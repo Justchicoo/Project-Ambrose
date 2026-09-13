@@ -29,6 +29,7 @@ find_package(fmt CONFIG REQUIRED)
 if(BUILD_TESTING)
     enable_testing()
     add_subdirectory(apps/codestyle)
+    add_subdirectory(apps/ci)
 endif()
 
 add_subdirectory(src)

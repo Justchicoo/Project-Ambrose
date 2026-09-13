@@ -1,0 +1,92 @@
+# Project Ambrose by Imjustchico
+# Checks style, forbidden files, and commit trailers, then builds and tests on Windows MSVC, Linux GCC, and Linux Clang.
+name: core-build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["doc/**", "**/*.md"]
+  pull_request:
+    paths-ignore: ["doc/**", "**/*.md"]
+  workflow_dispatch:
+
+concurrency:
+  group: core-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Codestyle self-tests
+        if: ${{ !cancelled() }}
+        run: python apps/codestyle/tests/test_codestyle.py
+      - name: Codestyle
+        if: ${{ !cancelled() }}
+        run: python apps/codestyle/codestyle.py
+      - name: CI script self-tests
+        if: ${{ !cancelled() }}
+        run: python apps/ci/tests/test_ci.py
+      - name: Forbidden files
+        if: ${{ !cancelled() }}
+        run: python apps/ci/ci_forbidden_files.py
+      - name: Commit trailers
+        if: ${{ !cancelled() }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: python apps/ci/ci_commit_trailer.py --from-github-env
+
+  build:
+    name: build (${{ matrix.configure }})
+    needs: checks
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            configure: windows-msvc-x64
+            build: windows-debug
+          - os: ubuntu-latest
+            configure: linux-gcc
+            build: linux-gcc-debug
+          - os: ubuntu-latest
+            configure: linux-clang
+            build: linux-clang-debug
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Ninja and Clang
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: vcpkg-${{ matrix.configure }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ matrix.configure }}-
+      - name: Build and test
+        env:
+          VCPKG_BINARY_SOURCES: clear;files,${{ runner.temp }}/vcpkg-binary-cache,readwrite
+        run: python apps/ci/ci_build.py --setup-vcpkg "${{ runner.temp }}/vcpkg" --configure-preset ${{ matrix.configure }} --build-preset ${{ matrix.build }} --warnings-as-errors
