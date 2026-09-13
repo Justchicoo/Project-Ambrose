@@ -37,7 +37,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 - **Ordering.** 1.04 CI is built and made mandatory before the 'how CI builds without client files' decision is taken, and before 1.15 msggen makes the build client-dependent. Either 1.04 depends on that decision or CI is rebuilt at 1.15.
 - **Missing work.** Automated headless test client/bot harness that replays scripted sessions. Almost every acceptance is 'Real client' and not repeatable in CI. 1.22 has a fake client, but nothing grows it into a regression harness.
-- **Missing work.** Codestyle checker (1.03) does not check the mandatory one-line brief, the Markdown/SQL/Batch/YAML header forms, or the JSON exemption from ARCHITECTURE.md.
+- **Missing work.** Codestyle checker (1.03) does not check the mandatory one-line brief, the Markdown/SQL/Batch/YAML header forms, or the JSON exemption from ARCHITECTURE.md. **Resolved in 1.03:** the checker validates the brief and every header form in the Conventions table, exempts JSON, and rejects file types it has no rule for.
 - **Correction.** 1.14's reason for the 253 GAME ids is incomplete. GameMessages.xml also has 254 tags / 253 ids because MSG_REMOVEOBJECT is duplicated, and the two copies have different descriptions. The totals 1448/1446 are still correct.
 - **Correction.** 1.14 fixture 'untyped GlobalID' is incomplete. Three untyped fields exist: MSG_MINIGAMEREWARDS.GlobalID (no TYPE), MSG_PHYSICS_GRAB.Force (TPYE typo), and MSG_BATTLEGROUNDQUEUEUPDATE.Kicked (attribute 'TYP', WizardMessages2). Add a 'TYP' fixture.
 - **Correction.** UNVERIFIED, not wrong: 1.21/phase 1 outcome rely on a '-P 0' client launch flag. No local source documents it (Imlight README.md:79 documents only '-L 127.0.0.1 12000'). Also unverified: TemplateManifest 137423 entries, 134076 BINd, 42 ItemSetBonusTemplate rows, 16 magic_school_template rows, CombatSigil8Actor's 8 sub-circles, and the traffic.log line citations.
@@ -126,10 +126,10 @@ Every later milestone can add GoogleTest tests that CTest runs from one executab
 
 **Acceptance**
 
-- [ ] The current tree passes
-- [ ] `int x = 1; // note` fails; `auto s = "http://x";` and `R"(/* x */)"` pass
-- [ ] SQL `-- extra` fails; `SELECT '--';` passes
-- [ ] A .h without an AMBROSE_ guard fails
+- [x] The current tree passes
+- [x] `int x = 1; // note` fails; `auto s = "http://x";` and `R"(/* x */)"` pass
+- [x] SQL `-- extra` fails; `SELECT '--';` passes
+- [x] A .h without an AMBROSE_ guard fails
 
 ### Detailed spec from FND-3: Codestyle checker: branding header and no other comments
 
@@ -147,12 +147,12 @@ A tool rejects any file that lacks the exact Project Ambrose header for its type
 
 **Acceptance**
 
-- [ ] Running on the current  tree passes (README.md, CONTRIBUTING.md, CLAUDE.md, doc/ARCHITECTURE.md, .gitignore, .editorconfig, .gitattributes all have valid headers today)
-- [ ] Fixture: `int x = 1; // note` fails at its line; `auto s = "http://x";` passes; `R"(/* x */)"` passes
-- [ ] Fixture: SQL file with `-- extra` after the header fails; `SELECT '--';` passes
-- [ ] Fixture: header brief empty or misspelled branding fails
-- [ ] Fixture: a .h without AMBROSE_ guard fails
-- [ ] Real client: n/a
+- [x] Running on the current  tree passes (README.md, CONTRIBUTING.md, CLAUDE.md, doc/ARCHITECTURE.md, .gitignore, .editorconfig, .gitattributes all have valid headers today)
+- [x] Fixture: `int x = 1; // note` fails at its line; `auto s = "http://x";` passes; `R"(/* x */)"` passes
+- [x] Fixture: SQL file with `-- extra` after the header fails; `SELECT '--';` passes
+- [x] Fixture: header brief empty or misspelled branding fails
+- [x] Fixture: a .h without AMBROSE_ guard fails
+- [x] Real client: n/a
 
 **Risks**
 
