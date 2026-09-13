@@ -90,9 +90,9 @@ Prove the whole toolchain works: configure, vendored dep, static lib, generated 
 
 **Acceptance**
 
-- [ ] ctest passes GitRevisionTest on both presets
-- [ ] A failing test makes ctest exit non-zero
-- [ ] -DBUILD_TESTING=OFF configures without gtest
+- [x] ctest passes GitRevisionTest on both presets
+- [x] A failing test makes ctest exit non-zero
+- [x] -DBUILD_TESTING=OFF configures without gtest
 
 ### Detailed spec from FND-2: Unit test harness
 
@@ -109,10 +109,10 @@ Every later milestone can add GoogleTest tests that CTest runs from one executab
 
 **Acceptance**
 
-- [ ] `ctest --test-dir build --output-on-failure` runs and passes GitRevisionTest on both presets
-- [ ] A deliberately failing test makes ctest exit non-zero
-- [ ] -DBUILD_TESTING=OFF configures without gtest
-- [ ] Real client: n/a
+- [x] `ctest --test-dir build --output-on-failure` runs and passes GitRevisionTest on both presets
+- [x] A deliberately failing test makes ctest exit non-zero
+- [x] -DBUILD_TESTING=OFF configures without gtest
+- [x] Real client: n/a
 
 **Risks**
 

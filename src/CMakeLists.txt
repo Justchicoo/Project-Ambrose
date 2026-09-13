@@ -6,3 +6,7 @@ add_subdirectory(common)
 if(APPS_BUILD)
     add_subdirectory(server)
 endif()
+
+if(BUILD_TESTING)
+    add_subdirectory(test)
+endif()

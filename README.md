@@ -33,6 +33,8 @@ cmake --build --preset linux-gcc-debug
 
 Use the `windows-release` or `linux-gcc-release` build presets for optimized builds.
 
+Run the unit tests with the test preset that matches your build, for example `ctest --preset windows-debug` or `ctest --preset linux-gcc-debug`. Configure with `-DBUILD_TESTING=OFF` to skip the tests and their dependencies.
+
 ## Ground rules
 
 - The server is written in C++.
