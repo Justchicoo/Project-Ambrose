@@ -1,3 +1,4 @@
+<!-- Project Ambrose: Project overview, status, ground rules, and disclaimer. -->
 # Project Ambrose
 
 An experimental Wizard101 server written from scratch in C++, built by AI agents under human direction.
@@ -6,13 +7,14 @@ The experiment is simple: see how far AI-driven development can take a complete 
 
 ## Status
 
-Pre-alpha. There is nothing to build or run yet.
+Pre-alpha. The repository layout is in place, and there is nothing to build or run yet.
 
 ## Ground rules
 
 - The server is written in C++.
-- Everything is written from scratch. Other server projects may be studied to understand how the game behaves, but no code is copied, translated, or ported from them, and none of their data files are committed here.
-- No files extracted from the game client are committed. Tools may read game data from a user's own installation at runtime.
+- The structure and development methods follow AzerothCore. See [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md).
+- Everything is written from scratch. Other projects may be studied, but no code is copied, translated, or ported from them, and none of their data files are committed here.
+- No files extracted from the game client are committed. Tools read game data from a user's own installation at runtime.
 - AI contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Disclaimer

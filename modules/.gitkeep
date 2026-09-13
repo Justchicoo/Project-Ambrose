@@ -1,0 +1,2 @@
+# Project Ambrose
+# Holds drop-in modules that CMake discovers and loads without core edits.

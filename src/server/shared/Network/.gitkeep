@@ -1,0 +1,2 @@
+# Project Ambrose
+# Holds the socket, session framing, and connection lifecycle shared by all servers.
