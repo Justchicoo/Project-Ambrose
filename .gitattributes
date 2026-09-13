@@ -1,6 +1,9 @@
 # Project Ambrose by Imjustchico
-# Line ending normalization per file type.
-* text=auto
-*.sh text eol=lf
+# Line ending normalization per file type, forcing LF checkouts everywhere except batch and PowerShell files.
+* text=auto eol=lf
 *.bat text eol=crlf
+*.cmd text eol=crlf
 *.ps1 text eol=crlf
+*.png binary
+*.jpg binary
+*.ico binary
