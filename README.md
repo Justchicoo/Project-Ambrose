@@ -7,7 +7,7 @@ The experiment is simple: see how far AI-driven development can take a complete 
 
 ## Status
 
-Pre-alpha. The repository layout is in place, and there is nothing to build or run yet.
+Pre-alpha. The build toolchain, unit tests, style checker, and CI on Windows and Linux are in place. The servers do not talk to the game client yet.
 
 The full plan lives in [doc/ROADMAP.md](doc/ROADMAP.md): 16 phases and 271 milestones, each ending in something visible in the real client. The tool suite is in [doc/TOOLS.md](doc/TOOLS.md) and the client strategy in [doc/CLIENT.md](doc/CLIENT.md).
 

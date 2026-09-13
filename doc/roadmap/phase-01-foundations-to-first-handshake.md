@@ -35,7 +35,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 - **Decision 2026-09-13.** Protocol definitions load at runtime (see Decisions in doc/ARCHITECTURE.md). 1.15 becomes the runtime `MessageRegistry` loader plus startup-validated message declarations instead of a build-time generator, and 1.16 tests it against project-authored fixtures, with real-install checks under the `client` CTest label. 1.04 CI therefore needs no client files. Dependencies come from vcpkg manifest mode rather than vendored copies, which replaces the `deps/fmt` and `deps/gtest` deliverables in 1.01 and 1.02.
 
-- **Ordering.** 1.04 CI is built and made mandatory before the 'how CI builds without client files' decision is taken, and before 1.15 msggen makes the build client-dependent. Either 1.04 depends on that decision or CI is rebuilt at 1.15.
+- **Ordering.** 1.04 CI is built and made mandatory before the 'how CI builds without client files' decision is taken, and before 1.15 msggen makes the build client-dependent. Either 1.04 depends on that decision or CI is rebuilt at 1.15. **Resolved:** the 2026-09-13 decision loads protocol data at runtime, so CI builds and tests without client files and 1.15 needs no CI rebuild.
 - **Missing work.** Automated headless test client/bot harness that replays scripted sessions. Almost every acceptance is 'Real client' and not repeatable in CI. 1.22 has a fake client, but nothing grows it into a regression harness.
 - **Missing work.** Codestyle checker (1.03) does not check the mandatory one-line brief, the Markdown/SQL/Batch/YAML header forms, or the JSON exemption from ARCHITECTURE.md. **Resolved in 1.03:** the checker validates the brief and every header form in the Conventions table, exempts JSON, and rejects file types it has no rule for.
 - **Correction.** 1.14's reason for the 253 GAME ids is incomplete. GameMessages.xml also has 254 tags / 253 ids because MSG_REMOVEOBJECT is duplicated, and the two copies have different descriptions. The totals 1448/1446 are still correct.
@@ -168,10 +168,10 @@ A tool rejects any file that lacks the exact Project Ambrose header for its type
 
 **Acceptance**
 
-- [ ] `// todo` in a .cpp fails codestyle
-- [ ] A file beginning 'KIWAD' fails ci-forbidden-files
-- [ ] A commit without an AI trailer fails
-- [ ] A clean PR is green on all 3 legs
+- [x] `// todo` in a .cpp fails codestyle (dispatch run 34771249175)
+- [x] A file beginning 'KIWAD' fails ci-forbidden-files
+- [x] A commit without an AI trailer fails
+- [x] A clean PR is green on all 3 legs (verified on push run 34771622038, which runs the same jobs a pull request does; the pull request commit range is covered by ci.selftest)
 
 ### Detailed spec from FND-4: CI pipeline
 
@@ -188,11 +188,11 @@ Every push and PR builds, tests, style-checks and scans for forbidden content on
 
 **Acceptance**
 
-- [ ] A PR that adds `// todo` to a .cpp fails the codestyle job
-- [ ] A PR that commits a file beginning with bytes 'KIWAD' fails ci-forbidden-files
-- [ ] A commit without an AI trailer fails ci-commit-trailer
-- [ ] A clean PR is green on all three matrix legs with unit_tests executed
-- [ ] Real client: n/a
+- [x] A PR that adds `// todo` to a .cpp fails the codestyle job
+- [x] A PR that commits a file beginning with bytes 'KIWAD' fails ci-forbidden-files
+- [x] A commit without an AI trailer fails ci-commit-trailer
+- [x] A clean PR is green on all three matrix legs with unit_tests executed (push run 34771622038: windows-msvc-x64 on Visual Studio 18 2026, linux-gcc, and linux-clang each ran 8/8 tests)
+- [x] Real client: n/a
 
 **Risks**
 
