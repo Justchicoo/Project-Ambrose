@@ -23,3 +23,5 @@ cmake-build-*/
 __pycache__/
 *.pyc
 CLAUDE.local.md
+conf/config.cmake
+conf/env

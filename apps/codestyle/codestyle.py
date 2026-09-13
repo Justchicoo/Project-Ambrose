@@ -33,9 +33,13 @@ def classify(relpath):
     name = relpath.rsplit("/", 1)[-1]
     if name.endswith(".in"):
         name = name[:-3]
+    if name.endswith(".dist") and not name.lower().endswith(".conf.dist"):
+        name = name[:-5]
     lower = name.lower()
     if name == "CMakeLists.txt":
         return "cmake"
+    if lower in ("env", ".env") or lower.endswith(".env"):
+        return "conf"
     if lower in (".gitignore", ".gitattributes", ".gitkeep"):
         return "linehash"
     if lower == ".editorconfig":

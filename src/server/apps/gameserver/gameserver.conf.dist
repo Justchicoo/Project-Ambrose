@@ -1,0 +1,4 @@
+# Project Ambrose by Imjustchico
+# Default settings for the gameserver; copy to gameserver.conf and edit, see doc/config/gameserver.md.
+LogsDir = logs
+WorldServerPort = 12000

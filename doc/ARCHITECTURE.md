@@ -156,7 +156,7 @@ Server code is C++. Tools may use whatever language does the job best, and they 
 
 ### Configuration
 
-A `.conf.dist` file contains only its branding header and `Key = value` lines. Each option is documented in `doc/config/<app>.md`.
+A `.conf.dist` file contains only its branding header and `Key = value` lines. Each option is documented in `doc/config/<app>.md`. Layers apply in the order `<app>.conf.dist`, `conf.d/*.conf.dist`, `<app>.conf`, `conf.d/*.conf`, `AMBROSE_` environment variables, then command-line overrides, so every default sits below every local edit. Environment variable names follow the rule in doc/config/README.md, for example `WorldServerPort` becomes `AMBROSE_WORLD_SERVER_PORT`.
 
 ### Operations
 

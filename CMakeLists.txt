@@ -2,6 +2,10 @@
 # Root build definition: language standard, build options, dependencies, and source tree.
 cmake_minimum_required(VERSION 3.25)
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/conf/config.cmake")
+    include("${CMAKE_SOURCE_DIR}/conf/config.cmake")
+endif()
+
 option(BUILD_TESTING "Build the unit tests" ON)
 if(BUILD_TESTING)
     list(APPEND VCPKG_MANIFEST_FEATURES "tests")

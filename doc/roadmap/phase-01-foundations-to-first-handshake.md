@@ -406,9 +406,9 @@ Bounds-checked little-endian primitives cover every DML field type in the client
 
 **Acceptance**
 
-- [ ] AMBROSE_WORLD_SERVER_PORT env override works
-- [ ] `Foo == bar` fails with its line number
-- [ ] Reload() picks up changes
+- [x] AMBROSE_WORLD_SERVER_PORT env override works
+- [x] `Foo == bar` fails with its line number
+- [x] Reload() picks up changes
 
 ### Detailed spec from FND-9: common/Configuration: ConfigMgr and .conf.dist convention
 
@@ -426,11 +426,11 @@ Apps read typed options from <app>.conf, falling back to .conf.dist defaults, wi
 
 **Acceptance**
 
-- [ ] GetOption<uint32>("WorldServerPort", 12000) returns the file value, default when missing, and env value when AMBROSE_WORLD_SERVER_PORT is set
-- [ ] Malformed line `Foo == bar` fails load with line number
-- [ ] Reload() picks up a changed file
-- [ ] `bool` accepts 1/0/true/false case-insensitively
-- [ ] Real client: n/a
+- [x] GetOption<uint32>("WorldServerPort", 12000) returns the file value, default when missing, and env value when AMBROSE_WORLD_SERVER_PORT is set
+- [x] Malformed line `Foo == bar` fails load with line number
+- [x] Reload() picks up a changed file
+- [x] `bool` accepts 1/0/true/false case-insensitively
+- [x] Real client: n/a
 
 **Risks**
 

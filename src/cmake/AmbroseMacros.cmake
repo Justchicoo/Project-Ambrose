@@ -31,3 +31,22 @@ function(ambrose_add_executable name root)
     add_executable(${name} ${sources})
     target_link_libraries(${name} PRIVATE ambrose-compile-options)
 endfunction()
+
+function(ambrose_copy_conf_dist target)
+    file(GLOB dist_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.conf.dist")
+    if(NOT dist_files)
+        return()
+    endif()
+    add_custom_target(${target}-conf-dist
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${target}>"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${dist_files} "$<TARGET_FILE_DIR:${target}>"
+        DEPENDS ${dist_files}
+        SOURCES ${dist_files}
+        VERBATIM)
+    add_dependencies(${target} ${target}-conf-dist)
+    install(TARGETS ${target} RUNTIME DESTINATION bin)
+    if(WIN32)
+        install(FILES $<TARGET_RUNTIME_DLLS:${target}> DESTINATION bin)
+    endif()
+    install(FILES ${dist_files} DESTINATION etc)
+endfunction()

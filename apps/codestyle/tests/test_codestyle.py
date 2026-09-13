@@ -122,6 +122,12 @@ class HashFamilyTests(CheckerTestCase):
         self.assertIssue(".editorconfig", HASH_HEADER + "root = true\n; note\n", "comment", 4)
         self.assertIssue("conf/dist/gameserver.conf.dist", HASH_HEADER + "# Port = 1\nPort = 12000\n", "comment", 3)
 
+    def test_dist_templates_use_their_inner_file_type(self):
+        self.assertClean("conf/dist/config.cmake.dist", HASH_HEADER + 'set(TOOLS ON CACHE BOOL "Build tools")\n')
+        self.assertIssue("conf/dist/config.cmake.dist", HASH_HEADER + "set(TOOLS ON) # note\n", "comment", 3)
+        self.assertClean("conf/dist/env.dist", HASH_HEADER + "AMBROSE_LOGS_DIR=logs\n")
+        self.assertIssue("conf/dist/env.dist", HASH_HEADER + "# AMBROSE_X=1\n", "comment", 3)
+
     def test_missing_hash_header_fails(self):
         self.assertIssue("src/CMakeLists.txt", "cmake_minimum_required(VERSION 3.25)\n", "header", 1)
 
