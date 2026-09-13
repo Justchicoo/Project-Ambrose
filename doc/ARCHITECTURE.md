@@ -158,6 +158,17 @@ Server code is C++. Tools may use whatever language does the job best, and they 
 
 A `.conf.dist` file contains only its branding header and `Key = value` lines. Each option is documented in `doc/config/<app>.md`.
 
+### Operations
+
+Settled on 2026-09-13 with the maintainer's direction to favor the most capable option.
+
+| Area | Choice |
+|---|---|
+| Admin API server | Crow on the standalone Asio layer, serving HTTP and WebSocket from one library |
+| Dashboard front end | TypeScript and Svelte, built by Vite into static files the admin API can serve |
+| Process control | An Ambrose supervisor process that starts, stops, restarts, and crash-restarts every app on Windows and Linux, and can itself run under systemd or as a Windows service |
+| Remote access | The admin API listens on localhost by default. Any other address requires TLS and the token, and plain HTTP is never exposed beyond the machine |
+
 ### Still open
 
 Decisions that block later milestones are listed under Decisions needed in doc/ROADMAP.md. Propose them to the maintainer when their milestone is next.

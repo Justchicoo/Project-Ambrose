@@ -21,7 +21,7 @@
 ## Review notes for this phase
 
 - **Origin.** Added on 2026-09-13 at the maintainer's request for a modern, intuitive way to run the servers. It also covers the roadmap review's missing work item for remote administration and health endpoints.
-- **Decisions.** 17.02, 17.06, and 17.08 are blocked by the operations decisions listed under Decisions needed in doc/ROADMAP.md.
+- **Decisions.** Settled on 2026-09-13 under Decisions, Operations in doc/ARCHITECTURE.md: Crow for 17.02, TypeScript and Svelte with Vite for 17.06, an Ambrose supervisor for 17.08, and localhost-only access unless TLS and a token are configured. 17.11 picks FTXUI, which vcpkg provides.
 
 ## 17.01 Server console: colored logs and a command prompt
 
@@ -215,7 +215,7 @@
 
 **Deliverables**
 
-- A `--tui` option that draws full-screen panels for status, sessions, logs, and a command line when output is a terminal, using a terminal UI library chosen when the milestone starts
+- A `--tui` option that draws full-screen panels for status, sessions, logs, and a command line when output is a terminal, using FTXUI from vcpkg
 
 **Acceptance**
 

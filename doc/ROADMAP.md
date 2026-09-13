@@ -85,12 +85,15 @@ These block specific milestones. The maintainer decides each one, then this list
 - Whether the tutorial moves earlier, since new characters see it first. Affects where 14.02/14.03 sit and 3.16's playercreateinfo start zone.
 - Whether the loginserver enforces Revision/DataRevision against the patch manifest. Blocks 16.07.
 
+
+### Resolved
+
+Settled on 2026-09-13 with the maintainer's direction to favor the most capable option, and recorded under Decisions, Operations in doc/ARCHITECTURE.md: Crow for the admin API, TypeScript and Svelte with Vite for the dashboard, an Ambrose supervisor for process control, and localhost-only access unless TLS and a token are configured.
+
 - Operations: the HTTP and WebSocket library for the admin API, either hand-written HTTP/1.1 on the Asio layer, Boost.Beast, or a small embedded server library. Blocks 17.02.
 - Operations: the dashboard front-end stack, for example TypeScript with Svelte or React built by Vite. Blocks 17.06.
 - Operations: how apps are started and restarted, either an Ambrose supervisor process or operating system services such as systemd and Windows services. Blocks 17.08.
 - Operations: whether the admin API may ever listen beyond localhost, and the TLS and token rules when it does. Blocks 17.02 and 17.10.
-
-### Resolved
 
 Settled on 2026-09-13 and recorded under Decisions in doc/ARCHITECTURE.md: runtime-loaded protocol definitions and type dump with startup-validated declarations, the stack and libraries, the database server and connector, SQL update execution and hashing, tool languages, config documentation, and tools linking the database layer.
 
