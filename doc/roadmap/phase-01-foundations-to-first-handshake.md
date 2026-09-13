@@ -242,10 +242,10 @@ Shared helpers every subsystem needs exist and are tested.
 
 **Acceptance**
 
-- [ ] Round-trip per type incl. NaN FLT and GID 0xFFFFFFFFFFFFFFFF
-- [ ] STR length past the end throws and allocates nothing
-- [ ] WSTR 'Ab' encodes as 02 00 41 00 62 00
-- [ ] Random-truncation fuzz is clean under ASan
+- [x] Round-trip per type incl. NaN FLT and GID 0xFFFFFFFFFFFFFFFF
+- [x] STR length past the end throws and allocates nothing
+- [x] WSTR 'Ab' encodes as 02 00 41 00 62 00
+- [x] Random-truncation fuzz is clean under ASan
 
 ### Detailed spec from FND-6: common/Encoding: byte buffer, bit stream, text encodings
 
@@ -262,12 +262,12 @@ Bounds-checked little-endian primitives cover every DML field type in the client
 
 **Acceptance**
 
-- [ ] Round-trip each DML type; reading a STR whose length prefix passes the buffer end throws and allocates nothing
-- [ ] BitWriter write(0b101,3), write(0x7F,7), realign produces the expected bytes; BitReader reads the same values; s24 sign-extends -1
-- [ ] UTF-8 'Wizardé\U0001F600' -> UTF-16LE -> UTF-8 is identical; an unpaired surrogate is replaced or rejected (documented)
-- [ ] Base64 matches RFC 4648 vectors
-- [ ] Optional integration test (skipped unless AMBROSE_CLIENT_DIR is set): decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error
-- [ ] Real client: n/a
+- [x] Round-trip each DML type; reading a STR whose length prefix passes the buffer end throws and allocates nothing
+- [ ] BitWriter write(0b101,3), write(0x7F,7), realign produces the expected bytes; BitReader reads the same values; s24 sign-extends -1 (tracked under 1.07)
+- [ ] UTF-8 'Wizardé\U0001F600' -> UTF-16LE -> UTF-8 is identical; an unpaired surrogate is replaced or rejected (documented) (tracked under 1.08)
+- [ ] Base64 matches RFC 4648 vectors (tracked under 1.08)
+- [ ] Optional integration test (skipped unless AMBROSE_CLIENT_DIR is set): decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error (tracked under 1.08)
+- [x] Real client: n/a
 
 **Risks**
 
@@ -291,10 +291,10 @@ Every one of the 9 wire field types used by the client XML can be read and writt
 
 **Acceptance**
 
-- [ ] Round-trip test per type, including min/max values, NaN for FLT, and 0xFFFFFFFFFFFFFFFF for GID
-- [ ] STR of 0 bytes encodes as 00 00; STR of 65535 bytes round-trips; a length prefix larger than the remaining bytes throws and does not allocate
-- [ ] WSTR 'Ab' encodes as 02 00 41 00 62 00 (the count is code units, not bytes)
-- [ ] Reading past the end throws; the fuzz-style test (random truncation of valid buffers) never crashes under ASan
+- [x] Round-trip test per type, including min/max values, NaN for FLT, and 0xFFFFFFFFFFFFFFFF for GID
+- [x] STR of 0 bytes encodes as 00 00; STR of 65535 bytes round-trips; a length prefix larger than the remaining bytes throws and does not allocate
+- [x] WSTR 'Ab' encodes as 02 00 41 00 62 00 (the count is code units, not bytes)
+- [x] Reading past the end throws; the fuzz-style test (random truncation of valid buffers) never crashes under ASan
 
 **Risks**
 

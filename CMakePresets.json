@@ -53,6 +53,14 @@
         "lhs": "${hostSystemName}",
         "rhs": "Linux"
       }
+    },
+    {
+      "name": "linux-gcc-asan",
+      "displayName": "Linux GCC with AddressSanitizer and UBSan",
+      "inherits": "linux-gcc",
+      "cacheVariables": {
+        "AMBROSE_SANITIZE_ADDRESS": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -85,6 +93,11 @@
       "name": "linux-clang-release",
       "configurePreset": "linux-clang",
       "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "linux-gcc-asan",
+      "configurePreset": "linux-gcc-asan",
+      "configuration": "Debug"
     }
   ],
   "testPresets": [
@@ -152,6 +165,21 @@
       },
       "execution": {
         "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "linux-gcc-asan",
+      "configurePreset": "linux-gcc-asan",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      },
+      "environment": {
+        "ASAN_OPTIONS": "detect_leaks=1:abort_on_error=1",
+        "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1"
       }
     }
   ]

@@ -19,6 +19,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/src/cmake")
 option(TOOLS "Build the tools in src/tools" ON)
 option(APPS_BUILD "Build the server apps" ON)
 option(AMBROSE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+option(AMBROSE_SANITIZE_ADDRESS "Build project code with AddressSanitizer, plus UndefinedBehaviorSanitizer where supported" OFF)
 
 include(PlatformDetect)
 include(CompilerFlags)

@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks style, forbidden files, and commit trailers, then builds and tests on Windows MSVC, Linux GCC, and Linux Clang.
+# Checks style, forbidden files, and commit trailers, then builds and tests on Windows MSVC, Linux GCC, Linux Clang, and Linux GCC with sanitizers.
 name: core-build
 
 on:
@@ -69,6 +69,9 @@ jobs:
           - os: ubuntu-latest
             configure: linux-clang
             build: linux-clang-debug
+          - os: ubuntu-latest
+            configure: linux-gcc-asan
+            build: linux-gcc-asan
     env:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:

@@ -29,3 +29,16 @@ else()
         target_compile_options(ambrose-compile-options INTERFACE -Werror)
     endif()
 endif()
+
+if(AMBROSE_SANITIZE_ADDRESS)
+    target_compile_definitions(ambrose-compile-options INTERFACE AMBROSE_SANITIZE_ADDRESS)
+    if(MSVC)
+        target_compile_options(ambrose-compile-options INTERFACE /fsanitize=address)
+    else()
+        target_compile_options(ambrose-compile-options INTERFACE
+            -fsanitize=address,undefined
+            -fno-sanitize-recover=all
+            -fno-omit-frame-pointer)
+        target_link_options(ambrose-compile-options INTERFACE -fsanitize=address,undefined)
+    endif()
+endif()
