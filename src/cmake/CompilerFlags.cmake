@@ -1,0 +1,31 @@
+# Project Ambrose by Imjustchico
+# Defines the ambrose-compile-options target that carries warnings and platform defines for project code.
+add_library(ambrose-compile-options INTERFACE)
+
+target_compile_features(ambrose-compile-options INTERFACE cxx_std_20)
+
+if(MSVC)
+    target_compile_options(ambrose-compile-options INTERFACE
+        /W4
+        /permissive-
+        /utf-8
+        /Zc:__cplusplus
+        /EHsc
+        /external:anglebrackets
+        /external:W0)
+    target_compile_definitions(ambrose-compile-options INTERFACE
+        _WIN32_WINNT=0x0A00
+        NOMINMAX
+        WIN32_LEAN_AND_MEAN)
+    if(AMBROSE_WARNINGS_AS_ERRORS)
+        target_compile_options(ambrose-compile-options INTERFACE /WX)
+    endif()
+else()
+    target_compile_options(ambrose-compile-options INTERFACE
+        -Wall
+        -Wextra
+        -Wpedantic)
+    if(AMBROSE_WARNINGS_AS_ERRORS)
+        target_compile_options(ambrose-compile-options INTERFACE -Werror)
+    endif()
+endif()

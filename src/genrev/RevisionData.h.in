@@ -1,0 +1,13 @@
+/*
+ * Project Ambrose by Imjustchico
+ * Template for the generated git revision constants compiled into every build.
+ */
+
+#ifndef AMBROSE_REVISIONDATA_H
+#define AMBROSE_REVISIONDATA_H
+
+#define AMBROSE_REVISION_HASH "@rev_hash@"
+#define AMBROSE_REVISION_BRANCH "@rev_branch@"
+#define AMBROSE_REVISION_DATE "@rev_date@"
+
+#endif

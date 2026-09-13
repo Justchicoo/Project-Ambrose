@@ -50,9 +50,9 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Acceptance**
 
-- [ ] Windows and linux-gcc presets build with no warnings
-- [ ] gameserver prints 'Project Ambrose rev <shorthash> (<branch>) <date>' matching git rev-parse --short HEAD
-- [ ] Build without .git prints 'rev unknown'
+- [x] Windows and linux-gcc presets build with no warnings
+- [x] gameserver prints 'Project Ambrose rev <shorthash> (<branch>) <date>' matching git rev-parse --short HEAD
+- [x] Build without .git prints 'rev unknown'
 
 ### Detailed spec from FND-1: Toolchain hello: CMake + fmt + genrev + one app that prints its revision
 
@@ -71,11 +71,11 @@ Prove the whole toolchain works: configure, vendored dep, static lib, generated 
 
 **Acceptance**
 
-- [ ] `cmake --preset windows-msvc-x64 && cmake --build` and the linux-gcc preset both finish with no warnings
-- [ ] gameserver prints 'Project Ambrose rev <shorthash> (<branch>) <date>' and the hash matches `git rev-parse --short HEAD`
-- [ ] Changing HEAD (new commit) and rebuilding regenerates GitRevision.h without a clean build
-- [ ] Building from an exported tree without .git prints 'rev unknown' and does not fail
-- [ ] Real client: nothing observable (no networking yet)
+- [x] `cmake --preset windows-msvc-x64 && cmake --build` and the linux-gcc preset both finish with no warnings
+- [x] gameserver prints 'Project Ambrose rev <shorthash> (<branch>) <date>' and the hash matches `git rev-parse --short HEAD`
+- [x] Changing HEAD (new commit) and rebuilding regenerates GitRevision.h without a clean build
+- [x] Building from an exported tree without .git prints 'rev unknown' and does not fail
+- [x] Real client: nothing observable (no networking yet)
 
 **Risks**
 

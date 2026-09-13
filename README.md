@@ -11,6 +11,28 @@ Pre-alpha. The repository layout is in place, and there is nothing to build or r
 
 The full plan lives in [doc/ROADMAP.md](doc/ROADMAP.md): 16 phases and 271 milestones, each ending in something visible in the real client. The tool suite is in [doc/TOOLS.md](doc/TOOLS.md) and the client strategy in [doc/CLIENT.md](doc/CLIENT.md).
 
+## Building
+
+You need CMake 3.25 or newer, vcpkg with the `VCPKG_ROOT` environment variable pointing at it, and a C++20 compiler: Visual Studio 2022 on Windows, or GCC 13 or newer on Linux. vcpkg installs every library automatically on the first configure.
+
+Windows:
+
+```
+cmake --preset windows-msvc-x64
+cmake --build --preset windows-debug
+build\windows-msvc-x64\bin\Debug\gameserver.exe
+```
+
+Linux:
+
+```
+cmake --preset linux-gcc
+cmake --build --preset linux-gcc-debug
+./build/linux-gcc/bin/Debug/gameserver
+```
+
+Use the `windows-release` or `linux-gcc-release` build presets for optimized builds.
+
 ## Ground rules
 
 - The server is written in C++.
