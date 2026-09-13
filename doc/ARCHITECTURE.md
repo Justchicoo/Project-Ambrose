@@ -6,7 +6,7 @@ Project Ambrose follows the structure and methods of AzerothCore, the open-sourc
 ## Repository layout
 
 ```
-apps/                     Repository tooling: CI, code style checks, installer
+apps/                     Repository tooling and operator apps: CI, code style checks, installer, dashboard, Grafana
 conf/dist/                Build and environment config templates
 data/sql/
   base/db_<name>/         Full schema snapshot per database
@@ -81,6 +81,10 @@ Each app ships `<app>.conf.dist` listing every option with its default. Users co
 ### Client data
 
 Nothing from the game client is committed. Tools in `src/tools/` read the user's own installation and produce the files and world database rows the servers load.
+
+### Operations
+
+Servers stay headless so they run the same on a desktop, a Linux VPS, or in Docker. Each app writes colored logs and accepts commands on its console. An optional admin API, bound to localhost and protected by a token, serves health, status, live logs, audited commands, and Prometheus metrics. The web dashboard in `apps/dashboard/` and the Grafana dashboards in `apps/grafana/` are built on that API. Phase 17 of doc/ROADMAP.md plans this work.
 
 ### Tests
 

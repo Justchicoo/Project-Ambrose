@@ -57,8 +57,9 @@ First milestones:
 | 14 | [Dungeons, tutorial and PvP](roadmap/phase-14-dungeons-tutorial-and-pvp.md) | 16 | Groups enter sigil dungeons with countdowns. New wizards play the scripted tutorial, and players queue for ranked PvP, tournaments, pet derby and daily assignments. |
 | 15 | [Housing, gardening and fishing](roadmap/phase-15-housing-gardening-and-fishing.md) | 21 | Players go home, decorate, store items in attic and vaults, grow gardens, fish ponds, publish castle tours and build castle magic. |
 | 16 | [Patch server and tooling ownership](roadmap/phase-16-patch-server-and-tooling-ownership.md) | 12 | The retail client patches against Ambrose with 0 files altered, restores a deleted WAD, and streams missing zone packages. Users produce their own type dump with Ambrose tooling. This track can run in parallel any time after phase 2. |
+| 17 | [Operations: console, admin API, dashboard and metrics](roadmap/phase-17-operations-console-admin-api-dashboard-and-metrics.md) | 11 | From a browser on a desktop or a phone, an operator sees every server's health and player counts, follows live logs, runs audited commands, restarts a crashed server, and reviews performance history in Grafana. Runs in parallel: 17.01 after 1.20, the rest after phase 2. |
 
-Total: 271 milestones.
+Total: 282 milestones.
 
 ## Decisions needed
 
@@ -83,6 +84,11 @@ These block specific milestones. The maintainer decides each one, then this list
 - Whether battlegrounds, castle magic and monster magic stay in scope. Blocks 14.14, 14.15 and 15.17-15.20.
 - Whether the tutorial moves earlier, since new characters see it first. Affects where 14.02/14.03 sit and 3.16's playercreateinfo start zone.
 - Whether the loginserver enforces Revision/DataRevision against the patch manifest. Blocks 16.07.
+
+- Operations: the HTTP and WebSocket library for the admin API, either hand-written HTTP/1.1 on the Asio layer, Boost.Beast, or a small embedded server library. Blocks 17.02.
+- Operations: the dashboard front-end stack, for example TypeScript with Svelte or React built by Vite. Blocks 17.06.
+- Operations: how apps are started and restarted, either an Ambrose supervisor process or operating system services such as systemd and Windows services. Blocks 17.08.
+- Operations: whether the admin API may ever listen beyond localhost, and the TLS and token rules when it does. Blocks 17.02 and 17.10.
 
 ### Resolved
 
@@ -116,6 +122,6 @@ Settled on 2026-09-13 and recorded under Decisions in doc/ARCHITECTURE.md: runti
 - Server-side use of zone geometry. Each zone WAD ships collision.bcd, zone.nav, pathData.xml, pathNodeData.bin, spawnData.xml, clientSpawnData.xml, portals.xml and FishingInfo.xml (verified in WizardCity-WC_Ravenwood.wad). No milestone loads collision or navmesh for mob wandering, aggro line of sight, spawn ground snapping, fishing spots or move validation.
 - Crash safety and persistence policy: periodic autosave of all online characters, write-behind queue flush on shutdown or crash, and reconciling stale online=1 / login_key rows after a gameserver crash (otherwise the character stays locked). No DB backup or restore guidance.
 - Player-facing account lifecycle and security: account registration path beyond the console, password change/reset, login brute-force throttling per IP/account, and audit logs of GM actions and chat for moderation (reports/Infraction, MSG_REPORTHOUSE handling).
-- Remote administration (AzerothCore RA/SOAP equivalent) or an operator console on each app, plus metrics/health endpoints for multi-realm operation.
+- Remote administration (AzerothCore RA/SOAP equivalent) or an operator console on each app, plus metrics/health endpoints for multi-realm operation. **Planned in phase 17.**
 - Message identity collisions: service 54 (CatchAKeyMessages.xml) and service 44 (ShockALockMessages.xml) both define MSG_MG3_CONNECT/MOVED/REWARDS. GAME also has duplicate MSG_REMOVEOBJECT tags with different descriptions (S->C out of proximity vs C->S remove instance object). The registry and msggen must key by (service, name) and handle direction. Only the PETHATCHREADYSTATUS duplicate is mentioned.
 - Localization and locale for server-generated text (MSG_ATTACH carries Locale). Server-side notice strings are not planned.
