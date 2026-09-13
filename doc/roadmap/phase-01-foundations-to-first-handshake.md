@@ -207,9 +207,9 @@ Every push and PR builds, tests, style-checks and scans for forbidden content on
 
 **Acceptance**
 
-- [ ] StringTo<uint32>("4294967296") is nullopt
-- [ ] GetMSTimeDiff handles uint32 wrap
-- [ ] TokenBucket refills on a fake clock
+- [x] StringTo<uint32>("4294967296") is nullopt
+- [x] GetMSTimeDiff handles uint32 wrap
+- [x] TokenBucket refills on a fake clock
 
 ### Detailed spec from FND-5: common/Utilities: time, random, strings, safe parsing
 
@@ -227,12 +227,12 @@ Shared helpers every subsystem needs exist and are tested.
 
 **Acceptance**
 
-- [ ] StringTo<uint32>("4294967296") is nullopt; StringTo<int32>("-5") == -5
-- [ ] GetMSTimeDiff handles a uint32 wrap
-- [ ] Tokenize("a  b", ' ', keepEmpty=false) gives {a,b}
-- [ ] urand(1,1)==1; 10^6 draws of urand(0,9) stay within range
-- [ ] TokenBucket allows N tokens and refills on a fake clock
-- [ ] Real client: n/a
+- [x] StringTo<uint32>("4294967296") is nullopt; StringTo<int32>("-5") == -5
+- [x] GetMSTimeDiff handles a uint32 wrap
+- [x] Tokenize("a  b", ' ', keepEmpty=false) gives {a,b}
+- [x] urand(1,1)==1; 10^6 draws of urand(0,9) stay within range
+- [x] TokenBucket allows N tokens and refills on a fake clock
+- [x] Real client: n/a
 
 ## 1.06 ByteBuffer and DML primitives (FND-6 + NET-1)
 
