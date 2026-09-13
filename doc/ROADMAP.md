@@ -64,12 +64,6 @@ Total: 271 milestones.
 
 These block specific milestones. The maintainer decides each one, then this list and doc/ARCHITECTURE.md are updated.
 
-- How CI and builds work without client files: a client-gated build with a self-hosted runner, a stub mode, or runtime-loaded message definitions. Blocks 1.04, 1.15, 1.16 and the shape of every handler after them.
-- Stack choices. C++20/CMake/presets block 1.01. Vendored deps vs vcpkg/Conan block 1.01, 1.13 and 2.01. GoogleTest vs Catch2 blocks 1.02. Boost.Asio vs standalone Asio blocks 1.11, 1.19 and 16.05 (Beast). fmt vs std::format blocks 1.10.
-- Libraries not yet on the pending list: an XML parser (1.14, 3.12, 16.02), a JSON parser for the type dump (3.03), zlib vs zlib-ng (1.13), OpenSSL vs self-contained hashes (1.12), and a Twofish source written from the spec vs Botan/Crypto++ (2.11).
-- MySQL 8 vs MariaDB and which connector, including licensing. Blocks 2.01, 2.02, and JSON-vs-normalized columns in 7.03 and 10.01.
-- SQL file execution through CLIENT_MULTI_STATEMENTS or the mysql CLI (DELIMITER support), and whether the updates table uses SHA-256 or SHA-1. Blocks 2.06.
-- Rule exceptions. Is Python allowed for apps/codestyle and apps/ci (1.03, 1.04)? Is deps/ exempt from the header rule (1.03)? Where do .conf.dist options get documented, given no comments (1.09)? Should dbimport and extractors be allowed to link src/server/database despite 'tools depend only on shared/common' (2.07, 3.14, 4.08, 7.01)?
 - Pending SQL promotion. Naming of pending_ files, and whether a CI bot may push to main. Blocks 3.19.
 - Whether a password-equivalent verifier base64(SHA-512(password)) may be stored in db_login, as the ClientKey1 scheme forces. Blocks 2.13 and 2.14.
 - Where AccountMgr and the security-level tables live (game/Accounts linked into loginserver, or apps/loginserver). Blocks 2.13 and 4.02.
@@ -81,7 +75,6 @@ These block specific milestones. The maintainer decides each one, then this list
 - Whether extractor-filled tables (object_template, zone_*, item_template, spells) are generated locally into the shared world DB or into a separate local-only DB, and whether templates are decoded at runtime from WADs or stored in the DB. Blocks 4.08, 5.01, 7.01, 8.04, 8.06.
 - Whether supplemental server-side class schemas are a committed file under data/ or a world DB table. Blocks 6.10 and 6.11.
 - Whether Ambrose builds its own type dumper (reads a live client process) or documents an external tool, and which revision and dump hash to pin. Blocks 3.03 in practice and 16.11.
-- Whether typed views are hand-written with constexpr hashes or generated at build time. Blocks 3.07.
 - Threading model: one world thread vs map-per-thread or strands. Blocks 4.01, 4.10, 6.01 and duel timers in 9.06.
 - Whether ranked-style security levels copy AzerothCore's SEC_PLAYER..SEC_CONSOLE numbering, and how they map to LOGINCOMPLETE IsCSR/Permissions. Blocks 4.02 and 6.04.
 - Whether zone spawns for all 3356 zones load at startup or lazily per instance. Blocks 4.09 and 5.02.
@@ -90,6 +83,18 @@ These block specific milestones. The maintainer decides each one, then this list
 - Whether battlegrounds, castle magic and monster magic stay in scope. Blocks 14.14, 14.15 and 15.17-15.20.
 - Whether the tutorial moves earlier, since new characters see it first. Affects where 14.02/14.03 sit and 3.16's playercreateinfo start zone.
 - Whether the loginserver enforces Revision/DataRevision against the patch manifest. Blocks 16.07.
+
+### Resolved
+
+Settled on 2026-09-13 and recorded under Decisions in doc/ARCHITECTURE.md: runtime-loaded protocol definitions and type dump with startup-validated declarations, the stack and libraries, the database server and connector, SQL update execution and hashing, tool languages, config documentation, and tools linking the database layer.
+
+- How CI and builds work without client files: a client-gated build with a self-hosted runner, a stub mode, or runtime-loaded message definitions. Blocks 1.04, 1.15, 1.16 and the shape of every handler after them.
+- Stack choices. C++20/CMake/presets block 1.01. Vendored deps vs vcpkg/Conan block 1.01, 1.13 and 2.01. GoogleTest vs Catch2 blocks 1.02. Boost.Asio vs standalone Asio blocks 1.11, 1.19 and 16.05 (Beast). fmt vs std::format blocks 1.10.
+- Libraries not yet on the pending list: an XML parser (1.14, 3.12, 16.02), a JSON parser for the type dump (3.03), zlib vs zlib-ng (1.13), OpenSSL vs self-contained hashes (1.12), and a Twofish source written from the spec vs Botan/Crypto++ (2.11).
+- MySQL 8 vs MariaDB and which connector, including licensing. Blocks 2.01, 2.02, and JSON-vs-normalized columns in 7.03 and 10.01.
+- SQL file execution through CLIENT_MULTI_STATEMENTS or the mysql CLI (DELIMITER support), and whether the updates table uses SHA-256 or SHA-1. Blocks 2.06.
+- Rule exceptions. Is Python allowed for apps/codestyle and apps/ci (1.03, 1.04)? Is deps/ exempt from the header rule (1.03)? Where do .conf.dist options get documented, given no comments (1.09)? Should dbimport and extractors be allowed to link src/server/database despite 'tools depend only on shared/common' (2.07, 3.14, 4.08, 7.01)?
+- Whether typed views are hand-written with constexpr hashes or generated at build time. Blocks 3.07.
 
 ## Top risks
 

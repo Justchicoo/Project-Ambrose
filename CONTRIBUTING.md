@@ -12,7 +12,7 @@ Project Ambrose is an AI-driven project. Contributions written with AI tools are
 
 ## Requirements
 
-- **C++ only** for server code.
+- **C++20** for server code. Tools may use any language that does the job well.
 - **Follow the architecture.** The layout, layering, and methods in doc/ARCHITECTURE.md mirror AzerothCore. Database changes go in dated update files, content goes in the world database, and custom content goes in scripts or modules instead of core edits.
 - **Branding header, no other comments.** Every file starts with the Project Ambrose header and a one-line brief of what it holds and does, in the format doc/ARCHITECTURE.md gives for its file type. Nothing else in the file is a comment.
 - **From scratch.** Study AzerothCore for structure and other projects for game behavior, then reimplement. Do not copy, translate, or port code from any of them, and do not commit their data files.

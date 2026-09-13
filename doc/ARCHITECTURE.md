@@ -13,7 +13,7 @@ data/sql/
   updates/db_<name>/      Dated, ordered updates per database
   updates/pending_db_*/   Updates from open pull requests
   custom/db_<name>/       Local-only SQL, never upstreamed
-deps/                     Vendored third-party libraries
+deps/                     vcpkg overlay ports and triplets, when needed
 doc/                      Project documentation
 modules/                  Drop-in modules, discovered by CMake
 src/
@@ -38,7 +38,7 @@ Each layer depends only on the layers to its right.
 apps -> scripts -> game -> database -> shared -> common -> deps
 ```
 
-Tools depend only on `shared` and `common`. Modules depend on `game` and `scripts`.
+Tools depend only on `database`, `shared`, and `common`. Modules depend on `game` and `scripts`.
 
 ## Processes
 
@@ -115,15 +115,45 @@ C++ example:
 - Include guards use `AMBROSE_<FILE>_H`.
 - Global managers are singletons accessed through an `s<Name>` macro, such as `sObjectMgr`, `sScriptMgr`, and `sWorld`.
 
-## Pending decisions
+## Decisions
 
-These follow AzerothCore's precedent unless the maintainer decides otherwise.
+Settled on 2026-09-13. Changing one needs the maintainer's approval and an update to this section.
 
-| Decision | AzerothCore precedent |
+### Stack
+
+| Area | Choice |
 |---|---|
-| C++ standard | C++20 |
-| Build system | CMake |
-| Database | MySQL or MariaDB |
-| Networking | Boost.Asio |
-| String formatting | fmt |
-| Unit tests | GoogleTest |
+| Language | C++20 for all server code |
+| Build | CMake 3.25 or newer, CMakePresets, Ninja Multi-Config |
+| Dependencies | vcpkg manifest mode (`vcpkg.json` with a pinned `builtin-baseline`). No third-party source is committed; `deps/` holds only vcpkg overlay ports and triplets when one is needed |
+| Formatting | fmt |
+| Networking | Standalone Asio (no Boost), with C++20 coroutines |
+| Unit tests | GoogleTest and GoogleMock |
+| XML | pugixml |
+| JSON | nlohmann-json |
+| Compression | zlib |
+| Cryptography | Botan 3, covering SHA-2, Twofish, and the random number generator. The client's non-standard CRC-32 is implemented in `common` |
+| Database server | MySQL 8.0 or newer, or MariaDB 10.6 or newer |
+| Database client | MariaDB Connector/C, which works with both servers |
+
+### Protocol and type data load at runtime
+
+The client's message definitions and type dump are never compiled into the build. At startup each app loads the message definition XML files from the user's install into a `MessageRegistry`, and the type dump into a `TypeRegistry`. Code that uses a message or class declares only the fields it needs, with their C++ types. At startup every declaration is resolved to field indices and checked against the loaded definitions, and the app refuses to start if any declaration is wrong. Wire layout always comes from the loaded definitions, so fields a declaration omits are still encoded correctly with default values.
+
+As a result, the project builds and its unit tests run on any machine, including CI, with no client files. Unit tests use small definition fixtures written by the project. Tests that need a real install carry the CTest label `client` and run only when `AMBROSE_CLIENT_DIR` is set.
+
+### Database updates
+
+Update files run through the connector with multi-statement support, so `DELIMITER` is not allowed in them. The `updates` table records each file's SHA-256 hash.
+
+### Tools
+
+Server code is C++. Tools may use whatever language does the job best, and they must work reliably. A tool that reuses server code, such as the archive reader or the ObjectProperty codec, lives in `src/tools/` in C++. Repository tooling such as the codestyle checker, CI scripts, and the installer lives in `apps/` and may be Python or shell. Every tool file carries the branding header.
+
+### Configuration
+
+A `.conf.dist` file contains only its branding header and `Key = value` lines. Each option is documented in `doc/config/<app>.md`.
+
+### Still open
+
+Decisions that block later milestones are listed under Decisions needed in doc/ROADMAP.md. Propose them to the maintainer when their milestone is next.

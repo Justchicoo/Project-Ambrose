@@ -33,6 +33,8 @@
 
 The roadmap critic flagged these. Resolve each one before or while implementing the milestones it names.
 
+- **Decision 2026-09-13.** Protocol definitions load at runtime (see Decisions in doc/ARCHITECTURE.md). 1.15 becomes the runtime `MessageRegistry` loader plus startup-validated message declarations instead of a build-time generator, and 1.16 tests it against project-authored fixtures, with real-install checks under the `client` CTest label. 1.04 CI therefore needs no client files. Dependencies come from vcpkg manifest mode rather than vendored copies, which replaces the `deps/fmt` and `deps/gtest` deliverables in 1.01 and 1.02.
+
 - **Ordering.** 1.04 CI is built and made mandatory before the 'how CI builds without client files' decision is taken, and before 1.15 msggen makes the build client-dependent. Either 1.04 depends on that decision or CI is rebuilt at 1.15.
 - **Missing work.** Automated headless test client/bot harness that replays scripted sessions. Almost every acceptance is 'Real client' and not repeatable in CI. 1.22 has a fake client, but nothing grows it into a regression harness.
 - **Missing work.** Codestyle checker (1.03) does not check the mandatory one-line brief, the Markdown/SQL/Batch/YAML header forms, or the JSON exemption from ARCHITECTURE.md.
