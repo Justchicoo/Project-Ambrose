@@ -13,7 +13,7 @@ The full plan lives in [doc/ROADMAP.md](doc/ROADMAP.md): 16 phases and 271 miles
 
 ## Building
 
-You need CMake 3.25 or newer, vcpkg with the `VCPKG_ROOT` environment variable pointing at it, and a C++20 compiler: Visual Studio 2022 on Windows, or GCC 13 or newer on Linux. vcpkg installs every library automatically on the first configure.
+You need CMake 3.25 or newer, vcpkg with the `VCPKG_ROOT` environment variable pointing at it, and a C++20 compiler: Visual Studio 2022 or newer on Windows, or GCC 13 or newer on Linux. vcpkg installs every library automatically on the first configure.
 
 Windows:
 

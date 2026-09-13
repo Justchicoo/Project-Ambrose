@@ -124,7 +124,7 @@ Settled on 2026-09-13. Changing one needs the maintainer's approval and an updat
 | Area | Choice |
 |---|---|
 | Language | C++20 for all server code |
-| Build | CMake 3.25 or newer with CMakePresets: the Visual Studio 2022 generator on Windows, Ninja Multi-Config on Linux |
+| Build | CMake 3.25 or newer with CMakePresets: the newest installed Visual Studio generator on Windows (2022 or newer), Ninja Multi-Config on Linux |
 | Dependencies | vcpkg manifest mode (`vcpkg.json` with a pinned `builtin-baseline`). No third-party source is committed; `deps/` holds only vcpkg overlay ports and triplets when one is needed |
 | Formatting | fmt |
 | Networking | Standalone Asio (no Boost), with C++20 coroutines |

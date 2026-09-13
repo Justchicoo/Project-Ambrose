@@ -61,6 +61,7 @@ def main(argv=None):
     if args.warnings_as_errors:
         configure.append("-DAMBROSE_WARNINGS_AS_ERRORS=ON")
     try:
+        run(["cmake", "--version"], environment=environment)
         run(configure, environment=environment)
         run(["cmake", "--build", "--preset", args.build_preset], environment=environment)
         run(["ctest", "--preset", args.test_preset or args.build_preset], environment=environment)
