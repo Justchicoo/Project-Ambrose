@@ -1,0 +1,116 @@
+<!-- Project Ambrose by Imjustchico: Ordered implementation roadmap: phases, milestones, and open decisions. -->
+
+# Roadmap
+
+Work through the phases in order. Each phase ends with something visible in the real client, and each milestone is small enough to implement and verify in one focused stretch. A milestone is done when every acceptance check in its phase file passes.
+
+## Where we are
+
+ has only README.md, CONTRIBUTING.md, CLAUDE.md, CLAUDE.local.md, doc/ARCHITECTURE.md and an empty folder skeleton (apps/{ci,codestyle,installer}, conf/dist, data/sql/{base,updates,pending_*,custom}/db_{login,characters,world}, deps, modules, src). Nothing builds, and every stack choice in ARCHITECTURE.md 'Pending decisions' is still open.
+
+I checked these against the sources, read-only:
+(1) Root.wad holds 29 *Messages*.xml files, not 26. GameMessages2.xml (svc 55, 10 msgs), WizardMessages2.xml (53, 254) and WizardMessages3.xml (56, 213) exist. That gives 1448 records, 1446 distinct ids and still only 9 field types. MSG_CLIENTZONED arrives as svc=53 order=64 right after LOGINCOMPLETE in a local session capture line 120, so msggen must cover all 29 files.
+(2) Ids come from an ordinal sort of element tags. The sort reproduces WIZARD MSG_UPDATEMANA=233 and MSG_UPDATEGOLD=231 (the duplicate PETHATCHREADYSTATUS gives 254 tags and 253 ids), GAME ATTACH=7, CLIENTMOVE=36, LOGINCOMPLETE=108, NEWOBJECT=122, BADGES=10, and QUEST ACCEPTQUEST=1. For WizCombat, CMB-1's claim 'MSG_SETSTATUS=last' is wrong: the last id is MSG_UPDATEDUELTIMER.
+(3) The capture's login sequence (lines 1-12, VALIDATE at 21852) matches the LOG plan. But its CHARACTERSELECTED IP is 127.0.0.2:12333, which means the traffic was recorded against the reference server, not retail. What it proves is that the client accepted that behavior, not that retail behaves that way.
+(4) KiStringHash('Fire')=2343174, 'Ice'=72777, 'Balance'=1027491821, 'class Duel'=85019234. LOG-7's StringId is the same function as OBJ-2, so they merge.
+(5) The KI CRC variant gives 0x2DFD2D88 on '123456789'; zlib's standard CRC gives 0xCBF43926. One CRC module must support both.
+(6) The Spells/* BINd entries I sampled use flags 7 (raw). TemplateManifest.xml uses flags 15 (zlib at offset 13), so the decoder needs both.
+(7) In the r806919 dump, ResTeleport has 0 properties (so door destinations need an authored table). WizardQuestingBehaviorTemplate, ResDropTable, ResAddGold, WizZoneTriggers, Trigger and MobDeckBehavior(Template) are absent, so server-side schemas or types are needed. Duel has 62 properties, QuestTemplate 36, WizardCharacterCreationInfo 14 (hash 292458316).
+
+Gaps the domain plans left open, filled here:
+- There was no DAT plan, but DAT-1 and DAT-2 were referenced. They are now the KIWAD reader (1.13) and the template store (5.01).
+- No owner existed for ScriptMgr, sWorld or CommandMgr (the 'CMD-1' reference). They are now 4.01 and 4.02.
+- The shared GameEffect framework broke a WIZ-13 <-> CMB cycle. It is now 9.03.
+- Fuzzy ids like 'WLD-interact', 'SOC-party' and 'EXT-1 (in QST-1)' are mapped to real milestones.
+- Duplicates merged: ByteBuffer (FND-6+NET-1), BitStream (FND-6+OBJ-1), CRC32 (FND-7+PAT-2), Twofish (FND-8+LOG-3; Rec1 needs a 32-byte key, so Twofish-256), zlib (FND-8+OBJ-3), .lang loader (OBJ-14+QST-1), CoreObject envelope (OBJ-9+WLD-6), LocationString (LOG-11+WLD-1), zone object extractor (WLD-2+QST-4), object template extractor (OBJ-17+QST-3), SpellMgr (CMB-2+WIZ-9), loot (QST-19+CMB-20), vendors (EXT-1+QST-20+WIZ-24), pets in combat (CMB-26+EXT-22), tutorial (CMB-28+EXT-24), dispatch (NET-9+LOG-1).
+- Ids are renumbered as <phase>.<nn>. Milestone titles keep their origin ids.
+
+## The biggest thing first
+
+Phase 1's protocol spine: a clean-room message layer generated at build time from the user's own 29 client XML files (KIWAD reader 1.13, then definition parser 1.14, then msggen 1.15), sitting on the frame and session codec (1.17-1.21). It needs one maintainer decision first: how CI builds without client files.
+
+All 1446 message ids, every dispatch table and every client-visible milestone in all ten domains depend on correct (service, order) ids and field layouts. Those can only come from the client install, because no generated code may be committed. The build/CI model (client-gated build, a stub mode, or runtime-loaded definitions) changes the shape of shared/Messages, NET-9 tables, the tests and CI. Settling it late would mean rewriting every handler. It also carries the least-verified wire facts (SessionOffer 23 vs 28 bytes, long-frame semantics) that gate the very first real-client contact.
+
+First milestones:
+
+- 1.01 Toolchain hello: CMake + fmt + genrev (FND-1)
+- 1.13 KIWAD archive reader (new DAT-1, absorbs PAT-2 KiwadHeader)
+- 1.14 Message definition model and ordinal rules over all 29 XML files (NET-2)
+
+## Phases
+
+| Phase | Name | Milestones | Done when |
+|---|---|---|---|
+| 1 | [Foundations to first handshake](roadmap/phase-01-foundations-to-first-handshake.md) | 22 | The retail client, started with -L 127.0.0.1 12000 -P 0, completes SessionOffer/SessionAccept with Ambrose loginserver and stays connected. The server log names its MSG_USER_AUTHEN_V3 (7:27). |
+| 2 | [Log in to character select](roadmap/phase-02-log-in-to-character-select.md) | 15 | The correct password lands on an empty character select screen. A wrong password shows the client's invalid-login dialog and allows a retry. |
+| 3 | [Create, list and delete a wizard](roadmap/phase-03-create-list-and-delete-a-wizard.md) | 19 | A player creates a wizard (school, look, name). It appears on character select with the right appearance, persists across restarts, and can be deleted. |
+| 4 | [A wizard stands in Ravenwood](roadmap/phase-04-a-wizard-stands-in-ravenwood.md) | 14 | After Play, the client leaves loginserver, attaches to gameserver and the player controls their wizard in WizardCity/WC_Ravenwood (or WC_Hub 'Start'). No other objects are streamed yet. |
+| 5 | [The zone comes alive for one player](roadmap/phase-05-the-zone-comes-alive-for-one-player.md) | 8 | Ravenwood shows its NPCs and props where retail has them, and the HUD shows real health, mana, gold and level from the DB. Relogging returns to the same spot, and quit-to-select works without a password. |
+| 6 | [Other players are visible](roadmap/phase-06-other-players-are-visible.md) | 18 | Two clients in WC_Hub see each other walk, jump, chat and emote, and one sees the other vanish on logout. Walking through the Ravenwood gate transfers zones. GMs teleport, kick and ban. |
+| 7 | [An NPC offers a quest](roadmap/phase-07-an-npc-offers-a-quest.md) | 13 | A test NPC in Ravenwood shows '!' and plays its Prep dialog. It opens the quest offer window, and accepting fills the quest book. Talking to the persona NPC ('?') completes the goal and chains the next offer. |
+| 8 | [The wizard grows: vitals, XP, spells, backpack and gear](roadmap/phase-08-the-wizard-grows-vitals-xp-spells-backpack-and-gear.md) | 14 | GM commands grant gold, XP, spells and items that show live. Potions work. Equipping a hat changes the model for nearby players. Decks and treasure cards can be built, and trainers teach spells. |
+| 9 | [A duel completes](roadmap/phase-09-a-duel-completes.md) | 12 | A wizard walks into a wandering mob and is pulled onto a sigil. They draw cards, cast Fire Cat, pay pips, and either win (victory sequence, respawn) or lose (sent to safety), and can flee. |
+| 10 | [Play the Wizard City opening quests](roadmap/phase-10-play-the-wizard-city-opening-quests.md) | 18 | A fresh wizard plays the first Wizard City chain from committed key-only SQL, covering offer, waypoint, persona, usage and bounty goals, rewards and gates opening. They also buy from vendors and use the Spiral Door. |
+| 11 | [Real combat](roadmap/phase-11-real-combat.md) | 25 | Two players and several mobs fight with gear stats, blades, traps, shields, heals, DoTs, AoE, stuns and authored creature decks. Health bars never desync. |
+| 12 | [Social wizards, instances and realms](roadmap/phase-12-social-wizards-instances-and-realms.md) | 23 | Players friend, whisper, group, trade, bank and dye. They wear titles, save outfits, pick instances and switch realms from the in-game picker. |
+| 13 | [Pets, cantrips, crafting and minigames](roadmap/phase-13-pets-cantrips-crafting-and-minigames.md) | 21 | An equipped pet follows the wizard, eats snacks, levels up and casts in duels. Cantrips cast. Reagents are harvested and crafted. Kiosk minigames pay rewards, and the Crown Shop browses and sells. |
+| 14 | [Dungeons, tutorial and PvP](roadmap/phase-14-dungeons-tutorial-and-pvp.md) | 16 | Groups enter sigil dungeons with countdowns. New wizards play the scripted tutorial, and players queue for ranked PvP, tournaments, pet derby and daily assignments. |
+| 15 | [Housing, gardening and fishing](roadmap/phase-15-housing-gardening-and-fishing.md) | 21 | Players go home, decorate, store items in attic and vaults, grow gardens, fish ponds, publish castle tours and build castle magic. |
+| 16 | [Patch server and tooling ownership](roadmap/phase-16-patch-server-and-tooling-ownership.md) | 12 | The retail client patches against Ambrose with 0 files altered, restores a deleted WAD, and streams missing zone packages. Users produce their own type dump with Ambrose tooling. This track can run in parallel any time after phase 2. |
+
+Total: 271 milestones.
+
+## Decisions needed
+
+These block specific milestones. The maintainer decides each one, then this list and doc/ARCHITECTURE.md are updated.
+
+- How CI and builds work without client files: a client-gated build with a self-hosted runner, a stub mode, or runtime-loaded message definitions. Blocks 1.04, 1.15, 1.16 and the shape of every handler after them.
+- Stack choices. C++20/CMake/presets block 1.01. Vendored deps vs vcpkg/Conan block 1.01, 1.13 and 2.01. GoogleTest vs Catch2 blocks 1.02. Boost.Asio vs standalone Asio blocks 1.11, 1.19 and 16.05 (Beast). fmt vs std::format blocks 1.10.
+- Libraries not yet on the pending list: an XML parser (1.14, 3.12, 16.02), a JSON parser for the type dump (3.03), zlib vs zlib-ng (1.13), OpenSSL vs self-contained hashes (1.12), and a Twofish source written from the spec vs Botan/Crypto++ (2.11).
+- MySQL 8 vs MariaDB and which connector, including licensing. Blocks 2.01, 2.02, and JSON-vs-normalized columns in 7.03 and 10.01.
+- SQL file execution through CLIENT_MULTI_STATEMENTS or the mysql CLI (DELIMITER support), and whether the updates table uses SHA-256 or SHA-1. Blocks 2.06.
+- Rule exceptions. Is Python allowed for apps/codestyle and apps/ci (1.03, 1.04)? Is deps/ exempt from the header rule (1.03)? Where do .conf.dist options get documented, given no comments (1.09)? Should dbimport and extractors be allowed to link src/server/database despite 'tools depend only on shared/common' (2.07, 3.14, 4.08, 7.01)?
+- Pending SQL promotion. Naming of pending_ files, and whether a CI bot may push to main. Blocks 3.19.
+- Whether a password-equivalent verifier base64(SHA-512(password)) may be stored in db_login, as the ClientKey1 scheme forces. Blocks 2.13 and 2.14.
+- Where AccountMgr and the security-level tables live (game/Accounts linked into loginserver, or apps/loginserver). Blocks 2.13 and 4.02.
+- Session state names across the three apps (connected, handoff, authenticated, logged in, in world). Blocks 2.09.
+- MSG_COMBATMOVE MoveType values: the XML description says 0 pass, 1 attack, 2 enchant, 3 flee, the reference says Attack 0, Flee 1, Discard 2, Pass 3, ChangeMind 4. A capture or client RE must settle it. Blocks 9.06.
+- Whether the client simulates spell results from server-supplied rolls, which would require bit-exact server math. Must be settled in 9.08. Blocks 11.05 and 11.06.
+- Whether client identifiers (locale keys, template ids, internal quest/goal names) may be committed in authored SQL while display text may not, and whether a door destination table derived from client location names counts as extracted data. Blocks 6.14, 7.05, 10.16.
+- Where server-side content not in the client comes from, clean-room: quests, creature decks, drop tables, vendor stock, trainer lists, badges, XP/gold formulas, bank capacities, potion rates. Blocks 8.13, 10.07-10.10, 10.16, 11.14, 12.08.
+- Whether extractor-filled tables (object_template, zone_*, item_template, spells) are generated locally into the shared world DB or into a separate local-only DB, and whether templates are decoded at runtime from WADs or stored in the DB. Blocks 4.08, 5.01, 7.01, 8.04, 8.06.
+- Whether supplemental server-side class schemas are a committed file under data/ or a world DB table. Blocks 6.10 and 6.11.
+- Whether Ambrose builds its own type dumper (reads a live client process) or documents an external tool, and which revision and dump hash to pin. Blocks 3.03 in practice and 16.11.
+- Whether typed views are hand-written with constexpr hashes or generated at build time. Blocks 3.07.
+- Threading model: one world thread vs map-per-thread or strands. Blocks 4.01, 4.10, 6.01 and duel timers in 9.06.
+- Whether ranked-style security levels copy AzerothCore's SEC_PLAYER..SEC_CONSOLE numbering, and how they map to LOGINCOMPLETE IsCSR/Permissions. Blocks 4.02 and 6.04.
+- Whether zone spawns for all 3356 zones load at startup or lazily per instance. Blocks 4.09 and 5.02.
+- Whether to embed a Lua runtime to run the client-shipped minigame Server.lua scripts or reimplement them in C++. Blocks 13.11.
+- Crowns policy: GM grant only, or earned in game. Blocks 12.15 and 13.20.
+- Whether battlegrounds, castle magic and monster magic stay in scope. Blocks 14.14, 14.15 and 15.17-15.20.
+- Whether the tutorial moves earlier, since new characters see it first. Affects where 14.02/14.03 sit and 3.16's playercreateinfo start zone.
+- Whether the loginserver enforces Revision/DataRevision against the patch manifest. Blocks 16.07.
+
+## Top risks
+
+- Unverified wire basics could block the first real-client contact: SessionOffer length (23 vs 28 bytes), long-frame length semantics, and the Rec1/CK1 salt number formatting. 1.18 and 2.14 must be checked with a real client before anything else builds on them.
+- The only capture comes from the reference server (CHARACTERSELECTED to 127.0.0.2:12333), not retail. It proves what the client accepts, not what retail sends, so ordering, error codes and blob masks inferred from it may be wrong.
+- Message coverage: the domain plans counted only 26 of the 29 XML files. WIZARD2 (53), WIZARD3 (56) and GAME2 (55) hold 477 more records, including MSG_CLIENTZONED (53:64), which is needed at world entry. A duplicate tag shifts WIZARD ids after position 122, so each ordinal must stay test-guarded.
+- Much content is absent from the client and must be authored clean-room: quest templates, drop tables, vendor stock, creature decks, trainer lists, badges, door destinations (ResTeleport has 0 properties), and server-only classes (Trigger, WizZoneTriggers, Res*, WizardQuestingBehaviorTemplate, MobDeckBehavior are all missing from the dump). This content work is large and the maintainer's ruling on committing client identifiers gates it.
+- Combat math parity: if the client replays CombatActions with its own resolver, any formula mismatch shows as visible health desync. The formulas exist in no local source and need client RE.
+- No way to test in hosted CI: the builds, type registry, extractors and real-client tests all need the user's install and dump, so regressions may only surface on the maintainer's machine.
+- ObjectProperty edge cases: the per-field envelope policy, DirtyEncode semantics, Matrix3x3 width, and CoreObject block/type pairs other than 104/2 are unverified. Getting any of them wrong crashes the client rather than failing gracefully.
+- Scope: about 250 milestones, with phases 13-15 (pets, housing, PvP) holding the most poorly documented systems. Keep the phase gates honest and do not start later phases before phase 10's playable loop exists.
+
+## Review findings not tied to one phase
+
+**Missing work**
+
+- Unassigned LOGIN messages: MSG_CHANGECHARACTERNAME (order 26), MSG_SAVECHARACTER (23), MSG_FULFILLPROMOCODE (29), MSG_WEBCHARACTERINFO (21). Also character rename (WIZ3 MSG_REQUESTRENAMECHARACTER) and purchased character slots (WIZ2 MSG_UPDATEPURCHASEDCHARACTERSLOTS, ResAddCharacterSlotResult).
+- Most of WizardMessages2 (53) and WizardMessages3 (56), 467 messages, has no milestone even though the roadmap itself flags them. Missing systems include jewels/sockets (EQUIPJEWELTOITEM, UNLOCKSOCKETS, UNSOCKETJEWELREQUEST), mounts (RIDEOBJECT, SETSTOREDMOUNT), Team Up/Team Help (REQUESTTEAMUP, TEAMUP*), resume-instance (SETRESUMEINSTANCE, UPDATERESUMEINSTANCETIME), zone gates/recall (ZONEGATELIST, ZONEHOP, RecallLocationConfirm, GotoDormConfirm), guilds/kinhouses (GUILD*, VISITGUILDHOUSE), Pixie Post mail, loyalty store, season pass, Rate My Stitch, Magic Mirror appearance change, spell fusion (ADDSPELLFUSIONTODECK), tiered spell upgrade/refund, Hatchmaking, pet elixirs, class projects/gauntlets, basic chat channels, zone tokens (AddZoneToken/ModifyZoneToken), environmental damage, holiday/event currency (HOLIDAYDATA, UPDATEEVENTCURRENCY1/2), and GameMessages2 (55) MSG_BADGESEGMENT and MSG_PVPBLOCK.
+- Server-side use of zone geometry. Each zone WAD ships collision.bcd, zone.nav, pathData.xml, pathNodeData.bin, spawnData.xml, clientSpawnData.xml, portals.xml and FishingInfo.xml (verified in WizardCity-WC_Ravenwood.wad). No milestone loads collision or navmesh for mob wandering, aggro line of sight, spawn ground snapping, fishing spots or move validation.
+- Crash safety and persistence policy: periodic autosave of all online characters, write-behind queue flush on shutdown or crash, and reconciling stale online=1 / login_key rows after a gameserver crash (otherwise the character stays locked). No DB backup or restore guidance.
+- Player-facing account lifecycle and security: account registration path beyond the console, password change/reset, login brute-force throttling per IP/account, and audit logs of GM actions and chat for moderation (reports/Infraction, MSG_REPORTHOUSE handling).
+- Remote administration (AzerothCore RA/SOAP equivalent) or an operator console on each app, plus metrics/health endpoints for multi-realm operation.
+- Message identity collisions: service 54 (CatchAKeyMessages.xml) and service 44 (ShockALockMessages.xml) both define MSG_MG3_CONNECT/MOVED/REWARDS. GAME also has duplicate MSG_REMOVEOBJECT tags with different descriptions (S->C out of proximity vs C->S remove instance object). The registry and msggen must key by (service, name) and handle direction. Only the PETHATCHREADYSTATUS duplicate is mentioned.
+- Localization and locale for server-generated text (MSG_ATTACH carries Locale). Server-side notice strings are not planned.

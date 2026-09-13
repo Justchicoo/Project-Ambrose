@@ -9,6 +9,8 @@ The experiment is simple: see how far AI-driven development can take a complete 
 
 Pre-alpha. The repository layout is in place, and there is nothing to build or run yet.
 
+The full plan lives in [doc/ROADMAP.md](doc/ROADMAP.md): 16 phases and 271 milestones, each ending in something visible in the real client. The tool suite is in [doc/TOOLS.md](doc/TOOLS.md) and the client strategy in [doc/CLIENT.md](doc/CLIENT.md).
+
 ## Ground rules
 
 - The server is written in C++.
