@@ -263,7 +263,7 @@ Bounds-checked little-endian primitives cover every DML field type in the client
 **Acceptance**
 
 - [x] Round-trip each DML type; reading a STR whose length prefix passes the buffer end throws and allocates nothing
-- [ ] BitWriter write(0b101,3), write(0x7F,7), realign produces the expected bytes; BitReader reads the same values; s24 sign-extends -1 (tracked under 1.07)
+- [x] BitWriter write(0b101,3), write(0x7F,7), realign produces the expected bytes; BitReader reads the same values; s24 sign-extends -1 (delivered in 1.07)
 - [ ] UTF-8 'Wizardé\U0001F600' -> UTF-16LE -> UTF-8 is identical; an unpaired surrogate is replaced or rejected (documented) (tracked under 1.08)
 - [ ] Base64 matches RFC 4648 vectors (tracked under 1.08)
 - [ ] Optional integration test (skipped unless AMBROSE_CLIENT_DIR is set): decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error (tracked under 1.08)
@@ -308,9 +308,9 @@ Every one of the 9 wire field types used by the client XML can be read and writt
 
 **Acceptance**
 
-- [ ] bit 1, u32 0xAABBCCDD, 3 bits 0b101 gives 01 DD CC BB AA 05
-- [ ] s24 -2 and bui5 31 round-trip
-- [ ] Read past end sets failed flag, no crash
+- [x] bit 1, u32 0xAABBCCDD, 3 bits 0b101 gives 01 DD CC BB AA 05
+- [x] s24 -2 and bui5 31 round-trip
+- [x] Read past end sets failed flag, no crash
 
 ### Detailed spec from OBJ-1: Bit stream reader and writer
 
@@ -324,10 +324,10 @@ Any code can read and write KI bit-packed streams exactly as the client does, sa
 
 **Acceptance**
 
-- [ ] Unit test: writing bit 1, then u32 0xAABBCCDD, then 3 bits 0b101 produces the hand-derived bytes 01 DD CC BB AA 05, and reads back identically
-- [ ] Unit test: s24 value -2 round-trips; bui5 31 round-trips; mixed bool/u16 sequences realign correctly
-- [ ] Unit test: reading past the end sets a failed flag, returns zeros and never crashes (run under ASan/UBSan in CI)
-- [ ] Unit test: back-patching a u32 at an earlier bit position rewrites it exactly
+- [x] Unit test: writing bit 1, then u32 0xAABBCCDD, then 3 bits 0b101 produces the hand-derived bytes 01 DD CC BB AA 05, and reads back identically
+- [x] Unit test: s24 value -2 round-trips; bui5 31 round-trips; mixed bool/u16 sequences realign correctly
+- [x] Unit test: reading past the end sets a failed flag, returns zeros and never crashes (run under ASan/UBSan in CI)
+- [x] Unit test: back-patching a u32 at an earlier bit position rewrites it exactly
 
 **Risks**
 
@@ -348,12 +348,12 @@ Bounds-checked little-endian primitives cover every DML field type in the client
 
 **Acceptance**
 
-- [ ] Round-trip each DML type; reading a STR whose length prefix passes the buffer end throws and allocates nothing
-- [ ] BitWriter write(0b101,3), write(0x7F,7), realign produces the expected bytes; BitReader reads the same values; s24 sign-extends -1
-- [ ] UTF-8 'Wizardé\U0001F600' -> UTF-16LE -> UTF-8 is identical; an unpaired surrogate is replaced or rejected (documented)
-- [ ] Base64 matches RFC 4648 vectors
-- [ ] Optional integration test (skipped unless AMBROSE_CLIENT_DIR is set): decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error
-- [ ] Real client: n/a
+- [x] Round-trip each DML type; reading a STR whose length prefix passes the buffer end throws and allocates nothing (delivered in 1.06)
+- [x] BitWriter write(0b101,3), write(0x7F,7), realign produces the expected bytes; BitReader reads the same values; s24 sign-extends -1
+- [ ] UTF-8 'Wizardé\U0001F600' -> UTF-16LE -> UTF-8 is identical; an unpaired surrogate is replaced or rejected (documented) (tracked under 1.08)
+- [ ] Base64 matches RFC 4648 vectors (tracked under 1.08)
+- [ ] Optional integration test (skipped unless AMBROSE_CLIENT_DIR is set): decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error (tracked under 1.08)
+- [x] Real client: n/a
 
 **Risks**
 
