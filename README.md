@@ -20,7 +20,9 @@ Windows:
 ```
 cmake --preset windows-msvc-x64
 cmake --build --preset windows-debug
-build\windows-msvc-x64\bin\Debug\gameserver.exe
+cd build\windows-msvc-x64\bin\Debug
+copy gameserver.conf.dist gameserver.conf
+gameserver.exe
 ```
 
 Linux:
@@ -28,8 +30,12 @@ Linux:
 ```
 cmake --preset linux-gcc
 cmake --build --preset linux-gcc-debug
-./build/linux-gcc/bin/Debug/gameserver
+cd build/linux-gcc/bin/Debug
+cp gameserver.conf.dist gameserver.conf
+./gameserver
 ```
+
+The build copies `gameserver.conf.dist` next to the executable. The server reads `gameserver.conf` from the folder it runs in, logs to the console and to `logs/Server.log`, and exits with an error naming the missing file if there is no `gameserver.conf`. Options are described in [doc/config/gameserver.md](doc/config/gameserver.md) and [doc/config/logging.md](doc/config/logging.md).
 
 Use the `windows-release` or `linux-gcc-release` build presets for optimized builds.
 

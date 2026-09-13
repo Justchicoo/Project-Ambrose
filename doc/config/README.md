@@ -1,7 +1,7 @@
 <!-- Project Ambrose by Imjustchico: How server configuration files, layers, environment overrides, and reloads work. -->
 # Configuration
 
-Every app reads its settings through `ConfigMgr`. Options are documented per app in `doc/config/<app>.md`, because config files hold no comments beyond their branding header.
+Every app reads its settings through `ConfigMgr`. Options are documented per app in `doc/config/<app>.md`, because config files hold no comments beyond their branding header. The logging options shared by every app are described in [logging.md](logging.md).
 
 ## File format
 
@@ -57,7 +57,7 @@ Environment variables are read each time an option is requested, so they can sup
 
 `GetOption<T>(name, default)` supports strings, booleans, integers, and floating point. Character types are rejected at compile time. Booleans accept `1`, `0`, `true`, `false`, `yes`, and `no` in any case. A missing option or a value that does not parse, including an integer out of range for the requested type, returns the default and records one warning per option.
 
-Warnings are buffered until the app installs a warning sink with `SetWarningSink`, which receives the buffered warnings first and then each new one as it happens. Calls to the sink are serialized, and the sink must stay valid until it is replaced. A successful load or reload lets each warning fire again.
+Warnings are buffered until the app installs a warning sink with `SetWarningSink`, which receives the buffered warnings first and then each new one as it happens. Apps install the logging sink at startup, so warnings appear as WARN lines in the `server.config` category. Calls to the sink are serialized, and the sink must stay valid until it is replaced. A successful load or reload lets each warning fire again.
 
 ## Reload
 

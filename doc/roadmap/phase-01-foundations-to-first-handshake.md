@@ -445,9 +445,9 @@ Apps read typed options from <app>.conf, falling back to .conf.dist defaults, wi
 
 **Acceptance**
 
-- [ ] Logger.sql.sql at Warn drops LOG_INFO while root Info prints
-- [ ] A format mismatch is a compile error
-- [ ] File appender writes Server.log
+- [x] Logger.sql.sql at Warn drops LOG_INFO while root Info prints
+- [x] A format mismatch is a compile error
+- [x] File appender writes Server.log
 
 ### Detailed spec from FND-10: common/Logging: loggers, appenders, levels from config
 
@@ -464,10 +464,10 @@ All code logs through named loggers configured by Appender.* and Logger.* option
 
 **Acceptance**
 
-- [ ] Logger.sql.sql at level Warn drops LOG_INFO("sql.sql", ...) while Logger.root at Info still prints server.* messages
-- [ ] A format string/argument mismatch is a compile error
-- [ ] File appender writes Server.log in LogsDir with the expected line prefix (time, level, logger)
-- [ ] Real client: n/a
+- [x] Logger.sql.sql at level Warn drops LOG_INFO("sql.sql", ...) while Logger.root at Info still prints server.* messages
+- [x] A format string/argument mismatch is a compile error
+- [x] File appender writes Server.log in LogsDir with the expected line prefix (time, level, logger)
+- [x] Real client: n/a
 
 **Risks**
 
