@@ -264,9 +264,9 @@ Bounds-checked little-endian primitives cover every DML field type in the client
 
 - [x] Round-trip each DML type; reading a STR whose length prefix passes the buffer end throws and allocates nothing
 - [x] BitWriter write(0b101,3), write(0x7F,7), realign produces the expected bytes; BitReader reads the same values; s24 sign-extends -1 (delivered in 1.07)
-- [ ] UTF-8 'Wizardé\U0001F600' -> UTF-16LE -> UTF-8 is identical; an unpaired surrogate is replaced or rejected (documented) (tracked under 1.08)
-- [ ] Base64 matches RFC 4648 vectors (tracked under 1.08)
-- [ ] Optional integration test (skipped unless AMBROSE_CLIENT_DIR is set): decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error (tracked under 1.08)
+- [x] UTF-8 'Wizardé\U0001F600' -> UTF-16LE -> UTF-8 is identical; an unpaired surrogate is replaced or rejected (documented) (delivered in 1.08)
+- [x] Base64 matches RFC 4648 vectors (delivered in 1.08)
+- [ ] Optional integration test (skipped unless AMBROSE_CLIENT_DIR is set): decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error (moved to 1.13, which adds the archive reader)
 - [x] Real client: n/a
 
 **Risks**
@@ -350,9 +350,9 @@ Bounds-checked little-endian primitives cover every DML field type in the client
 
 - [x] Round-trip each DML type; reading a STR whose length prefix passes the buffer end throws and allocates nothing (delivered in 1.06)
 - [x] BitWriter write(0b101,3), write(0x7F,7), realign produces the expected bytes; BitReader reads the same values; s24 sign-extends -1
-- [ ] UTF-8 'Wizardé\U0001F600' -> UTF-16LE -> UTF-8 is identical; an unpaired surrogate is replaced or rejected (documented) (tracked under 1.08)
-- [ ] Base64 matches RFC 4648 vectors (tracked under 1.08)
-- [ ] Optional integration test (skipped unless AMBROSE_CLIENT_DIR is set): decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error (tracked under 1.08)
+- [x] UTF-8 'Wizardé\U0001F600' -> UTF-16LE -> UTF-8 is identical; an unpaired surrogate is replaced or rejected (documented) (delivered in 1.08)
+- [x] Base64 matches RFC 4648 vectors (delivered in 1.08)
+- [ ] Optional integration test (skipped unless AMBROSE_CLIENT_DIR is set): decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error (moved to 1.13, which adds the archive reader)
 - [x] Real client: n/a
 
 **Risks**
@@ -368,8 +368,8 @@ Bounds-checked little-endian primitives cover every DML field type in the client
 
 **Acceptance**
 
-- [ ] UTF-8 'Wizardé\U0001F600' round-trips via UTF-16LE
-- [ ] Base64 matches RFC 4648 vectors
+- [x] UTF-8 'Wizardé\U0001F600' round-trips via UTF-16LE
+- [x] Base64 matches RFC 4648 vectors
 
 ### Detailed spec from FND-6: common/Encoding: byte buffer, bit stream, text encodings
 
@@ -386,12 +386,12 @@ Bounds-checked little-endian primitives cover every DML field type in the client
 
 **Acceptance**
 
-- [ ] Round-trip each DML type; reading a STR whose length prefix passes the buffer end throws and allocates nothing
-- [ ] BitWriter write(0b101,3), write(0x7F,7), realign produces the expected bytes; BitReader reads the same values; s24 sign-extends -1
-- [ ] UTF-8 'Wizardé\U0001F600' -> UTF-16LE -> UTF-8 is identical; an unpaired surrogate is replaced or rejected (documented)
-- [ ] Base64 matches RFC 4648 vectors
-- [ ] Optional integration test (skipped unless AMBROSE_CLIENT_DIR is set): decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error
-- [ ] Real client: n/a
+- [x] Round-trip each DML type; reading a STR whose length prefix passes the buffer end throws and allocates nothing (delivered in 1.06)
+- [x] BitWriter write(0b101,3), write(0x7F,7), realign produces the expected bytes; BitReader reads the same values; s24 sign-extends -1 (delivered in 1.07)
+- [x] UTF-8 'Wizardé\U0001F600' -> UTF-16LE -> UTF-8 is identical; an unpaired surrogate is replaced or rejected (documented)
+- [x] Base64 matches RFC 4648 vectors
+- [ ] Optional integration test (skipped unless AMBROSE_CLIENT_DIR is set): decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error (moved to 1.13, which adds the archive reader)
+- [x] Real client: n/a
 
 **Risks**
 
@@ -584,6 +584,7 @@ The server can compute the exact CRC, HeaderSize and HeaderCRC values the client
 - [ ] Synthetic KIWAD v2 with 3 entries gives TOC length 14 + sum(21+nameLen)
 - [ ] Client-gated: Root.wad lists 173088 entries (verified); LoginMessages.xml inflates; a flags-15 BINd inflates at offset 13
 - [ ] Client-gated: header parse never over-reads on any GameData/*.wad
+- [ ] Optional integration test moved from 1.08: decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error, skipped unless AMBROSE_CLIENT_DIR is set
 
 ### Detailed spec from FND-8: common/Cryptography part 2: Twofish-OFB; common/Utilities: zlib
 
