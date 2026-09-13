@@ -1,4 +1,4 @@
-<!-- Project Ambrose: Project overview, status, ground rules, and disclaimer. -->
+<!-- Project Ambrose by Imjustchico: Project overview, status, ground rules, and disclaimer. -->
 # Project Ambrose
 
 An experimental Wizard101 server written from scratch in C++, built by AI agents under human direction.

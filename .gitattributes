@@ -1,4 +1,4 @@
-# Project Ambrose
+# Project Ambrose by Imjustchico
 # Line ending normalization per file type.
 * text=auto
 *.sh text eol=lf

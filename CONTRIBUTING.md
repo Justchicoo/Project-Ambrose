@@ -1,4 +1,4 @@
-<!-- Project Ambrose: How to contribute, including the rules for AI-written changes. -->
+<!-- Project Ambrose by Imjustchico: How to contribute, including the rules for AI-written changes. -->
 # Contributing
 
 Project Ambrose is an AI-driven project. Contributions written with AI tools are expected, not just allowed.

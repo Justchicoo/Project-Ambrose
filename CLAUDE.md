@@ -1,4 +1,4 @@
-<!-- Project Ambrose: Rules every AI agent follows when working in this repository. -->
+<!-- Project Ambrose by Imjustchico: Rules every AI agent follows when working in this repository. -->
 # Project Ambrose
 
 An experimental Wizard101 server written from scratch in C++ by AI agents under human direction. Read README.md, CONTRIBUTING.md, and doc/ARCHITECTURE.md first.

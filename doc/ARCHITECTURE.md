@@ -1,4 +1,4 @@
-<!-- Project Ambrose: Repository layout, layering rules, and development methods. -->
+<!-- Project Ambrose by Imjustchico: Repository layout, layering rules, and development methods. -->
 # Architecture
 
 Project Ambrose follows the structure and methods of AzerothCore, the open-source World of Warcraft server emulator, adapted to Wizard101. The layout and patterns are borrowed. No AzerothCore code is.
@@ -94,17 +94,17 @@ Every file starts with the Project Ambrose branding header and a one-line brief 
 
 | File type | Header |
 |---|---|
-| C and C++ | `/*` then ` * Project Ambrose` then ` * <brief>` then ` */` |
-| CMake, shell, PowerShell, Python, YAML, conf, git and editor config | `# Project Ambrose` then `# <brief>` |
-| SQL | `-- Project Ambrose` then `-- <brief>` |
-| Batch | `REM Project Ambrose` then `REM <brief>` |
-| Markdown | `<!-- Project Ambrose: <brief> -->` |
+| C and C++ | `/*` then ` * Project Ambrose by Imjustchico` then ` * <brief>` then ` */` |
+| CMake, shell, PowerShell, Python, YAML, conf, git and editor config | `# Project Ambrose by Imjustchico` then `# <brief>` |
+| SQL | `-- Project Ambrose by Imjustchico` then `-- <brief>` |
+| Batch | `REM Project Ambrose by Imjustchico` then `REM <brief>` |
+| Markdown | `<!-- Project Ambrose by Imjustchico: <brief> -->` |
 
 C++ example:
 
 ```cpp
 /*
- * Project Ambrose
+ * Project Ambrose by Imjustchico
  * Quest template storage and lookup by id.
  */
 ```

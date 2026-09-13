@@ -1,4 +1,4 @@
-# Project Ambrose
+# Project Ambrose by Imjustchico
 # Build output, local config, and game data that must never be committed.
 build/
 out/
