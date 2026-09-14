@@ -25,6 +25,7 @@ struct MessageInfo
     ProtocolDef const* Protocol = nullptr;
     MessageDef const* Definition = nullptr;
     std::vector<DmlValue> Defaults;
+    std::size_t MinSize = 0;
 };
 
 enum class MessageDecodeStatus : uint8
@@ -56,6 +57,7 @@ public:
     std::vector<MessageIssue> const& GetErrors() const noexcept { return _errors; }
     std::vector<MessageIssue> const& GetWarnings() const noexcept { return _warnings; }
     std::size_t GetMessageCount() const noexcept { return _infos.size(); }
+    std::vector<MessageInfo> const& GetMessages() const noexcept { return _infos; }
 
     MessageInfo const* Find(uint8 serviceId, uint8 order) const noexcept;
     MessageInfo const* Find(uint8 serviceId, std::string_view tag) const noexcept;

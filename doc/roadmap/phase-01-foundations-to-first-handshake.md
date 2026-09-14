@@ -21,7 +21,7 @@
 | 1.13 | zlib Compression and KIWAD archive reader (new DAT-1; FND-8 zlib, PAT-2 KiwadHeader) | M | 1.12, 1.10 |
 | 1.14 | Message definition model and ordinal rules (NET-2) | M | 1.06, 1.13 |
 | 1.15 | Runtime message registry and declarations (NET-3) | M | 1.14 |
-| 1.16 | Message registry and round-trip suite (NET-4) | S | 1.15 |
+| 1.16 | Dynamic messages and round-trip suite (NET-4) | S | 1.15 |
 | 1.17 | KI frame codec and reassembler (NET-5) | M | 1.06 |
 | 1.18 | Control messages and capture verification (NET-6) | S | 1.17 |
 | 1.19 | Async socket layer and SocketMgr (NET-7) | M | 1.17, 1.11, 1.10 |
@@ -731,43 +731,45 @@ Replaces the msggen build-time generator under the 2026-09-13 decision that prot
 - The XML has no direction attribute, so declarations do not say who sends a message. The dispatch tables in phase 2 curate direction
 - Two C++ member types can share a wire type (for example an enum and its underlying integer); declarations check the wire type only, and an enum member accepts any value of its underlying type from the wire
 
-## 1.16 Message registry and round-trip suite (NET-4)
+## 1.16 Dynamic messages and round-trip suite (NET-4)
 
-**Goal:** (service, order) resolves to a name, layout and factory.
+**Goal:** Any (service, order) decodes to named values, and every loaded message provably round-trips.
 
 **Size:** S. **Depends on:** 1.15
 
 **Acceptance**
 
-- [ ] Round-trip passes for all 1446
-- [ ] (5,7) is MSG_ATTACH with access 1; (7,27) is MSG_USER_AUTHEN_V3; (12,92) is MSG_MINIGAMEREWARDS; (5,254) not found
-- [ ] Truncated body returns false; trailing bytes flagged
+- [x] Round-trip passes for all 1446
+- [x] (5,7) is MSG_ATTACH with access 1; (7,27) is MSG_USER_AUTHEN_V3; (12,92) is MSG_MINIGAMEREWARDS; (5,254) not found
+- [x] Truncated body returns false; trailing bytes flagged
 
-### Detailed spec from NET-4: Message registry and exhaustive round-trip suite
+### Detailed spec from NET-4: dynamic messages and exhaustive round-trip suite
 
-Any (service, order) pair resolves at runtime to a name, access level, field layout and factory, and every generated message provably round-trips.
+Any (service, order) pair resolves at runtime to a name, access level, field layout, and a dynamic value holder, and every loaded message provably round-trips. Under the 2026-09-13 runtime decision nothing is generated; the suite is table-driven over the loaded registry.
 
 **Deliverables**
 
-- Generated <build>/gen/Messages/MessageRegistry.cpp. It fills src/server/shared/Messages/MessageRegistry.h: a 256x256 table of MessageInfo {name, accessLevel, fieldCount, decodeToDynamic, encodedMinSize}
-- src/server/shared/Messages/DynamicMessage.h: a field-by-field decoded view for logging unknown or unhandled messages by name
-- src/test/server/shared/Messages/GeneratedRoundTripTest.cpp (generated or table-driven): fills every message with deterministic pseudo-random values and checks encode -> decode -> equality and encoded size == sum of field sizes
+- `MessageInfo` gains `MinSize` (fixed field sizes plus 2 per string), and `MessageRegistry::GetMessages()` lists every loaded id
+- src/server/shared/Messages/DynamicMessage.h/.cpp: one `DmlValue` per field, starting from the XML defaults, with `Set` by index or name that checks the type and the 65535 string limit, `Find`, `GetEncodedSize`, `Encode`, `Decode(ByteBuffer&)`, and `Decode(span)` returning Ok, Truncated, or TrailingBytes. `ToString` prints `MSG_TAG (service:order) { Field=value, ... }` for logging unknown or unhandled messages, escaping control bytes and non-ASCII STR bytes as `\xNN`, and capping long strings without splitting a surrogate pair
+- src/test/mocks/MessageRoundTrip.h/.cpp: fills any message with deterministic splitmix64 values per type, then checks encoded size, decode equality (bitwise for floats), re-encode equality, the minimum size, truncation by one byte, and a trailing byte
+- src/test/server/shared/Messages/DynamicMessageTest.cpp over Ambrose-authored fixtures, and src/test/client/MessageRoundTripClientTest.cpp over every id in the user's install
 
-**Client messages:** All 969 message ids
+**Client messages:** all 1446 message ids
 
 **Data sources**
 
-- Generated code from NET-3
+- The registry loaded at runtime from the user's install
 
 **Acceptance**
 
-- [ ] The round-trip test passes for all 969 messages
-- [ ] Lookups: (5,7) returns MSG_ATTACH with access level 1; (7,27) returns MSG_USER_AUTHEN_V3; (12,92) returns MSG_MINIGAMEREWARDS; (5,254) returns not found
-- [ ] A decode of a truncated body returns false, and a body with extra trailing bytes is flagged as a size mismatch rather than silently accepted
+- [x] The round-trip suite passes for every fixture id with several seeds, and for all 1446 ids of the real install
+- [x] Lookups: (5,7) returns MSG_ATTACH with access level 1; (7,27) returns MSG_USER_AUTHEN_V3; (12,92) returns MSG_MINIGAMEREWARDS; (5,254) returns not found
+- [x] A decode of a truncated body returns false (Truncated) and leaves the values unchanged, and a body with extra trailing bytes is flagged as TrailingBytes rather than silently accepted
+- [x] `ToString` names every field, escapes quotes, backslashes, control bytes, and non-ASCII STR bytes, shows GIDs in hex, and caps long STR and WSTR values without splitting a surrogate pair; `Set` rejects strings over the wire limit
 
 **Risks**
 
-- Test runtime and binary size with 969 structs; keep the registry data-only
+- Test runtime over 1446 ids with several properties each; the suite stays in memory and runs in well under a second
 
 ## 1.17 KI frame codec and reassembler (NET-5)
 

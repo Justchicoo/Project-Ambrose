@@ -63,6 +63,8 @@ bool MessageRegistry::Load(MessageDefinitionSet definitions)
             info.Defaults.reserve(message.Fields.size());
             for (FieldDef const& field : message.Fields)
             {
+                std::size_t const fixedSize = Dml::GetFixedSize(field.Type);
+                info.MinSize += fixedSize != 0 ? fixedSize : 2;
                 if (!field.DefaultValue)
                 {
                     info.Defaults.push_back(Dml::DefaultValue(field.Type));
