@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds unit_tests from every test source outside the compile and client folders, registers each test with CTest, and adds those two folders.
+# Builds unit_tests from every test source outside the compile and client folders, registers each test with CTest, adds those two folders, and smoke-tests each server executable.
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
@@ -25,3 +25,10 @@ gtest_discover_tests(unit_tests DISCOVERY_MODE PRE_TEST)
 
 add_subdirectory(compile)
 add_subdirectory(client)
+
+foreach(app IN ITEMS gameserver loginserver patchserver)
+    if(TARGET ${app})
+        add_test(NAME AppSmoke.${app}
+            COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:${app}> -DNAME=${app} -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/app-smoke/${app} -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/AppSmokeTest.cmake")
+    endif()
+endforeach()

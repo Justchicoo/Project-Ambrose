@@ -1,5 +1,5 @@
-<!-- Project Ambrose by Imjustchico: Every option in gameserver.conf.dist with its type, default, and meaning. -->
-# gameserver options
+<!-- Project Ambrose by Imjustchico: Every option in patchserver.conf.dist with its type, default, and meaning. -->
+# patchserver options
 
 See doc/config/README.md for the file format, layers, environment variable names, and reload triggers, and doc/config/logging.md for the full logging grammar.
 
@@ -9,14 +9,13 @@ The Applies column says when a changed value takes effect after a configuration 
 |---|---|---|---|---|---|
 | `LogsDir` | string | `logs` | `AMBROSE_LOGS_DIR` | Live | Folder for log files, relative to the working directory unless absolute; created when a File appender exists |
 | `BindIP` | string | `0.0.0.0` | `AMBROSE_BIND_IP` | Rebinds live like the port option | Local address the listener binds; 0.0.0.0 listens on every IPv4 address |
-| `WorldServerPort` | uint16 | `12333` | `AMBROSE_WORLD_SERVER_PORT` | Rebinds live; the new listener opens before the old one closes, and a failed bind keeps the old one | TCP port the realm listens on for game clients |
+| `PatchServerPort` | uint16 | `12500` | `AMBROSE_PATCH_SERVER_PORT` | Rebinds live; the new listener opens before the old one closes, and a failed bind keeps the old one | TCP port the patch server listens on for clients |
 | `Network.Threads` | uint32 | `1` | `AMBROSE_NETWORK_THREADS` | Live; new threads start at once, and removed threads stop taking sockets and exit when their last connection closes | Network threads that read and write sockets (1-256) |
 | `Network.MaxFrameSize` | uint64 | `4194304` | `AMBROSE_NETWORK_MAX_FRAME_SIZE` | Next connection | Largest frame in bytes a client may send, checked before the frame is buffered (17 to 1 GiB) |
 | `Network.MaxDmlMessages` | uint32 | `1024` | `AMBROSE_NETWORK_MAX_DML_MESSAGES` | Next connection | Most DML messages one frame may chain (at least 1) |
 | `Network.LongFrameLength` | string | `BodyOnly` | `AMBROSE_NETWORK_LONG_FRAME_LENGTH` | Next connection | What a long frame's 32-bit length counts: `BodyOnly` or `HeaderAndBody`, until doc/CAPTURE.md settles it |
 | `Network.OutKBuff` | int32 | `-1` | `AMBROSE_NETWORK_OUT_K_BUFF` | Next connection | Socket send buffer in bytes; -1 keeps the operating system default |
 | `Network.TcpNoDelay` | bool | `1` | `AMBROSE_NETWORK_TCP_NO_DELAY` | Next connection | Disable Nagle's algorithm so small frames go out at once |
-| `World.UpdateInterval` | uint32 | `50` | `AMBROSE_WORLD_UPDATE_INTERVAL` | Next tick | Milliseconds between world updates (1-10000) |
 | `Log.Async.Enable` | bool | `0` | `AMBROSE_LOG_ASYNC_ENABLE` | Live | Write log lines on a dedicated thread; shutdown and exit drain every queued line |
 | `Log.Async.QueueSize` | uint32 | `65536` | `AMBROSE_LOG_ASYNC_QUEUE_SIZE` | Live | Queued lines before the full-queue policy applies (1024-16777216) |
 | `Log.Async.QueueFull` | uint8 | `0` | `AMBROSE_LOG_ASYNC_QUEUE_FULL` | Live | 0 waits for room, 1 drops the line and logs the drop count |
@@ -24,8 +23,8 @@ The Applies column says when a changed value takes effect after a configuration 
 | `Log.PendingBuffer` | uint32 | `1000` | `AMBROSE_LOG_PENDING_BUFFER` | Live | Lines kept for an appender whose type registers later, such as DB |
 | `Console.Colors` | uint8 | `1` | `AMBROSE_CONSOLE_COLORS` | Live | 0 never, 1 when stdout is a terminal, 2 always; `NO_COLOR` disables 1 |
 | `Appender.Console` | appender | `1,3,3,"1 9 3 6 5 8"` | `AMBROSE_APPENDER_CONSOLE` | Live | Colored console output at Info with time and level |
-| `Appender.Server` | appender | `2,2,7,Server.log,w` | `AMBROSE_APPENDER_SERVER` | Live | Server.log in LogsDir, rewritten each start, with time, level and category |
-| `Appender.Errors` | appender | `2,4,7,Errors.log,a,16M,10` | `AMBROSE_APPENDER_ERRORS` | Live | Warnings and worse, appended across restarts, rotated at 16 MiB keeping 10 backups |
+| `Appender.Server` | appender | `2,2,7,Patch.log,w` | `AMBROSE_APPENDER_SERVER` | Live | Patch.log in LogsDir, rewritten each start, with time, level and category |
+| `Appender.Errors` | appender | `2,4,7,PatchErrors.log,a,16M,10` | `AMBROSE_APPENDER_ERRORS` | Live | Warnings and worse, appended across restarts, rotated at 16 MiB keeping 10 backups |
 | `Appender.Stream` | appender | `3,2,0,1000` | `AMBROSE_APPENDER_STREAM` | Live | Live records for the admin API with a 1000-record backlog |
 | `Logger.root` | logger | `3,Console Server Errors Stream` | `AMBROSE_LOGGER_ROOT` | Live | Required fallback for every category |
 | `Logger.server` | logger | `3,Console Server Errors Stream` | `AMBROSE_LOGGER_SERVER` | Live | App lifecycle, config and logging messages |

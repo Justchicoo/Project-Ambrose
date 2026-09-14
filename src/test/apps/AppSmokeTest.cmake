@@ -1,0 +1,33 @@
+# Project Ambrose by Imjustchico
+# Runs a built server executable to check that --version exits 0, a missing config names its path and exits 1, and the shipped .conf.dist starts it.
+if(NOT APP OR NOT NAME OR NOT WORKDIR)
+    message(FATAL_ERROR "APP, NAME and WORKDIR must be set")
+endif()
+
+execute_process(COMMAND "${APP}" --version RESULT_VARIABLE versionResult OUTPUT_VARIABLE versionOutput ERROR_VARIABLE versionError TIMEOUT 30)
+if(NOT versionResult EQUAL 0)
+    message(FATAL_ERROR "${NAME} --version exited ${versionResult}: ${versionOutput}${versionError}")
+endif()
+if(NOT versionOutput MATCHES "Project Ambrose rev ")
+    message(FATAL_ERROR "${NAME} --version printed '${versionOutput}'")
+endif()
+
+file(REMOVE_RECURSE "${WORKDIR}")
+file(MAKE_DIRECTORY "${WORKDIR}")
+execute_process(COMMAND "${APP}" WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE missingResult OUTPUT_VARIABLE missingOutput ERROR_VARIABLE missingError TIMEOUT 30)
+if(NOT missingResult EQUAL 1)
+    message(FATAL_ERROR "${NAME} without a config exited ${missingResult}: ${missingOutput}${missingError}")
+endif()
+if(NOT missingError MATCHES "app-smoke[/\\\\]${NAME}[/\\\\]${NAME}\\.conf")
+    message(FATAL_ERROR "${NAME} without a config did not name its full path: ${missingError}")
+endif()
+if(NOT missingError MATCHES "${NAME}\\.conf\\.dist")
+    message(FATAL_ERROR "${NAME} without a config did not suggest copying ${NAME}.conf.dist: ${missingError}")
+endif()
+
+get_filename_component(appDir "${APP}" DIRECTORY)
+execute_process(COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" --set Appender.Server=1,3,0 --set Appender.Errors=1,3,0 --set Appender.Stream=1,3,0 --set Appender.Console=1,3,0
+    WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE distResult OUTPUT_VARIABLE distOutput ERROR_VARIABLE distError TIMEOUT 5)
+if(NOT distOutput MATCHES "${NAME} ready")
+    message(FATAL_ERROR "${NAME} with its shipped ${NAME}.conf.dist did not report ready (${distResult}): ${distOutput}${distError}")
+endif()

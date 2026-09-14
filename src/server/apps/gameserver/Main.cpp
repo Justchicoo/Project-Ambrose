@@ -1,40 +1,49 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: loads gameserver.conf, starts logging, logs the banner and any config issues, and exits.
+ * Game server entry point: runs the shared app lifecycle with a world update tick whose interval follows World.UpdateInterval live.
  */
 
-#include "Banner.h"
 #include "ConfigMgr.h"
 #include "Log.h"
+#include "ServerApp.h"
 
-#include <cstdlib>
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <iostream>
 #include <string>
-#include <string_view>
 #include <vector>
+
+namespace
+{
+    class GameServerApp : public ServerApp
+    {
+    public:
+        GameServerApp() : ServerApp({ "gameserver", "gameserver.conf" }, sConfigMgr, sLog, std::cout, std::cerr)
+        {
+        }
+
+    protected:
+        std::chrono::milliseconds GetUpdateInterval() const override
+        {
+            uint32 const configured = sConfigMgr.GetOption<uint32>("World.UpdateInterval", 50, true);
+            uint32 const interval = std::clamp<uint32>(configured, 1, 10000);
+            if (configured != interval && configured != _reportedInterval.exchange(configured))
+                AMBROSE_LOG(sLog, LogLevel::Warn, "server.gameserver", "World.UpdateInterval {} is outside 1..10000, using {} ms", configured, interval);
+            return std::chrono::milliseconds(interval);
+        }
+
+        void OnUpdate(std::chrono::milliseconds) override
+        {
+        }
+
+    private:
+        mutable std::atomic<uint32> _reportedInterval{ 0 };
+    };
+}
 
 int main(int argc, char** argv)
 {
-    std::vector<std::string> const arguments(argv, argv + argc);
-    ConfigLoadResult const config = sConfigMgr.LoadInitial("gameserver.conf", arguments);
-    LogConfigResult logResult;
-    if (config.Succeeded())
-        logResult = sLog.LoadFromConfig(sConfigMgr);
-
-    Ambrose::Banner::Show("gameserver", [](std::string_view line) { LOG_INFO("server.gameserver", "{}", line); });
-    for (ConfigIssue const& issue : config.Errors)
-        LOG_ERROR("server.config", "{}", issue.ToString());
-    for (ConfigIssue const& issue : logResult.Warnings)
-        LOG_WARN("server.logging", "{}", issue.ToString());
-    for (ConfigIssue const& issue : logResult.Errors)
-        LOG_ERROR("server.logging", "{}", issue.ToString());
-    sLog.AttachConfigWarnings(sConfigMgr);
-    for (std::string const& name : sLog.GetPendingAppenderNames())
-        LOG_WARN("server.logging", "appender '{}' uses a type no layer in this app registers; it stays inactive", name);
-
-    bool const succeeded = config.Succeeded() && logResult.Succeeded();
-    if (succeeded)
-        LOG_INFO("server.gameserver", "Logging to {}", ConfigMgr::PathToUtf8(sLog.GetSettings().LogsDir));
-    sLog.DetachConfigWarnings();
-    sLog.Shutdown();
-    return succeeded ? EXIT_SUCCESS : EXIT_FAILURE;
+    GameServerApp app;
+    return app.Run(std::vector<std::string>(argv, argv + argc));
 }

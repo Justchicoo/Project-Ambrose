@@ -368,7 +368,7 @@ A real client started with -L 127.0.0.1 12000 connects to our loginserver, compl
 - src/server/apps/loginserver/Main.cpp: loads loginserver.conf, opens the login and characters DB pools, runs the acceptor and signal handling
 - src/server/apps/loginserver/Server/LoginSocket.{h,cpp}: per-connection session built on the NET session (SessionOffer, SessionAccept, KeepAlive, KeepAliveRsp) that remembers SessionID, offer seconds and offer milliseconds for the crypto in LOG-3
 - src/server/apps/loginserver/Server/LoginOpcodes.{h,cpp}: dispatch table of all 29 LOGIN messages by _MsgOrder (the ids come straight from LoginMessages.xml), each tagged with required state (Never / Authenticated / CharacterSelected) and a Handle<Message> member; unimplemented entries are logged and dropped, never fatal
-- conf/dist/loginserver.conf.dist: BindIP, LoginPort=12000, LoginDatabaseInfo, CharacterDatabaseInfo, KeepAliveInterval, SessionAcceptTimeout, MaxConnections. BindIP and LoginPort rebind live, opening the new listener before closing the old one, and a failed bind keeps the old listener; MaxConnections, KeepAliveInterval and SessionAcceptTimeout apply from the next connection or timer; the database strings follow 2.04
+- conf/dist/loginserver.conf.dist: BindIP, LoginServerPort=12000, LoginDatabaseInfo, CharacterDatabaseInfo, KeepAliveInterval, SessionAcceptTimeout, MaxConnections. BindIP and LoginServerPort rebind live, opening the new listener before closing the old one, and a failed bind keeps the old listener; MaxConnections, KeepAliveInterval and SessionAcceptTimeout apply from the next connection or timer; the database strings follow 2.04
 - src/test/server/apps/loginserver/LoginOpcodesTest.cpp
 
 **Client messages:** MSG_USER_AUTHEN_V3

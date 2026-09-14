@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Waits for shutdown signals on an io_context and calls back for each one until cancelled.
+ * Waits for shutdown signals on an io_context and calls back for each one until cancelled, then swallows them until destroyed.
  */
 
 #ifndef AMBROSE_SIGNALHANDLER_H

@@ -902,9 +902,9 @@ Each app can listen on its configured port, accept many connections, and read an
 
 **Acceptance**
 
-- [ ] --version exits 0
-- [ ] Missing conf names the path and exits 1
-- [ ] Ctrl+C exits 0 within 2 s
+- [x] --version exits 0
+- [x] Missing conf names the path and exits 1
+- [x] Ctrl+C exits 0 within 2 s
 
 ### Detailed spec from FND-12: App skeletons: loginserver, gameserver, patchserver start and stop cleanly
 
@@ -912,23 +912,25 @@ All three executables run the standard lifecycle (args, config, logging, banner,
 
 **Deliverables**
 
-- src/server/apps/{loginserver,gameserver,patchserver}/Main.cpp + CMakeLists.txt (targets link common only for now)
-- src/server/apps/<app>/<app>.conf.dist listing every option the skeleton reads (LogsDir, Appender.*, Logger.*, BindIP, port option, Updates.* placeholders later)
-- Command-line: -c/--config <file>, -v/--version, --help (hand-written parser, or Boost.Program_options as AzerothCore does; decision)
+- src/server/shared/App/ServerApp.h/.cpp: the shared lifecycle (options, config, logging, banner, shutdown signals, optional update tick, exit codes) with OnStart, OnUpdate, GetUpdateInterval, and OnStop hooks, and src/server/shared/App/AppOptions.h/.cpp
+- src/server/apps/{loginserver,gameserver,patchserver}/Main.cpp + CMakeLists.txt, linking shared
+- src/server/apps/<app>/<app>.conf.dist listing every option the skeleton reads (LogsDir, Log.*, Console.Colors, Appender.*, Logger.*, BindIP, the port option, Network.*, and World.UpdateInterval for gameserver), documented in doc/config/<app>.md. Default ports: LoginServerPort 12000, WorldServerPort 12333, PatchServerPort 12500
+- Command-line, parsed by hand: -c/--config <file>, --set Key=Value (repeatable, the command-line override layer), -v/--version, -h/--help
 - SIGINT/SIGTERM and Windows console Ctrl+C handler trigger graceful stop; process exit code 0
-- Main loop tick with configurable update diff for gameserver (World update placeholder for WLD); World.UpdateInterval applies from the next tick after a config reload
+- Main loop tick with configurable update diff for gameserver (World update placeholder for WLD); World.UpdateInterval is read every tick, so a reload applies from the next tick
+- src/test/server/shared/App/ServerAppTest.cpp (in process, including a real SIGINT) and src/test/apps/AppSmokeTest.cmake, which runs each built executable for --version and a missing config
 - Optional Windows service/daemon hooks deferred
 
 **Acceptance**
 
-- [ ] `gameserver --version` prints GitRevision full version and exits 0
-- [ ] Starting gameserver without gameserver.conf logs a clear error naming the expected path and exits 1; with a copied .conf.dist it logs the banner and 'ready'
-- [ ] Ctrl+C logs 'shutting down' and exits 0 within 2 seconds on Windows and Linux
-- [ ] Real client: nothing yet. Launching the client with `-L 127.0.0.1 <LoginServerPort>` still gives a connection failure because no socket is bound. The first client-visible step (sending the SessionOffer on accept) is NET-1.
+- [x] `gameserver --version` prints GitRevision full version and exits 0
+- [x] Starting gameserver without gameserver.conf logs a clear error naming the expected path and exits 1; with a copied .conf.dist it logs the banner and 'ready'
+- [x] Ctrl+C logs 'shutting down' and exits 0 within 2 seconds on Windows and Linux
+- [x] Real client: nothing yet. Launching the client with `-L 127.0.0.1 <LoginServerPort>` still gives a connection failure because no socket is bound. The first client-visible step (sending the SessionOffer on accept) is NET-1.
 
 **Risks**
 
-- Default ports are not settled (the reference README uses 12000 for login); leave them to NET or the maintainer
+- Default ports follow the conventional 12000/12333/12500 split; every port changes live through config
 
 ## 1.21 Patch-free dev path documented (PAT-1)
 

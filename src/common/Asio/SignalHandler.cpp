@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Registers SIGINT, SIGTERM, and SIGBREAK where available, and rearms the asio signal wait after each delivery.
+ * Registers SIGINT, SIGTERM, and SIGBREAK where available, rearms the asio signal wait after each delivery, and releases the signals only on destruction.
  */
 
 #include "SignalHandler.h"
@@ -41,6 +41,10 @@ Ambrose::Asio::SignalHandler::SignalHandler(IoContext& context, std::initializer
 Ambrose::Asio::SignalHandler::~SignalHandler()
 {
     Cancel();
+    std::lock_guard callbackLock(_shared->CallbackMutex);
+    std::lock_guard lock(_shared->Mutex);
+    std::error_code error;
+    _shared->Signals.clear(error);
 }
 
 void Ambrose::Asio::SignalHandler::Cancel()
@@ -52,7 +56,6 @@ void Ambrose::Asio::SignalHandler::Cancel()
     _shared->Cancelled = true;
     std::error_code error;
     _shared->Signals.cancel(error);
-    _shared->Signals.clear(error);
 }
 
 std::initializer_list<int> Ambrose::Asio::SignalHandler::ShutdownSignals()
