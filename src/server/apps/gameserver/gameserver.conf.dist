@@ -1,7 +1,14 @@
 # Project Ambrose by Imjustchico
 # Default settings for the gameserver; copy to gameserver.conf and edit, see doc/config/gameserver.md.
 LogsDir = logs
+BindIP = 0.0.0.0
 WorldServerPort = 12000
+Network.Threads = 1
+Network.MaxFrameSize = 4194304
+Network.MaxDmlMessages = 1024
+Network.LongFrameLength = BodyOnly
+Network.OutKBuff = -1
+Network.TcpNoDelay = 1
 Log.Async.Enable = 0
 Log.Async.QueueSize = 65536
 Log.Async.QueueFull = 0

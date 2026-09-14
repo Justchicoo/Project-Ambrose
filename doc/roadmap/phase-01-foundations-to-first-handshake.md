@@ -860,10 +860,10 @@ The four control messages are encoded exactly as the 1.610 client expects, and t
 
 **Acceptance**
 
-- [ ] 200 clients x 1000 fragmented frames arrive intact and in order
-- [ ] Mid-frame close leaks nothing
-- [ ] DelayedClose flushes before FIN
-- [ ] A duplicate port bind fails loudly
+- [x] 200 clients x 1000 fragmented frames arrive intact and in order
+- [x] Mid-frame close leaks nothing
+- [x] DelayedClose flushes before FIN
+- [x] A duplicate port bind fails loudly
 
 ### Detailed spec from NET-7: Async socket layer and SocketMgr
 
@@ -871,9 +871,10 @@ Each app can listen on its configured port, accept many connections, and read an
 
 **Deliverables**
 
-- src/server/shared/Network/Socket.h/.cpp: a Boost.Asio (pending decision) TCP socket wrapper with an async read loop into FrameReassembler, a write queue that coalesces pending frames into one write, and CloseSocket/DelayedClose (close after the queue drains)
-- src/server/shared/Network/SocketMgr.h, AsyncAcceptor.h, NetworkThread.h: N io threads, least-loaded socket placement, SO_REUSEADDR off on Windows, TCP_NODELAY on
-- Config keys in conf/dist/loginserver.conf.dist, gameserver.conf.dist and patchserver.conf.dist: BindIP, Port (12000/12333/12500 are the conventional defaults), Network.Threads, Network.MaxFrameSize, Network.OutKBuff, Network.TcpNoDelay
+- src/server/shared/Network/Socket.h/.cpp: a standalone Asio TCP socket with an async read loop into FrameReassembler, a write queue that sends every pending frame as one gathered write, CloseSocket, and DelayedCloseSocket, which drops later frames, flushes the queue, shuts down the send side, and closes on the peer's EOF or after a 5 s linger; a delayed close that cannot drain within 30 s closes anyway. Hooks: OnStart, OnFrame, OnProtocolError, OnClose; SetFrameLimits applies live
+- src/server/shared/Network/SocketMgr.h, AsyncAcceptor.h/.cpp, NetworkThread.h: N io threads, each with its own io_context, least-loaded socket placement with each socket accepted straight onto its thread, an accept thread, SO_REUSEADDR off on Windows, TCP_NODELAY on by default. `ApplySettings` rebinds a changed address or port (new listener first, falling back to close-then-bind for the same port, and restoring the old one if that fails), resizes the thread pool (removed threads take no new sockets, a pending accept aimed at one is cancelled and retried on a live thread, and a retired thread exits once it has no connections and no pending accepts), and applies frame limits, OutKBuff, and TCP_NODELAY to the next connection. A same-port rebind closes the old listener synchronously before binding and restores it if the new bind fails. The configured port is compared, so port 0 does not move on reload. Start, stop, and apply are serialized, and a failing accept backs off 100 ms instead of spinning. A thread only drops a closed socket once nothing else holds it
+- src/server/shared/Network/NetworkSettings.h/.cpp: loads BindIP, the app's port option, and the Network.* options from config, clamping out-of-range values and reporting each problem
+- Config keys in gameserver.conf.dist, documented in doc/config/gameserver.md: BindIP, WorldServerPort, Network.Threads, Network.MaxFrameSize, Network.MaxDmlMessages, Network.LongFrameLength, Network.OutKBuff, Network.TcpNoDelay. The loginserver and patchserver files gain the same keys with their own port options in 1.20
 - src/test/server/shared/Network/SocketIntegrationTest.cpp with a loopback fake client
 
 **Data sources**
@@ -882,15 +883,15 @@ Each app can listen on its configured port, accept many connections, and read an
 
 **Acceptance**
 
-- [ ] Loopback test: 200 concurrent fake clients each send 1000 fragmented frames; every frame arrives intact and in order per connection
-- [ ] A peer closing mid-frame releases the socket with no leak (ASan/LSan clean)
-- [ ] DelayedClose sends the final queued frame before FIN (needed for MSG_CHARACTERSELECTED and MSG_FORCE_DISCONNECT)
-- [ ] Starting two apps on the same port fails loudly with a logged bind error
-- [ ] Reloading config applies Network.MaxFrameSize, Network.OutKBuff, and Network.TcpNoDelay from the next connection, resizes the pool for a changed Network.Threads, and rebinds a changed Port without dropping existing sessions; a failed bind keeps the old listener and logs why
+- [x] Loopback test: 200 concurrent fake clients each send 1000 fragmented frames; every frame arrives intact and in order per connection
+- [x] A peer closing mid-frame releases the socket with no leak (ASan/LSan clean)
+- [x] DelayedClose sends the final queued frame before FIN (needed for MSG_CHARACTERSELECTED and MSG_FORCE_DISCONNECT)
+- [x] Starting two apps on the same port fails loudly with a logged bind error
+- [x] Reloading config applies Network.MaxFrameSize, Network.OutKBuff, and Network.TcpNoDelay from the next connection, resizes the pool for a changed Network.Threads, and rebinds a changed Port without dropping existing sessions; a failed bind keeps the old listener and logs why
 
 **Risks**
 
-- The Boost.Asio vs standalone Asio decision is pending
+- Standalone Asio was chosen (doc/ARCHITECTURE.md Decisions, Stack)
 - Imlight treats each recv() as a full packet (SocketListener.ProcessReceivedData), which breaks under fragmentation. Do not copy that behavior
 
 ## 1.20 App skeletons (FND-12)

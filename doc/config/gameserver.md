@@ -3,12 +3,19 @@
 
 See doc/config/README.md for the file format, layers, environment variable names, and reload triggers, and doc/config/logging.md for the full logging grammar.
 
-The Applies column says when a changed value takes effect after a configuration reload or a live edit. No option in this file needs a restart. Live rebinding of `WorldServerPort` arrives with milestone 1.19.
+The Applies column says when a changed value takes effect after a configuration reload or a live edit. No option in this file needs a restart. The socket layer applies these through `SocketMgr::ApplySettings`, which the app skeleton calls on each reload.
 
 | Option | Type | Default | Environment variable | Applies | Meaning |
 |---|---|---|---|---|---|
 | `LogsDir` | string | `logs` | `AMBROSE_LOGS_DIR` | Live | Folder for log files, relative to the working directory unless absolute; created when a File appender exists |
+| `BindIP` | string | `0.0.0.0` | `AMBROSE_BIND_IP` | Rebinds live like `WorldServerPort` | Local address the listener binds; 0.0.0.0 listens on every IPv4 address |
 | `WorldServerPort` | uint16 | `12000` | `AMBROSE_WORLD_SERVER_PORT` | Rebinds live; the new listener opens before the old one closes, and a failed bind keeps the old one | TCP port the realm listens on for game clients |
+| `Network.Threads` | uint32 | `1` | `AMBROSE_NETWORK_THREADS` | Live; new threads start at once, and removed threads stop taking sockets and exit when their last connection closes | Network threads that read and write sockets (1-256) |
+| `Network.MaxFrameSize` | uint64 | `4194304` | `AMBROSE_NETWORK_MAX_FRAME_SIZE` | Next connection | Largest frame in bytes a client may send, checked before the frame is buffered (17 to 1 GiB) |
+| `Network.MaxDmlMessages` | uint32 | `1024` | `AMBROSE_NETWORK_MAX_DML_MESSAGES` | Next connection | Most DML messages one frame may chain (at least 1) |
+| `Network.LongFrameLength` | string | `BodyOnly` | `AMBROSE_NETWORK_LONG_FRAME_LENGTH` | Next connection | What a long frame's 32-bit length counts: `BodyOnly` or `HeaderAndBody`, until doc/CAPTURE.md settles it |
+| `Network.OutKBuff` | int32 | `-1` | `AMBROSE_NETWORK_OUT_K_BUFF` | Next connection | Socket send buffer in bytes; -1 keeps the operating system default |
+| `Network.TcpNoDelay` | bool | `1` | `AMBROSE_NETWORK_TCP_NO_DELAY` | Next connection | Disable Nagle's algorithm so small frames go out at once |
 | `Log.Async.Enable` | bool | `0` | `AMBROSE_LOG_ASYNC_ENABLE` | Live | Write log lines on a dedicated thread; shutdown and exit drain every queued line |
 | `Log.Async.QueueSize` | uint32 | `65536` | `AMBROSE_LOG_ASYNC_QUEUE_SIZE` | Live | Queued lines before the full-queue policy applies (1024-16777216) |
 | `Log.Async.QueueFull` | uint8 | `0` | `AMBROSE_LOG_ASYNC_QUEUE_FULL` | Live | 0 waits for room, 1 drops the line and logs the drop count |
