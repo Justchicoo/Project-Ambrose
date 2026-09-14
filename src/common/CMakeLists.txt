@@ -2,6 +2,12 @@
 # Builds the common library of game-agnostic foundations.
 ambrose_add_library(common "${CMAKE_CURRENT_SOURCE_DIR}")
 
+if(TARGET botan::botan)
+    set(ambrose_botan_target botan::botan)
+else()
+    set(ambrose_botan_target botan::botan-static)
+endif()
+
 target_compile_definitions(common
     PUBLIC
         ASIO_STANDALONE
@@ -13,4 +19,5 @@ target_link_libraries(common
         asio::asio
         Threads::Threads
     PRIVATE
-        genrev)
+        genrev
+        ${ambrose_botan_target})

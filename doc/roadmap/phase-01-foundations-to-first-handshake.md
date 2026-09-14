@@ -517,10 +517,10 @@ Thread-safe queues, worker threads and thin Asio wrappers that network and datab
 
 **Acceptance**
 
-- [ ] SHA-256('abc')=ba7816bf...; SHA-512('abc')=ddaf35a1...
-- [ ] CRC32('123456789') init 0xFFFFFFFF + final xor = 0xCBF43926
-- [ ] KI variant (init 0, no xor) = 0x2DFD2D88 (verified)
-- [ ] Incremental equals one-shot
+- [x] SHA-256('abc')=ba7816bf...; SHA-512('abc')=ddaf35a1...
+- [x] CRC32('123456789') init 0xFFFFFFFF + final xor = 0xCBF43926
+- [x] KI variant (init 0, no xor) = 0x2DFD2D88 (verified)
+- [x] Incremental equals one-shot
 
 ### Detailed spec from FND-7: common/Cryptography part 1: hashes, CRC32, CSPRNG
 
@@ -537,10 +537,10 @@ The hash and checksum primitives login and patch flows need are available with k
 
 **Acceptance**
 
-- [ ] SHA-256('abc') = ba7816bf...; SHA-512('abc') = ddaf35a1... (FIPS 180-4 vectors)
-- [ ] CRC32('123456789') with init 0xFFFFFFFF and final xor = 0xCBF43926
-- [ ] Optional integration test with AMBROSE_CLIENT_DIR: a KIWAD entry's stored crc field matches CRC32 of its stored bytes (tells us which init/xor variant KIWAD uses)
-- [ ] Real client: n/a
+- [x] SHA-256('abc') = ba7816bf...; SHA-512('abc') = ddaf35a1... (FIPS 180-4 vectors)
+- [x] CRC32('123456789') with init 0xFFFFFFFF and final xor = 0xCBF43926
+- [ ] Optional integration test with AMBROSE_CLIENT_DIR: a KIWAD entry's stored crc field matches CRC32 of its stored bytes (tells us which init/xor variant KIWAD uses) (moved to 1.13, which adds the archive reader)
+- [x] Real client: n/a
 
 **Risks**
 
@@ -563,10 +563,10 @@ The server can compute the exact CRC, HeaderSize and HeaderCRC values the client
 
 **Acceptance**
 
-- [ ] Unit: Crc32("123456789") == 0x2DFD2D88 (this variant; zlib's standard value 0xCBF43926 must NOT be produced)
-- [ ] Unit: incremental update over split buffers equals one-shot result
-- [ ] Unit: synthetic in-memory KIWAD v2 with 3 entries yields TOC length 14 + sum(21+nameLen)
-- [ ] Env-gated test (AMBROSE_CLIENT_DIR set, skipped otherwise): for every Data/GameData/*.wad in the user's install, KiwadHeader length is <= file size and parsing never over-reads
+- [x] Unit: Crc32("123456789") == 0x2DFD2D88 (this variant; zlib's standard value 0xCBF43926 must NOT be produced)
+- [x] Unit: incremental update over split buffers equals one-shot result
+- [ ] Unit: synthetic in-memory KIWAD v2 with 3 entries yields TOC length 14 + sum(21+nameLen) (moved to 1.13, which adds the KIWAD reader)
+- [ ] Env-gated test (AMBROSE_CLIENT_DIR set, skipped otherwise): for every Data/GameData/*.wad in the user's install, KiwadHeader length is <= file size and parsing never over-reads (moved to 1.13, which adds the KIWAD reader)
 
 **Risks**
 
@@ -585,6 +585,7 @@ The server can compute the exact CRC, HeaderSize and HeaderCRC values the client
 - [ ] Client-gated: Root.wad lists 173088 entries (verified); LoginMessages.xml inflates; a flags-15 BINd inflates at offset 13
 - [ ] Client-gated: header parse never over-reads on any GameData/*.wad
 - [ ] Optional integration test moved from 1.08: decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error, skipped unless AMBROSE_CLIENT_DIR is set
+- [ ] Optional integration test moved from 1.12: a KIWAD entry's stored CRC equals Crc32 of its stored bytes, which confirms the client variant, skipped unless AMBROSE_CLIENT_DIR is set
 
 ### Detailed spec from FND-8: common/Cryptography part 2: Twofish-OFB; common/Utilities: zlib
 

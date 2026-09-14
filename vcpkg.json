@@ -4,6 +4,7 @@
   "builtin-baseline": "433546791c157e8a861d77fe58b4d95916179cc9",
   "dependencies": [
     "asio",
+    "botan",
     "fmt"
   ],
   "features": {

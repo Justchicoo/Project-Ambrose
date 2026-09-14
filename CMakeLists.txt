@@ -35,6 +35,7 @@ include(AmbroseMacros)
 
 find_package(fmt CONFIG REQUIRED)
 find_package(asio CONFIG REQUIRED)
+find_package(Botan 3 CONFIG REQUIRED COMPONENTS sha2_32 sha2_64 hmac system_rng)
 find_package(Threads REQUIRED)
 
 if(BUILD_TESTING)
