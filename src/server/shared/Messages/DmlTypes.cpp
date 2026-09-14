@@ -1,13 +1,16 @@
 /*
  * Project Ambrose by Imjustchico
- * Parses DML type names and encodes each field type, checking length prefixes before allocating.
+ * Parses DML type names and default value text, and encodes each field type, checking length prefixes before allocating.
  */
 
 #include "DmlTypes.h"
+#include "StringUtil.h"
+#include "Utf.h"
 
 #include <fmt/format.h>
 
 #include <array>
+#include <cmath>
 #include <stdexcept>
 
 namespace
@@ -35,6 +38,13 @@ namespace
         { "USHORT", DmlType::Ushrt, true },
         { "BOOL", DmlType::Ubyt, true },
     } };
+
+    template<typename T>
+    std::optional<DmlValue> ParseInteger(std::string_view text)
+    {
+        std::optional<T> const value = Ambrose::StringTo<T>(text);
+        return value ? std::optional<DmlValue>(*value) : std::nullopt;
+    }
 
     template<typename T>
     T const& Expect(DmlValue const& value, DmlType type)
@@ -137,6 +147,42 @@ DmlValue Dml::DefaultValue(DmlType type)
         case DmlType::Wstr: return std::u16string();
     }
     return uint8(0);
+}
+
+std::optional<DmlValue> Dml::ParseValue(DmlType type, std::string_view text)
+{
+    switch (type)
+    {
+        case DmlType::Byt: return ParseInteger<int8>(text);
+        case DmlType::Ubyt: return ParseInteger<uint8>(text);
+        case DmlType::Shrt: return ParseInteger<int16>(text);
+        case DmlType::Ushrt: return ParseInteger<uint16>(text);
+        case DmlType::Int: return ParseInteger<int32>(text);
+        case DmlType::Uint: return ParseInteger<uint32>(text);
+        case DmlType::Gid: return ParseInteger<uint64>(text);
+        case DmlType::Flt:
+        {
+            std::optional<float> const value = Ambrose::StringTo<float>(text);
+            return value && std::isfinite(*value) ? std::optional<DmlValue>(*value) : std::nullopt;
+        }
+        case DmlType::Dbl:
+        {
+            std::optional<double> const value = Ambrose::StringTo<double>(text);
+            return value && std::isfinite(*value) ? std::optional<DmlValue>(*value) : std::nullopt;
+        }
+        case DmlType::Str:
+            if (text.size() > MaxStringLength)
+                return std::nullopt;
+            return DmlValue(std::string(text));
+        case DmlType::Wstr:
+        {
+            std::optional<std::u16string> const value = Utf::Utf8ToUtf16(text, Utf::InvalidPolicy::Reject);
+            if (!value || value->size() > MaxStringLength)
+                return std::nullopt;
+            return DmlValue(*value);
+        }
+    }
+    return std::nullopt;
 }
 
 DmlValue Dml::ReadValue(ByteBuffer& buffer, DmlType type)

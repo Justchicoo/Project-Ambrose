@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Adds parsed protocols while rejecting duplicate ServiceIDs, and reads every *Messages.xml entry out of a KIWAD archive.
+ * Adds protocols while rejecting duplicate ServiceIDs, out-of-order ids, and repeated tags, and reads every *Messages.xml entry out of a KIWAD archive.
  */
 
 #include "MessageDefinitionSet.h"
@@ -11,6 +11,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <set>
 
 bool MessageDefinitionSet::Add(std::string_view xml, std::string_view sourceFile)
 {
@@ -29,6 +30,21 @@ bool MessageDefinitionSet::Add(ProtocolDef protocol)
     {
         _errors.push_back({ protocol.SourceFile, 0, fmt::format("ServiceID {} is already used by {}", protocol.ServiceId, existing->second.SourceFile) });
         return false;
+    }
+    std::set<std::string_view> tags;
+    for (std::size_t i = 0; i < protocol.Messages.size(); ++i)
+    {
+        MessageDef const& message = protocol.Messages[i];
+        if (message.Order == 0 || (i > 0 && message.Order <= protocol.Messages[i - 1].Order))
+        {
+            _errors.push_back({ protocol.SourceFile, message.Line, fmt::format("{} has order {}; orders must be 1-255 and increase through the protocol", message.Tag, message.Order) });
+            return false;
+        }
+        if (!tags.insert(message.Tag).second)
+        {
+            _errors.push_back({ protocol.SourceFile, message.Line, fmt::format("{} appears more than once in ServiceID {}", message.Tag, protocol.ServiceId) });
+            return false;
+        }
     }
     uint8 const serviceId = protocol.ServiceId;
     _protocols.emplace(serviceId, std::move(protocol));

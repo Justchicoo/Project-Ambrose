@@ -166,3 +166,37 @@ TEST(DmlTypesTest, DefaultValuesMatchTheirTypes)
         EXPECT_NO_THROW(Dml::WriteValue(buffer, type, Dml::DefaultValue(type))) << Dml::GetTypeName(type);
     }
 }
+
+TEST(DmlTypesTest, ParseValueReadsDefaultTextForEveryType)
+{
+    EXPECT_EQ(Dml::ParseValue(DmlType::Byt, "-128"), std::optional<DmlValue>(int8(-128)));
+    EXPECT_EQ(Dml::ParseValue(DmlType::Ubyt, "255"), std::optional<DmlValue>(uint8(255)));
+    EXPECT_EQ(Dml::ParseValue(DmlType::Shrt, "-32768"), std::optional<DmlValue>(int16(-32768)));
+    EXPECT_EQ(Dml::ParseValue(DmlType::Ushrt, "65535"), std::optional<DmlValue>(uint16(65535)));
+    EXPECT_EQ(Dml::ParseValue(DmlType::Int, "-7"), std::optional<DmlValue>(int32(-7)));
+    EXPECT_EQ(Dml::ParseValue(DmlType::Uint, "4294967295"), std::optional<DmlValue>(uint32(4294967295u)));
+    EXPECT_EQ(Dml::ParseValue(DmlType::Gid, "18446744073709551615"), std::optional<DmlValue>(uint64(18446744073709551615ull)));
+    EXPECT_EQ(Dml::ParseValue(DmlType::Flt, "1.5"), std::optional<DmlValue>(1.5f));
+    EXPECT_EQ(Dml::ParseValue(DmlType::Dbl, "-0.25"), std::optional<DmlValue>(-0.25));
+    EXPECT_EQ(Dml::ParseValue(DmlType::Str, "guest name"), std::optional<DmlValue>(std::string("guest name")));
+    EXPECT_EQ(Dml::ParseValue(DmlType::Str, ""), std::optional<DmlValue>(std::string()));
+    EXPECT_EQ(Dml::ParseValue(DmlType::Wstr, "caf\xC3\xA9"), std::optional<DmlValue>(std::u16string(u"café")));
+}
+
+TEST(DmlTypesTest, ParseValueRejectsTextOutsideTheType)
+{
+    EXPECT_FALSE(Dml::ParseValue(DmlType::Byt, "128").has_value());
+    EXPECT_FALSE(Dml::ParseValue(DmlType::Ubyt, "300").has_value());
+    EXPECT_FALSE(Dml::ParseValue(DmlType::Ubyt, "-1").has_value());
+    EXPECT_FALSE(Dml::ParseValue(DmlType::Uint, "4294967296").has_value());
+    EXPECT_FALSE(Dml::ParseValue(DmlType::Int, "1.5").has_value());
+    EXPECT_FALSE(Dml::ParseValue(DmlType::Int, " 7").has_value());
+    EXPECT_FALSE(Dml::ParseValue(DmlType::Int, "").has_value());
+    EXPECT_FALSE(Dml::ParseValue(DmlType::Gid, "0x10").has_value());
+    EXPECT_FALSE(Dml::ParseValue(DmlType::Flt, "nan").has_value());
+    EXPECT_FALSE(Dml::ParseValue(DmlType::Flt, "1e40").has_value());
+    EXPECT_FALSE(Dml::ParseValue(DmlType::Dbl, "inf").has_value());
+    EXPECT_FALSE(Dml::ParseValue(DmlType::Wstr, "\xC3").has_value());
+    EXPECT_FALSE(Dml::ParseValue(DmlType::Str, std::string(Dml::MaxStringLength + 1, 'a')).has_value());
+    EXPECT_TRUE(Dml::ParseValue(DmlType::Str, std::string(Dml::MaxStringLength, 'a')).has_value());
+}

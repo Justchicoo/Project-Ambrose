@@ -20,7 +20,7 @@
 | 1.12 | Crypto basics: SHA-256/512, CRC32 both variants, CSPRNG (FND-7 + PAT-2 Crc32) | S | 1.06 |
 | 1.13 | zlib Compression and KIWAD archive reader (new DAT-1; FND-8 zlib, PAT-2 KiwadHeader) | M | 1.12, 1.10 |
 | 1.14 | Message definition model and ordinal rules (NET-2) | M | 1.06, 1.13 |
-| 1.15 | msggen build-time generator (NET-3) | M | 1.14 |
+| 1.15 | Runtime message registry and declarations (NET-3) | M | 1.14 |
 | 1.16 | Message registry and round-trip suite (NET-4) | S | 1.15 |
 | 1.17 | KI frame codec and reassembler (NET-5) | M | 1.06 |
 | 1.18 | Control messages and capture verification (NET-6) | S | 1.17 |
@@ -684,9 +684,9 @@ A library turns the client's message XML text into a validated list of protocols
 - Needs a KIWAD reader from another domain for the client-backed test
 - Whether the real client reads the TPYE field, the TYP field, and the untyped GlobalID field, or drops them, is unknown and changes the wire layout of MSG_PHYSICS_GRAB, MSG_BATTLEGROUNDQUEUEUPDATE, and MSG_MINIGAMEREWARDS. The Message definition quirks decision in doc/ARCHITECTURE.md keeps them until capture verification
 
-## 1.15 msggen build-time generator (NET-3)
+## 1.15 Runtime message registry and declarations (NET-3)
 
-**Goal:** Compiled message structs from the user's install, nothing committed.
+**Goal:** The user's install loads into a registry, and C++ message declarations resolve against it at startup.
 
 **Size:** M. **Depends on:** 1.14
 
@@ -694,41 +694,42 @@ A library turns the client's message XML text into a validated list of protocols
 
 **Acceptance**
 
-- [ ] Fixture XML output matches a golden file
-- [ ] Full build compiles all structs warning-free
-- [ ] git status clean after build; rebuild without changes does not rerun msggen
+- [x] Fixtures: the registry loads definitions and finds messages by (service, order) and by tag, and a failed load leaves it empty
+- [x] A declaration of a subset of fields encodes to golden bytes, with omitted fields written as their XML default or zero
+- [x] Unknown messages, unknown fields, type mismatches, and a field declared twice fail at declaration; using an undeclared message throws
+- [x] Client-gated: the real install loads 1446 ids with 3 warnings, and MSG_PING, MSG_ATTACH, MSG_USER_AUTHEN_V3, and MSG_CROWNBALANCE declarations resolve and round-trip
+- [x] Nothing is generated at build time, and CI builds and tests without a client
 
-### Detailed spec from NET-3: msggen build-time code generator
+### Detailed spec from NET-3: runtime message registry and startup-validated declarations
 
-At build time the user's client XML becomes compiled C++ message structs with Encode/Decode, without committing anything derived from the client.
+Replaces the msggen build-time generator under the 2026-09-13 decision that protocol data loads at runtime. Nothing derived from the client is generated, compiled, or committed.
 
 **Deliverables**
 
-- src/tools/msggen/: a host executable (depends only on shared+common). Usage: msggen --client-data <GameData dir> --out <dir>
-- Emits one header+source per protocol, e.g. <build>/gen/Messages/GameMessages.h, with namespace Ambrose::Msg::Game and struct MSG_ATTACH { static constexpr uint8 ServiceId=5, Order=7, AccessLevel=1; static constexpr char const* Name; fields...; void Encode(ByteBuffer&) const; bool Decode(ByteBuffer&); }
-- Every generated file starts with the Project Ambrose branding header
-- Emits a manifest (a hash of the input XML) so rebuilds only happen when the client changes
-- src/cmake/macros/GenerateMessages.cmake: add_custom_command with an AMBROSE_CLIENT_DATA_DIR cache var; output under ${CMAKE_BINARY_DIR}/gen (git-ignored); target ambrose-messages linked by shared
-- A clear configure-time error when AMBROSE_CLIENT_DATA_DIR is missing
-- src/test/tools/msggen/EmitterTest.cpp using fixture XML
-
-**Client messages:** All 969 message ids
+- src/server/shared/Messages/MessageRegistry.h/.cpp: `MessageRegistry` with `sMessageRegistry`. `Load(MessageDefinitionSet)`, `LoadFromArchive(path)`, and `LoadFromClient(dir)` (which reads `Data/GameData/Root.wad`) log every warning and error under `server.loading`. A failed load leaves the registry empty. `Find(service, order)` is a constant-time 256x256 index, and `Find(service, tag)` looks up by element tag. Each `MessageInfo` holds the protocol, the definition, and each field's default parsed to its DML type
+- src/server/shared/Messages/MessageDeclaration.h: a declaration is a struct with `static constexpr uint8 ServiceId`, `static constexpr std::string_view Tag`, and `static constexpr auto Fields()` returning a tuple of `Field("XmlName", &Struct::Member)`. Members may be non-const integers matched by size and signedness (so `unsigned long long` binds to GID on every platform), float, double, std::string, std::u16string, bool (UBYT), or an enum with a fixed underlying type. Members may belong to a base class of the declaration
+- `MessageRegistry::Declare<Messages...>(errors)` resolves each declaration to field indices at startup. It reports unknown messages, unknown fields, type mismatches, and fields declared twice, so an app can refuse to start
+- `Encode(message, buffer)` writes every field in the loaded layout order, using the declared member when there is one and the field's default otherwise. It checks string lengths before writing, so an oversized string throws without leaving a partial message in the buffer. `Decode(ByteBuffer&, message)` reads exactly one body and skips undeclared fields. `Decode(span, message)` returns Ok, Truncated, or TrailingBytes, and leaves the message unchanged when truncated
+- `Dml::ParseValue(type, text)` parses XML default text. An invalid default is a load warning and uses the zero value
+- `MessageDefinitionSet::Add(ProtocolDef)` rejects orders that are zero or do not increase, and repeated tags, so every set the registry loads has unique ids
+- src/test/server/shared/Messages/MessageRegistryTest.cpp with Ambrose-authored fixtures, and src/test/client/MessageRegistryClientTest.cpp under the `client` label
 
 **Data sources**
 
-- User's client install: <GameData>/Root.wad message XML (read at build time)
+- The user's client install at runtime: `<install>/Data/GameData/Root.wad` message XML
 
 **Acceptance**
 
-- [ ] The fixture XML emits code that matches a golden output kept in the test (Ambrose-authored fixture, not client data)
-- [ ] A full build with AMBROSE_CLIENT_DATA_DIR pointing at a 1.610 GameData dir compiles all 969 structs with no warnings under /W4 or -Wall
-- [ ] git status after a build shows no new tracked or untracked files outside build/
-- [ ] Touching nothing and rebuilding does not rerun msggen; changing the client dir reruns it
+- [x] Fixture tests: loading, both lookups, defaults (including an invalid default that warns), a failed load that empties the registry, and loading from an archive and a client folder
+- [x] A subset declaration of a fixture message encodes to golden bytes with defaults for omitted fields, and a full declaration covering all 11 DML types round-trips with exact bytes
+- [x] Decode skips undeclared variable-length fields, reports Truncated and TrailingBytes, and leaves the message unchanged on truncation
+- [x] Declaration errors name the message and field for unknown messages, a wrong service, unknown fields, type mismatches, and duplicates; Encode, Decode, and GetInfo of an undeclared message throw, and reloading clears declarations
+- [x] Client-gated: 1446 ids and 3 warnings; (5,7) MSG_ATTACH with access level 1, (7,27) MSG_USER_AUTHEN_V3, (12,92) MSG_MINIGAMEREWARDS, (5,254) not found; the four declarations resolve, and their encodings round-trip with the expected sizes
 
 **Risks**
 
-- The build becomes impossible without a client install. CI needs either a runner with a client or a stub mode (see open questions)
-- Name collisions: field names like 'Type' or 'Message' and C++ keywords need sanitizing
+- The XML has no direction attribute, so declarations do not say who sends a message. The dispatch tables in phase 2 curate direction
+- Two C++ member types can share a wire type (for example an enum and its underlying integer); declarations check the wire type only, and an enum member accepts any value of its underlying type from the wire
 
 ## 1.16 Message registry and round-trip suite (NET-4)
 

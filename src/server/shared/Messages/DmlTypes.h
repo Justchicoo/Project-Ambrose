@@ -52,6 +52,7 @@ namespace Dml
     std::u16string ReadWstr(ByteBuffer& buffer);
 
     DmlValue DefaultValue(DmlType type);
+    std::optional<DmlValue> ParseValue(DmlType type, std::string_view text);
     DmlValue ReadValue(ByteBuffer& buffer, DmlType type);
     void WriteValue(ByteBuffer& buffer, DmlType type, DmlValue const& value);
 }

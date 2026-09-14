@@ -549,3 +549,34 @@ TEST(MessageDefinitionSetTest, ArchiveProblemsAreErrors)
     EXPECT_FALSE(none.LoadFromArchive(*emptyArchive));
     EXPECT_EQ(none.GetErrors().front().ToString(), "Empty.wad: the archive has no message definition files");
 }
+
+TEST(MessageDefinitionSetTest, HandBuiltProtocolsMustKeepIncreasingOrdersAndUniqueTags)
+{
+    auto build = [](uint8 serviceId, std::initializer_list<std::pair<char const*, uint8>> messages)
+    {
+        ProtocolDef protocol;
+        protocol.ServiceId = serviceId;
+        protocol.SourceFile = "HandBuilt.xml";
+        for (auto const& [tag, order] : messages)
+        {
+            MessageDef message;
+            message.Tag = tag;
+            message.Order = order;
+            protocol.Messages.push_back(message);
+        }
+        return protocol;
+    };
+
+    MessageDefinitionSet set;
+    EXPECT_TRUE(set.Add(build(1, { { "MSG_A", 1 }, { "MSG_B", 3 } })));
+    EXPECT_FALSE(set.Add(build(2, { { "MSG_A", 0 } })));
+    EXPECT_FALSE(set.Add(build(3, { { "MSG_A", 2 }, { "MSG_B", 2 } })));
+    EXPECT_FALSE(set.Add(build(4, { { "MSG_A", 5 }, { "MSG_B", 4 } })));
+    EXPECT_FALSE(set.Add(build(5, { { "MSG_A", 1 }, { "MSG_A", 2 } })));
+    ASSERT_EQ(set.GetErrors().size(), 4u);
+    EXPECT_EQ(set.GetErrors()[0].ToString(), "HandBuilt.xml: MSG_A has order 0; orders must be 1-255 and increase through the protocol");
+    EXPECT_EQ(set.GetErrors()[1].ToString(), "HandBuilt.xml: MSG_B has order 2; orders must be 1-255 and increase through the protocol");
+    EXPECT_EQ(set.GetErrors()[3].ToString(), "HandBuilt.xml: MSG_A appears more than once in ServiceID 5");
+    EXPECT_EQ(set.GetProtocols().size(), 1u);
+    EXPECT_EQ(set.Find(1, 3)->Tag, "MSG_B");
+}
