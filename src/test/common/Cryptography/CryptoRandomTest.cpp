@@ -83,4 +83,7 @@ TEST(ConstantTimeTest, EqualsComparesLengthAndContent)
     EXPECT_FALSE(Ambrose::Crypto::ConstantTimeEquals(a, c));
     EXPECT_FALSE(Ambrose::Crypto::ConstantTimeEquals(std::span<uint8 const>(a, 3), b));
     EXPECT_TRUE(Ambrose::Crypto::ConstantTimeEquals(std::span<uint8 const>(), std::span<uint8 const>()));
+    EXPECT_TRUE(Ambrose::Crypto::ConstantTimeEquals(std::string_view("key="), std::string_view("key=")));
+    EXPECT_FALSE(Ambrose::Crypto::ConstantTimeEquals(std::string_view("key="), std::string_view("kez=")));
+    EXPECT_FALSE(Ambrose::Crypto::ConstantTimeEquals(std::string_view("key"), std::string_view("key=")));
 }

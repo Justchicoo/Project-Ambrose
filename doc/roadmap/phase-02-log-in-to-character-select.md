@@ -484,9 +484,9 @@ The server can decrypt and encrypt Rec1 and verify ClientKey1 and PassKey3 exact
 **Acceptance**
 
 - [x] Unit: Twofish passes the published Twofish 256-bit known-answer vectors
-- [ ] Unit: the Rec1 key and IV derivation for sid=0x1234, secs=0xAABBCCDD, ms=0x0123 yields the exact byte layout above, and Encode followed by Decode round-trips arbitrary lengths (OFB, no padding, output length equals input length)
-- [ ] Unit: VerifyCK1 accepts a vector computed independently in a test script from the formula and rejects a one-character change in the password, the sid or the milliseconds
-- [ ] Unit: PassKey3 output is 88 base64 characters, matching the 88-byte PassKey3 seen in the capture
+- [x] Unit: the Rec1 key and IV derivation for sid=0x1234, secs=0xAABBCCDD, ms=0x0123 yields the exact byte layout above, and Encode followed by Decode round-trips arbitrary lengths (OFB, no padding, output length equals input length)
+- [x] Unit: VerifyCK1 accepts a vector computed independently in a test script from the formula and rejects a one-character change in the password, the sid or the milliseconds
+- [x] Unit: PassKey3 output is 88 base64 characters, matching the 88-byte PassKey3 seen in the capture
 
 **Risks**
 
@@ -501,9 +501,9 @@ The server can decrypt and encrypt Rec1 and verify ClientKey1 and PassKey3 exact
 
 **Acceptance**
 
-- [ ] Key/IV derivation for sid=0x1234 secs=0xAABBCCDD ms=0x0123 matches the layout
-- [ ] VerifyCK1 accepts an independent vector and rejects a 1-char change
-- [ ] PassKey3 is 88 base64 chars
+- [x] Key/IV derivation for sid=0x1234 secs=0xAABBCCDD ms=0x0123 matches the layout (Rec1Test, with Twofish-256 from common/Cryptography)
+- [x] VerifyCK1 accepts an independent vector and rejects a 1-char change (ClientKeyTest: vectors computed with Python hashlib for password, sid and milliseconds changes; the comparison is constant time)
+- [x] PassKey3 is 88 base64 chars (PassKey3Test, against a Python hashlib vector; the salt formatting is still confirmed only by the real-client login of 2.14)
 
 ### Detailed spec from LOG-3: KI login crypto primitives: Rec1, ClientKey1, PassKey3, session keys
 
@@ -523,10 +523,10 @@ The server can decrypt and encrypt Rec1 and verify ClientKey1 and PassKey3 exact
 
 **Acceptance**
 
-- [ ] Unit: Twofish passes the published Twofish 256-bit known-answer vectors
-- [ ] Unit: the Rec1 key and IV derivation for sid=0x1234, secs=0xAABBCCDD, ms=0x0123 yields the exact byte layout above, and Encode followed by Decode round-trips arbitrary lengths (OFB, no padding, output length equals input length)
-- [ ] Unit: VerifyCK1 accepts a vector computed independently in a test script from the formula and rejects a one-character change in the password, the sid or the milliseconds
-- [ ] Unit: PassKey3 output is 88 base64 characters, matching the 88-byte PassKey3 seen in the capture
+- [x] Unit: Twofish passes the published Twofish 256-bit known-answer vectors
+- [x] Unit: the Rec1 key and IV derivation for sid=0x1234, secs=0xAABBCCDD, ms=0x0123 yields the exact byte layout above, and Encode followed by Decode round-trips arbitrary lengths (OFB, no padding, output length equals input length)
+- [x] Unit: VerifyCK1 accepts a vector computed independently in a test script from the formula and rejects a one-character change in the password, the sid or the milliseconds
+- [x] Unit: PassKey3 output is 88 base64 characters, matching the 88-byte PassKey3 seen in the capture
 
 **Risks**
 
