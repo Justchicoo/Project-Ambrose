@@ -60,7 +60,16 @@ function(ambrose_copy_mariadb_plugins target)
     if(NOT EXISTS "${debug_plugins}")
         set(debug_plugins "${release_plugins}")
     endif()
-    add_custom_command(TARGET ${target} POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "$<IF:$<CONFIG:Debug>,${debug_plugins},${release_plugins}>" "$<TARGET_FILE_DIR:${target}>/plugins/libmariadb"
-        VERBATIM)
+    if(NOT TARGET ambrose_mariadb_plugins)
+        get_property(multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+        if(multi_config)
+            set(plugin_destination "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/plugins/libmariadb")
+        else()
+            set(plugin_destination "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/plugins/libmariadb")
+        endif()
+        add_custom_target(ambrose_mariadb_plugins
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory "$<IF:$<CONFIG:Debug>,${debug_plugins},${release_plugins}>" "${plugin_destination}"
+            VERBATIM)
+    endif()
+    add_dependencies(${target} ambrose_mariadb_plugins)
 endfunction()

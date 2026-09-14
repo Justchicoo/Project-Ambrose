@@ -30,7 +30,7 @@ Names start with a letter and use letters, digits and `_`. Fields are separated 
 | 1 | Console | `[Colors]` |
 | 2 | File | `FileName[,Mode[,MaxFileSize[,MaxBackups[,FlushIntervalMs]]]]` |
 | 3 | Stream | `[Backlog]` |
-| 4 | DB | Added by the database layer in milestone 2.08 |
+| 4 | DB | `[RealmId]`; rows go to the login database's `logs` table (`logged_at` in Unix milliseconds, `realm_id`, `category`, `level` as the number above, `message` up to 65535 bytes of repaired UTF-8) in batched transactions once the app opens that database. It never receives `sql` categories, keeps up to 10000 rows while the database is busy or closed, drops the oldest beyond that, and reports drops under `server.logging` |
 | 5-99 | | Reserved for core |
 | 100-255 | | Modules |
 

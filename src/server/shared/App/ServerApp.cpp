@@ -96,8 +96,6 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
         return EXIT_FAILURE;
     }
     _log.AttachConfigWarnings(_config);
-    for (std::string const& name : _log.GetPendingAppenderNames())
-        AMBROSE_LOG(_log, LogLevel::Warn, "server.logging", "appender {} has a type this app does not provide and stays inactive", name);
 
     _io.Restart();
     _io.Poll();
@@ -116,6 +114,9 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
         return EXIT_FAILURE;
     }
 
+    for (std::string const& name : _log.GetPendingAppenderNames())
+        AMBROSE_LOG(_log, LogLevel::Warn, "server.logging", "appender {} has a type this app does not provide and stays inactive", name);
+
     _lastUpdate = std::chrono::steady_clock::now();
     if (GetUpdateInterval().count() > 0)
         ScheduleUpdate();
@@ -123,6 +124,8 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
     LogLifecycle(LogLevel::Info, fmt::format("{} ready", _info.Name));
     if (_stopRequested.load())
         StopNow("a stop request");
+    else if (options.CheckOnly)
+        StopNow("--check");
     _io.Run();
 
     _ready = false;

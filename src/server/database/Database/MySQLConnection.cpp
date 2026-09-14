@@ -134,6 +134,16 @@ std::string MySQLConnectionInfo::ToLogString() const
     return fmt::format("{}@{}:{}/{}", User, Host, Port, Database);
 }
 
+std::string MySQLConnectionInfo::ToConnectionString() const
+{
+    std::string text = fmt::format("{};{};{};{};{}", Socket.empty() ? Host : std::string("."), Socket.empty() ? std::to_string(Port) : Socket, User, Password, Database);
+    if (Tls != DatabaseTls::Off || !TlsCa.empty())
+        text += Tls == DatabaseTls::RequiredVerified ? ";tls-verify" : Tls == DatabaseTls::Required ? ";tls" : ";off";
+    if (!TlsCa.empty())
+        text += ";" + TlsCa;
+    return text;
+}
+
 MySQLConnection::MySQLConnection(MySQLConnectionInfo info, MySQLConnectionSettings settings) : _info(std::move(info)), _settings(settings)
 {
 }

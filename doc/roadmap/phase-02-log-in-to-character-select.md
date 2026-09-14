@@ -285,9 +285,9 @@ A standalone tool creates and updates all three databases without starting any s
 
 **Acceptance**
 
-- [ ] gameserver on an empty DB logs updater output for 3 DBs then 'ready'
-- [ ] Appender.DB writes login.logs
-- [ ] DB outage logs reconnect attempts
+- [x] gameserver on an empty DB logs updater output for 3 DBs then 'ready'
+- [x] Appender.DB writes login.logs
+- [x] DB outage logs reconnect attempts
 
 ### Detailed spec from FND-21: database/Logging: DB appender, and wiring pools into the app skeletons
 
@@ -297,15 +297,15 @@ Apps open their databases and run the updater at startup, and log lines can be s
 
 - src/server/database/Logging/AppenderDB.h/.cpp: appender type 'DB' inserting into login.`logs` (time, realm id, type, level, text) through an async prepared statement, only enabled after pools open
 - data/sql/updates/db_login/<date>_NN.sql creating `logs`
-- loginserver opens LoginDatabase; gameserver opens Login, Character and World; patchserver opens Login (or none, per PAT decision). Each runs DBUpdater first when Updates.EnableDatabases allows
+- loginserver opens LoginDatabase; gameserver opens Login, Character and World; patchserver opens none until 16.04 settles what it stores. Each runs DBUpdater first when Updates.EnableDatabases allows
 - Graceful shutdown closes pools after the io loop stops
 
 **Acceptance**
 
-- [ ] gameserver startup on an empty DB server logs updater output for all three databases, then 'ready'
-- [ ] With `Appender.DB = 4,2,0` and `Logger.server.gameserver = 2,Console DB`, startup INFO lines appear in login.logs
-- [ ] Stopping the DB server during run logs reconnect attempts rather than crashing
-- [ ] Real client: n/a
+- [x] gameserver startup on an empty DB server logs updater output for all three databases, then 'ready' (AppSmoke.gameserver against the real binary when AMBROSE_TEST_DB is set)
+- [x] With `Appender.DB = 4,2,0` and `Logger.server.gameserver = 2,Console DB`, startup INFO lines appear in login.logs (AppenderDBTest, and checked by hand on gameserver against MySQL 8.0.46 on 2026-09-14: the banner and 'gameserver ready' lines were in login.logs)
+- [x] Stopping the DB server during run logs reconnect attempts rather than crashing (checked by hand on 2026-09-14: MySQL 8.0.46 was stopped under a running gameserver, which logged reconnect attempts, stayed up, and reconnected all six connections within 2 seconds of the server's return)
+- [x] Real client: n/a
 
 **Risks**
 
@@ -439,8 +439,8 @@ Game code sends any generated message with one call, and the server can show a m
 
 **Acceptance**
 
-- [ ] Twofish 256-bit (and 128-bit) KATs pass
-- [ ] OFB identity for 0, 1, 15, 16, 17 and 1000 bytes
+- [x] Twofish 256-bit (and 128-bit) KATs pass (TwofishTest: the zero-key vectors and the iterated tables for both key sizes, 256-bit added in this milestone; the cipher itself landed in 1.13)
+- [x] OFB identity for 0, 1, 15, 16, 17 and 1000 bytes, with 128, 192 and 256-bit keys
 
 ### Detailed spec from FND-8: common/Cryptography part 2: Twofish-OFB; common/Utilities: zlib
 
@@ -454,11 +454,11 @@ The cipher used for Rec1 in MSG_USER_AUTHEN_RSP / MSG_USER_VALIDATE exists, and 
 
 **Acceptance**
 
-- [ ] Twofish-128 matches the spec's published known-answer vectors (zero key and plaintext, and the iterated table)
-- [ ] OFB encrypt then decrypt is identity for 0, 1, 15, 16, 17 and 1000 bytes
-- [ ] Inflate of a stream that decompresses past its cap fails cleanly (zip bomb guard)
-- [ ] Optional integration with AMBROSE_CLIENT_DIR: inflate a compressed Root.wad entry (e.g. LoginMessages.xml) and, for a 'BINd' entry, the zlib payload at offset 13
-- [ ] Real client: n/a (NET checks Rec1 against a live login)
+- [x] Twofish-128 matches the spec's published known-answer vectors (zero key and plaintext, and the iterated table)
+- [x] OFB encrypt then decrypt is identity for 0, 1, 15, 16, 17 and 1000 bytes
+- [x] Inflate of a stream that decompresses past its cap fails cleanly (zip bomb guard)
+- [x] Optional integration with AMBROSE_CLIENT_DIR: inflate a compressed Root.wad entry (e.g. LoginMessages.xml) and, for a 'BINd' entry, the zlib payload at offset 13
+- [x] Real client: n/a (NET checks Rec1 against a live login)
 
 **Risks**
 
@@ -483,7 +483,7 @@ The server can decrypt and encrypt Rec1 and verify ClientKey1 and PassKey3 exact
 
 **Acceptance**
 
-- [ ] Unit: Twofish passes the published Twofish 256-bit known-answer vectors
+- [x] Unit: Twofish passes the published Twofish 256-bit known-answer vectors
 - [ ] Unit: the Rec1 key and IV derivation for sid=0x1234, secs=0xAABBCCDD, ms=0x0123 yields the exact byte layout above, and Encode followed by Decode round-trips arbitrary lengths (OFB, no padding, output length equals input length)
 - [ ] Unit: VerifyCK1 accepts a vector computed independently in a test script from the formula and rejects a one-character change in the password, the sid or the milliseconds
 - [ ] Unit: PassKey3 output is 88 base64 characters, matching the 88-byte PassKey3 seen in the capture

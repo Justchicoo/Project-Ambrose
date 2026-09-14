@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests Twofish against the published zero-key and iterated known answers, and OFB mode for identity and keystream carry.
+ * Tests Twofish against the published zero-key and iterated known answers for 128 and 256-bit keys, and OFB mode for identity with every key size and keystream carry.
  */
 
 #include "Hex.h"
@@ -60,6 +60,28 @@ TEST(TwofishTest, IteratedTableMatchesPublishedVectors)
     EXPECT_EQ(ciphertexts[48], "5D9D4EEFFA9151575524F115815A12E0");
 }
 
+TEST(TwofishTest, IteratedTableMatchesPublished256BitVectors)
+{
+    std::vector<uint8> key(32, 0);
+    Twofish::Block plaintext{};
+    std::vector<std::string> ciphertexts;
+    for (int i = 1; i <= 49; ++i)
+    {
+        Twofish const cipher(key);
+        Twofish::Block const ciphertext = cipher.EncryptBlock(plaintext);
+        EXPECT_EQ(cipher.DecryptBlock(ciphertext), plaintext) << "iteration " << i;
+        ciphertexts.push_back(ToHex(ciphertext));
+        std::vector<uint8> nextKey(plaintext.begin(), plaintext.end());
+        nextKey.insert(nextKey.end(), key.begin(), key.begin() + 16);
+        key = std::move(nextKey);
+        plaintext = ciphertext;
+    }
+    EXPECT_EQ(ciphertexts[0], "57FF739D4DC92C1BD7FC01700CC8216F");
+    EXPECT_EQ(ciphertexts[1], "D43BB7556EA32E46F2A282B7D45B4E0D");
+    EXPECT_EQ(ciphertexts[2], "90AFE91BB288544F2C32DC239B2635E6");
+    EXPECT_EQ(ciphertexts[48], "37FE26FF1CF66175F5DDF4C33B97A205");
+}
+
 TEST(TwofishTest, RejectsInvalidKeyLengths)
 {
     EXPECT_THROW(Twofish(std::vector<uint8>(15, 0)), std::invalid_argument);
@@ -69,19 +91,22 @@ TEST(TwofishTest, RejectsInvalidKeyLengths)
 
 TEST(TwofishTest, OfbEncryptThenDecryptIsIdentity)
 {
-    std::vector<uint8> const key = RandomBytes(16, 1);
     std::vector<uint8> const ivBytes = RandomBytes(16, 2);
     std::span<uint8 const, 16> const iv(ivBytes.data(), 16);
-    for (std::size_t const length : { std::size_t{ 0 }, std::size_t{ 1 }, std::size_t{ 15 }, std::size_t{ 16 }, std::size_t{ 17 }, std::size_t{ 1000 } })
+    for (std::size_t const keyLength : { std::size_t{ 16 }, std::size_t{ 24 }, std::size_t{ 32 } })
     {
-        std::vector<uint8> const plaintext = RandomBytes(length, static_cast<uint32>(length) + 10);
-        std::vector<uint8> const ciphertext = TwofishOfb(key, iv).Process(plaintext);
-        ASSERT_EQ(ciphertext.size(), length);
-        if (length >= 16)
+        std::vector<uint8> const key = RandomBytes(keyLength, static_cast<uint32>(keyLength));
+        for (std::size_t const length : { std::size_t{ 0 }, std::size_t{ 1 }, std::size_t{ 15 }, std::size_t{ 16 }, std::size_t{ 17 }, std::size_t{ 1000 } })
         {
-            EXPECT_NE(ciphertext, plaintext);
+            std::vector<uint8> const plaintext = RandomBytes(length, static_cast<uint32>(length) + 10);
+            std::vector<uint8> const ciphertext = TwofishOfb(key, iv).Process(plaintext);
+            ASSERT_EQ(ciphertext.size(), length);
+            if (length >= 16)
+            {
+                EXPECT_NE(ciphertext, plaintext);
+            }
+            EXPECT_EQ(TwofishOfb(key, iv).Process(ciphertext), plaintext) << keyLength << " byte key, " << length << " bytes";
         }
-        EXPECT_EQ(TwofishOfb(key, iv).Process(ciphertext), plaintext) << length;
     }
 }
 

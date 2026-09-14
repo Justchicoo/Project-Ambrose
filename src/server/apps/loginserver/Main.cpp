@@ -3,6 +3,7 @@
  * Login server entry point: loads the client's message definitions, opens the login database, listens for clients, and runs the session handshake until a shutdown signal.
  */
 
+#include "AppenderDB.h"
 #include "ConfigMgr.h"
 #include "DatabaseEnv.h"
 #include "DatabaseLoader.h"
@@ -51,6 +52,7 @@ namespace
                 _databases.reset();
                 return false;
             }
+            AppenderDB::Enable(Logger(), 0);
 
             std::vector<std::string> problems;
             _context = std::make_shared<SessionContext>(SessionSettings::Load(Config(), &problems));
@@ -67,6 +69,7 @@ namespace
             {
                 LOG_ERROR("server.loginserver", "Cannot listen for clients: {}", error);
                 _sockets.reset();
+                AppenderDB::Disable(Logger());
                 _databases->Close();
                 _databases.reset();
                 return false;
@@ -79,6 +82,7 @@ namespace
             if (_sockets)
                 _sockets->StopNetwork();
             _sockets.reset();
+            AppenderDB::Disable(Logger());
             if (_databases)
                 _databases->Close();
             _databases.reset();

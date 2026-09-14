@@ -16,6 +16,7 @@ struct AppOptions
     std::string ConfigFile;
     bool ShowVersion = false;
     bool ShowHelp = false;
+    bool CheckOnly = false;
     std::vector<std::pair<std::string, std::string>> Overrides;
     std::string Error;
 

@@ -88,7 +88,7 @@ Servers stay headless so they run the same on a desktop, a Linux VPS, or in Dock
 
 ### Tests
 
-`src/test/` mirrors `src/` and builds a single unit test executable. Database integration tests run only when `AMBROSE_TEST_DB` holds a connection string such as `127.0.0.1;3306;root;root;ambrose_test` for a disposable server, and skip otherwise. The Linux CI legs run them against the runner's MySQL 8, and local runs can use MariaDB.
+`src/test/` mirrors `src/` and builds a single unit test executable. Database integration tests run only when `AMBROSE_TEST_DB` holds a connection string such as `127.0.0.1;3306;root;root;ambrose_test` for a disposable server, and skip otherwise. Each test creates uniquely named databases and drops them when it finishes, including the app smoke tests, which start the real executables with `--check`. The Linux CI legs run them against the runner's MySQL 8, and local runs can use MariaDB.
 
 ## Conventions
 

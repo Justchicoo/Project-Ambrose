@@ -97,7 +97,7 @@ bool DatabaseLoader::Load()
         }
         if (uint32 const error = entry.Pool->Open())
         {
-            LOG_ERROR("sql.driver", "Could not open the {} database (error {}); check {}DatabaseInfo", entry.Pool->GetName(), error, entry.Name);
+            LOG_ERROR("sql.driver", "Could not open the {} database (error {}); see the errors above, which name the connection or the statement and table that failed (tables come from updates when Updates.EnableDatabases includes this database)", entry.Pool->GetName(), error);
             Close();
             return false;
         }

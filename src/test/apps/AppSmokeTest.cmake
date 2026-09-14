@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a built server executable to check that --version exits 0, a missing config names its path and exits 1, the shipped .conf.dist starts it, and that the login server updates and opens its database or exits 1 on a bad connection string.
+# Runs a built server executable to check --version, a missing config, and --check with its shipped .conf.dist; with AMBROSE_TEST_DB the game and login servers create, update, open and close uniquely named databases that are dropped afterwards, and a bad login database string exits 1.
 if(NOT APP OR NOT NAME OR NOT WORKDIR)
     message(FATAL_ERROR "APP, NAME and WORKDIR must be set")
 endif()
@@ -26,43 +26,61 @@ if(NOT missingError MATCHES "${NAME}\\.conf\\.dist")
 endif()
 
 get_filename_component(appDir "${APP}" DIRECTORY)
+include("${CMAKE_CURRENT_LIST_DIR}/TestDatabases.cmake")
 set(portOption "${NAME}")
 string(REPLACE "gameserver" "WorldServerPort" portOption "${portOption}")
 string(REPLACE "loginserver" "LoginServerPort" portOption "${portOption}")
 string(REPLACE "patchserver" "PatchServerPort" portOption "${portOption}")
 set(quietOptions --set BindIP=127.0.0.1 --set ${portOption}=0 --set ClientDir= --set Appender.Server=1,3,0 --set Appender.Errors=1,3,0 --set Appender.Stream=1,3,0 --set Appender.Console=1,3,0)
-execute_process(COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" ${quietOptions} --set LoginDatabaseInfo= --set CharacterDatabaseInfo= --set WorldDatabaseInfo=
-    WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE distResult OUTPUT_VARIABLE distOutput ERROR_VARIABLE distError TIMEOUT 5)
-if(NOT distOutput MATCHES "${NAME} ready")
+execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} --set LoginDatabaseInfo= --set CharacterDatabaseInfo= --set WorldDatabaseInfo=
+    WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE distResult OUTPUT_VARIABLE distOutput ERROR_VARIABLE distError TIMEOUT 30)
+if(NOT distResult EQUAL 0 OR NOT distOutput MATCHES "${NAME} ready" OR NOT distOutput MATCHES "${NAME} stopped")
     message(FATAL_ERROR "${NAME} with its shipped ${NAME}.conf.dist did not report ready (${distResult}): ${distOutput}${distError}")
 endif()
 
 if(NAME STREQUAL "loginserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AMBROSE_TEST_DB}" STREQUAL "")
-    set(databaseParts "$ENV{AMBROSE_TEST_DB}")
-    list(LENGTH databaseParts databasePartCount)
-    if(databasePartCount GREATER_EQUAL 5)
-        list(REMOVE_AT databaseParts 4)
-        string(RANDOM LENGTH 8 ALPHABET "0123456789abcdef" smokeSuffix)
-        list(INSERT databaseParts 4 "ambrose_smoke_login_${smokeSuffix}")
-    endif()
-    list(JOIN databaseParts ";" smokeDatabase)
+    ambrose_test_database_info(ambrose_smoke_login smokeDatabase)
     foreach(round IN ITEMS first second)
-        execute_process(COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=${smokeDatabase}"
-            WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE databaseResult OUTPUT_VARIABLE databaseOutput ERROR_VARIABLE databaseError TIMEOUT 8)
-        if(NOT databaseOutput MATCHES "Opened database connection pool login: 1 async, 1 sync" OR NOT databaseOutput MATCHES "loginserver ready")
-            message(FATAL_ERROR "loginserver with AMBROSE_TEST_DB did not update, open the login pool and report ready on its ${round} start (${databaseResult}): ${databaseOutput}${databaseError}")
+        execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=${smokeDatabase}"
+            WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE databaseResult OUTPUT_VARIABLE databaseOutput ERROR_VARIABLE databaseError TIMEOUT 60)
+        if(NOT databaseResult EQUAL 0 OR NOT databaseOutput MATCHES "Opened database connection pool login: 1 async, 1 sync" OR NOT databaseOutput MATCHES "loginserver ready" OR NOT databaseOutput MATCHES "Closed database connection pool login")
+            ambrose_test_fail("loginserver with AMBROSE_TEST_DB did not update, open and close the login pool on its ${round} start (${databaseResult}): ${databaseOutput}${databaseError}")
         endif()
         if(round STREQUAL "first" AND (NOT databaseOutput MATCHES "Created database ambrose_smoke_login_" OR NOT databaseOutput MATCHES "importing 2 base file" OR NOT databaseOutput MATCHES "Applied RELEASED 2026_01_01_00\\.sql to the login database"))
-            message(FATAL_ERROR "loginserver's first start did not create the login database, import its base and apply its updates: ${databaseOutput}")
+            ambrose_test_fail("loginserver's first start did not create the login database, import its base and apply its updates: ${databaseOutput}")
         endif()
     endforeach()
     if(NOT databaseOutput MATCHES "The login database is up to date")
-        message(FATAL_ERROR "loginserver's second start did not report the login database up to date: ${databaseOutput}")
+        ambrose_test_fail("loginserver's second start did not report the login database up to date: ${databaseOutput}")
     endif()
 endif()
 
+if(NAME STREQUAL "gameserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AMBROSE_TEST_DB}" STREQUAL "")
+    set(realmOptions)
+    foreach(database IN ITEMS Login Character World)
+        string(TOLOWER "${database}" lowerDatabase)
+        ambrose_test_database_info(ambrose_smoke_${lowerDatabase} databaseInfo)
+        string(REPLACE ";" "\\;" databaseInfo "${databaseInfo}")
+        list(APPEND realmOptions "--set=${database}DatabaseInfo=${databaseInfo}")
+    endforeach()
+    execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} ${realmOptions} --set Appender.DB=4,2,0
+        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE realmResult OUTPUT_VARIABLE realmOutput ERROR_VARIABLE realmError TIMEOUT 120)
+    if(NOT realmResult EQUAL 0)
+        ambrose_test_fail("gameserver --check on empty databases exited ${realmResult}: ${realmOutput}${realmError}")
+    endif()
+    foreach(expected IN ITEMS "Created database ambrose_smoke_login_" "Created database ambrose_smoke_character_" "Created database ambrose_smoke_world_"
+            "The login database is up to date|Applied [0-9]+ update\\(s\\) to the login database"
+            "Applied [0-9]+ update\\(s\\) to the characters database" "Applied [0-9]+ update\\(s\\) to the world database"
+            "Opened database connection pool world: 1 async, 1 sync" "gameserver ready" "Closed database connection pool world" "gameserver stopped")
+        if(NOT realmOutput MATCHES "${expected}")
+            ambrose_test_fail("gameserver on empty databases did not log '${expected}': ${realmOutput}${realmError}")
+        endif()
+    endforeach()
+endif()
+ambrose_drop_test_databases()
+
 if(NAME STREQUAL "loginserver")
-    execute_process(COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=not a connection string"
+    execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=not a connection string"
         WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE badResult OUTPUT_VARIABLE badOutput ERROR_VARIABLE badError TIMEOUT 30)
     if(NOT badResult EQUAL 1)
         message(FATAL_ERROR "loginserver with a bad LoginDatabaseInfo exited ${badResult}: ${badOutput}${badError}")

@@ -30,12 +30,12 @@ add_subdirectory(client)
 foreach(app IN ITEMS gameserver loginserver patchserver)
     if(TARGET ${app})
         add_test(NAME AppSmoke.${app}
-            COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:${app}> -DNAME=${app} -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/app-smoke/${app} -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/AppSmokeTest.cmake")
+            COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:${app}> -DUNIT_TESTS=$<TARGET_FILE:unit_tests> -DNAME=${app} -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/app-smoke/${app} -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/AppSmokeTest.cmake")
     endif()
 endforeach()
 
 if(TARGET dbimport)
     add_test(NAME DbImport
-        COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:dbimport> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/dbimport -DSOURCE=${PROJECT_SOURCE_DIR} -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/DbImportTest.cmake")
+        COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:dbimport> -DUNIT_TESTS=$<TARGET_FILE:unit_tests> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/dbimport -DSOURCE=${PROJECT_SOURCE_DIR} -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/DbImportTest.cmake")
     set_tests_properties(DbImport PROPERTIES SKIP_REGULAR_EXPRESSION "dbimport test skipped")
 endif()

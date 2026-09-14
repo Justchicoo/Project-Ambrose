@@ -4,6 +4,7 @@
  */
 
 #include "CharacterDatabase.h"
+#include "DBUpdater.h"
 #include "Environment.h"
 #include "Log.h"
 #include "LogTestConfig.h"
@@ -17,6 +18,7 @@
 
 #include <gtest/gtest.h>
 
+#include <random>
 #include <string>
 
 namespace
@@ -343,7 +345,18 @@ TEST(PreparedStatementTest, DatabaseConnectionsPrepareTheirStatements)
     std::optional<MySQLConnectionInfo> const info = TestDatabase();
     if (!info)
         GTEST_SKIP() << "AMBROSE_TEST_DB is not set";
-    LoginDatabaseConnection login(*info);
+    MySQLConnectionInfo loginInfo = *info;
+    loginInfo.Database = fmt::format("ambrose_statements_{:08x}", std::random_device()());
+    ScopeExit const dropLogin([&loginInfo]
+    {
+        MySQLConnectionInfo server = loginInfo;
+        server.Database.clear();
+        MySQLConnection connection(server);
+        if (connection.Open() == 0)
+            connection.Execute(fmt::format("DROP DATABASE IF EXISTS {}", DBUpdater::QuoteIdentifier(loginInfo.Database)));
+    });
+    ASSERT_TRUE(DBUpdater::Run(loginInfo, "login", UpdaterSettings{}));
+    LoginDatabaseConnection login(loginInfo);
     CharacterDatabaseConnection characters(*info);
     WorldDatabaseConnection world(*info);
     for (MySQLConnection* connection : { static_cast<MySQLConnection*>(&login), static_cast<MySQLConnection*>(&characters), static_cast<MySQLConnection*>(&world) })

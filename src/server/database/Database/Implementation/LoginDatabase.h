@@ -11,6 +11,7 @@
 enum LoginDatabaseStatements : uint32
 {
     LOGIN_SEL_SERVER_TIME,
+    LOGIN_INS_LOG,
     MAX_LOGINDATABASE_STATEMENTS
 };
 

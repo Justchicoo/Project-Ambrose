@@ -68,6 +68,18 @@ Warnings are buffered until the app installs a warning sink with `SetWarningSink
 
 Milestone 4.15 adds the reload triggers `reload config` on the console, `.reload config` in game, and SIGHUP on Linux, and 17.12 adds `POST /api/reload/config` on the admin API. After a successful reload, subscribers receive the changed keys and apply them without a restart. Each option's page states whether it applies live, from the next connection or operation, or needs a documented restart.
 
+## Command line
+
+Every server app accepts the same arguments:
+
+| Argument | Meaning |
+|---|---|
+| `-c`, `--config <file>` | Read this configuration file instead of `<app>.conf` in the working folder |
+| `--set <Key=Value>` | Override one option at the command-line layer; may repeat |
+| `--check` | Start fully (databases created, updated and opened, sockets bound), log `ready`, then shut down gracefully and exit 0; any startup failure exits 1. Use it to validate a deployment or a config change before a real start |
+| `-v`, `--version` | Print the full version and exit 0 |
+| `-h`, `--help` | Print the usage and exit 0 |
+
 ## Build options
 
 `conf/dist/config.cmake.dist` is a template for local CMake defaults. Copy it to `conf/config.cmake` and edit it. It only seeds a new build folder, so after editing it reconfigure with `cmake --fresh` or delete `CMakeCache.txt`. Values passed with `-D` on the command line or through presets still take precedence.

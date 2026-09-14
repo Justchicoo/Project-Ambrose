@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the shared app lifecycle in process: options, version, missing or broken config, ready and stop logging, live update intervals, repeated runs, and shutdown on signals.
+ * Tests the shared app lifecycle in process: options, version, missing or broken config, ready and stop logging, --check, live update intervals, repeated runs, and shutdown on signals.
  */
 
 #include "AppOptions.h"
@@ -93,13 +93,15 @@ TEST(AppOptionsTest, ParsesEveryOptionForm)
     AppOptions const defaults = AppOptions::Parse({ "app" }, "app.conf");
     EXPECT_EQ(defaults.ConfigFile, "app.conf");
     EXPECT_FALSE(defaults.ShowVersion);
+    EXPECT_FALSE(defaults.CheckOnly);
     EXPECT_TRUE(defaults.Error.empty());
 
-    AppOptions const full = AppOptions::Parse({ "app", "-c", "a.conf", "--set", "Network.Threads=4", "--set=Log.Utc = 1", "-v", "--help" }, "app.conf");
+    AppOptions const full = AppOptions::Parse({ "app", "-c", "a.conf", "--set", "Network.Threads=4", "--set=Log.Utc = 1", "-v", "--help", "--check" }, "app.conf");
     EXPECT_TRUE(full.Error.empty()) << full.Error;
     EXPECT_EQ(full.ConfigFile, "a.conf");
     EXPECT_TRUE(full.ShowVersion);
     EXPECT_TRUE(full.ShowHelp);
+    EXPECT_TRUE(full.CheckOnly);
     ASSERT_EQ(full.Overrides.size(), 2u);
     EXPECT_EQ(full.Overrides[0], (std::pair<std::string, std::string>{ "Network.Threads", "4" }));
     EXPECT_EQ(full.Overrides[1], (std::pair<std::string, std::string>{ "Log.Utc", "1" }));
@@ -167,6 +169,20 @@ TEST_F(ServerAppTest, RunsUntilStoppedAndLogsTheLifecycle)
     std::string const output = _harness.Device().Output();
     EXPECT_NE(output.find("testserver ready"), std::string::npos) << output;
     EXPECT_NE(output.find("testserver shutting down after a stop request"), std::string::npos) << output;
+    EXPECT_NE(output.find("testserver stopped"), std::string::npos) << output;
+}
+
+TEST_F(ServerAppTest, CheckStartsReportsReadyAndStopsCleanly)
+{
+    std::filesystem::path const file = WriteConfig();
+    TickApp app({ "testserver", "testserver.conf" }, _config, _harness.GetLog(), _out, _err);
+    EXPECT_EQ(app.Run({ "testserver", "--check", "-c", ConfigMgr::PathToUtf8(file) }), EXIT_SUCCESS);
+    EXPECT_TRUE(app.Started.load());
+    EXPECT_TRUE(app.Stopped.load());
+    EXPECT_FALSE(app.IsReady());
+    std::string const output = _harness.Device().Output();
+    EXPECT_NE(output.find("testserver ready"), std::string::npos) << output;
+    EXPECT_NE(output.find("testserver shutting down after --check"), std::string::npos) << output;
     EXPECT_NE(output.find("testserver stopped"), std::string::npos) << output;
 }
 

@@ -51,6 +51,7 @@ struct MySQLConnectionInfo
 
     static std::optional<MySQLConnectionInfo> Parse(std::string_view text, std::string* error = nullptr);
     std::string ToLogString() const;
+    std::string ToConnectionString() const;
 
     bool operator==(MySQLConnectionInfo const&) const = default;
 };
