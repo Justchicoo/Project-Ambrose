@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One connection to a MariaDB or MySQL server: parses the connection string, opens and closes, runs text queries, escapes, and reconnects with backoff when the server goes away.
+ * One connection to a MariaDB or MySQL server: parses the connection string, opens and closes, prepares registered statements, runs text and prepared queries, escapes, and reconnects with backoff when the server goes away.
  */
 
 #ifndef AMBROSE_MYSQLCONNECTION_H
@@ -10,13 +10,23 @@
 #include "Types.h"
 
 #include <chrono>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 struct st_mysql;
 struct st_mysql_res;
+class MySQLPreparedStatement;
+
+enum class ConnectionFlags : uint8
+{
+    Async = 1,
+    Sync = 2,
+    Both = 3
+};
 
 enum class DatabaseTls : uint8
 {
@@ -50,6 +60,7 @@ struct MySQLConnectionSettings
     std::chrono::milliseconds FirstReconnectDelay{ 100 };
     std::chrono::milliseconds MaxReconnectDelay{ 5000 };
     std::chrono::milliseconds GiveUpReconnectAfter{ 30000 };
+    ConnectionFlags Flags = ConnectionFlags::Both;
 };
 
 class MySQLConnection
@@ -70,6 +81,13 @@ public:
     std::string Escape(std::string_view text);
     bool Ping();
 
+    bool PrepareStatements();
+    std::unique_ptr<PreparedStatementBase> GetPreparedStatement(uint32 index) const;
+    bool Execute(PreparedStatementBase const& statement);
+    PreparedQueryResult Query(PreparedStatementBase const& statement);
+    bool IsStatementPrepared(uint32 index) const noexcept;
+    std::size_t GetPreparedStatementCount() const noexcept;
+
     uint32 GetLastErrorCode() const noexcept { return _lastErrorCode; }
     std::string const& GetLastErrorText() const noexcept { return _lastErrorText; }
     std::string GetServerInfo() const;
@@ -88,6 +106,8 @@ public:
     static bool IsPermanentConnectError(uint32 errorCode) noexcept;
 
 protected:
+    virtual void DoPrepareStatements();
+    void PrepareStatement(uint32 index, std::string_view name, std::string_view sql, ConnectionFlags flags);
     st_mysql* GetHandle() const noexcept { return _mysql; }
     bool RunQuery(std::string_view context, std::string_view sql, st_mysql_res** result, bool readOnly);
     bool Reconnect();
@@ -95,8 +115,19 @@ protected:
 
 private:
     uint32 Connect(bool quiet);
+    void CloseHandle();
     bool DrainResults(std::string_view context, std::string_view sql);
     void SetError(uint32 code, std::string text);
+    bool PrepareOne(uint32 index, std::string const& name, std::string const& sql, bool quiet);
+    bool PrepareRegistered();
+    bool RunStatement(PreparedStatementBase const& values, bool readOnly, PreparedQueryResult* result);
+
+    struct StatementRegistration
+    {
+        uint32 Index = 0;
+        std::string Name;
+        std::string Sql;
+    };
 
     MySQLConnectionInfo _info;
     MySQLConnectionSettings _settings;
@@ -107,6 +138,9 @@ private:
     uint64 _reconnects = 0;
     bool _mariaDB = false;
     bool _closed = true;
+    bool _prepareFailed = false;
+    std::vector<StatementRegistration> _registrations;
+    std::vector<std::unique_ptr<MySQLPreparedStatement>> _statements;
 };
 
 #endif

@@ -73,9 +73,9 @@ The database layer can open a connection, run a query, and read typed fields.
 
 **Acceptance**
 
-- [ ] SELECT ? + ? with 3, 4 returns 7
-- [ ] Blob with NUL round-trips
-- [ ] A bad statement stops startup with 'Could not prepare statement LOGIN_...'
+- [x] SELECT ? + ? with 3, 4 returns 7
+- [x] Blob with NUL round-trips
+- [x] A bad statement fails PrepareStatements() with 'Could not prepare statement <NAME>'; 2.04 turns that into a startup stop
 
 ### Detailed spec from FND-14: database: prepared statements with typed binding
 
@@ -86,16 +86,16 @@ All SQL runs through registered, typed prepared statements per database.
 - src/server/database/Database/PreparedStatement.h/.cpp: PreparedStatementBase with SetData(index, value) for bool/uint8..uint64/int8..int64/float/double/string/std::vector<uint8>/std::nullptr_t, template PreparedStatement<ConnectionType>
 - MySQLPreparedStatement.h/.cpp: binds MYSQL_BIND, checks the parameter count against the placeholder count, stores the query text for logging
 - PreparedQueryResult (binary protocol rows) with the same Field API
-- Implementation/LoginDatabase.h/.cpp, CharacterDatabase.h/.cpp, WorldDatabase.h/.cpp: statement enums (LOGIN_SEL_UPDATES_EXAMPLE placeholder only) and DoPrepareStatements() with PrepareStatement(id, sql, CONNECTION_SYNC|CONNECTION_ASYNC)
+- Implementation/LoginDatabase.h/.cpp, CharacterDatabase.h/.cpp, WorldDatabase.h/.cpp: statement enums (a SERVER_TIME placeholder each, which needs no schema) and DoPrepareStatements() with PrepareStatement(id, name, sql, ConnectionFlags::Sync|Async|Both)
 - Fail-fast: any statement that fails to prepare aborts pool open with the id and SQL logged
 
 **Acceptance**
 
-- [ ] Integration: a prepared SELECT ? + ? with uint32 3 and 4 returns 7
-- [ ] Binding a string with embedded NUL and a 1 MB blob round-trips byte-exactly
-- [ ] Leaving a parameter unset makes Execute fail with a logged 'parameter N not bound' (assert in debug)
-- [ ] A syntax error in a registered statement stops startup with 'Could not prepare statement LOGIN_...'
-- [ ] Real client: n/a
+- [x] Integration: a prepared SELECT ? + ? with uint32 3 and 4 returns 7
+- [x] Binding a string with embedded NUL and a 1 MB blob round-trips byte-exactly
+- [x] Leaving a parameter unset makes Execute fail with a logged 'parameter N not bound' (in every build, never an assert, so a running server does not abort)
+- [x] A syntax error in a registered statement makes PrepareStatements() fail and log 'Could not prepare statement <NAME>' with the SQL; the loader in 2.04 turns that failure into a startup stop
+- [x] Real client: n/a
 
 **Risks**
 
@@ -166,6 +166,7 @@ Multi-statement atomic writes and main-thread callback processing work, and apps
 - [ ] Forced deadlock between two transactions: the loser retries and both finally commit
 - [ ] A QueryCallback chain (query A then B using A's result) runs both callbacks on the processor thread (checked by thread id)
 - [ ] loginserver with a bad LoginDatabaseInfo exits 1 with a clear error; with a valid one logs 'Opened database connection pool login: 1 async, 1 sync'
+- [ ] A syntax error in a registered login statement stops loginserver startup with 'Could not prepare statement LOGIN_...'
 - [ ] Integration: changing LoginDatabaseInfo and reloading config on a running loginserver swaps to the new pool without dropping queued queries; an unreachable string keeps the old pool and logs the error
 - [ ] Real client: n/a
 

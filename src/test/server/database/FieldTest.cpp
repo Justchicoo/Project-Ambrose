@@ -101,6 +101,18 @@ TEST(FieldTest, DecimalsTruncateTowardZeroAndClamp)
     EXPECT_EQ(tiny.Value.Get<uint32>(), 0u);
 }
 
+TEST(FieldTest, RealColumnsReadAsIntegersWhenWhole)
+{
+    FieldValue const seven("7", "DOUBLE", false);
+    EXPECT_EQ(seven.Value.Get<uint32>(), 7u);
+    FieldValue const negative("-3", "DOUBLE", false);
+    EXPECT_EQ(negative.Value.Get<int32>(), -3);
+    FieldValue const half("7.5", "FLOAT", false);
+    EXPECT_EQ(half.Value.Get<int32>(), 7);
+    FieldValue const huge("1e30", "DOUBLE", false);
+    EXPECT_EQ(huge.Value.Get<uint64>(), std::numeric_limits<uint64>::max());
+}
+
 TEST(FieldTest, MismatchesAreLoggedToSqlSql)
 {
     auto const store = std::make_shared<TestAppenderStore>();

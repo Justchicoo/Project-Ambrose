@@ -1,12 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * Opens connector handles with utf8mb4, timeouts, TLS and the plugin folder, runs text queries and drains extra results, logs errors to sql.sql, and reconnects with backoff, retrying only statements that cannot have run twice.
+ * Opens connector handles with utf8mb4, timeouts, TLS and the plugin folder, prepares registered statements, runs text and prepared queries and drains extra results, logs errors to sql.sql, and reconnects with backoff, re-preparing statements and retrying only work that cannot have run twice.
  */
 
 #include "MySQLConnection.h"
 #include "ConfigMgr.h"
 #include "Environment.h"
 #include "Log.h"
+#include "MySQLPreparedStatement.h"
+#include "PreparedStatement.h"
 #include "QueryResult.h"
 #include "StringUtil.h"
 
@@ -126,6 +128,8 @@ bool MySQLConnection::IsConnectionLost(uint32 errorCode, bool mariaDB) noexcept
         case CR_SERVER_GONE_ERROR:
         case CR_SERVER_LOST:
         case CR_SERVER_LOST_EXTENDED:
+        case CR_COMMANDS_OUT_OF_SYNC:
+        case CR_NEW_STMT_METADATA:
             return true;
         case MariaDBConnectionKilled:
             return mariaDB;
@@ -141,6 +145,8 @@ bool MySQLConnection::IsSafeToRetry(uint32 errorCode, bool mariaDB) noexcept
     switch (errorCode)
     {
         case CR_SERVER_GONE_ERROR:
+        case CR_COMMANDS_OUT_OF_SYNC:
+        case CR_NEW_STMT_METADATA:
             return true;
         case MariaDBConnectionKilled:
             return mariaDB;
@@ -168,15 +174,26 @@ bool MySQLConnection::IsPermanentConnectError(uint32 errorCode) noexcept
     }
 }
 
-uint32 MySQLConnection::Open()
+void MySQLConnection::CloseHandle()
 {
     if (_mysql)
     {
         mysql_close(_mysql);
         _mysql = nullptr;
     }
+    _statements.clear();
+}
+
+uint32 MySQLConnection::Open()
+{
+    CloseHandle();
     _closed = false;
-    uint32 const code = Connect(false);
+    uint32 code = Connect(false);
+    if (code == 0 && !PrepareRegistered())
+    {
+        code = _lastErrorCode;
+        CloseHandle();
+    }
     if (code != 0)
         _closed = true;
     return code;
@@ -185,11 +202,7 @@ uint32 MySQLConnection::Open()
 void MySQLConnection::Close()
 {
     _closed = true;
-    if (_mysql)
-    {
-        mysql_close(_mysql);
-        _mysql = nullptr;
-    }
+    CloseHandle();
 }
 
 void MySQLConnection::ClearError() noexcept
@@ -347,7 +360,7 @@ bool MySQLConnection::RunQuery(std::string_view context, std::string_view sql, s
 
         bool const safe = IsSafeToRetry(code, _mariaDB) || (readOnly && (code == CR_SERVER_LOST || code == CR_SERVER_LOST_EXTENDED));
         bool const retry = attempt == 0 && !inTransaction && safe;
-        LOG_WARN("sql.sql", "Lost the connection to {} during {}: [{}] {}{}", _info.ToLogString(), context, code, text,
+        LOG_WARN("sql.sql", "Reconnecting to {} after {} failed: [{}] {}{}", _info.ToLogString(), context, code, text,
             inTransaction ? "; the open transaction was rolled back" : retry ? "; retrying after reconnecting" : "; the statement is not retried");
         bool const reconnected = Reconnect();
         SetError(code, text);
@@ -429,21 +442,22 @@ bool MySQLConnection::Reconnect()
 {
     if (_closed)
         return false;
-    if (_mysql)
-    {
-        mysql_close(_mysql);
-        _mysql = nullptr;
-    }
+    CloseHandle();
     auto const start = std::chrono::steady_clock::now();
     std::chrono::milliseconds delay = _settings.FirstReconnectDelay;
     for (uint32 attempt = 1;; ++attempt)
     {
-        uint32 const code = Connect(true);
+        uint32 code = Connect(true);
         if (code == 0)
         {
-            ++_reconnects;
-            LOG_INFO("sql.driver", "Reconnected to {} after {} attempt(s)", _info.ToLogString(), attempt);
-            return true;
+            if (PrepareRegistered())
+            {
+                ++_reconnects;
+                LOG_INFO("sql.driver", "Reconnected to {} after {} attempt(s)", _info.ToLogString(), attempt);
+                return true;
+            }
+            code = _lastErrorCode;
+            CloseHandle();
         }
         LOG_WARN("sql.driver", "Reconnect attempt {} to {} failed: [{}] {}", attempt, _info.ToLogString(), code, _lastErrorText);
         if (IsPermanentConnectError(code) || std::chrono::steady_clock::now() - start + delay > _settings.GiveUpReconnectAfter)
@@ -453,5 +467,194 @@ bool MySQLConnection::Reconnect()
         }
         std::this_thread::sleep_for(delay);
         delay = std::min(delay * 2, _settings.MaxReconnectDelay);
+    }
+}
+
+void MySQLConnection::DoPrepareStatements()
+{
+}
+
+void MySQLConnection::PrepareStatement(uint32 index, std::string_view name, std::string_view sql, ConnectionFlags flags)
+{
+    if ((static_cast<uint8>(flags) & static_cast<uint8>(_settings.Flags)) == 0)
+        return;
+    for (StatementRegistration const& existing : _registrations)
+    {
+        if (existing.Index == index)
+        {
+            LOG_ERROR("sql.sql", "Could not prepare statement {}: index {} is already used by {}", name, index, existing.Name);
+            _prepareFailed = true;
+            return;
+        }
+    }
+    StatementRegistration registration{ index, std::string(name), std::string(sql) };
+    if (!PrepareOne(index, registration.Name, registration.Sql, false))
+    {
+        _prepareFailed = true;
+        return;
+    }
+    _registrations.push_back(std::move(registration));
+}
+
+bool MySQLConnection::PrepareStatements()
+{
+    _registrations.clear();
+    _statements.clear();
+    _prepareFailed = false;
+    if (!_mysql)
+    {
+        SetError(CR_SERVER_GONE_ERROR, "the connection is not open");
+        LOG_ERROR("sql.sql", "Cannot prepare statements on {}: the connection is not open", _info.ToLogString());
+        return false;
+    }
+    DoPrepareStatements();
+    return !_prepareFailed;
+}
+
+bool MySQLConnection::PrepareOne(uint32 index, std::string const& name, std::string const& sql, bool quiet)
+{
+    MYSQL_STMT* const handle = mysql_stmt_init(_mysql);
+    if (!handle)
+    {
+        SetError(mysql_errno(_mysql), mysql_error(_mysql));
+        if (!quiet)
+            LOG_ERROR("sql.sql", "Could not prepare statement {}: [{}] {}", name, _lastErrorCode, _lastErrorText);
+        return false;
+    }
+    if (mysql_stmt_prepare(handle, sql.data(), static_cast<unsigned long>(sql.size())))
+    {
+        SetError(mysql_stmt_errno(handle), mysql_stmt_error(handle));
+        mysql_stmt_close(handle);
+        if (!quiet)
+            LOG_ERROR("sql.sql", "Could not prepare statement {}: [{}] {} in: {}", name, _lastErrorCode, _lastErrorText, sql);
+        return false;
+    }
+    if (_statements.size() <= index)
+        _statements.resize(index + 1);
+    _statements[index] = std::make_unique<MySQLPreparedStatement>(handle, index, name, sql);
+    return true;
+}
+
+bool MySQLConnection::PrepareRegistered()
+{
+    _statements.clear();
+    for (StatementRegistration const& registration : _registrations)
+        if (!PrepareOne(registration.Index, registration.Name, registration.Sql, false) && (!_mysql || IsConnectionLost(_lastErrorCode, _mariaDB)))
+            return false;
+    ClearError();
+    return true;
+}
+
+bool MySQLConnection::IsStatementPrepared(uint32 index) const noexcept
+{
+    return index < _statements.size() && _statements[index] != nullptr;
+}
+
+std::size_t MySQLConnection::GetPreparedStatementCount() const noexcept
+{
+    return static_cast<std::size_t>(std::count_if(_statements.begin(), _statements.end(), [](auto const& statement) { return statement != nullptr; }));
+}
+
+std::unique_ptr<PreparedStatementBase> MySQLConnection::GetPreparedStatement(uint32 index) const
+{
+    if (!IsStatementPrepared(index))
+    {
+        LOG_ERROR("sql.sql", "Statement {} is not prepared on {}", index, _info.ToLogString());
+        return nullptr;
+    }
+    return std::make_unique<PreparedStatementBase>(index, _statements[index]->GetParameterCount());
+}
+
+bool MySQLConnection::Execute(PreparedStatementBase const& statement)
+{
+    return RunStatement(statement, false, nullptr);
+}
+
+PreparedQueryResult MySQLConnection::Query(PreparedStatementBase const& statement)
+{
+    PreparedQueryResult result;
+    if (!RunStatement(statement, true, &result))
+        return nullptr;
+    return result;
+}
+
+bool MySQLConnection::RunStatement(PreparedStatementBase const& values, bool readOnly, PreparedQueryResult* result)
+{
+    ClearError();
+    if (_closed)
+    {
+        SetError(CR_SERVER_GONE_ERROR, "the connection is closed");
+        LOG_ERROR("sql.sql", "Statement {} on {} refused: the connection is closed", values.GetIndex(), _info.ToLogString());
+        return false;
+    }
+
+    for (int attempt = 0;; ++attempt)
+    {
+        ClearError();
+        if (!_mysql && !Reconnect())
+            return false;
+        if (!IsStatementPrepared(values.GetIndex()))
+        {
+            SetError(CR_UNKNOWN_ERROR, fmt::format("statement {} is not prepared on this connection", values.GetIndex()));
+            LOG_ERROR("sql.sql", "Could not run statement {} on {}: it is not prepared on this connection", values.GetIndex(), _info.ToLogString());
+            return false;
+        }
+        MySQLPreparedStatement& prepared = *_statements[values.GetIndex()];
+        std::string bindError;
+        if (!prepared.BindParameters(values, bindError))
+        {
+            SetError(CR_PARAMS_NOT_BOUND, bindError);
+            LOG_ERROR("sql.sql", "Could not run statement {} on {}: {}", prepared.GetName(), _info.ToLogString(), bindError);
+            return false;
+        }
+
+        bool const inTransaction = (_mysql->server_status & SERVER_STATUS_IN_TRANS) != 0;
+        MYSQL_STMT* const handle = prepared.GetHandle();
+        uint32 code = 0;
+        std::string text;
+        if (mysql_stmt_execute(handle) == 0)
+        {
+            PreparedQueryResult loaded = PreparedResultSet::Load(handle, code, text);
+            while (code == 0 && mysql_stmt_more_results(handle))
+            {
+                int const status = mysql_stmt_next_result(handle);
+                if (status > 0)
+                {
+                    code = mysql_stmt_errno(handle);
+                    text = mysql_stmt_error(handle);
+                }
+                else if (status == 0)
+                    mysql_stmt_free_result(handle);
+                else
+                    break;
+            }
+            if (code == 0)
+            {
+                if (result)
+                    *result = std::move(loaded);
+                return true;
+            }
+        }
+        else
+        {
+            code = mysql_stmt_errno(handle);
+            text = mysql_stmt_error(handle);
+        }
+
+        SetError(code, text);
+        if (!IsConnectionLost(code, _mariaDB))
+        {
+            LOG_ERROR("sql.sql", "Statement {} on {} failed: [{}] {} with values ({})", prepared.GetName(), _info.ToLogString(), code, text, values.DescribeValues());
+            return false;
+        }
+        std::string const name = prepared.GetName();
+        bool const safe = IsSafeToRetry(code, _mariaDB) || (readOnly && (code == CR_SERVER_LOST || code == CR_SERVER_LOST_EXTENDED));
+        bool const retry = attempt == 0 && !inTransaction && safe;
+        LOG_WARN("sql.sql", "Reconnecting to {} after statement {} failed: [{}] {}{}", _info.ToLogString(), name, code, text,
+            inTransaction ? "; the open transaction was rolled back" : retry ? "; retrying after reconnecting" : "; the statement is not retried");
+        bool const reconnected = Reconnect();
+        SetError(code, text);
+        if (!reconnected || !retry)
+            return false;
     }
 }

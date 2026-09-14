@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Parses text-protocol column values into numbers, checking the column type and the target range and reporting every mismatch with the column name.
+ * Reads text-protocol values and binary-protocol native numbers, checking the column type and the target range and reporting every mismatch with the column name.
  */
 
 #include "Field.h"
@@ -8,28 +8,139 @@
 #include "StringUtil.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 
 void Field::SetText(char const* data, std::size_t length, FieldMetadata const* metadata) noexcept
 {
     _data = data;
     _length = length;
     _metadata = metadata;
+    _binary = false;
+}
+
+void Field::SetBinary(char const* data, std::size_t length, FieldMetadata const* metadata) noexcept
+{
+    _data = data;
+    _length = length;
+    _metadata = metadata;
+    _binary = true;
+}
+
+bool Field::IsNativeNumber() const noexcept
+{
+    if (!_binary || !_metadata || !_data)
+        return false;
+    switch (_metadata->Type)
+    {
+        case DatabaseFieldType::Int8: return _length == 1;
+        case DatabaseFieldType::Int16: return _length == 2;
+        case DatabaseFieldType::Int32: return _length == 4;
+        case DatabaseFieldType::Int64: return _length == 8;
+        case DatabaseFieldType::Float: return _length == 4;
+        case DatabaseFieldType::Double: return _length == 8;
+        default: return false;
+    }
+}
+
+std::string Field::GetString() const
+{
+    if (!IsNativeNumber())
+        return std::string(GetStringView());
+    return DescribeValue();
+}
+
+std::string Field::DescribeValue() const
+{
+    if (IsNull())
+        return "NULL";
+    if (!IsNativeNumber())
+        return std::string(GetStringView());
+    if (_metadata->Type == DatabaseFieldType::Float)
+    {
+        float value = 0;
+        std::memcpy(&value, _data, sizeof(value));
+        return fmt::format("{}", value);
+    }
+    if (_metadata->Type == DatabaseFieldType::Double)
+    {
+        double value = 0;
+        std::memcpy(&value, _data, sizeof(value));
+        return fmt::format("{}", value);
+    }
+    IntegerValue const value = ReadInteger();
+    return value.Negative ? fmt::format("{}", value.Signed) : fmt::format("{}", value.Unsigned);
 }
 
 std::string_view Field::GetStringView() const noexcept
 {
-    return _data ? std::string_view(_data, _length) : std::string_view();
+    return _data && !IsNativeNumber() ? std::string_view(_data, _length) : std::string_view();
+}
+
+std::string_view Field::GetCheckedStringView() const
+{
+    if (IsNativeNumber())
+    {
+        ReportMismatch("string_view", "a binary-protocol number has no text to view; read it as std::string");
+        return {};
+    }
+    return GetStringView();
 }
 
 std::vector<uint8> Field::GetBinary() const
 {
+    if (IsNativeNumber())
+    {
+        std::string const text = DescribeValue();
+        return std::vector<uint8>(text.begin(), text.end());
+    }
     std::span<uint8 const> const bytes = GetBinaryView();
     return std::vector<uint8>(bytes.begin(), bytes.end());
 }
 
 std::span<uint8 const> Field::GetBinaryView() const noexcept
 {
-    return _data ? std::span<uint8 const>(reinterpret_cast<uint8 const*>(_data), _length) : std::span<uint8 const>();
+    return _data && !IsNativeNumber() ? std::span<uint8 const>(reinterpret_cast<uint8 const*>(_data), _length) : std::span<uint8 const>();
+}
+
+bool Field::IsRealColumn() const noexcept
+{
+    return _metadata && (_metadata->Type == DatabaseFieldType::Float || _metadata->Type == DatabaseFieldType::Double);
+}
+
+Field::IntegerValue Field::FromReal(double real) noexcept
+{
+    IntegerValue result;
+    if (!std::isfinite(real))
+        return result;
+    result.Valid = true;
+    double const whole = std::trunc(real);
+    result.Truncated = whole != real;
+    result.Negative = whole < 0;
+    if (whole < -9223372036854775808.0)
+    {
+        result.Overflow = true;
+        result.Signed = std::numeric_limits<int64>::min();
+        return result;
+    }
+    if (whole >= 18446744073709551616.0)
+    {
+        result.Overflow = true;
+        result.Signed = std::numeric_limits<int64>::max();
+        result.Unsigned = std::numeric_limits<uint64>::max();
+        return result;
+    }
+    if (result.Negative)
+    {
+        result.Signed = static_cast<int64>(whole);
+        result.Unsigned = static_cast<uint64>(result.Signed);
+    }
+    else
+    {
+        result.Unsigned = static_cast<uint64>(whole);
+        result.Signed = whole >= 9223372036854775808.0 ? std::numeric_limits<int64>::max() : static_cast<int64>(whole);
+    }
+    return result;
 }
 
 bool Field::IsIntegerColumn() const noexcept
@@ -54,6 +165,45 @@ bool Field::IsIntegerColumn() const noexcept
 Field::IntegerValue Field::ReadInteger() const
 {
     IntegerValue result;
+    if (IsNativeNumber())
+    {
+        if (_metadata->Type == DatabaseFieldType::Float)
+        {
+            float real = 0;
+            std::memcpy(&real, _data, sizeof(real));
+            return FromReal(real);
+        }
+        if (_metadata->Type == DatabaseFieldType::Double)
+        {
+            double real = 0;
+            std::memcpy(&real, _data, sizeof(real));
+            return FromReal(real);
+        }
+        bool const isUnsigned = _metadata->Unsigned;
+        auto store = [&result, isUnsigned](int64 signedValue, uint64 unsignedValue)
+        {
+            result.Valid = true;
+            if (isUnsigned)
+            {
+                result.Unsigned = unsignedValue;
+                result.Signed = unsignedValue > static_cast<uint64>(std::numeric_limits<int64>::max()) ? std::numeric_limits<int64>::max() : static_cast<int64>(unsignedValue);
+            }
+            else
+            {
+                result.Signed = signedValue;
+                result.Negative = signedValue < 0;
+                result.Unsigned = static_cast<uint64>(signedValue);
+            }
+        };
+        switch (_length)
+        {
+            case 1: { uint8 raw = 0; std::memcpy(&raw, _data, 1); store(static_cast<int8>(raw), raw); break; }
+            case 2: { uint16 raw = 0; std::memcpy(&raw, _data, 2); store(static_cast<int16>(raw), raw); break; }
+            case 4: { uint32 raw = 0; std::memcpy(&raw, _data, 4); store(static_cast<int32>(raw), raw); break; }
+            default: { uint64 raw = 0; std::memcpy(&raw, _data, 8); store(static_cast<int64>(raw), raw); break; }
+        }
+        return result;
+    }
     if (_metadata && _metadata->Type == DatabaseFieldType::Bit)
     {
         std::span<uint8 const> const bytes = GetBinaryView();
@@ -66,6 +216,12 @@ Field::IntegerValue Field::ReadInteger() const
         }
         result.Signed = static_cast<int64>(result.Unsigned);
         return result;
+    }
+
+    if (IsRealColumn())
+    {
+        std::optional<double> const real = Ambrose::StringTo<double>(GetStringView());
+        return real ? FromReal(*real) : result;
     }
 
     std::string_view text = GetStringView();
@@ -111,17 +267,17 @@ int64 Field::GetInt64(std::string_view requested, int64 minimum, int64 maximum) 
 {
     if (IsNull())
         return 0;
-    if (!IsIntegerColumn())
-        ReportMismatch(requested, "the column is not an integer column");
+    if (!IsIntegerColumn() && !IsRealColumn())
+        ReportMismatch(requested, "the column is not a numeric column");
     IntegerValue const value = ReadInteger();
     if (!value.Valid)
     {
-        if (IsIntegerColumn())
-            ReportMismatch(requested, fmt::format("value '{}' is not an integer", GetStringView()));
+        if (IsIntegerColumn() || IsRealColumn())
+            ReportMismatch(requested, fmt::format("value '{}' is not an integer", DescribeValue()));
         return 0;
     }
     if (value.Truncated)
-        ReportMismatch(requested, fmt::format("value {} loses its fraction", GetStringView()));
+        ReportMismatch(requested, fmt::format("value {} loses its fraction", DescribeValue()));
     if (!value.Negative && value.Unsigned > static_cast<uint64>(std::numeric_limits<int64>::max()))
     {
         ReportMismatch(requested, fmt::format("value is above {}", maximum));
@@ -129,7 +285,7 @@ int64 Field::GetInt64(std::string_view requested, int64 minimum, int64 maximum) 
     }
     if (value.Overflow)
     {
-        ReportMismatch(requested, fmt::format("value {} is outside {}..{}", GetStringView(), minimum, maximum));
+        ReportMismatch(requested, fmt::format("value {} is outside {}..{}", DescribeValue(), minimum, maximum));
         return value.Negative ? minimum : maximum;
     }
     if (value.Signed < minimum || value.Signed > maximum)
@@ -144,17 +300,17 @@ uint64 Field::GetUInt64(std::string_view requested, uint64 minimum, uint64 maxim
 {
     if (IsNull())
         return 0;
-    if (!IsIntegerColumn())
-        ReportMismatch(requested, "the column is not an integer column");
+    if (!IsIntegerColumn() && !IsRealColumn())
+        ReportMismatch(requested, "the column is not a numeric column");
     IntegerValue const value = ReadInteger();
     if (!value.Valid)
     {
-        if (IsIntegerColumn())
-            ReportMismatch(requested, fmt::format("value '{}' is not an integer", GetStringView()));
+        if (IsIntegerColumn() || IsRealColumn())
+            ReportMismatch(requested, fmt::format("value '{}' is not an integer", DescribeValue()));
         return minimum;
     }
     if (value.Truncated)
-        ReportMismatch(requested, fmt::format("value {} loses its fraction", GetStringView()));
+        ReportMismatch(requested, fmt::format("value {} loses its fraction", DescribeValue()));
     if (value.Negative && value.Signed != 0)
     {
         ReportMismatch(requested, fmt::format("value {} is negative", value.Signed));
@@ -162,7 +318,7 @@ uint64 Field::GetUInt64(std::string_view requested, uint64 minimum, uint64 maxim
     }
     if (value.Overflow)
     {
-        ReportMismatch(requested, fmt::format("value {} is above {}", GetStringView(), maximum));
+        ReportMismatch(requested, fmt::format("value {} is above {}", DescribeValue(), maximum));
         return maximum;
     }
     if (value.Unsigned < minimum || value.Unsigned > maximum)
@@ -195,11 +351,28 @@ double Field::GetDouble(std::string_view requested) const
     }
     if (wrongColumn)
         ReportMismatch(requested, "the column is not a numeric column");
+    if (IsNativeNumber())
+    {
+        if (_metadata->Type == DatabaseFieldType::Float)
+        {
+            float value = 0;
+            std::memcpy(&value, _data, sizeof(value));
+            return value;
+        }
+        if (_metadata->Type == DatabaseFieldType::Double)
+        {
+            double value = 0;
+            std::memcpy(&value, _data, sizeof(value));
+            return value;
+        }
+        IntegerValue const value = ReadInteger();
+        return value.Negative ? static_cast<double>(value.Signed) : static_cast<double>(value.Unsigned);
+    }
     std::optional<double> const value = Ambrose::StringTo<double>(GetStringView());
     if (!value)
     {
         if (!wrongColumn)
-            ReportMismatch(requested, fmt::format("value '{}' is not a number", GetStringView()));
+            ReportMismatch(requested, fmt::format("value '{}' is not a number", DescribeValue()));
         return 0.0;
     }
     return *value;

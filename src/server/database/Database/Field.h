@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One column value of a result row with typed getters that check the column type and range, logging mismatches to sql.sql instead of aborting.
+ * One column value of a text or binary protocol row with typed getters that check the column type and range, logging mismatches to sql.sql instead of aborting.
  */
 
 #ifndef AMBROSE_FIELD_H
@@ -49,6 +49,7 @@ public:
     Field() = default;
 
     void SetText(char const* data, std::size_t length, FieldMetadata const* metadata) noexcept;
+    void SetBinary(char const* data, std::size_t length, FieldMetadata const* metadata) noexcept;
 
     bool IsNull() const noexcept { return _data == nullptr; }
     FieldMetadata const* GetMetadata() const noexcept { return _metadata; }
@@ -59,9 +60,9 @@ public:
         if constexpr (std::is_same_v<T, bool>)
             return GetUInt64("bool", 0, 1) != 0;
         else if constexpr (std::is_same_v<T, std::string>)
-            return std::string(GetStringView());
+            return GetString();
         else if constexpr (std::is_same_v<T, std::string_view>)
-            return GetStringView();
+            return GetCheckedStringView();
         else if constexpr (std::is_same_v<T, std::vector<uint8>>)
             return GetBinary();
         else if constexpr (std::is_floating_point_v<T>)
@@ -74,6 +75,7 @@ public:
             return T::FieldTypeIsNotSupported;
     }
 
+    std::string GetString() const;
     std::string_view GetStringView() const noexcept;
     std::vector<uint8> GetBinary() const;
     std::span<uint8 const> GetBinaryView() const noexcept;
@@ -106,11 +108,17 @@ private:
     uint64 GetUInt64(std::string_view requested, uint64 minimum, uint64 maximum) const;
     double GetDouble(std::string_view requested) const;
     bool IsIntegerColumn() const noexcept;
+    bool IsRealColumn() const noexcept;
+    std::string_view GetCheckedStringView() const;
+    static IntegerValue FromReal(double real) noexcept;
+    bool IsNativeNumber() const noexcept;
+    std::string DescribeValue() const;
     void ReportMismatch(std::string_view requested, std::string_view problem) const;
 
     char const* _data = nullptr;
     std::size_t _length = 0;
     FieldMetadata const* _metadata = nullptr;
+    bool _binary = false;
 };
 
 #endif

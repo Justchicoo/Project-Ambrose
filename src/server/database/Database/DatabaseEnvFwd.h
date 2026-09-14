@@ -10,9 +10,12 @@
 
 class Field;
 class ResultSet;
+class PreparedResultSet;
+class PreparedStatementBase;
 class MySQLConnection;
 struct MySQLConnectionInfo;
 
 using QueryResult = std::shared_ptr<ResultSet>;
+using PreparedQueryResult = std::shared_ptr<PreparedResultSet>;
 
 #endif
