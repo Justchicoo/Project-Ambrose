@@ -10,6 +10,7 @@ The Applies column says when a changed value takes effect after a configuration 
 | `LogsDir` | string | `logs` | `AMBROSE_LOGS_DIR` | Live | Folder for log files, relative to the working directory unless absolute; created when a File appender exists |
 | `BindIP` | string | `0.0.0.0` | `AMBROSE_BIND_IP` | Rebinds live like the port option | Local address the listener binds; 0.0.0.0 listens on every IPv4 address |
 | `WorldServerPort` | uint16 | `12333` | `AMBROSE_WORLD_SERVER_PORT` | Rebinds live; the new listener opens before the old one closes, and a failed bind keeps the old one | TCP port the realm listens on for game clients |
+| `Patch.Enabled` | bool | `0` | `AMBROSE_PATCH_ENABLED` | Live, from the next zone transfer once milestone 16.07 consumes it | 0 for development with the client launched with -P 0 (doc/PATCHING.md); 1 lets the realm send download-package messages |
 | `Network.Threads` | uint32 | `1` | `AMBROSE_NETWORK_THREADS` | Live; new threads start at once, and removed threads stop taking sockets and exit when their last connection closes | Network threads that read and write sockets (1-256) |
 | `Network.MaxFrameSize` | uint64 | `4194304` | `AMBROSE_NETWORK_MAX_FRAME_SIZE` | Next connection | Largest frame in bytes a client may send, checked before the frame is buffered (17 to 1 GiB) |
 | `Network.MaxDmlMessages` | uint32 | `1024` | `AMBROSE_NETWORK_MAX_DML_MESSAGES` | Next connection | Most DML messages one frame may chain (at least 1) |

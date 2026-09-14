@@ -10,12 +10,17 @@ The Applies column says when a changed value takes effect after a configuration 
 | `LogsDir` | string | `logs` | `AMBROSE_LOGS_DIR` | Live | Folder for log files, relative to the working directory unless absolute; created when a File appender exists |
 | `BindIP` | string | `0.0.0.0` | `AMBROSE_BIND_IP` | Rebinds live like the port option | Local address the listener binds; 0.0.0.0 listens on every IPv4 address |
 | `LoginServerPort` | uint16 | `12000` | `AMBROSE_LOGIN_SERVER_PORT` | Rebinds live; the new listener opens before the old one closes, and a failed bind keeps the old one | TCP port the login server listens on for clients |
+| `Patch.Enabled` | bool | `0` | `AMBROSE_PATCH_ENABLED` | Live, from the next login once milestone 16.07 consumes it | 0 for development with the client launched with -P 0 (doc/PATCHING.md); 1 expects clients to patch through the patchserver |
+| `ClientDir` | string | empty | `AMBROSE_CLIENT_DIR` | Live once the reload triggers of milestone 4.15 reload messages; a folder that fails to load keeps the active definitions | Your own Wizard101 install, the folder that holds `Data` and `Bin`. The message definitions load from its `Data/GameData/Root.wad`, and one that fails to load at startup stops the server. Empty logs client messages by service and order only |
 | `Network.Threads` | uint32 | `1` | `AMBROSE_NETWORK_THREADS` | Live; new threads start at once, and removed threads stop taking sockets and exit when their last connection closes | Network threads that read and write sockets (1-256) |
 | `Network.MaxFrameSize` | uint64 | `4194304` | `AMBROSE_NETWORK_MAX_FRAME_SIZE` | Next connection | Largest frame in bytes a client may send, checked before the frame is buffered (17 to 1 GiB) |
 | `Network.MaxDmlMessages` | uint32 | `1024` | `AMBROSE_NETWORK_MAX_DML_MESSAGES` | Next connection | Most DML messages one frame may chain (at least 1) |
 | `Network.LongFrameLength` | string | `BodyOnly` | `AMBROSE_NETWORK_LONG_FRAME_LENGTH` | Next connection | What a long frame's 32-bit length counts: `BodyOnly` or `HeaderAndBody`, until doc/CAPTURE.md settles it |
 | `Network.OutKBuff` | int32 | `-1` | `AMBROSE_NETWORK_OUT_K_BUFF` | Next connection | Socket send buffer in bytes; -1 keeps the operating system default |
 | `Network.TcpNoDelay` | bool | `1` | `AMBROSE_NETWORK_TCP_NO_DELAY` | Next connection | Disable Nagle's algorithm so small frames go out at once |
+| `Network.SessionAcceptTimeout` | uint32 | `15` | `AMBROSE_NETWORK_SESSION_ACCEPT_TIMEOUT` | Next connection | Seconds a new connection has to answer SessionOffer with a matching SessionAccept before it is closed (1-3600) |
+| `Network.KeepAliveInterval` | uint32 | `60` | `AMBROSE_NETWORK_KEEP_ALIVE_INTERVAL` | Next keepalive timer; a disabled timer checks again every second | Seconds between server keepalives to each accepted session; 0 sends none (0-3600) |
+| `Network.KeepAliveTimeout` | uint32 | `15` | `AMBROSE_NETWORK_KEEP_ALIVE_TIMEOUT` | Next keepalive | Seconds after a server keepalive in which the client must send anything at all, or the session closes (1-3600) |
 | `Log.Async.Enable` | bool | `0` | `AMBROSE_LOG_ASYNC_ENABLE` | Live | Write log lines on a dedicated thread; shutdown and exit drain every queued line |
 | `Log.Async.QueueSize` | uint32 | `65536` | `AMBROSE_LOG_ASYNC_QUEUE_SIZE` | Live | Queued lines before the full-queue policy applies (1024-16777216) |
 | `Log.Async.QueueFull` | uint8 | `0` | `AMBROSE_LOG_ASYNC_QUEUE_FULL` | Live | 0 waits for room, 1 drops the line and logs the drop count |
@@ -30,3 +35,4 @@ The Applies column says when a changed value takes effect after a configuration 
 | `Logger.server` | logger | `3,Console Server Errors Stream` | `AMBROSE_LOGGER_SERVER` | Live | App lifecycle, config and logging messages |
 | `Logger.sql` | logger | `4,Console Server Errors Stream` | `AMBROSE_LOGGER_SQL` | Live | Database messages, warnings and worse |
 | `Logger.network` | logger | `3,Console Server Errors Stream` | `AMBROSE_LOGGER_NETWORK` | Live | Sockets and message traffic |
+| `Logger.network.session` | logger | `2,Console Server Errors Stream` | `AMBROSE_LOGGER_NETWORK_SESSION` | Live | Session offers, accepts and closes, plus keepalives at Debug, which reach Login.log and the stream while the console stays at Info |

@@ -3,6 +3,7 @@
 LogsDir = logs
 BindIP = 0.0.0.0
 WorldServerPort = 12333
+Patch.Enabled = 0
 Network.Threads = 1
 Network.MaxFrameSize = 4194304
 Network.MaxDmlMessages = 1024

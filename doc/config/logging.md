@@ -111,7 +111,8 @@ A message goes to the logger with the longest matching name at a dot boundary. `
 | `server.<app>` | App lifecycle |
 | `server.config` | Configuration warnings |
 | `server.logging` | Logging problems such as dropped lines |
-| `network`, `network.opcode` | Sockets and messages |
+| `network`, `network.opcode` | Sockets and client messages by protocol and name |
+| `network.session` | Session offers, accepts and closes at Info, keepalives in both directions at Debug |
 | `sql.sql`, `sql.updates`, `sql.driver` | Database queries, updates and connections |
 
 ## Async mode

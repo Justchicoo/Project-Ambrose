@@ -1,0 +1,315 @@
+/*
+ * Project Ambrose by Imjustchico
+ * Runs the KI session handshake and keepalives on the socket's network thread, queues DML frames that arrive before SessionAccept, and closes on mismatched ids or silence.
+ */
+
+#include "SessionBase.h"
+#include "FrameWriter.h"
+#include "Log.h"
+
+#include <fmt/format.h>
+
+namespace
+{
+    constexpr char const* SessionLog = "network.session";
+
+    uint16 MillisecondsIntoSecond()
+    {
+        auto const now = std::chrono::system_clock::now().time_since_epoch();
+        return static_cast<uint16>(std::chrono::duration_cast<std::chrono::milliseconds>(now).count() % 1000);
+    }
+
+    int64 ElapsedMs(std::chrono::steady_clock::time_point since)
+    {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - since).count();
+    }
+}
+
+SessionBase::SessionBase(asio::ip::tcp::socket&& socket, FrameLimits limits, std::shared_ptr<SessionContext> context)
+    : Socket(std::move(socket), limits), _context(std::move(context)), _acceptTimer(GetExecutor()), _keepAliveTimer(GetExecutor()), _keepAliveResponseTimer(GetExecutor())
+{
+    if (std::optional<uint16> const id = _context->AllocateId())
+        _sessionId = *id;
+}
+
+SessionBase::~SessionBase()
+{
+    if (!_idReleased && _sessionId != 0)
+        _context->ReleaseId(_sessionId);
+}
+
+SessionTimestamp SessionBase::GetOfferTime() const noexcept
+{
+    uint64 const seconds = _offerSeconds.load(std::memory_order_relaxed);
+    SessionTimestamp time;
+    time.TimeHigh = static_cast<int32>(static_cast<uint32>(seconds >> 32));
+    time.TimeLow = static_cast<int32>(static_cast<uint32>(seconds & 0xFFFFFFFFu));
+    time.Milliseconds = _offerMilliseconds.load(std::memory_order_relaxed);
+    return time;
+}
+
+void SessionBase::OnAccepted()
+{
+}
+
+void SessionBase::OnSessionClosed()
+{
+}
+
+void SessionBase::SendDml(uint8 serviceId, uint8 order, std::span<uint8 const> body)
+{
+    ByteBuffer frame;
+    FrameWriter::WriteDml(frame, serviceId, order, body, GetLongFrameLength());
+    QueueFrame(frame);
+}
+
+void SessionBase::OnStart()
+{
+    if (_sessionId == 0)
+    {
+        LOG_WARN(SessionLog, "Refusing {}:{}: every session id is in use", GetRemoteAddress().to_string(), GetRemotePort());
+        CloseNow();
+        return;
+    }
+
+    SessionOffer offer;
+    offer.SessionId = _sessionId;
+    offer.Time = SessionTimestamp::FromTimePoint(std::chrono::system_clock::now());
+    _offerSeconds.store(offer.Time.GetSeconds(), std::memory_order_relaxed);
+    _offerMilliseconds.store(offer.Time.Milliseconds, std::memory_order_relaxed);
+    ByteBuffer frame;
+    ControlMessages::WriteFrame(frame, offer);
+    QueueFrame(frame);
+    _offerSentAt = std::chrono::steady_clock::now();
+    _lastInbound = _offerSentAt;
+    LOG_INFO(SessionLog, "Session {} offered to {}:{}", _sessionId, GetRemoteAddress().to_string(), GetRemotePort());
+    StartAcceptTimer();
+}
+
+void SessionBase::OnFrame(Frame& frame)
+{
+    _lastInbound = std::chrono::steady_clock::now();
+    if (frame.IsControl)
+    {
+        HandleControl(frame);
+        return;
+    }
+    if (GetState() == SessionState::Offered)
+    {
+        if (_pendingFrames.size() >= MaxPendingFrames || _pendingBytes + frame.Payload.size() > MaxPendingBytes)
+        {
+            CloseForProtocol(fmt::format("more than {} frames or {} bytes arrived before SessionAccept", MaxPendingFrames, MaxPendingBytes));
+            return;
+        }
+        _pendingBytes += frame.Payload.size();
+        _pendingFrames.push_back(std::move(frame));
+        return;
+    }
+    DispatchDml(frame);
+}
+
+void SessionBase::OnClose()
+{
+    _acceptTimer.cancel();
+    _keepAliveTimer.cancel();
+    _keepAliveResponseTimer.cancel();
+    _pendingFrames.clear();
+    _pendingBytes = 0;
+    if (_sessionId != 0 && !_idReleased)
+    {
+        _idReleased = true;
+        _context->ReleaseId(_sessionId);
+    }
+    LOG_DEBUG(SessionLog, "Session {} closed", _sessionId);
+    OnSessionClosed();
+}
+
+void SessionBase::HandleControl(Frame& frame)
+{
+    std::optional<ControlOpcode> const opcode = ControlMessages::GetOpcode(frame);
+    if (!opcode)
+    {
+        LOG_DEBUG(SessionLog, "Session {} ignored control opcode {}", _sessionId, frame.Opcode);
+        return;
+    }
+    switch (*opcode)
+    {
+        case ControlOpcode::SessionAccept:
+            HandleAccept(frame);
+            break;
+        case ControlOpcode::KeepAlive:
+            HandleClientKeepAlive(frame);
+            break;
+        case ControlOpcode::KeepAliveRsp:
+            HandleKeepAliveResponse();
+            break;
+        case ControlOpcode::SessionOffer:
+            LOG_DEBUG(SessionLog, "Session {} ignored a SessionOffer from the client", _sessionId);
+            break;
+    }
+}
+
+void SessionBase::HandleAccept(Frame const& frame)
+{
+    std::optional<SessionAccept> const accept = ControlMessages::DecodeSessionAccept(frame.Payload);
+    if (!accept)
+    {
+        CloseForProtocol(fmt::format("SessionAccept body has {} bytes, expected at least {}", frame.Payload.size(), SessionAccept::BodySize));
+        return;
+    }
+    if (accept->SessionId != _sessionId)
+    {
+        CloseForProtocol(fmt::format("SessionAccept names session {}", accept->SessionId));
+        return;
+    }
+    if (GetState() != SessionState::Offered)
+    {
+        LOG_DEBUG(SessionLog, "Session {} ignored a repeated SessionAccept", _sessionId);
+        return;
+    }
+
+    _acceptTimer.cancel();
+    _acceptedAt = std::chrono::steady_clock::now();
+    int64 const roundTrip = ElapsedMs(_offerSentAt);
+    _acceptRoundTripMs.store(roundTrip, std::memory_order_relaxed);
+    _state.store(SessionState::Accepted, std::memory_order_relaxed);
+    LOG_INFO(SessionLog, "Session {} accepted by {}:{} after {} ms", _sessionId, GetRemoteAddress().to_string(), GetRemotePort(), roundTrip);
+
+    OnAccepted();
+    while (IsOpen() && !_pendingFrames.empty())
+    {
+        Frame pending = std::move(_pendingFrames.front());
+        _pendingFrames.pop_front();
+        _pendingBytes -= pending.Payload.size();
+        DispatchDml(pending);
+    }
+    if (IsOpen())
+        ScheduleKeepAlive(_context->GetSettings().KeepAliveInterval);
+}
+
+void SessionBase::HandleClientKeepAlive(Frame const& frame)
+{
+    std::optional<ClientKeepAlive> const keepAlive = ControlMessages::DecodeClientKeepAlive(frame.Payload);
+    if (!keepAlive)
+    {
+        CloseForProtocol(fmt::format("KeepAlive body has {} bytes, expected {}", frame.Payload.size(), ClientKeepAlive::BodySize));
+        return;
+    }
+    if (keepAlive->SessionId != _sessionId)
+    {
+        CloseForProtocol(fmt::format("KeepAlive names session {}", keepAlive->SessionId));
+        return;
+    }
+
+    KeepAliveResponse response;
+    response.SessionId = _sessionId;
+    response.Milliseconds = MillisecondsIntoSecond();
+    response.ElapsedMinutes = keepAlive->ElapsedMinutes;
+    ByteBuffer out;
+    ControlMessages::WriteFrame(out, response);
+    QueueFrame(out);
+    LOG_DEBUG(SessionLog, "Session {} keepalive from the client at {} minutes, answered", _sessionId, keepAlive->ElapsedMinutes);
+}
+
+void SessionBase::HandleKeepAliveResponse()
+{
+    if (!_awaitingKeepAlive)
+    {
+        LOG_DEBUG(SessionLog, "Session {} got an unrequested KeepAliveRsp", _sessionId);
+        return;
+    }
+    _awaitingKeepAlive = false;
+    _keepAliveResponseTimer.cancel();
+    int64 const roundTrip = ElapsedMs(_keepAliveSentAt);
+    _keepAliveRoundTripMs.store(roundTrip, std::memory_order_relaxed);
+    _keepAlivesAnswered.fetch_add(1, std::memory_order_relaxed);
+    LOG_DEBUG(SessionLog, "Session {} keepalive answered by the client after {} ms", _sessionId, roundTrip);
+}
+
+void SessionBase::DispatchDml(Frame& frame)
+{
+    std::vector<DmlMessageData> messages;
+    FrameError const error = FrameLayout::SplitDmlMessages(frame.Payload, messages);
+    if (error != FrameError::None)
+    {
+        OnProtocolError(error);
+        CloseNow();
+        return;
+    }
+    for (DmlMessageData& message : messages)
+    {
+        OnMessage(message);
+        if (!IsOpen())
+            return;
+    }
+}
+
+void SessionBase::StartAcceptTimer()
+{
+    std::chrono::milliseconds const timeout = _context->GetSettings().AcceptTimeout;
+    _acceptTimer.expires_after(timeout);
+    _acceptTimer.async_wait([weak = std::weak_ptr<SessionBase>(Self()), timeout](std::error_code const& error)
+    {
+        std::shared_ptr<SessionBase> const session = weak.lock();
+        if (error || !session || !session->IsOpen() || session->GetState() != SessionState::Offered)
+            return;
+        LOG_WARN(SessionLog, "Closing session {} from {}:{}: no SessionAccept within {} ms", session->_sessionId, session->GetRemoteAddress().to_string(), session->GetRemotePort(), timeout.count());
+        session->CloseNow();
+    });
+}
+
+void SessionBase::ScheduleKeepAlive(std::chrono::milliseconds delay)
+{
+    bool const disabled = delay.count() <= 0;
+    _keepAliveTimer.expires_after(disabled ? std::chrono::milliseconds(DisabledKeepAliveRecheck) : delay);
+    _keepAliveTimer.async_wait([weak = std::weak_ptr<SessionBase>(Self()), disabled](std::error_code const& error)
+    {
+        std::shared_ptr<SessionBase> const session = weak.lock();
+        if (error || !session || !session->IsOpen())
+            return;
+        std::chrono::milliseconds const interval = session->_context->GetSettings().KeepAliveInterval;
+        if (!disabled && interval.count() > 0 && !session->_awaitingKeepAlive)
+            session->SendKeepAlive();
+        session->ScheduleKeepAlive(interval);
+    });
+}
+
+void SessionBase::SendKeepAlive()
+{
+    ServerKeepAlive keepAlive;
+    keepAlive.SessionId = _sessionId;
+    keepAlive.Milliseconds = static_cast<uint32>(ElapsedMs(_acceptedAt));
+    ByteBuffer out;
+    ControlMessages::WriteFrame(out, keepAlive);
+    QueueFrame(out);
+    _keepAliveSentAt = std::chrono::steady_clock::now();
+    _awaitingKeepAlive = true;
+    uint32 const sequence = ++_keepAliveSequence;
+    _keepAlivesSent.fetch_add(1, std::memory_order_relaxed);
+    LOG_DEBUG(SessionLog, "Session {} keepalive sent to the client", _sessionId);
+
+    std::chrono::milliseconds const timeout = _context->GetSettings().KeepAliveTimeout;
+    _keepAliveResponseTimer.expires_after(timeout);
+    _keepAliveResponseTimer.async_wait([weak = std::weak_ptr<SessionBase>(Self()), timeout, sequence](std::error_code const& error)
+    {
+        std::shared_ptr<SessionBase> const session = weak.lock();
+        if (error || !session || !session->IsOpen() || !session->_awaitingKeepAlive || session->_keepAliveSequence != sequence)
+            return;
+        session->_awaitingKeepAlive = false;
+        if (session->_lastInbound >= session->_keepAliveSentAt || session->_keepAliveTimeoutSuspended)
+            return;
+        LOG_WARN(SessionLog, "Closing session {} from {}:{}: nothing received within {} ms of a keepalive", session->_sessionId, session->GetRemoteAddress().to_string(), session->GetRemotePort(), timeout.count());
+        session->CloseNow();
+    });
+}
+
+void SessionBase::CloseForProtocol(std::string const& reason)
+{
+    LOG_WARN(SessionLog, "Closing session {} from {}:{}: {}", _sessionId, GetRemoteAddress().to_string(), GetRemotePort(), reason);
+    CloseNow();
+}
+
+std::shared_ptr<SessionBase> SessionBase::Self()
+{
+    return std::static_pointer_cast<SessionBase>(shared_from_this());
+}

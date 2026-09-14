@@ -154,6 +154,12 @@ Settled on 2026-09-14 at the maintainer's direction. Anything that can change wh
 
 Settled on 2026-09-14. A field whose type attribute is misspelled `TPYE` or `TYP` keeps that type, and a `GlobalID` field with no type is a GID. Each case is reported as a load warning, which the startup loader logs, and the field stays on the wire. This keeps MSG_PHYSICS_GRAB, MSG_MINIGAMEREWARDS, and MSG_BATTLEGROUNDQUEUEUPDATE at their fullest layout until capture verification shows the client drops those fields. A message's element tag is its identity and sort key, never `_MsgName`. A repeated tag merges into one id only when its fields match, and a repeat with different fields is an error.
 
+### Sessions and keepalives
+
+Settled on 2026-09-14. A session sends SessionOffer before any other work and closes on a SessionAccept or client keepalive that names another session id. DML frames that arrive before SessionAccept are queued, up to 256 frames or 1 MiB, and delivered in order after it. A KeepAliveRsp echoes the client's elapsed minutes and carries the server's milliseconds into the current second. A server keepalive closes the session only when nothing at all arrives from the client within `Network.KeepAliveTimeout`, so a client that never answers server keepalives but sends its own stays connected. Session ids are nonzero, handed out in rotating order, and reused only after their session closes. These choices hold until doc/CAPTURE.md records otherwise.
+
+Work that needs the maintainer's own client, such as the real-client checks of 1.21 and 1.22, is listed in doc/ROADMAP.md under Where we are. Milestones that do not depend on those checks go ahead while they wait.
+
 ### Database updates
 
 Update files run through the connector with multi-statement support, so `DELIMITER` is not allowed in them. The `updates` table records each file's SHA-256 hash.

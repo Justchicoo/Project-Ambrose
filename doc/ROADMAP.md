@@ -6,7 +6,7 @@ Work through the phases in order. Each phase ends with something visible in the 
 
 ## Where we are
 
- has only README.md, CONTRIBUTING.md, CLAUDE.md, CLAUDE.local.md, doc/ARCHITECTURE.md and an empty folder skeleton (apps/{ci,codestyle,installer}, conf/dist, data/sql/{base,updates,pending_*,custom}/db_{login,characters,world}, deps, modules, src). Nothing builds, and every stack choice in ARCHITECTURE.md 'Pending decisions' is still open.
+Phase 1 is built through 1.20: toolchain and CI, utilities, configuration, logging, threading, crypto, the KIWAD reader, the runtime message registry, frames and control messages, the socket layer, and the gameserver, loginserver and patchserver app skeletons. 1.21 (the patch-free launcher) and 1.22 (the session handshake, keepalives and the loginserver bootstrap) are implemented and pass their automated checks. Their real-client checks need the maintainer's own client and follow doc/PATCHING.md. Until they are recorded, work continues on milestones that do not depend on them, starting with the database layer in phase 2 (2.01-2.08, 2.11-2.13).
 
 I checked these against the sources, read-only:
 (1) Root.wad holds 29 *Messages*.xml files, not 26. GameMessages2.xml (svc 55, 10 msgs), WizardMessages2.xml (53, 254) and WizardMessages3.xml (56, 213) exist. That gives 1448 records, 1446 distinct ids and still only 9 field types. MSG_CLIENTZONED arrives as svc=53 order=64 right after LOGINCOMPLETE in a local session capture line 120, so the registry must load all 29 files.

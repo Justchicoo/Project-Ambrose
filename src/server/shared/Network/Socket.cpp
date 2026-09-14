@@ -11,7 +11,7 @@
 #include <asio/post.hpp>
 #include <asio/write.hpp>
 
-Socket::Socket(asio::ip::tcp::socket&& socket, FrameLimits limits) : _socket(std::move(socket)), _reassembler(limits), _lingerTimer(_socket.get_executor())
+Socket::Socket(asio::ip::tcp::socket&& socket, FrameLimits limits) : _socket(std::move(socket)), _reassembler(limits), _lingerTimer(_socket.get_executor()), _longLength(limits.LongLength)
 {
     std::error_code error;
     asio::ip::tcp::endpoint const remote = _socket.remote_endpoint(error);
@@ -86,6 +86,7 @@ void Socket::DelayedCloseSocket()
 
 void Socket::SetFrameLimits(FrameLimits limits)
 {
+    _longLength.store(limits.LongLength, std::memory_order_relaxed);
     asio::post(_socket.get_executor(), [self = shared_from_this(), limits] { self->_reassembler.SetLimits(limits); });
 }
 

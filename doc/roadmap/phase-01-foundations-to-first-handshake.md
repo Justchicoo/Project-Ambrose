@@ -951,8 +951,8 @@ Every other domain can run the retail client against loginserver/gameserver with
 **Deliverables**
 
 - doc/PATCHING.md: how to launch WizardGraphicalClient.exe with -L <host> <port> -P 0 (and optional -A <locale>) from the user's own install; warning never to run the retail launcher against a pinned install
-- apps/launcher/ (repo tooling): run-client.bat.dist / run-client.ps1.dist template reading the install path from a local, git-ignored config
-- conf/dist/worldserver.conf.dist + loginserver.conf.dist option Patch.Enabled = 0 (default for dev) read by gameserver/loginserver (consumed by PAT-9), applied live on a config reload
+- apps/launcher/ (repo tooling): run-client.ps1 and run-client.bat reading the install path from conf/launcher.conf (git-ignored), copied from conf/dist/launcher.conf.dist
+- gameserver.conf.dist + loginserver.conf.dist option Patch.Enabled = 0 (default for dev), consumed by 16.07 (PAT-9) and applied live from the next login or zone transfer
 
 **Data sources**
 
@@ -980,7 +980,7 @@ Every other domain can run the retail client against loginserver/gameserver with
 
 **Acceptance**
 
-- [ ] Fake client: wrong accept id closes; no accept in 15 s closes; keepalive echo correct
+- [x] Fake client: wrong accept id closes; no accept in 15 s closes; keepalive echo correct
 - [ ] Real client: log shows SessionOffer sent, SessionAccept with matching id, then 'LOGIN MSG_USER_AUTHEN_V3 (7:27)'
 - [ ] Idle 5 minutes at login: keepalives both ways, no drop
 
@@ -1005,7 +1005,7 @@ A real Wizard101 client completes the session handshake with an Ambrose server a
 
 **Acceptance**
 
-- [ ] Unit test with a fake client: offer bytes as specified; accept with the wrong id closes; no accept in 15s closes; keepalive echo is correct
+- [x] Unit test with a fake client: offer bytes as specified; accept with the wrong id closes; no accept in 15s closes; keepalive echo is correct
 - [ ] Real client: start loginserver, launch the client pointed at 127.0.0.1:12000 (-L 127.0.0.1 12000), and trigger login. The server log shows SessionOffer sent, SessionAccept received with a matching id, then a decoded 'LOGIN MSG_USER_AUTHEN_V3 (7:27)' line proving the client accepted the session and moved on to authenticate
 - [ ] Real client idle for 5 minutes at the login stage: keepalives are logged in both directions and the server never drops the session
 

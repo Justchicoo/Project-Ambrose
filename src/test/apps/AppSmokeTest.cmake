@@ -26,7 +26,11 @@ if(NOT missingError MATCHES "${NAME}\\.conf\\.dist")
 endif()
 
 get_filename_component(appDir "${APP}" DIRECTORY)
-execute_process(COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" --set Appender.Server=1,3,0 --set Appender.Errors=1,3,0 --set Appender.Stream=1,3,0 --set Appender.Console=1,3,0
+set(portOption "${NAME}")
+string(REPLACE "gameserver" "WorldServerPort" portOption "${portOption}")
+string(REPLACE "loginserver" "LoginServerPort" portOption "${portOption}")
+string(REPLACE "patchserver" "PatchServerPort" portOption "${portOption}")
+execute_process(COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" --set BindIP=127.0.0.1 --set ${portOption}=0 --set ClientDir= --set Appender.Server=1,3,0 --set Appender.Errors=1,3,0 --set Appender.Stream=1,3,0 --set Appender.Console=1,3,0
     WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE distResult OUTPUT_VARIABLE distOutput ERROR_VARIABLE distError TIMEOUT 5)
 if(NOT distOutput MATCHES "${NAME} ready")
     message(FATAL_ERROR "${NAME} with its shipped ${NAME}.conf.dist did not report ready (${distResult}): ${distOutput}${distError}")

@@ -50,12 +50,15 @@ protected:
     virtual void OnProtocolError(FrameError error);
     virtual void OnClose();
 
+    asio::ip::tcp::socket::executor_type GetExecutor() { return _socket.get_executor(); }
+    LongFrameLength GetLongFrameLength() const noexcept { return _longLength.load(std::memory_order_relaxed); }
+    void CloseNow();
+
 private:
     void ReadNext();
     void HandleRead(std::error_code const& error, std::size_t bytes);
     void WriteNext();
     void HandleWrite(std::error_code const& error);
-    void CloseNow();
 
     asio::ip::tcp::socket _socket;
     asio::ip::address _remoteAddress;
@@ -70,6 +73,7 @@ private:
     bool _shutdownSent = false;
     std::atomic<bool> _closed{ false };
     std::atomic<std::size_t> _queuedBytes{ 0 };
+    std::atomic<LongFrameLength> _longLength{ LongFrameLength::BodyOnly };
 };
 
 #endif
