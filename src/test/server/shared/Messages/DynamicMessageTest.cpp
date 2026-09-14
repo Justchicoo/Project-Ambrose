@@ -34,10 +34,15 @@ namespace
 
         MessageInfo const& Info(std::string_view tag) const
         {
-            MessageInfo const* const info = _registry.Find(9, tag);
+            MessageInfoPtr const info = _registry.Find(9, tag);
             if (!info)
                 throw std::runtime_error(std::string(tag) + " is missing");
             return *info;
+        }
+
+        DynamicMessage Make(std::string_view tag) const
+        {
+            return DynamicMessage(_registry.GetCatalog(), Info(tag));
         }
 
         MessageRegistry _registry;
@@ -46,7 +51,7 @@ namespace
 
 TEST_F(DynamicMessageTest, StartsFromDefaultsAndChecksTypes)
 {
-    DynamicMessage message(Info("MSG_EVERY"));
+    DynamicMessage message = Make("MSG_EVERY");
     EXPECT_EQ(message.GetDefinition().Tag, "MSG_EVERY");
     ASSERT_EQ(message.GetValues().size(), 11u);
     EXPECT_EQ(*message.Find("Flag"), DmlValue(uint8(1)));
@@ -76,7 +81,7 @@ TEST_F(DynamicMessageTest, StartsFromDefaultsAndChecksTypes)
 
 TEST_F(DynamicMessageTest, EncodesDefaultsAndReportsMinimumSize)
 {
-    DynamicMessage const message(Info("MSG_EVERY"));
+    DynamicMessage const message = Make("MSG_EVERY");
     ByteBuffer buffer;
     message.Encode(buffer);
     EXPECT_EQ(Hex::Encode(buffer.GetData()), "00" "01" "0000" "0000" "fbffffff" "00000000" "00002040" "0000000000000000" "0000000000000000" "0500" "6775657374" "0000");
@@ -91,7 +96,7 @@ TEST_F(DynamicMessageTest, EncodesDefaultsAndReportsMinimumSize)
 
 TEST_F(DynamicMessageTest, DecodeReportsStatusAndKeepsValuesOnFailure)
 {
-    DynamicMessage message(Info("MSG_TEXT"));
+    DynamicMessage message = Make("MSG_TEXT");
     std::optional<std::vector<uint8>> const body = Hex::Decode("0200" "6869" "0100" "4100");
     ASSERT_TRUE(body.has_value());
     ASSERT_EQ(message.Decode(*body), MessageDecodeStatus::Ok);
@@ -121,24 +126,24 @@ TEST_F(DynamicMessageTest, DecodeReportsStatusAndKeepsValuesOnFailure)
     EXPECT_EQ(shortBuffer.GetReadPosition(), 0u);
     EXPECT_EQ(*message.Find("Body"), DmlValue(std::string("again")));
 
-    DynamicMessage empty(Info("MSG_EMPTY"));
+    DynamicMessage empty = Make("MSG_EMPTY");
     EXPECT_EQ(empty.Decode(std::span<uint8 const>()), MessageDecodeStatus::Ok);
     EXPECT_EQ(empty.Decode(*body), MessageDecodeStatus::TrailingBytes);
 }
 
 TEST_F(DynamicMessageTest, ToStringNamesFieldsAndEscapesText)
 {
-    DynamicMessage message(Info("MSG_EVERY"));
+    DynamicMessage message = Make("MSG_EVERY");
     ASSERT_TRUE(message.Set("Signed", DmlValue(int8(-3))));
     ASSERT_TRUE(message.Set("Target", DmlValue(uint64(0x1122334455667788ull))));
     ASSERT_TRUE(message.Set("Name", DmlValue(std::string("a\"b\\c\n\x01"))));
     ASSERT_TRUE(message.Set("Title", DmlValue(std::u16string(u"café"))));
     EXPECT_EQ(message.ToString(), "MSG_EVERY (9:2) { Signed=-3, Flag=1, Short=0, Port=0, Count=-5, Mask=0, Speed=2.5, Scale=0, Target=0x1122334455667788, Name=\"a\\\"b\\\\c\\x0a\\x01\", Title=u\"caf\xC3\xA9\" }");
 
-    DynamicMessage const empty(Info("MSG_EMPTY"));
+    DynamicMessage const empty = Make("MSG_EMPTY");
     EXPECT_EQ(empty.ToString(), "MSG_EMPTY (9:1) {}");
 
-    DynamicMessage text(Info("MSG_TEXT"));
+    DynamicMessage text = Make("MSG_TEXT");
     ASSERT_TRUE(text.Set("Body", DmlValue(std::string(100, 'x'))));
     ASSERT_TRUE(text.Set("Wide", DmlValue(std::u16string(70, u'y'))));
     std::string const dump = text.ToString(4);
@@ -153,7 +158,7 @@ TEST_F(DynamicMessageTest, ToStringNamesFieldsAndEscapesText)
 
 TEST_F(DynamicMessageTest, SetRejectsStringsLongerThanTheWireLimit)
 {
-    DynamicMessage message(Info("MSG_TEXT"));
+    DynamicMessage message = Make("MSG_TEXT");
     EXPECT_FALSE(message.Set("Body", DmlValue(std::string(Dml::MaxStringLength + 1, 'a'))));
     EXPECT_FALSE(message.Set("Wide", DmlValue(std::u16string(Dml::MaxStringLength + 1, u'a'))));
     EXPECT_EQ(*message.Find("Body"), DmlValue(std::string()));
@@ -163,26 +168,52 @@ TEST_F(DynamicMessageTest, SetRejectsStringsLongerThanTheWireLimit)
     message.Encode(buffer);
     EXPECT_EQ(buffer.GetSize(), message.GetEncodedSize());
     EXPECT_EQ(buffer.GetSize(), 2u + Dml::MaxStringLength + 2 + 2 * Dml::MaxStringLength);
-    DynamicMessage decoded(Info("MSG_TEXT"));
+    DynamicMessage decoded = Make("MSG_TEXT");
     EXPECT_EQ(decoded.Decode(buffer.GetData()), MessageDecodeStatus::Ok);
     EXPECT_EQ(decoded.GetValues(), message.GetValues());
 }
 
 TEST_F(DynamicMessageTest, EveryFixtureMessageRoundTrips)
 {
-    ASSERT_EQ(_registry.GetMessages().size(), 3u);
-    for (MessageInfo const& info : _registry.GetMessages())
+    ASSERT_EQ(_registry.GetCatalog()->GetMessages().size(), 3u);
+    for (MessageInfo const& info : _registry.GetCatalog()->GetMessages())
     {
         for (uint64 seed : { MessageRoundTrip::SeedFor(info), uint64(1), uint64(0xFFFFFFFFFFFFFFFFull) })
         {
-            std::string const failure = MessageRoundTrip::Check(info, seed);
+            std::string const failure = MessageRoundTrip::Check(_registry.GetCatalog(), info, seed);
             EXPECT_TRUE(failure.empty()) << failure;
         }
     }
-    DynamicMessage const random = MessageRoundTrip::MakeRandom(Info("MSG_EVERY"), 7);
-    DynamicMessage const same = MessageRoundTrip::MakeRandom(Info("MSG_EVERY"), 7);
+    DynamicMessage const random = MessageRoundTrip::MakeRandom(_registry.GetCatalog(), Info("MSG_EVERY"), 7);
+    DynamicMessage const same = MessageRoundTrip::MakeRandom(_registry.GetCatalog(), Info("MSG_EVERY"), 7);
     for (std::size_t i = 0; i < random.GetValues().size(); ++i)
         EXPECT_TRUE(MessageRoundTrip::SameValue(random.GetValues()[i], same.GetValues()[i]));
     EXPECT_FALSE(MessageRoundTrip::SameValue(DmlValue(0.0f), DmlValue(-0.0f)));
     EXPECT_FALSE(MessageRoundTrip::SameValue(DmlValue(int32(1)), DmlValue(uint32(1))));
+}
+
+TEST_F(DynamicMessageTest, MessagesStayPinnedToTheirCatalogAcrossReloads)
+{
+    std::optional<DynamicMessage> created = DynamicMessage::Create(_registry.GetCatalog(), 9, 3);
+    ASSERT_TRUE(created.has_value());
+    EXPECT_EQ(created->GetDefinition().Tag, "MSG_TEXT");
+    EXPECT_FALSE(DynamicMessage::Create(_registry.GetCatalog(), 9, 4).has_value());
+    EXPECT_FALSE(DynamicMessage::Create(nullptr, 9, 3).has_value());
+
+    MessageCatalogPtr const first = _registry.GetCatalog();
+    ASSERT_TRUE(created->Set("Body", DmlValue(std::string("before"))));
+
+    MessageDefinitionSet reloaded;
+    ASSERT_TRUE(reloaded.Add(FixtureXml, "DynamicFixtureMessages.xml"));
+    ASSERT_TRUE(_registry.Load(std::move(reloaded)));
+    EXPECT_NE(_registry.GetCatalog(), first);
+    EXPECT_EQ(created->GetCatalog(), first);
+    ByteBuffer buffer;
+    created->Encode(buffer);
+    EXPECT_EQ(Hex::Encode(buffer.GetData()), "0600" "6265666f7265" "0000");
+
+    MessageInfo const& oldInfo = *first->Find(9, 3);
+    EXPECT_THROW(static_cast<void>(DynamicMessage(_registry.GetCatalog(), oldInfo)), std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(DynamicMessage(nullptr, oldInfo)), std::invalid_argument);
+    EXPECT_NO_THROW(static_cast<void>(DynamicMessage(first, oldInfo)));
 }

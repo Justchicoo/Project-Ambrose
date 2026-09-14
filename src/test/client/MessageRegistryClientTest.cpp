@@ -110,7 +110,7 @@ TEST_F(MessageRegistryClientTest, LoadsEveryMessageAndFindsSpotChecks)
     EXPECT_EQ(_registry->GetWarnings().size(), 3u);
     EXPECT_TRUE(_registry->GetErrors().empty());
 
-    MessageInfo const* const attach = _registry->Find(5, 7);
+    MessageInfoPtr const attach = _registry->Find(5, 7);
     ASSERT_NE(attach, nullptr);
     EXPECT_EQ(attach->Definition->Tag, "MSG_ATTACH");
     EXPECT_EQ(attach->Definition->AccessLevel, std::optional<uint8>(1));

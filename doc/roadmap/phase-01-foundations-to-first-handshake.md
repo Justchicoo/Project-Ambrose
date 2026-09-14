@@ -694,9 +694,9 @@ A library turns the client's message XML text into a validated list of protocols
 
 **Acceptance**
 
-- [x] Fixtures: the registry loads definitions and finds messages by (service, order) and by tag, and a failed load leaves it empty
+- [x] Fixtures: the registry loads definitions and finds messages by (service, order) and by tag, and a failed load or reload keeps the active catalog
 - [x] A declaration of a subset of fields encodes to golden bytes, with omitted fields written as their XML default or zero
-- [x] Unknown messages, unknown fields, type mismatches, and a field declared twice fail at declaration; using an undeclared message throws
+- [x] Unknown messages, unknown fields, type mismatches, and a field declared twice fail at declaration once definitions are loaded, and fail the load for declarations made earlier; using an undeclared message throws
 - [x] Client-gated: the real install loads 1446 ids with 3 warnings, and MSG_PING, MSG_ATTACH, MSG_USER_AUTHEN_V3, and MSG_CROWNBALANCE declarations resolve and round-trip
 - [x] Nothing is generated at build time, and CI builds and tests without a client
 
@@ -706,9 +706,9 @@ Replaces the msggen build-time generator under the 2026-09-13 decision that prot
 
 **Deliverables**
 
-- src/server/shared/Messages/MessageRegistry.h/.cpp: `MessageRegistry` with `sMessageRegistry`. `Load(MessageDefinitionSet)`, `LoadFromArchive(path)`, and `LoadFromClient(dir)` (which reads `Data/GameData/Root.wad`) log every warning and error under `server.loading`. A failed load leaves the registry empty. `Find(service, order)` is a constant-time 256x256 index, and `Find(service, tag)` looks up by element tag. Each `MessageInfo` holds the protocol, the definition, and each field's default parsed to its DML type
+- src/server/shared/Messages/MessageRegistry.h/.cpp: `MessageRegistry` with `sMessageRegistry`. `Load(MessageDefinitionSet)`, `LoadFromArchive(path)`, and `LoadFromClient(dir)` (which reads `Data/GameData/Root.wad`) log every warning and error under `server.loading`. Each load builds an immutable `MessageCatalog` snapshot, re-resolves every registered declaration against it, and publishes it atomically only if all of that succeeds; otherwise the active catalog stays live. Readers hold a `MessageCatalogPtr`, so a reload never invalidates a message in use. Declarations made before the first load are resolved by it. `Find(service, order)` is a constant-time 256x256 index, and `Find(service, tag)` looks up by element tag. Each `MessageInfo` holds the protocol, the definition, and each field's default parsed to its DML type
 - src/server/shared/Messages/MessageDeclaration.h: a declaration is a struct with `static constexpr uint8 ServiceId`, `static constexpr std::string_view Tag`, and `static constexpr auto Fields()` returning a tuple of `Field("XmlName", &Struct::Member)`. Members may be non-const integers matched by size and signedness (so `unsigned long long` binds to GID on every platform), float, double, std::string, std::u16string, bool (UBYT), or an enum with a fixed underlying type. Members may belong to a base class of the declaration
-- `MessageRegistry::Declare<Messages...>(errors)` resolves each declaration to field indices at startup. It reports unknown messages, unknown fields, type mismatches, and fields declared twice, so an app can refuse to start
+- `MessageRegistry::Declare<Messages...>(errors)` registers each declaration and resolves it to field indices against the loaded catalog. It reports unknown messages, unknown fields, type mismatches, and fields declared twice, so an app can refuse to start. A declaration made before the first load is resolved by that load, and any error fails it. Registry lookups (`Find`, `GetInfo`) return a `MessageInfoPtr` that keeps its catalog alive
 - `Encode(message, buffer)` writes every field in the loaded layout order, using the declared member when there is one and the field's default otherwise. It checks string lengths before writing, so an oversized string throws without leaving a partial message in the buffer. `Decode(ByteBuffer&, message)` reads exactly one body and skips undeclared fields. `Decode(span, message)` returns Ok, Truncated, or TrailingBytes, and leaves the message unchanged when truncated
 - `Dml::ParseValue(type, text)` parses XML default text. An invalid default is a load warning and uses the zero value
 - `MessageDefinitionSet::Add(ProtocolDef)` rejects orders that are zero or do not increase, and repeated tags, so every set the registry loads has unique ids
@@ -720,10 +720,10 @@ Replaces the msggen build-time generator under the 2026-09-13 decision that prot
 
 **Acceptance**
 
-- [x] Fixture tests: loading, both lookups, defaults (including an invalid default that warns), a failed load that empties the registry, and loading from an archive and a client folder
+- [x] Fixture tests: loading, both lookups, defaults (including an invalid default that warns), a failed reload that keeps the active catalog, a reload that would break a declaration being rejected, readers encoding on other threads during 50 reloads, and loading from an archive and a client folder
 - [x] A subset declaration of a fixture message encodes to golden bytes with defaults for omitted fields, and a full declaration covering all 11 DML types round-trips with exact bytes
 - [x] Decode skips undeclared variable-length fields, reports Truncated and TrailingBytes, and leaves the message unchanged on truncation
-- [x] Declaration errors name the message and field for unknown messages, a wrong service, unknown fields, type mismatches, and duplicates; Encode, Decode, and GetInfo of an undeclared message throw, and reloading clears declarations
+- [x] Declaration errors name the message and field for unknown messages, a wrong service, unknown fields, type mismatches, and duplicates; Encode, Decode, and GetInfo of an undeclared message throw, reloading keeps declarations, and Clear drops them
 - [x] Client-gated: 1446 ids and 3 warnings; (5,7) MSG_ATTACH with access level 1, (7,27) MSG_USER_AUTHEN_V3, (12,92) MSG_MINIGAMEREWARDS, (5,254) not found; the four declarations resolve, and their encodings round-trip with the expected sizes
 
 **Risks**
@@ -749,8 +749,8 @@ Any (service, order) pair resolves at runtime to a name, access level, field lay
 
 **Deliverables**
 
-- `MessageInfo` gains `MinSize` (fixed field sizes plus 2 per string), and `MessageRegistry::GetMessages()` lists every loaded id
-- src/server/shared/Messages/DynamicMessage.h/.cpp: one `DmlValue` per field, starting from the XML defaults, with `Set` by index or name that checks the type and the 65535 string limit, `Find`, `GetEncodedSize`, `Encode`, `Decode(ByteBuffer&)`, and `Decode(span)` returning Ok, Truncated, or TrailingBytes. `ToString` prints `MSG_TAG (service:order) { Field=value, ... }` for logging unknown or unhandled messages, escaping control bytes and non-ASCII STR bytes as `\xNN`, and capping long strings without splitting a surrogate pair
+- `MessageInfo` gains `MinSize` (fixed field sizes plus 2 per string), and `MessageCatalog::GetMessages()`, reached through `MessageRegistry::GetCatalog()`, lists every loaded id
+- src/server/shared/Messages/DynamicMessage.h/.cpp: pinned to the `MessageCatalogPtr` it was made from, with `Create(catalog, service, order)`, and one `DmlValue` per field, starting from the XML defaults, with `Set` by index or name that checks the type and the 65535 string limit, `Find`, `GetEncodedSize`, `Encode`, `Decode(ByteBuffer&)`, and `Decode(span)` returning Ok, Truncated, or TrailingBytes. `ToString` prints `MSG_TAG (service:order) { Field=value, ... }` for logging unknown or unhandled messages, escaping control bytes and non-ASCII STR bytes as `\xNN`, and capping long strings without splitting a surrogate pair
 - src/test/mocks/MessageRoundTrip.h/.cpp: fills any message with deterministic splitmix64 values per type, then checks encoded size, decode equality (bitwise for floats), re-encode equality, the minimum size, truncation by one byte, and a trailing byte
 - src/test/server/shared/Messages/DynamicMessageTest.cpp over Ambrose-authored fixtures, and src/test/client/MessageRoundTripClientTest.cpp over every id in the user's install
 
@@ -804,6 +804,7 @@ Raw TCP bytes are split into complete control frames or DML messages regardless 
 - [ ] Hand-built vectors: a control frame with a 14-byte body has len = 14+5 = 19; a DML frame with a 10-byte body has len = 10+9 = 19 and dmlLen = 14
 - [ ] Feeding one valid frame one byte at a time yields exactly one frame; feeding 3 frames in one buffer yields 3
 - [ ] Garbage prefix or wrong magic gives a protocol error; len above Network.MaxFrameSize gives an error before any allocation
+- [ ] Changing the frame size limit on a running reassembler applies from the next frame, with no reconnect
 - [ ] A DML frame containing two back-to-back DML messages (dmlLen chaining) decodes into 2 messages (the Imlight decoder supports this; see open question on whether the client sends it)
 - [ ] Randomized split-point test over 10k generated frames passes under ASan/UBSan
 
@@ -883,6 +884,7 @@ Each app can listen on its configured port, accept many connections, and read an
 - [ ] A peer closing mid-frame releases the socket with no leak (ASan/LSan clean)
 - [ ] DelayedClose sends the final queued frame before FIN (needed for MSG_CHARACTERSELECTED and MSG_FORCE_DISCONNECT)
 - [ ] Starting two apps on the same port fails loudly with a logged bind error
+- [ ] Reloading config applies Network.MaxFrameSize, Network.OutKBuff, and Network.TcpNoDelay from the next connection, resizes the pool for a changed Network.Threads, and rebinds a changed Port without dropping existing sessions; a failed bind keeps the old listener and logs why
 
 **Risks**
 
@@ -911,7 +913,7 @@ All three executables run the standard lifecycle (args, config, logging, banner,
 - src/server/apps/<app>/<app>.conf.dist listing every option the skeleton reads (LogsDir, Appender.*, Logger.*, BindIP, port option, Updates.* placeholders later)
 - Command-line: -c/--config <file>, -v/--version, --help (hand-written parser, or Boost.Program_options as AzerothCore does; decision)
 - SIGINT/SIGTERM and Windows console Ctrl+C handler trigger graceful stop; process exit code 0
-- Main loop tick with configurable update diff for gameserver (World update placeholder for WLD)
+- Main loop tick with configurable update diff for gameserver (World update placeholder for WLD); World.UpdateInterval applies from the next tick after a config reload
 - Optional Windows service/daemon hooks deferred
 
 **Acceptance**
@@ -945,7 +947,7 @@ Every other domain can run the retail client against loginserver/gameserver with
 
 - doc/PATCHING.md: how to launch WizardGraphicalClient.exe with -L <host> <port> -P 0 (and optional -A <locale>) from the user's own install; warning never to run the retail launcher against a pinned install
 - apps/launcher/ (repo tooling): run-client.bat.dist / run-client.ps1.dist template reading the install path from a local, git-ignored config
-- conf/dist/worldserver.conf.dist + loginserver.conf.dist option Patch.Enabled = 0 (default for dev) read by gameserver/loginserver (consumed by PAT-9)
+- conf/dist/worldserver.conf.dist + loginserver.conf.dist option Patch.Enabled = 0 (default for dev) read by gameserver/loginserver (consumed by PAT-9), applied live on a config reload
 
 **Data sources**
 
@@ -985,7 +987,7 @@ A real Wizard101 client completes the session handshake with an Ambrose server a
 
 - src/server/shared/Network/SessionBase.h/.cpp: unique u16 session id allocator (never 0, recycled only after close), offer timestamp/millis stored and exposed (LOG needs them for MSG_USER_AUTHEN_V3 decryption), and states Offered -> Accepted -> (app-defined)
 - Sends SessionOffer immediately on accept, ahead of any other work. Waits for SessionAccept with Network.SessionAcceptTimeout (default 15s); a mismatched sessionId gives a protocol error and close
-- Answers client KeepAlive with KeepAliveRsp echoing the elapsed field. Optional server keepalive every Network.KeepAliveInterval (60s) with Network.KeepAliveTimeout (15s)
+- Answers client KeepAlive with KeepAliveRsp echoing the elapsed field. Optional server keepalive every Network.KeepAliveInterval (60s) with Network.KeepAliveTimeout (15s). All three timeouts apply from the next timer after a config reload
 - DML frames received before SessionAccept are queued, not dropped (Imlight SessionActor._preInitMessages suggests the client can send early)
 - Round-trip time measured from offer to accept and from keepalive exchanges
 - src/server/apps/loginserver: a minimal bootstrap that runs only the handshake and logs every decoded DML message by name via MessageRegistry

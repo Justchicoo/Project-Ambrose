@@ -16,25 +16,27 @@ TEST(MessageRoundTripClientTest, EveryClientMessageRoundTrips)
         GTEST_SKIP() << "set AMBROSE_CLIENT_DIR to a Wizard101 install folder to run client data tests";
     MessageRegistry registry;
     ASSERT_TRUE(registry.LoadFromClient(LogConfig::Utf8Path(*directory)));
-    ASSERT_EQ(registry.GetMessages().size(), 1446u);
+    MessageCatalogPtr const catalog = registry.GetCatalog();
+    ASSERT_NE(catalog, nullptr);
+    ASSERT_EQ(catalog->GetMessages().size(), 1446u);
 
     std::size_t checked = 0;
     std::size_t withStrings = 0;
-    for (MessageInfo const& info : registry.GetMessages())
+    for (MessageInfo const& info : catalog->GetMessages())
     {
-        std::string const failure = MessageRoundTrip::Check(info, MessageRoundTrip::SeedFor(info));
+        std::string const failure = MessageRoundTrip::Check(catalog, info, MessageRoundTrip::SeedFor(info));
         EXPECT_TRUE(failure.empty()) << failure;
-        std::string const second = MessageRoundTrip::Check(info, ~MessageRoundTrip::SeedFor(info));
+        std::string const second = MessageRoundTrip::Check(catalog, info, ~MessageRoundTrip::SeedFor(info));
         EXPECT_TRUE(second.empty()) << second;
         ++checked;
-        withStrings += DynamicMessage(info).GetEncodedSize() != info.MinSize ? 1 : 0;
+        withStrings += DynamicMessage(catalog, info).GetEncodedSize() != info.MinSize ? 1 : 0;
     }
     EXPECT_EQ(checked, 1446u);
     EXPECT_EQ(withStrings, 0u);
 
-    MessageInfo const* const crowns = registry.Find(12, "MSG_CROWNBALANCE");
+    MessageInfo const* const crowns = catalog->Find(12, "MSG_CROWNBALANCE");
     ASSERT_NE(crowns, nullptr);
-    DynamicMessage message(*crowns);
+    DynamicMessage message(catalog, *crowns);
     ASSERT_TRUE(message.Set("TotalCrowns", DmlValue(int32(1250))));
     ASSERT_TRUE(message.Set("CharacterID", DmlValue(uint64(0x1122334455667788ull))));
     EXPECT_EQ(message.ToString(), "MSG_CROWNBALANCE (12:" + std::to_string(crowns->Definition->Order) + ") { Failure=0, TotalCrowns=1250, CharacterID=0x1122334455667788, CacheBalanceForCSSegmentation=0 }");

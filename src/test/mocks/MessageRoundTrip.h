@@ -13,9 +13,9 @@
 namespace MessageRoundTrip
 {
     uint64 SeedFor(MessageInfo const& info) noexcept;
-    DynamicMessage MakeRandom(MessageInfo const& info, uint64 seed);
+    DynamicMessage MakeRandom(MessageCatalogPtr const& catalog, MessageInfo const& info, uint64 seed);
     bool SameValue(DmlValue const& left, DmlValue const& right) noexcept;
-    std::string Check(MessageInfo const& info, uint64 seed);
+    std::string Check(MessageCatalogPtr const& catalog, MessageInfo const& info, uint64 seed);
 }
 
 #endif

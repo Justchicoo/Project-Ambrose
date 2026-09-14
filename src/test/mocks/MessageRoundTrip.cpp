@@ -81,10 +81,10 @@ uint64 MessageRoundTrip::SeedFor(MessageInfo const& info) noexcept
     return (uint64{ info.Protocol->ServiceId } << 8 | info.Definition->Order) ^ 0xA5B35705C0FFEEull;
 }
 
-DynamicMessage MessageRoundTrip::MakeRandom(MessageInfo const& info, uint64 seed)
+DynamicMessage MessageRoundTrip::MakeRandom(MessageCatalogPtr const& catalog, MessageInfo const& info, uint64 seed)
 {
     SplitMix64 random(seed);
-    DynamicMessage message(info);
+    DynamicMessage message(catalog, info);
     std::vector<FieldDef> const& fields = info.Definition->Fields;
     for (std::size_t i = 0; i < fields.size(); ++i)
     {
@@ -105,16 +105,16 @@ bool MessageRoundTrip::SameValue(DmlValue const& left, DmlValue const& right) no
     return left == right;
 }
 
-std::string MessageRoundTrip::Check(MessageInfo const& info, uint64 seed)
+std::string MessageRoundTrip::Check(MessageCatalogPtr const& catalog, MessageInfo const& info, uint64 seed)
 {
     MessageDef const& definition = *info.Definition;
     std::string const name = fmt::format("{} ({}:{})", definition.Tag, info.Protocol->ServiceId, definition.Order);
 
-    DynamicMessage const defaults(info);
+    DynamicMessage const defaults(catalog, info);
     if (defaults.GetEncodedSize() < info.MinSize)
         return fmt::format("{}: default size {} is below the minimum size {}", name, defaults.GetEncodedSize(), info.MinSize);
 
-    DynamicMessage const original = MakeRandom(info, seed);
+    DynamicMessage const original = MakeRandom(catalog, info, seed);
     ByteBuffer buffer;
     original.Encode(buffer);
     std::vector<uint8> const bytes(buffer.GetData().begin(), buffer.GetData().end());
@@ -123,7 +123,7 @@ std::string MessageRoundTrip::Check(MessageInfo const& info, uint64 seed)
     if (bytes.size() < info.MinSize)
         return fmt::format("{}: encoded {} bytes, below the minimum size {}", name, bytes.size(), info.MinSize);
 
-    DynamicMessage decoded(info);
+    DynamicMessage decoded(catalog, info);
     MessageDecodeStatus const status = decoded.Decode(bytes);
     if (status != MessageDecodeStatus::Ok)
         return fmt::format("{}: decode returned status {}", name, static_cast<int32>(status));
@@ -139,13 +139,13 @@ std::string MessageRoundTrip::Check(MessageInfo const& info, uint64 seed)
 
     if (!bytes.empty())
     {
-        DynamicMessage truncated(info);
+        DynamicMessage truncated(catalog, info);
         if (truncated.Decode(std::span<uint8 const>(bytes).first(bytes.size() - 1)) != MessageDecodeStatus::Truncated)
             return fmt::format("{}: a body one byte short was not reported as truncated", name);
     }
     std::vector<uint8> trailing = bytes;
     trailing.push_back(0x5A);
-    DynamicMessage extra(info);
+    DynamicMessage extra(catalog, info);
     if (extra.Decode(trailing) != MessageDecodeStatus::TrailingBytes)
         return fmt::format("{}: a body with an extra byte was not flagged", name);
     return std::string();

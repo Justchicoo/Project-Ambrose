@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A message of any loaded id held as one DML value per field, with type-checked access, encode and decode by layout, and a readable dump for logs.
+ * A message of any loaded id held as one DML value per field, pinned to its catalog snapshot, with checked access, encode and decode by layout, and a log dump.
  */
 
 #ifndef AMBROSE_DYNAMICMESSAGE_H
@@ -9,6 +9,7 @@
 #include "MessageRegistry.h"
 
 #include <cstddef>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -19,8 +20,11 @@ class DynamicMessage
 public:
     static constexpr std::size_t DefaultMaxDumpStringLength = 64;
 
-    explicit DynamicMessage(MessageInfo const& info);
+    DynamicMessage(MessageCatalogPtr catalog, MessageInfo const& info);
 
+    static std::optional<DynamicMessage> Create(MessageCatalogPtr catalog, uint8 serviceId, uint8 order);
+
+    MessageCatalogPtr const& GetCatalog() const noexcept { return _catalog; }
     MessageInfo const& GetInfo() const noexcept { return *_info; }
     MessageDef const& GetDefinition() const noexcept { return *_info->Definition; }
     std::vector<DmlValue> const& GetValues() const noexcept { return _values; }
@@ -42,6 +46,7 @@ public:
     static std::string FormatValue(DmlValue const& value, std::size_t maxStringLength = DefaultMaxDumpStringLength);
 
 private:
+    MessageCatalogPtr _catalog;
     MessageInfo const* _info;
     std::vector<DmlValue> _values;
 };

@@ -9,6 +9,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <stdexcept>
 #include <type_traits>
 #include <variant>
 
@@ -32,8 +33,19 @@ namespace
     }
 }
 
-DynamicMessage::DynamicMessage(MessageInfo const& info) : _info(&info), _values(info.Defaults)
+DynamicMessage::DynamicMessage(MessageCatalogPtr catalog, MessageInfo const& info) : _catalog(std::move(catalog)), _info(&info)
 {
+    if (!_catalog || !_catalog->Contains(info))
+        throw std::invalid_argument("a dynamic message needs the catalog its message info belongs to");
+    _values = info.Defaults;
+}
+
+std::optional<DynamicMessage> DynamicMessage::Create(MessageCatalogPtr catalog, uint8 serviceId, uint8 order)
+{
+    MessageInfo const* const info = catalog ? catalog->Find(serviceId, order) : nullptr;
+    if (!info)
+        return std::nullopt;
+    return DynamicMessage(std::move(catalog), *info);
 }
 
 DmlValue const* DynamicMessage::Find(std::string_view field) const noexcept

@@ -10,8 +10,10 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <fstream>
 #include <memory>
+#include <thread>
 #include <tuple>
 
 namespace
@@ -286,10 +288,10 @@ TEST(MessageRegistryTest, LoadsDefinitionsAndFindsMessages)
     EXPECT_TRUE(registry.IsLoaded());
     EXPECT_TRUE(registry.GetErrors().empty());
     EXPECT_EQ(registry.GetMessageCount(), 4u);
-    ASSERT_NE(registry.GetDefinitions(), nullptr);
-    EXPECT_EQ(registry.GetDefinitions()->GetProtocols().size(), 2u);
+    ASSERT_NE(registry.GetCatalog(), nullptr);
+    EXPECT_EQ(registry.GetCatalog()->GetDefinitions().GetProtocols().size(), 2u);
 
-    MessageInfo const* const join = registry.Find(5, 3);
+    MessageInfoPtr const join = registry.Find(5, 3);
     ASSERT_NE(join, nullptr);
     EXPECT_EQ(join->Definition->Tag, "MSG_JOIN");
     EXPECT_EQ(join->Definition->AccessLevel, std::optional<uint8>(1));
@@ -312,30 +314,146 @@ TEST(MessageRegistryTest, InvalidDefaultsWarnAndUseZero)
     ASSERT_TRUE(registry.Load(FixtureDefinitions()));
     ASSERT_EQ(registry.GetWarnings().size(), 1u);
     EXPECT_NE(registry.GetWarnings().front().Message.find("MSG_BROKEN_DEFAULT.Level has default '300', which is not a valid UBYT"), std::string::npos) << registry.GetWarnings().front().ToString();
-    MessageInfo const* const broken = registry.Find(5, "MSG_BROKEN_DEFAULT");
+    MessageInfoPtr const broken = registry.Find(5, "MSG_BROKEN_DEFAULT");
     ASSERT_NE(broken, nullptr);
     EXPECT_EQ(broken->Defaults[0], DmlValue(uint8(0)));
     EXPECT_EQ(broken->Defaults[1], DmlValue(std::string("guest")));
 }
 
-TEST(MessageRegistryTest, FailedLoadLeavesTheRegistryEmpty)
+TEST(MessageRegistryTest, FailedReloadKeepsTheActiveCatalog)
 {
     MessageRegistry registry;
+    EXPECT_FALSE(registry.Load(MessageDefinitionSet()));
+    EXPECT_FALSE(registry.IsLoaded());
+    ASSERT_EQ(registry.GetErrors().size(), 1u);
+    EXPECT_EQ(registry.GetErrors().front().Message, "no message protocols were loaded");
+
     ASSERT_TRUE(registry.Load(FixtureDefinitions()));
+    EXPECT_TRUE(registry.GetErrors().empty());
+    EXPECT_EQ(registry.GetGeneration(), 1u);
     std::vector<std::string> errors;
     ASSERT_TRUE(registry.Declare<AliveMessage>(errors));
+    MessageCatalogPtr const active = registry.GetCatalog();
 
     MessageDefinitionSet broken;
     EXPECT_FALSE(broken.Add("<Broken>", "BrokenMessages.xml"));
     EXPECT_FALSE(registry.Load(std::move(broken)));
-    EXPECT_FALSE(registry.IsLoaded());
     EXPECT_FALSE(registry.GetErrors().empty());
-    EXPECT_EQ(registry.Find(5, 1), nullptr);
-    EXPECT_FALSE(registry.IsDeclared<AliveMessage>());
+    EXPECT_EQ(registry.GetCatalog(), active);
+    EXPECT_EQ(registry.GetGeneration(), 1u);
+    EXPECT_NE(registry.Find(5, 1), nullptr);
+    EXPECT_TRUE(registry.IsDeclared<AliveMessage>());
 
-    EXPECT_FALSE(registry.Load(MessageDefinitionSet()));
+    ASSERT_TRUE(registry.Load(FixtureDefinitions()));
+    EXPECT_TRUE(registry.GetErrors().empty());
+    EXPECT_EQ(registry.GetGeneration(), 2u);
+    EXPECT_NE(registry.GetCatalog(), active);
+    EXPECT_TRUE(registry.IsDeclared<AliveMessage>());
+    EXPECT_EQ(active->GetGeneration(), 1u);
+    EXPECT_NE(active->Find(5, 1), nullptr);
+
+    MessageInfoPtr const pinned = registry.Find(5, "MSG_JOIN");
+    ASSERT_NE(pinned, nullptr);
+    std::vector<std::string> joinErrors;
+    ASSERT_TRUE(registry.Declare<JoinMessage>(joinErrors));
+    MessageInfoPtr const declared = registry.GetInfo<JoinMessage>();
+    registry.Clear();
+    EXPECT_EQ(pinned->Definition->Tag, "MSG_JOIN");
+    EXPECT_EQ(declared->Definition->Fields.size(), 11u);
+    EXPECT_FALSE(registry.IsLoaded());
+    EXPECT_EQ(registry.GetGeneration(), 0u);
+    EXPECT_EQ(registry.Find(5, 1), nullptr);
+    EXPECT_EQ(registry.GetMessageCount(), 0u);
+    ASSERT_TRUE(registry.Load(FixtureDefinitions()));
+    EXPECT_FALSE(registry.IsDeclared<AliveMessage>());
+}
+
+TEST(MessageRegistryTest, ReloadThatBreaksADeclarationIsRejected)
+{
+    MessageRegistry registry;
+    ASSERT_TRUE(registry.Load(FixtureDefinitions()));
+    std::vector<std::string> errors;
+    ASSERT_TRUE(registry.Declare<JoinMessage>(errors));
+    MessageCatalogPtr const active = registry.GetCatalog();
+
+    std::string withoutZone(GameXml);
+    std::string const zone = "<Zone TYPE=\"STR\"></Zone>";
+    withoutZone.erase(withoutZone.find(zone), zone.size());
+    MessageDefinitionSet changed;
+    ASSERT_TRUE(changed.Add(withoutZone, "GameFixtureMessages.xml"));
+    ASSERT_TRUE(changed.Add(LoginXml, "LoginFixtureMessages.xml"));
+    EXPECT_FALSE(registry.Load(std::move(changed)));
     ASSERT_EQ(registry.GetErrors().size(), 1u);
-    EXPECT_EQ(registry.GetErrors().front().Message, "no message protocols were loaded");
+    EXPECT_EQ(registry.GetErrors().front().ToString(), "message declarations: MSG_JOIN (service 5) has no field Zone");
+    EXPECT_EQ(registry.GetCatalog(), active);
+    ByteBuffer buffer;
+    registry.Encode(JoinMessage{}, buffer);
+    EXPECT_EQ(buffer.GetSize(), 38u);
+
+    std::string extended(GameXml);
+    std::string const count = "<Count TYPE=\"UINT\"></Count>";
+    extended.insert(extended.find(count) + count.size(), "<Extra TYPE=\"UBYT\">9</Extra>");
+    MessageDefinitionSet grown;
+    ASSERT_TRUE(grown.Add(extended, "GameFixtureMessages.xml"));
+    ASSERT_TRUE(grown.Add(LoginXml, "LoginFixtureMessages.xml"));
+    ASSERT_TRUE(registry.Load(std::move(grown)));
+    ByteBuffer grownBuffer;
+    registry.Encode(JoinMessage{}, grownBuffer);
+    EXPECT_EQ(grownBuffer.GetSize(), 39u);
+    EXPECT_EQ(grownBuffer.GetData().back(), 9);
+    ByteBuffer oldBuffer;
+    active->Encode(JoinMessage{}, oldBuffer);
+    EXPECT_EQ(oldBuffer.GetSize(), 38u);
+
+    MessageRegistry pending;
+    EXPECT_TRUE(pending.Declare<MissingMessage>(errors));
+    EXPECT_FALSE(pending.Load(FixtureDefinitions()));
+    EXPECT_FALSE(pending.IsLoaded());
+    ASSERT_EQ(pending.GetErrors().size(), 1u);
+    EXPECT_EQ(pending.GetErrors().front().ToString(), "message declarations: MSG_MISSING is not a message of service 5");
+}
+
+TEST(MessageRegistryTest, ReaderThreadsSeeWholeCatalogsDuringReloads)
+{
+    MessageRegistry registry;
+    ASSERT_TRUE(registry.Load(FixtureDefinitions()));
+    std::vector<std::string> errors;
+    ASSERT_TRUE(registry.Declare<JoinMessage>(errors));
+
+    std::atomic<bool> stop{ false };
+    std::atomic<bool> failed{ false };
+    std::atomic<uint64> encodes{ 0 };
+    std::vector<std::thread> readers;
+    for (int i = 0; i < 4; ++i)
+    {
+        readers.emplace_back([&]
+        {
+            JoinMessage message;
+            message.Zone = "Hub";
+            while (!stop.load())
+            {
+                MessageCatalogPtr const catalog = registry.GetCatalog();
+                ByteBuffer buffer;
+                catalog->Encode(message, buffer);
+                JoinMessage decoded;
+                if (catalog->Decode(buffer.GetData(), decoded) != MessageDecodeStatus::Ok || decoded.Zone != "Hub" || registry.Find(5, 3) == nullptr)
+                    failed = true;
+                ++encodes;
+            }
+        });
+    }
+    int reloaded = 0;
+    for (int i = 0; i < 50; ++i)
+        reloaded += registry.Load(FixtureDefinitions()) ? 1 : 0;
+    while (encodes.load() == 0)
+        std::this_thread::yield();
+    stop = true;
+    for (std::thread& reader : readers)
+        reader.join();
+    EXPECT_EQ(reloaded, 50);
+    EXPECT_FALSE(failed.load());
+    EXPECT_EQ(registry.GetGeneration(), 51u);
+    EXPECT_TRUE(registry.IsDeclared<JoinMessage>());
 }
 
 TEST(MessageRegistryTest, DeclaredSubsetEncodesWithDefaultsForOmittedFields)
@@ -346,7 +464,7 @@ TEST(MessageRegistryTest, DeclaredSubsetEncodesWithDefaultsForOmittedFields)
     ASSERT_TRUE(registry.Declare<JoinMessage>(errors)) << errors.front();
     EXPECT_TRUE(errors.empty());
     EXPECT_TRUE(registry.IsDeclared<JoinMessage>());
-    EXPECT_EQ(registry.GetInfo<JoinMessage>().Definition->Order, 3);
+    EXPECT_EQ(registry.GetInfo<JoinMessage>()->Definition->Order, 3);
 
     JoinMessage message;
     message.ObjectId = 0x1122334455667788ull;
@@ -460,11 +578,12 @@ TEST(MessageRegistryTest, InvalidDeclarationsAreReported)
 {
     MessageRegistry registry;
     std::vector<std::string> errors;
-    EXPECT_FALSE(registry.Declare<AliveMessage>(errors));
-    ASSERT_EQ(errors.size(), 1u);
-    EXPECT_EQ(errors.front(), "MSG_ALIVE (service 5) cannot be declared before message definitions are loaded");
+    EXPECT_TRUE(registry.Declare<AliveMessage>(errors));
+    EXPECT_TRUE(errors.empty());
+    EXPECT_FALSE(registry.IsDeclared<AliveMessage>());
 
     ASSERT_TRUE(registry.Load(FixtureDefinitions()));
+    EXPECT_TRUE(registry.IsDeclared<AliveMessage>());
     errors.clear();
     EXPECT_FALSE(registry.Declare<MissingMessage>(errors));
     EXPECT_FALSE(registry.Declare<WrongServiceMessage>(errors));
@@ -492,7 +611,7 @@ TEST(MessageRegistryTest, InvalidDeclarationsAreReported)
     EXPECT_FALSE(registry.IsDeclared<MissingMessage>());
 }
 
-TEST(MessageRegistryTest, UndeclaredUseThrowsAndReloadClearsDeclarations)
+TEST(MessageRegistryTest, UndeclaredUseThrowsAndReloadKeepsDeclarations)
 {
     MessageRegistry registry;
     ASSERT_TRUE(registry.Load(FixtureDefinitions()));
@@ -508,8 +627,13 @@ TEST(MessageRegistryTest, UndeclaredUseThrowsAndReloadClearsDeclarations)
     EXPECT_FALSE(buffer.GetData().empty());
 
     ASSERT_TRUE(registry.Load(FixtureDefinitions()));
-    EXPECT_FALSE(registry.IsDeclared<JoinMessage>());
-    EXPECT_THROW(registry.Encode(message, buffer), std::logic_error);
+    EXPECT_TRUE(registry.IsDeclared<JoinMessage>());
+    registry.Encode(message, buffer);
+
+    MessageRegistry unloaded;
+    EXPECT_THROW(unloaded.Encode(message, buffer), std::logic_error);
+    EXPECT_THROW(unloaded.GetInfo<JoinMessage>(), std::logic_error);
+    EXPECT_FALSE(unloaded.IsDeclared<JoinMessage>());
 
     MessageRegistry other;
     ASSERT_TRUE(other.Load(FixtureDefinitions()));
@@ -532,7 +656,8 @@ TEST(MessageRegistryTest, LoadsFromAnArchiveAndAClientFolder)
     EXPECT_EQ(registry.Find(7, 27)->Protocol->SourceFile, "Messages/LoginFixtureMessages.xml");
 
     EXPECT_FALSE(registry.LoadFromClient(directory.Path() / "Missing"));
-    EXPECT_FALSE(registry.IsLoaded());
+    EXPECT_TRUE(registry.IsLoaded());
+    EXPECT_EQ(registry.GetMessageCount(), 4u);
     ASSERT_EQ(registry.GetErrors().size(), 1u);
     EXPECT_NE(registry.GetErrors().front().SourceFile.find("Root.wad"), std::string::npos);
 
