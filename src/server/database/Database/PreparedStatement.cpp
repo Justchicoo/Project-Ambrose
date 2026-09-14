@@ -1,10 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Stores parameter values by index, rejects indexes past the statement's placeholder count, and describes values for error logs without string or blob contents.
+ * Stores parameter values by index, rejects indexes past the statement's placeholder count, describes values for logs without string or blob contents, and runs queued statements.
  */
 
 #include "PreparedStatement.h"
 #include "Log.h"
+#include "MySQLConnection.h"
+#include "QueryResult.h"
 
 #include <fmt/format.h>
 
@@ -66,4 +68,33 @@ std::string PreparedStatementBase::DescribeValues() const
         }, _values[i]);
     }
     return text;
+}
+
+PreparedStatementTask::PreparedStatementTask(std::unique_ptr<PreparedStatementBase> statement, bool hasResult) : _statement(std::move(statement)), _hasResult(hasResult)
+{
+}
+
+void PreparedStatementTask::Execute(MySQLConnection& connection)
+{
+    try
+    {
+        PreparedQueryResult result;
+        if (!_statement)
+            LOG_ERROR("sql.sql", "A queued prepared statement was empty and did not run");
+        else if (_hasResult)
+            result = connection.Query(*_statement);
+        else
+            connection.Execute(*_statement);
+        _result.set_value(std::move(result));
+    }
+    catch (...)
+    {
+        LOG_ERROR("sql.sql", "Queued statement {} threw an exception on {}", _statement ? _statement->GetIndex() : 0, connection.GetInfo().ToLogString());
+        _result.set_exception(std::current_exception());
+    }
+}
+
+void PreparedStatementTask::Cancel()
+{
+    _result.set_value(nullptr);
 }

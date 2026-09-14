@@ -109,9 +109,9 @@ All SQL runs through registered, typed prepared statements per database.
 
 **Acceptance**
 
-- [ ] 1000 AsyncQuery from 8 threads complete
-- [ ] No concurrent use of one connection
-- [ ] Close drains deterministically under ASan
+- [x] 1000 AsyncQuery from 8 threads complete
+- [x] No concurrent use of one connection
+- [x] Close drains deterministically under ASan
 
 ### Detailed spec from FND-15: database: DatabaseWorkerPool with sync and async connections
 
@@ -127,11 +127,11 @@ Game code can run blocking queries on a small connection pool and queue async qu
 
 **Acceptance**
 
-- [ ] Integration: 1000 AsyncQuery calls from 8 threads all complete, with results matching inputs
-- [ ] Sync Query on a pool of 2 connections from 4 threads blocks correctly and never uses a connection concurrently (checked with CONNECTION_ID() per thread)
-- [ ] Close() while async work is queued drains or cancels deterministically, with no leak under ASan
-- [ ] KeepAlive keeps a connection past wait_timeout=5 set in the test session
-- [ ] Real client: n/a
+- [x] Integration: 1000 AsyncQuery calls from 8 threads all complete, with results matching inputs
+- [x] Sync Query on a pool of 2 connections from 4 threads blocks correctly and never uses a connection concurrently (checked by each connection's concurrent-use counter, with CONNECTION_ID() showing both connections served)
+- [x] Close() while async work is queued drains or cancels deterministically, with no leak under ASan
+- [x] KeepAlive keeps a connection past wait_timeout=5 set in the test session
+- [x] Real client: n/a
 
 **Risks**
 

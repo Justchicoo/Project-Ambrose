@@ -1,14 +1,18 @@
 /*
  * Project Ambrose by Imjustchico
- * A registered statement's id plus its typed parameter values, set by index and bound when the statement runs.
+ * A registered statement's id plus its typed parameter values, set by index and bound when it runs, and the queued task that runs one on an async connection.
  */
 
 #ifndef AMBROSE_PREPAREDSTATEMENT_H
 #define AMBROSE_PREPAREDSTATEMENT_H
 
+#include "DatabaseEnvFwd.h"
+#include "SQLOperation.h"
 #include "Types.h"
 
 #include <cstddef>
+#include <future>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -46,6 +50,22 @@ private:
 
     uint32 _index;
     std::vector<PreparedStatementValue> _values;
+};
+
+class PreparedStatementTask : public SQLOperation
+{
+public:
+    PreparedStatementTask(std::unique_ptr<PreparedStatementBase> statement, bool hasResult);
+
+    std::future<PreparedQueryResult> GetFuture() { return _result.get_future(); }
+
+    void Execute(MySQLConnection& connection) override;
+    void Cancel() override;
+
+private:
+    std::unique_ptr<PreparedStatementBase> _statement;
+    bool _hasResult;
+    std::promise<PreparedQueryResult> _result;
 };
 
 template<typename ConnectionType>

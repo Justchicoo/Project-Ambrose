@@ -1,0 +1,63 @@
+/*
+ * Project Ambrose by Imjustchico
+ * Stores statements by slot, runs every set slot in order on one connection, hands back each slot's result, and settles the queued holder task.
+ */
+
+#include "QueryHolder.h"
+#include "Log.h"
+#include "MySQLConnection.h"
+#include "QueryResult.h"
+
+SQLQueryHolderBase::SQLQueryHolderBase(std::size_t slots) : _slots(slots)
+{
+}
+
+SQLQueryHolderBase::~SQLQueryHolderBase() = default;
+
+bool SQLQueryHolderBase::SetPreparedQueryBase(std::size_t slot, std::unique_ptr<PreparedStatementBase> statement)
+{
+    if (slot >= _slots.size())
+    {
+        LOG_ERROR("sql.sql", "Query holder has {} slot(s), so slot {} cannot be set", _slots.size(), slot);
+        return false;
+    }
+    _slots[slot].Statement = std::move(statement);
+    _slots[slot].Result = nullptr;
+    return true;
+}
+
+PreparedQueryResult SQLQueryHolderBase::GetPreparedResult(std::size_t slot) const
+{
+    return slot < _slots.size() ? _slots[slot].Result : nullptr;
+}
+
+void SQLQueryHolderBase::Run(MySQLConnection& connection)
+{
+    for (Slot& slot : _slots)
+        if (slot.Statement)
+            slot.Result = connection.Query(*slot.Statement);
+}
+
+QueryHolderTask::QueryHolderTask(std::shared_ptr<SQLQueryHolderBase> holder) : _holder(std::move(holder))
+{
+}
+
+void QueryHolderTask::Execute(MySQLConnection& connection)
+{
+    try
+    {
+        if (_holder)
+            _holder->Run(connection);
+        _done.set_value();
+    }
+    catch (...)
+    {
+        LOG_ERROR("sql.sql", "A queued query holder threw an exception on {}", connection.GetInfo().ToLogString());
+        _done.set_exception(std::current_exception());
+    }
+}
+
+void QueryHolderTask::Cancel()
+{
+    _done.set_value();
+}

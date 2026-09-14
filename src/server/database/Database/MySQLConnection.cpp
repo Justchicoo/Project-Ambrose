@@ -22,6 +22,27 @@
 
 namespace
 {
+    class UsageGuard
+    {
+    public:
+        UsageGuard(std::atomic<int>& active, std::atomic<uint64>& concurrent) : _active(active)
+        {
+            if (_active.fetch_add(1, std::memory_order_relaxed) != 0)
+                concurrent.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        ~UsageGuard()
+        {
+            _active.fetch_sub(1, std::memory_order_relaxed);
+        }
+
+        UsageGuard(UsageGuard const&) = delete;
+        UsageGuard& operator=(UsageGuard const&) = delete;
+
+    private:
+        std::atomic<int>& _active;
+    };
+
     constexpr uint32 ErrorDatabaseAccessDenied = 1044;
     constexpr uint32 ErrorAccessDenied = 1045;
     constexpr uint32 ErrorEmptyQuery = 1065;
@@ -188,6 +209,7 @@ uint32 MySQLConnection::Open()
 {
     CloseHandle();
     _closed = false;
+    _unavailableUntil = {};
     uint32 code = Connect(false);
     if (code == 0 && !PrepareRegistered())
     {
@@ -310,6 +332,7 @@ bool MySQLConnection::DrainResults(std::string_view context, std::string_view sq
 
 bool MySQLConnection::RunQuery(std::string_view context, std::string_view sql, st_mysql_res** result, bool readOnly)
 {
+    UsageGuard const usage(_activeUsers, _concurrentUses);
     ClearError();
     if (sql.empty())
     {
@@ -403,6 +426,7 @@ std::string MySQLConnection::Escape(std::string_view text)
 
 bool MySQLConnection::Ping()
 {
+    UsageGuard const usage(_activeUsers, _concurrentUses);
     ClearError();
     if (_closed)
         return false;
@@ -442,6 +466,11 @@ bool MySQLConnection::Reconnect()
 {
     if (_closed)
         return false;
+    if (std::chrono::steady_clock::now() < _unavailableUntil)
+    {
+        SetError(CR_SERVER_GONE_ERROR, "the server was unreachable on the last attempt; waiting before reconnecting again");
+        return false;
+    }
     CloseHandle();
     auto const start = std::chrono::steady_clock::now();
     std::chrono::milliseconds delay = _settings.FirstReconnectDelay;
@@ -462,7 +491,8 @@ bool MySQLConnection::Reconnect()
         LOG_WARN("sql.driver", "Reconnect attempt {} to {} failed: [{}] {}", attempt, _info.ToLogString(), code, _lastErrorText);
         if (IsPermanentConnectError(code) || std::chrono::steady_clock::now() - start + delay > _settings.GiveUpReconnectAfter)
         {
-            LOG_ERROR("sql.driver", "Gave up reconnecting to {} after {} attempt(s): [{}] {}", _info.ToLogString(), attempt, code, _lastErrorText);
+            LOG_ERROR("sql.driver", "Gave up reconnecting to {} after {} attempt(s): [{}] {}; failing fast for {} ms", _info.ToLogString(), attempt, code, _lastErrorText, _settings.ReconnectCooldown.count());
+            _unavailableUntil = std::chrono::steady_clock::now() + _settings.ReconnectCooldown;
             return false;
         }
         std::this_thread::sleep_for(delay);
@@ -580,6 +610,7 @@ PreparedQueryResult MySQLConnection::Query(PreparedStatementBase const& statemen
 
 bool MySQLConnection::RunStatement(PreparedStatementBase const& values, bool readOnly, PreparedQueryResult* result)
 {
+    UsageGuard const usage(_activeUsers, _concurrentUses);
     ClearError();
     if (_closed)
     {
@@ -657,4 +688,13 @@ bool MySQLConnection::RunStatement(PreparedStatementBase const& values, bool rea
         if (!reconnected || !retry)
             return false;
     }
+}
+
+std::vector<PreparedStatementInfo> MySQLConnection::GetPreparedStatementInfos() const
+{
+    std::vector<PreparedStatementInfo> infos;
+    for (std::unique_ptr<MySQLPreparedStatement> const& statement : _statements)
+        if (statement)
+            infos.push_back(PreparedStatementInfo{ statement->GetIndex(), statement->GetName(), statement->GetParameterCount() });
+    return infos;
 }

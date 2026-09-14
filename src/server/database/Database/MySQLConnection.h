@@ -9,12 +9,15 @@
 #include "DatabaseEnvFwd.h"
 #include "Types.h"
 
+#include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 struct st_mysql;
@@ -60,7 +63,15 @@ struct MySQLConnectionSettings
     std::chrono::milliseconds FirstReconnectDelay{ 100 };
     std::chrono::milliseconds MaxReconnectDelay{ 5000 };
     std::chrono::milliseconds GiveUpReconnectAfter{ 30000 };
+    std::chrono::milliseconds ReconnectCooldown{ 10000 };
     ConnectionFlags Flags = ConnectionFlags::Both;
+};
+
+struct PreparedStatementInfo
+{
+    uint32 Index = 0;
+    std::string Name;
+    std::size_t ParameterCount = 0;
 };
 
 class MySQLConnection
@@ -87,6 +98,8 @@ public:
     PreparedQueryResult Query(PreparedStatementBase const& statement);
     bool IsStatementPrepared(uint32 index) const noexcept;
     std::size_t GetPreparedStatementCount() const noexcept;
+    std::vector<PreparedStatementInfo> GetPreparedStatementInfos() const;
+    uint64 GetConcurrentUseCount() const noexcept { return _concurrentUses.load(std::memory_order_relaxed); }
 
     uint32 GetLastErrorCode() const noexcept { return _lastErrorCode; }
     std::string const& GetLastErrorText() const noexcept { return _lastErrorText; }
@@ -95,7 +108,7 @@ public:
     uint64 GetThreadId() const;
     bool IsMariaDB() const noexcept { return _mariaDB; }
     bool IsEncrypted() const;
-    uint64 GetReconnectCount() const noexcept { return _reconnects; }
+    uint64 GetReconnectCount() const noexcept { return _reconnects.load(std::memory_order_relaxed); }
     MySQLConnectionInfo const& GetInfo() const noexcept { return _info; }
 
     bool TryLock() { return _mutex.try_lock(); }
@@ -135,10 +148,13 @@ private:
     std::mutex _mutex;
     uint32 _lastErrorCode = 0;
     std::string _lastErrorText;
-    uint64 _reconnects = 0;
+    std::atomic<uint64> _reconnects{ 0 };
     bool _mariaDB = false;
     bool _closed = true;
     bool _prepareFailed = false;
+    std::chrono::steady_clock::time_point _unavailableUntil{};
+    std::atomic<int> _activeUsers{ 0 };
+    std::atomic<uint64> _concurrentUses{ 0 };
     std::vector<StatementRegistration> _registrations;
     std::vector<std::unique_ptr<MySQLPreparedStatement>> _statements;
 };
