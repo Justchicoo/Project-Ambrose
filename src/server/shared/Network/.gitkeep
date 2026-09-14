@@ -1,2 +1,0 @@
-# Project Ambrose by Imjustchico
-# Holds the socket, session framing, and connection lifecycle shared by all servers.

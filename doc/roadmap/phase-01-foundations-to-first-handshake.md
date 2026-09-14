@@ -779,10 +779,10 @@ Any (service, order) pair resolves at runtime to a name, access level, field lay
 
 **Acceptance**
 
-- [ ] Control frame with 14-byte body has len 19; DML with 10-byte body has len 19 and dmlLen 14
-- [ ] One byte at a time yields one frame; 3 frames in one buffer yield 3
-- [ ] Bad magic or len > MaxFrameSize errors before allocation
-- [ ] 10k randomized splits clean under ASan/UBSan
+- [x] Control frame with 14-byte body has len 19; DML with 10-byte body has len 19 and dmlLen 14
+- [x] One byte at a time yields one frame; 3 frames in one buffer yield 3
+- [x] Bad magic or len > MaxFrameSize errors before allocation
+- [x] 10k randomized splits clean under ASan/UBSan
 
 ### Detailed spec from NET-5: KI frame codec and stream reassembler
 
@@ -791,8 +791,9 @@ Raw TCP bytes are split into complete control frames or DML messages regardless 
 **Deliverables**
 
 - src/server/shared/Network/Frame.h/.cpp. FrameHeader: u16 magic 0xF00D (wire 0D F0); u16 len (len counts bytes after itself, including the trailing null); if len==0x8000, a u32 long length follows; then u8 isControl, u8 opcode (control only), u16 reserved. Non-control frames add u8 serviceId, u8 order, u16 dmlLen (= body+4), then the body, then u8 0x00
-- src/server/shared/Network/FrameReassembler.h/.cpp: accumulates bytes, yields frames, and enforces a configurable max frame size. On a bad magic it reports a protocol error; it does not resync by skipping bytes
-- FrameWriter: builds control and DML frames. Long-frame encoding lives behind one function so NET-6's capture can settle its exact semantics
+- src/server/shared/Network/FrameReassembler.h/.cpp: accumulates bytes, yields frames, and enforces `FrameLimits` (max frame size, default 4 MiB; the long-length mode; and the most DML messages one frame may chain, default 1024), which `SetLimits` changes live. The size limit applies to the frame being read, and the long-length mode is fixed for a frame once its prefix has arrived. It sizes each frame from its prefix before buffering it, validates chained DML lengths without allocating, releases buffer memory above 64 KiB once a large frame is consumed, and stops at the first protocol error (bad magic, bad length, an isControl byte other than 0 or 1, too large, a bad DML length, or too many DML messages); it does not resync by skipping bytes
+- src/server/shared/Network/FrameWriter.h/.cpp: builds control frames, DML frames with one or more chained messages, and any `Frame` byte-exactly. A body over 0x777F bytes uses the 0x8000 marker. What the u32 counts lives behind `LongFrameLength`: `BodyOnly` (the Imcodec writer, the default) or `HeaderAndBody` (the sniff.py reader). A DML body over 0xFFFB bytes, which cannot fit the 16-bit dmlLen, is rejected
+- `FrameLayout` in Frame.h holds the constants, `GetFrameSize` from a prefix, `ValidateDmlPayload`, and `SplitDmlMessages`
 - src/test/server/shared/Network/FrameTest.cpp
 
 **Data sources**
@@ -801,16 +802,16 @@ Raw TCP bytes are split into complete control frames or DML messages regardless 
 
 **Acceptance**
 
-- [ ] Hand-built vectors: a control frame with a 14-byte body has len = 14+5 = 19; a DML frame with a 10-byte body has len = 10+9 = 19 and dmlLen = 14
-- [ ] Feeding one valid frame one byte at a time yields exactly one frame; feeding 3 frames in one buffer yields 3
-- [ ] Garbage prefix or wrong magic gives a protocol error; len above Network.MaxFrameSize gives an error before any allocation
-- [ ] Changing the frame size limit on a running reassembler applies from the next frame, with no reconnect
-- [ ] A DML frame containing two back-to-back DML messages (dmlLen chaining) decodes into 2 messages (the Imlight decoder supports this; see open question on whether the client sends it)
-- [ ] Randomized split-point test over 10k generated frames passes under ASan/UBSan
+- [x] Hand-built vectors: a control frame with a 14-byte body has len = 14+5 = 19; a DML frame with a 10-byte body has len = 10+9 = 19 and dmlLen = 14
+- [x] Feeding one valid frame one byte at a time yields exactly one frame; feeding 3 frames in one buffer yields 3
+- [x] Garbage prefix or wrong magic gives a protocol error; len above Network.MaxFrameSize gives an error before any allocation
+- [x] Changing the frame size limit on a running reassembler applies from the next frame, with no reconnect
+- [x] A DML frame containing two back-to-back DML messages (dmlLen chaining) decodes into 2 messages (the Imlight decoder supports this; see open question on whether the client sends it)
+- [x] Randomized split-point test over 10k generated frames passes under ASan/UBSan
 
 **Risks**
 
-- Long-frame semantics conflict: Imcodec writes the u32 as the message body length with the 0x8000 marker when the body is over 0x777F, while sniff.py computes total = 8 + u32 + 1, which disagrees for DML frames by 8 bytes. Must be confirmed on the wire (NET-6)
+- Long-frame semantics conflict: Imcodec writes the u32 as the message body length with the 0x8000 marker when the body is over 0x777F, while sniff.py computes total = 8 + u32 + 1, which disagrees for DML frames by 8 bytes. Must be confirmed on the wire (NET-6). Both readings are implemented behind `LongFrameLength`, so 1.18 only changes the default
 
 ## 1.18 Control messages and capture verification (NET-6)
 
@@ -820,7 +821,7 @@ Raw TCP bytes are split into complete control frames or DML messages regardless 
 
 **Acceptance**
 
-- [ ] Hand-written vectors round-trip
+- [x] Hand-written vectors round-trip
 - [ ] Checklist recorded: offer length (23 vs 28 bytes), server keepalive layout, long-frame semantics, multi-DML frames, keepalive cadence
 
 ### Detailed spec from NET-6: Control messages and wire capture verification
@@ -830,7 +831,8 @@ The four control messages are encoded exactly as the 1.610 client expects, and t
 **Deliverables**
 
 - src/server/shared/Network/ControlMessages.h/.cpp, hand-written (they are not in the XML). SessionOffer (opcode 0): u16 sessionId, i32 timeHigh, i32 timeLow, u32 millis, plus whatever trailing bytes the capture proves. KeepAlive (3) client->server: u16 sessionId, u16 millis, u16 elapsedMinutes. Server->client: u16 sessionId, u32 millis. KeepAliveRsp (4): same layout as client KeepAlive. SessionAccept (5): u16 reserved, i32 timeHigh, i32 timeLow, u32 millis, u16 sessionId
-- Capture procedure doc/ (Markdown with header) describing how a maintainer records raw frames from their own client session with their own tooling, and which facts to extract. Captures themselves are never committed
+- doc/CAPTURE.md: how a maintainer records raw frames from their own client session with their own tooling, the checklist of facts to extract, and the findings so far. Captures themselves are never committed. The checklist adds (f): whether the client accepts TimeHigh as the upper 32 bits of Unix seconds
+- Decoders keep unknown trailing SessionOffer and SessionAccept bytes, so a longer offer or accept still decodes; keepalive bodies must be exactly 6 bytes, and the direction picks the opcode 3 layout
 - Golden byte-vector tests written by hand from the documented facts (not pasted capture files)
 
 **Client messages:** Control opcodes 0 SessionOffer, 3 KeepAlive, 4 KeepAliveRsp, 5 SessionAccept
@@ -842,7 +844,7 @@ The four control messages are encoded exactly as the 1.610 client expects, and t
 
 **Acceptance**
 
-- [ ] Unit tests round-trip each control message and match the hand-written vectors
+- [x] Unit tests round-trip each control message and match the hand-written vectors
 - [ ] Verification checklist answered and recorded in the doc: (a) SessionOffer body length the 1.610 client accepts. Imlight sends a 23-byte frame; the Aurorium patch fetcher expects a 28-byte offer from the live KI patch server. (b) Server keepalive layout and whether the client answers it with opcode 4. (c) Long-frame length semantics for a frame over 0x7780 bytes. (d) Whether the client ever packs 2+ DML messages in one frame. (e) Client KeepAlive cadence
 - [ ] FrameWriter long-frame test updated to the confirmed semantics
 
