@@ -38,8 +38,8 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Ordering.** 1.04 CI is built and made mandatory before the 'how CI builds without client files' decision is taken, and before 1.15 msggen makes the build client-dependent. Either 1.04 depends on that decision or CI is rebuilt at 1.15. **Resolved:** the 2026-09-13 decision loads protocol data at runtime, so CI builds and tests without client files and 1.15 needs no CI rebuild.
 - **Missing work.** Automated headless test client/bot harness that replays scripted sessions. Almost every acceptance is 'Real client' and not repeatable in CI. 1.22 has a fake client, but nothing grows it into a regression harness.
 - **Missing work.** Codestyle checker (1.03) does not check the mandatory one-line brief, the Markdown/SQL/Batch/YAML header forms, or the JSON exemption from ARCHITECTURE.md. **Resolved in 1.03:** the checker validates the brief and every header form in the Conventions table, exempts JSON, and rejects file types it has no rule for.
-- **Correction.** 1.14's reason for the 253 GAME ids is incomplete. GameMessages.xml also has 254 tags / 253 ids because MSG_REMOVEOBJECT is duplicated, and the two copies have different descriptions. The totals 1448/1446 are still correct.
-- **Correction.** 1.14 fixture 'untyped GlobalID' is incomplete. Three untyped fields exist: MSG_MINIGAMEREWARDS.GlobalID (no TYPE), MSG_PHYSICS_GRAB.Force (TPYE typo), and MSG_BATTLEGROUNDQUEUEUPDATE.Kicked (attribute 'TYP', WizardMessages2). Add a 'TYP' fixture.
+- **Correction.** 1.14's reason for the 253 GAME ids is incomplete. GameMessages.xml also has 254 tags / 253 ids because MSG_REMOVEOBJECT is duplicated, and the two copies have different descriptions. The totals 1448/1446 are still correct. **Resolved in 1.14:** duplicate tags merge by matching fields, and descriptions may differ.
+- **Correction.** 1.14 fixture 'untyped GlobalID' is incomplete. Three untyped fields exist: MSG_MINIGAMEREWARDS.GlobalID (no TYPE), MSG_PHYSICS_GRAB.Force (TPYE typo), and MSG_BATTLEGROUNDQUEUEUPDATE.Kicked (attribute 'TYP', WizardMessages2). Add a 'TYP' fixture. **Resolved in 1.14:** the TYP fixture and client check exist, and the Message definition quirks decision in doc/ARCHITECTURE.md keeps all three fields on the wire.
 - **Correction.** UNVERIFIED, not wrong: 1.21/phase 1 outcome rely on a '-P 0' client launch flag. No local source documents it (Imlight README.md:79 documents only '-L 127.0.0.1 12000'). Also unverified: TemplateManifest 137423 entries, 134076 BINd, 42 ItemSetBonusTemplate rows, 16 magic_school_template rows, CombatSigil8Actor's 8 sub-circles, and the traffic.log line citations.
 
 ## 1.01 Toolchain hello (FND-1)
@@ -645,10 +645,10 @@ The server can compute the exact CRC, HeaderSize and HeaderCRC values the client
 
 **Acceptance**
 
-- [ ] Fixtures: explicit order, duplicate tag, lowercase tags (MSG_DailyQuestUpdate), TPYE typo, untyped GlobalID
-- [ ] Client-gated: 29 protocols, 1448 records, 1446 ids (corrected from 26/971/969; includes GAME2 55=10, WIZARD2 53=254, WIZARD3 56=213)
-- [ ] Spot checks: SYSTEM MSG_PING=1; LOGIN MSG_USER_AUTHEN_V3=27; GAME MSG_ATTACH=7, MSG_CLIENTMOVE=36, MSG_LOGINCOMPLETE=108, MSG_NEWOBJECT=122, MSG_SERVER_ERROR=223; WIZARD MSG_UPDATEMANA=233; WIZARD2 MSG_CLIENTZONED=64
-- [ ] Exactly 9 field types; sorting by _MsgName instead of tag fails the GAME test
+- [x] Fixtures: explicit order (_MsgOrder and _MsgType), duplicate tag, lowercase tags (MSG_DailyQuestUpdate), TPYE and TYP typos, untyped GlobalID
+- [x] Client-gated: 29 protocols, 1448 records, 1446 ids (corrected from 26/971/969; includes GAME2 55=10, WIZARD2 53=254, WIZARD3 56=213)
+- [x] Spot checks: SYSTEM MSG_PING=1; LOGIN MSG_USER_AUTHEN_V3=27; GAME MSG_ATTACH=7, MSG_CLIENTMOVE=36, MSG_LOGINCOMPLETE=108, MSG_NEWOBJECT=122, MSG_SERVER_ERROR=223; WIZARD MSG_UPDATEMANA=233; WIZARD2 MSG_CLIENTZONED=64
+- [x] Exactly 9 field types; sorting by _MsgName instead of tag fails the GAME test
 
 ### Detailed spec from NET-2: Message definition model and ordinal rules
 
@@ -659,30 +659,30 @@ A library turns the client's message XML text into a validated list of protocols
 - src/server/shared/Messages/MessageDefinition.h/.cpp: ProtocolDef {serviceId, protocolType, version, description, sourceFile}, MessageDef {tag, msgName, handlerName, description, accessLevel, order, fields}, FieldDef {name, DmlType}
 - src/server/shared/Messages/MessageDefinitionParser.h/.cpp. It takes XML text. It keys protocols by ServiceID, never by ProtocolType: WizCombatMessages (51) says DOODLEDOUG_MESSAGES, and CatchAKey (54) and ShockALock (44) both say MG3_MESSAGES. It ignores the root element name. The element tag is the identity. It skips '_'-prefixed metadata children. When the first record has _MsgOrder or _MsgType, ids are explicit. Otherwise it sorts by tag using byte-ordinal comparison, merges duplicate tags (GameMessages has MSG_REMOVEOBJECT twice, WizardMessages has MSG_PETHATCHREADYSTATUS twice) and numbers 1..N. It accepts TPYE as TYPE and treats a missing TYPE on a field named GlobalID as GID, each with a warning
 - Validation errors: duplicate explicit order, id > 255, unknown type, duplicate ServiceID across files
-- XML parser choice: a small in-house reader or a vendored lib in deps/ (pending decision)
+- XML parser: pugixml from vcpkg (see Dependencies in doc/ARCHITECTURE.md)
 - src/test/server/shared/Messages/MessageDefinitionParserTest.cpp with hand-written fixture XML that is Ambrose-authored, not client-extracted
-- Client-backed test, skipped unless AMBROSE_CLIENT_DATA_DIR is set, that loads the real Root.wad through the archive reader
+- Client-backed test, skipped unless AMBROSE_CLIENT_DIR is set, that loads the real Root.wad through the archive reader
 
-**Client messages:** All 971 records in the 26 XML files. Explicitly exercised: MSG_PING, MSG_PING_RSP, MSG_CUSTOMDICT, MSG_RAW_TEXT, MSG_SERVERMESSAGE, MSG_FORCE_DISCONNECT, MSG_USER_AUTHEN_V3, MSG_CHARACTERSELECTED, MSG_LATEST_FILE_LIST_V2, MSG_ATTACH, MSG_BADGES, MSG_REMOVEOBJECT, MSG_SERVER_ERROR, MSG_PETHATCHREADYSTATUS, MSG_MINIGAMEREWARDS, MSG_PHYSICS_GRAB
+**Client messages:** All 1448 records in the 29 XML files (corrected from 971 in 26). Explicitly exercised: MSG_PING, MSG_PING_RSP, MSG_CUSTOMDICT, MSG_RAW_TEXT, MSG_SERVERMESSAGE, MSG_FORCE_DISCONNECT, MSG_USER_AUTHEN_V3, MSG_CHARACTERSELECTED, MSG_LATEST_FILE_LIST_V2, MSG_ATTACH, MSG_BADGES, MSG_REMOVEOBJECT, MSG_SERVER_ERROR, MSG_PETHATCHREADYSTATUS, MSG_MINIGAMEREWARDS, MSG_PHYSICS_GRAB
 
 **Data sources**
 
-- Root.wad entries: AISClientMessages.xml, BaseMessages.xml, ExtendedBaseMessages.xml, GameMessages.xml, LoginMessages.xml, PatchMessages.xml, PetMessages.xml, ScriptDebuggerMessages.xml, TestManagerMessages.xml, WizardMessages.xml, Messages/{Cantrips,CatchAKey,ChooChooZoo,Concentration,DoodleDoug,Dueling_Diego,HotShots,Housing,MoveBehavior,PhysicsBehavior,PotionMotion,Quest,ShockALock,SkullRiders,Soblocks,WizCombat}Messages.xml
+- Root.wad entries: AISClientMessages.xml, BaseMessages.xml, ExtendedBaseMessages.xml, GameMessages.xml, GameMessages2.xml, LoginMessages.xml, PatchMessages.xml, PetMessages.xml, ScriptDebuggerMessages.xml, TestManagerMessages.xml, WizardMessages.xml, WizardMessages2.xml, WizardMessages3.xml, Messages/{Cantrips,CatchAKey,ChooChooZoo,Concentration,DoodleDoug,Dueling_Diego,HotShots,Housing,MoveBehavior,PhysicsBehavior,PotionMotion,Quest,ShockALock,SkullRiders,Soblocks,WizCombat}Messages.xml
 - Some entries may be BINd containers (zlib at offset 13); the archive reader must handle both
 - Reference for cross-checking only: a local packet capture (private, never committed)
 
 **Acceptance**
 
-- [ ] Fixture tests cover: explicit-order file, sorted file with a duplicate tag, lowercase tags (Housing has MSG_DailyQuestUpdate and MSG_DailyPvPUpdate, which sort after all uppercase MSG_D...), the TPYE typo, and a GlobalID field with no TYPE
-- [ ] Client-backed test: 26 protocols, 971 records, 969 ids; per service GAME(5)=253, WIZARD(12)=253, WIZARDHOUSING(50)=212, PET(9)=55, WizCombat(51)=36, LOGIN(7)=29, Soblocks(25)=23, ScriptDebugger(10)=20, QUEST(52)=19, Cantrips(57)=18, EXTENDEDBASE(2)=6, Physics(16)=6, MoveBehavior(15)=4, PATCH(8)=3, SYSTEM(1)=2, TestManager(11)=2, AIS(19)=1, minigames 40-47 and 54 = 3 each
-- [ ] Client-backed ordinal spot checks: SYSTEM MSG_PING=1, MSG_PING_RSP=2; EXTENDEDBASE MSG_CUSTOMDICT=1, MSG_CUSTOMRECORD=2, MSG_FORCE_DISCONNECT=3, MSG_RAWRECORD=4, MSG_RAW_TEXT=5, MSG_SERVERMESSAGE=6; LOGIN MSG_CHARACTERSELECTED=3, MSG_SELECTCHARACTER=10, MSG_USER_AUTHEN_V3=27; PATCH MSG_LATEST_FILE_LIST_V2=2; GAME MSG_ATTACH=7, MSG_ATTACHFAILED=8, MSG_BADGES=10, MSG_CLIENTMOVE=36, MSG_LOGINCOMPLETE=108, MSG_NEWOBJECT=122, MSG_REMOVEOBJECT=182, MSG_SERVER_ERROR=223 (tag; its _MsgName is MSG_SERVERERROR); WIZARD MSG_MINIGAMEREWARDS=92, MSG_PETHATCHREADYSTATUS=122; Physics MSG_PHYSICS_GRAB=3
-- [ ] Client-backed type census equals GID 782, STR 652, UINT 453, INT 394, UBYT 286, FLT 216, BYT 144, WSTR 33, USHRT 27 (2988 fields), with exactly 2 warnings (TPYE, untyped GlobalID)
-- [ ] Sorting by _MsgName instead of tag makes the GAME test fail (191 positions differ), so the test guards the rule
+- [x] Fixture tests cover: explicit-order file, sorted file with a duplicate tag, lowercase tags (Housing has MSG_DailyQuestUpdate and MSG_DailyPvPUpdate, which sort after all uppercase MSG_D...), the TPYE typo, the TYP typo, and a GlobalID field with no TYPE
+- [x] Client-backed test: 29 protocols, 1448 records, 1446 ids (corrected from 26/971/969); per service GAME(5)=253, WIZARD(12)=253, WIZARD2(53)=254, WIZARD3(56)=213, WIZARDHOUSING(50)=212, PET(9)=55, WizCombat(51)=36, LOGIN(7)=29, Soblocks(25)=23, ScriptDebugger(10)=20, QUEST(52)=19, Cantrips(57)=18, GAME2(55)=10, EXTENDEDBASE(2)=6, Physics(16)=6, MoveBehavior(15)=4, PATCH(8)=3, SYSTEM(1)=2, TestManager(11)=2, AIS(19)=1, minigames 40-47 and 54 = 3 each
+- [x] Client-backed ordinal spot checks: SYSTEM MSG_PING=1, MSG_PING_RSP=2; EXTENDEDBASE MSG_CUSTOMDICT=1, MSG_CUSTOMRECORD=2, MSG_FORCE_DISCONNECT=3, MSG_RAWRECORD=4, MSG_RAW_TEXT=5, MSG_SERVERMESSAGE=6; LOGIN MSG_CHARACTERSELECTED=3, MSG_SELECTCHARACTER=10, MSG_USER_AUTHEN_V3=27; PATCH MSG_LATEST_FILE_LIST_V2=2; GAME MSG_ATTACH=7, MSG_ATTACHFAILED=8, MSG_BADGES=10, MSG_CLIENTMOVE=36, MSG_LOGINCOMPLETE=108, MSG_NEWOBJECT=122, MSG_REMOVEOBJECT=182, MSG_SERVER_ERROR=223 (tag; its _MsgName is MSG_SERVERERROR); WIZARD MSG_MINIGAMEREWARDS=92, MSG_PETHATCHREADYSTATUS=122; Physics MSG_PHYSICS_GRAB=3
+- [x] Client-backed type census equals GID 1193, STR 911, UINT 740, INT 530, UBYT 459, FLT 241, BYT 172, WSTR 38, USHRT 27 (4311 fields over the 1446 ids, 4315 over all 1448 records; corrected from 2988), with exactly 3 warnings (TPYE, TYP, untyped GlobalID)
+- [x] Sorting by _MsgName instead of tag makes the GAME test fail (191 positions differ), so the test guards the rule
 
 **Risks**
 
 - Needs a KIWAD reader from another domain for the client-backed test
-- Whether the real client reads the TPYE field and the untyped GlobalID field, or drops them, is unknown and changes the wire layout of MSG_PHYSICS_GRAB and MSG_MINIGAMEREWARDS
+- Whether the real client reads the TPYE field, the TYP field, and the untyped GlobalID field, or drops them, is unknown and changes the wire layout of MSG_PHYSICS_GRAB, MSG_BATTLEGROUNDQUEUEUPDATE, and MSG_MINIGAMEREWARDS. The Message definition quirks decision in doc/ARCHITECTURE.md keeps them until capture verification
 
 ## 1.15 msggen build-time generator (NET-3)
 

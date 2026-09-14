@@ -2,4 +2,8 @@
 # Builds the shared library of code every server uses: network, messages, ObjectProperty, archives, and realms.
 ambrose_add_library(shared "${CMAKE_CURRENT_SOURCE_DIR}")
 
-target_link_libraries(shared PUBLIC common)
+target_link_libraries(shared
+    PUBLIC
+        common
+    PRIVATE
+        pugixml::pugixml)

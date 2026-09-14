@@ -6,6 +6,7 @@
     "asio",
     "botan",
     "fmt",
+    "pugixml",
     "zlib"
   ],
   "features": {
