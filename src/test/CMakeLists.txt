@@ -33,3 +33,9 @@ foreach(app IN ITEMS gameserver loginserver patchserver)
             COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:${app}> -DNAME=${app} -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/app-smoke/${app} -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/AppSmokeTest.cmake")
     endif()
 endforeach()
+
+if(TARGET dbimport)
+    add_test(NAME DbImport
+        COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:dbimport> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/dbimport -DSOURCE=${PROJECT_SOURCE_DIR} -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/DbImportTest.cmake")
+    set_tests_properties(DbImport PROPERTIES SKIP_REGULAR_EXPRESSION "dbimport test skipped")
+endif()
