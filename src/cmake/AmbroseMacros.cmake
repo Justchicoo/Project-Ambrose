@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Helpers that build a library or executable from every source file under a folder.
+# Helpers that build a library or executable from every source file under a folder, copy conf.dist files, and ship MariaDB client plugins beside executables.
 function(ambrose_collect_include_dirs root out)
     set(dirs "${root}")
     file(GLOB_RECURSE children LIST_DIRECTORIES true "${root}/*")
@@ -49,4 +49,18 @@ function(ambrose_copy_conf_dist target)
         install(FILES $<TARGET_RUNTIME_DLLS:${target}> DESTINATION bin)
     endif()
     install(FILES ${dist_files} DESTINATION etc)
+endfunction()
+
+function(ambrose_copy_mariadb_plugins target)
+    set(release_plugins "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/plugins/libmariadb")
+    set(debug_plugins "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/debug/plugins/libmariadb")
+    if(NOT EXISTS "${release_plugins}")
+        return()
+    endif()
+    if(NOT EXISTS "${debug_plugins}")
+        set(debug_plugins "${release_plugins}")
+    endif()
+    add_custom_command(TARGET ${target} POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "$<IF:$<CONFIG:Debug>,${debug_plugins},${release_plugins}>" "$<TARGET_FILE_DIR:${target}>/plugins/libmariadb"
+        VERBATIM)
 endfunction()

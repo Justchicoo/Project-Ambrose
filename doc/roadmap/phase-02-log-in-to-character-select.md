@@ -36,8 +36,8 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Acceptance**
 
-- [ ] Field '255' as TINYINT UNSIGNED gives Get<uint8>()==255
-- [ ] With AMBROSE_TEST_DB: SELECT 1; KILL CONNECTION_ID() then reconnect succeeds
+- [x] Field '255' as TINYINT UNSIGNED gives Get<uint8>()==255
+- [x] With AMBROSE_TEST_DB: SELECT 1; KILL CONNECTION_ID() then reconnect succeeds
 
 ### Detailed spec from FND-13: database: MySQL connector dependency and MySQLConnection with raw queries
 
@@ -45,7 +45,7 @@ The database layer can open a connection, run a query, and read typed fields.
 
 **Deliverables**
 
-- Decision point: MySQL 8 vs MariaDB and the client library (libmysqlclient vs MariaDB Connector/C); FindMySQL.cmake in src/cmake
+- Decision point, settled in doc/ARCHITECTURE.md: MariaDB Connector/C from vcpkg (`libmariadb`, found with `find_package(unofficial-libmariadb)`), working with both MySQL 8 and MariaDB servers
 - src/server/database/Database/MySQLConnection.h/.cpp: connection info from the string 'host;port;user;password;database' (AzerothCore convention, e.g. LoginDatabaseInfo), Open/Close, Execute(sql), Query(sql) -> QueryResult, escape, automatic reconnect on CR_SERVER_GONE_ERROR/CR_SERVER_LOST with backoff, SSL option
 - src/server/database/Database/QueryResult.h/.cpp, Field.h/.cpp: typed getters Get<uint8..uint64,int*,float,double,std::string,std::vector<uint8>>, IsNull, with type-mismatch assertion logged to sql.sql
 - src/server/database/Database/DatabaseEnvFwd.h
@@ -54,11 +54,11 @@ The database layer can open a connection, run a query, and read typed fields.
 
 **Acceptance**
 
-- [ ] Unit: Field built from the string '255' as TINYINT UNSIGNED gives Get<uint8>()==255; NULL field IsNull()
-- [ ] Integration (with AMBROSE_TEST_DB): SELECT 1 returns one row, one field == 1
-- [ ] Integration: killing the connection server-side (KILL CONNECTION_ID()) followed by a query reconnects and succeeds
-- [ ] Wrong password logs a sql.sql error with the MySQL error code and Open() returns the error
-- [ ] Real client: n/a
+- [x] Unit: Field built from the string '255' as TINYINT UNSIGNED gives Get<uint8>()==255; NULL field IsNull()
+- [x] Integration (with AMBROSE_TEST_DB): SELECT 1 returns one row, one field == 1
+- [x] Integration: killing the connection server-side (KILL CONNECTION_ID()) followed by a query reconnects and succeeds
+- [x] Wrong password logs a sql.sql error with the MySQL error code and Open() returns the error
+- [x] Real client: n/a
 
 **Risks**
 

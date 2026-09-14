@@ -88,6 +88,11 @@ jobs:
       - name: Lower mmap randomization for ThreadSanitizer
         if: matrix.configure == 'linux-clang-tsan'
         run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: Start MySQL for database tests
+        if: runner.os == 'Linux'
+        run: |
+          sudo systemctl start mysql.service
+          mysql -h127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS ambrose_test"
       - name: Restore vcpkg binary cache
         uses: actions/cache@v4
         with:
@@ -98,4 +103,5 @@ jobs:
       - name: Build and test
         env:
           VCPKG_BINARY_SOURCES: clear;files,${{ runner.temp }}/vcpkg-binary-cache,readwrite
+          AMBROSE_TEST_DB: ${{ runner.os == 'Linux' && '127.0.0.1;3306;root;root;ambrose_test' || '' }}
         run: python apps/ci/ci_build.py --setup-vcpkg "${{ runner.temp }}/vcpkg" --configure-preset ${{ matrix.configure }} --build-preset ${{ matrix.build }} --warnings-as-errors

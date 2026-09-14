@@ -18,9 +18,10 @@ target_include_directories(unit_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/mocks
 target_link_libraries(unit_tests
     PRIVATE
         ambrose-compile-options
-        shared
+        database
         GTest::gmock)
 
+ambrose_copy_mariadb_plugins(unit_tests)
 gtest_discover_tests(unit_tests DISCOVERY_MODE PRE_TEST)
 
 add_subdirectory(compile)
