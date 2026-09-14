@@ -481,9 +481,9 @@ All code logs through named loggers configured by Appender.* and Logger.* option
 
 **Acceptance**
 
-- [ ] 4x100k producer/consumer exactly-once; Cancel wakes consumers
-- [ ] DeadlineTimer fires; cancel prevents it
-- [ ] TSan clean
+- [x] 4x100k producer/consumer exactly-once; Cancel wakes consumers
+- [x] DeadlineTimer fires; cancel prevents it
+- [x] TSan clean
 
 ### Detailed spec from FND-11: common/Threading and common/Asio wrappers
 
@@ -493,17 +493,17 @@ Thread-safe queues, worker threads and thin Asio wrappers that network and datab
 
 - Decision point: Boost.Asio (AzerothCore precedent) vs standalone Asio; Boost is not vendored (too large), found via find_package, which affects install docs and CI
 - src/common/Threading/ProducerConsumerQueue.h: blocking Pop with Cancel, WaitAndPop
-- src/common/Threading/ThreadPool.h (wraps asio::thread_pool), ThreadName helper, LockedQueue.h, MPSCQueue.h
+- src/common/Threading/ThreadPool.h (named threads running one asio::io_context; asio::thread_pool was not used because attaching named threads to it races with join), ThreadName helper, LockedQueue.h, MPSCQueue.h
 - src/common/Asio/IoContext.h, Strand.h, DeadlineTimer.h, Resolver.h (IPv4/IPv6 resolve to endpoint), IpAddress.h (parse, is-loopback), SignalSet helper
 - src/test/common/Threading/*Test.cpp, src/test/common/Asio/*Test.cpp
 
 **Acceptance**
 
-- [ ] ProducerConsumerQueue: 4 producers × 100k items, 4 consumers, all items consumed exactly once; Cancel wakes blocked consumers
-- [ ] DeadlineTimer fires on an io_context within tolerance; cancel prevents the handler
-- [ ] Resolver resolves 'localhost' to loopback
-- [ ] ThreadSanitizer (linux-clang preset with -fsanitize=thread) run of these tests is clean
-- [ ] Real client: n/a
+- [x] ProducerConsumerQueue: 4 producers × 100k items, 4 consumers, all items consumed exactly once; Cancel wakes blocked consumers
+- [x] DeadlineTimer fires on an io_context within tolerance; cancel prevents the handler
+- [x] Resolver resolves 'localhost' to loopback
+- [x] ThreadSanitizer (linux-clang preset with -fsanitize=thread) run of these tests is clean
+- [x] Real client: n/a
 
 **Risks**
 

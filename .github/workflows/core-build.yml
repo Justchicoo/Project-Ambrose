@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks style, forbidden files, and commit trailers, then builds and tests on Windows MSVC, Linux GCC, Linux Clang, and Linux GCC with sanitizers.
+# Checks style, forbidden files, and commit trailers, then builds and tests on Windows MSVC, Linux GCC, Linux Clang, Linux GCC with ASan and UBSan, and Linux Clang with TSan.
 name: core-build
 
 on:
@@ -72,6 +72,9 @@ jobs:
           - os: ubuntu-latest
             configure: linux-gcc-asan
             build: linux-gcc-asan
+          - os: ubuntu-latest
+            configure: linux-clang-tsan
+            build: linux-clang-tsan
     env:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
@@ -82,6 +85,9 @@ jobs:
       - name: Install Ninja and Clang
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ninja-build clang
+      - name: Lower mmap randomization for ThreadSanitizer
+        if: matrix.configure == 'linux-clang-tsan'
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
       - name: Restore vcpkg binary cache
         uses: actions/cache@v4
         with:

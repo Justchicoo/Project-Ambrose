@@ -49,7 +49,7 @@ std::size_t AllocationScope::GetLargest() const
     return State.Largest;
 }
 
-#if defined(AMBROSE_SANITIZE_ADDRESS) && !defined(_MSC_VER)
+#if (defined(AMBROSE_SANITIZE_ADDRESS) || defined(AMBROSE_SANITIZE_THREAD)) && !defined(_MSC_VER)
 
 extern "C" int __sanitizer_install_malloc_and_free_hooks(void (*mallocHook)(void const*, std::size_t), void (*freeHook)(void const*));
 

@@ -61,6 +61,14 @@
       "cacheVariables": {
         "AMBROSE_SANITIZE_ADDRESS": "ON"
       }
+    },
+    {
+      "name": "linux-clang-tsan",
+      "displayName": "Linux Clang with ThreadSanitizer",
+      "inherits": "linux-clang",
+      "cacheVariables": {
+        "AMBROSE_SANITIZE_THREAD": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -98,6 +106,11 @@
       "name": "linux-gcc-asan",
       "configurePreset": "linux-gcc-asan",
       "configuration": "Debug"
+    },
+    {
+      "name": "linux-clang-tsan",
+      "configurePreset": "linux-clang-tsan",
+      "configuration": "Debug"
     }
   ],
   "testPresets": [
@@ -109,7 +122,8 @@
         "outputOnFailure": true
       },
       "execution": {
-        "noTestsAction": "error"
+        "noTestsAction": "error",
+        "timeout": 600
       }
     },
     {
@@ -120,7 +134,8 @@
         "outputOnFailure": true
       },
       "execution": {
-        "noTestsAction": "error"
+        "noTestsAction": "error",
+        "timeout": 600
       }
     },
     {
@@ -131,7 +146,8 @@
         "outputOnFailure": true
       },
       "execution": {
-        "noTestsAction": "error"
+        "noTestsAction": "error",
+        "timeout": 600
       }
     },
     {
@@ -142,7 +158,8 @@
         "outputOnFailure": true
       },
       "execution": {
-        "noTestsAction": "error"
+        "noTestsAction": "error",
+        "timeout": 600
       }
     },
     {
@@ -153,7 +170,8 @@
         "outputOnFailure": true
       },
       "execution": {
-        "noTestsAction": "error"
+        "noTestsAction": "error",
+        "timeout": 600
       }
     },
     {
@@ -164,7 +182,8 @@
         "outputOnFailure": true
       },
       "execution": {
-        "noTestsAction": "error"
+        "noTestsAction": "error",
+        "timeout": 600
       }
     },
     {
@@ -175,11 +194,27 @@
         "outputOnFailure": true
       },
       "execution": {
-        "noTestsAction": "error"
+        "noTestsAction": "error",
+        "timeout": 600
       },
       "environment": {
         "ASAN_OPTIONS": "detect_leaks=1:abort_on_error=1",
         "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1"
+      }
+    },
+    {
+      "name": "linux-clang-tsan",
+      "configurePreset": "linux-clang-tsan",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "timeout": 600
+      },
+      "environment": {
+        "TSAN_OPTIONS": "halt_on_error=1:abort_on_error=1:second_deadlock_stack=1"
       }
     }
   ]

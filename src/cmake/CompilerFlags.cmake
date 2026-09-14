@@ -30,6 +30,21 @@ else()
     endif()
 endif()
 
+if(AMBROSE_SANITIZE_ADDRESS AND AMBROSE_SANITIZE_THREAD)
+    message(FATAL_ERROR "AMBROSE_SANITIZE_ADDRESS and AMBROSE_SANITIZE_THREAD cannot be combined")
+endif()
+
+if(AMBROSE_SANITIZE_THREAD)
+    if(MSVC)
+        message(FATAL_ERROR "ThreadSanitizer is not available with MSVC; use the linux-clang-tsan preset")
+    endif()
+    target_compile_definitions(ambrose-compile-options INTERFACE AMBROSE_SANITIZE_THREAD)
+    target_compile_options(ambrose-compile-options INTERFACE
+        -fsanitize=thread
+        -fno-omit-frame-pointer)
+    target_link_options(ambrose-compile-options INTERFACE -fsanitize=thread)
+endif()
+
 if(AMBROSE_SANITIZE_ADDRESS)
     target_compile_definitions(ambrose-compile-options INTERFACE AMBROSE_SANITIZE_ADDRESS)
     if(MSVC)

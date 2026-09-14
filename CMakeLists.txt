@@ -2,6 +2,9 @@
 # Root build definition: language standard, build options, dependencies, and source tree.
 cmake_minimum_required(VERSION 3.25)
 
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+list(APPEND CMAKE_TRY_COMPILE_PLATFORM_VARIABLES CMAKE_CXX_SCAN_FOR_MODULES)
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/conf/config.cmake")
     include("${CMAKE_SOURCE_DIR}/conf/config.cmake")
 endif()
@@ -24,12 +27,15 @@ option(TOOLS "Build the tools in src/tools" ON)
 option(APPS_BUILD "Build the server apps" ON)
 option(AMBROSE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(AMBROSE_SANITIZE_ADDRESS "Build project code with AddressSanitizer, plus UndefinedBehaviorSanitizer where supported" OFF)
+option(AMBROSE_SANITIZE_THREAD "Build project code with ThreadSanitizer (GCC or Clang only)" OFF)
 
 include(PlatformDetect)
 include(CompilerFlags)
 include(AmbroseMacros)
 
 find_package(fmt CONFIG REQUIRED)
+find_package(asio CONFIG REQUIRED)
+find_package(Threads REQUIRED)
 
 if(BUILD_TESTING)
     enable_testing()

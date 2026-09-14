@@ -41,6 +41,8 @@ Use the `windows-release` or `linux-gcc-release` build presets for optimized bui
 
 Run the unit tests with the test preset that matches your build, for example `ctest --preset windows-debug` or `ctest --preset linux-gcc-debug`. Configure with `-DBUILD_TESTING=OFF` to skip the tests and their dependencies.
 
+On Linux, the `linux-gcc-asan` preset builds and tests with AddressSanitizer and UndefinedBehaviorSanitizer, and `linux-clang-tsan` does the same with ThreadSanitizer. Both need the matching compiler installed, and ThreadSanitizer may need `sudo sysctl vm.mmap_rnd_bits=28` on newer kernels. CI runs every preset on each push.
+
 ## Ground rules
 
 - The server is written in C++.
