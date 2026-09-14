@@ -580,12 +580,12 @@ The server can compute the exact CRC, HeaderSize and HeaderCRC values the client
 
 **Acceptance**
 
-- [ ] Inflate past cap fails cleanly
-- [ ] Synthetic KIWAD v2 with 3 entries gives TOC length 14 + sum(21+nameLen)
-- [ ] Client-gated: Root.wad lists 173088 entries (verified); LoginMessages.xml inflates; a flags-15 BINd inflates at offset 13
-- [ ] Client-gated: header parse never over-reads on any GameData/*.wad
-- [ ] Optional integration test moved from 1.08: decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error, skipped unless AMBROSE_CLIENT_DIR is set
-- [ ] Optional integration test moved from 1.12: a KIWAD entry's stored CRC equals Crc32 of its stored bytes, which confirms the client variant, skipped unless AMBROSE_CLIENT_DIR is set
+- [x] Inflate past cap fails cleanly
+- [x] Synthetic KIWAD v2 with 3 entries gives TOC length 14 + sum(21+nameLen)
+- [x] Client-gated: Root.wad lists 173088 entries (verified); LoginMessages.xml inflates; a flags-15 BINd inflates at offset 13
+- [x] Client-gated: header parse never over-reads on any GameData/*.wad
+- [x] Optional integration test moved from 1.08: decode the UTF-16 text of one Locale/*.lang entry from the user's Root.wad without error, skipped unless AMBROSE_CLIENT_DIR is set
+- [x] Optional integration test moved from 1.12: a KIWAD entry's stored CRC equals Crc32 of its stored bytes, which confirms the client variant, skipped unless AMBROSE_CLIENT_DIR is set
 
 ### Detailed spec from FND-8: common/Cryptography part 2: Twofish-OFB; common/Utilities: zlib
 
@@ -599,11 +599,11 @@ The cipher used for Rec1 in MSG_USER_AUTHEN_RSP / MSG_USER_VALIDATE exists, and 
 
 **Acceptance**
 
-- [ ] Twofish-128 matches the spec's published known-answer vectors (zero key and plaintext, and the iterated table)
-- [ ] OFB encrypt then decrypt is identity for 0, 1, 15, 16, 17 and 1000 bytes
-- [ ] Inflate of a stream that decompresses past its cap fails cleanly (zip bomb guard)
-- [ ] Optional integration with AMBROSE_CLIENT_DIR: inflate a compressed Root.wad entry (e.g. LoginMessages.xml) and, for a 'BINd' entry, the zlib payload at offset 13
-- [ ] Real client: n/a (NET checks Rec1 against a live login)
+- [x] Twofish-128 matches the spec's published known-answer vectors (zero key and plaintext, and the iterated table)
+- [x] OFB encrypt then decrypt is identity for 0, 1, 15, 16, 17 and 1000 bytes
+- [x] Inflate of a stream that decompresses past its cap fails cleanly (zip bomb guard)
+- [x] Optional integration with AMBROSE_CLIENT_DIR: inflate a compressed Root.wad entry (e.g. LoginMessages.xml) and, for a 'BINd' entry, the zlib payload at offset 13
+- [x] Real client: n/a (NET checks Rec1 against a live login)
 
 **Risks**
 
@@ -626,10 +626,10 @@ The server can compute the exact CRC, HeaderSize and HeaderCRC values the client
 
 **Acceptance**
 
-- [ ] Unit: Crc32("123456789") == 0x2DFD2D88 (this variant; zlib's standard value 0xCBF43926 must NOT be produced)
-- [ ] Unit: incremental update over split buffers equals one-shot result
-- [ ] Unit: synthetic in-memory KIWAD v2 with 3 entries yields TOC length 14 + sum(21+nameLen)
-- [ ] Env-gated test (AMBROSE_CLIENT_DIR set, skipped otherwise): for every Data/GameData/*.wad in the user's install, KiwadHeader length is <= file size and parsing never over-reads
+- [x] Unit: Crc32("123456789") == 0x2DFD2D88 (this variant; zlib's standard value 0xCBF43926 must NOT be produced)
+- [x] Unit: incremental update over split buffers equals one-shot result
+- [x] Unit: synthetic in-memory KIWAD v2 with 3 entries yields TOC length 14 + sum(21+nameLen)
+- [x] Env-gated test (AMBROSE_CLIENT_DIR set, skipped otherwise): for every Data/GameData/*.wad in the user's install, KiwadHeader length is <= file size and parsing never over-reads
 
 **Risks**
 

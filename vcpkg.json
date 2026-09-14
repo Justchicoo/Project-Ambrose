@@ -5,7 +5,8 @@
   "dependencies": [
     "asio",
     "botan",
-    "fmt"
+    "fmt",
+    "zlib"
   ],
   "features": {
     "tests": {

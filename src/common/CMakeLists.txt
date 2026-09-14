@@ -20,4 +20,5 @@ target_link_libraries(common
         Threads::Threads
     PRIVATE
         genrev
-        ${ambrose_botan_target})
+        ${ambrose_botan_target}
+        ZLIB::ZLIB)

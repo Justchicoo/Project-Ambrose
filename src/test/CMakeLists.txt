@@ -1,10 +1,16 @@
 # Project Ambrose by Imjustchico
-# Builds the single unit_tests executable from every test source and registers each test with CTest.
+# Builds unit_tests from every test source outside the compile and client folders, registers each test with CTest, and adds those two folders.
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
-ambrose_collect_sources("${CMAKE_CURRENT_SOURCE_DIR}" test_sources)
-list(FILTER test_sources EXCLUDE REGEX "/compile/")
+ambrose_collect_sources("${CMAKE_CURRENT_SOURCE_DIR}" all_test_sources)
+set(test_sources "")
+foreach(source IN LISTS all_test_sources)
+    file(RELATIVE_PATH relative "${CMAKE_CURRENT_SOURCE_DIR}" "${source}")
+    if(NOT relative MATCHES "^(compile|client)/")
+        list(APPEND test_sources "${source}")
+    endif()
+endforeach()
 add_executable(unit_tests ${test_sources})
 
 target_include_directories(unit_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/mocks")
@@ -18,3 +24,4 @@ target_link_libraries(unit_tests
 gtest_discover_tests(unit_tests DISCOVERY_MODE PRE_TEST)
 
 add_subdirectory(compile)
+add_subdirectory(client)
