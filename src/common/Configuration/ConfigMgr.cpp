@@ -146,6 +146,11 @@ std::string ConfigMgr::PathToUtf8(std::filesystem::path const& path)
     return std::string(utf8.begin(), utf8.end());
 }
 
+std::filesystem::path ConfigMgr::PathFromUtf8(std::string_view utf8)
+{
+    return std::filesystem::path(std::u8string(utf8.begin(), utf8.end()));
+}
+
 std::string ConfigIssue::ToString() const
 {
     std::string const file = ConfigMgr::PathToUtf8(File);

@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a built server executable to check that --version exits 0, a missing config names its path and exits 1, the shipped .conf.dist starts it, and a bad database string stops the login server.
+# Runs a built server executable to check that --version exits 0, a missing config names its path and exits 1, the shipped .conf.dist starts it, and that the login server updates and opens its database or exits 1 on a bad connection string.
 if(NOT APP OR NOT NAME OR NOT WORKDIR)
     message(FATAL_ERROR "APP, NAME and WORKDIR must be set")
 endif()
@@ -38,10 +38,26 @@ if(NOT distOutput MATCHES "${NAME} ready")
 endif()
 
 if(NAME STREQUAL "loginserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AMBROSE_TEST_DB}" STREQUAL "")
-    execute_process(COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=$ENV{AMBROSE_TEST_DB}"
-        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE databaseResult OUTPUT_VARIABLE databaseOutput ERROR_VARIABLE databaseError TIMEOUT 10)
-    if(NOT databaseOutput MATCHES "Opened database connection pool login: 1 async, 1 sync" OR NOT databaseOutput MATCHES "loginserver ready")
-        message(FATAL_ERROR "loginserver with AMBROSE_TEST_DB did not open the login pool and report ready (${databaseResult}): ${databaseOutput}${databaseError}")
+    set(databaseParts "$ENV{AMBROSE_TEST_DB}")
+    list(LENGTH databaseParts databasePartCount)
+    if(databasePartCount GREATER_EQUAL 5)
+        list(REMOVE_AT databaseParts 4)
+        string(RANDOM LENGTH 8 ALPHABET "0123456789abcdef" smokeSuffix)
+        list(INSERT databaseParts 4 "ambrose_smoke_login_${smokeSuffix}")
+    endif()
+    list(JOIN databaseParts ";" smokeDatabase)
+    foreach(round IN ITEMS first second)
+        execute_process(COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=${smokeDatabase}"
+            WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE databaseResult OUTPUT_VARIABLE databaseOutput ERROR_VARIABLE databaseError TIMEOUT 8)
+        if(NOT databaseOutput MATCHES "Opened database connection pool login: 1 async, 1 sync" OR NOT databaseOutput MATCHES "loginserver ready")
+            message(FATAL_ERROR "loginserver with AMBROSE_TEST_DB did not update, open the login pool and report ready on its ${round} start (${databaseResult}): ${databaseOutput}${databaseError}")
+        endif()
+        if(round STREQUAL "first" AND (NOT databaseOutput MATCHES "Created database ambrose_smoke_login_" OR NOT databaseOutput MATCHES "importing 2 base file" OR NOT databaseOutput MATCHES "Applied RELEASED 2026_01_01_00\\.sql to the login database"))
+            message(FATAL_ERROR "loginserver's first start did not create the login database, import its base and apply its updates: ${databaseOutput}")
+        endif()
+    endforeach()
+    if(NOT databaseOutput MATCHES "The login database is up to date")
+        message(FATAL_ERROR "loginserver's second start did not report the login database up to date: ${databaseOutput}")
     endif()
 endif()
 

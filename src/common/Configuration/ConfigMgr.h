@@ -118,6 +118,7 @@ public:
     static ParsedConfig ParseText(std::string_view text, std::filesystem::path const& source, ConfigSourceKind kind);
     static std::string ToEnvironmentName(std::string_view key);
     static std::string PathToUtf8(std::filesystem::path const& path);
+    static std::filesystem::path PathFromUtf8(std::string_view utf8);
 
 private:
     template<ConfigOptionType T>

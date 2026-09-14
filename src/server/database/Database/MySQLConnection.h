@@ -65,6 +65,7 @@ struct MySQLConnectionSettings
     std::chrono::milliseconds GiveUpReconnectAfter{ 30000 };
     std::chrono::milliseconds ReconnectCooldown{ 10000 };
     ConnectionFlags Flags = ConnectionFlags::Both;
+    bool MultiStatements = false;
 };
 
 struct TransactionResult
@@ -97,6 +98,7 @@ public:
     bool IsOpen() const noexcept { return _mysql != nullptr; }
 
     bool Execute(std::string_view sql);
+    bool ExecuteScript(std::string_view sql, std::size_t& failedStatement);
     QueryResult Query(std::string_view sql);
     std::string Escape(std::string_view text);
     bool Ping();

@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads <Name>DatabaseInfo, <Name>Database.WorkerThreads, <Name>Database.SynchThreads and MaxPingTime, opens or reconfigures each pool, and reports every failure by pool name.
+ * Reads <Name>DatabaseInfo, <Name>Database.WorkerThreads, <Name>Database.SynchThreads, MaxPingTime and the Updates.* options, updates and opens or reconfigures each pool, and reports every failure by pool name.
  */
 
 #include "DatabaseLoader.h"
 #include "ConfigMgr.h"
+#include "DBUpdater.h"
 #include "DatabaseWorkerPool.h"
 #include "Log.h"
 
@@ -21,10 +22,12 @@ DatabaseLoader::~DatabaseLoader()
     Close();
 }
 
-DatabaseLoader& DatabaseLoader::AddDatabase(DatabaseWorkerPoolBase& pool, std::string name)
+DatabaseLoader& DatabaseLoader::AddDatabase(DatabaseWorkerPoolBase& pool, std::string name, uint32 updateFlag, std::string updateFolder)
 {
     Entry entry;
     entry.Pool = &pool;
+    entry.UpdateFlag = updateFlag;
+    entry.UpdateFolder = updateFolder.empty() ? pool.GetName() : std::move(updateFolder);
     entry.Name = std::move(name);
     _entries.push_back(std::move(entry));
     return *this;
@@ -44,6 +47,29 @@ void DatabaseLoader::ApplyPingInterval() const
         entry.Pool->SetKeepAliveInterval(std::chrono::minutes(minutes));
 }
 
+bool DatabaseLoader::RunUpdater(Entry const& entry, std::string const& info) const
+{
+    uint32 const enabled = _config.GetOption<uint32>("Updates.EnableDatabases", DATABASE_NONE, true);
+    if ((entry.UpdateFlag & enabled) == 0)
+        return true;
+    std::string error;
+    std::optional<MySQLConnectionInfo> const parsed = MySQLConnectionInfo::Parse(info, &error);
+    if (!parsed)
+    {
+        LOG_ERROR("sql.driver", "{}DatabaseInfo is not a valid connection string: {}", entry.Name, error);
+        return false;
+    }
+    UpdaterSettings settings;
+    settings.AutoSetup = _config.GetOption<bool>("Updates.AutoSetup", true, true);
+    std::string const source = _config.GetOption<std::string>("Updates.SourcePath", "", true);
+    if (!source.empty())
+        settings.SourceDirectory = ConfigMgr::PathFromUtf8(source);
+    if (DBUpdater::Run(*parsed, entry.UpdateFolder, settings))
+        return true;
+    LOG_ERROR("sql.updates", "Could not update the {} database; fix the error above or clear bit {} of Updates.EnableDatabases", entry.Pool->GetName(), entry.UpdateFlag);
+    return false;
+}
+
 bool DatabaseLoader::Load()
 {
     ApplyPingInterval();
@@ -61,6 +87,11 @@ bool DatabaseLoader::Load()
         if (!entry.Pool->SetConnectionInfo(info, asyncThreads, syncThreads))
         {
             LOG_ERROR("sql.driver", "{}DatabaseInfo is not a valid connection string", entry.Name);
+            Close();
+            return false;
+        }
+        if (!RunUpdater(entry, info))
+        {
             Close();
             return false;
         }

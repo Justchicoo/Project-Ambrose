@@ -178,7 +178,7 @@ Multi-statement atomic writes and main-thread callback processing work, and apps
 
 **Acceptance**
 
-- [ ] A fresh server gets the login DB created with base imported and updates/updates_include tables
+- [x] A fresh server gets the login DB created with base imported and updates/updates_include tables
 
 ### Detailed spec from FND-17: database/Updater part 1: base import and in-order update application
 
@@ -189,18 +189,18 @@ An empty database is created from base/ and then brought current by applying dat
 - data/sql/base/db_{login,characters,world}/updates.sql and updates_include.sql: tables `updates` (name PK, hash CHAR(64) SHA-256 hex, state ENUM('RELEASED','CUSTOM','MODULE','ARCHIVED','PENDING'), timestamp, speed) and `updates_include` (path, state) seeded with $/data/sql/updates/db_<name> RELEASED and $/data/sql/custom/db_<name> CUSTOM
 - src/server/database/Updater/DBUpdater.h/.cpp: Create database (if Updates.AutoSetup), Populate from base/ when the schema has no tables, Update(): read includes, list *.sql, validate names YYYY_MM_DD_NN.sql for RELEASED (any name for CUSTOM), sort, apply unapplied ones, record hash/state/speed
 - UpdateFetcher.h/.cpp: file discovery and hashing (SHA-256 of file bytes with line endings normalized to LF)
-- SQL file execution: split-free multi-statement execution via CLIENT_MULTI_STATEMENTS on a dedicated connection, or shelling out to the mysql CLI as AzerothCore does (decision), stopping on the first error with file and statement logged
+- SQL file execution: multi-statement execution via CLIENT_MULTI_STATEMENTS on a dedicated connection (settled in doc/ARCHITECTURE.md), with a quote- and comment-aware splitter that names the failing statement and its line and refuses DELIMITER, stopping on the first error
 - Config: Updates.EnableDatabases (bitmask login=1, characters=2, world=4), Updates.AutoSetup, Updates.SourcePath
-- `db update` on a running server applies pending data-only update files live, then reloads the stores they touch (through 4.15 when it lands); a file with schema statements is refused, since schema updates the running binary needs are a documented restart case
+- `db update` on a running server applies pending data-only update files live, then reloads the stores they touch; a file with schema statements is refused, since schema updates the running binary needs are a documented restart case. Deferred to 4.15, which adds the command and reload framework; until then updates run at startup only
 
 **Acceptance**
 
-- [ ] Integration: on a fresh server, loginserver startup creates the login DB, imports base, applies data/sql/updates/db_login/2026_01_01_00.sql, and a second start applies nothing ('database is up to date')
-- [ ] A test update with a syntax error stops startup, names the file and error, and records no row for it
-- [ ] Files are applied in name order even when created out of order on disk
-- [ ] A CUSTOM file in custom/db_login is applied with state CUSTOM
-- [ ] A badly named file in updates/ (e.g. 2026-1-1.sql) is refused with an error
-- [ ] Real client: n/a
+- [x] Integration: on a fresh server, loginserver startup creates the login DB, imports base, applies data/sql/updates/db_login/2026_01_01_00.sql, and a second start applies nothing ('database is up to date'); AppSmoke.loginserver runs both starts against the real binary when AMBROSE_TEST_DB is set
+- [x] A test update with a syntax error stops startup, names the file and error, and records no row for it
+- [x] Files are applied in name order even when created out of order on disk
+- [x] A CUSTOM file in custom/db_login is applied with state CUSTOM
+- [x] A badly named file in updates/ (e.g. 2026-1-1.sql) is refused with an error
+- [x] Real client: n/a
 
 **Risks**
 
@@ -215,9 +215,9 @@ An empty database is created from base/ and then brought current by applying dat
 
 **Acceptance**
 
-- [ ] Second start logs 'database is up to date'
-- [ ] A syntax error names the file and records no row
-- [ ] Name order is respected; a CUSTOM file gets state CUSTOM; 2026-1-1.sql is refused
+- [x] Second start logs 'database is up to date'
+- [x] A syntax error names the file and records no row
+- [x] Name order is respected; a CUSTOM file gets state CUSTOM; 2026-1-1.sql is refused
 
 ### Detailed spec from FND-17: database/Updater part 1: base import and in-order update application
 
@@ -228,18 +228,18 @@ An empty database is created from base/ and then brought current by applying dat
 - data/sql/base/db_{login,characters,world}/updates.sql and updates_include.sql: tables `updates` (name PK, hash CHAR(64) SHA-256 hex, state ENUM('RELEASED','CUSTOM','MODULE','ARCHIVED','PENDING'), timestamp, speed) and `updates_include` (path, state) seeded with $/data/sql/updates/db_<name> RELEASED and $/data/sql/custom/db_<name> CUSTOM
 - src/server/database/Updater/DBUpdater.h/.cpp: Create database (if Updates.AutoSetup), Populate from base/ when the schema has no tables, Update(): read includes, list *.sql, validate names YYYY_MM_DD_NN.sql for RELEASED (any name for CUSTOM), sort, apply unapplied ones, record hash/state/speed
 - UpdateFetcher.h/.cpp: file discovery and hashing (SHA-256 of file bytes with line endings normalized to LF)
-- SQL file execution: split-free multi-statement execution via CLIENT_MULTI_STATEMENTS on a dedicated connection, or shelling out to the mysql CLI as AzerothCore does (decision), stopping on the first error with file and statement logged
+- SQL file execution: multi-statement execution via CLIENT_MULTI_STATEMENTS on a dedicated connection (settled in doc/ARCHITECTURE.md), with a quote- and comment-aware splitter that names the failing statement and its line and refuses DELIMITER, stopping on the first error
 - Config: Updates.EnableDatabases (bitmask login=1, characters=2, world=4), Updates.AutoSetup, Updates.SourcePath
-- `db update` on a running server applies pending data-only update files live, then reloads the stores they touch (through 4.15 when it lands); a file with schema statements is refused, since schema updates the running binary needs are a documented restart case
+- `db update` on a running server applies pending data-only update files live, then reloads the stores they touch; a file with schema statements is refused, since schema updates the running binary needs are a documented restart case. Deferred to 4.15, which adds the command and reload framework; until then updates run at startup only
 
 **Acceptance**
 
-- [ ] Integration: on a fresh server, loginserver startup creates the login DB, imports base, applies data/sql/updates/db_login/2026_01_01_00.sql, and a second start applies nothing ('database is up to date')
-- [ ] A test update with a syntax error stops startup, names the file and error, and records no row for it
-- [ ] Files are applied in name order even when created out of order on disk
-- [ ] A CUSTOM file in custom/db_login is applied with state CUSTOM
-- [ ] A badly named file in updates/ (e.g. 2026-1-1.sql) is refused with an error
-- [ ] Real client: n/a
+- [x] Integration: on a fresh server, loginserver startup creates the login DB, imports base, applies data/sql/updates/db_login/2026_01_01_00.sql, and a second start applies nothing ('database is up to date'); AppSmoke.loginserver runs both starts against the real binary when AMBROSE_TEST_DB is set
+- [x] A test update with a syntax error stops startup, names the file and error, and records no row for it
+- [x] Files are applied in name order even when created out of order on disk
+- [x] A CUSTOM file in custom/db_login is applied with state CUSTOM
+- [x] A badly named file in updates/ (e.g. 2026-1-1.sql) is refused with an error
+- [x] Real client: n/a
 
 **Risks**
 
@@ -254,8 +254,8 @@ An empty database is created from base/ and then brought current by applying dat
 
 **Acceptance**
 
-- [ ] Creates ambrose_login/characters/world, exits 0; rerun says up to date
-- [ ] A broken update exits 1 and names the file
+- [x] Creates ambrose_login/characters/world, exits 0; rerun says up to date
+- [x] A broken update exits 1 and names the file
 
 ### Detailed spec from FND-20: src/tools/dbimport
 
@@ -265,13 +265,13 @@ A standalone tool creates and updates all three databases without starting any s
 
 - src/tools/dbimport/Main.cpp + CMakeLists.txt + dbimport.conf.dist (LoginDatabaseInfo, CharacterDatabaseInfo, WorldDatabaseInfo, Updates.*, Appender/Logger)
 - Runs DatabaseLoader with open, AutoSetup, populate and update for each enabled DB, then exits: 0 on success, 1 on any failure
-- CI job switched to dbimport for SQL validation
+- CI job switched to dbimport for SQL validation: the DbImport CTest runs dbimport against the Linux legs' MySQL 8 and validates every repository SQL file on each push
 
 **Acceptance**
 
-- [ ] Against an empty server, `dbimport` creates ambrose_login, ambrose_characters and ambrose_world, applies base and updates, exits 0; a second run logs up to date for all three
-- [ ] A broken update exits 1 and names the file
-- [ ] Real client: n/a
+- [x] Against an empty server, `dbimport` creates ambrose_login, ambrose_characters and ambrose_world, applies base and updates, exits 0; a second run logs up to date for all three
+- [x] A broken update exits 1 and names the file
+- [x] Real client: n/a
 
 **Risks**
 

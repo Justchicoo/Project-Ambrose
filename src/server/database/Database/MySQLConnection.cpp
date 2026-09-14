@@ -281,7 +281,8 @@ uint32 MySQLConnection::Connect(bool quiet)
     }
 
     char const* const database = _info.Database.empty() ? nullptr : _info.Database.c_str();
-    if (!mysql_real_connect(mysql, host, _info.User.c_str(), _info.Password.c_str(), database, _info.Port, socket, 0))
+    unsigned long const clientFlags = _settings.MultiStatements ? CLIENT_MULTI_STATEMENTS : 0;
+    if (!mysql_real_connect(mysql, host, _info.User.c_str(), _info.Password.c_str(), database, _info.Port, socket, clientFlags))
     {
         SetError(mysql_errno(mysql), mysql_error(mysql));
         mysql_close(mysql);
@@ -393,6 +394,48 @@ bool MySQLConnection::RunQuery(std::string_view context, std::string_view sql, s
         SetError(code, text);
         if (!reconnected || !retry)
             return false;
+    }
+}
+
+bool MySQLConnection::ExecuteScript(std::string_view sql, std::size_t& failedStatement)
+{
+    UsageGuard const usage(_activeUsers, _concurrentUses);
+    ClearError();
+    failedStatement = 0;
+    if (_closed || (!_mysql && !Reconnect()))
+    {
+        if (_lastErrorCode == 0)
+            SetError(CR_SERVER_GONE_ERROR, "the connection is closed");
+        return false;
+    }
+    if (!_settings.MultiStatements)
+    {
+        SetError(CR_UNKNOWN_ERROR, "the connection was not opened for multi-statement scripts");
+        return false;
+    }
+    std::size_t statement = 1;
+    auto fail = [&]
+    {
+        SetError(mysql_errno(_mysql), mysql_error(_mysql));
+        failedStatement = statement;
+        return false;
+    };
+    if (mysql_real_query(_mysql, sql.data(), static_cast<unsigned long>(sql.size())) != 0)
+        return fail();
+    while (true)
+    {
+        if (MYSQL_RES* const result = mysql_store_result(_mysql))
+            mysql_free_result(result);
+        else if (mysql_field_count(_mysql) != 0)
+            return fail();
+        if (!mysql_more_results(_mysql))
+            return true;
+        ++statement;
+        int const status = mysql_next_result(_mysql);
+        if (status > 0)
+            return fail();
+        if (status < 0)
+            return true;
     }
 }
 

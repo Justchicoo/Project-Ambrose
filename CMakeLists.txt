@@ -48,3 +48,5 @@ if(BUILD_TESTING)
 endif()
 
 add_subdirectory(src)
+
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/data/sql" DESTINATION share/ambrose/data PATTERN ".gitkeep" EXCLUDE)

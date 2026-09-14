@@ -44,7 +44,7 @@ namespace
             }
 
             _databases = std::make_unique<DatabaseLoader>(Config());
-            _databases->AddDatabase(LoginDatabase, "Login");
+            _databases->AddDatabase(LoginDatabase, "Login", DatabaseLoader::DATABASE_LOGIN);
             if (!_databases->Load())
             {
                 LOG_ERROR("server.loginserver", "Cannot open the login database");

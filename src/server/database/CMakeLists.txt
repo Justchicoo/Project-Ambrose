@@ -7,3 +7,5 @@ target_link_libraries(database
         shared
     PRIVATE
         unofficial::libmariadb)
+
+target_compile_definitions(database PRIVATE "AMBROSE_SOURCE_DIRECTORY=\"${PROJECT_SOURCE_DIR}\"")

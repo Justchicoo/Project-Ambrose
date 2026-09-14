@@ -16,6 +16,9 @@ The Applies column says when a changed value takes effect after a configuration 
 | `LoginDatabase.WorkerThreads` | uint32 | `1` | `AMBROSE_LOGIN_DATABASE_WORKER_THREADS` | Live like `LoginDatabaseInfo` | Async connections, each with its own worker thread (0-64) |
 | `LoginDatabase.SynchThreads` | uint32 | `1` | `AMBROSE_LOGIN_DATABASE_SYNCH_THREADS` | Live like `LoginDatabaseInfo` | Connections for blocking queries (1-64) |
 | `MaxPingTime` | uint32 | `30` | `AMBROSE_MAX_PING_TIME` | At startup, and live once 4.15's reload triggers call the database loader | Minutes an idle database connection waits before it pings the server to stay open |
+| `Updates.EnableDatabases` | uint32 | `1` | `AMBROSE_UPDATES_ENABLE_DATABASES` | At startup; schema updates never run on a live reload, so the running binary keeps the schema it was built for | Bitmask of databases the updater brings current before their pools open: 1 login, 2 characters, 4 world; a missing key means 0, none |
+| `Updates.AutoSetup` | bool | `1` | `AMBROSE_UPDATES_AUTO_SETUP` | At startup | Create a missing database with utf8mb4. An empty database always gets `data/sql/base/db_<name>` imported, and a failed import into a database created this way drops it again |
+| `Updates.SourcePath` | string | empty | `AMBROSE_UPDATES_SOURCE_PATH` | At startup | The Project Ambrose folder that holds `data/sql`; empty uses the folder the server was built from, then `share/ambrose` next to an installed `bin` |
 | `Network.Threads` | uint32 | `1` | `AMBROSE_NETWORK_THREADS` | Live; new threads start at once, and removed threads stop taking sockets and exit when their last connection closes | Network threads that read and write sockets (1-256) |
 | `Network.MaxFrameSize` | uint64 | `4194304` | `AMBROSE_NETWORK_MAX_FRAME_SIZE` | Next connection | Largest frame in bytes a client may send, checked before the frame is buffered (17 to 1 GiB) |
 | `Network.MaxDmlMessages` | uint32 | `1024` | `AMBROSE_NETWORK_MAX_DML_MESSAGES` | Next connection | Most DML messages one frame may chain (at least 1) |
@@ -39,5 +42,6 @@ The Applies column says when a changed value takes effect after a configuration 
 | `Logger.server` | logger | `3,Console Server Errors Stream` | `AMBROSE_LOGGER_SERVER` | Live | App lifecycle, config and logging messages |
 | `Logger.sql` | logger | `4,Console Server Errors Stream` | `AMBROSE_LOGGER_SQL` | Live | Database messages, warnings and worse |
 | `Logger.sql.driver` | logger | `3,Console Server Errors Stream` | `AMBROSE_LOGGER_SQL_DRIVER` | Live | Database pools opening, closing, reconnecting and reconfiguring at Info |
+| `Logger.sql.updates` | logger | `3,Console Server Errors Stream` | `AMBROSE_LOGGER_SQL_UPDATES` | Live | Database creation, base imports and applied update files at Info |
 | `Logger.network` | logger | `3,Console Server Errors Stream` | `AMBROSE_LOGGER_NETWORK` | Live | Sockets and message traffic |
 | `Logger.network.session` | logger | `2,Console Server Errors Stream` | `AMBROSE_LOGGER_NETWORK_SESSION` | Live | Session offers, accepts and closes, plus keepalives at Debug, which reach Login.log and the stream while the console stays at Info |
