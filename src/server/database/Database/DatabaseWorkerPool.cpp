@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds and validates a new connection generation before publishing it, takes a snapshot of the current generation for every call, refuses empty or wrong-side statements, and drains a retired generation on close.
+ * Builds and validates a new connection generation before publishing it, swaps generations live and drains retired ones in the background, takes a snapshot for every call, and refuses empty or wrong-side statements and transactions.
  */
 
 #include "DatabaseWorkerPool.h"
@@ -10,14 +10,29 @@
 #include "QueryResult.h"
 
 #include <algorithm>
+#include <functional>
 
 namespace
 {
     class SyncLease
     {
     public:
-        explicit SyncLease(std::shared_ptr<DatabaseConnectionSet> set) : _set(std::move(set)), _connection(_set ? _set->AcquireSync() : nullptr)
+        explicit SyncLease(std::function<std::shared_ptr<DatabaseConnectionSet>()> const& current)
         {
+            for (int attempt = 0; attempt < 4; ++attempt)
+            {
+                std::shared_ptr<DatabaseConnectionSet> set = current();
+                if (!set)
+                    return;
+                if (MySQLConnection* const connection = set->AcquireSync())
+                {
+                    _set = std::move(set);
+                    _connection = connection;
+                    return;
+                }
+                if (current() == set)
+                    return;
+            }
         }
 
         ~SyncLease()
@@ -34,7 +49,7 @@ namespace
 
     private:
         std::shared_ptr<DatabaseConnectionSet> _set;
-        MySQLConnection* _connection;
+        MySQLConnection* _connection = nullptr;
     };
 }
 
@@ -51,6 +66,7 @@ DatabaseWorkerPoolBase::~DatabaseWorkerPoolBase()
     }
     if (retired)
         retired->Shutdown(std::chrono::milliseconds(0));
+    WaitForRetired(std::chrono::milliseconds(0));
 }
 
 bool DatabaseWorkerPoolBase::SetConnectionInfo(std::string_view infoString, uint32 asyncThreads, uint32 syncThreads)
@@ -115,10 +131,11 @@ void DatabaseWorkerPoolBase::Close(std::chrono::milliseconds drainTimeout)
         std::lock_guard<std::mutex> lock(_currentMutex);
         retired = std::move(_current);
     }
-    if (!retired)
-        return;
-    retired->Shutdown(drainTimeout);
-    LOG_INFO("sql.driver", "Closed database connection pool {}", _name);
+    if (retired)
+        retired->Shutdown(drainTimeout);
+    WaitForRetired(drainTimeout);
+    if (retired)
+        LOG_INFO("sql.driver", "Closed database connection pool {}", _name);
 }
 
 bool DatabaseWorkerPoolBase::IsOpen() const
@@ -135,13 +152,22 @@ std::shared_ptr<DatabaseConnectionSet> DatabaseWorkerPoolBase::GetCurrent() cons
 
 bool DatabaseWorkerPoolBase::Enqueue(std::unique_ptr<SQLOperation> operation)
 {
-    std::shared_ptr<DatabaseConnectionSet> const set = GetCurrent();
-    if (set && set->Enqueue(operation))
-        return true;
+    std::shared_ptr<DatabaseConnectionSet> set = GetCurrent();
+    for (int attempt = 0; attempt < 4 && set; ++attempt)
+    {
+        if (set->Enqueue(operation))
+            return true;
+        std::shared_ptr<DatabaseConnectionSet> next = GetCurrent();
+        if (next == set)
+            break;
+        set = std::move(next);
+    }
     if (!set)
-        LOG_ERROR("sql.sql", "Database pool {} is not open, so queued work was refused", _name);
+        LOG_ERROR("sql.sql", "Database pool {} is not open, so queued work was cancelled", _name);
     else if (set->GetAsyncConnectionCount() == 0)
-        LOG_ERROR("sql.sql", "Database pool {} has no async connections, so queued work was refused", _name);
+        LOG_ERROR("sql.sql", "Database pool {} has no async connections, so queued work was cancelled", _name);
+    else
+        LOG_ERROR("sql.sql", "Database pool {} is closing, so queued work was cancelled", _name);
     if (operation)
         operation->Cancel();
     return false;
@@ -226,7 +252,7 @@ QueryCallback DatabaseWorkerPoolBase::AsyncQueryStatement(std::unique_ptr<Prepar
     return QueryCallback(std::move(result));
 }
 
-std::future<void> DatabaseWorkerPoolBase::DelayQueryHolderBase(std::shared_ptr<SQLQueryHolderBase> holder)
+SQLQueryHolderCallback DatabaseWorkerPoolBase::DelayQueryHolderBase(std::shared_ptr<SQLQueryHolderBase> holder)
 {
     auto task = std::make_unique<QueryHolderTask>(holder);
     std::future<void> done = task->GetFuture();
@@ -237,12 +263,12 @@ std::future<void> DatabaseWorkerPoolBase::DelayQueryHolderBase(std::shared_ptr<S
     }
     else
         Enqueue(std::move(task));
-    return done;
+    return SQLQueryHolderCallback(std::move(holder), std::move(done));
 }
 
 bool DatabaseWorkerPoolBase::DirectExecute(std::string_view sql)
 {
-    SyncLease connection(GetCurrent());
+    SyncLease connection([this] { return GetCurrent(); });
     if (!connection)
     {
         LOG_ERROR("sql.sql", "Database pool {} is not open, so DirectExecute was refused", _name);
@@ -253,7 +279,7 @@ bool DatabaseWorkerPoolBase::DirectExecute(std::string_view sql)
 
 QueryResult DatabaseWorkerPoolBase::Query(std::string_view sql)
 {
-    SyncLease connection(GetCurrent());
+    SyncLease connection([this] { return GetCurrent(); });
     if (!connection)
     {
         LOG_ERROR("sql.sql", "Database pool {} is not open, so Query was refused", _name);
@@ -266,7 +292,7 @@ bool DatabaseWorkerPoolBase::DirectExecuteStatement(PreparedStatementBase const*
 {
     if (!CheckStatement(statement, true, "DirectExecute"))
         return false;
-    SyncLease connection(GetCurrent());
+    SyncLease connection([this] { return GetCurrent(); });
     if (!connection)
     {
         LOG_ERROR("sql.sql", "Database pool {} is not open, so statement {} was refused", _name, statement->GetIndex());
@@ -279,7 +305,7 @@ PreparedQueryResult DatabaseWorkerPoolBase::QueryStatement(PreparedStatementBase
 {
     if (!CheckStatement(statement, true, "Query"))
         return nullptr;
-    SyncLease connection(GetCurrent());
+    SyncLease connection([this] { return GetCurrent(); });
     if (!connection)
     {
         LOG_ERROR("sql.sql", "Database pool {} is not open, so statement {} was refused", _name, statement->GetIndex());
@@ -296,7 +322,7 @@ void DatabaseWorkerPoolBase::KeepAlive()
 
 std::string DatabaseWorkerPoolBase::Escape(std::string_view text)
 {
-    SyncLease connection(GetCurrent());
+    SyncLease connection([this] { return GetCurrent(); });
     if (!connection)
     {
         MySQLConnection offline(MySQLConnectionInfo{});
@@ -333,4 +359,136 @@ uint64 DatabaseWorkerPoolBase::GetConcurrentUseCount() const
 {
     std::shared_ptr<DatabaseConnectionSet> const set = GetCurrent();
     return set ? set->GetConcurrentUseCount() : 0;
+}
+
+void DatabaseWorkerPoolBase::WaitForRetired(std::chrono::milliseconds drainTimeout)
+{
+    std::vector<RetiredGeneration> retired;
+    {
+        std::lock_guard<std::mutex> lock(_currentMutex);
+        retired = std::move(_retired);
+        _retired.clear();
+    }
+    for (RetiredGeneration& generation : retired)
+    {
+        generation.Set->ShortenDrain(drainTimeout);
+        if (generation.Done.valid())
+            generation.Done.wait();
+    }
+}
+
+uint32 DatabaseWorkerPoolBase::Reconfigure(std::string_view infoString, uint32 asyncThreads, uint32 syncThreads)
+{
+    std::string error;
+    std::optional<MySQLConnectionInfo> info = MySQLConnectionInfo::Parse(infoString, &error);
+    if (!info)
+    {
+        LOG_ERROR("sql.driver", "Database pool {} keeps its connections: the new connection string is invalid: {}", _name, error);
+        return 2000;
+    }
+    uint32 const async = std::min(asyncThreads, MaxThreads);
+    uint32 const sync = std::clamp<uint32>(syncThreads, 1, MaxThreads);
+    if (async != asyncThreads || sync != syncThreads)
+        LOG_WARN("sql.driver", "Database pool {} uses {} async and {} sync connection(s) instead of {} and {} (sync 1-{}, async 0-{})", _name, async, sync, asyncThreads, syncThreads, MaxThreads, MaxThreads);
+
+    std::lock_guard<std::mutex> lifecycle(_lifecycleMutex);
+    if (!IsOpen())
+    {
+        _info = std::move(info);
+        _asyncThreads = async;
+        _syncThreads = sync;
+        return 0;
+    }
+
+    auto set = std::make_shared<DatabaseConnectionSet>(_name, _keepAliveMs);
+    if (uint32 const openError = set->Open(_factory, *info, _settings, async, sync))
+    {
+        set->Shutdown(std::chrono::milliseconds(0));
+        LOG_ERROR("sql.driver", "Database pool {} keeps its current connections: {} could not be opened (error {})", _name, info->ToLogString(), openError);
+        return openError;
+    }
+    set->Start();
+    std::shared_ptr<DatabaseConnectionSet> previous;
+    {
+        std::lock_guard<std::mutex> lock(_currentMutex);
+        previous = std::move(_current);
+        _current = set;
+        _statements = set->GetStatements();
+        std::erase_if(_retired, [](RetiredGeneration const& generation) { return generation.Done.wait_for(std::chrono::seconds(0)) == std::future_status::ready; });
+        if (previous)
+            _retired.push_back(RetiredGeneration{ previous, std::async(std::launch::async, [previous] { previous->Shutdown(DefaultDrainTimeout); }) });
+    }
+    _info = std::move(info);
+    _asyncThreads = async;
+    _syncThreads = sync;
+    LOG_INFO("sql.driver", "Reconfigured database connection pool {}: {} async, {} sync on {}", _name, set->GetAsyncConnectionCount(), set->GetSyncConnectionCount(), _info->ToLogString());
+    return 0;
+}
+
+bool DatabaseWorkerPoolBase::CheckTransaction(TransactionBase const* transaction, bool sync) const
+{
+    if (!transaction)
+    {
+        LOG_ERROR("sql.sql", "Database pool {} refused an empty transaction", _name);
+        return false;
+    }
+    if (!transaction->IsValid())
+    {
+        LOG_ERROR("sql.sql", "Database pool {} refused a transaction that holds an empty statement or was changed after submission", _name);
+        return false;
+    }
+    for (TransactionBase::Entry const& entry : transaction->GetEntries())
+        if (std::holds_alternative<std::unique_ptr<PreparedStatementBase>>(entry) && !CheckStatement(std::get<std::unique_ptr<PreparedStatementBase>>(entry).get(), sync, "a transaction"))
+            return false;
+    return true;
+}
+
+void DatabaseWorkerPoolBase::CommitTransactionBase(std::shared_ptr<TransactionBase> transaction)
+{
+    if (!LockTransaction(transaction.get()) || !CheckTransaction(transaction.get(), false))
+        return;
+    Enqueue(std::make_unique<TransactionTask>(std::move(transaction)));
+}
+
+TransactionCallback DatabaseWorkerPoolBase::AsyncCommitTransactionBase(std::shared_ptr<TransactionBase> transaction)
+{
+    bool const valid = LockTransaction(transaction.get()) && CheckTransaction(transaction.get(), false);
+    auto task = std::make_unique<TransactionTask>(std::move(transaction));
+    std::future<bool> result = task->GetFuture();
+    if (valid)
+        Enqueue(std::move(task));
+    else
+        task->Cancel();
+    return TransactionCallback(std::move(result));
+}
+
+bool DatabaseWorkerPoolBase::DirectCommitTransactionBase(std::shared_ptr<TransactionBase> const& transaction)
+{
+    if (!LockTransaction(transaction.get()) || !CheckTransaction(transaction.get(), true))
+        return false;
+    SyncLease connection([this] { return GetCurrent(); });
+    if (!connection)
+    {
+        LOG_ERROR("sql.sql", "Database pool {} is not open, so a transaction was refused", _name);
+        return false;
+    }
+    try
+    {
+        return TransactionTask::Commit(*connection.operator->(), *transaction);
+    }
+    catch (std::exception const& exception)
+    {
+        LOG_ERROR("sql.sql", "A transaction on database pool {} threw: {}", _name, exception.what());
+        return false;
+    }
+}
+
+bool DatabaseWorkerPoolBase::LockTransaction(TransactionBase* transaction) const
+{
+    if (transaction && !transaction->Lock())
+    {
+        LOG_ERROR("sql.sql", "Database pool {} refused a transaction that was already submitted", _name);
+        return false;
+    }
+    return true;
 }

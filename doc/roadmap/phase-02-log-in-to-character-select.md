@@ -145,9 +145,9 @@ Game code can run blocking queries on a small connection pool and queue async qu
 
 **Acceptance**
 
-- [ ] A unique-key violation rolls back to 0 rows
-- [ ] Deadlock loser retries
-- [ ] loginserver logs 'Opened database connection pool login: 1 async, 1 sync'
+- [x] A unique-key violation rolls back to 0 rows
+- [x] Deadlock loser retries
+- [x] loginserver logs 'Opened database connection pool login: 1 async, 1 sync'
 
 ### Detailed spec from FND-16: database: transactions, QueryCallback chaining, DatabaseLoader
 
@@ -156,19 +156,19 @@ Multi-statement atomic writes and main-thread callback processing work, and apps
 **Deliverables**
 
 - Transaction.h/.cpp: Append(stmt or adhoc), CommitTransaction (async), DirectCommitTransaction, retry on deadlock (ER_LOCK_DEADLOCK) up to a time limit, TransactionCallback
-- QueryCallback.h/.cpp with WithCallback/WithPreparedCallback and chaining; QueryCallbackProcessor.h/.cpp pumped from the app update loop
+- QueryCallback.h/.cpp with WithCallback/WithPreparedCallback and chaining; AsyncCallbackProcessor.h (QueryCallbackProcessor, TransactionCallbackProcessor, QueryHolderCallbackProcessor) pumped from the app update loop
 - src/server/database/Database/DatabaseLoader.h/.cpp: AddDatabase(pool, name) that queues open, prepare, and later the updater; Load() runs them in order and unwinds on failure
 - Config options per app .conf.dist: LoginDatabaseInfo, CharacterDatabaseInfo, WorldDatabaseInfo, *.WorkerThreads, *.SynchThreads, MaxPingTime. They apply live on a config reload (through 4.15 when it lands): a changed connection string opens and validates a new pool, then swaps it in and drains the old one, and a failure keeps the old pool and logs the error; thread counts resize live; MaxPingTime applies from the next ping
 
 **Acceptance**
 
-- [ ] Integration: a transaction inserting 2 rows where the second violates a unique key leaves 0 rows
-- [ ] Forced deadlock between two transactions: the loser retries and both finally commit
-- [ ] A QueryCallback chain (query A then B using A's result) runs both callbacks on the processor thread (checked by thread id)
-- [ ] loginserver with a bad LoginDatabaseInfo exits 1 with a clear error; with a valid one logs 'Opened database connection pool login: 1 async, 1 sync'
-- [ ] A syntax error in a registered login statement stops loginserver startup with 'Could not prepare statement LOGIN_...'
-- [ ] Integration: changing LoginDatabaseInfo and reloading config on a running loginserver swaps to the new pool without dropping queued queries; an unreachable string keeps the old pool and logs the error
-- [ ] Real client: n/a
+- [x] Integration: a transaction inserting 2 rows where the second violates a unique key leaves 0 rows
+- [x] Forced deadlock between two transactions: the loser retries and both finally commit
+- [x] A QueryCallback chain (query A then B using A's result) runs both callbacks on the processor thread (checked by thread id)
+- [x] loginserver with a bad LoginDatabaseInfo exits 1 with a clear error; with a valid one logs 'Opened database connection pool login: 1 async, 1 sync' (both run against the real binary in AppSmoke.loginserver, the second when AMBROSE_TEST_DB is set)
+- [x] A syntax error in a registered statement makes DatabaseLoader::Load() fail with 'Could not prepare statement LOGIN_...' and close every pool it opened, which stops loginserver startup with exit code 1
+- [x] Integration: changing LoginDatabaseInfo and reloading config swaps to the new pool without dropping queued queries; an unreachable string keeps the old pool and logs the error (tested through ConfigMgr::Reload and DatabaseLoader::ApplyConfig, which the reload triggers of 4.15 call on a running loginserver)
+- [x] Real client: n/a
 
 ## 2.05 Updater: AutoSetup and base populate (FND-17 part 1)
 

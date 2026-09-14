@@ -99,7 +99,12 @@ void DatabaseConnectionSet::Shutdown(std::chrono::milliseconds drainTimeout)
 
     _queue.Close();
     auto const deadline = std::chrono::steady_clock::now() + drainTimeout;
-    while (std::chrono::steady_clock::now() < deadline && std::any_of(_workers.begin(), _workers.end(), [](auto const& worker) { return !worker->IsFinished(); }))
+    auto withinDeadline = [this, deadline]
+    {
+        auto const now = std::chrono::steady_clock::now();
+        return now < deadline && now.time_since_epoch().count() < _drainLimitNs.load(std::memory_order_relaxed);
+    };
+    while (withinDeadline() && std::any_of(_workers.begin(), _workers.end(), [](auto const& worker) { return !worker->IsFinished(); }))
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     if (std::any_of(_workers.begin(), _workers.end(), [](auto const& worker) { return !worker->IsFinished(); }) || _workers.empty())
         _queue.Cancel();
@@ -132,6 +137,15 @@ void DatabaseConnectionSet::Shutdown(std::chrono::milliseconds drainTimeout)
     for (auto* list : { &_syncConnections, &_asyncConnections })
         for (std::unique_ptr<MySQLConnection>& connection : *list)
             connection->Close();
+}
+
+void DatabaseConnectionSet::ShortenDrain(std::chrono::milliseconds remaining) noexcept
+{
+    int64 const limit = std::chrono::duration_cast<std::chrono::steady_clock::duration>((std::chrono::steady_clock::now() + remaining).time_since_epoch()).count();
+    int64 current = _drainLimitNs.load(std::memory_order_relaxed);
+    while (limit < current && !_drainLimitNs.compare_exchange_weak(current, limit, std::memory_order_relaxed))
+    {
+    }
 }
 
 bool DatabaseConnectionSet::Enqueue(std::unique_ptr<SQLOperation>& operation)

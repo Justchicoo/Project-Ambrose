@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a built server executable to check that --version exits 0, a missing config names its path and exits 1, and the shipped .conf.dist starts it.
+# Runs a built server executable to check that --version exits 0, a missing config names its path and exits 1, the shipped .conf.dist starts it, and a bad database string stops the login server.
 if(NOT APP OR NOT NAME OR NOT WORKDIR)
     message(FATAL_ERROR "APP, NAME and WORKDIR must be set")
 endif()
@@ -30,8 +30,28 @@ set(portOption "${NAME}")
 string(REPLACE "gameserver" "WorldServerPort" portOption "${portOption}")
 string(REPLACE "loginserver" "LoginServerPort" portOption "${portOption}")
 string(REPLACE "patchserver" "PatchServerPort" portOption "${portOption}")
-execute_process(COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" --set BindIP=127.0.0.1 --set ${portOption}=0 --set ClientDir= --set Appender.Server=1,3,0 --set Appender.Errors=1,3,0 --set Appender.Stream=1,3,0 --set Appender.Console=1,3,0
+set(quietOptions --set BindIP=127.0.0.1 --set ${portOption}=0 --set ClientDir= --set Appender.Server=1,3,0 --set Appender.Errors=1,3,0 --set Appender.Stream=1,3,0 --set Appender.Console=1,3,0)
+execute_process(COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" ${quietOptions} --set LoginDatabaseInfo= --set CharacterDatabaseInfo= --set WorldDatabaseInfo=
     WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE distResult OUTPUT_VARIABLE distOutput ERROR_VARIABLE distError TIMEOUT 5)
 if(NOT distOutput MATCHES "${NAME} ready")
     message(FATAL_ERROR "${NAME} with its shipped ${NAME}.conf.dist did not report ready (${distResult}): ${distOutput}${distError}")
+endif()
+
+if(NAME STREQUAL "loginserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AMBROSE_TEST_DB}" STREQUAL "")
+    execute_process(COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=$ENV{AMBROSE_TEST_DB}"
+        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE databaseResult OUTPUT_VARIABLE databaseOutput ERROR_VARIABLE databaseError TIMEOUT 10)
+    if(NOT databaseOutput MATCHES "Opened database connection pool login: 1 async, 1 sync" OR NOT databaseOutput MATCHES "loginserver ready")
+        message(FATAL_ERROR "loginserver with AMBROSE_TEST_DB did not open the login pool and report ready (${databaseResult}): ${databaseOutput}${databaseError}")
+    endif()
+endif()
+
+if(NAME STREQUAL "loginserver")
+    execute_process(COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=not a connection string"
+        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE badResult OUTPUT_VARIABLE badOutput ERROR_VARIABLE badError TIMEOUT 30)
+    if(NOT badResult EQUAL 1)
+        message(FATAL_ERROR "loginserver with a bad LoginDatabaseInfo exited ${badResult}: ${badOutput}${badError}")
+    endif()
+    if(NOT badOutput MATCHES "LoginDatabaseInfo is not a valid connection string")
+        message(FATAL_ERROR "loginserver with a bad LoginDatabaseInfo did not explain why: ${badOutput}${badError}")
+    endif()
 endif()

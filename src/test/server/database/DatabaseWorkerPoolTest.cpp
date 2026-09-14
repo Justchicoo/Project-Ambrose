@@ -214,16 +214,20 @@ TEST(DatabaseWorkerPoolTest, QueryHolderRunsEverySlotOnOneConnection)
     EXPECT_TRUE(holder->SetPreparedQuery(2, pool.GetPreparedStatement(PoolTestConnection::POOL_SEL_CONNECTION_ID)));
     EXPECT_TRUE(holder->SetPreparedQuery(3, pool.GetPreparedStatement(PoolTestConnection::POOL_SEL_CONNECTION_ID)));
     EXPECT_FALSE(holder->SetPreparedQuery(4, pool.GetPreparedStatement(PoolTestConnection::POOL_SEL_ECHO)));
-    std::future<void> done = pool.DelayQueryHolder(holder);
-    ASSERT_EQ(done.wait_for(std::chrono::seconds(30)), std::future_status::ready);
+    SQLQueryHolderCallback done = pool.DelayQueryHolder(holder);
+    auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    bool finished = false;
+    while (!(finished = done.InvokeIfReady()) && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    ASSERT_TRUE(finished);
     for (std::size_t slot = 0; slot < 4; ++slot)
         ASSERT_TRUE(holder->GetPreparedResult(slot)) << slot;
     EXPECT_EQ((*holder->GetPreparedResult(0))[0].Get<uint64>(), 40u);
     EXPECT_EQ((*holder->GetPreparedResult(1))[0].Get<uint64>(), 41u);
     EXPECT_EQ((*holder->GetPreparedResult(2))[0].Get<uint64>(), (*holder->GetPreparedResult(3))[0].Get<uint64>());
 
-    std::future<void> empty = pool.DelayQueryHolder(nullptr);
-    EXPECT_EQ(empty.wait_for(std::chrono::seconds(0)), std::future_status::ready);
+    SQLQueryHolderCallback empty = pool.DelayQueryHolder(nullptr);
+    EXPECT_TRUE(empty.IsReady());
 }
 
 TEST(DatabaseWorkerPoolTest, InvalidStatementsAreRefusedAtTheCallSite)

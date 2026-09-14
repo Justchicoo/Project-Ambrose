@@ -22,7 +22,7 @@ target_link_libraries(unit_tests
         GTest::gmock)
 
 ambrose_copy_mariadb_plugins(unit_tests)
-gtest_discover_tests(unit_tests DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(unit_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT 120)
 
 add_subdirectory(compile)
 add_subdirectory(client)

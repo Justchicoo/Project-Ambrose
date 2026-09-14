@@ -27,7 +27,7 @@ struct MessageField
 };
 
 template<typename Message, typename Member>
-constexpr MessageField<Message, Member> Field(std::string_view name, Member Message::* pointer) noexcept
+constexpr MessageField<Message, Member> DmlField(std::string_view name, Member Message::* pointer) noexcept
 {
     return MessageField<Message, Member>{ name, pointer };
 }

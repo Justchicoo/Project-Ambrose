@@ -11,6 +11,7 @@
 #include "SQLOperation.h"
 
 #include <cstddef>
+#include <functional>
 #include <future>
 #include <memory>
 #include <vector>
@@ -54,6 +55,25 @@ public:
 private:
     std::shared_ptr<SQLQueryHolderBase> _holder;
     std::promise<void> _done;
+};
+
+class SQLQueryHolderCallback
+{
+public:
+    SQLQueryHolderCallback(std::shared_ptr<SQLQueryHolderBase> holder, std::future<void>&& done);
+
+    SQLQueryHolderCallback(SQLQueryHolderCallback&&) noexcept = default;
+    SQLQueryHolderCallback& operator=(SQLQueryHolderCallback&&) noexcept = default;
+
+    SQLQueryHolderCallback&& AfterComplete(std::function<void(SQLQueryHolderBase const&)>&& callback);
+    bool IsReady() const;
+    bool InvokeIfReady();
+
+private:
+    std::shared_ptr<SQLQueryHolderBase> _holder;
+    std::future<void> _done;
+    std::function<void(SQLQueryHolderBase const&)> _callback;
+    bool _finished = false;
 };
 
 template<typename ConnectionType>

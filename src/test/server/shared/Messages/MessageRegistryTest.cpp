@@ -52,7 +52,7 @@ namespace
 
         static constexpr auto Fields()
         {
-            return std::tuple{ Field("ObjectID", &JoinMessage::ObjectId), Field("Zone", &JoinMessage::Zone), Field("Title", &JoinMessage::Title), Field("Retry", &JoinMessage::Retry) };
+            return std::tuple{ DmlField("ObjectID", &JoinMessage::ObjectId), DmlField("Zone", &JoinMessage::Zone), DmlField("Title", &JoinMessage::Title), DmlField("Retry", &JoinMessage::Retry) };
         }
 
         bool operator==(JoinMessage const&) const = default;
@@ -77,9 +77,9 @@ namespace
 
         static constexpr auto Fields()
         {
-            return std::tuple{ Field("Count", &FullJoinMessage::Count), Field("ObjectID", &FullJoinMessage::ObjectId), Field("Zone", &FullJoinMessage::Zone), Field("Slot", &FullJoinMessage::Slot),
-                Field("Retry", &FullJoinMessage::Retry), Field("Title", &FullJoinMessage::Title), Field("Speed", &FullJoinMessage::Speed), Field("Delta", &FullJoinMessage::Delta),
-                Field("Port", &FullJoinMessage::Port), Field("Offset", &FullJoinMessage::Offset), Field("Scale", &FullJoinMessage::Scale) };
+            return std::tuple{ DmlField("Count", &FullJoinMessage::Count), DmlField("ObjectID", &FullJoinMessage::ObjectId), DmlField("Zone", &FullJoinMessage::Zone), DmlField("Slot", &FullJoinMessage::Slot),
+                DmlField("Retry", &FullJoinMessage::Retry), DmlField("Title", &FullJoinMessage::Title), DmlField("Speed", &FullJoinMessage::Speed), DmlField("Delta", &FullJoinMessage::Delta),
+                DmlField("Port", &FullJoinMessage::Port), DmlField("Offset", &FullJoinMessage::Offset), DmlField("Scale", &FullJoinMessage::Scale) };
         }
 
         bool operator==(FullJoinMessage const&) const = default;
@@ -95,7 +95,7 @@ namespace
 
         static constexpr auto Fields()
         {
-            return std::tuple{ Field("Title", &TitleOnlyMessage::Title), Field("Count", &TitleOnlyMessage::Count) };
+            return std::tuple{ DmlField("Title", &TitleOnlyMessage::Title), DmlField("Count", &TitleOnlyMessage::Count) };
         }
     };
 
@@ -114,7 +114,7 @@ namespace
 
         std::string Version;
 
-        static constexpr auto Fields() { return std::tuple{ Field("Version", &HelloMessage::Version) }; }
+        static constexpr auto Fields() { return std::tuple{ DmlField("Version", &HelloMessage::Version) }; }
     };
 
     struct MissingMessage
@@ -140,7 +140,7 @@ namespace
 
         std::string Zone;
 
-        static constexpr auto Fields() { return std::tuple{ Field("Zoen", &MisspelledFieldMessage::Zone) }; }
+        static constexpr auto Fields() { return std::tuple{ DmlField("Zoen", &MisspelledFieldMessage::Zone) }; }
     };
 
     struct WrongTypeMessage
@@ -151,7 +151,7 @@ namespace
         uint32 Slot = 0;
         int32 Count = 0;
 
-        static constexpr auto Fields() { return std::tuple{ Field("Slot", &WrongTypeMessage::Slot), Field("Count", &WrongTypeMessage::Count) }; }
+        static constexpr auto Fields() { return std::tuple{ DmlField("Slot", &WrongTypeMessage::Slot), DmlField("Count", &WrongTypeMessage::Count) }; }
     };
 
     struct TwiceMessage
@@ -162,7 +162,7 @@ namespace
         std::string First;
         std::string Second;
 
-        static constexpr auto Fields() { return std::tuple{ Field("Zone", &TwiceMessage::First), Field("Zone", &TwiceMessage::Second) }; }
+        static constexpr auto Fields() { return std::tuple{ DmlField("Zone", &TwiceMessage::First), DmlField("Zone", &TwiceMessage::Second) }; }
     };
 
     struct AfterTitleMessage
@@ -173,7 +173,7 @@ namespace
         float Speed = 0.0f;
         uint32 Count = 0;
 
-        static constexpr auto Fields() { return std::tuple{ Field("Speed", &AfterTitleMessage::Speed), Field("Count", &AfterTitleMessage::Count) }; }
+        static constexpr auto Fields() { return std::tuple{ DmlField("Speed", &AfterTitleMessage::Speed), DmlField("Count", &AfterTitleMessage::Count) }; }
     };
 
     struct JoinHeader
@@ -188,7 +188,7 @@ namespace
 
         std::string Zone;
 
-        static constexpr auto Fields() { return std::tuple{ Field("ObjectID", &InheritedJoinMessage::ObjectId), Field("Zone", &InheritedJoinMessage::Zone) }; }
+        static constexpr auto Fields() { return std::tuple{ DmlField("ObjectID", &InheritedJoinMessage::ObjectId), DmlField("Zone", &InheritedJoinMessage::Zone) }; }
     };
 
     struct SpelledIntegersMessage
@@ -204,8 +204,8 @@ namespace
 
         static constexpr auto Fields()
         {
-            return std::tuple{ Field("ObjectID", &SpelledIntegersMessage::ObjectId), Field("Slot", &SpelledIntegersMessage::Slot), Field("Port", &SpelledIntegersMessage::Port),
-                Field("Offset", &SpelledIntegersMessage::Offset), Field("Delta", &SpelledIntegersMessage::Delta) };
+            return std::tuple{ DmlField("ObjectID", &SpelledIntegersMessage::ObjectId), DmlField("Slot", &SpelledIntegersMessage::Slot), DmlField("Port", &SpelledIntegersMessage::Port),
+                DmlField("Offset", &SpelledIntegersMessage::Offset), DmlField("Delta", &SpelledIntegersMessage::Delta) };
         }
     };
 

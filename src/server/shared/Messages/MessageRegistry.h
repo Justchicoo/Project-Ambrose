@@ -178,7 +178,7 @@ template<DeclaredMessage T>
 bool MessageCatalog::Resolve(MessageCatalog const& catalog, MessageBinding& binding, std::vector<std::string>& errors)
 {
     using Fields = std::remove_cvref_t<decltype(T::Fields())>;
-    static_assert(IsMessageFieldTuple<T, Fields>::value, "Fields() must return a std::tuple of Field() entries whose members belong to the message or its bases and are non-const DML-compatible types");
+    static_assert(IsMessageFieldTuple<T, Fields>::value, "Fields() must return a std::tuple of DmlField() entries whose members belong to the message or its bases and are non-const DML-compatible types");
 
     uint8 const serviceId = static_cast<uint8>(T::ServiceId);
     std::string_view const tag = T::Tag;

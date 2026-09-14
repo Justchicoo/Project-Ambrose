@@ -11,6 +11,16 @@ The Applies column says when a changed value takes effect after a configuration 
 | `BindIP` | string | `0.0.0.0` | `AMBROSE_BIND_IP` | Rebinds live like the port option | Local address the listener binds; 0.0.0.0 listens on every IPv4 address |
 | `WorldServerPort` | uint16 | `12333` | `AMBROSE_WORLD_SERVER_PORT` | Rebinds live; the new listener opens before the old one closes, and a failed bind keeps the old one | TCP port the realm listens on for game clients |
 | `Patch.Enabled` | bool | `0` | `AMBROSE_PATCH_ENABLED` | Live, from the next zone transfer once milestone 16.07 consumes it | 0 for development with the client launched with -P 0 (doc/PATCHING.md); 1 lets the realm send download-package messages |
+| `LoginDatabaseInfo` | string | `127.0.0.1;3306;ambrose;ambrose;ambrose_login` | `AMBROSE_LOGIN_DATABASE_INFO` | Read when milestone 2.08 opens the realm's pools; afterwards live like the login server's `LoginDatabaseInfo` | Login database, for accounts and realm state, in the connection string form described in doc/config/loginserver.md |
+| `LoginDatabase.WorkerThreads` | uint32 | `1` | `AMBROSE_LOGIN_DATABASE_WORKER_THREADS` | Like `LoginDatabaseInfo` | Async connections, each with its own worker thread (0-64) |
+| `LoginDatabase.SynchThreads` | uint32 | `1` | `AMBROSE_LOGIN_DATABASE_SYNCH_THREADS` | Like `LoginDatabaseInfo` | Connections for blocking queries (1-64) |
+| `CharacterDatabaseInfo` | string | `127.0.0.1;3306;ambrose;ambrose;ambrose_characters` | `AMBROSE_CHARACTER_DATABASE_INFO` | Read when milestone 2.08 opens the realm's pools; afterwards live like the login server's `LoginDatabaseInfo` | Characters database, in the connection string form described in doc/config/loginserver.md |
+| `CharacterDatabase.WorkerThreads` | uint32 | `1` | `AMBROSE_CHARACTER_DATABASE_WORKER_THREADS` | Like `CharacterDatabaseInfo` | Async connections, each with its own worker thread (0-64) |
+| `CharacterDatabase.SynchThreads` | uint32 | `1` | `AMBROSE_CHARACTER_DATABASE_SYNCH_THREADS` | Like `CharacterDatabaseInfo` | Connections for blocking queries (1-64) |
+| `WorldDatabaseInfo` | string | `127.0.0.1;3306;ambrose;ambrose;ambrose_world` | `AMBROSE_WORLD_DATABASE_INFO` | Read when milestone 2.08 opens the realm's pools; afterwards live like the login server's `LoginDatabaseInfo` | World database of templates, spawns and quests, in the connection string form described in doc/config/loginserver.md |
+| `WorldDatabase.WorkerThreads` | uint32 | `1` | `AMBROSE_WORLD_DATABASE_WORKER_THREADS` | Like `WorldDatabaseInfo` | Async connections, each with its own worker thread (0-64) |
+| `WorldDatabase.SynchThreads` | uint32 | `1` | `AMBROSE_WORLD_DATABASE_SYNCH_THREADS` | Like `WorldDatabaseInfo` | Connections for blocking queries (1-64) |
+| `MaxPingTime` | uint32 | `30` | `AMBROSE_MAX_PING_TIME` | Like `LoginDatabaseInfo` | Minutes an idle database connection waits before it pings the server to stay open |
 | `Network.Threads` | uint32 | `1` | `AMBROSE_NETWORK_THREADS` | Live; new threads start at once, and removed threads stop taking sockets and exit when their last connection closes | Network threads that read and write sockets (1-256) |
 | `Network.MaxFrameSize` | uint64 | `4194304` | `AMBROSE_NETWORK_MAX_FRAME_SIZE` | Next connection | Largest frame in bytes a client may send, checked before the frame is buffered (17 to 1 GiB) |
 | `Network.MaxDmlMessages` | uint32 | `1024` | `AMBROSE_NETWORK_MAX_DML_MESSAGES` | Next connection | Most DML messages one frame may chain (at least 1) |
@@ -31,4 +41,5 @@ The Applies column says when a changed value takes effect after a configuration 
 | `Logger.root` | logger | `3,Console Server Errors Stream` | `AMBROSE_LOGGER_ROOT` | Live | Required fallback for every category |
 | `Logger.server` | logger | `3,Console Server Errors Stream` | `AMBROSE_LOGGER_SERVER` | Live | App lifecycle, config and logging messages |
 | `Logger.sql` | logger | `4,Console Server Errors Stream` | `AMBROSE_LOGGER_SQL` | Live | Database messages, warnings and worse |
+| `Logger.sql.driver` | logger | `3,Console Server Errors Stream` | `AMBROSE_LOGGER_SQL_DRIVER` | Live | Database pools opening, closing, reconnecting and reconfiguring at Info |
 | `Logger.network` | logger | `3,Console Server Errors Stream` | `AMBROSE_LOGGER_NETWORK` | Live | Sockets and message traffic |

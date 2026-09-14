@@ -67,6 +67,15 @@ struct MySQLConnectionSettings
     ConnectionFlags Flags = ConnectionFlags::Both;
 };
 
+struct TransactionResult
+{
+    uint32 Code = 0;
+    bool CommitSent = false;
+    bool RolledBack = true;
+};
+
+class TransactionBase;
+
 struct PreparedStatementInfo
 {
     uint32 Index = 0;
@@ -97,6 +106,7 @@ public:
     bool Execute(PreparedStatementBase const& statement);
     PreparedQueryResult Query(PreparedStatementBase const& statement);
     bool IsStatementPrepared(uint32 index) const noexcept;
+    TransactionResult ExecuteTransaction(TransactionBase const& transaction);
     std::size_t GetPreparedStatementCount() const noexcept;
     std::vector<PreparedStatementInfo> GetPreparedStatementInfos() const;
     uint64 GetConcurrentUseCount() const noexcept { return _concurrentUses.load(std::memory_order_relaxed); }
@@ -117,12 +127,14 @@ public:
     static bool IsConnectionLost(uint32 errorCode, bool mariaDB) noexcept;
     static bool IsSafeToRetry(uint32 errorCode, bool mariaDB) noexcept;
     static bool IsPermanentConnectError(uint32 errorCode) noexcept;
+    static bool IsTransientLockError(uint32 errorCode) noexcept;
 
 protected:
     virtual void DoPrepareStatements();
     void PrepareStatement(uint32 index, std::string_view name, std::string_view sql, ConnectionFlags flags);
     st_mysql* GetHandle() const noexcept { return _mysql; }
     bool RunQuery(std::string_view context, std::string_view sql, st_mysql_res** result, bool readOnly);
+    bool AbandonTransaction();
     bool Reconnect();
     void ClearError() noexcept;
 

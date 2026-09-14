@@ -36,8 +36,8 @@ namespace
 
         static constexpr auto Fields()
         {
-            return std::tuple{ Field("GameObjectID", &AttachMessage::GameObjectId), Field("LoginKey", &AttachMessage::LoginKey), Field("ZoneName", &AttachMessage::ZoneName),
-                Field("Slot", &AttachMessage::Slot), Field("Reattach", &AttachMessage::Reattach), Field("PlatformGamerTag", &AttachMessage::PlatformGamerTag) };
+            return std::tuple{ DmlField("GameObjectID", &AttachMessage::GameObjectId), DmlField("LoginKey", &AttachMessage::LoginKey), DmlField("ZoneName", &AttachMessage::ZoneName),
+                DmlField("Slot", &AttachMessage::Slot), DmlField("Reattach", &AttachMessage::Reattach), DmlField("PlatformGamerTag", &AttachMessage::PlatformGamerTag) };
         }
 
         bool operator==(AttachMessage const&) const = default;
@@ -56,8 +56,8 @@ namespace
 
         static constexpr auto Fields()
         {
-            return std::tuple{ Field("Rec1", &UserAuthenV3Message::Rec1), Field("Version", &UserAuthenV3Message::Version), Field("MachineID", &UserAuthenV3Message::MachineId),
-                Field("IsSteamPatcher", &UserAuthenV3Message::IsSteamPatcher), Field("ConsoleType", &UserAuthenV3Message::ConsoleType) };
+            return std::tuple{ DmlField("Rec1", &UserAuthenV3Message::Rec1), DmlField("Version", &UserAuthenV3Message::Version), DmlField("MachineID", &UserAuthenV3Message::MachineId),
+                DmlField("IsSteamPatcher", &UserAuthenV3Message::IsSteamPatcher), DmlField("ConsoleType", &UserAuthenV3Message::ConsoleType) };
         }
 
         bool operator==(UserAuthenV3Message const&) const = default;
@@ -70,7 +70,7 @@ namespace
 
         uint64 CharacterId = 0;
 
-        static constexpr auto Fields() { return std::tuple{ Field("CharacterID", &CrownBalanceMessage::CharacterId) }; }
+        static constexpr auto Fields() { return std::tuple{ DmlField("CharacterID", &CrownBalanceMessage::CharacterId) }; }
     };
 
     class MessageRegistryClientTest : public testing::Test

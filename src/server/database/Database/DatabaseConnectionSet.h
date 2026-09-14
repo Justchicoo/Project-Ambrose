@@ -10,6 +10,7 @@
 #include "MySQLConnection.h"
 
 #include <atomic>
+#include <cstdint>
 #include <chrono>
 #include <condition_variable>
 #include <functional>
@@ -48,6 +49,7 @@ public:
     uint32 Open(ConnectionFactory const& factory, MySQLConnectionInfo const& info, MySQLConnectionSettings const& settings, uint32 asyncThreads, uint32 syncThreads);
     void Start();
     void Shutdown(std::chrono::milliseconds drainTimeout);
+    void ShortenDrain(std::chrono::milliseconds remaining) noexcept;
 
     bool Enqueue(std::unique_ptr<SQLOperation>& operation);
     MySQLConnection* AcquireSync();
@@ -89,6 +91,7 @@ private:
 
     std::atomic<bool> _shutDown{ false };
     std::atomic<bool> _accepting{ false };
+    std::atomic<int64> _drainLimitNs{ INT64_MAX };
 };
 
 #endif

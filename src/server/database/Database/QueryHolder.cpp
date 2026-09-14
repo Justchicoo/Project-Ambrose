@@ -1,12 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * Stores statements by slot, runs every set slot in order on one connection, hands back each slot's result, and settles the queued holder task.
+ * Stores statements by slot, runs every set slot in order on one connection, hands back each slot's result, settles the queued holder task, and runs its completion callback when polled.
  */
 
 #include "QueryHolder.h"
 #include "Log.h"
 #include "MySQLConnection.h"
 #include "QueryResult.h"
+
+#include <chrono>
 
 SQLQueryHolderBase::SQLQueryHolderBase(std::size_t slots) : _slots(slots)
 {
@@ -60,4 +62,39 @@ void QueryHolderTask::Execute(MySQLConnection& connection)
 void QueryHolderTask::Cancel()
 {
     _done.set_value();
+}
+
+SQLQueryHolderCallback::SQLQueryHolderCallback(std::shared_ptr<SQLQueryHolderBase> holder, std::future<void>&& done) : _holder(std::move(holder)), _done(std::move(done))
+{
+}
+
+SQLQueryHolderCallback&& SQLQueryHolderCallback::AfterComplete(std::function<void(SQLQueryHolderBase const&)>&& callback)
+{
+    _callback = std::move(callback);
+    return std::move(*this);
+}
+
+bool SQLQueryHolderCallback::IsReady() const
+{
+    return _done.valid() && _done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+}
+
+bool SQLQueryHolderCallback::InvokeIfReady()
+{
+    if (_finished)
+        return true;
+    if (!IsReady())
+        return false;
+    _finished = true;
+    try
+    {
+        _done.get();
+    }
+    catch (std::exception const& exception)
+    {
+        LOG_ERROR("sql.sql", "An async query holder failed: {}", exception.what());
+    }
+    if (_callback && _holder)
+        _callback(*_holder);
+    return true;
 }

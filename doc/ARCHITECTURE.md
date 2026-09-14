@@ -160,6 +160,10 @@ Settled on 2026-09-14. A session sends SessionOffer before any other work and cl
 
 Work that needs the maintainer's own client, such as the real-client checks of 1.21 and 1.22, is listed in doc/ROADMAP.md under Where we are. Milestones that do not depend on those checks go ahead while they wait.
 
+### Database pools
+
+Settled on 2026-09-14. A pool serves every call from its current connection generation: sync connections leased one caller at a time, async workers on a shared queue, a keepalive pinger, and the statement table. A new generation opens, checks versions and prepares every statement before it is published, so opening, closing and live reconfiguration never block callers, and a failed reconfiguration keeps the current generation. A retired generation drains its queue for up to 30 seconds, then cancels what is left and settles every callback. A statement is retried after a reconnect only when it cannot have run: never inside a transaction, and a lost connection during a write is reported instead of retried. Transactions retry deadlocks, lock wait timeouts and connections lost before COMMIT for up to 60 seconds. Callbacks for async work run on whichever thread polls them, normally the app's update loop through an AsyncCallbackProcessor.
+
 ### Database updates
 
 Update files run through the connector with multi-statement support, so `DELIMITER` is not allowed in them. The `updates` table records each file's SHA-256 hash.

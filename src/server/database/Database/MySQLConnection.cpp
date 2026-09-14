@@ -11,6 +11,7 @@
 #include "PreparedStatement.h"
 #include "QueryResult.h"
 #include "StringUtil.h"
+#include "Transaction.h"
 
 #include <errmsg.h>
 #include <mysql.h>
@@ -377,7 +378,10 @@ bool MySQLConnection::RunQuery(std::string_view context, std::string_view sql, s
         SetError(code, text);
         if (!IsConnectionLost(code, _mariaDB))
         {
-            LOG_ERROR("sql.sql", "{} on {} failed: [{}] {} in: {}", context, _info.ToLogString(), code, text, sql);
+            if (IsTransientLockError(code))
+                LOG_WARN("sql.sql", "{} on {} failed: [{}] {} in: {}", context, _info.ToLogString(), code, text, sql);
+            else
+                LOG_ERROR("sql.sql", "{} on {} failed: [{}] {} in: {}", context, _info.ToLogString(), code, text, sql);
             return false;
         }
 
@@ -675,7 +679,10 @@ bool MySQLConnection::RunStatement(PreparedStatementBase const& values, bool rea
         SetError(code, text);
         if (!IsConnectionLost(code, _mariaDB))
         {
-            LOG_ERROR("sql.sql", "Statement {} on {} failed: [{}] {} with values ({})", prepared.GetName(), _info.ToLogString(), code, text, values.DescribeValues());
+            if (IsTransientLockError(code))
+                LOG_WARN("sql.sql", "Statement {} on {} failed: [{}] {} with values ({})", prepared.GetName(), _info.ToLogString(), code, text, values.DescribeValues());
+            else
+                LOG_ERROR("sql.sql", "Statement {} on {} failed: [{}] {} with values ({})", prepared.GetName(), _info.ToLogString(), code, text, values.DescribeValues());
             return false;
         }
         std::string const name = prepared.GetName();
@@ -697,4 +704,59 @@ std::vector<PreparedStatementInfo> MySQLConnection::GetPreparedStatementInfos() 
         if (statement)
             infos.push_back(PreparedStatementInfo{ statement->GetIndex(), statement->GetName(), statement->GetParameterCount() });
     return infos;
+}
+
+bool MySQLConnection::IsTransientLockError(uint32 errorCode) noexcept
+{
+    return errorCode == 1205 || errorCode == 1213;
+}
+
+bool MySQLConnection::AbandonTransaction()
+{
+    if (!_mysql)
+        return true;
+    if (RunQuery("Rollback", "ROLLBACK", nullptr, false))
+        return true;
+    if (_mysql)
+    {
+        LOG_ERROR("sql.sql", "ROLLBACK failed on {}; closing the connection so the server discards the transaction", _info.ToLogString());
+        CloseHandle();
+    }
+    return true;
+}
+
+TransactionResult MySQLConnection::ExecuteTransaction(TransactionBase const& transaction)
+{
+    if (transaction.GetSize() == 0)
+        return {};
+    auto failWith = [this](bool commitSent)
+    {
+        uint32 const code = _lastErrorCode ? _lastErrorCode : CR_UNKNOWN_ERROR;
+        std::string const text = _lastErrorText;
+        bool const rolledBack = AbandonTransaction();
+        SetError(code, text);
+        return TransactionResult{ code, commitSent, rolledBack };
+    };
+
+    try
+    {
+        if (!Execute("START TRANSACTION"))
+            return failWith(false);
+        for (TransactionBase::Entry const& entry : transaction.GetEntries())
+        {
+            bool const executed = std::holds_alternative<std::string>(entry)
+                ? Execute(std::get<std::string>(entry))
+                : Execute(*std::get<std::unique_ptr<PreparedStatementBase>>(entry));
+            if (!executed)
+                return failWith(false);
+        }
+        if (!Execute("COMMIT"))
+            return failWith(true);
+        return {};
+    }
+    catch (...)
+    {
+        AbandonTransaction();
+        throw;
+    }
 }

@@ -1,9 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Login server entry point: loads the client's message definitions, listens for clients, and runs the session handshake until a shutdown signal.
+ * Login server entry point: loads the client's message definitions, opens the login database, listens for clients, and runs the session handshake until a shutdown signal.
  */
 
 #include "ConfigMgr.h"
+#include "DatabaseEnv.h"
+#include "DatabaseLoader.h"
 #include "Log.h"
 #include "LogConfig.h"
 #include "LoginSession.h"
@@ -41,6 +43,15 @@ namespace
                 return false;
             }
 
+            _databases = std::make_unique<DatabaseLoader>(Config());
+            _databases->AddDatabase(LoginDatabase, "Login");
+            if (!_databases->Load())
+            {
+                LOG_ERROR("server.loginserver", "Cannot open the login database");
+                _databases.reset();
+                return false;
+            }
+
             std::vector<std::string> problems;
             _context = std::make_shared<SessionContext>(SessionSettings::Load(Config(), &problems));
             NetworkSettings const network = NetworkSettings::Load(Config(), "LoginServerPort", DefaultPort, &problems);
@@ -56,6 +67,8 @@ namespace
             {
                 LOG_ERROR("server.loginserver", "Cannot listen for clients: {}", error);
                 _sockets.reset();
+                _databases->Close();
+                _databases.reset();
                 return false;
             }
             return true;
@@ -66,11 +79,15 @@ namespace
             if (_sockets)
                 _sockets->StopNetwork();
             _sockets.reset();
+            if (_databases)
+                _databases->Close();
+            _databases.reset();
         }
 
     private:
         std::shared_ptr<SessionContext> _context;
         std::unique_ptr<SocketMgr<LoginSession>> _sockets;
+        std::unique_ptr<DatabaseLoader> _databases;
     };
 }
 

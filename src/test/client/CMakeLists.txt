@@ -13,4 +13,5 @@ target_link_libraries(client_tests
 
 gtest_discover_tests(client_tests
     DISCOVERY_MODE PRE_TEST
+    DISCOVERY_TIMEOUT 120
     PROPERTIES LABELS client)
