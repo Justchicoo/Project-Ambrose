@@ -72,7 +72,7 @@ The server knows the valid first, middle and last name index ranges per gender, 
 - src/tools/extractor (name module): reads Root.wad CharacterNames.xml (tables FirstName_HumanMale, FirstName_HumanFemale, MiddleName_Human, LastName_Human; the per-locale copies list the same keys, so take one), Locale/en-US/CharacterNames.lang (UTF-16 key/blank/text triplets), CharacterNamesDisallowedList.xml (a BINd ObjectProperty file, not zlib-wrapped here) and CharacterCreation/CharacterCreationConfig.xml (WizCharacterCreationConfig: the allowed schools Fire, Ice, Storm, Life, Myth, Death, Balance)
 - The extractor writes world DB rows: character_name_part (table_name, idx, locale_key, text_en), character_name_disallowed, character_create_school (school_name, school_id = KI string-ID hash)
 - data/sql/base/db_world/: the empty table definitions only (no extracted rows committed)
-- src/server/game/Characters/CharacterNameMgr.{h,cpp} (sCharacterNameMgr): IsValidIndices(nameIndices, gender), FormatName(nameIndices, gender), IsDisallowed()
+- src/server/game/Characters/CharacterNameMgr.{h,cpp} (sCharacterNameMgr): IsValidIndices(nameIndices, gender), FormatName(nameIndices, gender), IsDisallowed(). `.reload character_name` (through 4.15 when it lands) rebuilds the name parts and disallowed list off to the side, validates them, swaps, and keeps the old tables on failure
 - src/server/shared/Util/StringId.{h,cpp}: the KI string-ID hash, if OBJ has not already provided it
 - src/test/server/game/Characters/CharacterNameMgrTest.cpp
 
@@ -94,6 +94,7 @@ The server knows the valid first, middle and last name index ranges per gender, 
 
 - [ ] Unit: StringId('Fire') == 2343174, StringId('Ice') == 72777 and StringId('Balance') == 1027491821, matching the reference enum values
 - [ ] Unit: FormatName with middle=0 and last=0 returns only the first name, and out-of-range indices are rejected
+- [ ] Unit: reloading sCharacterNameMgr applies an edited character_name_part row, and a reload with an invalid row keeps the old tables and reports it
 - [ ] Tool run against the local install fills character_name_part with non-zero counts for all 4 tables and exactly 7 character_create_school rows; git status shows no new data files
 
 **Risks**
@@ -157,11 +158,13 @@ The server loads the user's client type dump and answers every schema question b
 - ValueKind classifier over the measured vocabulary: bool, char, unsigned char, short, unsigned short, int, unsigned int, unsigned __int64, gid, float, double, wchar_t, std::string, std::wstring, bui2/4/5/7, s24/u24, the fixed math types, enum, object (inline/pointer/SharedPointer)
 - Load-time validation: recompute every hash and fail loudly on mismatch; SHA-256 of the dump logged for revision pinning
 - conf/dist gameserver.conf.dist and loginserver.conf.dist options: TypeDumpPath
+- Reload: `.reload typedump` (through 4.15 when it lands) loads TypeDumpPath into a new registry off to the side, validates every hash, rebinds the typed views (3.07), and swaps; any failure keeps the old registry and reports every error. Live PropertyObjects keep the registry generation they were built from; if that cannot be made safe, a type-dump change is documented as a restart case instead
 - src/test/server/shared/ObjectProperty/TypeRegistryTest.cpp using a small synthetic dump written by us (invented classes), never client data
 
 **Acceptance**
 
 - [ ] Unit test on the synthetic dump: alias collapse, base-chain lookup, ordering by property id, enum option lookup in both directions
+- [ ] Unit test: reloading from a synthetic dump with a bad hash keeps the previous registry serving and reports the mismatch
 - [ ] Client-gated test: the r806919 dump loads into 2205 property classes and 140 enums with no unclassified property type; load time and memory are logged (target under 2 s, under 150 MB)
 - [ ] Client-gated test: the class 'class WizClientObject' has 14 properties in id order, starting with m_inactiveBehaviors, m_globalID.m_full, m_permID
 
@@ -250,7 +253,7 @@ Client-sent ObjectProperty blobs cannot crash, hang, or exhaust the server.
 
 **Deliverables**
 
-- Limits enforced in all decoders: max nesting depth, max container count (checked against remaining bits before allocating), max total objects, max inflated size, rejection of zero-sized versionable properties (infinite-loop guard)
+- Limits enforced in all decoders: max nesting depth, max container count (checked against remaining bits before allocating), max total objects, max inflated size, rejection of zero-sized versionable properties (infinite-loop guard). The limits are live settings with defaults and bounds (ObjectProperty.MaxDepth, ObjectProperty.MaxContainerCount, ObjectProperty.MaxObjects, ObjectProperty.MaxInflatedSize), read per decode so a change applies to the next blob (registered with 4.16 when it lands)
 - A class allow-list per message field (e.g. MSG_CREATECHARACTER.CreationInfo accepts only WizardCharacterCreationInfo)
 - src/test/server/shared/ObjectProperty/DecoderFuzzTest.cpp (seeded random mutations of synthetic golden blobs) plus a libFuzzer target where the toolchain allows
 
@@ -278,13 +281,14 @@ Game code uses compile-checked C++ accessors for the few dozen classes it touche
 **Deliverables**
 
 - src/server/shared/ObjectProperty/TypedView.h: a template base plus declaration macros that give a class name and (type string, property name) pairs. The hash is computed constexpr with OBJ-2 and the property ordinal is cached once at bind time
-- TypedViewRegistry: at startup each view resolves its class and properties in sTypeRegistry; a missing class, property or type mismatch is a fatal error listing every problem
+- TypedViewRegistry: at startup and on every registry reload each view resolves its class and properties in sTypeRegistry; a missing class, property or type mismatch lists every problem, and is a fatal error at startup or refuses the swap on reload
 - First views: WizardCharacterCreationInfo, WizClientObject, ClientObject, CoreObject, GameObjectTemplate, WizItemTemplate, TemplateManifest, TemplateLocation, RequirementList, NamedEffect
 - A codestyle note for apps/codestyle: views carry only the branding header, no comments
 
 **Acceptance**
 
 - [ ] Unit test: a view over a synthetic class binds; a view naming a nonexistent property fails startup with a precise message
+- [ ] Unit test: reloading a synthetic registry that drops a bound property refuses the swap and leaves the views bound to the old registry
 - [ ] Client-gated test: all first views bind against r806919; reading WizItemTemplate::templateId() on the decoded hat returns 1652259
 - [ ] Unit test: accessing a field through a view costs one indexed load (no hash lookup per access)
 
@@ -358,7 +362,7 @@ The character select screen shows the account's wizards with correct appearance,
 
 **Deliverables**
 
-- src/server/apps/loginserver/Handlers/CharacterHandler.cpp: HandleRequestCharacterList sends MSG_STARTCHARACTERLIST{LoginServer=<config Login.Name>, PurchasedCharacterSlots=account.purchased_slots}, then one MSG_CHARACTERINFO per character, then MSG_CHARACTERLIST{Error=0}; if the account is missing, CHARACTERLIST{Error=1}
+- src/server/apps/loginserver/Handlers/CharacterHandler.cpp: HandleRequestCharacterList sends MSG_STARTCHARACTERLIST{LoginServer=<live setting Login.Name, read per request>, PurchasedCharacterSlots=account.purchased_slots}, then one MSG_CHARACTERINFO per character, then MSG_CHARACTERLIST{Error=0}; if the account is missing, CHARACTERLIST{Error=1}
 - src/server/game/Characters/LoginScreenInfoBuilder.{h,cpp}: builds WizardCharacterCreationInfo {m_templateID=1, m_name=custom_name or empty, m_globalID, m_userID, m_avatarBehavior=WizardCharacterBehavior from appearance, m_equipmentInfoList=EquippedItemInfoList (empty until items exist), m_location=zone_display, m_level, m_world, m_schoolOfFocus, m_nameIndices} and serializes it with Transmit|AuthorityTransmit flags, no SerializerBinary wrapper, not versionable
 - src/test/server/game/Characters/LoginScreenInfoBuilderTest.cpp
 
@@ -512,12 +516,13 @@ Any localized key a template or message references (for example Items_00028316) 
 - src/server/shared/Locale/LangFile.h/.cpp: UTF-16LE with BOM, CRLF lines; header line '1:<TableName>', then triplets of key line, metadata line (usually blank), text line
 - src/server/shared/Locale/LocaleStore.h/.cpp (sLocaleStore): lookup of '<Table>_<Key>' for locale en-US/de/es/fr/it/pl/el; both 8-digit numeric keys and named keys supported
 - Optional support for the BINd Locale/<lang>/StringTable.xml via OBJ-6
-- conf option ClientDataDir, DefaultLocale
+- conf option ClientDataDir, DefaultLocale. DefaultLocale is a live setting; `.reload locale` (through 4.15 when it lands) rebuilds the store off to the side from ClientDataDir, swaps it, and keeps the old store on failure
 - src/test/server/shared/Locale/LangFileTest.cpp with a synthetic .lang
 
 **Acceptance**
 
 - [ ] Unit test: a synthetic UTF-16 file with numeric and named keys and a non-blank metadata line parses correctly
+- [ ] Unit test: a reload that meets a malformed .lang file keeps the previous store resolving keys and names the file
 - [ ] Client-gated test: en-US loads 5132 tables and 217032 keys; Items_00028316 resolves to 'Cute Fairy Kei Broadbrim'; the German Items table resolves the same key
 - [ ] Client-gated test: every m_displayName in the 2000-template sample resolves or is reported as missing
 
@@ -571,7 +576,7 @@ The server knows the valid first, middle and last name index ranges per gender, 
 - src/tools/extractor (name module): reads Root.wad CharacterNames.xml (tables FirstName_HumanMale, FirstName_HumanFemale, MiddleName_Human, LastName_Human; the per-locale copies list the same keys, so take one), Locale/en-US/CharacterNames.lang (UTF-16 key/blank/text triplets), CharacterNamesDisallowedList.xml (a BINd ObjectProperty file, not zlib-wrapped here) and CharacterCreation/CharacterCreationConfig.xml (WizCharacterCreationConfig: the allowed schools Fire, Ice, Storm, Life, Myth, Death, Balance)
 - The extractor writes world DB rows: character_name_part (table_name, idx, locale_key, text_en), character_name_disallowed, character_create_school (school_name, school_id = KI string-ID hash)
 - data/sql/base/db_world/: the empty table definitions only (no extracted rows committed)
-- src/server/game/Characters/CharacterNameMgr.{h,cpp} (sCharacterNameMgr): IsValidIndices(nameIndices, gender), FormatName(nameIndices, gender), IsDisallowed()
+- src/server/game/Characters/CharacterNameMgr.{h,cpp} (sCharacterNameMgr): IsValidIndices(nameIndices, gender), FormatName(nameIndices, gender), IsDisallowed(). `.reload character_name` (through 4.15 when it lands) rebuilds the name parts and disallowed list off to the side, validates them, swaps, and keeps the old tables on failure
 - src/server/shared/Util/StringId.{h,cpp}: the KI string-ID hash, if OBJ has not already provided it
 - src/test/server/game/Characters/CharacterNameMgrTest.cpp
 
@@ -593,6 +598,7 @@ The server knows the valid first, middle and last name index ranges per gender, 
 
 - [ ] Unit: StringId('Fire') == 2343174, StringId('Ice') == 72777 and StringId('Balance') == 1027491821, matching the reference enum values
 - [ ] Unit: FormatName with middle=0 and last=0 returns only the first name, and out-of-range indices are rejected
+- [ ] Unit: reloading sCharacterNameMgr applies an edited character_name_part row, and a reload with an invalid row keeps the old tables and reports it
 - [ ] Tool run against the local install fills character_name_part with non-zero counts for all 4 tables and exactly 7 character_create_school rows; git status shows no new data files
 
 **Risks**
@@ -620,8 +626,9 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 **Deliverables**
 
 - CharacterHandler::HandleCreateCharacter: deserialize CreationInfo as WizardCharacterCreationInfo (Transmit|AuthorityTransmit, unwrapped); on a decode failure send ErrorCode!=0 and keep the session
-- Validation: count < Character.MaxPerAccount (config, default 6) + purchased_slots; m_schoolOfFocus is in character_create_school; m_avatarBehavior.m_eGender is Female=0 or Male=1 (Neutral=2 rejected); m_eRace == Human (79806088); every appearance field fits its bit width; nameIndices pass CharacterNameMgr and the disallowed list; optional uniqueness (config Character.UniqueNames); m_name (custom name) ignored unless security_level allows
+- Validation: count < Character.MaxPerAccount (live setting, default 6) + purchased_slots; m_schoolOfFocus is in character_create_school; m_avatarBehavior.m_eGender is Female=0 or Male=1 (Neutral=2 rejected); m_eRace == Human (79806088); every appearance field fits its bit width; nameIndices pass CharacterNameMgr and the disallowed list; optional uniqueness (live setting Character.UniqueNames); m_name (custom name) ignored unless security_level allows. Both settings are read per request (registered with 4.16 when it lands)
 - Starting state from world DB playercreateinfo (school_id, zone, location, orientation, level, world), AzerothCore precedent: write the characters and character_appearance rows in one transaction
+- `.reload playercreateinfo` and `.reload character_create_school` (through 4.15 when it lands) rebuild their rows off to the side, validate them, swap, and keep the old rows on failure
 - CharacterHandler::HandleLoginLogCharacterCreation: store Stage and Parameter on the session and log them (telemetry, no reply)
 - data/sql/base/db_world/: playercreateinfo definition; data/sql/custom example rows
 - src/test/server/apps/loginserver/CreateCharacterTest.cpp
@@ -646,6 +653,7 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 
 - [ ] Unit: a blob built by our serializer with valid fields creates exactly one character; a bad school hash, gender=2, hair_model beyond bui4, an out-of-range name index and a 7th character each return ErrorCode!=0 and write nothing
 - [ ] Unit: a truncated or garbage blob returns ErrorCode!=0 without crashing or closing the session
+- [ ] Unit: lowering Character.MaxPerAccount on a running server refuses the next create over the new limit without a restart
 - [ ] Real client: completing the creation flow returns to character select with the new wizard at level 1 with the chosen school, look and name; restarting the client and logging in again still shows it
 - [ ] Real client: on an account already at the slot limit, the create attempt shows the client's failure message and the list is unchanged
 
@@ -677,8 +685,9 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 **Deliverables**
 
 - CharacterHandler::HandleCreateCharacter: deserialize CreationInfo as WizardCharacterCreationInfo (Transmit|AuthorityTransmit, unwrapped); on a decode failure send ErrorCode!=0 and keep the session
-- Validation: count < Character.MaxPerAccount (config, default 6) + purchased_slots; m_schoolOfFocus is in character_create_school; m_avatarBehavior.m_eGender is Female=0 or Male=1 (Neutral=2 rejected); m_eRace == Human (79806088); every appearance field fits its bit width; nameIndices pass CharacterNameMgr and the disallowed list; optional uniqueness (config Character.UniqueNames); m_name (custom name) ignored unless security_level allows
+- Validation: count < Character.MaxPerAccount (live setting, default 6) + purchased_slots; m_schoolOfFocus is in character_create_school; m_avatarBehavior.m_eGender is Female=0 or Male=1 (Neutral=2 rejected); m_eRace == Human (79806088); every appearance field fits its bit width; nameIndices pass CharacterNameMgr and the disallowed list; optional uniqueness (live setting Character.UniqueNames); m_name (custom name) ignored unless security_level allows. Both settings are read per request (registered with 4.16 when it lands)
 - Starting state from world DB playercreateinfo (school_id, zone, location, orientation, level, world), AzerothCore precedent: write the characters and character_appearance rows in one transaction
+- `.reload playercreateinfo` and `.reload character_create_school` (through 4.15 when it lands) rebuild their rows off to the side, validate them, swap, and keep the old rows on failure
 - CharacterHandler::HandleLoginLogCharacterCreation: store Stage and Parameter on the session and log them (telemetry, no reply)
 - data/sql/base/db_world/: playercreateinfo definition; data/sql/custom example rows
 - src/test/server/apps/loginserver/CreateCharacterTest.cpp
@@ -703,6 +712,7 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 
 - [ ] Unit: a blob built by our serializer with valid fields creates exactly one character; a bad school hash, gender=2, hair_model beyond bui4, an out-of-range name index and a 7th character each return ErrorCode!=0 and write nothing
 - [ ] Unit: a truncated or garbage blob returns ErrorCode!=0 without crashing or closing the session
+- [ ] Unit: lowering Character.MaxPerAccount on a running server refuses the next create over the new limit without a restart
 - [ ] Real client: completing the creation flow returns to character select with the new wizard at level 1 with the chosen school, look and name; restarting the client and logging in again still shows it
 - [ ] Real client: on an account already at the slot limit, the create attempt shows the client's failure message and the list is unchanged
 
@@ -733,7 +743,7 @@ A player can delete one of their own wizards from the select screen, and the dat
 **Deliverables**
 
 - CharacterHandler::HandleDeleteCharacter: require that the character belongs to the session's account, is not online, and is not already deleted; set deleted_at and deleted_account, clear account; reply MSG_DELETECHARACTERRESPONSE{ErrorCode}
-- Config Character.DeleteMode (soft or hard) and Character.KeepDeletedDays
+- Live settings Character.DeleteMode (soft or hard) and Character.KeepDeletedDays, read on each delete and purge so a change applies without a restart (registered with 4.16 when it lands)
 - src/test/server/apps/loginserver/DeleteCharacterTest.cpp
 
 **Client messages:** MSG_DELETECHARACTER, MSG_DELETECHARACTERRESPONSE
@@ -777,6 +787,7 @@ The updater copes with renamed, edited, deleted and pending update files the way
 - ARCHIVED state for files squashed into base/
 - Updates.AllowPending (dev-only, default 0) adds data/sql/updates/pending_db_<name> with state PENDING; pending names must match rev_<unix-timestamp>_<slug>.sql (proposed)
 - Module includes: modules/<m>/data/sql/db-<name>/ registered as MODULE via updates_include generated at configure time
+- Updates.Redundancy, Updates.AllowRehash, Updates.CleanDeadRefMaxCount and Updates.AllowPending are live settings read on each updater run, including `db update` on a running server (registered with 4.16 when it lands)
 - Unit tests for UpdateFetcher decision logic with an in-memory applied-set (no DB)
 
 **Acceptance**

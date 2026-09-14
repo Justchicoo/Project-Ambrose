@@ -6,30 +6,30 @@
 
 | ID | Milestone | Size | Depends on |
 |---|---|---|---|
-| 6.01 | Whole-zone player broadcast (WLD-10) | M | 5.02, 5.03, 5.05 |
+| 6.01 | Whole-zone player broadcast (WLD-10) | M | 5.02, 5.03, 5.05, 4.16 |
 | 6.02 | PLAYERWIZBANG broadcast (WIZ-1 remainder) | S | 6.01 |
-| 6.03 | Say chat, quick chat, core emotes (WIZ-4) | M | 6.01, 4.02 |
-| 6.04 | GM commands in chat (WIZ-5 remainder) | M | 6.03, 5.01 |
-| 6.05 | GM account, ban, character commands (LOG-17) | M | 6.04, 3.17 |
-| 6.06 | Same-zone teleport and cs_tele (WLD-12) | S | 6.01, 4.02 |
+| 6.03 | Say chat, quick chat, core emotes (WIZ-4) | M | 6.01, 4.02, 4.15, 4.16 |
+| 6.04 | GM commands in chat (WIZ-5 remainder) | M | 6.03, 5.01, 4.16 |
+| 6.05 | GM account, ban, character commands (LOG-17) | M | 6.04, 3.17, 4.15 |
+| 6.06 | Same-zone teleport and cs_tele (WLD-12) | S | 6.01, 4.02, 4.15 |
 | 6.07 | Cross-zone transfer via MSG_SERVERTRANSFER (WLD-13) | M | 6.06, 4.13 |
-| 6.08 | Logout, link-dead, AFK, shutdown (WLD-20) | M | 6.01 |
+| 6.08 | Logout, link-dead, AFK, shutdown (WLD-20) | M | 6.01, 4.16 |
 | 6.09 | Schema probe for classes missing from the dump (OBJ-11) | M | 3.11 |
-| 6.10 | Supplemental server-side schemas (OBJ-12) | S | 6.09, 3.03 |
+| 6.10 | Supplemental server-side schemas (OBJ-12) | S | 6.09, 3.03, 4.15 |
 | 6.11 | Trigger/volume schemas and zone WAD sweep (WLD-3 part 1 + OBJ-18) | M | 6.10 |
 | 6.12 | Volume/trigger extraction to world rows (WLD-3 part 2) | M | 6.11, 4.08 |
-| 6.13 | Volumes and walk-in trigger events (WLD-14) | M | 6.12, 5.03, 4.01 |
-| 6.14 | Zone doors table and walk-in transfers (WLD-15) | M | 6.07, 6.13 |
-| 6.15 | AOI grid and visibility sets, unit level (WLD-11 part 1) | M | 6.01 |
+| 6.13 | Volumes and walk-in trigger events (WLD-14) | M | 6.12, 5.03, 4.01, 4.15 |
+| 6.14 | Zone doors table and walk-in transfers (WLD-15) | M | 6.07, 6.13, 4.15 |
+| 6.15 | AOI grid and visibility sets, unit level (WLD-11 part 1) | M | 6.01, 4.16 |
 | 6.16 | AOI in the real client (WLD-11 part 2) | M | 6.15 |
-| 6.17 | Network hardening (NET-11) | M | 2.09 |
-| 6.18 | Packet log, diagnostics, network hooks (NET-12) | S | 2.09, 4.02 |
+| 6.17 | Network hardening (NET-11) | M | 2.09, 4.16 |
+| 6.18 | Packet log, diagnostics, network hooks (NET-12) | S | 2.09, 4.02, 4.16 |
 
 ## 6.01 Whole-zone player broadcast (WLD-10)
 
 **Goal:** Players see each other appear, move and leave.
 
-**Size:** M. **Depends on:** 5.02, 5.03, 5.05
+**Size:** M. **Depends on:** 5.02, 5.03, 5.05, 4.16
 
 **Client messages:** MSG_NEWOBJECT, MSG_REMOVEOBJECT, MSG_SERVERMOVE, MSG_MOVESTATE, MSG_CLIENTMOVESTATE, MSG_JUMP, MSG_CLIENTMOVE
 
@@ -38,6 +38,7 @@
 - [ ] Two clients see each other with correct name and gear
 - [ ] B sees A's smooth run and idle within ~0.5 s; jumps relay
 - [ ] A logs out and vanishes on B at once; quick relog shows no ghost
+- [ ] Changing Zone.MoveFlushInterval applies from the next flush
 
 ### Detailed spec from WLD-10: Players see each other (whole-zone broadcast)
 
@@ -47,7 +48,8 @@ Two real clients in the same zone instance see each other appear, walk, jump, an
 
 - Map::AddPlayer: send the newcomer's public WizClientObject to everyone present, and every present player's object to the newcomer, via MSG_NEWOBJECT with the Public flag mask
 - MovementHandler: relay MSG_SERVERMOVE (the player's MobileID) and MSG_MOVESTATE (GlobalID) to others, batched on Zone.MoveFlushInterval; relay MSG_JUMP when ExcludeOriginator is set
-- Idle detection: after no MSG_CLIENTMOVE for 2x the flush interval, broadcast MSG_MOVESTATE NewState=0 once
+- Idle detection: after no MSG_CLIENTMOVE for Zone.MoveIdleIntervals flush intervals (default 2), broadcast MSG_MOVESTATE NewState=0 once
+- Zone.MoveFlushInterval and Zone.MoveIdleIntervals are live settings applied from the next flush
 - Map::RemovePlayer: MSG_REMOVEOBJECT (GameObjectID) to the remaining players
 
 **Client messages:** MSG_NEWOBJECT, MSG_REMOVEOBJECT, MSG_SERVERMOVE, MSG_MOVESTATE, MSG_CLIENTMOVESTATE, MSG_JUMP, MSG_CLIENTMOVE
@@ -59,6 +61,7 @@ Two real clients in the same zone instance see each other appear, walk, jump, an
 - [ ] A jumps: B sees the jump
 - [ ] A logs out: A's model vanishes on B's screen at once
 - [ ] A logs back in quickly and gets a new mobile id: B sees one A, not a ghost
+- [ ] Unit: changing Zone.MoveFlushInterval or Zone.MoveIdleIntervals applies from the next flush without a restart
 
 **Risks**
 
@@ -110,7 +113,7 @@ A character entering the world gets no errors or unknown-message spam from the W
 
 **Goal:** Chat bubbles and emotes in range.
 
-**Size:** M. **Depends on:** 6.01, 4.02
+**Size:** M. **Depends on:** 6.01, 4.02, 4.15, 4.16
 
 **Client messages:** MSG_REQUESTRADIALCHAT, MSG_RADIALCHAT, MSG_REQUESTRADIALQUICKCHAT, MSG_RADIALQUICKCHAT, MSG_REQUESTRADIALQUICKCHATEXT, MSG_RADIALQUICKCHATEXT, MSG_CORE_EMOTE
 
@@ -118,6 +121,7 @@ A character entering the world gets no errors or unknown-message spam from the W
 
 - [ ] Command-prefixed messages are never broadcast
 - [ ] B sees A's 'hello' bubble, quick chat and wave
+- [ ] Prefix and range changes apply to the next message; a failed `.reload quickchat` keeps the old IDs
 
 ### Detailed spec from WIZ-4: Say chat, quick chat and core emotes
 
@@ -127,7 +131,8 @@ Players in the same zone can see each other's typed chat bubbles, quick-chat lin
 
 - src/server/game/Handlers/ChatHandler.cpp: REQUESTRADIALCHAT -> RADIALCHAT to players in range, REQUESTRADIALQUICKCHAT -> RADIALQUICKCHAT, REQUESTRADIALQUICKCHATEXT -> RADIALQUICKCHATEXT
 - CORE_EMOTE handler: echo to range, respecting ExcludeOriginator
-- src/server/game/Chat/ChatMgr: range filter, blocks senders on the listener's ignore list (the list itself comes in WIZ-17), a configurable prefix string (default '.') routed to the command system instead of broadcast
+- src/server/game/Chat/ChatMgr: range filter on Chat.SayRange, blocks senders on the listener's ignore list (the list itself comes in WIZ-17), and routes text starting with GM.CommandPrefix (default '.') to the command system instead of broadcast. Both are live settings applied to the next message.
+- `.reload quickchat` rebuilds the quick-chat ID set from QuickChat.xml off to the side, validates it, and swaps it; a failure keeps the old set and reports every error
 - src/test/server/game/ChatHandlerTest.cpp
 
 **Client messages:** GAME MSG_REQUESTRADIALCHAT, GAME MSG_RADIALCHAT, GAME MSG_REQUESTRADIALQUICKCHAT, GAME MSG_RADIALQUICKCHAT, GAME MSG_REQUESTRADIALQUICKCHATEXT, GAME MSG_RADIALQUICKCHATEXT, GAME MSG_CORE_EMOTE
@@ -140,6 +145,7 @@ Players in the same zone can see each other's typed chat bubbles, quick-chat lin
 
 - [ ] Unit test: a message starting with the command prefix is never broadcast
 - [ ] Unit test: RADIALCHAT SourceName is the wizard's name blob and SourceID the player's GameObject GID
+- [ ] Unit test: changing GM.CommandPrefix or Chat.SayRange applies to the next message without a restart, and `.reload quickchat` with an unreadable QuickChat.xml keeps the old ID set and reports the error
 - [ ] Two real clients in one zone: A types 'hello'. B sees a speech bubble over A and a line in the chat log. A picks a quick-chat phrase and B sees it. A clicks the wave emote and B sees A wave.
 
 **Risks**
@@ -152,7 +158,7 @@ Players in the same zone can see each other's typed chat bubbles, quick-chat lin
 
 **Goal:** Chat prefix routes to CommandMgr; cs_gm/cs_character/cs_lookup.
 
-**Size:** M. **Depends on:** 6.03, 5.01
+**Size:** M. **Depends on:** 6.03, 5.01, 4.16
 
 **Client messages:** MSG_COMMAND, MSG_COMMANDRESULT, MSG_SERVERMESSAGE, MSG_CLIENTNOTIFYTEXT
 
@@ -160,6 +166,7 @@ Players in the same zone can see each other's typed chat bubbles, quick-chat lin
 
 - [ ] GM '.help' lists commands with no bubble for others
 - [ ] Player account text is chat or refused per config
+- [ ] GM.LogCommands changes apply from the next command
 
 ### Detailed spec from WIZ-5: Account security levels and GM command framework
 
@@ -168,11 +175,11 @@ An account's security level decides which chat-prefixed GM commands it may run, 
 **Deliverables**
 
 - data/sql/updates/db_login: account_access (account_id, realm_id, security_level) with levels PLAYER=0, MODERATOR=1, GAMEMASTER=2, ADMINISTRATOR=3, CONSOLE=4 (AzerothCore precedent)
-- src/server/game/Chat/CommandMgr: CommandScript tables, argument parsing, security check, per-command help
+- src/server/game/Chat/CommandMgr: CommandScript tables, argument parsing, security check against the command's default level or its command_security override, per-command help
 - src/server/scripts/Commands/cs_gm.cpp (.gm on/off, .gm visible), cs_character.cpp (.character level, .character gold, .character xp, .character heal), cs_lookup.cpp (.lookup item / spell by name)
 - Replies via SYSTEM MSG_SERVERMESSAGE or GAME MSG_CLIENTNOTIFYTEXT
 - Set LOGINCOMPLETE IsCSR and Permissions from the security level (coordinate with NET/LOG)
-- gameserver.conf.dist: GM.CommandPrefix, GM.LogCommands
+- gameserver.conf.dist: GM.CommandPrefix, GM.LogCommands, live settings applied from the next command
 - src/test/server/game/CommandMgrTest.cpp
 
 **Client messages:** GAME MSG_COMMAND, GAME MSG_COMMANDRESULT, SYSTEM MSG_SERVERMESSAGE, GAME MSG_CLIENTNOTIFYTEXT
@@ -180,12 +187,14 @@ An account's security level decides which chat-prefixed GM commands it may run, 
 **Database tables**
 
 - login.account_access
+- world.command_security
 - characters.gm_command_log (optional)
 
 **Acceptance**
 
 - [ ] Unit test: a PLAYER-level account running a GAMEMASTER command gets 'no such command' and nothing executes
 - [ ] Unit test: the command table parses '.character gold 500' into (character, gold, [500])
+- [ ] Unit test: turning GM.LogCommands off stops logging from the next command without a restart
 - [ ] Real client, GM account: typing '.help' shows the command list in the chat window, and nearby players see no bubble. The same text from a player account shows up as normal chat or is refused, depending on config.
 
 **Risks**
@@ -197,13 +206,14 @@ An account's security level decides which chat-prefixed GM commands it may run, 
 
 **Goal:** Manage accounts without SQL.
 
-**Size:** M. **Depends on:** 6.04, 3.17
+**Size:** M. **Depends on:** 6.04, 3.17, 4.15
 
 **Client messages:** MSG_FORCE_DISCONNECT, MSG_SERVERMESSAGE
 
 **Acceptance**
 
 - [ ] Lower security levels refused
+- [ ] A command_security override applies after `.reload command_security` without a restart
 - [ ] `ban account test 1h spam` disconnects and blocks next login; unban restores
 - [ ] `character deleted restore <guid>` brings the wizard back
 
@@ -216,7 +226,7 @@ Operators can manage accounts, bans, security levels and deleted characters from
 - src/server/scripts/Commands/cs_account.cpp: account create, delete, set password (revokes account_session), set gmlevel, lock, unlock, onlinelist
 - src/server/scripts/Commands/cs_ban.cpp: ban account, ban ip, ban machine, unban, baninfo
 - src/server/scripts/Commands/cs_character.cpp: character deleted list, character deleted restore, character rename flag (sets should_rename)
-- Security levels mapped to account.security_level; command tables declare their required level
+- Security levels mapped to account.security_level; command tables declare their default required level, and a world.command_security row overrides it live through `.reload command_security`
 
 **Client messages:** MSG_FORCE_DISCONNECT, MSG_SERVERMESSAGE
 
@@ -232,6 +242,7 @@ Operators can manage accounts, bans, security levels and deleted characters from
 **Acceptance**
 
 - [ ] Unit: each command's permission check refuses a lower security level
+- [ ] Unit: a world.command_security row raising '.ban account' to ADMINISTRATOR, then `.reload command_security`, refuses a GAMEMASTER account without a restart
 - [ ] Real client: `ban account test 1h spam` from a GM character disconnects the target, whose next login attempt is refused; `unban` lets them back in
 - [ ] Real client: `character deleted restore <guid>` makes a deleted wizard reappear on its owner's select screen after a relog
 
@@ -243,7 +254,7 @@ Operators can manage accounts, bans, security levels and deleted characters from
 
 **Goal:** GM teleport seen by onlookers.
 
-**Size:** S. **Depends on:** 6.01, 4.02
+**Size:** S. **Depends on:** 6.01, 4.02, 4.15
 
 **Client messages:** MSG_SERVERTELEPORT, MSG_COMMAND, MSG_COMMANDRESULT
 
@@ -252,6 +263,7 @@ Operators can manage accounts, bans, security levels and deleted characters from
 - [ ] '.tele Start' snaps without loading; B sees it
 - [ ] '.gps' matches minimap
 - [ ] Out-of-range '.go xyz' refused; players cannot '.tele'
+- [ ] A point from '.tele add' works at once without a reload
 
 ### Detailed spec from WLD-12: Same-zone teleport and GM teleport commands
 
@@ -261,7 +273,8 @@ A GM can instantly move themselves or another player to a named location or coor
 
 - src/server/game/Entities/Player::TeleportWithinMap: update position and send MSG_SERVERTELEPORT (packed location, MobileID) to self and viewers
 - src/server/scripts/Commands/cs_tele.cpp: '.tele <location name>', '.go xyz <x> <y> <z> [yaw]', '.gps' (zone, x, y, z, yaw, dynamic zone id), with security levels
-- world.game_tele table (named GM teleport points: name, zone, x, y, z, yaw) and '.tele add/del'
+- world.game_tele table (named GM teleport points: name, zone, x, y, z, yaw) and '.tele add/del', which update the live list and the table at once and are journaled as a pending SQL update
+- `.reload game_tele` swaps in hand-edited rows; a failure keeps the old list and reports every error
 
 **Client messages:** MSG_SERVERTELEPORT, MSG_COMMAND, MSG_COMMANDRESULT
 
@@ -279,6 +292,7 @@ A GM can instantly move themselves or another player to a named location or coor
 - [ ] Real client: '.gps' prints coordinates matching the minimap position
 - [ ] Unit: '.go xyz' outside the packable range is refused with a message
 - [ ] A player-level account cannot run '.tele'
+- [ ] Real client: a point added with '.tele add' works immediately without a reload or restart
 
 **Risks**
 
@@ -336,7 +350,7 @@ Players can move between zones with the retail loading-screen flow, triggered he
 
 **Goal:** Clean world exit in all cases.
 
-**Size:** M. **Depends on:** 6.01
+**Size:** M. **Depends on:** 6.01, 4.16
 
 **Client messages:** MSG_QUERY_LOGOUT, MSG_CLIENT_DISCONNECT, MSG_ZOMBIE_PLAYER, MSG_DISCONNECT_AFK, MSG_NOT_AFK, MSG_SERVERSHUTDOWN, MSG_REMOVEOBJECT, MSG_ATTACH
 
@@ -345,6 +359,7 @@ Players can move between zones with the retail loading-screen flow, triggered he
 - [ ] Quit removes A from B at once; relog same spot
 - [ ] Killed process: B sees A stand then vanish; reattach within window resumes
 - [ ] Server stop shows notice; second attach kicks the first
+- [ ] Changing Player.AfkTime applies from the next AFK timer
 
 ### Detailed spec from WLD-20: Logout, disconnect, link-dead and server shutdown
 
@@ -356,7 +371,7 @@ Players leave the world cleanly on logout, crash or server stop, their position 
 - Socket loss without logout: keep the player in the Map as link-dead for Player.LinkDeadTime and send MSG_ZOMBIE_PLAYER (GlobalID, Remaining) to viewers; a reattach in that window resumes the session (MSG_ATTACH Reattach=1)
 - AFK: MSG_DISCONNECT_AFK warning, then disconnect after Player.AfkTime; MSG_NOT_AFK resets the timer
 - World shutdown: MSG_SERVERSHUTDOWN to all sessions, save all positions, then close
-- conf/dist/gameserver.conf.dist: Player.LinkDeadTime, Player.AfkWarnTime, Player.AfkTime
+- conf/dist/gameserver.conf.dist: Player.LinkDeadTime, Player.AfkWarnTime, Player.AfkTime, live settings applied from the next timer
 
 **Client messages:** MSG_QUERY_LOGOUT, MSG_CLIENT_DISCONNECT, MSG_ZOMBIE_PLAYER, MSG_DISCONNECT_AFK, MSG_NOT_AFK, MSG_SERVERSHUTDOWN, MSG_REMOVEOBJECT, MSG_ATTACH
 
@@ -370,6 +385,7 @@ Players leave the world cleanly on logout, crash or server stop, their position 
 - [ ] Kill A's process: B sees A stand still, then vanish after the link-dead time; relogging within it resumes without a duplicate
 - [ ] Server stop: connected clients get the shutdown notice and a relog after restart puts them where they were
 - [ ] Unit: two sessions for one character: the second attach kicks the first cleanly
+- [ ] Unit: changing Player.AfkTime or Player.LinkDeadTime applies from the next timer without a restart
 
 **Risks**
 
@@ -412,12 +428,13 @@ Unknown class and property hashes found in client data can be named and typed by
 
 **Goal:** Server-owned classes decode like dump classes.
 
-**Size:** S. **Depends on:** 6.09, 3.03
+**Size:** S. **Depends on:** 6.09, 3.03, 4.15
 
 **Acceptance**
 
 - [ ] A supplemental class extends a dump base and decodes
 - [ ] A name/type not hashing to its declared hash is rejected
+- [ ] A failed `.reload server_class_schema` keeps the old registry
 
 ### Detailed spec from OBJ-12: Supplemental server-side class schemas
 
@@ -428,11 +445,13 @@ Classes that exist in client data or server logic but not in the client dump dec
 - A supplemental schema format (JSON or conf, our own) of classes with name or hash-only id, bases, and properties (name or hash, type, flags, container), merged into sTypeRegistry after the dump. Every named entry is verified by the hash formula at load
 - Location: authored by us under data/ (or a world DB table server_class_schema, see open questions); contains no client bytes
 - Registry reports which classes came from the dump and which from the supplement
+- `.reload server_class_schema` merges the edited supplement into a new registry generation off to the side, verifies every hash, and swaps it; a failure keeps the old registry and reports every error
 
 **Acceptance**
 
 - [ ] Unit test: a supplemental class extends a dump base class and decodes a synthetic versionable blob
 - [ ] Unit test: a supplemental entry whose name and type do not hash to its declared property hash is rejected
+- [ ] Unit test: `.reload server_class_schema` with an added class decodes it without a restart, and a supplement with a bad hash keeps the old registry and reports the error
 - [ ] Client-gated sweep: the unknown-class count from OBJ-6 drops for every class added; the sweep result is recorded
 
 ## 6.11 Trigger/volume schemas and zone WAD sweep (WLD-3 part 1 + OBJ-18)
@@ -549,7 +568,7 @@ Walk-in volumes and event triggers for every zone are decoded into typed world r
 
 **Goal:** Enter/exit fires triggers and ZoneScript hooks.
 
-**Size:** M. **Depends on:** 6.12, 5.03, 4.01
+**Size:** M. **Depends on:** 6.12, 5.03, 4.01, 4.15
 
 **Client messages:** MSG_POSTZONEEVENTFROMCLIENT, MSG_CLIENTNOTIFYTEXT
 
@@ -559,6 +578,7 @@ Walk-in volumes and event triggers for every zone are decoded into typed world r
 - [ ] Cooldown fires once per player
 - [ ] Walking into Ravenwood POI logs 'Enter_Ravenwood POI' and fires 'Trigger POI Ravenwood'; spawning inside fires nothing
 - [ ] Triggers with requirements fail closed until 7.04
+- [ ] `.reload zone_trigger` applies an edited trigger; a failed reload keeps the old set
 
 ### Detailed spec from WLD-14: Volumes and walk-in trigger events
 
@@ -571,6 +591,7 @@ Walking into a zone volume fires its enter and exit events into the zone's trigg
 - The built-in 'EnterZone' event fires on player enter (the reference posts 'EnterZone'; the data uses both 'StartZone' and 'EnterZone')
 - ZoneScript hooks: OnVolumeEnter, OnVolumeExit, OnTriggerFired; scripts/World/ loader
 - MSG_POSTZONEEVENTFROMCLIENT posts client-sent events, allow-listed per zone
+- `.reload zone_trigger` rebuilds volumes, triggers, events, results, cooldowns and the client-event allow-list off to the side, validates them, and swaps them into live Maps; a failure keeps the old set and reports every error. A player inside a volume that still exists stays inside without firing enter.
 
 **Client messages:** MSG_POSTZONEEVENTFROMCLIENT, MSG_CLIENTNOTIFYTEXT
 
@@ -591,6 +612,7 @@ Walking into a zone volume fires its enter and exit events into the zone's trigg
 - [ ] Unit: a trigger with a cooldown fires once per player per cooldown
 - [ ] Real client: walking into Ravenwood's POI sphere in WC_Hub logs 'Enter_Ravenwood POI' and fires 'Trigger POI Ravenwood'; with the POI-text result wired, the zone-entry text shows
 - [ ] Real client: logging in while standing inside a volume fires no enter event
+- [ ] Unit: editing a zone_trigger row, then `.reload zone_trigger`, changes what fires on the next enter without a restart; a row that fails validation keeps the old triggers and reports the error
 
 **Risks**
 
@@ -601,7 +623,7 @@ Walking into a zone volume fires its enter and exit events into the zone's trigg
 
 **Goal:** Walk through exits to the right arrival point.
 
-**Size:** M. **Depends on:** 6.07, 6.13
+**Size:** M. **Depends on:** 6.07, 6.13, 4.15
 
 **Client messages:** MSG_ZONETRANSFERREQUEST, MSG_ZONETRANSFERACK, MSG_SERVERTRANSFER, MSG_SERVERTELEPORT, MSG_ENTERSTATE
 
@@ -610,6 +632,7 @@ Walking into a zone volume fires its enter and exit events into the zone's trigg
 - [ ] Real client: WC_Hub Ravenwood gate lands in Ravenwood; back lands at 'Target location(WC_Hub Ravenwood)'
 - [ ] 'Teleport location (WC_Hub WC_Headmistress_House Entrance)' works
 - [ ] Two triggers on one event give one transfer; '.zone teleports' flags missing destinations
+- [ ] `.reload zone_teleport` sends the next walk-through to an edited destination
 
 ### Detailed spec from WLD-15: Zone doors: teleport destination table and walk-in transfers
 
@@ -618,6 +641,7 @@ Walking through a zone exit (e.g. WC_Hub -> Ravenwood) transfers the player to t
 **Deliverables**
 
 - world.zone_teleport table: zone, trigger_name -> dest_zone, dest_location, transition_id, same_zone flag
+- `.reload zone_teleport` rebuilds the destination map off to the side, validates every destination zone and location, and swaps it; a failure keeps the old rows and reports every error
 - ResTeleport result handler: a same-zone destination uses WLD-12; otherwise WLD-13. When paired triggers share an event, only the first teleport in data order runs.
 - src/tools/zone_extractor --propose-teleports: suggests pairs by matching 'Target location (<SrcZone> <DstZone> Exit)'-style location names and 'TeleportTo<X>' trigger names across zones, and writes a review CSV (never auto-committed)
 - data/sql/updates/db_world: hand-reviewed zone_teleport rows for the Wizard City starting area (WC_Hub <-> Ravenwood, Shopping District, Unicorn Way, Golem Court, Library)
@@ -640,6 +664,7 @@ Walking through a zone exit (e.g. WC_Hub -> Ravenwood) transfers the player to t
 - [ ] Real client: walking into 'Teleport location (WC_Hub WC_Headmistress_House Entrance)' works
 - [ ] Unit: two triggers on one event with teleport results produce exactly one transfer
 - [ ] '.zone teleports <zone>' lists each teleport trigger and flags any with no destination row
+- [ ] Real client: editing a zone_teleport destination, then `.reload zone_teleport`, sends the next walk-through to the new destination without a restart; a row naming a missing zone keeps the old rows
 
 **Risks**
 
@@ -650,7 +675,7 @@ Walking through a zone exit (e.g. WC_Hub -> Ravenwood) transfers the player to t
 
 **Goal:** Per-player known sets with hysteresis.
 
-**Size:** M. **Depends on:** 6.01
+**Size:** M. **Depends on:** 6.01, 4.16
 
 **Client messages:** MSG_ADDOBJECT
 
@@ -658,6 +683,7 @@ Walking through a zone exit (e.g. WC_Hub -> Ravenwood) transfers the player to t
 
 - [ ] Boundary crossing within hysteresis sends nothing
 - [ ] Re-entry sends MSG_ADDOBJECT, not a second MSG_NEWOBJECT
+- [ ] Changing Visibility.Distance applies on the next visibility update
 
 ### Detailed spec from WLD-11: Area of interest: grid visibility
 
@@ -669,7 +695,7 @@ In big or busy zones each client gets only objects and players within range, wit
 - src/server/game/Zones/VisibilitySet: per-player known-object set that sends MSG_ADDOBJECT on re-entry and MSG_REMOVEOBJECT on exit; MSG_NEWOBJECT only the first time an object is made known
 - Objects whose template has m_exemptFromAOI are always visible
 - Move relays go only to players who can see the mover
-- conf/dist/gameserver.conf.dist: Visibility.Distance (default: zone m_farClip), Visibility.Hysteresis
+- conf/dist/gameserver.conf.dist: Visibility.Distance (default: zone m_farClip), Visibility.Hysteresis, live settings; a change re-evaluates every visibility set on the next update
 - src/test/server/game/Zones/GridTest.cpp, VisibilitySetTest.cpp
 
 **Client messages:** MSG_NEWOBJECT, MSG_ADDOBJECT, MSG_REMOVEOBJECT, MSG_SERVERMOVE, MSG_MOVESTATE
@@ -685,6 +711,7 @@ In big or busy zones each client gets only objects and players within range, wit
 - [ ] Unit: re-entry after exit sends MSG_ADDOBJECT, not a second MSG_NEWOBJECT
 - [ ] Real client: in a large zone, B walks away from A: A sees B vanish at range and reappear when B returns, in the right place
 - [ ] Real client: a far-off exempt landmark stays visible
+- [ ] Unit: lowering Visibility.Distance removes objects now out of range on the next update without a restart
 
 **Risks**
 
@@ -714,7 +741,7 @@ In big or busy zones each client gets only objects and players within range, wit
 - src/server/game/Zones/VisibilitySet: per-player known-object set that sends MSG_ADDOBJECT on re-entry and MSG_REMOVEOBJECT on exit; MSG_NEWOBJECT only the first time an object is made known
 - Objects whose template has m_exemptFromAOI are always visible
 - Move relays go only to players who can see the mover
-- conf/dist/gameserver.conf.dist: Visibility.Distance (default: zone m_farClip), Visibility.Hysteresis
+- conf/dist/gameserver.conf.dist: Visibility.Distance (default: zone m_farClip), Visibility.Hysteresis, live settings; a change re-evaluates every visibility set on the next update
 - src/test/server/game/Zones/GridTest.cpp, VisibilitySetTest.cpp
 
 **Client messages:** MSG_NEWOBJECT, MSG_ADDOBJECT, MSG_REMOVEOBJECT, MSG_SERVERMOVE, MSG_MOVESTATE
@@ -740,13 +767,14 @@ In big or busy zones each client gets only objects and players within range, wit
 
 **Goal:** Abusive traffic disconnected predictably.
 
-**Size:** M. **Depends on:** 2.09
+**Size:** M. **Depends on:** 2.09, 4.16
 
 **Acceptance**
 
 - [ ] 10-minute fuzz: no crash, no allocation above MaxFrameSize
 - [ ] 10k frames/s flooder disconnected within 1 s
 - [ ] A never-reading client disconnected at the high-water mark
+- [ ] Changing Network.RateLimit.PerSecond applies to connected sessions from the next frame
 
 ### Detailed spec from NET-11: Network hardening
 
@@ -755,9 +783,10 @@ Malformed, oversized or abusive traffic can't crash or stall a server and is dis
 **Deliverables**
 
 - Per-session token bucket on frames per second (Network.RateLimit.Burst=150, PerSecond=50, as Imlight's defaults suggest) with a violation counter and disconnect
-- Per-IP connection cap and accept-rate cap in SocketMgr
+- Per-IP connection cap and accept-rate cap in SocketMgr (Network.MaxConnectionsPerIP, Network.AcceptRatePerSecond)
 - Strict DML checks: dmlLen must match bytes consumed by Decode; STR/WSTR length above the remaining frame gives a reject; control opcode not in {0,3,4,5} gives a strike
-- Send-queue high-water mark: a slow reader is disconnected instead of growing memory without limit
+- Send-queue high-water mark (Network.SendQueueHighWater): a slow reader is disconnected instead of growing memory without limit
+- The rate limits, caps and high-water mark are live settings with bounds, applied from the next frame or connection
 - src/test/fuzz/FrameFuzz.cpp and MessageDecodeFuzz.cpp (libFuzzer target where the compiler supports it; otherwise a randomized gtest)
 
 **Data sources**
@@ -769,6 +798,7 @@ Malformed, oversized or abusive traffic can't crash or stall a server and is dis
 - [ ] Fuzz run of 10 minutes on the frame and decode paths has no crash, no ASan report and no allocation above MaxFrameSize
 - [ ] A test client flooding 10k frames/s is disconnected within 1s, and other sessions show no latency spike above a threshold in the integration test
 - [ ] A test client that never reads is disconnected when its send queue passes the high-water mark
+- [ ] Integration test: lowering Network.RateLimit.PerSecond while a client is connected throttles that client from the next frame without a restart
 
 **Risks**
 
@@ -778,7 +808,7 @@ Malformed, oversized or abusive traffic can't crash or stall a server and is dis
 
 **Goal:** Named packet logging and CanPacketReceive hooks.
 
-**Size:** S. **Depends on:** 2.09, 4.02
+**Size:** S. **Depends on:** 2.09, 4.02, 4.16
 
 **Client messages:** MSG_USER_AUTHEN_V3, MSG_CLIENTMOVE, MSG_SERVERMOVE, MSG_NEWOBJECT, MSG_REMOVEOBJECT, MSG_LOGIN_NOT_AFK
 
@@ -787,6 +817,7 @@ Malformed, oversized or abusive traffic can't crash or stall a server and is dis
 - [ ] Log shows 'C->S LOGIN MSG_USER_AUTHEN_V3 (7:27)' with credentials redacted; suppressed messages absent
 - [ ] A module blocks one message with no core edits
 - [ ] '.network sessions' returns live count
+- [ ] '.network packetlog' toggles and filters logging live
 
 ### Detailed spec from NET-12: Packet logging, diagnostics and network hooks
 
@@ -794,9 +825,9 @@ Developers can see every message by name with fields, and scripts or modules can
 
 **Deliverables**
 
-- src/server/shared/Network/PacketLog.h/.cpp: optional (Network.PacketLog.Enable, .Filter, .Suppress defaults MSG_CLIENTMOVE, MSG_SERVERMOVE, MSG_NEWOBJECT, MSG_REMOVEOBJECT, MSG_LOGIN_NOT_AFK, keepalives) text log with direction, session id, service:order, name and DynamicMessage fields
+- src/server/shared/Network/PacketLog.h/.cpp: optional (Network.PacketLog.Enable, .Filter, .Suppress defaults MSG_CLIENTMOVE, MSG_SERVERMOVE, MSG_NEWOBJECT, MSG_REMOVEOBJECT, MSG_LOGIN_NOT_AFK, keepalives) text log with direction, session id, service:order, name and DynamicMessage fields. The PacketLog options are live settings applied from the next message.
 - ScriptMgr ServerScript hooks: OnNetworkStart, OnSocketOpen, OnSocketClose, CanPacketReceive(session, service, order), CanPacketSend
-- GM command group src/server/scripts/Commands/cs_network.cpp: 'network sessions' (count, per-app), 'network session <id>' (state, RTT, queued bytes, strikes)
+- GM command group src/server/scripts/Commands/cs_network.cpp: 'network sessions' (count, per-app), 'network session <id>' (state, RTT, queued bytes, strikes), 'network packetlog on|off|filter <names>' (sets the PacketLog settings live)
 
 **Client messages:** MSG_USER_AUTHEN_V3, MSG_CLIENTMOVE, MSG_SERVERMOVE, MSG_NEWOBJECT, MSG_REMOVEOBJECT, MSG_LOGIN_NOT_AFK
 
@@ -809,6 +840,7 @@ Developers can see every message by name with fields, and scripts or modules can
 - [ ] With PacketLog enabled and a real client at login, the log shows 'C->S LOGIN MSG_USER_AUTHEN_V3 (7:27)' with decoded fields, and suppressed messages are absent
 - [ ] A test module registering CanPacketReceive returning false for one message blocks it with no core edits
 - [ ] '.network sessions' in game chat returns the live count
+- [ ] '.network packetlog filter MSG_CLIENTMOVE' on a running server changes what is logged from the next message without a restart
 
 **Risks**
 

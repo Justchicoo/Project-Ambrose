@@ -6,26 +6,26 @@
 
 | ID | Milestone | Size | Depends on |
 |---|---|---|---|
-| 13.01 | Pet core (EXT-10) | M | 8.10, 6.16 |
+| 13.01 | Pet core (EXT-10) | M | 8.10, 6.16, 4.16 |
 | 13.02 | Pet snacks, level, talents, rename (EXT-11) | M | 13.01 |
 | 13.03 | Pets in combat (CMB-26 + EXT-22) | M | 13.02, 11.11 |
 | 13.04 | Cantrips casting and XP (EXT-12) | M | 13.01, 8.05 |
 | 13.05 | Cantrips advanced (EXT-13) | M | 13.04, 9.10 |
-| 13.06 | Reagents and recipes (EXT-14) | M | 8.09, 7.07, 9.04 |
+| 13.06 | Reagents and recipes (EXT-14) | M | 8.09, 7.07, 9.04, 4.15, 4.16 |
 | 13.07 | Crafting (EXT-15) | M | 13.06 |
 | 13.08 | Minigame kiosk and client-process framework (EXT-16 part 1) | M | 12.18, 1.16 |
 | 13.09 | Concentration end to end (EXT-16 part 2) | M | 13.08 |
-| 13.10 | Remaining simple minigames (EXT-17) | S | 13.09 |
+| 13.10 | Remaining simple minigames (EXT-17) | S | 13.09, 4.15 |
 | 13.11 | Sorcery Stones state machine (EXT-18 part 1) | M | 13.09 |
 | 13.12 | Sorcery Stones handlers and client (EXT-18 part 2) | M | 13.11 |
 | 13.13 | Pet games: dance (EXT-19 part 1) | M | 13.02, 13.08 |
 | 13.14 | Pet games: maze and jump (EXT-19 part 2) | M | 13.13 |
-| 13.15 | Hatch session (EXT-20 part 1) | M | 13.02, 12.10 |
+| 13.15 | Hatch session (EXT-20 part 1) | M | 13.02, 12.10, 4.16 |
 | 13.16 | Egg incubation and inheritance (EXT-20 part 2) | M | 13.15, 13.07 |
 | 13.17 | Pet morphing (EXT-21) | S | 13.16 |
-| 13.18 | Crown shop list (EXT-8 part 1) | M | 12.15, 7.01 |
+| 13.18 | Crown shop list (EXT-8 part 1) | M | 12.15, 7.01, 4.15 |
 | 13.19 | Crown shop segments (EXT-8 part 2) | M | 13.18 |
-| 13.20 | Crown purchases, gifts, access passes (EXT-9) | M | 13.19, 6.14 |
+| 13.20 | Crown purchases, gifts, access passes (EXT-9) | M | 13.19, 6.14, 4.16 |
 | 13.21 | Paid loot rolls (EXT-44) | S | 12.15, 10.09 |
 
 ## Review notes for this phase
@@ -38,7 +38,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Goal:** Pet spawn/follow and energy.
 
-**Size:** M. **Depends on:** 8.10, 6.16
+**Size:** M. **Depends on:** 8.10, 6.16, 4.16
 
 **Client messages:** MSG_PETUPDATEBEHAVIOR, MSG_PETENERGYTICK, MSG_PETENERGYMAX, MSG_LEASH, MSG_LEASHOFFSET, MSG_EQUIPMENTBEHAVIOR_EQUIPITEM, MSG_EQUIPMENTBEHAVIOR_UNEQUIPITEM, MSG_NEWOBJECT, MSG_DELETEOBJECT
 
@@ -46,6 +46,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 - [ ] Energy never exceeds max; unequip despawns
 - [ ] Real client: pet follows through doors; others see it
+- [ ] Changing Pet.EnergyRegenInterval applies from the next energy tick without a restart
 
 ### Detailed spec from EXT-10: Pet core: equip, spawn/follow, energy
 
@@ -55,7 +56,7 @@ An equipped pet follows the wizard, and the energy bar ticks and caps correctly.
 
 - game/Pets/PetMgr and Pet object on character (ServerPetOwnerBehavior state)
 - Pet spawn/despawn on equip/unequip and zone change, leash offset
-- Energy regen timer and max from level table
+- Energy regen timer and max from level table, with the regen interval as the live setting Pet.EnergyRegenInterval
 
 **Client messages:** MSG_PETUPDATEBEHAVIOR, MSG_PETENERGYTICK, MSG_PETENERGYMAX, MSG_LEASH, MSG_LEASHOFFSET, MSG_EQUIPMENTBEHAVIOR_EQUIPITEM, MSG_EQUIPMENTBEHAVIOR_UNEQUIPITEM, MSG_NEWOBJECT, MSG_DELETEOBJECT
 
@@ -85,6 +86,7 @@ An equipped pet follows the wizard, and the energy bar ticks and caps correctly.
 
 - [ ] Talent roll only from pool, no duplicates
 - [ ] Real client: feeding shows XP; level-up names the talent
+- [ ] `.settings set Rate.XP.Pet 2` doubles the next snack's pet XP without a restart
 
 ### Detailed spec from EXT-11: Pet snacks, XP, level up, talent manifestation, rename
 
@@ -92,8 +94,8 @@ Feeding snacks grows a pet through levels and reveals talents from its pool.
 
 **Deliverables**
 
-- Snack inventory, feed XP calculation with PetFeedingRewardConfig likes/dislikes
-- Level-up with talent roll from talent pool, pet stat rules
+- Snack inventory, feed XP calculation with PetFeedingRewardConfig likes/dislikes, with every pet XP grant passing through Rate.XP.Pet
+- Level-up with talent roll from talent pool, pet stat rules, with manifestation odds as the live setting Pet.TalentManifestChance
 - Pet rename via name-part picker
 
 **Client messages:** MSG_PETSNACKADD, MSG_PETSNACKREMOVE, MSG_PETSNACKREMOVEREQUEST, MSG_PETSNACKUPDATE, MSG_GETSNACKLIST, MSG_SNACKLIST, MSG_FEEDINVENTORYITEM, MSG_PETLEVELUP, MSG_PETRENAMEREQUEST, MSG_PETRENAMECONFIRM, MSG_SHAREDBANKDELETEREAGENTORPETSNACK, MSG_SHAREDBANKDELETEREAGENTORPETSNACKCONFIRM
@@ -117,7 +119,7 @@ Feeding snacks grows a pet through levels and reveals talents from its pool.
 
 **Risks**
 
-- Talent manifestation odds are not in client data; behavior must be studied and documented as a tunable
+- Talent manifestation odds are not in client data; behavior must be studied and the result becomes the default of Pet.TalentManifestChance
 
 ## 13.03 Pets in combat (CMB-26 + EXT-22)
 
@@ -198,7 +200,7 @@ Players learn cantrips and cast emote/effect/teleport cantrips for energy, gaini
 
 - game/Cantrips/CantripMgr (CantripsSpellTemplate effect dispatch)
 - Handlers for spell cast and response/errors, energy cost
-- Cantrip XP/level from CantripXPConfig.xml
+- Cantrip XP/level from CantripXPConfig.xml, with every cantrip XP grant passing through Rate.XP.Cantrip
 
 **Client messages:** MSG_CANTRIPSSPELLCAST, MSG_CANTRIPSRESPONSE, MSG_CANTRIPSRESPONSEERROR, MSG_CASTEFFECT, MSG_UPDATECANTRIPXP, MSG_CANTRIPLEVELUP, MSG_CANTRIPENDLOOP, MSG_CANTRIPAFFECTEDPLAYER
 
@@ -254,7 +256,7 @@ Invisibility, ritual objects and luck/beneficial objects behave correctly for al
 
 **Goal:** Harvest and hold reagents.
 
-**Size:** M. **Depends on:** 8.09, 7.07, 9.04
+**Size:** M. **Depends on:** 8.09, 7.07, 9.04, 4.15, 4.16
 
 **Client messages:** MSG_REAGENTADD, MSG_REAGENTREMOVE, MSG_REAGENTREMOVEREQUEST, MSG_REAGENTUPDATE, MSG_RECIPEADD, MSG_RECIPEREMOVE
 
@@ -262,6 +264,7 @@ Invisibility, ritual objects and luck/beneficial objects behave correctly for al
 
 - [ ] Stack cap enforced
 - [ ] Real client: harvest node despawns; reagent tab count; recipe bought
+- [ ] Changing Reagent.RespawnSeconds or Rate.Respawn affects the next harvested node's respawn without a restart
 
 ### Detailed spec from EXT-14: Reagents and recipes
 
@@ -270,7 +273,8 @@ Players harvest world reagents, hold reagents and recipes, and see them in the c
 **Deliverables**
 
 - Reagent stack storage (separate from backpack), recipe list
-- Harvestable reagent spawn behavior with respawn timers
+- Harvestable reagent spawn behavior with respawn timers from the live setting Reagent.RespawnSeconds, scaled by Rate.Respawn
+- `.reload reagent_spawn` builds the spawn store off to the side, validates it, swaps it, spawns and despawns the difference in live zones, and keeps the old store on failure
 - Recipe vendor (RecipeShopOption) via EXT-1 framework
 
 **Client messages:** MSG_REAGENTADD, MSG_REAGENTREMOVE, MSG_REAGENTREMOVEREQUEST, MSG_REAGENTUPDATE, MSG_RECIPEADD, MSG_RECIPEREMOVE
@@ -351,7 +355,8 @@ A player can pick a minigame at a kiosk, play it, and receive mana/gold rewards.
 
 **Deliverables**
 
-- game/Minigames/MinigameMgr loading MinigameConfig.xml (MinigameInfo: name, zone, reward tables)
+- game/Minigames/MinigameMgr loading MinigameConfig.xml (MinigameInfo: name, zone, reward tables) as a 4.15 reload target, so `.reload minigame` swaps it and keeps the old config on failure
+- Minigame gold rewards pass through Rate.Gold.Minigame
 - ClientProcess session component: job ids, MSG_MESSAGE_PROCESS inner-message decode and routing to services 25/40-47/54
 - Minigame handler for service 42 (Concentration): connect, moved, rewards with score sanity bounds
 - Leaderboard (ScoreTrackingList) storage
@@ -396,7 +401,8 @@ A player can pick a minigame at a kiosk, play it, and receive mana/gold rewards.
 
 **Deliverables**
 
-- game/Minigames/MinigameMgr loading MinigameConfig.xml (MinigameInfo: name, zone, reward tables)
+- game/Minigames/MinigameMgr loading MinigameConfig.xml (MinigameInfo: name, zone, reward tables) as a 4.15 reload target, so `.reload minigame` swaps it and keeps the old config on failure
+- Minigame gold rewards pass through Rate.Gold.Minigame
 - ClientProcess session component: job ids, MSG_MESSAGE_PROCESS inner-message decode and routing to services 25/40-47/54
 - Minigame handler for service 42 (Concentration): connect, moved, rewards with score sanity bounds
 - Leaderboard (ScoreTrackingList) storage
@@ -426,7 +432,7 @@ A player can pick a minigame at a kiosk, play it, and receive mana/gold rewards.
 
 **Goal:** Services 40,41,43,44,45,46,47,54.
 
-**Size:** S. **Depends on:** 13.09
+**Size:** S. **Depends on:** 13.09, 4.15
 
 **Client messages:** MSG_SKULLRIDERS_REWARDS, MSG_DOODLEDOUG_REWARDS, MSG_MG2_REWARDS, MSG_MG3_REWARDS, MSG_MG4_REWARDS, MSG_MG5_REWARDS, MSG_MG6_REWARDS, MSG_MG9_REWARDS
 
@@ -434,6 +440,7 @@ A player can pick a minigame at a kiosk, play it, and receive mana/gold rewards.
 
 - [ ] Each service decodes REWARDS score/gameName
 - [ ] Real client: each launches and shows rewards
+- [ ] `.reload minigame_reward_bounds` applies an edited bound to the next reward, and a failed reload keeps the old bounds
 
 ### Detailed spec from EXT-17: Remaining simple minigames
 
@@ -442,7 +449,7 @@ All 3-message minigames (Skull Riders, Doodle Doug, Hot Shots, Shock-a-Lock, Cho
 **Deliverables**
 
 - Data-driven handlers for services 40,41,43,44,45,46,47,54 reusing EXT-16
-- Per-game score bounds in world DB
+- Per-game score bounds in world DB, reloaded live with `.reload minigame_reward_bounds` (validate, swap, keep the old bounds on failure)
 
 **Client messages:** MSG_SKULLRIDERS_CONNECT, MSG_SKULLRIDERS_MOVED, MSG_SKULLRIDERS_REWARDS, MSG_DOODLEDOUG_CONNECT, MSG_DOODLEDOUG_MOVED, MSG_DOODLEDOUG_REWARDS, MSG_MG2_CONNECT, MSG_MG2_MOVED, MSG_MG2_REWARDS, MSG_MG3_CONNECT, MSG_MG3_MOVED, MSG_MG3_REWARDS, MSG_MG4_CONNECT, MSG_MG4_MOVED, MSG_MG4_REWARDS, MSG_MG5_CONNECT, MSG_MG5_MOVED, MSG_MG5_REWARDS, MSG_MG6_CONNECT, MSG_MG6_MOVED, MSG_MG6_REWARDS, MSG_MG9_CONNECT, MSG_MG9_MOVED, MSG_MG9_REWARDS
 
@@ -477,6 +484,7 @@ The server-authoritative Sorcery Stones minigame works, including rows, levels, 
 **Deliverables**
 
 - game/Minigames/Soblocks C++ game state machine (row generation, levels, attacks, countdown)
+- Level thresholds and countdown length as the live settings Soblocks.LevelThresholds and Soblocks.CountdownSeconds, applied from the next game
 - Handlers for the 23 service-25 messages
 
 **Client messages:** MSG_SOBLOCKS_STARTSWAP, MSG_SOBLOCKS_PAUSE, MSG_SOBLOCKS_PAUSEON, MSG_SOBLOCKS_PAUSEOFF, MSG_SOBLOCKS_ADVANCEON, MSG_SOBLOCKS_ADVANCEOFF, MSG_SOBLOCKS_ENDGAME, MSG_SOBLOCKS_RESETGAME, MSG_SOBLOCKS_SELECTGAME, MSG_SOBLOCKS_SENDROW, MSG_SOBLOCKS_ROWINFO, MSG_SOBLOCKS_REQUESTROW, MSG_SOBLOCKS_LEVELUP, MSG_SOBLOCKS_READY, MSG_SOBLOCKS_SETLEVEL, MSG_SOBLOCKS_LOSS, MSG_SOBLOCKS_WIN, MSG_SOBLOCKS_COUNTDOWN, MSG_SOBLOCKS_INFO, MSG_SOBLOCKS_ROCKDROP, MSG_SOBLOCKS_FREEZEBLOCKS, MSG_SOBLOCKS_TIMEDDROP, MSG_SOBLOCKS_ATTACK
@@ -492,7 +500,7 @@ The server-authoritative Sorcery Stones minigame works, including rows, levels, 
 
 **Risks**
 
-- Scripts/*/Server.lua are the original server logic shipped in the client. Running them needs an embedded Lua runtime, a new dependency the maintainer has to approve; reimplementing in C++ is clean-room but costs more
+- Scripts/*/Server.lua are the original server logic shipped in the client. Running them needs an embedded Lua runtime, a new dependency the maintainer has to approve, which would let the scripts reload live; reimplementing in C++ is clean-room but costs more, and its tunables become live settings instead
 
 ## 13.12 Sorcery Stones handlers and client (EXT-18 part 2)
 
@@ -513,6 +521,7 @@ The server-authoritative Sorcery Stones minigame works, including rows, levels, 
 **Deliverables**
 
 - game/Minigames/Soblocks C++ game state machine (row generation, levels, attacks, countdown)
+- Level thresholds and countdown length as the live settings Soblocks.LevelThresholds and Soblocks.CountdownSeconds, applied from the next game
 - Handlers for the 23 service-25 messages
 
 **Client messages:** MSG_SOBLOCKS_STARTSWAP, MSG_SOBLOCKS_PAUSE, MSG_SOBLOCKS_PAUSEON, MSG_SOBLOCKS_PAUSEOFF, MSG_SOBLOCKS_ADVANCEON, MSG_SOBLOCKS_ADVANCEOFF, MSG_SOBLOCKS_ENDGAME, MSG_SOBLOCKS_RESETGAME, MSG_SOBLOCKS_SELECTGAME, MSG_SOBLOCKS_SENDROW, MSG_SOBLOCKS_ROWINFO, MSG_SOBLOCKS_REQUESTROW, MSG_SOBLOCKS_LEVELUP, MSG_SOBLOCKS_READY, MSG_SOBLOCKS_SETLEVEL, MSG_SOBLOCKS_LOSS, MSG_SOBLOCKS_WIN, MSG_SOBLOCKS_COUNTDOWN, MSG_SOBLOCKS_INFO, MSG_SOBLOCKS_ROCKDROP, MSG_SOBLOCKS_FREEZEBLOCKS, MSG_SOBLOCKS_TIMEDDROP, MSG_SOBLOCKS_ATTACK
@@ -528,7 +537,7 @@ The server-authoritative Sorcery Stones minigame works, including rows, levels, 
 
 **Risks**
 
-- Scripts/*/Server.lua are the original server logic shipped in the client. Running them needs an embedded Lua runtime, a new dependency the maintainer has to approve; reimplementing in C++ is clean-room but costs more
+- Scripts/*/Server.lua are the original server logic shipped in the client. Running them needs an embedded Lua runtime, a new dependency the maintainer has to approve, which would let the scripts reload live; reimplementing in C++ is clean-room but costs more, and its tunables become live settings instead
 
 ## 13.13 Pet games: dance (EXT-19 part 1)
 
@@ -617,7 +626,7 @@ Players play pet games to earn pet XP and snacks, spending energy.
 
 **Goal:** Two-player hatch window.
 
-**Size:** M. **Depends on:** 13.02, 12.10
+**Size:** M. **Depends on:** 13.02, 12.10, 4.16
 
 **Client messages:** MSG_PETHATCHCREATE, MSG_PETHATCHREQUEST, MSG_PETHATCHJOINSTATUS, MSG_PETHATCHREADYSTATUS, MSG_PETHATCHRESULT, MSG_LENTPET
 
@@ -631,9 +640,9 @@ Two players (or a kiosk) hatch pets into an egg that incubates and hatches with 
 
 **Deliverables**
 
-- Hatch session (create/request/join/ready/result) with gold cost
-- Egg item in crafting slot with incubation timer and instant hatch for gold
-- Offspring talent inheritance rules
+- Hatch session (create/request/join/ready/result) with gold cost from the live setting Hatch.GoldCost
+- Egg item in crafting slot with incubation timer and instant hatch for gold, from the live settings Hatch.IncubationSeconds and Hatch.InstantGoldCost
+- Offspring talent inheritance rules, with odds as the live settings Hatch.InheritChance.Manifested and Hatch.InheritChance.Pool
 - Hatchmaking kiosk listing (HatchmakingCrownsPets)
 
 **Client messages:** MSG_PETHATCHCREATE, MSG_PETHATCHREQUEST, MSG_PETHATCHJOINSTATUS, MSG_PETHATCHREADYSTATUS, MSG_PETHATCHRESULT, MSG_PETHATCHED, MSG_HATCHEGGNOW, MSG_LENTPET
@@ -655,7 +664,7 @@ Two players (or a kiosk) hatch pets into an egg that incubates and hatches with 
 
 **Risks**
 
-- Inheritance odds are not in the client, so they must be studied from behavior and flagged tunable
+- Inheritance odds are not in the client, so they must be studied from behavior, and the result becomes the defaults of Hatch.InheritChance.*
 - Depends on a trade/ready-window pattern owned by social systems (prefix guessed)
 
 ## 13.16 Egg incubation and inheritance (EXT-20 part 2)
@@ -670,6 +679,7 @@ Two players (or a kiosk) hatch pets into an egg that incubates and hatches with 
 
 - [ ] Offspring talents only from parents' manifested plus pool; timer survives restart
 - [ ] Real client: hatch-now plays cinematic and adds baby pet
+- [ ] Changing Hatch.IncubationSeconds applies to the next egg without a restart, and eggs already incubating keep their stored end time
 
 ### Detailed spec from EXT-20: Hatching and hatchmaking
 
@@ -677,9 +687,9 @@ Two players (or a kiosk) hatch pets into an egg that incubates and hatches with 
 
 **Deliverables**
 
-- Hatch session (create/request/join/ready/result) with gold cost
-- Egg item in crafting slot with incubation timer and instant hatch for gold
-- Offspring talent inheritance rules
+- Hatch session (create/request/join/ready/result) with gold cost from the live setting Hatch.GoldCost
+- Egg item in crafting slot with incubation timer and instant hatch for gold, from the live settings Hatch.IncubationSeconds and Hatch.InstantGoldCost
+- Offspring talent inheritance rules, with odds as the live settings Hatch.InheritChance.Manifested and Hatch.InheritChance.Pool
 - Hatchmaking kiosk listing (HatchmakingCrownsPets)
 
 **Client messages:** MSG_PETHATCHCREATE, MSG_PETHATCHREQUEST, MSG_PETHATCHJOINSTATUS, MSG_PETHATCHREADYSTATUS, MSG_PETHATCHRESULT, MSG_PETHATCHED, MSG_HATCHEGGNOW, MSG_LENTPET
@@ -701,7 +711,7 @@ Two players (or a kiosk) hatch pets into an egg that incubates and hatches with 
 
 **Risks**
 
-- Inheritance odds are not in the client, so they must be studied from behavior and flagged tunable
+- Inheritance odds are not in the client, so they must be studied from behavior, and the result becomes the defaults of Hatch.InheritChance.*
 - Depends on a trade/ready-window pattern owned by social systems (prefix guessed)
 
 ## 13.17 Pet morphing (EXT-21)
@@ -723,7 +733,7 @@ Pets can be morphed into new forms per PetMorphing rules.
 
 **Deliverables**
 
-- Morph recipe lookup, cost check, morph slot timer
+- Morph recipe lookup, cost check, morph slot timer from the live setting PetMorph.SlotSeconds
 
 **Client messages:** MSG_PETMORPHSET, MSG_PETMORPHCANAFFORD, MSG_PETMORPHREADY, MSG_PETEGGMORPHED, MSG_PETMORPHINGSLOT
 
@@ -744,7 +754,7 @@ Pets can be morphed into new forms per PetMorphing rules.
 
 **Goal:** PCS list and catalog extractor.
 
-**Size:** M. **Depends on:** 12.15, 7.01
+**Size:** M. **Depends on:** 12.15, 7.01, 4.15
 
 **Client messages:** MSG_PCS_LIST_REQUEST, MSG_PCS_LIST_RESPONSE, MSG_PCS_PATCH, MSG_SHOWCASEDSTOREITEMINFO
 
@@ -758,7 +768,7 @@ The in-game Crown Shop window opens and shows categorized items with prices.
 
 **Deliverables**
 
-- game/CrownShop/CrownShopMgr loading catalog from world DB
+- game/CrownShop/CrownShopMgr loading catalog from world DB; `.reload crown_shop` builds the catalog off to the side, validates it, swaps it, keeps the old one on failure, and bumps the catalog version so clients refetch
 - PCS segment/list serializer
 - tools extractor: builds world.crown_shop rows from ObjectData/CrownItems in the user's install
 
@@ -796,6 +806,7 @@ The in-game Crown Shop window opens and shows categorized items with prices.
 
 - [ ] Segment request returns only its items; summary reflects catalog version
 - [ ] Real client: item tiles, prices, search without errors
+- [ ] `.reload crown_shop` after a price edit bumps the catalog version, and the next segment request shows the new price without a restart
 
 ### Detailed spec from EXT-8: Crown shop catalog browse (PCS)
 
@@ -803,7 +814,7 @@ The in-game Crown Shop window opens and shows categorized items with prices.
 
 **Deliverables**
 
-- game/CrownShop/CrownShopMgr loading catalog from world DB
+- game/CrownShop/CrownShopMgr loading catalog from world DB; `.reload crown_shop` builds the catalog off to the side, validates it, swaps it, keeps the old one on failure, and bumps the catalog version so clients refetch
 - PCS segment/list serializer
 - tools extractor: builds world.crown_shop rows from ObjectData/CrownItems in the user's install
 
@@ -833,7 +844,7 @@ The in-game Crown Shop window opens and shows categorized items with prices.
 
 **Goal:** Buy with crowns.
 
-**Size:** M. **Depends on:** 13.19, 6.14
+**Size:** M. **Depends on:** 13.19, 6.14, 4.16
 
 **Client messages:** MSG_PCS_PRICE_LOCK_REQUEST, MSG_PCS_PRICE_LOCK_RESPONSE, MSG_PCS_PURCHASE_REQUEST, MSG_PCS_PURCHASE_RESPONSE, MSG_PCS_UPDATEUSERWISHLIST, MSG_ACCESSPASSINFOREQUEST, MSG_ACCESSPASSOFFER, MSG_ACCESSPASSBUYREQUEST, MSG_ACCESSPASSBUYCONFIRM, MSG_ACCESSPASSREJECTED, MSG_ACCESSPASSDECLINED, MSG_GETTIMEDACCESSPASSES, MSG_TIMEDACCESSPASSES, MSG_NOTIFY_GIFT, MSG_REQUEST_GIFTS, MSG_RECEIVE_GIFTS, MSG_REDEEM_GIFT, MSG_GIFT_REDEEMED, MSG_DELETE_GIFT
 
@@ -841,6 +852,7 @@ The in-game Crown Shop window opens and shows categorized items with prices.
 
 - [ ] Expired price lock rejected; gift to unknown name fails
 - [ ] Real client: mount purchase; locked area offer then transfer
+- [ ] Changing CrownShop.PriceLockSeconds applies to the next price lock without a restart
 
 ### Detailed spec from EXT-9: Crown shop purchase, gifting, wishlist, access passes
 
@@ -848,7 +860,7 @@ Players buy crown shop items, including area access passes and gifts to others.
 
 **Deliverables**
 
-- Price lock plus purchase transaction
+- Price lock plus purchase transaction, with the lock timeout as the live setting CrownShop.PriceLockSeconds
 - Gift and wishlist persistence
 - Access pass gating hook for zone transfer (WLD)
 
@@ -872,7 +884,7 @@ Players buy crown shop items, including area access passes and gifts to others.
 
 **Risks**
 
-- Price lock timeout semantics unverified
+- Price lock timeout semantics unverified; the observed value becomes the default of CrownShop.PriceLockSeconds
 
 ## 13.21 Paid loot rolls (EXT-44)
 

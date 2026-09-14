@@ -2,7 +2,7 @@
 
 # Phase 16: Patch server and tooling ownership
 
-**Done when:** The retail client patches against Ambrose with 0 files altered, restores a deleted WAD, and streams missing zone packages. Users produce their own type dump with Ambrose tooling. This track can run in parallel any time after phase 2.
+**Done when:** The retail client patches against Ambrose with 0 files altered, restores a deleted WAD, and streams missing zone packages. The manifest reloads and every patch option changes without a restart. Users produce their own type dump with Ambrose tooling. This track can run in parallel any time after phase 2.
 
 | ID | Milestone | Size | Depends on |
 |---|---|---|---|
@@ -12,7 +12,7 @@
 | 16.04 | patchserver TCP service 8 (PAT-6) | M | 16.03, 2.09 |
 | 16.05 | HTTP file service with Range (PAT-7) | M | 16.03, 1.19 |
 | 16.06 | Real-client no-op patch and repair (PAT-8) | M | 16.04, 16.05, 1.21 |
-| 16.07 | Login/game patching switches (PAT-9) | S | 2.14, 4.14 |
+| 16.07 | Login/game patching switches (PAT-9) | S | 2.14, 4.14, 4.16 |
 | 16.08 | MSG_NEXT_VERSION and patch hardening (PAT-11) | S | 16.04, 16.05 |
 | 16.09 | DOWNLOADPACKAGE format RE (PAT-10 part 1) | M | 16.06, 16.07 |
 | 16.10 | In-game package streaming (PAT-10 part 2) | M | 16.09, 6.14 |
@@ -157,6 +157,7 @@ A tool builds a patch output directory (manifest plus revision name) from the us
 - [ ] Fake client gets ListFileSize/ListFileCRC equal to the .bin
 - [ ] Probe without session accept still gets a reply
 - [ ] ListFileURL contains '/V_r806919.Wizard_1_610/'
+- [ ] Corrupt manifest reload keeps the old one; port change rebinds live
 
 ### Detailed spec from PAT-6: patchserver app: TCP service 8 answering MSG_LATEST_FILE_LIST_V2
 
@@ -167,8 +168,8 @@ A client or probe that connects to the patch port gets a correct pointer to our 
 - src/server/apps/patchserver/Main.cpp + PatchServerApp (Boost.Asio acceptor, pending the stack decision)
 - src/server/game-independent handler file src/server/apps/patchserver/Handlers/PatchHandler.cpp registering MSG_LATEST_FILE_LIST_V2 (state: never authenticated) and MSG_LATEST_FILE_LIST (v1, same reply without Locale)
 - Reply fields: LatestVersion=1, ListFileName='LatestFileList.bin', ListFileType=1, ListFileTime=manifest mtime (unix), ListFileSize and ListFileCRC of the .bin, ListFileURL='<BaseUrl>/<V_revision>/Windows/LatestFileList.bin' (path style unverified), URLPrefix='<BaseUrl>/<V_revision>', URLSuffix='', Locale echoed
-- Manifest loaded at startup, reload on a console command
-- conf/dist/patchserver.conf.dist: PatchServer.BindIP, PatchServer.Port=12500, Http.PublicBaseUrl, Patch.OutputDir, Patch.SupportedLocales
+- Manifest loaded at startup and reloaded from the console or the admin API with an atomic swap; a manifest that fails to load or validate keeps the old one serving and reports every error. This hooks into the 4.15 reload framework and the 17.12 admin API when those land
+- conf/dist/patchserver.conf.dist: PatchServer.BindIP, PatchServer.Port=12500, Http.PublicBaseUrl, Patch.OutputDir, Patch.SupportedLocales, all live settings once 4.16 lands; a port or address change rebinds live, and a failed bind keeps the old listener
 
 **Client messages:** MSG_LATEST_FILE_LIST_V2, MSG_LATEST_FILE_LIST
 
@@ -183,6 +184,7 @@ A client or probe that connects to the patch port gets a correct pointer to our 
 - [ ] A probe that sends the V2 request right after the 28-byte session offer, without a session accept first (the Aurorium probe byte sequence 0D F0 27 00 00 00 00 00 08 02 22 00 + 30 zero bytes), still gets a reply
 - [ ] Reply ListFileURL contains '/V_r806919.Wizard_1_610/'
 - [ ] Unknown locale: behaviour matches the client string 'Locale (%s) not supported by the server' (exact reply to be decided from the PAT-8 client test, logged)
+- [ ] Reloading a corrupt manifest keeps the old manifest serving and reports the error, and changing PatchServer.Port rebinds without a restart while a failed bind keeps the old listener
 
 **Risks**
 
@@ -201,6 +203,7 @@ A client or probe that connects to the patch port gets a correct pointer to our 
 - [ ] Range 0-(HeaderSize-1) CRC == HeaderCRC
 - [ ] Traversal and unlisted paths 400/404
 - [ ] HEAD Content-Length == Size
+- [ ] Http.MaxConnections change applies live
 
 ### Detailed spec from PAT-7: HTTP file service with Range and Src->local path mapping
 
@@ -212,7 +215,7 @@ The client can fetch the manifest, whole files and byte ranges from our server, 
 - Range: bytes=a-b support (206 + Content-Range), Content-Length on every response, correct 404/416
 - Path traversal rejection (.., absolute, drive prefixes), case-insensitive lookup on Windows installs
 - Optional serving of the compressed variant for FileType 4 once its URL/format is confirmed (see open questions)
-- patchserver.conf.dist: Http.BindIP, Http.Port, Http.MaxConnections
+- patchserver.conf.dist: Http.BindIP, Http.Port, Http.MaxConnections, all live settings once 4.16 lands; a port or address change rebinds live, a failed bind keeps the old listener, and Http.MaxConnections applies to the next connection
 
 **Data sources**
 
@@ -225,6 +228,7 @@ The client can fetch the manifest, whole files and byte ranges from our server, 
 - [ ] Integration: Range bytes=0-(HeaderSize-1) on a zone WAD returns HeaderSize bytes with CRC == HeaderCRC
 - [ ] Unit: GET /V_x/../Bin/x and a path not in the manifest return 400/404 without touching the filesystem outside the install
 - [ ] HEAD returns Content-Length == Size (the client string 'FileInfo filesize mismatch with URL filesize' shows it checks this)
+- [ ] Lowering Http.MaxConnections while running refuses the next connection over the new limit without a restart, and in-flight downloads complete
 
 **Risks**
 
@@ -278,7 +282,7 @@ The retail client patches against Ambrose, finds nothing to change on a complete
 
 **Goal:** Correct behaviour with patching on or off.
 
-**Size:** S. **Depends on:** 2.14, 4.14
+**Size:** S. **Depends on:** 2.14, 4.14, 4.16
 
 **Client messages:** MSG_USER_AUTHEN_V3, MSG_USER_AUTHEN_V2, MSG_USER_VALIDATE, MSG_PATCHINGBLOCKED, MSG_LOGPATCHCLIENTPATCHTIME, MSG_DOWNLOADPACKAGE, MSG_DOWNLOADPACKAGEELEMENT, MSG_DOWNLOADBROWSER
 
@@ -287,6 +291,7 @@ The retail client patches against Ambrose, finds nothing to change on a complete
 - [ ] PATCHINGBLOCKED and LOGPATCHCLIENTPATCHTIME registered 'logged in'
 - [ ] -P 0 zones in with no download-package messages
 - [ ] Revision mismatch rejected only with Login.RequireRevision=1
+- [ ] Login.RequireRevision and Patch.Enabled changes apply live
 
 ### Detailed spec from PAT-9: Game/login integration switches for patching
 
@@ -294,8 +299,8 @@ Login and game servers behave correctly whether patching is enabled or disabled.
 
 **Deliverables**
 
-- loginserver: accept and log PatchClientID / Revision / DataRevision from MSG_USER_AUTHEN_V3 (and V2/MSG_USER_VALIDATE), and optionally reject a Revision that differs from the patchserver manifest revision (config Login.RequireRevision)
-- gameserver: global Patch.Enabled; when 0 never send MSG_DOWNLOADPACKAGE / MSG_DOWNLOADPACKAGEELEMENT / MSG_DOWNLOADBROWSER
+- loginserver: accept and log PatchClientID / Revision / DataRevision from MSG_USER_AUTHEN_V3 (and V2/MSG_USER_VALIDATE), and optionally reject a Revision that differs from the patchserver manifest revision (live setting Login.RequireRevision, applied from the next login)
+- gameserver: live setting Patch.Enabled, applied from the next zone transfer; when 0 never send MSG_DOWNLOADPACKAGE / MSG_DOWNLOADPACKAGEELEMENT / MSG_DOWNLOADBROWSER
 - gameserver handlers for client MSG_PATCHINGBLOCKED (log PackageName/ZoneName and keep the player in place) and MSG_LOGPATCHCLIENTPATCHTIME (log only), in game/Handlers/PatchHandler.cpp
 
 **Client messages:** MSG_USER_AUTHEN_V3, MSG_USER_AUTHEN_V2, MSG_USER_VALIDATE, MSG_PATCHINGBLOCKED, MSG_LOGPATCHCLIENTPATCHTIME, MSG_DOWNLOADPACKAGE, MSG_DOWNLOADPACKAGEELEMENT, MSG_DOWNLOADBROWSER
@@ -311,6 +316,7 @@ Login and game servers behave correctly whether patching is enabled or disabled.
 - [ ] Unit: dispatch table has MSG_PATCHINGBLOCKED and MSG_LOGPATCHCLIENTPATCHTIME registered with state 'logged in'
 - [ ] Real client with -P 0 logs in and zones in without the gameserver sending any download-package message (sniffer or server log shows none)
 - [ ] Login with mismatched Revision is rejected with a clear login error only when Login.RequireRevision=1
+- [ ] `.settings set Login.RequireRevision 1` on a running loginserver rejects the next mismatched login without a restart, and setting Patch.Enabled to 0 stops download-package messages from the next zone transfer
 
 **Risks**
 
@@ -329,6 +335,7 @@ Login and game servers behave correctly whether patching is enabled or disabled.
 - [ ] NEXT_VERSION{Base,1} replied, connection healthy
 - [ ] 200 concurrent ranges correct; 201st refused
 - [ ] Reload mid-download completes with old CRC
+- [ ] Rate limit changes apply live
 
 ### Detailed spec from PAT-11: MSG_NEXT_VERSION and operational hardening
 
@@ -337,8 +344,8 @@ The patchserver handles every service-8 message safely and survives public expos
 **Deliverables**
 
 - Handler for MSG_NEXT_VERSION: reply with the same PkgName and current Version, which means no newer version (exact semantics to confirm; client strings 'Version advanced' / 'Patch failed - Unsupported version' / 'Error downloading RTPatch file')
-- Per-IP connection and request rate limits, idle timeout on the TCP service, max HTTP body/header sizes
-- Manifest hot reload (console command + patchserver.conf option) with atomic swap so in-flight downloads keep the old file set
+- Per-IP connection and request rate limits, idle timeout on the TCP service, max HTTP body/header sizes, each a live setting with bounds that applies from the next connection or request
+- Manifest hot reload from the console or the admin API, plus a patchserver.conf option, with atomic swap so in-flight downloads keep the old file set and a failed reload keeps the old manifest and reports every error; this uses the 4.15 reload framework when it lands
 - CI check in apps/ that no LatestFileList.*, *.wad or client files are staged (supports the never-commit rule)
 
 **Client messages:** MSG_NEXT_VERSION
@@ -353,11 +360,12 @@ The patchserver handles every service-8 message safely and survives public expos
 - [ ] Integration: MSG_NEXT_VERSION{PkgName='Base', Version=1} gets a reply and the connection stays healthy
 - [ ] Load test: 200 concurrent HTTP range requests complete with correct CRCs; the 201st connection over the limit gets refused cleanly
 - [ ] Reload during a large download: the download completes with the old CRC, and new requests see the new manifest
+- [ ] Lowering the per-IP request limit on a running patchserver takes effect for the next request without a restart
 - [ ] CI job fails when a *.wad or LatestFileList.bin is added to a commit
 
 **Risks**
 
-- MSG_NEXT_VERSION may be a dead RTPatch path in 1.610; replying wrongly could put the client in a patch-failure loop, so the reply stays config-gated
+- MSG_NEXT_VERSION may be a dead RTPatch path in 1.610; replying wrongly could put the client in a patch-failure loop, so the reply stays gated by a live setting
 
 ## 16.09 DOWNLOADPACKAGE format RE (PAT-10 part 1)
 

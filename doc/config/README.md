@@ -24,12 +24,15 @@ Later layers override earlier ones for the same key. Every default sits below ev
 | 2 | Module defaults, sorted by file name | `conf.d/pets.conf.dist` |
 | 3 | Local config, required | `gameserver.conf` |
 | 4 | Module config, sorted by file name | `conf.d/pets.conf` |
-| 5 | Environment variables | `AMBROSE_WORLD_SERVER_PORT=14000` |
-| 6 | Command-line overrides | passed by the app at startup |
+| 5 | Live settings (milestone 4.16), persisted in the `settings` table of the database the app owns | `.settings set Rate.XP.Quest 2` |
+| 6 | Environment variables | `AMBROSE_WORLD_SERVER_PORT=14000` |
+| 7 | Command-line overrides | passed by the app at startup |
+
+The gameserver keeps live settings in the characters database, and the loginserver and patchserver keep theirs in the login database. Every live change also writes a row to `setting_audit`.
 
 `conf.d` is the folder next to the local config. If the local config is missing, loading fails with a message naming its path and the `.dist` file to copy. A path that exists but is not a regular file, such as a folder, is reported as an error rather than skipped.
 
-Every resolved value records where it came from: its layer, file, and line. The operations dashboard uses this to show effective settings against their defaults.
+Every resolved value records where it came from: its layer, file, and line. The operations dashboard uses this to show and edit effective settings against their defaults.
 
 Each app's `<app>.conf.dist` is copied next to its executable on every build, and `cmake --install` places it in `etc/`.
 
@@ -51,7 +54,7 @@ An option's environment variable is `AMBROSE_` followed by the key in upper case
 
 Two keys that map to the same variable, such as `Rate.XP` and `Rate_XP`, fail the load. An empty variable counts as unset on every platform.
 
-Environment variables are read each time an option is requested, so they can supply options that no file defines. Such options do not appear in `GetKeysByString`, which lists only keys from files and overrides. Set variables before the app starts its threads. `conf/dist/env.dist` is a template of common variables.
+Environment variables are read each time an option is requested, so they can supply options that no file defines. Such options do not appear in `GetKeysByString`, which lists only keys from files and overrides. Set variables before the app starts its threads. Environment and command-line values are fixed for the life of the process, so a live edit to a key they set is refused with a message naming the layer. `conf/dist/env.dist` is a template of common variables.
 
 ## Typed options and warnings
 
@@ -62,6 +65,8 @@ Warnings are buffered until the app installs a warning sink with `SetWarningSink
 ## Reload
 
 `Reload()` reads every layer again. If any layer has an error, the reload fails and the previous values stay in effect. Loads and reloads run one at a time, so a reload never undoes a newer `LoadInitial`.
+
+Milestone 4.15 adds the reload triggers `reload config` on the console, `.reload config` in game, and SIGHUP on Linux, and 17.12 adds `POST /api/reload/config` on the admin API. After a successful reload, subscribers receive the changed keys and apply them without a restart. Each option's page states whether it applies live, from the next connection or operation, or needs a documented restart.
 
 ## Build options
 

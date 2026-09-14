@@ -8,12 +8,12 @@
 |---|---|---|---|
 | 7.01 | Object template extractor (OBJ-17 + QST-3) | M | 5.01, 6.10, 2.07 |
 | 7.02 | Quest/dialog/madlib model and blob encoders (QST-2) | M | 3.05, 3.02 |
-| 7.03 | Quest schema, sQuestMgr, validator (QST-5) | M | 7.02, 7.01, 3.13 |
-| 7.04 | Requirement engine v1 (QST-6) | M | 7.03, 5.05 |
+| 7.03 | Quest schema, sQuestMgr, validator (QST-5) | M | 7.02, 7.01, 3.13, 4.15 |
+| 7.04 | Requirement engine v1 (QST-6) | M | 7.03, 5.05, 4.15 |
 | 7.05 | Quest authoring toolchain (QST-22) | M | 7.03, 4.08, 3.13 |
 | 7.06 | Character quest persistence and registry (QST-7) | M | 7.03, 3.08 |
-| 7.07 | NPC service menu (QST-8) | M | 5.02, 6.13, 7.02, 7.01 |
-| 7.08 | Wizbang indicators (QST-9) | S | 7.07, 7.04, 7.06 |
+| 7.07 | NPC service menu (QST-8) | M | 5.02, 6.13, 7.02, 7.01, 4.16 |
+| 7.08 | Wizbang indicators (QST-9) | S | 7.07, 7.04, 7.06, 4.16 |
 | 7.09 | Quest offer (QST-10) | M | 7.08 |
 | 7.10 | Accept quest and quest book sync (QST-11) | M | 7.09 |
 | 7.11 | Goal logic engine and completion (QST-12) | M | 7.10 |
@@ -120,26 +120,28 @@ The server holds quests, goals, dialogs and NPC menus as its own C++ types and c
 
 ## 7.03 Quest schema, sQuestMgr, validator (QST-5)
 
-**Goal:** Authored quest rows load into a validated snapshot.
+**Goal:** Authored quest rows load into a validated snapshot that reloads live.
 
-**Size:** M. **Depends on:** 7.02, 7.01, 3.13
+**Size:** M. **Depends on:** 7.02, 7.01, 3.13, 4.15
 
 **Acceptance**
 
 - [ ] Prep entries [38232, 0] index as offered by 38232 only
 - [ ] Validator rejects missing goalsToAdd, bounty without adjectives/tally, unknown persona, logic with both complete and add
 - [ ] Start log 'Loaded N quests, M goals, K validation errors'
+- [ ] `.reload quest_template` swaps in an added quest; a reload that introduces an error keeps the old snapshot
 
 ### Detailed spec from QST-5: World database quest schema, QuestMgr loader and validator
 
-Quests authored as SQL rows load into an immutable sQuestMgr snapshot at startup, with every cross-reference checked and reported.
+Quests authored as SQL rows load into an immutable sQuestMgr snapshot built on the 4.15 reloadable store, at startup and on `.reload quest_template`, with every cross-reference checked and reported.
 
 **Deliverables**
 
 - data/sql/base/db_world and data/sql/updates/db_world/YYYY_MM_DD_NN.sql: quest_template (name PK, name_id, title_key, info/prep/underway/complete keys, level, repeat, mainline, no_quest_helper, skip_qh_autoselect, pet_only, activity_type, prep_always, is_hidden), quest_start_goal, quest_goal (quest, goal_name, name_id, type, title_key, underway_key, complete_key, location_key, destination_zone, image1/2, persona_name, use_patron, tally_count, tally_percent, tally_descriptor/2_key, zone_entry, zone_exit, zone_tag, proximity_tag, rank, hide flags), quest_goal_adjective (bounty/scavenge), quest_goal_client_tag, quest_goal_logic plus quest_goal_logic_member (AND / OR / ADD), quest_dialog (owner = quest|goal, tag Start|Prep|Underway|Completion|Complete), quest_dialog_entry (ordered: actor_template_id, dialog_key, picture, sound, action, dialog_event, animation), quest_dialog_madlib.
-- src/server/game/Quests/QuestMgr.h/.cpp (sQuestMgr): load into shared_ptr<const QuestStore>; derived indexes starterByTemplateId (FIRST entry of the quest's Prep dialog -> actor_template_id), personaGoalsByObjectName, usageGoalsByTag/adjective, bountyGoalsByAdjective, waypointGoalsByZone.
+- src/server/game/Quests/QuestMgr.h/.cpp (sQuestMgr): load into a ReloadableStore<QuestStore> registered with sReloadMgr as quest_template, which rebuilds every quest_* table and index off to the side, validates them, and swaps, keeping the old store and reporting every error on failure; derived indexes starterByTemplateId (FIRST entry of the quest's Prep dialog -> actor_template_id), personaGoalsByObjectName, usageGoalsByTag/adjective, bountyGoalsByAdjective, waypointGoalsByZone.
 - src/server/game/Quests/QuestValidator.cpp: goal names in logic, start goals and dialogs exist; a logic entry cannot both add goals and complete the quest; a Prep dialog exists for any quest that has a starter; actor_template_id exists in object_template; persona_name equals some object_template.object_name; bounty goals have at least one adjective and a tally count; every *_key resolves when LocaleStore is available.
 - src/test/server/game/Quests/QuestMgrTest.cpp using an in-memory row source.
+- Re-binding active quest instances and refreshing NPCs after a swap stay in 10.15.
 
 **Data sources**
 
@@ -164,6 +166,7 @@ Quests authored as SQL rows load into an immutable sQuestMgr snapshot at startup
 - [ ] Unit test: a fixture quest whose Prep dialog has entries [template 38232, template 0] indexes as offered by 38232 only.
 - [ ] Unit test: the validator rejects (a) goalsToAdd naming a missing goal, (b) a bounty goal with no adjectives or tally_count=0, (c) a persona_name matching no object name, (d) a logic row with both completeQuest and goalsToAdd.
 - [ ] Gameserver start log reports 'Loaded N quests, M goals, K validation errors' and refuses to register invalid quests (they are skipped, not crashed on).
+- [ ] Unit test: `.reload quest_template` with an added quest swaps it in and indexes its starter. A reload that introduces a validation error keeps the old snapshot serving and reports every error.
 
 **Risks**
 
@@ -174,13 +177,14 @@ Quests authored as SQL rows load into an immutable sQuestMgr snapshot at startup
 
 **Goal:** One evaluator for quests, spawns, triggers, equip.
 
-**Size:** M. **Depends on:** 7.03, 5.05
+**Size:** M. **Depends on:** 7.03, 5.05, 4.15
 
 **Acceptance**
 
 - [ ] Each type incl. ROP_OR, apply_not, nesting
 - [ ] ReqHasEntry(Q1 'Complete') gates the quest until Q1 completes
 - [ ] Unknown types evaluate false and log once
+- [ ] `.reload requirement` applies an edit to the next evaluation; a bad reload keeps the old lists
 
 ### Detailed spec from QST-6: Requirement engine v1
 
@@ -190,6 +194,7 @@ Quest availability, goal activation, dialog entries, spawns and triggers can all
 
 - data/sql db_world: requirement_list (id, operator AND|OR, apply_not, parent) and requirement (list_id, type, apply_not, quest_name, goal_name, required_status, entry_name, is_quest_registry, numeric_value, operator_type, magic_school, zone, gender).
 - src/server/game/Conditions/RequirementMgr.h/.cpp plus one evaluator per type: ReqHasQuest, ReqHasGoal (m_requiredStatus), ReqHasEntry (quest registry vs character registry), ReqEntryValue, ReqGlobalRegistryValue, ReqMagicLevel (ReqNumeric operators), ReqSchoolOfFocus, ReqIsSchool, ReqInZone, ReqIsGender, ReqHasBadge, nested RequirementList.
+- RequirementMgr holds requirement lists in a 4.15 reloadable store registered as requirement. `.reload requirement` builds and validates the lists off to the side and swaps them, and a failure keeps the old lists and reports every error.
 - ScriptMgr hook ConditionScript for script-defined requirement types.
 - src/test/server/game/Conditions/RequirementTest.cpp
 
@@ -208,6 +213,7 @@ Quest availability, goal activation, dialog entries, spawns and triggers can all
 - [ ] Unit tests for each type against a fake character context, including ROP_OR lists, apply_not, and nested lists.
 - [ ] Unit test: a quest with ReqHasEntry(m_questName=Q1, entry 'Complete', is_quest_registry) is unavailable until Q1 is completed.
 - [ ] Unknown requirement types from extracted trigger or spawn data evaluate to false and log once per type.
+- [ ] Unit test: `.reload requirement` applies an edited requirement to the next evaluation, and a reload with a malformed list keeps the old lists serving.
 
 **Risks**
 
@@ -299,7 +305,7 @@ Active quests, goal progress, completion history, registry entries and hidden-qu
 
 **Goal:** Interaction prompt and routing.
 
-**Size:** M. **Depends on:** 5.02, 6.13, 7.02, 7.01
+**Size:** M. **Depends on:** 5.02, 6.13, 7.02, 7.01, 4.16
 
 **Client messages:** MSG_INTERACTNPC, MSG_SENDNPCOPTIONS, MSG_LEAVESERVICERANGE, MSG_INTERACTOBJECT, MSG_SENDINTERACTOPTIONS, MSG_INTERACTOPTION
 
@@ -307,6 +313,7 @@ Active quests, goal progress, completion history, registry entries and hidden-qu
 
 - [ ] Providers with 1 and 2 options give flat indices 0..2 routed correctly
 - [ ] One SENDNPCOPTIONS/LEAVESERVICERANGE per crossing
+- [ ] Changing Npc.InteractRadiusDefault applies from the next move without a restart
 - [ ] Real client: WC-RAV-NPC06 prompt shows localized name and portrait; click logs the right index
 
 ### Detailed spec from QST-8: NPC service menu: range, options and interaction routing
@@ -316,7 +323,7 @@ Walking near any NPC makes the client show its interaction prompt with the NPC's
 **Deliverables**
 
 - src/server/game/Npc/NpcServiceProvider.h: interface with GetServiceOptions(player), OnServiceInteraction(player, index), NpcIcon/NameKey/TextKey override, WizBang, priority, interaction radius.
-- src/server/game/Npc/NpcServiceMemento.cpp: on movement, entering the radius (default 300) sends MSG_SENDNPCOPTIONS (MobileID = NPC GLOBAL id, Options = ServiceMementoBase with m_npcNameKey 'NPCFormats_Name', m_npcTextKey 'GUI_NPCInteractText', m_npcIcon from template m_sIcon, and m_personaMadlibs as an NPC block holding NAME = display key); leaving sends MSG_LEAVESERVICERANGE. The flat option index maps to the owning provider.
+- src/server/game/Npc/NpcServiceMemento.cpp: on movement, entering the radius (Npc.InteractRadiusDefault, a live setting defaulting to 300, unless the provider overrides it) sends MSG_SENDNPCOPTIONS (MobileID = NPC GLOBAL id, Options = ServiceMementoBase with m_npcNameKey 'NPCFormats_Name', m_npcTextKey 'GUI_NPCInteractText', m_npcIcon from template m_sIcon, and m_personaMadlibs as an NPC block holding NAME = display key); leaving sends MSG_LEAVESERVICERANGE. The flat option index maps to the owning provider.
 - src/server/game/Handlers/QuestHandler.cpp: HandleInteractNPC (MSG_INTERACTNPC: GlobalID, ServiceName, ServiceIndex, Reinteract; an empty ServiceName means closing a shop) and HandleInteractOption (GAME MSG_INTERACTOBJECT / MSG_INTERACTOPTION for interactables). Registered in the dispatch table as in-world.
 - ScriptMgr NpcScript hook (OnGossip-like GetServiceOptions and OnServiceSelect) with AddSC_ loader; scripts/Custom/npc_test_greeter.cpp as a sample.
 
@@ -336,6 +343,7 @@ Walking near any NPC makes the client show its interaction prompt with the NPC's
 
 - [ ] Unit test: two providers with 1 and 2 options produce flat indices 0..2, and index 2 routes to the second provider.
 - [ ] Unit test: range enter and exit send exactly one SENDNPCOPTIONS and one LEAVESERVICERANGE per crossing, not one per move packet.
+- [ ] Unit test: changing Npc.InteractRadiusDefault applies from the next movement update without a restart.
 - [ ] Client: walk up to WC-RAV-NPC06 in Ravenwood (spawned from zone_object) with the sample NpcScript attached. The interaction prompt appears with the NPC's localized name and portrait, and disappears on walking away. Clicking it logs HandleInteractNPC with the right service index.
 
 **Risks**
@@ -347,7 +355,7 @@ Walking near any NPC makes the client show its interaction prompt with the NPC's
 
 **Goal:** '!' and '?' update live.
 
-**Size:** S. **Depends on:** 7.07, 7.04, 7.06
+**Size:** S. **Depends on:** 7.07, 7.04, 7.06, 4.16
 
 **Client messages:** MSG_WIZBANG
 
@@ -363,7 +371,7 @@ NPCs show the yellow '!' when they have a quest the player can take and the '?' 
 **Deliverables**
 
 - src/server/game/Npc/WizBang.h: enum from the reference (None=0, CompleteQuestGoal=432425611, StartQuest=660791182, UnfinishedQuest=747193091, Training, Shopping, ...) and a priority order.
-- NpcServiceMemento: compute the per-player top-priority wizbang from providers that currently offer options; send GAME MSG_WIZBANG (WizBangID, GameObjectID = global id) to players in render range on change and on a 1 s tick (retail re-sends; a single send can be lost while the scene loads).
+- NpcServiceMemento: compute the per-player top-priority wizbang from providers that currently offer options; send GAME MSG_WIZBANG (WizBangID, GameObjectID = global id) to players in render range on change and every Npc.WizbangResendInterval, a live setting defaulting to 1 s (retail re-sends; a single send can be lost while the scene loads).
 - Event-driven invalidation: quest accept, goal complete and quest complete mark nearby NPC wizbangs dirty for that player.
 
 **Client messages:** MSG_WIZBANG

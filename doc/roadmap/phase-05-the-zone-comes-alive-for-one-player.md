@@ -6,12 +6,12 @@
 
 | ID | Milestone | Size | Depends on |
 |---|---|---|---|
-| 5.01 | Template manifest and template store (OBJ-16, new DAT-2) | M | 3.11, 3.07 |
+| 5.01 | Template manifest and template store (OBJ-16, new DAT-2) | M | 3.11, 3.07, 4.15 |
 | 5.02 | Static zone objects appear (WLD-8) | M | 4.14, 5.01 |
-| 5.03 | Own movement tracking and persistence (WLD-9) | S | 4.14 |
-| 5.04 | Level, school and stat-config extractor (WIZ-2) | M | 3.11, 2.07, 4.01 |
-| 5.05 | Character state and player-object stats (WIZ-3) | M | 5.04, 4.11, 3.16 |
-| 5.06 | Return to character select (LOG-13) | M | 2.14, 4.07, 5.03 |
+| 5.03 | Own movement tracking and persistence (WLD-9) | S | 4.14, 4.16 |
+| 5.04 | Level, school and stat-config extractor (WIZ-2) | M | 3.11, 2.07, 4.01, 4.15 |
+| 5.05 | Character state and player-object stats (WIZ-3) | M | 5.04, 4.11, 3.16, 4.16 |
+| 5.06 | Return to character select (LOG-13) | M | 2.14, 4.07, 5.03, 4.16 |
 | 5.07 | Binary type-registry cache (OBJ-15) | S | 3.03 |
 | 5.08 | Installer (FND-22) | S | 2.08 |
 
@@ -19,12 +19,13 @@
 
 **Goal:** GetTemplate(id) from the user's WADs.
 
-**Size:** M. **Depends on:** 3.11, 3.07
+**Size:** M. **Depends on:** 3.11, 3.07, 4.15
 
 **Acceptance**
 
 - [ ] Fake archive: cache hit/miss, missing id returns null
 - [ ] GetTemplate(1) is PlayerObject; GetTemplate(1652259) is the hat; first access under 5 ms
+- [ ] `.reload templates` swaps in an edited manifest; a broken one keeps the old map
 
 ### Detailed spec from OBJ-16: Template manifest and on-demand template store
 
@@ -33,12 +34,13 @@ The server can fetch any client template by template id, backed by the TemplateM
 **Deliverables**
 
 - src/server/game/Templates/TemplateMgr.h/.cpp (sTemplateMgr): loads TemplateManifest.xml into an id->path map (137423 entries); GetTemplate(id) decodes lazily from Root.wad with an LRU cache; typed accessors through OBJ-10 views
-- A GM reload hook placeholder for cs_reload (scripts/Commands) that clears the cache
+- `.reload templates` rebuilds the manifest map off to the side, validates it, swaps it, and drops cache entries by generation. Objects keep the template snapshot they spawned with. A failure keeps the old map and reports every error.
 - src/test/server/game/Templates/TemplateMgrTest.cpp using an in-memory fake archive
 
 **Acceptance**
 
 - [ ] Unit test with a fake archive: manifest lookup, cache hit/miss, missing id returns null without throwing
+- [ ] Unit test with a fake archive: `.reload templates` with an edited manifest serves the new entry without a restart, an object spawned before the reload keeps its snapshot, and a manifest that fails validation keeps the old map and reports every error
 - [ ] Client-gated test: GetTemplate(1) returns the PlayerObject template; GetTemplate(1652259) returns the hat; a missing manifest path is reported
 - [ ] Client-gated benchmark: first access under 5 ms per template; decoding 10k random templates stays within the memory cap
 
@@ -100,7 +102,7 @@ NPCs, signs, doors and props from the zone data appear for a player entering a z
 
 **Goal:** Server knows position; relog returns there.
 
-**Size:** S. **Depends on:** 4.14
+**Size:** S. **Depends on:** 4.14, 4.16
 
 **Client messages:** MSG_CLIENTMOVE, MSG_CLIENTMOVESTATE, MSG_JUMP
 
@@ -109,6 +111,7 @@ NPCs, signs, doors and props from the zone data appear for a player entering a z
 - [ ] Real client: walk to the Ravenwood gate, relog, spawn there within a few units
 - [ ] Stale ZoneCounter leaves position unchanged
 - [ ] 1000 moves give at most one DB write per interval
+- [ ] Changing Player.SaveInterval applies from the next save
 
 ### Detailed spec from WLD-9: Own movement: position tracking and persistence
 
@@ -117,7 +120,7 @@ The server always knows where each player is, and a relog returns the player to 
 **Deliverables**
 
 - src/server/game/Handlers/MovementHandler.cpp: HandleClientMove (unpack, drop packets whose ZoneCounter differs from the session's), HandleClientMoveState, HandleJump
-- src/server/game/Entities/Player position fields plus a periodic dirty-save to characters DB, and a save on logout
+- src/server/game/Entities/Player position fields plus a dirty-save to characters DB every Player.SaveInterval, and a save on logout. Player.SaveInterval is a live setting applied from the next save.
 - Session zone counter bumped on every zone change
 
 **Client messages:** MSG_CLIENTMOVE, MSG_CLIENTMOVESTATE, MSG_JUMP
@@ -131,6 +134,7 @@ The server always knows where each player is, and a relog returns the player to 
 - [ ] Real client: walk to the Ravenwood gate, log out, log back in, and spawn at that gate (within a few units)
 - [ ] Unit: a MSG_CLIENTMOVE with a stale ZoneCounter leaves position unchanged
 - [ ] Unit: 1000 moves between saves produce at most one DB write per save interval
+- [ ] Unit: changing Player.SaveInterval applies from the next save without a restart
 
 **Risks**
 
@@ -140,13 +144,14 @@ The server always knows where each player is, and a relog returns the player to 
 
 **Goal:** player_level_stats and magic_school_template.
 
-**Size:** M. **Depends on:** 3.11, 2.07, 4.01
+**Size:** M. **Depends on:** 3.11, 2.07, 4.01, 4.15
 
 **Acceptance**
 
 - [ ] Synthetic MagicXPConfig fixture emits expected rows
 - [ ] A row per (school, level) up to m_maxSchoolLevel; 16 magic_school_template rows
 - [ ] GetInfo(Fire,1) matches the row
+- [ ] `.reload player_level_stats` applies new base stats on the next level-up or login
 
 ### Detailed spec from WIZ-2: Level, school and stat-config extractor
 
@@ -158,7 +163,7 @@ The world database holds the per-school, per-level stat table and school definit
 - src/tools/extractor/MagicSchoolExtractor: MagicSchools/*.xml (16 MagicSchoolTemplate: m_schoolName, m_minLevel, m_schoolIndex)
 - src/tools/extractor/StatConfigExtractor: WizStatisticEffectConfig.xml -> config rows
 - data/sql/base/db_world: player_level_stats, magic_school_template, stat_effect_config schema files
-- src/server/game/Entities/Player/PlayerLevelMgr (sPlayerLevelMgr) loaded at startup, with a reload command hook
+- src/server/game/Entities/Player/PlayerLevelMgr (sPlayerLevelMgr) loaded at startup. `.reload player_level_stats` rebuilds it off to the side, validates it, and swaps it; a failure keeps the old table and reports every error.
 
 **Data sources**
 
@@ -178,6 +183,7 @@ The world database holds the per-school, per-level stat table and school definit
 - [ ] Unit test: the extractor, run on a synthetic BINd MagicXPConfig fixture built in the test, emits the expected rows
 - [ ] Run against the user's install: player_level_stats has a row for each (school, level) up to m_maxSchoolLevel, and magic_school_template has 16 rows
 - [ ] Unit test: sPlayerLevelMgr.GetInfo(Fire, 1) returns hitpoints, mana and training points matching the imported row
+- [ ] Unit test: editing a player_level_stats row, then `.reload player_level_stats`, applies the new base stats on the next level-up or login without a restart; a row that fails validation keeps the old table
 
 **Risks**
 
@@ -187,7 +193,7 @@ The world database holds the per-school, per-level stat table and school definit
 
 **Goal:** HUD and character sheet show DB values.
 
-**Size:** M. **Depends on:** 5.04, 4.11, 3.16
+**Size:** M. **Depends on:** 5.04, 4.11, 3.16, 4.16
 
 **Client messages:** MSG_WIZGAMESTATS
 
@@ -205,7 +211,7 @@ A logged-in character's level, school, XP, training points, gold, health, mana a
 
 - data/sql/updates/db_characters/<date>_01.sql: character_stats (level, xp, overflow_xp, school_id, secondary_school_id, training_points, gold, health, mana, potion_charge, potion_max, arena_points, level_locked)
 - src/server/game/Entities/Player/PlayerStats: builds WizGameStats (m_baseHitpoints, m_baseMana, m_baseGoldPouch, m_currentHitpoints, m_currentMana, m_currentGold, m_powerPipBase, m_potionMax, m_potionCharge, m_schoolID, m_secondarySchool, m_shadowPipMax...) as WizClientObject.m_gameStats, and ClientMagicSchoolBehavior (m_schoolOfFocus, m_experiencePoints, m_level, m_trainingPoints, m_overflowXP, m_levelLocked, m_secondarySchool)
-- Save on logout and on a periodic timer (interval set in gameserver.conf.dist)
+- Save on logout and every Player.SaveInterval, the live setting shared with WLD-9
 - src/test/server/game/PlayerStatsTest.cpp
 
 **Client messages:** MSG_WIZGAMESTATS
@@ -233,7 +239,7 @@ A logged-in character's level, school, XP, training points, gold, health, mana a
 
 **Goal:** Quit to select without credentials.
 
-**Size:** M. **Depends on:** 2.14, 4.07, 5.03
+**Size:** M. **Depends on:** 2.14, 4.07, 5.03, 4.16
 
 **Client messages:** MSG_QUERY_LOGOUT, MSG_CLIENT_DISCONNECT, MSG_USER_VALIDATE, MSG_USER_VALIDATE_RSP, MSG_USER_ADMIT_IND
 
@@ -242,6 +248,7 @@ A logged-in character's level, school, XP, training points, gold, health, mana a
 - [ ] PassKey3 from the stored key and this offer passes; previous offer, wrong key or other MachineID fails
 - [ ] Real client: quit to select shows USER_VALIDATE -> VALIDATE_RSP Error=0 -> ADMIT_IND -> list, no password prompt
 - [ ] DB online=0 with saved zone and position
+- [ ] Changing Login.SessionKeyTTL applies from the next validate
 
 ### Detailed spec from LOG-13: Return to character select: MSG_QUERY_LOGOUT and MSG_USER_VALIDATE
 
@@ -251,7 +258,7 @@ A player in game can quit to character select and land on the list without re-en
 
 - Gameserver: HandleQueryLogout sends MSG_CLIENT_DISCONNECT, saves the character (zone, position, logout time), sets online=0 and removes it from realm_online_character; also on MSG_CLIENT_DISCONNECT and socket loss
 - Loginserver AuthHandler::HandleUserValidate: load account by UserID; check bans and lock; load the account_session for (account, MachineID) and reject if missing or expired; verify PassKey3 against this new connection's SessionID and offer seconds and milliseconds; on success send MSG_USER_VALIDATE_RSP{Error=0, Reason='', UserID, TimeStamp='', PayingUser=1, Flags=0, SupportID=''} then MSG_USER_ADMIT_IND{Status=1, PositionInQueue=0}; on failure send only VALIDATE_RSP{Error!=0} and close (never fall through to success)
-- Session key lifetime: extend expires on each successful validate; revoke on password change or ban
+- Session key lifetime: Login.SessionKeyTTL, a live setting applied from the next validate; extend expires on each successful validate; revoke on password change or ban
 
 **Client messages:** MSG_QUERY_LOGOUT, MSG_CLIENT_DISCONNECT, MSG_USER_VALIDATE, MSG_USER_VALIDATE_RSP, MSG_USER_ADMIT_IND
 
@@ -272,6 +279,7 @@ A player in game can quit to character select and land on the list without re-en
 - [ ] Real client: in game, choose to quit to character select; the client reconnects to the loginserver and the log shows USER_VALIDATE -> VALIDATE_RSP Error=0 -> ADMIT_IND -> character list, matching capture lines 21852-21860; the select screen appears with no password prompt
 - [ ] Real client: selecting the same wizard again enters the world at the saved position
 - [ ] DB: after quitting, characters.online=0 and the saved zone and position reflect where the player stood
+- [ ] Unit: lowering Login.SessionKeyTTL makes the next validate of an older key fail without a restart
 
 **Risks**
 

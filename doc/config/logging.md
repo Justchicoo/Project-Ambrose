@@ -122,6 +122,8 @@ With `Log.Async.Enable = 1`, lines are written on a dedicated thread. `Log.Async
 
 Options resolve through the configuration layers, so `AMBROSE_LOGGER_SQL_SQL=4,Console` changes an existing `Logger.sql.sql` line. An environment variable cannot add a new `Appender.*` or `Logger.*` key, because only keys present in a file or a command-line override are discovered.
 
+The reload triggers, added in milestones 4.15 and 17.12, are listed in [README.md](README.md). No logging option needs a restart.
+
 Reloading configuration applies all logging options at once, including `LogsDir` and `Log.Utc` for appenders whose own lines did not change. If any option or route is invalid, nothing changes. The one exception is a file that cannot be opened: the reload fails, but other files named in the same reload may already have been created. Files are kept open and never truncated by a reload, Stream subscribers stay connected, and pending buffers are kept unless `Log.PendingBuffer` changes.
 
 Async mode cannot be switched from inside an appender running on the logging thread; that reload fails with an error.

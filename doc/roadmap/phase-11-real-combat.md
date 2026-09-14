@@ -6,11 +6,11 @@
 
 | ID | Milestone | Size | Depends on |
 |---|---|---|---|
-| 11.01 | Multi-participant duels (CMB-10) | M | 9.12 |
+| 11.01 | Multi-participant duels (CMB-10) | M | 9.12, 4.15, 4.16 |
 | 11.02 | StatCalculator and equip effects (WIZ-13 part 1) | M | 8.10, 9.03, 5.04 |
-| 11.03 | Set bonuses and rating conversions (WIZ-13 part 2) | M | 11.02 |
-| 11.04 | Combat stats and pip rules (CMB-11) | M | 11.01, 11.03 |
-| 11.05 | DamageCalc and limit curves (CMB-12 part 1) | M | 11.04 |
+| 11.03 | Set bonuses and rating conversions (WIZ-13 part 2) | M | 11.02, 4.15 |
+| 11.04 | Combat stats and pip rules (CMB-11) | M | 11.01, 11.03, 4.15 |
+| 11.05 | DamageCalc and limit curves (CMB-12 part 1) | M | 11.04, 4.16 |
 | 11.06 | Crit, block and SETST parity (CMB-12 part 2) | M | 11.05 |
 | 11.07 | Blades and traps (CMB-13 part 1) | M | 11.06 |
 | 11.08 | Shields, absorbs, max damage (CMB-13 part 2) | M | 11.07 |
@@ -19,16 +19,16 @@
 | 11.11 | Compound, conditional, X-pip spells (CMB-15 part 2) | M | 11.10, 7.04 |
 | 11.12 | Stun and pip manipulation (CMB-16 part 1) | M | 11.11 |
 | 11.13 | Removal, push, steal, swap, auras (CMB-16 part 2) | M | 11.12 |
-| 11.14 | Creature deck tables and loader (CMB-18 part 1) | M | 9.10, 2.07 |
+| 11.14 | Creature deck tables and loader (CMB-18 part 1) | M | 9.10, 2.07, 4.15, 4.16 |
 | 11.15 | Weighted creature AI (CMB-18 part 2) | M | 11.14, 11.11 |
 | 11.16 | Treasure cards, item cards, enchantments in combat (CMB-21) | M | 11.08, 8.12 |
 | 11.17 | Minions (CMB-22) | M | 11.15 |
-| 11.18 | Timers, AFK, pause, spectators (CMB-23) | M | 11.01 |
+| 11.18 | Timers, AFK, pause, spectators (CMB-23) | M | 11.01, 4.16 |
 | 11.19 | Polymorph (CMB-17 part 1) | M | 11.13 |
 | 11.20 | Mind control, confusion, taunt, cloaked effects (CMB-17 part 2) | M | 11.19 |
 | 11.21 | Duel modifiers and battlefield effects (CMB-24 part 1) | M | 11.20, 11.15 |
 | 11.22 | Combat triggers and sigil spells (CMB-24 part 2) | M | 11.21 |
-| 11.23 | Shadow pips and backlash (CMB-25 part 1) | M | 11.13 |
+| 11.23 | Shadow pips and backlash (CMB-25 part 1) | M | 11.13, 4.16 |
 | 11.24 | Shadow pacts and shadow creatures (CMB-25 part 2) | M | 11.23 |
 | 11.25 | Archmastery school pips and tiered spells (CMB-25 part 3) | M | 11.23 |
 
@@ -42,7 +42,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Goal:** 4v4, join-in-progress, turn order.
 
-**Size:** M. **Depends on:** 9.12
+**Size:** M. **Depends on:** 9.12, 4.15, 4.16
 
 **Client messages:** MSG_COMBATADD, MSG_COMBATUPFIRST, MSG_COMBATMOVESELECTION, MSG_COMBATLOADED, MSG_UPDATECOMBATPARTICIPANT
 
@@ -50,6 +50,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 - [ ] 2v3 executes team A ascending then B; round-2 joiner acts round 3
 - [ ] Real client: second wizard added next round; third client zoning in sees the fight
+- [ ] `.reload zone_combat_rules` changes the next duel's pull-in cap without a restart
 
 ### Detailed spec from CMB-10: Multi-participant duels: join in progress, teams and turn order
 
@@ -58,7 +59,7 @@ Up to 4 players and 4 creatures share a duel, with correct late joins, creature 
 **Deliverables**
 
 - Join queue: participants entering the engage radius mid-round are added at the next round start (MSG_COMBATADD), never mid-execution
-- Creature pull-in rules (base creature slots per zone plus one per extra player), exposed as world DB columns per zone or sigil
+- Creature pull-in rules (base creature slots per zone plus one per extra player), exposed as world DB columns per zone or sigil and reloaded live with `.reload zone_combat_rules`; the fallbacks for zones without a row are the live settings Combat.PullIn.BaseSlots and Combat.PullIn.PerExtraPlayer, applied from the next duel
 - First team roll and slot-order execution; teammate move selection broadcast only to the same team
 - MSG_COMBATLOADED sent to a client that enters the zone while a duel is active, so it renders the fight
 
@@ -77,10 +78,11 @@ Up to 4 players and 4 creatures share a duel, with correct late joins, creature 
 - [ ] Sim test: a 2v3 duel executes team A slots in ascending order, then team B; a creature added in round 2 acts from round 3
 - [ ] Real client (2 clients): a second wizard runs into an active fight, is added at the next round, and both players see each other's card choice icons
 - [ ] Real client: a third client zoning in mid-fight sees the ring, participants and health correctly (MSG_COMBATLOADED)
+- [ ] Editing a zone_combat_rules row, then `.reload zone_combat_rules`, changes the pull-in cap of the next duel in that zone without a restart; a row that fails validation keeps the old rules and reports the error
 
 **Risks**
 
-- The retail extra-creature pull-in rule is not in client data; the reference hardcodes 1/2/3 base
+- The retail extra-creature pull-in rule is not in client data; the reference hardcodes 1/2/3 base, so the defaults are live settings that can be tuned without a restart
 
 ## 11.02 StatCalculator and equip effects (WIZ-13 part 1)
 
@@ -103,7 +105,7 @@ Equipped gear changes the wizard's maximum health, damage, resist, crit, block, 
 
 - src/server/game/Entities/Player/StatCalculator: base stats from player_level_stats, plus each equipped item's m_equipEffects (WizStatisticEffect fields: m_hitPointBonus, m_manaBonus, m_damageBonusPercent, m_damageReducePercent, m_accuracyBonusPercent, m_criticalHitRating, m_blockRating, m_powerPipBonusPercent, m_pipConversionRating, m_archmastery, per-school fields via effect category), plus ItemSetBonusTemplate tiers by equipped count
 - GAME ADDEFFECT/REMOVEEFFECT sent on equip, unequip and login; UPDATEHEALTH/UPDATEMANA with the new maximums
-- Rating-to-percent conversions from stat_effect_config (critical, block, pip conversion) for derived WizGameStats fields
+- Rating-to-percent conversions from stat_effect_config (critical, block, pip conversion) for derived WizGameStats fields; stat_effect_config and item_set_bonus reload live with `.reload stat_effect_config` and `.reload item_set_bonus`, keep the old tables on failure, and recompute online players' stats after a successful swap
 - src/test/server/game/StatCalculatorTest.cpp
 
 **Client messages:** GAME MSG_ADDEFFECT, GAME MSG_REMOVEEFFECT, MSG_UPDATEHEALTH, MSG_UPDATEMANA
@@ -131,12 +133,13 @@ Equipped gear changes the wizard's maximum health, damage, resist, crit, block, 
 
 **Goal:** Set tiers and rating-to-percent.
 
-**Size:** M. **Depends on:** 11.02
+**Size:** M. **Depends on:** 11.02, 4.15
 
 **Acceptance**
 
 - [ ] 3-piece bonus only with 3 pieces
 - [ ] Sheet numbers match server values
+- [ ] `.reload stat_effect_config` updates an online player's sheet without a restart
 
 ### Detailed spec from WIZ-13: Equipment stat effects and set bonuses
 
@@ -146,7 +149,7 @@ Equipped gear changes the wizard's maximum health, damage, resist, crit, block, 
 
 - src/server/game/Entities/Player/StatCalculator: base stats from player_level_stats, plus each equipped item's m_equipEffects (WizStatisticEffect fields: m_hitPointBonus, m_manaBonus, m_damageBonusPercent, m_damageReducePercent, m_accuracyBonusPercent, m_criticalHitRating, m_blockRating, m_powerPipBonusPercent, m_pipConversionRating, m_archmastery, per-school fields via effect category), plus ItemSetBonusTemplate tiers by equipped count
 - GAME ADDEFFECT/REMOVEEFFECT sent on equip, unequip and login; UPDATEHEALTH/UPDATEMANA with the new maximums
-- Rating-to-percent conversions from stat_effect_config (critical, block, pip conversion) for derived WizGameStats fields
+- Rating-to-percent conversions from stat_effect_config (critical, block, pip conversion) for derived WizGameStats fields; stat_effect_config and item_set_bonus reload live with `.reload stat_effect_config` and `.reload item_set_bonus`, keep the old tables on failure, and recompute online players' stats after a successful swap
 - src/test/server/game/StatCalculatorTest.cpp
 
 **Client messages:** GAME MSG_ADDEFFECT, GAME MSG_REMOVEEFFECT, MSG_UPDATEHEALTH, MSG_UPDATEMANA
@@ -174,7 +177,7 @@ Equipped gear changes the wizard's maximum health, damage, resist, crit, block, 
 
 **Goal:** Starting pips, power pips, pip payment.
 
-**Size:** M. **Depends on:** 11.01, 11.03
+**Size:** M. **Depends on:** 11.01, 11.03, 4.15
 
 **Client messages:** MSG_COMBATSTATS, MSG_COMBATPIPS
 
@@ -183,6 +186,7 @@ Equipped gear changes the wizard's maximum health, damage, resist, crit, block, 
 - [ ] Rank-4 Fire spell with 1 power + 2 pips succeeds for Fire, fails for Ice
 - [ ] 100% power pip chance always; 0% never
 - [ ] Real client: stats window matches; power pips gold
+- [ ] `.reload creature_combat_stats` changes the next duel's creature stats without a restart
 
 ### Detailed spec from CMB-11: Combat stats, starting pips, power pips and pip payment rules
 
@@ -190,7 +194,7 @@ Participants enter combat with real stats derived from level, school and gear, a
 
 **Deliverables**
 
-- src/server/game/Combat/CombatStats: builds WizGameStats for players (WIZ) and creatures (NPCBehaviorTemplate plus world DB overrides)
+- src/server/game/Combat/CombatStats: builds WizGameStats for players (WIZ) and creatures (NPCBehaviorTemplate plus world DB overrides); creature_combat_stats reloads live with `.reload creature_combat_stats`, keeps the old overrides on failure, and applies from the next duel
 - Starting pips and power pips from stats (m_startingPips/m_startingPowerPips), power pip chance m_powerPipBase + m_powerPipBonusPercentAll
 - Pip payment: power pips count double only for on-school or Balance-equivalent spells, off-school power pips count as 1, school pips from SpellRank fields reserved for shadow/archmastery later
 - Accuracy with m_accBonusPercent/m_accReducePercent per school and All
@@ -211,6 +215,7 @@ Participants enter combat with real stats derived from level, school and gear, a
 - [ ] Unit test table: SpellRank (rank 4, school Fire) paid by a Fire wizard with 1 power pip + 2 pips succeeds; paid by an Ice wizard it fails
 - [ ] Unit test: 100% power pip chance gives power pips every round; 0% never does
 - [ ] Real client: the combat stats window numbers match MSG_COMBATSTATS; power pips show as gold pips and a 4-pip on-school spell becomes castable with 2 power pips
+- [ ] Editing a creature's resist in creature_combat_stats, then `.reload creature_combat_stats`, changes the damage it takes in the next duel without a restart
 
 **Risks**
 
@@ -220,7 +225,7 @@ Participants enter combat with real stats derived from level, school and gear, a
 
 **Goal:** Pure damage/resist/pierce functions.
 
-**Size:** M. **Depends on:** 11.04
+**Size:** M. **Depends on:** 11.04, 4.16
 
 **Acceptance**
 
@@ -233,9 +238,10 @@ Outgoing and incoming damage use stat percentages, flat values, pierce, the dama
 **Deliverables**
 
 - src/server/game/Combat/DamageCalc.{h,cpp}: pure functions over (caster stats, target stats, Duel scalar/limit constants) with no duel state
-- Limit curves using Duel m_damageLimit/m_dK0/m_dN0 and m_resistLimit/m_rK0/m_rN0 from CombatSigilTemplate PvE/PvP fields
+- Limit curves using Duel m_damageLimit/m_dK0/m_dN0 and m_resistLimit/m_rK0/m_rN0 from CombatSigilTemplate PvE/PvP fields, with optional server overrides as the live settings Combat.Limit.PvE.* and Combat.Limit.PvP.*, applied from the next duel
 - Critical and block ratings to chance, crit multiplier, and roll outcomes recorded in CombatAction (m_criticalHitRoll, m_CritHitList TargetCritHit)
 - MSG_SETST/MSG_SETST2 sent to clients so their displayed numbers use the same stat-rebalance settings
+- The stat-rebalance values are live settings (Combat.StatRebalance.*); a change applies from the next duel and re-sends MSG_SETST/MSG_SETST2 to every connected client
 
 **Client messages:** MSG_SETST, MSG_SETST2, MSG_COMBATACTIONS, MSG_COMBATHEALTH
 
@@ -249,6 +255,7 @@ Outgoing and incoming damage use stat percentages, flat values, pierce, the dama
 - [ ] Golden unit tests: 30+ (stats, spell, sigil constants) → expected damage cases, each with its source noted (client RE function address or recorded observation)
 - [ ] Real client: a Fire Cat crit shows the critical effect and the health drop the client shows matches server HP after MSG_COMBATHEALTH with no correction jump
 - [ ] Real client: the stats window damage% and resist% shown after MSG_SETST match the server's computed effective values
+- [ ] Changing a Combat.StatRebalance.* setting re-sends MSG_SETST to connected clients and changes the next duel's damage without a restart
 
 **Risks**
 
@@ -266,6 +273,7 @@ Outgoing and incoming damage use stat percentages, flat values, pierce, the dama
 
 - [ ] Real client: Fire Cat crit with no correction jump
 - [ ] Stats window damage%/resist% after MSG_SETST match
+- [ ] Combat.StatRebalance.* change re-sends MSG_SETST and applies from the next duel without a restart
 
 ### Detailed spec from CMB-12: Damage, resist, pierce and critical math
 
@@ -274,9 +282,10 @@ Outgoing and incoming damage use stat percentages, flat values, pierce, the dama
 **Deliverables**
 
 - src/server/game/Combat/DamageCalc.{h,cpp}: pure functions over (caster stats, target stats, Duel scalar/limit constants) with no duel state
-- Limit curves using Duel m_damageLimit/m_dK0/m_dN0 and m_resistLimit/m_rK0/m_rN0 from CombatSigilTemplate PvE/PvP fields
+- Limit curves using Duel m_damageLimit/m_dK0/m_dN0 and m_resistLimit/m_rK0/m_rN0 from CombatSigilTemplate PvE/PvP fields, with optional server overrides as the live settings Combat.Limit.PvE.* and Combat.Limit.PvP.*, applied from the next duel
 - Critical and block ratings to chance, crit multiplier, and roll outcomes recorded in CombatAction (m_criticalHitRoll, m_CritHitList TargetCritHit)
 - MSG_SETST/MSG_SETST2 sent to clients so their displayed numbers use the same stat-rebalance settings
+- The stat-rebalance values are live settings (Combat.StatRebalance.*); a change applies from the next duel and re-sends MSG_SETST/MSG_SETST2 to every connected client
 
 **Client messages:** MSG_SETST, MSG_SETST2, MSG_COMBATACTIONS, MSG_COMBATHEALTH
 
@@ -290,6 +299,7 @@ Outgoing and incoming damage use stat percentages, flat values, pierce, the dama
 - [ ] Golden unit tests: 30+ (stats, spell, sigil constants) → expected damage cases, each with its source noted (client RE function address or recorded observation)
 - [ ] Real client: a Fire Cat crit shows the critical effect and the health drop the client shows matches server HP after MSG_COMBATHEALTH with no correction jump
 - [ ] Real client: the stats window damage% and resist% shown after MSG_SETST match the server's computed effective values
+- [ ] Changing a Combat.StatRebalance.* setting re-sends MSG_SETST to connected clients and changes the next duel's damage without a restart
 
 **Risks**
 
@@ -572,11 +582,12 @@ Stuns, pip manipulation and charm/ward/over-time removal and transfer work.
 
 **Goal:** Authored mob decks with reload.
 
-**Size:** M. **Depends on:** 9.10, 2.07
+**Size:** M. **Depends on:** 9.10, 2.07, 4.15, 4.16
 
 **Acceptance**
 
 - [ ] '.creature deck reload' changes the next duel's cards without restart
+- [ ] A deck reload that references a missing spell keeps the old decks and reports the error
 
 ### Detailed spec from CMB-18: Creature AI and creature decks
 
@@ -585,9 +596,9 @@ Mobs fight with authored decks and personalities (smart, selfish, aggressive) in
 **Deliverables**
 
 - src/server/game/AI/CreatureCombatAI: hand from creature deck; choice weighted by NPCBehaviorTemplate m_fIntelligence, m_fSelfishFactor, m_nAggressiveFactor; heal threshold; buff-before-hit; hate table targeting (kModifyHate, damage/heal threat)
-- sCreatureDeckMgr loading world.creature_deck and world.creature_deck_spell with reload command
+- sCreatureDeckMgr loading world.creature_deck, world.creature_deck_spell and world.creature_combat_ai with a reload command on the 4.15 framework: the new decks are built and validated off to the side, swapped atomically, and a failed reload keeps the old decks and reports every error
 - ScriptMgr NpcScript/CombatScript hook for boss scripts to override move choice (scripts/<World>/)
-- conf/dist: Combat.AI.* tunables
+- Combat.AI.* tunables as live settings with defaults in conf/dist, applied from the next AI decision
 - tools extractor: optional seed rows from each mob's MobDeckBehavior basic spell
 
 **Client messages:** MSG_COMBATACTIONS
@@ -608,6 +619,7 @@ Mobs fight with authored decks and personalities (smart, selfish, aggressive) in
 - [ ] Sim test: with intelligence 1.0 and a blade plus attack in hand at enough pips, the AI blades first then attacks; with intelligence 0 it attacks immediately
 - [ ] Sim test: a creature below the heal threshold with a heal in hand heals with the configured probability
 - [ ] GM .creature deck reload changes a mob's next-duel cards without restart
+- [ ] Changing a Combat.AI.* setting with `.settings set` changes the next AI decision without a restart
 - [ ] Real client: a mob uses varied cards from its authored deck across rounds and targets the player who dealt the most damage
 
 **Risks**
@@ -628,6 +640,7 @@ Mobs fight with authored decks and personalities (smart, selfish, aggressive) in
 - [ ] Intelligence 1.0 blades then attacks; 0 attacks immediately
 - [ ] Heal threshold heals with configured probability
 - [ ] Real client: varied cards; targets top damage dealer
+- [ ] Combat.AI.* change applies from the next AI decision without a restart
 
 ### Detailed spec from CMB-18: Creature AI and creature decks
 
@@ -636,9 +649,9 @@ Mobs fight with authored decks and personalities (smart, selfish, aggressive) in
 **Deliverables**
 
 - src/server/game/AI/CreatureCombatAI: hand from creature deck; choice weighted by NPCBehaviorTemplate m_fIntelligence, m_fSelfishFactor, m_nAggressiveFactor; heal threshold; buff-before-hit; hate table targeting (kModifyHate, damage/heal threat)
-- sCreatureDeckMgr loading world.creature_deck and world.creature_deck_spell with reload command
+- sCreatureDeckMgr loading world.creature_deck, world.creature_deck_spell and world.creature_combat_ai with a reload command on the 4.15 framework: the new decks are built and validated off to the side, swapped atomically, and a failed reload keeps the old decks and reports every error
 - ScriptMgr NpcScript/CombatScript hook for boss scripts to override move choice (scripts/<World>/)
-- conf/dist: Combat.AI.* tunables
+- Combat.AI.* tunables as live settings with defaults in conf/dist, applied from the next AI decision
 - tools extractor: optional seed rows from each mob's MobDeckBehavior basic spell
 
 **Client messages:** MSG_COMBATACTIONS
@@ -659,6 +672,7 @@ Mobs fight with authored decks and personalities (smart, selfish, aggressive) in
 - [ ] Sim test: with intelligence 1.0 and a blade plus attack in hand at enough pips, the AI blades first then attacks; with intelligence 0 it attacks immediately
 - [ ] Sim test: a creature below the heal threshold with a heal in hand heals with the configured probability
 - [ ] GM .creature deck reload changes a mob's next-duel cards without restart
+- [ ] Changing a Combat.AI.* setting with `.settings set` changes the next AI decision without a restart
 - [ ] Real client: a mob uses varied cards from its authored deck across rounds and targets the player who dealt the most damage
 
 **Risks**
@@ -754,13 +768,14 @@ Summon spells add minions to the caster's team and players can dismiss them.
 
 **Goal:** Duel timers and combat AFK.
 
-**Size:** M. **Depends on:** 11.01
+**Size:** M. **Depends on:** 11.01, 4.16
 
 **Client messages:** MSG_SETDUELTIMER, MSG_UPDATEDUELTIMER, MSG_SETSTATUS, MSG_COMBATAFK, MSG_COMBATPAUSED, MSG_COMBATPHASEFORSPECTATORS, MSG_SETPLANNINGPHASETIMER
 
 **Acceptance**
 
 - [ ] Idle player flagged after N rounds; any move clears
+- [ ] Combat.AFK.FlagRounds change applies from the next round without a restart
 - [ ] Real client: '.duel pause' freezes countdown; bystander panel updates
 
 ### Detailed spec from CMB-23: Timers, AFK, pause and spectators
@@ -770,7 +785,7 @@ Duel and turn timers, combat AFK auto-pass, pause, and spectator views behave co
 **Deliverables**
 
 - Duel timer for timed duels: MSG_SETDUELTIMER, MSG_UPDATEDUELTIMER, MSG_SETSTATUS (Duel m_matchTimer, m_bonusTime, m_passPenalty, m_yellowTime/m_redTime, m_minTurnTime)
-- Combat AFK: after N rounds without a move the participant is flagged (MSG_COMBATAFK) and auto-passes; a client MSG_COMBATAFK clears it; after M rounds they are removed
+- Combat AFK: after N rounds without a move the participant is flagged (MSG_COMBATAFK) and auto-passes; a client MSG_COMBATAFK clears it; after M rounds they are removed. N and M are the live settings Combat.AFK.FlagRounds and Combat.AFK.RemoveRounds, applied from the next round
 - MSG_COMBATPAUSED for GM pause; MSG_COMBATPHASEFORSPECTATORS for nearby non-participants
 
 **Client messages:** MSG_SETDUELTIMER, MSG_UPDATEDUELTIMER, MSG_SETSTATUS, MSG_COMBATAFK, MSG_COMBATPAUSED, MSG_COMBATPHASEFORSPECTATORS, MSG_SETPLANNINGPHASETIMER
@@ -780,10 +795,11 @@ Duel and turn timers, combat AFK auto-pass, pause, and spectator views behave co
 - [ ] Sim test: an idle player gets the AFK flag after the configured rounds; any move clears it
 - [ ] Real client: the AFK warning appears after idling and disappears on clicking; a GM .duel pause freezes the countdown for all participants
 - [ ] Real client: a bystander sees the phase and names panel update while watching
+- [ ] `.settings set Combat.AFK.FlagRounds 1` flags an idle participant after the next round of an ongoing duel without a restart
 
 **Risks**
 
-- The exact AFK thresholds are unknown; make them configurable
+- The exact AFK thresholds are unknown, so they are live settings that can be tuned without a restart
 
 ## 11.19 Polymorph (CMB-17 part 1)
 
@@ -894,7 +910,7 @@ Boss fights and special sigils apply their rules, battlefield effects, cheats an
 
 **Database tables**
 
-- world: creature_combat_trigger (script binding)
+- world: creature_combat_trigger (script binding, reloaded live with `.reload creature_combat_trigger` and applied from the next duel)
 
 **Acceptance**
 
@@ -937,7 +953,7 @@ Boss fights and special sigils apply their rules, battlefield effects, cheats an
 
 **Database tables**
 
-- world: creature_combat_trigger (script binding)
+- world: creature_combat_trigger (script binding, reloaded live with `.reload creature_combat_trigger` and applied from the next duel)
 
 **Acceptance**
 
@@ -952,13 +968,14 @@ Boss fights and special sigils apply their rules, battlefield effects, cheats an
 
 **Goal:** Shadow pip rules.
 
-**Size:** M. **Depends on:** 11.13
+**Size:** M. **Depends on:** 11.13, 4.16
 
 **Client messages:** MSG_COMBATPIPS, MSG_COMBATACTIONS
 
 **Acceptance**
 
 - [ ] Shadow pip at threshold; backlash equals m_initialBacklash
+- [ ] Combat.ShadowPip.RoundThreshold change applies from the next duel without a restart
 
 ### Detailed spec from CMB-25: Shadow magic, archmastery, backlash and school pips
 
@@ -966,7 +983,7 @@ Late-game pip systems (shadow pips, archmastery, school pips) and shadow creatur
 
 **Deliverables**
 
-- Shadow pip rules (ShadowPipRule, Duel shadow threshold fields, m_shadowPipRatingFactor)
+- Shadow pip rules (ShadowPipRule, Duel shadow threshold fields, m_shadowPipRatingFactor), with the server defaults as live settings Combat.ShadowPip.* applied from the next duel
 - ShadowSpellEffect, backlash (kBacklashDamage, kModifyBacklash), shadow creature levels, ShadowPactSpellEffect with MSG_COMBATMOVE ShadowPactTarget
 - Archmastery school pips (ParticipantPipData m_arch/m_archPoints, PipCount school fields, kModifySchoolPips)
 - Tiered spells (MSG_COMBATMOVE SelectedTieredSpellID)
@@ -979,7 +996,7 @@ Late-game pip systems (shadow pips, archmastery, school pips) and shadow creatur
 
 **Acceptance**
 
-- [ ] Sim test: shadow pip gained at the configured round threshold, and a shadow spell adds backlash equal to its m_initialBacklash
+- [ ] Sim test: shadow pip gained at the configured round threshold (live setting Combat.ShadowPip.RoundThreshold), and a shadow spell adds backlash equal to its m_initialBacklash
 - [ ] Real client: a shadow pip appears in the pip ring, casting a shadow-enhanced spell plays the shadow cinematic, and school pips render in their colors
 
 **Risks**
@@ -1004,7 +1021,7 @@ Late-game pip systems (shadow pips, archmastery, school pips) and shadow creatur
 
 **Deliverables**
 
-- Shadow pip rules (ShadowPipRule, Duel shadow threshold fields, m_shadowPipRatingFactor)
+- Shadow pip rules (ShadowPipRule, Duel shadow threshold fields, m_shadowPipRatingFactor), with the server defaults as live settings Combat.ShadowPip.* applied from the next duel
 - ShadowSpellEffect, backlash (kBacklashDamage, kModifyBacklash), shadow creature levels, ShadowPactSpellEffect with MSG_COMBATMOVE ShadowPactTarget
 - Archmastery school pips (ParticipantPipData m_arch/m_archPoints, PipCount school fields, kModifySchoolPips)
 - Tiered spells (MSG_COMBATMOVE SelectedTieredSpellID)
@@ -1017,7 +1034,7 @@ Late-game pip systems (shadow pips, archmastery, school pips) and shadow creatur
 
 **Acceptance**
 
-- [ ] Sim test: shadow pip gained at the configured round threshold, and a shadow spell adds backlash equal to its m_initialBacklash
+- [ ] Sim test: shadow pip gained at the configured round threshold (live setting Combat.ShadowPip.RoundThreshold), and a shadow spell adds backlash equal to its m_initialBacklash
 - [ ] Real client: a shadow pip appears in the pip ring, casting a shadow-enhanced spell plays the shadow cinematic, and school pips render in their colors
 
 **Risks**
@@ -1040,7 +1057,7 @@ Late-game pip systems (shadow pips, archmastery, school pips) and shadow creatur
 
 **Deliverables**
 
-- Shadow pip rules (ShadowPipRule, Duel shadow threshold fields, m_shadowPipRatingFactor)
+- Shadow pip rules (ShadowPipRule, Duel shadow threshold fields, m_shadowPipRatingFactor), with the server defaults as live settings Combat.ShadowPip.* applied from the next duel
 - ShadowSpellEffect, backlash (kBacklashDamage, kModifyBacklash), shadow creature levels, ShadowPactSpellEffect with MSG_COMBATMOVE ShadowPactTarget
 - Archmastery school pips (ParticipantPipData m_arch/m_archPoints, PipCount school fields, kModifySchoolPips)
 - Tiered spells (MSG_COMBATMOVE SelectedTieredSpellID)
@@ -1053,7 +1070,7 @@ Late-game pip systems (shadow pips, archmastery, school pips) and shadow creatur
 
 **Acceptance**
 
-- [ ] Sim test: shadow pip gained at the configured round threshold, and a shadow spell adds backlash equal to its m_initialBacklash
+- [ ] Sim test: shadow pip gained at the configured round threshold (live setting Combat.ShadowPip.RoundThreshold), and a shadow spell adds backlash equal to its m_initialBacklash
 - [ ] Real client: a shadow pip appears in the pip ring, casting a shadow-enhanced spell plays the shadow cinematic, and school pips render in their colors
 
 **Risks**

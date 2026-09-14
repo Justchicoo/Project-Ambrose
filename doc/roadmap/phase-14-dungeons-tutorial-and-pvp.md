@@ -6,22 +6,22 @@
 
 | ID | Milestone | Size | Depends on |
 |---|---|---|---|
-| 14.01 | Dungeon sigils and zone timers (EXT-23) | M | 12.18, 12.05, 10.01 |
+| 14.01 | Dungeon sigils and zone timers (EXT-23) | M | 12.18, 12.05, 10.01, 4.15, 4.16 |
 | 14.02 | Tutorial manager (EXT-24) | M | 10.17, 3.16, 8.10 |
 | 14.03 | Scripted tutorial duel (CMB-28) | M | 14.02, 11.09 |
 | 14.04 | PvP scalars and restrictions (CMB-27 part 1) | M | 11.06, 11.18 |
 | 14.05 | Alternating turns (CMB-27 part 2) | M | 14.04 |
-| 14.06 | PvP queue and brackets (EXT-34 part 1) | M | 14.05, 14.01 |
+| 14.06 | PvP queue and brackets (EXT-34 part 1) | M | 14.05, 14.01, 4.16 |
 | 14.07 | Ready check and arena match (EXT-34 part 2) | M | 14.06 |
-| 14.08 | Ratings, tickets, leaderboards, daily PvP (EXT-35) | M | 14.07, 10.10 |
-| 14.09 | Tournament scheduler and brackets (EXT-36 part 1) | M | 14.08 |
+| 14.08 | Ratings, tickets, leaderboards, daily PvP (EXT-35) | M | 14.07, 10.10, 4.15 |
+| 14.09 | Tournament scheduler and brackets (EXT-36 part 1) | M | 14.08, 4.15 |
 | 14.10 | Tournament credits and rewards (EXT-36 part 2) | M | 14.09 |
 | 14.11 | Derby race simulation (EXT-37 part 1) | M | 13.13, 14.07 |
 | 14.12 | Derby laps and results (EXT-37 part 2) | M | 14.11 |
 | 14.13 | Derby abilities and cheers (EXT-38) | M | 14.12 |
 | 14.14 | Battlegrounds RE spike (EXT-39 part 1) | M | 14.08, 11.19 |
 | 14.15 | Battleground sigil, polymorph, POI scoring (EXT-39 part 2) | L | 14.14 |
-| 14.16 | Daily assignments (EXT-43) | M | 10.08 |
+| 14.16 | Daily assignments (EXT-43) | M | 10.08, 4.16 |
 
 ## Review notes for this phase
 
@@ -36,7 +36,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Goal:** Countdown into private instance.
 
-**Size:** M. **Depends on:** 12.18, 12.05, 10.01
+**Size:** M. **Depends on:** 12.18, 12.05, 10.01, 4.15, 4.16
 
 **Client messages:** MSG_LEAVESIGILTIMERWAITING, MSG_DISPOSABLEDUNGEONNOOWNER, MSG_ADDZONETIMER, MSG_UPDATEZONETIMER, MSG_REMOVEZONETIMER, MSG_UPDATEZONECOUNTER, MSG_TELEPORT_TO_GAME_ZONE, MSG_ZONEEVENTTIMEREXPIRED, MSG_POSTZONEEVENTFROMCLIENT
 
@@ -44,6 +44,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 - [ ] Leavers excluded; groups get different ids
 - [ ] Real client: countdown, private instance, skeleton key consumed
+- [ ] A change to Sigil.GatherSeconds and an edited row applied with `.reload instance_template` both take effect at the next sigil countdown without a restart; a failed reload keeps the old rows
 
 ### Detailed spec from EXT-23: Dungeon sigils and private instances
 
@@ -51,9 +52,9 @@ Players (solo or team) enter a dungeon through its sigil, with a countdown and p
 
 **Deliverables**
 
-- game/Instances/InstanceMgr: sigil gather timer, party snapshot, instance id allocation, owner loss handling
+- game/Instances/InstanceMgr: sigil gather timer (live setting Sigil.GatherSeconds), party snapshot, instance id allocation, owner loss handling
 - Zone timers and counters for dungeon mechanics
-- world.instance_template (zone, max players, requirement)
+- world.instance_template (zone, max players, requirement), reloaded live with `.reload instance_template` (validate, swap, keep the old rows on failure); open instances keep the template they started with
 
 **Client messages:** MSG_LEAVESIGILTIMERWAITING, MSG_DISPOSABLEDUNGEONNOOWNER, MSG_ADDZONETIMER, MSG_UPDATEZONETIMER, MSG_REMOVEZONETIMER, MSG_UPDATEZONECOUNTER, MSG_TELEPORT_TO_GAME_ZONE, MSG_ZONEEVENTTIMEREXPIRED, MSG_POSTZONEEVENTFROMCLIENT
 
@@ -234,13 +235,14 @@ Practice and ranked PvP duels use PvP scalars, alternating turns and PvP-only re
 
 **Goal:** Matchmaking.
 
-**Size:** M. **Depends on:** 14.05, 14.01
+**Size:** M. **Depends on:** 14.05, 14.01, 4.16
 
 **Client messages:** MSG_REQUESTPVPKIOSK, MSG_PREPVPKIOSK, MSG_REQUESTPVPACTOR, MSG_PVPMATCHREQUEST, MSG_PVPINTENT, MSG_PVPCONFIRM, MSG_PVPQUEUE, MSG_EXPANDPVPSEARCH, MSG_ARENAERROR, MSG_MATCHMAKERUPDATE
 
 **Acceptance**
 
 - [ ] Two same-bracket players matched
+- [ ] Changing PvP.SearchExpandInterval applies to players already queued from the next queue pass without a restart
 
 ### Detailed spec from EXT-34: PvP kiosk and ranked 1v1 matchmaking
 
@@ -249,6 +251,7 @@ Players queue at the arena, get matched, and fight a ranked duel that records a 
 **Deliverables**
 
 - game/PvP/MatchmakingMgr (queue, bracket by level, search expansion, ready check)
+- Bracket width, search expansion, and ready-check timeout as the live settings PvP.BracketLevelRange, PvP.SearchExpandInterval, PvP.SearchExpandLevels, and PvP.ReadyCheckSeconds, applied from the next queue pass
 - Match lifecycle into a PvP arena instance and result recording
 
 **Client messages:** MSG_REQUESTPVPKIOSK, MSG_PREPVPKIOSK, MSG_REQUESTPVPACTOR, MSG_PVPMATCHREQUEST, MSG_PVPINTENT, MSG_PVPCONFIRM, MSG_PVPQUEUE, MSG_EXPANDPVPSEARCH, MSG_ARENAERROR, MSG_MATCHMAKERUPDATE, MSG_MATCHINVITE, MSG_PLAYERREADYACK, MSG_MATCHREADY, MSG_MATCHRESULT, MSG_ALLOWLEAVEPVP, MSG_SETDUELTIMER
@@ -288,6 +291,7 @@ Players queue at the arena, get matched, and fight a ranked duel that records a 
 **Deliverables**
 
 - game/PvP/MatchmakingMgr (queue, bracket by level, search expansion, ready check)
+- Bracket width, search expansion, and ready-check timeout as the live settings PvP.BracketLevelRange, PvP.SearchExpandInterval, PvP.SearchExpandLevels, and PvP.ReadyCheckSeconds, applied from the next queue pass
 - Match lifecycle into a PvP arena instance and result recording
 
 **Client messages:** MSG_REQUESTPVPKIOSK, MSG_PREPVPKIOSK, MSG_REQUESTPVPACTOR, MSG_PVPMATCHREQUEST, MSG_PVPINTENT, MSG_PVPCONFIRM, MSG_PVPQUEUE, MSG_EXPANDPVPSEARCH, MSG_ARENAERROR, MSG_MATCHMAKERUPDATE, MSG_MATCHINVITE, MSG_PLAYERREADYACK, MSG_MATCHREADY, MSG_MATCHRESULT, MSG_ALLOWLEAVEPVP, MSG_SETDUELTIMER
@@ -311,7 +315,7 @@ Players queue at the arena, get matched, and fight a ranked duel that records a 
 
 **Goal:** Rank progression.
 
-**Size:** M. **Depends on:** 14.07, 10.10
+**Size:** M. **Depends on:** 14.07, 10.10, 4.15
 
 **Client messages:** MSG_MATCHAWARD, MSG_UPDATEARENAPOINTS, MSG_PVPUPDATEINFO, MSG_PVPUPDATEREQUEST, MSG_UPDATESHADOWPIPRATING, MSG_GETLADDER, MSG_LADDER, MSG_GET_RANKINGS, MSG_RANKING, MSG_PRELEADERBOARD, MSG_LEADERBOARDREQUEST, MSG_LEADERBOARDRESPONSE, MSG_LEADERBOARDFRIENDREQUEST, MSG_DailyPvPUpdate, MSG_DAILYPVPOPEN
 
@@ -319,6 +323,7 @@ Players queue at the arena, get matched, and fight a ranked duel that records a 
 
 - [ ] Symmetric bounded rating delta
 - [ ] Real client: rating, rank, tickets, leaderboard update
+- [ ] `.reload pvp_rating` applies an edited rank threshold to the next match result, and a failed reload keeps the old config
 
 ### Detailed spec from EXT-35: PvP ratings, arena tickets, rank, leaderboards, daily PvP
 
@@ -326,8 +331,8 @@ Match results update rating, rank and arena tickets, and players can view leader
 
 **Deliverables**
 
-- Rating calculation from PvPRatingsConfig/AdvPvPRankConfig
-- Arena ticket currency and arena vendor shop type (EXT-1 currency_type=PvP)
+- Rating calculation from PvPRatingsConfig/AdvPvPRankConfig, reloaded live with `.reload pvp_rating` (validate, swap, keep the old config on failure)
+- Arena ticket currency and arena vendor shop type (EXT-1 currency_type=PvP), with ticket awards passing through Rate.ArenaTickets
 - Ladder/leaderboard queries; daily PvP
 
 **Client messages:** MSG_MATCHAWARD, MSG_UPDATEARENAPOINTS, MSG_PVPUPDATEINFO, MSG_PVPUPDATEREQUEST, MSG_UPDATESHADOWPIPRATING, MSG_GETLADDER, MSG_LADDER, MSG_GET_RANKINGS, MSG_RANKING, MSG_PRELEADERBOARD, MSG_LEADERBOARDREQUEST, MSG_LEADERBOARDRESPONSE, MSG_LEADERBOARDFRIENDREQUEST, MSG_DailyPvPUpdate, MSG_DAILYPVPOPEN
@@ -350,13 +355,14 @@ Match results update rating, rank and arena tickets, and players can view leader
 
 **Goal:** Scheduled brackets.
 
-**Size:** M. **Depends on:** 14.08
+**Size:** M. **Depends on:** 14.08, 4.15
 
 **Client messages:** MSG_TOURNAMENTUPDATE, MSG_BRACKETREPORT, MSG_SUBOPTIMAL_BRACKET_RESPONSE
 
 **Acceptance**
 
 - [ ] N players give correct rounds and byes
+- [ ] A tournament scheduled or cancelled live appears on or leaves the kiosk list without a restart
 
 ### Detailed spec from EXT-36: PvP tournaments
 
@@ -364,7 +370,8 @@ Scheduled tournaments with brackets, credits and rewards run end to end.
 
 **Deliverables**
 
-- Tournament scheduler from Tournaments/*.xml and PvPTournamentConfig.xml
+- Tournament scheduler from Tournaments/*.xml and PvPTournamentConfig.xml; `.reload tournament` swaps the schedule without touching running brackets and keeps the old schedule on failure
+- Tournaments can be scheduled and cancelled live by GM command, and from the admin API once 17.12 lands
 - Bracket pairing, rounds, credit consumption, rewards
 
 **Client messages:** MSG_TOURNAMENTUPDATE, MSG_PVPCONFIRMTOURNEY, MSG_PVPCONSUMEPVPTOURNEYCURRENCY, MSG_FREETOURNEYCREDITINFO, MSG_BRACKETREPORT, MSG_NEWTOURNEYREWARDS, MSG_SUBOPTIMAL_BRACKET_RESPONSE
@@ -405,7 +412,8 @@ Scheduled tournaments with brackets, credits and rewards run end to end.
 
 **Deliverables**
 
-- Tournament scheduler from Tournaments/*.xml and PvPTournamentConfig.xml
+- Tournament scheduler from Tournaments/*.xml and PvPTournamentConfig.xml; `.reload tournament` swaps the schedule without touching running brackets and keeps the old schedule on failure
+- Tournaments can be scheduled and cancelled live by GM command, and from the admin API once 17.12 lands
 - Bracket pairing, rounds, credit consumption, rewards
 
 **Client messages:** MSG_TOURNAMENTUPDATE, MSG_PVPCONFIRMTOURNEY, MSG_PVPCONSUMEPVPTOURNEYCURRENCY, MSG_FREETOURNEYCREDITINFO, MSG_BRACKETREPORT, MSG_NEWTOURNEYREWARDS, MSG_SUBOPTIMAL_BRACKET_RESPONSE
@@ -614,7 +622,7 @@ Team battleground matches run with polymorphs, points of interest and team scori
 
 **Goal:** Daily rolls and rewards.
 
-**Size:** M. **Depends on:** 10.08
+**Size:** M. **Depends on:** 10.08, 4.16
 
 **Client messages:** MSG_DailyQuestUpdate, MSG_DAILYQUESTOPEN, MSG_DAILYQUESTCOMPLETED, MSG_DAILYQUESTEXPLORE, MSG_DAILYQUESTCSRDATA
 
@@ -622,6 +630,7 @@ Team battleground matches run with polymorphs, points of interest and team scori
 
 - [ ] Roll stable within a day, changes after reset
 - [ ] Real client: task list; completion grants reward
+- [ ] Changing Daily.ResetTime moves the next reset without a restart
 
 ### Detailed spec from EXT-43: Daily assignments
 
@@ -629,7 +638,7 @@ Daily quests (assignments) roll, track, and grant daily rewards.
 
 **Deliverables**
 
-- Daily roll at reset time, progress tracking, reward tiers
+- Daily roll at the reset time from the live setting Daily.ResetTime, progress tracking, reward tiers
 
 **Client messages:** MSG_DailyQuestUpdate, MSG_DAILYQUESTOPEN, MSG_DAILYQUESTCOMPLETED, MSG_DAILYQUESTEXPLORE, MSG_DAILYQUESTCSRDATA
 

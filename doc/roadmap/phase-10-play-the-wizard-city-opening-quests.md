@@ -12,15 +12,15 @@
 | 10.04 | Requirement-gated visibility (WLD-19 part 2) | M | 10.03 |
 | 10.05 | Usage and scavenge goals (QST-17) | M | 10.04, 7.07 |
 | 10.06 | Bounty goals (QST-18) | M | 10.01, 9.11 |
-| 10.07 | LootMgr core (QST-19 + CMB-20 merged) | M | 8.09, 2.07 |
+| 10.07 | LootMgr core (QST-19 + CMB-20 merged) | M | 8.09, 2.07, 4.15, 4.16 |
 | 10.08 | Quest rewards (QST-19) | M | 10.07, 10.01, 8.02, 8.05 |
 | 10.09 | Duel rewards and drop tables (CMB-19 + CMB-20) | M | 10.07, 9.11, 10.06 |
-| 10.10 | Gold vendors (EXT-1 + QST-20 + WIZ-24 gold) | M | 7.07, 8.09, 8.01 |
+| 10.10 | Gold vendors (EXT-1 + QST-20 + WIZ-24 gold) | M | 7.07, 8.09, 8.01, 4.15, 4.16 |
 | 10.11 | Potion shop and wisps (EXT-2 + WIZ-24 potions) | S | 10.10 |
 | 10.12 | Treasure card vendor (EXT-6 + WIZ-24 TC) | S | 10.10, 8.12 |
-| 10.13 | Teleporters, Spiral Door, Go Home (WLD-16) | M | 6.14, 7.04, 9.03 |
-| 10.14 | Path-walking NPCs (WLD-17) | M | 6.16, 6.12 |
-| 10.15 | Content hot reload (QST-21) | M | 7.12, 10.08, 10.10 |
+| 10.13 | Teleporters, Spiral Door, Go Home (WLD-16) | M | 6.14, 7.04, 9.03, 4.15, 4.16 |
+| 10.14 | Path-walking NPCs (WLD-17) | M | 6.16, 6.12, 4.15 |
+| 10.15 | Content hot reload (QST-21) | M | 7.12, 10.08, 10.10, 10.09, 10.11, 10.12, 10.13, 10.14, 8.13, 4.15 |
 | 10.16 | Wizard City chain authoring and automated test (QST-23 part 1) | M | 7.05, 7.13, 10.02, 10.05, 10.06, 10.08 |
 | 10.17 | Wizard City chain real-client playthrough (QST-23 part 2) | M | 10.16, 10.03 |
 | 10.18 | Quest helper extras (QST-24) | M | 7.11, 7.06 |
@@ -300,12 +300,13 @@ Defeating mobs whose adjectives match a bounty goal advances its tally ('Defeat 
 
 **Goal:** Weighted grouped loot tables.
 
-**Size:** M. **Depends on:** 8.09, 2.07
+**Size:** M. **Depends on:** 8.09, 2.07, 4.15, 4.16
 
 **Acceptance**
 
 - [ ] 100000 seeded rolls of a 10% entry land in 9.5-10.5%
 - [ ] School-gated spell entry only for that school
+- [ ] With Rate.Drop.Item at 2, the same 10% item entry lands in 19-21% without a restart
 
 ### Detailed spec from QST-19: Loot tables and quest rewards
 
@@ -314,6 +315,7 @@ Quest completion grants gold, XP, items and spells from data-driven loot tables,
 **Deliverables**
 
 - data/sql db_world: loot_table, loot_entry (type GOLD|XP|ITEM|SPELL|REAGENT|TREASURE_CARD, template_id, min/max, chance, group, requirement_list_id), creature_loot (object template -> loot_table; the template's m_lootTable name is kept as a hint only).
+- Each rolled entry's chance is multiplied by the live setting Rate.Drop.<kind> for its type (Rate.Drop.Item, Rate.Drop.Spell, Rate.Drop.Reagent, Rate.Drop.TreasureCard), bounded in its declaration, and a scaled chance never exceeds 1.0. Guaranteed entries are not scaled.
 - src/server/game/Loot/LootMgr.h/.cpp (sLootMgr): roller with grouped entries, deterministic RNG seam for tests.
 - Result types ResLoot/ResDropTable(table, maxRolls), ResAddGold, ResAddMagicXP, ResAddSpell/ResLearnSpell with per-school requirement; reward preview builder for MSG_QUESTOFFER and MSG_SENDQUEST Rewards.
 - Send WIZARD MSG_LOOT (GlobalID, LootList) for granted loot and MSG_QUESTREWARDS (QuestID, LootList) for spell rewards; MSG_ITEMDROP on a full inventory.
@@ -347,9 +349,10 @@ Defeated creatures roll authored drop tables and players receive items, reagents
 
 **Deliverables**
 
-- src/server/game/Loot/LootMgr (sLootMgr): world loot tables keyed by the loot-table names referenced in mob templates (e.g. 'LT-Drop-BronzeGear-04'), weighted and guaranteed entries, nested tables
+- src/server/game/Loot/LootMgr (sLootMgr): world loot tables keyed by the loot-table names referenced in mob templates (e.g. 'LT-Drop-BronzeGear-04'), weighted and guaranteed entries, nested tables, with drop chances scaled by the Rate.Drop.<kind> live settings
 - LootInfoList construction (GoldLootInfo, ItemLootInfo, TreasureCardLootInfo, ReagentLootInfo, ...) and MSG_LOOT
 - cs_loot.cpp: .loot reload, .loot test <table>
+- loot_table and creature_loot are one 4.15 reload target: `.loot reload` and `.reload loot_table` build the tables off to the side, validate them, and swap them; a failure keeps the old tables and reports every error
 
 **Client messages:** MSG_LOOT
 
@@ -366,6 +369,7 @@ Defeated creatures roll authored drop tables and players receive items, reagents
 **Acceptance**
 
 - [ ] Unit test: 100000 seeded rolls of a table with a 10% entry land within 9.5–10.5%
+- [ ] Unit test: after `.settings set Rate.Drop.Item 2`, 100000 seeded rolls of the same 10% item entry land within 19–21% without a restart
 - [ ] Real client: after victory the loot popup lists the rolled items with icons, and the items are in the backpack after relog (characters DB)
 
 **Risks**
@@ -383,6 +387,7 @@ Defeated creatures roll authored drop tables and players receive items, reagents
 **Acceptance**
 
 - [ ] Real client: reward popup with 100 gold, 50 XP and item; Fire wizard gets only the fire spell popup
+- [ ] Changing Rate.Gold.Quest or Rate.XP.Quest applies to the next quest reward without a restart
 
 ### Detailed spec from QST-19: Loot tables and quest rewards
 
@@ -393,6 +398,7 @@ Quest completion grants gold, XP, items and spells from data-driven loot tables,
 - data/sql db_world: loot_table, loot_entry (type GOLD|XP|ITEM|SPELL|REAGENT|TREASURE_CARD, template_id, min/max, chance, group, requirement_list_id), creature_loot (object template -> loot_table; the template's m_lootTable name is kept as a hint only).
 - src/server/game/Loot/LootMgr.h/.cpp (sLootMgr): roller with grouped entries, deterministic RNG seam for tests.
 - Result types ResLoot/ResDropTable(table, maxRolls), ResAddGold, ResAddMagicXP, ResAddSpell/ResLearnSpell with per-school requirement; reward preview builder for MSG_QUESTOFFER and MSG_SENDQUEST Rewards.
+- Quest gold and XP grants are multiplied by the live settings Rate.Gold.Quest and Rate.XP.Quest, and the reward preview shows the scaled amounts.
 - Send WIZARD MSG_LOOT (GlobalID, LootList) for granted loot and MSG_QUESTREWARDS (QuestID, LootList) for spell rewards; MSG_ITEMDROP on a full inventory.
 
 **Client messages:** MSG_LOOT, MSG_QUESTREWARDS, MSG_ITEMDROP, MSG_QUESTOFFER, MSG_SENDQUEST
@@ -412,6 +418,7 @@ Quest completion grants gold, XP, items and spells from data-driven loot tables,
 
 - [ ] Unit test with a seeded RNG: table rolls are reproducible, and a school-gated spell entry is only granted to that school.
 - [ ] Client: completing a quest with 100 gold, 50 XP and one item shows the reward popup with the gold, XP bar gain and item icon, and the backpack contains the item. A Fire wizard gets the spell cinematic popup for the fire spell only.
+- [ ] Client: after `.settings set Rate.Gold.Quest 2`, completing the same quest shows 200 gold in the reward popup without a restart.
 
 **Risks**
 
@@ -429,6 +436,7 @@ Quest completion grants gold, XP, items and spells from data-driven loot tables,
 **Acceptance**
 
 - [ ] Level-3 Normal mob grants XP row to winners, nothing to fleers
+- [ ] Changing Rate.XP.Kill or Rate.Gold.Kill applies to the next victory without a restart
 - [ ] Real client: XP bar, gold, loot popup items persist; quest tracker increments
 
 ### Detailed spec from CMB-19: Rewards: XP, gold, quest credit
@@ -437,7 +445,8 @@ Winning a duel grants experience and gold, levels players up, and credits quest 
 
 **Deliverables**
 
-- src/server/game/Combat/DuelRewards: XP per creature (world table keyed by level/rank/title) and gold rolls
+- src/server/game/Combat/DuelRewards: XP per creature (world table keyed by level/rank/title) and gold rolls, multiplied by the live settings Rate.XP.Kill and Rate.Gold.Kill
+- `.reload creature_combat_reward` as a 4.15 target: builds the table off to the side, validates it, and swaps it; a failure keeps the old rows and reports every error
 - Level-up integration through WIZ (MSG_UPDATEXP, MSG_LEVELUP)
 - QuestScript/PlayerScript hook firing per defeated creature template for every living or defeated player in the duel
 
@@ -454,6 +463,7 @@ Winning a duel grants experience and gold, levels players up, and credits quest 
 **Acceptance**
 
 - [ ] Unit test: a defeated level-3 Normal mob grants the XP row value to each winning player, and nothing to fled players
+- [ ] Unit test: after `.settings set Rate.XP.Kill 2`, the next defeated level-3 Normal mob grants twice the XP row value without a restart
 - [ ] Real client: after victory the XP bar fills by the granted amount, gold rises, and a quest 'defeat 3 X' tracker increments per kill
 - [ ] Real client: crossing an XP threshold shows the level-up effect
 
@@ -496,13 +506,14 @@ Defeated creatures roll authored drop tables and players receive items, reagents
 
 **Goal:** Shop window buy/sell.
 
-**Size:** M. **Depends on:** 7.07, 8.09, 8.01
+**Size:** M. **Depends on:** 7.07, 8.09, 8.01, 4.15, 4.16
 
 **Client messages:** MSG_SENDINTERACTOPTIONS, MSG_INTERACTOPTION, MSG_SHOPLIST, MSG_SHOPBUYREQUEST, MSG_SHOPBUYCONFIRM, MSG_SHOPSELLREQUEST, MSG_SHOPSELLCONFIRM, MSG_DONESHOPPING, MSG_UPDATEGOLD, MSG_REMOVEDSHOPPER, MSG_REQUESTQUICKSELL, MSG_QUICKSELLREQUEST, MSG_SELLMODIFIER
 
 **Acceptance**
 
 - [ ] Insufficient gold, item not listed, out of range rejected with no change; equipped/locked sell refused
+- [ ] Changing Shop.SellValuePercent applies to the next sale; a failed `.reload npc_vendor` keeps the old stock
 - [ ] Real client: shop lists DB items; buy deducts gold and adds item; closing frees movement
 
 ### Detailed spec from EXT-1: Service-option framework and gold equipment vendors
@@ -511,7 +522,7 @@ Talking to a vendor NPC opens the native shop window, and the player can buy and
 
 **Deliverables**
 
-- src/server/game/Shops/ShopMgr (sShopMgr) loading vendor stock from world DB
+- src/server/game/Shops/ShopMgr (sShopMgr) loading vendor stock from world DB as the 4.15 reload target npc_vendor: a reload builds the stock off to the side, validates it, and swaps it, a failure keeps the old stock and reports every error, and an open shop window keeps its list until reopened
 - src/server/game/Handlers/ShopHandler.cpp (buy, sell, done)
 - WizShopOffering / EquipmentShopOption serialization in the service-option list sent on interact
 - MSG_WIZBANG Shopping plus MSG_ENTERSTATE 'Shop' (freezes movement) and MSG_LEAVESTATE on done
@@ -535,6 +546,7 @@ Talking to a vendor NPC opens the native shop window, and the player can buy and
 **Acceptance**
 
 - [ ] Unit: buying with insufficient gold is rejected; sell value matches formula; item not in vendor list is rejected and logged
+- [ ] Unit: setting Shop.SellValuePercent to a new value with `.settings set` changes the next sell price to match, without a restart
 - [ ] Client: clicking a vendor NPC in Wizard City shows the equipment shop window listing the DB items with correct prices
 - [ ] Client: buying an item plays the confirm, deducts gold in the HUD, and the item appears in the backpack; selling reverses it; closing the window lets the wizard move again
 
@@ -581,7 +593,7 @@ Players can buy items, potions and treasure cards from NPC vendors with gold and
 
 - world.npc_vendor (npc template, item template, currency, price override), world.npc_treasure_vendor, authored SQL
 - SHOPLIST sender; SHOPBUYREQUEST -> SHOPBUYCONFIRM; SHOPSELLREQUEST -> SHOPSELLCONFIRM; REQUESTQUICKSELL and WIZARD2 QUICKSELLREQUEST (QuickSellItemList blob); POTIONSHOPOPEN/POTIONBUYREQUEST/POTIONBUYCONFIRM; TREASURESHOPLIST/TREASUREBUY/TREASUREBUYCONFIRM; DONESHOPPING ends shop state
-- Price rules from item_template.m_baseCost and PriceModifiers.xml; the sell value formula is config
+- Price rules from item_template.m_baseCost and PriceModifiers.xml; the sell value is the live setting Shop.SellValuePercent of the base cost, applied from the next sale
 
 **Client messages:** MSG_SHOPLIST, MSG_SHOPBUYREQUEST, MSG_SHOPBUYCONFIRM, MSG_SHOPSELLREQUEST, MSG_SHOPSELLCONFIRM, MSG_REQUESTQUICKSELL, MSG_QUICKSELLREQUESTBANK, MSG_POTIONSHOPOPEN, MSG_POTIONBUYREQUEST, MSG_POTIONBUYCONFIRM, MSG_TREASURESHOPLIST, MSG_TREASUREBUY, MSG_TREASUREBUYCONFIRM, MSG_DONESHOPPING, WIZARD2 MSG_QUICKSELLREQUEST, WIZARD2 MSG_SELLMODIFIER
 
@@ -617,6 +629,7 @@ Players can buy items, potions and treasure cards from NPC vendors with gold and
 **Acceptance**
 
 - [ ] Cannot exceed max potions
+- [ ] Changing Potion.RefillCostPerLevel applies to the next purchase; a failed `.reload wisp_template` keeps the old rows
 - [ ] Real client: bottles fill; red wisp heals, disappears and respawns
 
 ### Detailed spec from EXT-2: Potions, potion shop and wisps
@@ -625,10 +638,11 @@ Players buy and drink health/mana potions and pick up health/mana wisps in the w
 
 **Deliverables**
 
-- game/Potions/PotionMgr with refill cost formula configurable in gameserver.conf.dist
+- game/Potions/PotionMgr with the refill cost formula's factors as live settings Potion.RefillCostBase and Potion.RefillCostPerLevel, defaults in gameserver.conf.dist, applied from the next purchase
 - PotionShopOption service option and handler
-- game/Entities wisp pickup behavior (proximity trigger, heal percent from world DB, despawn/respawn timer)
+- game/Entities wisp pickup behavior (proximity trigger, heal percent from world DB, despawn/respawn timer from the row's respawn seconds scaled by Rate.Respawn)
 - world.wisp_template table (template id, stat, percent, respawn seconds)
+- `.reload wisp_template` as a 4.15 target: builds the table off to the side, validates it, and swaps it; the next pickup and respawn use the new rows, and a failure keeps the old rows and reports every error
 
 **Client messages:** MSG_POTIONSHOPOPEN, MSG_POTIONBUYREQUEST, MSG_POTIONBUYCONFIRM, MSG_USEPOTION, MSG_UPDATEPOTIONS, MSG_UPDATEHEALTH, MSG_UPDATEMANA, MSG_ENTERSTATE, MSG_DELETEOBJECT
 
@@ -645,6 +659,7 @@ Players buy and drink health/mana potions and pick up health/mana wisps in the w
 **Acceptance**
 
 - [ ] Unit: potion purchase cost scales with level; cannot exceed max potions
+- [ ] Unit: `.settings set Potion.RefillCostPerLevel` changes the next purchase's cost without a restart
 - [ ] Client: Mystical Mixtures window opens from the potion NPC, buying fills potion bottles on the HUD
 - [ ] Client: clicking the potion button raises the health globe; walking over a red wisp while damaged heals, plays the pickup effect, and the wisp disappears then respawns
 
@@ -660,7 +675,7 @@ Players can buy items, potions and treasure cards from NPC vendors with gold and
 
 - world.npc_vendor (npc template, item template, currency, price override), world.npc_treasure_vendor, authored SQL
 - SHOPLIST sender; SHOPBUYREQUEST -> SHOPBUYCONFIRM; SHOPSELLREQUEST -> SHOPSELLCONFIRM; REQUESTQUICKSELL and WIZARD2 QUICKSELLREQUEST (QuickSellItemList blob); POTIONSHOPOPEN/POTIONBUYREQUEST/POTIONBUYCONFIRM; TREASURESHOPLIST/TREASUREBUY/TREASUREBUYCONFIRM; DONESHOPPING ends shop state
-- Price rules from item_template.m_baseCost and PriceModifiers.xml; the sell value formula is config
+- Price rules from item_template.m_baseCost and PriceModifiers.xml; the sell value is the live setting Shop.SellValuePercent of the base cost, applied from the next sale
 
 **Client messages:** MSG_SHOPLIST, MSG_SHOPBUYREQUEST, MSG_SHOPBUYCONFIRM, MSG_SHOPSELLREQUEST, MSG_SHOPSELLCONFIRM, MSG_REQUESTQUICKSELL, MSG_QUICKSELLREQUESTBANK, MSG_POTIONSHOPOPEN, MSG_POTIONBUYREQUEST, MSG_POTIONBUYCONFIRM, MSG_TREASURESHOPLIST, MSG_TREASUREBUY, MSG_TREASUREBUYCONFIRM, MSG_DONESHOPPING, WIZARD2 MSG_QUICKSELLREQUEST, WIZARD2 MSG_SELLMODIFIER
 
@@ -706,6 +721,7 @@ Players buy treasure cards and see them in their spellbook's treasure tab.
 
 - TreasureShopOption service option, TreasureShop handler
 - Treasure card inventory per character (book and deck)
+- `.reload npc_treasure_vendor` as a 4.15 target: builds the stock off to the side, validates it, and swaps it; a failure keeps the old stock and reports every error
 
 **Client messages:** MSG_TREASURESHOPLIST, MSG_TREASUREBUY, MSG_TREASUREBUYCONFIRM, MSG_ADDTREASURESPELLTOBOOK, MSG_REMOVETREASURESPELLFROMBOOK, MSG_ADDTREASURESPELLTODECK, MSG_REMOVETREASURESPELLFROMDECK, MSG_REMOVETREASURESPELLFROMVAULT
 
@@ -732,7 +748,7 @@ Players can buy items, potions and treasure cards from NPC vendors with gold and
 
 - world.npc_vendor (npc template, item template, currency, price override), world.npc_treasure_vendor, authored SQL
 - SHOPLIST sender; SHOPBUYREQUEST -> SHOPBUYCONFIRM; SHOPSELLREQUEST -> SHOPSELLCONFIRM; REQUESTQUICKSELL and WIZARD2 QUICKSELLREQUEST (QuickSellItemList blob); POTIONSHOPOPEN/POTIONBUYREQUEST/POTIONBUYCONFIRM; TREASURESHOPLIST/TREASUREBUY/TREASUREBUYCONFIRM; DONESHOPPING ends shop state
-- Price rules from item_template.m_baseCost and PriceModifiers.xml; the sell value formula is config
+- Price rules from item_template.m_baseCost and PriceModifiers.xml; the sell value is the live setting Shop.SellValuePercent of the base cost, applied from the next sale
 
 **Client messages:** MSG_SHOPLIST, MSG_SHOPBUYREQUEST, MSG_SHOPBUYCONFIRM, MSG_SHOPSELLREQUEST, MSG_SHOPSELLCONFIRM, MSG_REQUESTQUICKSELL, MSG_QUICKSELLREQUESTBANK, MSG_POTIONSHOPOPEN, MSG_POTIONBUYREQUEST, MSG_POTIONBUYCONFIRM, MSG_TREASURESHOPLIST, MSG_TREASUREBUY, MSG_TREASUREBUYCONFIRM, MSG_DONESHOPPING, WIZARD2 MSG_QUICKSELLREQUEST, WIZARD2 MSG_SELLMODIFIER
 
@@ -761,14 +777,15 @@ Players can buy items, potions and treasure cards from NPC vendors with gold and
 
 **Goal:** World list and hub travel.
 
-**Size:** M. **Depends on:** 6.14, 7.04, 9.03
+**Size:** M. **Depends on:** 6.14, 7.04, 9.03, 4.15, 4.16
 
 **Client messages:** MSG_INTERACTOBJECT, MSG_SENDINTERACTOPTIONS, MSG_INTERACTOPTION, MSG_LEAVESERVICERANGE, MSG_WIZBANG, MSG_ENTERSTATE, MSG_ADDEFFECT, MSG_WORLDTELEPORTLIST, MSG_WORLDTELEPORTREQUEST, MSG_GOHOME
 
 **Acceptance**
 
 - [ ] Unmet teleporter requirement does nothing and notifies
-- [ ] Real client: Spiral Door lists unlocked worlds; Krokotopia loads; Go Home loads WC_Hub, second press in 30 s refused
+- [ ] Changing GoHome.CooldownSeconds applies to the next press; a failed `.reload world_hub` keeps the old rows
+- [ ] Real client: Spiral Door lists unlocked worlds; Krokotopia loads; Go Home loads WC_Hub, second press within GoHome.CooldownSeconds (default 30) refused
 
 ### Detailed spec from WLD-16: Interactive teleporters and the Spiral Door
 
@@ -778,8 +795,9 @@ Clicking teleporter objects (Spiral Door, go-home, marked world teleporters) ope
 
 - Interact dispatch for objects whose template has teleport behaviors (TeleportProximityBehaviorTemplate: m_radius, m_locationName, m_requirementList), via NpcScript/GameObjectScript
 - Spiral Door: MSG_WORLDTELEPORTLIST (WIZARD 12) with a WorldTeleportOptions blob built from world.world_hub rows gated by the character's unlocked worlds; MSG_WORLDTELEPORTREQUEST transfers to the world's arrival zone and location; an empty World clears the wizbang
-- MSG_GOHOME (12): teleport effects (MSG_ENTERSTATE 'Teleport', MSG_ADDEFFECT RecallHome/CantGoHome) then transfer to the current world's hub from world.world_hub
+- MSG_GOHOME (12): teleport effects (MSG_ENTERSTATE 'Teleport', MSG_ADDEFFECT RecallHome/CantGoHome) then transfer to the current world's hub from world.world_hub; a press within the live setting GoHome.CooldownSeconds (default 30) of the last one is refused
 - world.world_hub table: world name, hub zone, hub location, universe teleport zone and location
+- `.reload world_hub` as a 4.15 target: builds the table off to the side, validates it, and swaps it; the next world list and Go Home use the new rows, and a failure keeps the old rows and reports every error
 
 **Client messages:** MSG_INTERACTOBJECT, MSG_SENDINTERACTOPTIONS, MSG_INTERACTOPTION, MSG_LEAVESERVICERANGE, MSG_WIZBANG, MSG_ENTERSTATE, MSG_ADDEFFECT, MSG_WORLDTELEPORTLIST, MSG_WORLDTELEPORTREQUEST, MSG_GOHOME
 
@@ -796,8 +814,9 @@ Clicking teleporter objects (Spiral Door, go-home, marked world teleporters) ope
 **Acceptance**
 
 - [ ] Real client: clicking the Spiral Door in Ravenwood opens the world list with only unlocked worlds; choosing Krokotopia loads its arrival zone
-- [ ] Real client: the Go Home button in a WC street plays the teleport effect, then loads WC_Hub; a second press within 30s is refused
+- [ ] Real client: the Go Home button in a WC street plays the teleport effect, then loads WC_Hub; a second press within GoHome.CooldownSeconds (default 30) is refused
 - [ ] Unit: a teleporter with unmet requirements does nothing and sends a notify text
+- [ ] Unit: after `.settings set GoHome.CooldownSeconds 5`, a press 6 s after the last one is accepted without a restart
 
 **Risks**
 
@@ -808,7 +827,7 @@ Clicking teleporter objects (Spiral Door, go-home, marked world teleporters) ope
 
 **Goal:** Server-driven patrols.
 
-**Size:** M. **Depends on:** 6.16, 6.12
+**Size:** M. **Depends on:** 6.16, 6.12, 4.15
 
 **Client messages:** MSG_SERVERMOVE, MSG_MOVESTATE, MSG_SERVERTELEPORT
 
@@ -816,6 +835,7 @@ Clicking teleporter objects (Spiral Door, go-home, marked world teleporters) ope
 
 - [ ] 2-node path at speed s takes distance/s +-1 tick
 - [ ] Empty Map sends nothing
+- [ ] `.reload zone_path` reroutes walking NPCs live; a failed reload keeps the old paths
 - [ ] Real client: patrol identical on two clients
 
 ### Detailed spec from WLD-17: Path-walking NPCs
@@ -827,6 +847,7 @@ NPCs with path data walk their routes on the server, and every client sees the s
 - zone_extractor: decode pathData.xml (PathManager::PathTemplateList, 0x3B6A23E8) and pathNodeData.bin into world.zone_path and world.zone_path_node
 - src/server/game/Movement/PathMovementGenerator.h/.cpp: node-to-node travel at PathMovementBehaviorTemplate m_movementSpeed * m_movementScale, with loop, ping-pong and wait handling per path data
 - Relays MSG_SERVERMOVE plus MSG_MOVESTATE to viewers only, paused when no player is in the Map
+- `.reload zone_path` as a 4.15 target: builds zone_path and zone_path_node off to the side, validates them, and swaps them; an NPC on a changed path continues from its next node on the new path, and a failure keeps the old paths and reports every error
 - src/test/server/game/Movement/PathMovementGeneratorTest.cpp
 
 **Client messages:** MSG_SERVERMOVE, MSG_MOVESTATE, MSG_SERVERTELEPORT
@@ -846,6 +867,7 @@ NPCs with path data walk their routes on the server, and every client sees the s
 
 - [ ] Unit: an NPC on a 2-node path with speed s covers the distance in distance/s seconds (+-1 tick)
 - [ ] Unit: a Map with no players sends no movement packets
+- [ ] Unit: `.reload zone_path` with a moved node sends a walking NPC to the new node position from its next leg without a restart, and a reload with a broken node keeps the old path
 - [ ] Real client: a patrolling NPC in a Wizard City street walks the same route on clients A and B at the same moment and does not pop on arrival
 
 **Risks**
@@ -855,9 +877,9 @@ NPCs with path data walk their routes on the server, and every client sees the s
 
 ## 10.15 Content hot reload (QST-21)
 
-**Goal:** Reload quests, loot, vendors live.
+**Goal:** Reload quests, loot, vendors and every other content store live.
 
-**Size:** M. **Depends on:** 7.12, 10.08, 10.10
+**Size:** M. **Depends on:** 7.12, 10.08, 10.10, 10.09, 10.11, 10.12, 10.13, 10.14, 8.13, 4.15
 
 **Client messages:** MSG_SENDQUEST, MSG_REMOVEGOAL, MSG_SENDNPCOPTIONS, MSG_WIZBANG
 
@@ -865,16 +887,18 @@ NPCs with path data walk their routes on the server, and every client sees the s
 
 - [ ] Renamed dialog key used next time; instance intact
 - [ ] Invalid reload refused; old snapshot served
+- [ ] `.reload all` reports a result and generation for every registered content target
 - [ ] Real client: '.reload quest_template' shows new title; new quest '!' within 1 s
 
 ### Detailed spec from QST-21: Hot reload of content and GM quest tooling
 
-Quest, dialog, requirement, result, loot and vendor edits apply with a GM command without restarting, and in-progress players keep working.
+Quest, dialog, requirement, result, loot, vendor and every other content edit applies live without restarting, and in-progress players keep working.
 
 **Deliverables**
 
-- scripts/Commands/cs_reload.cpp: .reload quest_template (reloads all quest_* tables as one snapshot), .reload requirement, .reload result, .reload loot_table, .reload npc_vendor, .reload object_template. Each needs an admin security level.
-- The managers build a new immutable store off-thread, validate it, and swap the shared_ptr atomically on the world thread. Failed validation keeps the old store and prints errors to the GM.
+- 4.15 reload targets for quest_template (all quest_* tables as one snapshot; the swap comes from 7.03 and this milestone adds the re-binding below), requirement, result, loot_table, npc_vendor and object_template, reached through `.reload <target>`, the console `reload`, and `.reload all`. Each needs an admin security level.
+- Every content manager is a 4.15 target, registered by the milestone that owns it: zone_template, zone_location, zone_object, zone_trigger, zone_teleport, zone_spawner, zone_path, world_hub, game_tele, templates, quickchat, character_name, character_create_school, playercreateinfo, player_level_stats, item_template, npc_trainer_spell, npc_treasure_vendor, wisp_template, creature_combat_reward, and the spell and sigil stores. This milestone checks that none is missing. The 17.12 admin API exposes all of them when it lands.
+- The managers build a new immutable store off-thread, validate it, and swap the shared_ptr atomically on the world thread. Failed validation keeps the old store and reports every error to the GM or console that asked.
 - Post-swap: re-bind active quest instances by quest_name and goal_name. Goals removed from the template are dropped with MSG_REMOVEGOAL; quests removed are left dormant, not deleted. Rebuild starter and persona indexes, mark every NPC wizbang dirty, re-send options to players in range.
 - cs_quest additions: .quest reset <name> (clears registry), .quest info <name> (validation state, starter NPC, persona targets).
 
@@ -894,6 +918,7 @@ Quest, dialog, requirement, result, loot and vendor edits apply with a GM comman
 
 - [ ] Unit test: while a player holds goal G, reload a template that renames the dialog key. The next dialog uses the new key and the instance stays intact.
 - [ ] Unit test: a reload that introduces a validation error is refused and the old snapshot is still served.
+- [ ] Unit test: `.reload all` lists every content target named above with its result and generation, and a broken row in one target leaves the others swapped and that one serving its old store.
 - [ ] Client: change a quest's title key in SQL, run .reload quest_template, reopen the quest book. The new title shows without relogging. Adding a new quest whose Prep actor is a nearby NPC makes a '!' appear within 1 s.
 
 **Risks**

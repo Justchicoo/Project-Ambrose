@@ -158,7 +158,7 @@ Multi-statement atomic writes and main-thread callback processing work, and apps
 - Transaction.h/.cpp: Append(stmt or adhoc), CommitTransaction (async), DirectCommitTransaction, retry on deadlock (ER_LOCK_DEADLOCK) up to a time limit, TransactionCallback
 - QueryCallback.h/.cpp with WithCallback/WithPreparedCallback and chaining; QueryCallbackProcessor.h/.cpp pumped from the app update loop
 - src/server/database/Database/DatabaseLoader.h/.cpp: AddDatabase(pool, name) that queues open, prepare, and later the updater; Load() runs them in order and unwinds on failure
-- Config options per app .conf.dist: LoginDatabaseInfo, CharacterDatabaseInfo, WorldDatabaseInfo, *.WorkerThreads, *.SynchThreads, MaxPingTime
+- Config options per app .conf.dist: LoginDatabaseInfo, CharacterDatabaseInfo, WorldDatabaseInfo, *.WorkerThreads, *.SynchThreads, MaxPingTime. They apply live on a config reload (through 4.15 when it lands): a changed connection string opens and validates a new pool, then swaps it in and drains the old one, and a failure keeps the old pool and logs the error; thread counts resize live; MaxPingTime applies from the next ping
 
 **Acceptance**
 
@@ -166,6 +166,7 @@ Multi-statement atomic writes and main-thread callback processing work, and apps
 - [ ] Forced deadlock between two transactions: the loser retries and both finally commit
 - [ ] A QueryCallback chain (query A then B using A's result) runs both callbacks on the processor thread (checked by thread id)
 - [ ] loginserver with a bad LoginDatabaseInfo exits 1 with a clear error; with a valid one logs 'Opened database connection pool login: 1 async, 1 sync'
+- [ ] Integration: changing LoginDatabaseInfo and reloading config on a running loginserver swaps to the new pool without dropping queued queries; an unreachable string keeps the old pool and logs the error
 - [ ] Real client: n/a
 
 ## 2.05 Updater: AutoSetup and base populate (FND-17 part 1)
@@ -189,6 +190,7 @@ An empty database is created from base/ and then brought current by applying dat
 - UpdateFetcher.h/.cpp: file discovery and hashing (SHA-256 of file bytes with line endings normalized to LF)
 - SQL file execution: split-free multi-statement execution via CLIENT_MULTI_STATEMENTS on a dedicated connection, or shelling out to the mysql CLI as AzerothCore does (decision), stopping on the first error with file and statement logged
 - Config: Updates.EnableDatabases (bitmask login=1, characters=2, world=4), Updates.AutoSetup, Updates.SourcePath
+- `db update` on a running server applies pending data-only update files live, then reloads the stores they touch (through 4.15 when it lands); a file with schema statements is refused, since schema updates the running binary needs are a documented restart case
 
 **Acceptance**
 
@@ -227,6 +229,7 @@ An empty database is created from base/ and then brought current by applying dat
 - UpdateFetcher.h/.cpp: file discovery and hashing (SHA-256 of file bytes with line endings normalized to LF)
 - SQL file execution: split-free multi-statement execution via CLIENT_MULTI_STATEMENTS on a dedicated connection, or shelling out to the mysql CLI as AzerothCore does (decision), stopping on the first error with file and statement logged
 - Config: Updates.EnableDatabases (bitmask login=1, characters=2, world=4), Updates.AutoSetup, Updates.SourcePath
+- `db update` on a running server applies pending data-only update files live, then reloads the stores they touch (through 4.15 when it lands); a file with schema statements is refused, since schema updates the running binary needs are a documented restart case
 
 **Acceptance**
 
@@ -334,6 +337,7 @@ Each incoming DML message is routed to exactly one Session::Handle<Message> memb
 - Every client->server message not yet implemented is registered STATUS_NEVER with HandleNULL, so unimplemented is explicit. Server->client-only messages are marked STATUS_NEVER with HandleServerSide
 - Inbound queue: PROCESS_INPLACE runs on the network thread; others are queued and drained in Session::Update(diff) (world tick) or by the zone that owns the player
 - Handler grouping per doc: src/server/game/Handlers/<Subsystem>Handler.cpp (empty stubs created only when a subsystem lands)
+- Network.MaxStrikes is a live setting read at each strike, so a change applies to the next strike (registered with 4.16 when it lands)
 - src/test/server/game/Server/MessageTableTest.cpp
 
 **Client messages:** MSG_USER_AUTHEN_V3, MSG_LOGIN_NOT_AFK, MSG_ATTACH, MSG_PING
@@ -364,7 +368,7 @@ A real client started with -L 127.0.0.1 12000 connects to our loginserver, compl
 - src/server/apps/loginserver/Main.cpp: loads loginserver.conf, opens the login and characters DB pools, runs the acceptor and signal handling
 - src/server/apps/loginserver/Server/LoginSocket.{h,cpp}: per-connection session built on the NET session (SessionOffer, SessionAccept, KeepAlive, KeepAliveRsp) that remembers SessionID, offer seconds and offer milliseconds for the crypto in LOG-3
 - src/server/apps/loginserver/Server/LoginOpcodes.{h,cpp}: dispatch table of all 29 LOGIN messages by _MsgOrder (the ids come straight from LoginMessages.xml), each tagged with required state (Never / Authenticated / CharacterSelected) and a Handle<Message> member; unimplemented entries are logged and dropped, never fatal
-- conf/dist/loginserver.conf.dist: BindIP, LoginPort=12000, LoginDatabaseInfo, CharacterDatabaseInfo, KeepAliveInterval, SessionAcceptTimeout, MaxConnections
+- conf/dist/loginserver.conf.dist: BindIP, LoginPort=12000, LoginDatabaseInfo, CharacterDatabaseInfo, KeepAliveInterval, SessionAcceptTimeout, MaxConnections. BindIP and LoginPort rebind live, opening the new listener before closing the old one, and a failed bind keeps the old listener; MaxConnections, KeepAliveInterval and SessionAcceptTimeout apply from the next connection or timer; the database strings follow 2.04
 - src/test/server/apps/loginserver/LoginOpcodesTest.cpp
 
 **Client messages:** MSG_USER_AUTHEN_V3
@@ -594,8 +598,9 @@ A real client with valid credentials is authenticated and admitted to character 
 
 - src/server/apps/loginserver/Handlers/AuthHandler.cpp: HandleUserAuthenV3 decrypts Rec1 with the session's offer values and parses the plaintext as 'sid username ck1' (split on spaces; exactly 3 parts; sid must equal this session's id), then checks optional revision enforcement (Login.EnforceRevision, Login.AllowedRevision), account existence, account, IP and machine bans (MachineID GID), locked accounts, and CK1
 - On success: generate a session key, store it in account_session, update last_login/last_ip/last_machine_id, and send MSG_USER_AUTHEN_RSP{Error=0, UserID=account id, Rec1=Rec1.Encode(sessionKey), Reason='', TimeStamp='', PayingUser=1, Flags=0, SupportID='', PublicPlayerName=''} then MSG_USER_ADMIT_IND{Status=1, PositionInQueue=0}; mark the session Authenticated
-- On failure: MSG_USER_AUTHEN_RSP{Error=<code>, Reason=<text>} and keep the socket open for a retry, closing it after N failures (config Login.MaxAuthAttempts) with an IP lockout like AzerothCore's WrongPass policy
-- Duplicate login policy (config): an account already marked online either rejects with Error=AuthenFailed plus MSG_SERVERMESSAGE, or kicks the old session
+- On failure: MSG_USER_AUTHEN_RSP{Error=<code>, Reason=<text>} and keep the socket open for a retry, closing it after N failures (config Login.MaxAuthAttempts) with an IP lockout lasting Login.LockoutSeconds, like AzerothCore's WrongPass policy
+- Duplicate login policy (config Login.DuplicateLoginPolicy): an account already marked online either rejects with Error=AuthenFailed plus MSG_SERVERMESSAGE, or kicks the old session
+- Login.EnforceRevision, Login.AllowedRevision, Login.MaxAuthAttempts, Login.LockoutSeconds and Login.DuplicateLoginPolicy are live settings read on each attempt, so a change applies without a restart (registered with 4.16 when it lands)
 - MSG_USER_AUTHEN (13), MSG_USER_AUTHEN_V2 (22), MSG_WEB_AUTHEN (24) and MSG_WEB_VALIDATE (25) are answered with an AUTHEN_RSP failure and logged
 - data/sql/updates/db_login/<date>_01.sql: account_session (account_id PK, machine_id, session_key CHAR(44), created, expires)
 - src/server/apps/loginserver/Server/AuthResult.h: error code constants
@@ -618,6 +623,7 @@ A real client with valid credentials is authenticated and admitted to character 
 **Acceptance**
 
 - [ ] Unit: a fake session with known sid, secs and ms, fed a Rec1 built by the test from 'sid user ck1', authenticates; a wrong sid in the plaintext, a wrong CK1, a banned machine id and a locked account each give the expected error code and no session row
+- [ ] Unit: changing Login.MaxAuthAttempts on a running loginserver applies to the next attempt without a restart
 - [ ] Real client (in-client login UI, no -U): the correct password moves to the character select screen (empty list for a new account) with no error dialog; the server log shows AUTHEN_V3, AUTHEN_RSP Error=0 and ADMIT_IND Status=1, matching capture lines 1-3
 - [ ] Real client: a wrong password shows the client's invalid-login dialog and allows a retry without restarting the client
 - [ ] Real client: an account banned via account_banned is refused with a visible message and never reaches character select
@@ -650,13 +656,14 @@ Idle clients at the login screen are dropped politely, and a login server shutdo
 
 - LoginSocket idle tracking: MSG_LOGIN_NOT_AFK (BadgeNameID ignored) and any other client message reset the timer; after Login.AfkTimeout send MSG_DISCONNECT_LOGIN_AFK{Warning} and close; the timer is suspended once CharacterSelected
 - Shutdown: on SIGINT or console `server shutdown`, send MSG_LOGINSERVERSHUTDOWN{Message} to every session, then close after a grace delay
-- conf/dist/loginserver.conf.dist: Login.AfkTimeout, Login.AfkWarning, Login.ShutdownGrace
+- conf/dist/loginserver.conf.dist: Login.AfkTimeout, Login.AfkWarning, Login.ShutdownGrace. They are live settings read at each timer check, so a change applies without a restart (registered with 4.16 when it lands)
 
 **Client messages:** MSG_LOGIN_NOT_AFK, MSG_DISCONNECT_LOGIN_AFK, MSG_LOGINSERVERSHUTDOWN
 
 **Acceptance**
 
 - [ ] Unit: with a fake clock, a session with no traffic for AfkTimeout seconds is closed, while one sending MSG_LOGIN_NOT_AFK every 30s is kept
+- [ ] Unit: with a fake clock, lowering Login.AfkTimeout on a running loginserver closes an idle session at the new timeout
 - [ ] Real client: leave the client on character select past the timeout; it shows the client's AFK disconnect message rather than a generic connection-lost error
 - [ ] Real client: stopping the loginserver while on character select shows a server-shutdown notice
 

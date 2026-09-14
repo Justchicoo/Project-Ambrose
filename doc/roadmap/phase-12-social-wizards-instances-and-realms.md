@@ -6,29 +6,29 @@
 
 | ID | Milestone | Size | Depends on |
 |---|---|---|---|
-| 12.01 | Friends (WIZ-17 part 1) | M | 6.03, 5.05 |
+| 12.01 | Friends (WIZ-17 part 1) | M | 6.03, 5.05, 4.16 |
 | 12.02 | Ignore list (WIZ-17 part 2) | S | 12.01 |
 | 12.03 | Whispers and inspect (WIZ-18) | M | 12.02, 11.03 |
-| 12.04 | Groups: invite, join, leave (WIZ-19 part 1) | M | 12.01, 8.02 |
+| 12.04 | Groups: invite, join, leave (WIZ-19 part 1) | M | 12.01, 8.02, 4.16 |
 | 12.05 | Groups: updates, member zones, channel chat, leader (WIZ-19 part 2) | M | 12.04 |
 | 12.06 | Privacy, friendly player, teleport to friend (WIZ-20) | M | 12.01, 6.07 |
-| 12.07 | Chat moderation (WIZ-21) | M | 6.04 |
-| 12.08 | Badges and titles (WIZ-22) | M | 6.04, 10.01 |
-| 12.09 | Bank and shared bank (WIZ-23) | M | 8.09 |
+| 12.07 | Chat moderation (WIZ-21) | M | 6.04, 4.15 |
+| 12.08 | Badges and titles (WIZ-22) | M | 6.04, 10.01, 4.15 |
+| 12.09 | Bank and shared bank (WIZ-23) | M | 8.09, 4.16 |
 | 12.10 | Player trade (WIZ-25) | M | 8.09, 12.06 |
-| 12.11 | Dye shop (EXT-3 + WIZ-26 dye) | S | 10.10, 8.10 |
-| 12.12 | Stitching (EXT-4 + WIZ-26 stitch) | S | 12.11 |
+| 12.11 | Dye shop (EXT-3 + WIZ-26 dye) | S | 10.10, 8.10, 4.15 |
+| 12.12 | Stitching (EXT-4 + WIZ-26 stitch) | S | 12.11, 4.16 |
 | 12.13 | Equipment sets (WIZ-26 part) | M | 8.10 |
 | 12.14 | Custom emotes and pet rename (WIZ-26 part) | M | 6.03, 5.05 |
-| 12.15 | Crowns balance and crown services (EXT-7) | S | 10.10, 2.13 |
-| 12.16 | Bazaar (EXT-5) | M | 10.10, 12.09 |
-| 12.17 | Public instances by capacity (WLD-22 part 1) | M | 6.14 |
+| 12.15 | Crowns balance and crown services (EXT-7) | S | 10.10, 2.13, 4.16 |
+| 12.16 | Bazaar (EXT-5) | M | 10.10, 12.09, 4.15, 4.16 |
+| 12.17 | Public instances by capacity (WLD-22 part 1) | M | 6.14, 4.15, 4.16 |
 | 12.18 | Private dungeon instances (WLD-22 part 2) | M | 12.17, 12.05 |
 | 12.19 | Realm and instance picker (LOG-16 part 1 + WLD-22 part 3) | M | 12.17, 4.03 |
 | 12.20 | Realm transfer (LOG-16 part 2) | M | 12.19, 6.07 |
-| 12.21 | Admission queue (LOG-15) | M | 4.05, 2.15 |
-| 12.22 | Same-connection zone transfer spike (WLD-21) | S | 6.07 |
-| 12.23 | MoveBehavior/Physics observation and speed validation (WLD-23) | S | 5.03, 11.03 |
+| 12.21 | Admission queue (LOG-15) | M | 4.05, 2.15, 4.16 |
+| 12.22 | Same-connection zone transfer spike (WLD-21) | S | 6.07, 4.16 |
+| 12.23 | MoveBehavior/Physics observation and speed validation (WLD-23) | S | 5.03, 11.03, 4.16 |
 
 ## Review notes for this phase
 
@@ -43,7 +43,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Goal:** Add, accept, deny, remove, presence.
 
-**Size:** M. **Depends on:** 6.03, 5.05
+**Size:** M. **Depends on:** 6.03, 5.05, 4.16
 
 **Client messages:** MSG_BUDDYREQUESTLIST, MSG_BUDDYENTRY, MSG_BUDDYLISTCOMPLETE, MSG_BUDDYREQUESTADD, MSG_BUDDYREQUESTACCEPT, MSG_BUDDYREQUESTDENY, MSG_BUDDYREQUESTDROP, MSG_BUDDYDROP, MSG_BUDDYSTATUSUPDATE, MSG_BESTFRIEND, MSG_REQUESTMAXFRIENDS
 
@@ -51,6 +51,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 - [ ] Accepting an unsent request fails with CHATERROR
 - [ ] Real client: add/accept shows both online with zone; logout shows offline
+- [ ] Lowering Social.MaxFriends refuses the next request over the cap without a restart
 
 ### Detailed spec from WIZ-17: Friends and ignore lists
 
@@ -59,7 +60,7 @@ Players can add, accept, deny and remove friends and ignored players, see online
 **Deliverables**
 
 - data/sql/updates/db_characters: character_friend (owner, friend, best_friend_symbol, date), character_ignore, character_friend_request
-- src/server/game/Social/SocialMgr (sSocialMgr): realm-wide online presence (single gameserver process now, designed so a chat server can be split out later), friend cap from config
+- src/server/game/Social/SocialMgr (sSocialMgr): realm-wide online presence (single gameserver process now, designed so a chat server can be split out later), friend cap from the live setting Social.MaxFriends, applied from the next friend request and REQUESTMAXFRIENDS reply, with existing friends kept when it is lowered
 - GAME handlers: BUDDYREQUESTLIST -> BUDDYENTRY* + BUDDYLISTCOMPLETE; BUDDYREQUESTADD (forwarded to the target), BUDDYREQUESTACCEPT, BUDDYREQUESTDENY, BUDDYREQUESTDROP -> BUDDYDROP both sides; BUDDYSTATUSUPDATE on login, logout and zone change; BESTFRIEND; IGNOREADD, IGNOREDROP, IGNORELIST (ListData blob of IgnoreEntryData); CHATERROR; REQUESTMAXFRIENDS
 - src/test/server/game/SocialMgrTest.cpp
 
@@ -75,6 +76,7 @@ Players can add, accept, deny and remove friends and ignored players, see online
 
 - [ ] Unit test: accepting a request that was never sent fails with CHATERROR
 - [ ] Unit test: ignoring a player removes them from friends and suppresses their radial chat to the owner
+- [ ] Unit test: lowering Social.MaxFriends with `.settings set` refuses the next request over the new cap without a restart
 - [ ] Two real clients: A clicks B and chooses Add Friend. B gets the friend request popup and accepts. Both friends lists show each other online with zone name. B logs out and A's list shows B offline within one status update. A ignores B and stops seeing B's chat bubbles.
 
 **Risks**
@@ -102,7 +104,7 @@ Players can add, accept, deny and remove friends and ignored players, see online
 **Deliverables**
 
 - data/sql/updates/db_characters: character_friend (owner, friend, best_friend_symbol, date), character_ignore, character_friend_request
-- src/server/game/Social/SocialMgr (sSocialMgr): realm-wide online presence (single gameserver process now, designed so a chat server can be split out later), friend cap from config
+- src/server/game/Social/SocialMgr (sSocialMgr): realm-wide online presence (single gameserver process now, designed so a chat server can be split out later), friend cap from the live setting Social.MaxFriends, applied from the next friend request and REQUESTMAXFRIENDS reply, with existing friends kept when it is lowered
 - GAME handlers: BUDDYREQUESTLIST -> BUDDYENTRY* + BUDDYLISTCOMPLETE; BUDDYREQUESTADD (forwarded to the target), BUDDYREQUESTACCEPT, BUDDYREQUESTDENY, BUDDYREQUESTDROP -> BUDDYDROP both sides; BUDDYSTATUSUPDATE on login, logout and zone change; BESTFRIEND; IGNOREADD, IGNOREDROP, IGNORELIST (ListData blob of IgnoreEntryData); CHATERROR; REQUESTMAXFRIENDS
 - src/test/server/game/SocialMgrTest.cpp
 
@@ -118,6 +120,7 @@ Players can add, accept, deny and remove friends and ignored players, see online
 
 - [ ] Unit test: accepting a request that was never sent fails with CHATERROR
 - [ ] Unit test: ignoring a player removes them from friends and suppresses their radial chat to the owner
+- [ ] Unit test: lowering Social.MaxFriends with `.settings set` refuses the next request over the new cap without a restart
 - [ ] Two real clients: A clicks B and chooses Add Friend. B gets the friend request popup and accepts. Both friends lists show each other online with zone name. B logs out and A's list shows B offline within one status update. A ignores B and stops seeing B's chat bubbles.
 
 **Risks**
@@ -165,13 +168,14 @@ Players can send private messages to friends and open another player's character
 
 **Goal:** Parties of four.
 
-**Size:** M. **Depends on:** 12.01, 8.02
+**Size:** M. **Depends on:** 12.01, 8.02, 4.16
 
 **Client messages:** MSG_PARTYREQUESTINVITE, MSG_PARTYREQUESTJOIN, MSG_PARTYREQUESTACCEPT, MSG_PARTYREQUESTDECLINE, MSG_PARTYJOINNOTIFICATION, MSG_PARTYLEAVE, MSG_PARTYLEAVENOTIFICATION, MSG_PARTYDISBAND, MSG_PARTYREQUESTTIMEOUT, MSG_PARTYJOINFAILED, MSG_PARTYREQUESTRESPONSE
 
 **Acceptance**
 
 - [ ] 5th invite gives PARTYJOINFAILED; leader leaving promotes next
+- [ ] Group.InviteTimeout change applies from the next invite without a restart
 - [ ] Real client: invite popup, portraits, leave clears
 
 ### Detailed spec from WIZ-19: Groups (parties)
@@ -180,7 +184,7 @@ Players can invite each other into a group of up to four, see member info and le
 
 **Deliverables**
 
-- src/server/game/Groups/GroupMgr (sGroupMgr): party id, leader, members, invite timeout (config)
+- src/server/game/Groups/GroupMgr (sGroupMgr): party id, leader, members, invite timeout from the live setting Group.InviteTimeout, applied from the next invite
 - GAME PARTYREQUESTINVITE -> PARTYREQUESTJOIN to the target; PARTYREQUESTACCEPT/DECLINE; PARTYJOINNOTIFICATION, PARTYUPDATE (school, level, zone, leader), PARTYLEAVE -> PARTYLEAVENOTIFICATION, PARTYDISBAND, PARTYREQUESTTIMEOUT, PARTYJOINFAILED, PARTYREQUESTRESPONSE errors; PARTYLEVELUPUPDATE from the WIZ-7 hook; PARTYREQUESTMEMBERZONES -> PARTYSUBMITMEMBERZONES
 - WIZARD3 CHANGEGROUPLEADER; WIZARD2 group quick chat routed to members
 - Group chat channel via GAME CHANNELCHAT
@@ -191,6 +195,7 @@ Players can invite each other into a group of up to four, see member info and le
 
 - [ ] Unit test: a 5th invite into a full party returns PARTYJOINFAILED
 - [ ] Unit test: the leader leaving promotes the next member
+- [ ] Unit test: after `.settings set Group.InviteTimeout`, the next unanswered invite ends with PARTYREQUESTTIMEOUT at the new timeout without a restart
 - [ ] Real clients A, B: A invites B, B sees the invite popup and accepts. Both see each other's portrait in the group panel with level and school. B levels up and A's panel updates. B leaves and A's panel clears.
 
 **Risks**
@@ -216,7 +221,7 @@ Players can invite each other into a group of up to four, see member info and le
 
 **Deliverables**
 
-- src/server/game/Groups/GroupMgr (sGroupMgr): party id, leader, members, invite timeout (config)
+- src/server/game/Groups/GroupMgr (sGroupMgr): party id, leader, members, invite timeout from the live setting Group.InviteTimeout, applied from the next invite
 - GAME PARTYREQUESTINVITE -> PARTYREQUESTJOIN to the target; PARTYREQUESTACCEPT/DECLINE; PARTYJOINNOTIFICATION, PARTYUPDATE (school, level, zone, leader), PARTYLEAVE -> PARTYLEAVENOTIFICATION, PARTYDISBAND, PARTYREQUESTTIMEOUT, PARTYJOINFAILED, PARTYREQUESTRESPONSE errors; PARTYLEVELUPUPDATE from the WIZ-7 hook; PARTYREQUESTMEMBERZONES -> PARTYSUBMITMEMBERZONES
 - WIZARD3 CHANGEGROUPLEADER; WIZARD2 group quick chat routed to members
 - Group chat channel via GAME CHANNELCHAT
@@ -227,6 +232,7 @@ Players can invite each other into a group of up to four, see member info and le
 
 - [ ] Unit test: a 5th invite into a full party returns PARTYJOINFAILED
 - [ ] Unit test: the leader leaving promotes the next member
+- [ ] Unit test: after `.settings set Group.InviteTimeout`, the next unanswered invite ends with PARTYREQUESTTIMEOUT at the new timeout without a restart
 - [ ] Real clients A, B: A invites B, B sees the invite popup and accepts. Both see each other's portrait in the group panel with level and school. B levels up and A's panel updates. B leaves and A's panel clears.
 
 **Risks**
@@ -278,7 +284,7 @@ Players can set privacy toggles (friend requests, teleports, trade, hatch, party
 
 **Goal:** Filter, permissions, mute.
 
-**Size:** M. **Depends on:** 6.04
+**Size:** M. **Depends on:** 6.04, 4.15
 
 **Client messages:** MSG_CHATFILTERBLACK, MSG_CHATFILTERWHITE, MSG_MUTE, MSG_NOTMUTED
 
@@ -287,6 +293,7 @@ Players can set privacy toggles (friend requests, teleports, trade, hatch, party
 - [ ] Blacklisted word flagged; whitelisted phrase passes
 - [ ] Muted REQUESTRADIALCHAT dropped with notice
 - [ ] Real client: '.mute <name> 5m' works
+- [ ] `.reload chatfilter` keeps the old lists on a failed load
 
 ### Detailed spec from WIZ-21: Chat moderation: filter, permissions and mute
 
@@ -295,7 +302,7 @@ Accounts get open or filtered chat, filtered words are handled the way the clien
 **Deliverables**
 
 - login.account chat_mode (open/filtered/closed) -> ClientWizPlayerNameBehavior.m_chatPermissions
-- src/server/game/Chat/ChatFilter: loads ChatFilter/WhiteListBase.txt, WhiteListPhrasesBase.txt, BlackListBase.txt, ExceptionListBase.txt and CharacterReplacementMap.txt from the user's install at startup (UTF-16), and sets the RADIALCHAT Filter byte
+- src/server/game/Chat/ChatFilter: loads ChatFilter/WhiteListBase.txt, WhiteListPhrasesBase.txt, BlackListBase.txt, ExceptionListBase.txt and CharacterReplacementMap.txt from the user's install at startup and on `.reload chatfilter` (UTF-16), and sets the RADIALCHAT Filter byte. A reload builds the new lists off to the side and swaps them atomically, and if any file fails to load the old lists stay active and every error is reported
 - CHATFILTERBLACK/CHATFILTERWHITE senders for runtime additions
 - GAME MUTE, NOTMUTED; login.account_muted (until, reason, by)
 - src/server/scripts/Commands/cs_mute.cpp (.mute, .unmute), cs_ban stub owned with LOG
@@ -314,6 +321,7 @@ Accounts get open or filtered chat, filtered words are handled the way the clien
 
 - [ ] Unit test: a blacklisted word from a fixture list is flagged and a whitelisted phrase passes
 - [ ] Unit test: a muted account's REQUESTRADIALCHAT is dropped with a notice
+- [ ] Unit test: `.reload chatfilter` with a missing list file keeps the old lists and reports the error; with valid files a newly blacklisted word is flagged without a restart
 - [ ] Real client: after '.mute <name> 5m', the muted player gets the mute notice and nobody sees their chat until it expires. A filtered-chat account sees another player's off-whitelist message as filtered text.
 
 **Risks**
@@ -324,7 +332,7 @@ Accounts get open or filtered chat, filtered words are handled the way the clien
 
 **Goal:** Earn and select titles.
 
-**Size:** M. **Depends on:** 6.04, 10.01
+**Size:** M. **Depends on:** 6.04, 10.01, 4.15
 
 **Client messages:** MSG_BADGES, MSG_SELECT_BADGE, MSG_NEWTITLE, MSG_REQUESTNEWBADGE, MSG_REQUESTPLAYERBADGE
 
@@ -332,6 +340,7 @@ Accounts get open or filtered chat, filtered words are handled the way the clien
 
 - [ ] No duplicates; progress clamps; LastSegment only on final
 - [ ] Real client: '.badge add' shows under filter; title seen by second client
+- [ ] New badge_template row grantable after `.reload badge_template` without a restart
 
 ### Detailed spec from WIZ-22: Badges and titles
 
@@ -339,7 +348,7 @@ Wizards earn badges, can pick one as the title above their head, and the badge b
 
 **Deliverables**
 
-- world.badge_template (name, title key, info key, filter, requirements, registry name/value, auto-add, overcount) authored as SQL, because BadgeTemplate files do not appear as roots in Root.wad
+- world.badge_template (name, title key, info key, filter, requirements, registry name/value, auto-add, overcount) authored as SQL, because BadgeTemplate files do not appear as roots in Root.wad; badge_template and badge_filter reload live with `.reload badge_template`, keeping the old tables on failure
 - BadgeFilterDescriptions.xml extractor -> world.badge_filter
 - data/sql/updates/db_characters: character_badge (badge, progress, complete), character_stats.selected_badge
 - GAME BADGES (segmented, with the BadgeInfo/BadgeFilterInfo blobs), SELECT_BADGE handler that updates ClientWizPlayerNameBehavior.m_badgeTitle and broadcasts NEWTITLE
@@ -363,6 +372,7 @@ Wizards earn badges, can pick one as the title above their head, and the badge b
 
 - [ ] Unit test: granting a badge twice does not duplicate it; progress clamps at max
 - [ ] Unit test: the BADGES segmented sequence sets LastSegment on the final message only
+- [ ] Adding a badge_template row, then `.reload badge_template`, lets '.badge add' grant it without a restart
 - [ ] Real client: '.badge add <badge>' makes the badge appear in the Badges tab under the right filter. Selecting it changes the title under the wizard's name, and a second client sees the new title.
 
 **Risks**
@@ -374,7 +384,7 @@ Wizards earn badges, can pick one as the title above their head, and the badge b
 
 **Goal:** Move items to storage.
 
-**Size:** M. **Depends on:** 8.09
+**Size:** M. **Depends on:** 8.09, 4.16
 
 **Client messages:** MSG_OPENBANK, MSG_MOVEINVTOBANK, MSG_INVTOBANKCONFIRM, MSG_MOVEBANKTOINV, MSG_BANKTOINVCONFIRM, MSG_MOVEBANKTOBANK, MSG_BANKTOBANKCONFIRM, MSG_BANKDELETE, MSG_BANKDELETECONFIRM, MSG_STORAGECLIENTADD, MSG_STORAGECLIENTREMOVE, MSG_ITEMOVERFLOWTOBANK, MSG_BANKCOUNT, MSG_UPDATEBANKLIMIT, MSG_QUICKSELLREQUESTBANK
 
@@ -383,6 +393,7 @@ Wizards earn badges, can pick one as the title above their head, and the badge b
 - [ ] Unowned move returns Failure=1
 - [ ] Shared bank visible to second character
 - [ ] Real client: hat to bank persists
+- [ ] Bank.Capacity change applies from the next move without a restart
 
 ### Detailed spec from WIZ-23: Bank and shared bank
 
@@ -393,7 +404,7 @@ Players can open the bank, move items between backpack, bank and shared bank, an
 - data/sql/updates/db_characters: character_bank; data/sql/updates/db_login or db_characters: account_shared_bank (decide which database with the maintainer)
 - OPENBANK sender (house or bank object interaction), MOVEINVTOBANK -> INVTOBANKCONFIRM, MOVEBANKTOINV -> BANKTOINVCONFIRM, MOVEBANKTOBANK -> BANKTOBANKCONFIRM, BANKDELETE -> BANKDELETECONFIRM, STORAGECLIENTADD/REMOVE, ITEMOVERFLOWTOBANK, SHAREDBANKDELETEREAGENTORPETSNACK(+CONFIRM)
 - WIZARD2 BANKCOUNT, UPDATEBANKLIMIT
-- Enforce ClientRequestID echo and capacity
+- Enforce ClientRequestID echo and capacity; bank and shared bank capacities are the live settings Bank.Capacity and Bank.SharedCapacity, applied from the next move and sent to online players with UPDATEBANKLIMIT, with stored items above a lowered cap kept
 
 **Client messages:** MSG_OPENBANK, MSG_MOVEINVTOBANK, MSG_INVTOBANKCONFIRM, MSG_MOVEBANKTOINV, MSG_BANKTOINVCONFIRM, MSG_MOVEBANKTOBANK, MSG_BANKTOBANKCONFIRM, MSG_BANKDELETE, MSG_BANKDELETECONFIRM, MSG_STORAGECLIENTADD, MSG_STORAGECLIENTREMOVE, MSG_ITEMOVERFLOWTOBANK, MSG_SHAREDBANKDELETEREAGENTORPETSNACK, MSG_SHAREDBANKDELETEREAGENTORPETSNACKCONFIRM, WIZARD2 MSG_BANKCOUNT, WIZARD2 MSG_UPDATEBANKLIMIT
 
@@ -407,10 +418,11 @@ Players can open the bank, move items between backpack, bank and shared bank, an
 - [ ] Unit test: moving an item the player does not own returns Failure=1 and changes nothing
 - [ ] Unit test: shared bank items are visible from a second character on the same account
 - [ ] Real client: opening the bank and dragging a hat from backpack to bank moves the icon across. Relog keeps it there. A second character on the account sees shared-bank items.
+- [ ] Raising Bank.Capacity with `.settings set` lets the next deposit into a full bank succeed without a restart
 
 **Risks**
 
-- Bank capacity values are server-side and need a source. The shared bank crosses databases (account versus character).
+- Bank capacity values are server-side and need a source, so the defaults are live settings until one is found. The shared bank crosses databases (account versus character).
 
 ## 12.10 Player trade (WIZ-25)
 
@@ -454,7 +466,7 @@ Two players can trade items and gold safely with both sides confirming.
 
 **Goal:** Recolor gear.
 
-**Size:** S. **Depends on:** 10.10, 8.10
+**Size:** S. **Depends on:** 10.10, 8.10, 4.15
 
 **Client messages:** MSG_DYESHOPOPEN, MSG_DYEREQUEST, MSG_DYECONFIRM
 
@@ -462,6 +474,7 @@ Two players can trade items and gold safely with both sides confirming.
 
 - [ ] Unowned item rejected
 - [ ] Real client: new colors persist and are seen by others
+- [ ] `.reload dye_cost` changes the next dye's price without a restart
 
 ### Detailed spec from EXT-3: Dye shop
 
@@ -471,7 +484,7 @@ Players recolor equipment at the dye NPC.
 
 - DyeShopOption service option, game/Handlers/DyeHandler.cpp
 - Persist texture/decal/decal2 per item instance
-- Dye cost rule in world DB
+- Dye cost rule in world DB, reloaded live with `.reload dye_cost` and applied from the next dye request, keeping the old rule on failure
 
 **Client messages:** MSG_DYESHOPOPEN, MSG_DYEREQUEST, MSG_DYECONFIRM
 
@@ -487,6 +500,7 @@ Players recolor equipment at the dye NPC.
 
 - [ ] Unit: dye request on item not owned is rejected
 - [ ] Client: dye window previews colors; confirming charges gold and the wizard model shows the new colors, which survive relog and are seen by other players
+- [ ] Editing the dye cost rule, then `.reload dye_cost`, changes the gold charged for the next dye without a restart
 
 ### Detailed spec from WIZ-26: Equipment sets, custom emotes and dye/stitch services
 
@@ -525,13 +539,14 @@ Quality-of-life wardrobe features work: saved equipment sets, unlocked custom em
 
 **Goal:** Stats of one item, look of another.
 
-**Size:** S. **Depends on:** 12.11
+**Size:** S. **Depends on:** 12.11, 4.16
 
 **Client messages:** MSG_SEAMSTRESSOPEN, MSG_STITCHITEMS, MSG_STITCHITEMSCONFIRM, MSG_UNSTITCHOPEN, MSG_UNSTITCHITEMS
 
 **Acceptance**
 
 - [ ] Different slot types rejected
+- [ ] Stitch.GoldCost change applies from the next stitch without a restart
 - [ ] Real client: tooltip stats vs worn look; others see the look
 
 ### Detailed spec from EXT-4: Stitching (seamstress) and unstitch
@@ -541,7 +556,7 @@ Players can take the stats of one item and the appearance of another, and later 
 **Deliverables**
 
 - game/Items stitched-appearance field on item instance
-- Handler for stitch/unstitch with cost and item consumption rules
+- Handler for stitch/unstitch with cost and item consumption rules; the gold costs are the live settings Stitch.GoldCost and Stitch.UnstitchGoldCost, applied from the next request
 
 **Client messages:** MSG_SEAMSTRESSOPEN, MSG_STITCHITEMS, MSG_STITCHITEMSCONFIRM, MSG_UNSTITCHOPEN, MSG_UNSTITCHITEMS
 
@@ -690,7 +705,7 @@ Quality-of-life wardrobe features work: saved equipment sets, unlocked custom em
 
 **Goal:** Crowns ledger, energy, respec.
 
-**Size:** S. **Depends on:** 10.10, 2.13
+**Size:** S. **Depends on:** 10.10, 2.13, 4.16
 
 **Client messages:** MSG_CROWNBALANCE, MSG_CROWNSERVICESOPEN, MSG_CROWNSBUYREQUEST, MSG_CROWNSBUYCONFIRM, MSG_ENERGYSHOPOPEN, MSG_ENERGYBUYREQUEST, MSG_BUYENERGYCONFIRM, MSG_RESPECCONFIRM, MSG_RENTALUPDATE, MSG_SETRENTALTIMER
 
@@ -698,6 +713,7 @@ Quality-of-life wardrobe features work: saved equipment sets, unlocked custom em
 
 - [ ] Debit atomic, never negative under concurrency
 - [ ] Real client: HUD crowns; energy refill; respec
+- [ ] Crowns.StartingGrant change applies to the next new account without a restart
 
 ### Detailed spec from EXT-7: Crown balance, crown services NPC, energy and respec
 
@@ -708,6 +724,7 @@ The HUD shows a crowns balance and crown services (energy refill, respec, crown 
 - login DB account crowns ledger with transactional debit
 - game/Handlers/CrownServicesHandler.cpp
 - GM command cs_crowns (grant/show)
+- Live setting Crowns.StartingGrant for the crowns a new account receives, applied to accounts created after a change
 
 **Client messages:** MSG_CROWNBALANCE, MSG_CROWNSERVICESOPEN, MSG_CROWNSBUYREQUEST, MSG_CROWNSBUYCONFIRM, MSG_ENERGYSHOPOPEN, MSG_ENERGYBUYREQUEST, MSG_BUYENERGYCONFIRM, MSG_RESPECCONFIRM, MSG_RENTALUPDATE, MSG_SETRENTALTIMER
 
@@ -724,16 +741,17 @@ The HUD shows a crowns balance and crown services (energy refill, respec, crown 
 
 - [ ] Unit: debit is atomic and never goes negative under two concurrent purchases
 - [ ] Client: HUD crowns counter shows the granted amount; buying an energy refill at the crown NPC refills energy and lowers crowns; respec resets training points
+- [ ] Changing Crowns.StartingGrant with `.settings set` gives the next created account the new amount without a restart
 
 **Risks**
 
-- Real-money purchase of crowns is out of scope; crowns only granted by GM or config
+- Real-money purchase of crowns is out of scope; crowns only granted by GM command or the live setting Crowns.StartingGrant
 
 ## 12.16 Bazaar (EXT-5)
 
 **Goal:** Shared stock auction house.
 
-**Size:** M. **Depends on:** 10.10, 12.09
+**Size:** M. **Depends on:** 10.10, 12.09, 4.15, 4.16
 
 **Client messages:** MSG_AUCTIONHOUSEREQUEST, MSG_AUCTIONHOUSECONTENTS, MSG_AUCTIONRESPONSE, MSG_AUCTIONHOUSEMOREACKNOWLEDGEMENT, MSG_AUCTIONHOUSEUPDATE, MSG_AUCTIONREQUESTBANK, MSG_REQUESTQUICKSELL, MSG_QUICKSELLREQUESTBANK
 
@@ -741,6 +759,7 @@ The HUD shows a crowns balance and crown services (energy refill, respec, crown 
 
 - [ ] Selling raises stock; price follows modifiers
 - [ ] Real client: item sold by A bought by B
+- [ ] Bazaar.RestockInterval change reschedules the next restock without a restart
 
 ### Detailed spec from EXT-5: Bazaar (auction house)
 
@@ -748,10 +767,10 @@ Players sell items to and buy them back from a shared, stock-based Bazaar.
 
 **Deliverables**
 
-- game/AuctionHouse/AuctionHouseMgr (sAuctionHouseMgr) with shared stock, price modifiers and category paging
+- game/AuctionHouse/AuctionHouseMgr (sAuctionHouseMgr) with shared stock, price modifiers and category paging; `.reload auction_house_config` rebuilds the price modifiers and template list from AuctionHouseConfig.xml and keeps the old ones on failure
 - AuctionHouseEntry blob writer
 - game/Handlers/AuctionHouseHandler.cpp dispatching on Command byte
-- Periodic stock decay/restock timer
+- Periodic stock decay/restock timer; the interval and decay amount are the live settings Bazaar.RestockInterval and Bazaar.DecayRate, applied from the next tick
 
 **Client messages:** MSG_AUCTIONHOUSEREQUEST, MSG_AUCTIONHOUSECONTENTS, MSG_AUCTIONRESPONSE, MSG_AUCTIONHOUSEMOREACKNOWLEDGEMENT, MSG_AUCTIONHOUSEUPDATE, MSG_AUCTIONREQUESTBANK, MSG_REQUESTQUICKSELL, MSG_QUICKSELLREQUESTBANK
 
@@ -767,6 +786,7 @@ Players sell items to and buy them back from a shared, stock-based Bazaar.
 
 - [ ] Unit: selling increases stock and buy price follows AuctionPriceMods; buying last unit empties category
 - [ ] Client: Bazaar NPC opens categories with paging; an item sold by player A shows up for player B and can be bought; quick-sell from bank works
+- [ ] Changing Bazaar.RestockInterval reschedules the next restock without a restart
 
 **Risks**
 
@@ -776,11 +796,12 @@ Players sell items to and buy them back from a shared, stock-based Bazaar.
 
 **Goal:** Soft/hard limits, '.instance list/go'.
 
-**Size:** M. **Depends on:** 6.14
+**Size:** M. **Depends on:** 6.14, 4.15, 4.16
 
 **Acceptance**
 
 - [ ] Soft limit 2: 3rd gets a new instance, 4th joins the less full
+- [ ] `.reload zone_template` soft limit change applies from the next join
 
 ### Detailed spec from WLD-22: Instances: capacity spill, private dungeons, instance switching
 
@@ -788,7 +809,7 @@ Busy zones split across instances, dungeons get private per-group instances, and
 
 **Deliverables**
 
-- MapMgr: a public instance is picked with m_nSoftLimit as the join preference and m_nHardLimit as the refusal point; private instances keyed by owner or group id with Zone.PrivateInstanceTimeout
+- MapMgr: a public instance is picked with m_nSoftLimit as the join preference and m_nHardLimit as the refusal point; private instances keyed by owner or group id with the live setting Zone.PrivateInstanceTimeout, applied to instances that empty after a change; soft and hard limits edited in zone_template apply from the next join after `.reload zone_template`
 - MSG_REALM_INFO_QUERY response with RealmInfoList and InstanceInfoList blobs; MSG_TRANSFER_INSTANCE (ZoneID) switches instance through the transfer flow; MSG_CURRENTREALM (GAME2 55)
 - '.instance list' and '.instance go <id>' in cs_zone.cpp
 - ResTeleport flag for private-instance destinations, used by dungeon entrances
@@ -807,6 +828,7 @@ Busy zones split across instances, dungeons get private per-group instances, and
 **Acceptance**
 
 - [ ] Unit: with soft limit 2, a 3rd player gets a new instance and a 4th joins the less-full one
+- [ ] Unit: lowering the soft limit with `.reload zone_template`, or Zone.PrivateInstanceTimeout with `.settings set`, changes the next join or the next emptied private instance without a restart
 - [ ] Real client: the realm/instance picker lists the instances of the current zone with populations; choosing another reloads there
 - [ ] Real client: two ungrouped players entering the same dungeon door get separate instances; leaving and re-entering within the timeout returns to the same instance
 
@@ -824,6 +846,7 @@ Busy zones split across instances, dungeons get private per-group instances, and
 **Acceptance**
 
 - [ ] Real client: ungrouped players get separate dungeon instances; re-entry within timeout returns to same
+- [ ] Zone.PrivateInstanceTimeout change applies to the next emptied instance without a restart
 
 ### Detailed spec from WLD-22: Instances: capacity spill, private dungeons, instance switching
 
@@ -831,7 +854,7 @@ Busy zones split across instances, dungeons get private per-group instances, and
 
 **Deliverables**
 
-- MapMgr: a public instance is picked with m_nSoftLimit as the join preference and m_nHardLimit as the refusal point; private instances keyed by owner or group id with Zone.PrivateInstanceTimeout
+- MapMgr: a public instance is picked with m_nSoftLimit as the join preference and m_nHardLimit as the refusal point; private instances keyed by owner or group id with the live setting Zone.PrivateInstanceTimeout, applied to instances that empty after a change; soft and hard limits edited in zone_template apply from the next join after `.reload zone_template`
 - MSG_REALM_INFO_QUERY response with RealmInfoList and InstanceInfoList blobs; MSG_TRANSFER_INSTANCE (ZoneID) switches instance through the transfer flow; MSG_CURRENTREALM (GAME2 55)
 - '.instance list' and '.instance go <id>' in cs_zone.cpp
 - ResTeleport flag for private-instance destinations, used by dungeon entrances
@@ -850,6 +873,7 @@ Busy zones split across instances, dungeons get private per-group instances, and
 **Acceptance**
 
 - [ ] Unit: with soft limit 2, a 3rd player gets a new instance and a 4th joins the less-full one
+- [ ] Unit: lowering the soft limit with `.reload zone_template`, or Zone.PrivateInstanceTimeout with `.settings set`, changes the next join or the next emptied private instance without a restart
 - [ ] Real client: the realm/instance picker lists the instances of the current zone with populations; choosing another reloads there
 - [ ] Real client: two ungrouped players entering the same dungeon door get separate instances; leaving and re-entering within the timeout returns to the same instance
 
@@ -910,7 +934,7 @@ Busy zones split across instances, dungeons get private per-group instances, and
 
 **Deliverables**
 
-- MapMgr: a public instance is picked with m_nSoftLimit as the join preference and m_nHardLimit as the refusal point; private instances keyed by owner or group id with Zone.PrivateInstanceTimeout
+- MapMgr: a public instance is picked with m_nSoftLimit as the join preference and m_nHardLimit as the refusal point; private instances keyed by owner or group id with the live setting Zone.PrivateInstanceTimeout, applied to instances that empty after a change; soft and hard limits edited in zone_template apply from the next join after `.reload zone_template`
 - MSG_REALM_INFO_QUERY response with RealmInfoList and InstanceInfoList blobs; MSG_TRANSFER_INSTANCE (ZoneID) switches instance through the transfer flow; MSG_CURRENTREALM (GAME2 55)
 - '.instance list' and '.instance go <id>' in cs_zone.cpp
 - ResTeleport flag for private-instance destinations, used by dungeon entrances
@@ -929,6 +953,7 @@ Busy zones split across instances, dungeons get private per-group instances, and
 **Acceptance**
 
 - [ ] Unit: with soft limit 2, a 3rd player gets a new instance and a 4th joins the less-full one
+- [ ] Unit: lowering the soft limit with `.reload zone_template`, or Zone.PrivateInstanceTimeout with `.settings set`, changes the next join or the next emptied private instance without a restart
 - [ ] Real client: the realm/instance picker lists the instances of the current zone with populations; choosing another reloads there
 - [ ] Real client: two ungrouped players entering the same dungeon door get separate instances; leaving and re-entering within the timeout returns to the same instance
 
@@ -986,7 +1011,7 @@ A player can open the in-game realm picker, see every online realm with its popu
 
 **Goal:** Queue for full realms.
 
-**Size:** M. **Depends on:** 4.05, 2.15
+**Size:** M. **Depends on:** 4.05, 2.15, 4.16
 
 **Client messages:** MSG_CHARACTERSELECTED, MSG_USER_ADMIT_IND
 
@@ -994,6 +1019,7 @@ A player can open the in-game realm picker, see every online realm with its popu
 
 - [ ] player_limit=1: second queued at 1 and released on logout
 - [ ] Real client: queue position then auto-enter
+- [ ] Raised player_limit admits queued players without a restart
 
 ### Detailed spec from LOG-15: Admission queue for full realms
 
@@ -1002,7 +1028,7 @@ When the chosen realm is at player_limit, the client waits in a visible queue an
 **Deliverables**
 
 - src/server/apps/loginserver/Realms/AdmissionQueue.{h,cpp}: a FIFO per realm; SelectCharacter on a full realm replies MSG_CHARACTERSELECTED{PrepPhase=1, Slot=<position>} (or USER_ADMIT_IND with PositionInQueue) and caches the final CHARACTERSELECTED, released when population drops
-- Periodic position updates; GM accounts (security_level >= config) bypass the queue
+- Periodic position updates every Queue.PositionUpdateInterval; GM accounts (security_level at or above Queue.BypassSecurityLevel) bypass the queue. Both are live settings applied from the next update or select, and a raised player_limit picked up by the realmlist refresh releases queued players without a restart
 
 **Client messages:** MSG_CHARACTERSELECTED, MSG_USER_ADMIT_IND
 
@@ -1015,6 +1041,7 @@ When the chosen realm is at player_limit, the client waits in a visible queue an
 
 - [ ] Unit: with player_limit=1 and one player online, a second select is queued at position 1 and receives the cached CHARACTERSELECTED when the first player's realm_online_character row is removed
 - [ ] Real client: with the limit set to 1, the second client shows a queue position and enters the world automatically when the first client logs out
+- [ ] Raising the realm's player_limit while a player is queued admits them within one realmlist refresh without a restart
 
 **Risks**
 
@@ -1024,13 +1051,14 @@ When the chosen realm is at player_limit, the client waits in a visible queue an
 
 **Goal:** Test MSG_ZONETRANSFER.
 
-**Size:** S. **Depends on:** 6.07
+**Size:** S. **Depends on:** 6.07, 4.16
 
 **Client messages:** MSG_ZONETRANSFER, MSG_UPDATEZONECOUNTER, MSG_ZONETRANSFERREQUEST, MSG_ZONETRANSFERACK, MSG_LOGINCOMPLETE
 
 **Acceptance**
 
 - [ ] inprocess mode WC_Hub -> Ravenwood with no reconnect, or stall recorded and default stays reconnect
+- [ ] Zone.TransferMode change applies from the next transfer without a restart
 
 ### Detailed spec from WLD-21: Same-connection zone transfer spike (MSG_ZONETRANSFER)
 
@@ -1038,7 +1066,7 @@ Find out whether the retail client can change zones on the same connection, and 
 
 **Deliverables**
 
-- Conf switch Zone.TransferMode = reconnect|inprocess
+- Live setting Zone.TransferMode = reconnect|inprocess, applied from the next transfer
 - In-process path: after MSG_ZONETRANSFERACK send MSG_ZONETRANSFER (ZoneName, ZoneID, DynamicZoneID, DynamicServerProcID, ZoneCounter+1, TransitionID), then the new zone's LOGINCOMPLETE-equivalent flow; MSG_UPDATEZONECOUNTER for intra-cluster moves
 - A written result in doc/ of which messages the client expected, whatever the outcome
 
@@ -1048,6 +1076,7 @@ Find out whether the retail client can change zones on the same connection, and 
 
 - [ ] Real client in inprocess mode: transfer WC_Hub -> Ravenwood with the loading screen and no socket reconnect (verified in server connection log); MSG_CLIENTMOVE after arrival carries the new ZoneCounter
 - [ ] If the client stalls, the spike records the observed state and the default stays 'reconnect'
+- [ ] `.settings set Zone.TransferMode inprocess` switches the next transfer's path without a restart
 
 **Risks**
 
@@ -1057,7 +1086,7 @@ Find out whether the retail client can change zones on the same connection, and 
 
 **Goal:** Settle services 15/16; reject impossible moves.
 
-**Size:** S. **Depends on:** 5.03, 11.03
+**Size:** S. **Depends on:** 5.03, 11.03, 4.16
 
 **Client messages:** MSG_MB_MOVE, MSG_MB_MOVE_T, MSG_MB_TELEPORT, MSG_MB_MOVESTATE, MSG_PHYSICS_STATE, MSG_PHYSICS_FORCE, MSG_PHYSICS_FORCE_AT_POS, MSG_PHYSICS_TORQUE, MSG_PHYSICS_GRAB, MSG_PHYSICS_RELEASE, MSG_MOVECORRECTION, MSG_CLIENTMOVE
 
@@ -1066,6 +1095,7 @@ Find out whether the retail client can change zones on the same connection, and 
 - [ ] Counter summary recorded in doc/
 - [ ] 10x distance move yields one MSG_MOVECORRECTION
 - [ ] Normal running and mounts never corrected
+- [ ] Movement.ValidateSpeed toggles live from the next move
 
 ### Detailed spec from WLD-23: MoveBehavior/Physics observation and move validation
 
@@ -1075,7 +1105,7 @@ Settle whether services 15 and 16 are ever used by the retail client in normal w
 
 - Log-only handlers with counters for MSG_MB_MOVE, MSG_MB_MOVE_T, MSG_PHYSICS_STATE, MSG_PHYSICS_FORCE, MSG_PHYSICS_FORCE_AT_POS, MSG_PHYSICS_TORQUE, MSG_PHYSICS_GRAB, MSG_PHYSICS_RELEASE (server-bound directions only)
 - Speed check in HandleClientMove from speed stats (WIZ) plus a tolerance; on violation send MSG_MOVECORRECTION (float location and direction) and keep the last valid position
-- conf/dist/gameserver.conf.dist: Movement.ValidateSpeed, Movement.SpeedTolerance
+- Live settings Movement.ValidateSpeed and Movement.SpeedTolerance, with defaults in conf/dist/gameserver.conf.dist, applied from the next MSG_CLIENTMOVE
 
 **Client messages:** MSG_MB_MOVE, MSG_MB_MOVE_T, MSG_MB_TELEPORT, MSG_MB_MOVESTATE, MSG_PHYSICS_STATE, MSG_PHYSICS_FORCE, MSG_PHYSICS_FORCE_AT_POS, MSG_PHYSICS_TORQUE, MSG_PHYSICS_GRAB, MSG_PHYSICS_RELEASE, MSG_MOVECORRECTION, MSG_CLIENTMOVE
 
@@ -1088,6 +1118,7 @@ Settle whether services 15 and 16 are ever used by the retail client in normal w
 - [ ] After a normal play session (walk, mount, zone, jump), the counter summary for services 15 and 16 is recorded in doc/
 - [ ] Unit: a move 10x the allowed distance per tick is rejected and yields one MSG_MOVECORRECTION
 - [ ] Real client: a crafted teleport-hack packet snaps the wizard back to the last valid spot; normal running and mounts never trigger a correction
+- [ ] Turning Movement.ValidateSpeed on with `.settings set` checks the next MSG_CLIENTMOVE, and a changed Movement.SpeedTolerance applies to it, without a restart
 
 **Risks**
 

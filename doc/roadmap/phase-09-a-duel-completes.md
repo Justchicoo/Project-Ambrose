@@ -7,11 +7,11 @@
 | ID | Milestone | Size | Depends on |
 |---|---|---|---|
 | 9.01 | WizCombat protocol surface and stubs (CMB-1) | S | 2.09, 1.16 |
-| 9.02 | SigilMgr (CMB-2 sigils) | S | 5.01 |
+| 9.02 | SigilMgr (CMB-2 sigils) | S | 5.01, 4.15 |
 | 9.03 | Shared GameEffect framework (new; breaks the WIZ-13/CMB cycle) | M | 6.01 |
-| 9.04 | Spawners and runtime spawn/despawn (WLD-18, without paths; QST-4 SpawnExtractor) | M | 6.13, 6.16, 6.10 |
+| 9.04 | Spawners and runtime spawn/despawn (WLD-18, without paths; QST-4 SpawnExtractor) | M | 6.13, 6.16, 6.10, 4.15, 4.16 |
 | 9.05 | Duel instance and sigil placement (CMB-3) | M | 9.01, 9.02, 9.04, 8.04, 5.05 |
-| 9.06 | Round state machine, pass-only (CMB-4) | M | 9.05 |
+| 9.06 | Round state machine, pass-only (CMB-4) | M | 9.05, 4.16 |
 | 9.07 | Play deck and hand (CMB-5) | S | 9.06, 8.11 |
 | 9.08 | Single-target damage cast (CMB-6) | M | 9.07 |
 | 9.09 | Victory and teardown (CMB-7) | S | 9.08, 9.03 |
@@ -74,11 +74,12 @@ All 36 service-51 messages and the combat WIZARD/GAME messages encode and decode
 
 **Goal:** CombatSigilTemplate and PvPCombatSigilTemplate loaded.
 
-**Size:** S. **Depends on:** 5.01
+**Size:** S. **Depends on:** 5.01, 4.15
 
 **Acceptance**
 
 - [ ] Sigils/CombatSigil8Actor.xml has 8 SigilSubCircle (4 Monster, 4 Player) with non-zero PvE limit fields
+- [ ] `.sigil reload` with a broken sigil file keeps the old templates and lists every error
 
 ### Detailed spec from CMB-2: SpellMgr and SigilMgr: load spell and sigil templates from the client
 
@@ -88,7 +89,8 @@ The game server holds every SpellTemplate and CombatSigilTemplate in memory, loo
 
 - src/server/game/Spells/SpellMgr.{h,cpp} (sSpellMgr): loads Spells/**/*.xml from the user's Root.wad and indexes by the TemplateManifest.xml template id and by m_name
 - src/server/game/Combat/SigilMgr.{h,cpp} (sSigilMgr): loads Sigils/*.xml CombatSigilTemplate and PvPCombatSigilTemplate
-- src/server/scripts/Commands/cs_spell.cpp: .spell info <name|id>, .spell reload
+- src/server/scripts/Commands/cs_spell.cpp: .spell info <name|id>, .spell reload; cs_sigil.cpp: .sigil reload
+- Both managers are 4.15 reload targets: a reload builds the new template set off to the side, validates it, and swaps it atomically, a failure keeps the old set and reports every error, and duels in progress keep the snapshot they started with
 - src/test/server/game/Spells/SpellMgrTest.cpp (skipped when no client path is configured)
 - conf/dist gameserver.conf.dist: ClientDataDir
 
@@ -105,6 +107,7 @@ The game server holds every SpellTemplate and CombatSigilTemplate in memory, loo
 - [ ] Test: 'Fire Cat - Amulet' resolves with an effect of type kDamage, damage type Fire, target kEnemySingle
 - [ ] Test: Sigils/CombatSigil8Actor.xml has 8 SigilSubCircle entries (4 MonsterCircle, 4 PlayerCircle) and non-zero PvE damage/resist limit fields
 - [ ] GM in a real client types .spell info Fire Cat and gets chat output with school, pip rank, accuracy and effects
+- [ ] Test: a `.spell reload` or `.sigil reload` that hits a decode failure keeps the old templates serving and lists every error
 
 **Risks**
 
@@ -160,7 +163,7 @@ Equipped gear changes the wizard's maximum health, damage, resist, crit, block, 
 
 **Goal:** Creatures spawn, despawn, respawn.
 
-**Size:** M. **Depends on:** 6.13, 6.16, 6.10
+**Size:** M. **Depends on:** 6.13, 6.16, 6.10, 4.15, 4.16
 
 **Client messages:** MSG_NEWOBJECT, MSG_ADDOBJECT, MSG_DELETEOBJECT, MSG_REMOVEOBJECT
 
@@ -168,6 +171,7 @@ Equipped gear changes the wizard's maximum health, damage, resist, crit, block, 
 
 - [ ] WC_Ravenwood yields 5 SpawnObjects incl. SpawnPoint_Wood_01 SNT_RANDOM_UNIQUE; WC_Hub HalloweenSpawner1 has ReqGlobalRegistryValue
 - [ ] Respawn after respawnTime, never above count
+- [ ] Changing Rate.Respawn affects the next despawn without a restart; a failed `.reload zone_spawner` keeps the old spawners
 - [ ] Real client: '.npc spawn <id>' appears for nearby clients; '.npc delete' plays despawn effect
 
 ### Detailed spec from WLD-18: Spawners and runtime spawn/despawn
@@ -177,7 +181,8 @@ Zone spawners create, despawn and respawn non-combat creatures and objects on ti
 **Deliverables**
 
 - zone_extractor: decode spawnData.xml (SpawnManager, 0x3752F969; SpawnObjectInfo with m_pathID, m_startNode, m_kStartNodeType, m_uniqueLoc) into world.zone_spawner and world.zone_spawner_entry
-- src/server/game/Zones/SpawnerMgr: respawn timers, max counts, ResSpawn/ResDespawn result handlers
+- src/server/game/Zones/SpawnerMgr: respawn timers scaled by the live setting Rate.Respawn, max counts, ResSpawn/ResDespawn result handlers
+- `.reload zone_spawner` as a 4.15 target: rebuilds zone_spawner and zone_spawner_entry off to the side, validates them, swaps them, and reschedules live timers; a validation failure keeps the old spawners and reports every error
 - Despawn with effect: MSG_DELETEOBJECT carrying a wrapped DespawnInfo (m_killer, m_despawnEffect); plain despawn: MSG_REMOVEOBJECT
 - '.npc spawn <templateId>' and '.npc delete' in scripts/Commands/cs_npc.cpp (temporary spawns, not saved)
 
@@ -196,6 +201,8 @@ Zone spawners create, despawn and respawn non-combat creatures and objects on ti
 **Acceptance**
 
 - [ ] Unit: after a despawn, a spawner respawns after respawnTime and never goes over its count
+- [ ] Unit: `.settings set Rate.Respawn 0.5` halves the respawn delay from the next despawn without a restart
+- [ ] Unit: `.reload zone_spawner` with a raised count spawns the difference, and a reload with a broken row keeps the old spawners serving
 - [ ] Real client: '.npc spawn <id>' makes the creature appear in front of the GM for all nearby clients; '.npc delete' removes it with its despawn effect
 - [ ] Real client: a trigger whose result is ResSpawn makes its creature appear when the event fires
 
@@ -287,7 +294,7 @@ A GM can start a duel at a combat sigil, and the real client shows the player an
 
 **Goal:** PrePlanning/Planning/Execution/Resolution with timer.
 
-**Size:** M. **Depends on:** 9.05
+**Size:** M. **Depends on:** 9.05, 4.16
 
 **Client messages:** MSG_COMBATPHASE, MSG_COMBATUPFIRST, MSG_SHOWCOMBATUI, MSG_SETPLANNINGPHASETIMER, MSG_COMBATSTATS, MSG_COMBATPIPS, MSG_COMBATHEALTH, MSG_COMBATMOVE, MSG_COMBATMOVESELECTION, MSG_COMBATACTIONS
 
@@ -295,6 +302,7 @@ A GM can start a duel at a combat sigil, and the real client shows the player an
 
 - [ ] 3 passing rounds give phases 1,2,4,5 repeated, pips 1..3
 - [ ] Execution starts within 1 tick of the last move
+- [ ] Changing Combat.PlanningSeconds mid-duel applies from the next round without a restart
 - [ ] Real client: up-first arrow, HUD, countdown, pips; Pass advances
 
 ### Detailed spec from CMB-4: Round state machine with pass-only turns
@@ -306,9 +314,9 @@ A duel loops through PrePlanning, Planning, Execution and Resolution with a work
 - src/server/game/Combat/DuelPhase machine driven by the gameserver world update tick, not threads
 - Planning timer and early end when every living participant has queued a move
 - MSG_COMBATMOVE pass handling plus 'change mind' re-selection
-- Generic pip gain of 1 per round per living participant (cap 7 total)
+- Generic pip gain per round per living participant from Combat.PipsPerRound (default 1), capped at Combat.MaxPips (default 7)
 - src/test/server/game/Combat/DuelSimHarness: headless duel with injectable RNG and scripted participants
-- conf/dist gameserver.conf.dist: Combat.PlanningSeconds, Combat.PrePlanningSeconds, Combat.StartGraceSeconds
+- Live settings Combat.PlanningSeconds, Combat.PrePlanningSeconds, Combat.StartGraceSeconds, Combat.PipsPerRound and Combat.MaxPips, with defaults in gameserver.conf.dist; a change applies from the next round, and the round in progress keeps its values
 
 **Client messages:** MSG_COMBATPHASE, MSG_COMBATUPFIRST, MSG_SHOWCOMBATUI, MSG_SETPLANNINGPHASETIMER, MSG_COMBATSTATS, MSG_COMBATPIPS, MSG_COMBATHEALTH, MSG_COMBATMOVE, MSG_COMBATMOVESELECTION, MSG_COMBATACTIONS
 
@@ -316,6 +324,7 @@ A duel loops through PrePlanning, Planning, Execution and Resolution with a work
 
 - [ ] Sim test: 3 rounds of both sides passing produce phases 1,2,4,5 repeated, round number 1..3, pips 1..3
 - [ ] Sim test: when all participants queue before the timer ends, Execution starts within 1 tick of the last move
+- [ ] Sim test: `.settings set Combat.PlanningSeconds 10` during round 1 leaves round 1's timer unchanged and gives round 2 a 10 s planning timer, without a restart
 - [ ] Real client: after the grace delay the up-first arrow points at the right team (MSG_COMBATUPFIRST, MSG_COMBATPHASE with UpFirstData), the card HUD and countdown appear (MSG_SHOWCOMBATUI, MSG_SETPLANNINGPHASETIMER), the pip count rises by one each round (MSG_COMBATPIPS), and health globes show the right values (MSG_COMBATHEALTH, MSG_COMBATSTATS)
 - [ ] Real client: clicking Pass shows the pass marker on the teammate display (MSG_COMBATMOVESELECTION echoed to the player team) and the round advances; letting the timer run out also advances
 
@@ -391,10 +400,10 @@ The player can cast a damage card that hits or fizzles, pays pips, and visibly d
 
 - src/server/game/Combat/CombatResolver.{h,cpp}: execution order (first team, then slot index), pass/fizzle/cast CombatAction building
 - Spell target decoding (MSG_COMBATMOVE SpellTarget appears to be a 1<<slot bitmask) and validation that the card is in hand and pips are sufficient
-- Pip payment (generic then power; power pip worth 2) and discard after cast
+- Pip payment (generic then power; a power pip is worth the live setting Combat.PowerPipValue, default 2) and discard after cast
 - Accuracy roll using SpellTemplate m_accuracy only (stats come in CMB-10)
 - src/server/game/Combat/Effects/DamageEffect.cpp: kDamage and kDamageNoCrit with fixed m_effectParam; RandomSpellEffect choice encoded into CombatAction.m_effectChosen (4-bit stack, unused bits set)
-- Cinematic duration estimate so Resolution waits for the animations
+- Cinematic duration estimate plus the live setting Combat.ExecutionPaddingSeconds so Resolution waits for the animations; both settings apply from the next round
 
 **Client messages:** MSG_COMBATMOVE, MSG_COMBATACTIONS, MSG_COMBATHEALTH, MSG_COMBATPIPS, MSG_COMBATMOVESELECTION
 
@@ -413,7 +422,8 @@ The player can cast a damage card that hits or fizzles, pays pips, and visibly d
 **Risks**
 
 - The client probably replays CombatActions with its own CombatResolver: the server-supplied roll fields (m_criticalHitRoll, m_stunResistRoll, m_randomSpellEffectPerTargetRolls, m_CritHitList) point that way. If so, server math must match the client exactly or health bars desync. Must be confirmed here with a real client
-- Execution-phase length is guessed; too short cuts cinematics off, too long stalls the duel
+- Execution-phase length is guessed; too short cuts cinematics off, too long stalls the duel. Combat.ExecutionPaddingSeconds lets it be tuned live against a real client
+- If the client resolves pips itself, a Combat.PowerPipValue other than the client's value desyncs the pip display, so its bounds must hold it to what the client accepts
 
 ## 9.09 Victory and teardown (CMB-7)
 
@@ -436,7 +446,7 @@ When the last creature dies, the duel ends cleanly with a victory for the player
 
 - Death detection after each action (kResult_PlayerDied semantics) and dead participants skipped in later actions
 - Win check at Resolution; victory sequence (phase kPhase_Victory, MSG_COMBATMATCHRESULT WinningTeam, phase kPhase_Ended, MSG_ENDDUEL)
-- Players returned to idle via MSG_ENTERSTATE; a short no-aggro grace effect via MSG_ADDEFFECT/MSG_REMOVEEFFECT
+- Players returned to idle via MSG_ENTERSTATE; a no-aggro grace effect lasting the live setting Combat.NoAggroGraceSeconds via MSG_ADDEFFECT/MSG_REMOVEEFFECT, applied from the next victory
 - ScriptMgr hook (proposed CombatScript/PlayerScript OnDuelEnd, OnCreatureKilledInDuel) for QST and loot to attach to
 
 **Client messages:** MSG_COMBATPHASE, MSG_COMBATMATCHRESULT, MSG_ENDDUEL, MSG_ENTERSTATE, MSG_ADDEFFECT, MSG_REMOVEEFFECT, MSG_COMBATVICTORY
@@ -471,7 +481,7 @@ A normal player walks into a mob, fights it, and either wins or is defeated and 
 
 - Aggro start: a DuelistBehavior creature within its engage radius (CombatSigilTemplate m_engageRadius / DuelistBehaviorTemplate m_npcProximity) starts a duel at the nearest free sigil
 - src/server/game/AI/CreatureCombatAI.{h,cpp} minimal: casts the creature's MobDeckBehavior basic spell at a random living enemy when affordable, else passes
-- Player defeat: 0 HP players stay on their circle until the duel ends; if all players are dead, creatures win, and defeated players are moved to the zone's safe/start point with health set per rule and MSG_UPDATEHEALTH sent
+- Player defeat: 0 HP players stay on their circle until the duel ends; if all players are dead, creatures win, and defeated players are moved to the zone's safe/start point with health and mana set to the live settings Defeat.HealthPercent and Defeat.ManaPercent of their maximums and MSG_UPDATEHEALTH sent
 - Character HP persisted after the duel (characters DB)
 
 **Client messages:** MSG_AGGRO, MSG_COMBATACTIONS, MSG_COMBATMATCHRESULT, MSG_UPDATEHEALTH, MSG_ENDDUEL
@@ -487,13 +497,14 @@ A normal player walks into a mob, fights it, and either wins or is defeated and 
 **Acceptance**
 
 - [ ] Sim test: a player at 10 HP vs a creature dealing 20 loses; the result is team 1 won and the player's persisted HP follows the defeat rule
+- [ ] Sim test: after `.settings set Defeat.HealthPercent 50`, the next defeat leaves the player at half health without a restart
 - [ ] Real client: walking near a wandering mob pulls both into a sigil without a GM command; the mob casts its attack card with the correct cinematic and damages the player
 - [ ] Real client: letting the mob win shows the defeat sequence and the player reappears at the safe point with updated health globes
 - [ ] Real client: winning with Fire Cat cards and then walking away works with no stuck state (movement, chat and zone transfer all work)
 
 **Risks**
 
-- Retail post-defeat rules (where you respawn, HP/mana restored) are not verified from sources; make them configurable
+- Retail post-defeat rules (where you respawn, HP/mana restored) are not verified from sources; Defeat.HealthPercent and Defeat.ManaPercent let them be corrected live once verified
 - The class and field name of the MobDeckBehavior template are not confirmed in the type dump
 
 ## 9.11 Player defeat and HP persistence (CMB-8 part 2)
@@ -507,6 +518,7 @@ A normal player walks into a mob, fights it, and either wins or is defeated and 
 **Acceptance**
 
 - [ ] 10 HP player vs 20 damage loses; team 1 wins; persisted HP follows the defeat rule
+- [ ] Changing Defeat.HealthPercent applies to the next defeat without a restart
 - [ ] Real client: defeat sequence, safe point, updated globes; after a win movement, chat and zoning all work
 
 ### Detailed spec from CMB-8: First playable duel: aggro start, basic creature attack, defeat
@@ -517,7 +529,7 @@ A normal player walks into a mob, fights it, and either wins or is defeated and 
 
 - Aggro start: a DuelistBehavior creature within its engage radius (CombatSigilTemplate m_engageRadius / DuelistBehaviorTemplate m_npcProximity) starts a duel at the nearest free sigil
 - src/server/game/AI/CreatureCombatAI.{h,cpp} minimal: casts the creature's MobDeckBehavior basic spell at a random living enemy when affordable, else passes
-- Player defeat: 0 HP players stay on their circle until the duel ends; if all players are dead, creatures win, and defeated players are moved to the zone's safe/start point with health set per rule and MSG_UPDATEHEALTH sent
+- Player defeat: 0 HP players stay on their circle until the duel ends; if all players are dead, creatures win, and defeated players are moved to the zone's safe/start point with health and mana set to the live settings Defeat.HealthPercent and Defeat.ManaPercent of their maximums and MSG_UPDATEHEALTH sent
 - Character HP persisted after the duel (characters DB)
 
 **Client messages:** MSG_AGGRO, MSG_COMBATACTIONS, MSG_COMBATMATCHRESULT, MSG_UPDATEHEALTH, MSG_ENDDUEL
@@ -533,13 +545,14 @@ A normal player walks into a mob, fights it, and either wins or is defeated and 
 **Acceptance**
 
 - [ ] Sim test: a player at 10 HP vs a creature dealing 20 loses; the result is team 1 won and the player's persisted HP follows the defeat rule
+- [ ] Sim test: after `.settings set Defeat.HealthPercent 50`, the next defeat leaves the player at half health without a restart
 - [ ] Real client: walking near a wandering mob pulls both into a sigil without a GM command; the mob casts its attack card with the correct cinematic and damages the player
 - [ ] Real client: letting the mob win shows the defeat sequence and the player reappears at the safe point with updated health globes
 - [ ] Real client: winning with Fire Cat cards and then walking away works with no stuck state (movement, chat and zone transfer all work)
 
 **Risks**
 
-- Retail post-defeat rules (where you respawn, HP/mana restored) are not verified from sources; make them configurable
+- Retail post-defeat rules (where you respawn, HP/mana restored) are not verified from sources; Defeat.HealthPercent and Defeat.ManaPercent let them be corrected live once verified
 - The class and field name of the MobDeckBehavior template are not confirmed in the type dump
 
 ## 9.12 Flee, disconnect, logout in combat (CMB-9)
@@ -561,7 +574,7 @@ Players can leave a duel by fleeing, disconnecting or logging out without breaki
 
 **Deliverables**
 
-- Flee move handling: MSG_COMBATFLEE and MSG_COMBATREMOVE broadcast, mana drain via MSG_UPDATEMANA, player removed from the sub-circle
+- Flee move handling: MSG_COMBATFLEE and MSG_COMBATREMOVE broadcast, mana drain of the live setting Combat.FleeManaDrainPercent (default 100) via MSG_UPDATEMANA, player removed from the sub-circle
 - Disconnect and logout treated as flee; the duel ends if no players remain (creatures reset to full and return to their path)
 - Zone-leave while dueling treated as flee
 

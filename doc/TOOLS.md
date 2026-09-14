@@ -4,19 +4,19 @@
 
 The Ambrose tool suite takes the AzerothCore content toolchain and changes it in three ways for Wizard101. First, Wizard101 data is hash-keyed BINd ObjectProperty data stored in KIWAD archives, not DBC/ADT files. That makes the type registry dumper and the WAD/BINd decoder the base that every other tool sits on. Second, the world is spatial and quest-driven, so the most valuable authoring tools are quest/dialogue and zone/spawn editors, plus in-game GM build sessions that work inside the retail client. Third, the project rules come first: nothing extracted from the client is committed, and nothing edits the database silently. Every authoring tool (Studio, capture_to_sql, GM build sessions, content DSL) writes a dated pending SQL update (data/sql/updates/pending_db_world/YYYY_MM_DD_NN.sql). Each file passes a codestyle-sql check by construction and is applied by a hash-tracking updater. All client-derived indexes (template names, locale strings, zone geometry, minimaps) are built locally from the user's r806919 install into a git-ignored cache.
 
-One source of truth ties the suite together: a per-table schema definition file in data/schema/world/<table>.yaml, inspired by WDE DbDefinitions and Keira field models. The same file drives the Studio editor forms and pickers, the gameserver startup validator, the reload-command mapping and generated doc/world/<table>.md pages. Tables are defined as data, so adding a world table means adding one file.
+One source of truth ties the suite together: a per-table schema definition file in data/schema/world/<table>.yaml, inspired by WDE DbDefinitions and Keira field models. The same file drives the Studio editor forms and pickers, the gameserver startup and reload validator, the reload-command mapping and generated doc/world/<table>.md pages. Tables are defined as data, so adding a world table means adding one file.
 
 Current repo state (): src/tools/{dbimport, template_extractor, wad_extractor, zone_extractor} exist as empty folders. apps/{ci, codestyle, installer} exist. data/sql/base/db_world is empty. scripts/Commands is empty. ARCHITECTURE.md already sets the rules that tools depend only on shared+common and that GM commands reload single tables.
 
 Build order:
-1. **Early foundation:** codec_registry, wad_extractor, template_extractor, dbimport + codestyle-sql, the ambrose.sh dashboard, the reload channel.
+1. **Early foundation:** codec_registry, wad_extractor, template_extractor, dbimport + codestyle-sql, the ambrose.sh dashboard, the reload framework (4.15) and its admin API (17.12).
 2. **Mid authoring:** Ambrose Studio (database editor) with quest/dialogue and NPC/loot/vendor sub-editors, GM build sessions (.spawn/.session), zone_extractor + zone/spawn editor, wadview, spell inspector, create_module.
 3. **Late:** capture_to_sql (blocked on a capture-policy decision because of KingsIsle ToS risk), a server-side event/action script table + editor, a Lua scripting module, client_content_builder + manifest_builder for custom WAD overlays (blocked on a test proving the client accepts a changed WAD), navmesh_generator, a content DSL.
 
 Rejected ideas:
 - acore.sh-style 'download client-data': it would break the no-extracted-files rule.
 - Keira's external 3D model host: previews must render from the user's own install.
-- Direct-to-database GM edits in the style of .npc add/SaveToDB: they cause database drift.
+- Direct-to-database GM edits in the style of .npc add/SaveToDB: they cause database drift. Live world-database edits from the control center are journaled, audited, and exportable as a pending SQL update, so the database never drifts from git.
 - Serving executables from the patchserver: CRC-32 is the only integrity check, so that would be a malware channel.
 - Any use of the leaked Gamebryo SDK repos .
 
@@ -116,7 +116,7 @@ One data file per world table as the single source of truth for column types, en
 - record_mode: single-row vs multi-row (DELETE+INSERT per key), composite keys
 - reload: name of the .reload subcommand
 - Generates doc/world/<table>.md with a hand-written notes section kept separate
-- Generates C++ loader validation tables so the gameserver rejects bad rows at startup
+- Generates C++ loader validation tables so the gameserver rejects bad rows at startup and on every reload, keeping the old store
 - Written from scratch; WDE/Keira definitions are not ported
 
 ### ambrose.sh / ambrose.ps1 dashboard
@@ -138,19 +138,20 @@ A single entry point for contributors and agents: install deps, compile, run the
 - module new/list; studio (launch local web editor); wadview
 - Never downloads client data
 
-### Dev reload channel (.reload + authenticated dev admin endpoint)
+### Reload channel (.reload + admin API)
 
-Let editors and GMs push world database changes into a running dev gameserver without a restart, so a tester in the Wizard101 client sees a change within seconds.
+Let editors, GMs and operators push world database changes into any running gameserver without a restart, so a tester in the Wizard101 client sees a change within seconds.
 
-- **Form:** In-game GM command + dev-only admin endpoint
+- **Form:** In-game GM command + console command + phase 17 admin API
 - **Inspired by:** AzerothCore cs_reload.cpp (~117 subcommands); WDE.RemoteSOAP per-editor reload commands
-- **Lives in:** src/server/scripts/Commands/cs_reload.cpp; src/server/apps/gameserver (admin endpoint)
-- **Needs:** Global managers loading world tables; CommandScript system; GM security levels
+- **Lives in:** src/server/shared/Reload/ (4.15 framework); src/server/scripts/Commands/cs_reload.cpp; the admin API reload routes (17.12)
+- **Needs:** Reload framework (4.15); global managers loading world tables; CommandScript system; GM security levels; admin API (17.02, 17.05)
 
 **Key features**
 
 - cs_reload.cpp: one subcommand per world table plus groups (all, quests, locales), security level gated
-- Dev-only admin socket/HTTP endpoint (off by default in gameserver.conf.dist) that accepts the same reload commands, bound to localhost, token-authenticated
+- Every reload builds the new store off to the side, validates it, swaps it atomically, and keeps the old store with every error reported on failure
+- `POST /api/reload/{target}` and `GET /api/reload` accept the same targets on every server, gated by the admin token and security level, and every call is audited; there is no separate dev socket
 - Studio and the build-session tools call it after 'Execute'
 - Reload names come from the schema definitions
 
@@ -172,7 +173,7 @@ The main content editor: schema-aware forms over the world database with linked 
 - 'Change session': bundles every edit made while building one quest line into one pending_db_world file, with a diff viewer before writing
 - Linked navigation: every foreign-key field has a picker (search by English name from the local template index) and a jump-to link (quest -> giver NPC -> spawn -> zone)
 - Unsaved-change dots per table; forms generated from data/schema/world/*.yaml
-- After Execute, calls the dev reload channel for the touched tables
+- After Execute, calls the reload channel for the touched tables
 - Unused-id finder for the custom template/quest id range; collision check against the retail TemplateManifest
 - Help '?' on each field links to doc/world/<table>.md
 
@@ -214,7 +215,7 @@ Edit server-owned NPC/mob rows: which client template an NPC uses, its interacti
 
 ### GM build sessions (.spawn / .session / .zone commands)
 
-Place and tune spatial content from inside the retail Wizard101 client (spawn position, yaw, patrol paths, teleporter targets). Edits apply live on dev and are recorded as a pending SQL update instead of silently changing the database.
+Place and tune spatial content from inside the retail Wizard101 client (spawn position, yaw, patrol paths, teleporter targets). Edits apply live on dev and are recorded as a pending SQL update instead of silently changing the database. On other servers the same commands need an admin security level, apply live, and are audited.
 
 - **Form:** In-game GM chat commands
 - **Inspired by:** AzerothCore cs_npc (.npc add/move/near), cs_wp (waypoints), cs_pooltools (session that dumps SQL to sql.dev log)
@@ -227,7 +228,7 @@ Place and tune spatial content from inside the retail Wizard101 client (spawn po
 - .spawn add <templateId|name> at the GM's position and yaw; .spawn move / turn / delete / near / info
 - .path add/show/clear for patrol waypoints; .zone tele / .zone info
 - .dialogue test <id>, .quest start/complete <id> for quick testing of Studio content
-- Dev-only; security levels per command in cs_spawn.cpp, cs_session.cpp
+- Security levels per command in cs_spawn.cpp, cs_session.cpp; open to GMs on dev, admin level on other servers, and audited everywhere
 - Changes are streamed live to clients in the zone
 
 ### zone_extractor
@@ -351,12 +352,12 @@ Let content authors script server-side NPC and zone behavior as data rows (event
 - npc_script rows: event (OnInteract, OnQuestGoalComplete, OnZoneEnter, OnDuelEnd, Timer) + params, action (Say LocaleKey, StartDialogue, GiveItem, Teleport, SpawnMob, SetQuestGoal, PlayCinematic) + params, target (Self, Invoker, Party, ZonePlayers), phase/flags, link to next row
 - Type-specific parameter labels and tooltips defined once in schema; editor, loader validator and docs share them
 - Auto-generated readable comment column
-- Server loader rejects unknown event/action/param combinations at startup
+- Server loader rejects unknown event/action/param combinations at startup and on reload; a failing reload keeps the old rows
 - Clean-room constants; nothing ported from SAI tables
 
 ### mod-lua (hot-reload Lua scripting module)
 
-Optional drop-in module that binds ScriptMgr hook classes to Lua so quest, event and module logic can be iterated with hot reload on dev.
+Optional drop-in module that binds ScriptMgr hook classes to Lua so quest, event and module logic can be iterated with hot reload on dev and reloaded live on every server.
 
 - **Form:** Drop-in module (C++ + Lua)
 - **Inspired by:** mod-ale / Eluna (RegisterPlayerEvent, AutoReload, .reload ale)
@@ -366,7 +367,7 @@ Optional drop-in module that binds ScriptMgr hook classes to Lua so quest, event
 **Key features**
 
 - Binds PlayerScript, NpcScript, QuestScript, ZoneScript, CommandScript hooks
-- lua_scripts/ folder with an AutoReload file watcher (dev only) and .reload lua
+- lua_scripts/ folder with an AutoReload file watcher (dev only) and .reload lua, which on every server loads and validates the new scripts, swaps them, and keeps the old scripts on failure
 - Versioned Lua API with docs generated from the binding code (avoids the ALE/Eluna split)
 - Written from scratch; no Eluna/ALE code
 
@@ -402,7 +403,7 @@ Generate server-side pathing meshes for mob movement and spawn validation from t
 - Input from zone_extractor output (walkable NIF / collision.bcd / zone.nav)
 - YAML config: per-zone overrides, off-mesh links for stairs and portals
 - Output to the local git-ignored data folder; menu entry in ambrose.sh extract
-- Reminds the user to rerun it after zone data changes
+- Reminds the user to rerun it after zone data changes, then `.reload navmesh <zone>` swaps it live
 
 ### Content DSL compiler (code-first content)
 

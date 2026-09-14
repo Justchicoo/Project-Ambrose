@@ -7,7 +7,7 @@
 | ID | Milestone | Size | Depends on |
 |---|---|---|---|
 | 15.01 | Own and enter a house (EXT-25) | M | 12.18, 8.09 |
-| 15.02 | Furniture placement and persistence (EXT-26 part 1) | M | 15.01, 8.14 |
+| 15.02 | Furniture placement and persistence (EXT-26 part 1) | M | 15.01, 8.14, 4.16 |
 | 15.03 | Visitor patches, pickup-all, blobs (EXT-26 part 2) | M | 15.02 |
 | 15.04 | Attic (EXT-27 part 1) | M | 15.03 |
 | 15.05 | Vaults (EXT-27 part 2) | M | 15.04 |
@@ -17,7 +17,7 @@
 | 15.09 | Garden plant lifecycle (EXT-30 part 1) | M | 15.03 |
 | 15.10 | Garden harvest and XP (EXT-30 part 2) | M | 15.09, 10.07 |
 | 15.11 | Gardening spells (EXT-31) | M | 15.10, 13.01 |
-| 15.12 | Fish populations and casting (EXT-32 part 1) | M | 6.16, 8.09, 13.01 |
+| 15.12 | Fish populations and casting (EXT-32 part 1) | M | 6.16, 8.09, 13.01, 4.16 |
 | 15.13 | Catching and fishing XP (EXT-32 part 2) | M | 15.12 |
 | 15.14 | Fishing spells, aquariums, selling, tournaments (EXT-33) | M | 15.13, 15.03 |
 | 15.15 | Castle tours publish and visit (EXT-40 part 1) | M | 15.07, 12.01 |
@@ -78,7 +78,7 @@ A player who owns a house deed can teleport home and walk around a private house
 
 **Goal:** Place, move, pick up.
 
-**Size:** M. **Depends on:** 15.01, 8.14
+**Size:** M. **Depends on:** 15.01, 8.14, 4.16
 
 **Client messages:** MSG_PLACEHOUSINGOBJECT, MSG_UPDATEHOUSINGOBJECT, MSG_PLACEOBJECT, MSG_PICKUPOBJECT, MSG_UPDATEMAXIMUMHOUSINGITEMS, MSG_HOUSINGOBJECTNOPICKUP
 
@@ -86,6 +86,7 @@ A player who owns a house deed can teleport home and walk around a private house
 
 - [ ] Over limit and non-owner rejected
 - [ ] Real client: chair placed, moved, persists across restart
+- [ ] Changing Housing.MaxItems updates the limit shown to an owner inside their house without a restart
 
 ### Detailed spec from EXT-26: Housing: place, move and pick up furniture
 
@@ -93,7 +94,7 @@ Players decorate: placed items persist and are seen by visitors.
 
 **Deliverables**
 
-- Housing object persistence (template, position, yaw, state), item-count limit
+- Housing object persistence (template, position, yaw, state), item-count limit from the live setting Housing.MaxItems, re-sent with MSG_UPDATEMAXIMUMHOUSINGITEMS when it changes
 - Patch broadcast to everyone in the house
 - Pickup-all
 
@@ -134,7 +135,7 @@ Players decorate: placed items persist and are seen by visitors.
 
 **Deliverables**
 
-- Housing object persistence (template, position, yaw, state), item-count limit
+- Housing object persistence (template, position, yaw, state), item-count limit from the live setting Housing.MaxItems, re-sent with MSG_UPDATEMAXIMUMHOUSINGITEMS when it changes
 - Patch broadcast to everyone in the house
 - Pickup-all
 
@@ -169,6 +170,7 @@ Players decorate: placed items persist and are seen by visitors.
 
 - [ ] Capacity enforced
 - [ ] Real client: attic lists items; move to house places
+- [ ] Changing Housing.AtticCapacity applies to the next move to the attic without a restart
 
 ### Detailed spec from EXT-27: Housing: attic and vaults
 
@@ -176,7 +178,7 @@ Players store housing items in the attic and use gear, jewel, TC and seed vaults
 
 **Deliverables**
 
-- Attic storage with counts and audit
+- Attic storage with counts and audit, capacity from the live setting Housing.AtticCapacity
 - Gear vault, jewel vault, treasure card vault and poster, gardening shed stores
 
 **Client messages:** MSG_REQUESTATTIC, MSG_SETATTICID, MSG_MOVETOATTIC, MSG_MOVEFROMATTIC, MSG_PATCHADDATTIC, MSG_PATCHDELETEATTIC, MSG_DELETEFROMATTIC, MSG_UPDATEATTICCOUNT, MSG_AUDITATTICRESULTS, MSG_PETTOMESCANATTIC, MSG_MOVEGEARTOGEARVAULT, MSG_PATCHHOUSINGGEARVAULT, MSG_MOVEGEARFROMGEARVAULT, MSG_MOVEJEWELTOJEWELVAULT, MSG_PATCHHOUSINGJEWELVAULT, MSG_MOVEJEWELFROMJEWELVAULT, MSG_MOVETCTOTCVAULT, MSG_PATCHTREASURECARDVAULT, MSG_MOVETCFROMTCVAULT, MSG_ADDTOTREASURECARDPOSTER, MSG_PATCHTREASURECARDPOSTER, MSG_MOVESEEDTOGARDENINGSHED, MSG_PATCHHOUSINGGARDENINGSHED, MSG_MOVESEEDFROMGARDENINGSHED
@@ -214,7 +216,7 @@ Players store housing items in the attic and use gear, jewel, TC and seed vaults
 
 **Deliverables**
 
-- Attic storage with counts and audit
+- Attic storage with counts and audit, capacity from the live setting Housing.AtticCapacity
 - Gear vault, jewel vault, treasure card vault and poster, gardening shed stores
 
 **Client messages:** MSG_REQUESTATTIC, MSG_SETATTICID, MSG_MOVETOATTIC, MSG_MOVEFROMATTIC, MSG_PATCHADDATTIC, MSG_PATCHDELETEATTIC, MSG_DELETEFROMATTIC, MSG_UPDATEATTICCOUNT, MSG_AUDITATTICRESULTS, MSG_PETTOMESCANATTIC, MSG_MOVEGEARTOGEARVAULT, MSG_PATCHHOUSINGGEARVAULT, MSG_MOVEGEARFROMGEARVAULT, MSG_MOVEJEWELTOJEWELVAULT, MSG_PATCHHOUSINGJEWELVAULT, MSG_MOVEJEWELFROMJEWELVAULT, MSG_MOVETCTOTCVAULT, MSG_PATCHTREASURECARDVAULT, MSG_MOVETCFROMTCVAULT, MSG_ADDTOTREASURECARDPOSTER, MSG_PATCHTREASURECARDPOSTER, MSG_MOVESEEDTOGARDENINGSHED, MSG_PATCHHOUSINGGARDENINGSHED, MSG_MOVESEEDFROMGARDENINGSHED
@@ -367,6 +369,7 @@ Players buy extra island space and run placed trains.
 
 - [ ] Simulated clock advances stages; unmet needs stall
 - [ ] Real client: seedling reaches next stage
+- [ ] Changing Rate.Gardening.Growth applies to growing plants from the next growth tick without a restart
 
 ### Detailed spec from EXT-30: Gardening: plant lifecycle and harvest
 
@@ -374,8 +377,8 @@ Players plant seeds, plants grow over real time with needs, and harvesting yield
 
 **Deliverables**
 
-- game/Gardening/GardenMgr: plant state machine, growth ticks including offline time, needs and pests
-- Harvest loot, second spring, gardening XP/level
+- game/Gardening/GardenMgr: plant state machine, growth ticks including offline time, needs and pests, with growth time scaled by the live setting Rate.Gardening.Growth
+- Harvest loot, second spring, gardening XP/level, with every gardening XP grant passing through Rate.XP.Gardening
 
 **Client messages:** MSG_GARDENINGCOMMAND, MSG_GARDENINGCOMMANDRESPONSE, MSG_PATCHGARDENING, MSG_GARDENINGHARVESTPLANT, MSG_GARDENINGHARVESTPLANTSECONDSPRING, MSG_UPDATEGARDENINGXP, MSG_GARDENLEVELUP, MSG_GARDENINGCSRRESULTS
 
@@ -391,7 +394,7 @@ Players plant seeds, plants grow over real time with needs, and harvesting yield
 **Acceptance**
 
 - [ ] Unit: growth stage advances by elapsed time with simulated clock; unmet needs stall growth
-- [ ] Client: planting a seed in the house yard places a seedling; after the configured time it shows the next stage; harvesting at Elder drops rewards into the backpack and the gardening XP bar rises
+- [ ] Client: planting a seed in the house yard places a seedling; after its growth time scaled by Rate.Gardening.Growth it shows the next stage; harvesting at Elder drops rewards into the backpack and the gardening XP bar rises
 
 ## 15.10 Garden harvest and XP (EXT-30 part 2)
 
@@ -404,6 +407,7 @@ Players plant seeds, plants grow over real time with needs, and harvesting yield
 **Acceptance**
 
 - [ ] Real client: Elder harvest drops rewards; XP bar rises
+- [ ] `.settings set Rate.XP.Gardening 2` doubles the next harvest's gardening XP without a restart
 
 ### Detailed spec from EXT-30: Gardening: plant lifecycle and harvest
 
@@ -411,8 +415,8 @@ Players plant seeds, plants grow over real time with needs, and harvesting yield
 
 **Deliverables**
 
-- game/Gardening/GardenMgr: plant state machine, growth ticks including offline time, needs and pests
-- Harvest loot, second spring, gardening XP/level
+- game/Gardening/GardenMgr: plant state machine, growth ticks including offline time, needs and pests, with growth time scaled by the live setting Rate.Gardening.Growth
+- Harvest loot, second spring, gardening XP/level, with every gardening XP grant passing through Rate.XP.Gardening
 
 **Client messages:** MSG_GARDENINGCOMMAND, MSG_GARDENINGCOMMANDRESPONSE, MSG_PATCHGARDENING, MSG_GARDENINGHARVESTPLANT, MSG_GARDENINGHARVESTPLANTSECONDSPRING, MSG_UPDATEGARDENINGXP, MSG_GARDENLEVELUP, MSG_GARDENINGCSRRESULTS
 
@@ -428,7 +432,7 @@ Players plant seeds, plants grow over real time with needs, and harvesting yield
 **Acceptance**
 
 - [ ] Unit: growth stage advances by elapsed time with simulated clock; unmet needs stall growth
-- [ ] Client: planting a seed in the house yard places a seedling; after the configured time it shows the next stage; harvesting at Elder drops rewards into the backpack and the gardening XP bar rises
+- [ ] Client: planting a seed in the house yard places a seedling; after its growth time scaled by Rate.Gardening.Growth it shows the next stage; harvesting at Elder drops rewards into the backpack and the gardening XP bar rises
 
 ## 15.11 Gardening spells (EXT-31)
 
@@ -466,13 +470,14 @@ Gardening spells (water, pest removal, area buffs) cast with energy on plants.
 
 **Goal:** Per-instance fish and cast state.
 
-**Size:** M. **Depends on:** 6.16, 8.09, 13.01
+**Size:** M. **Depends on:** 6.16, 8.09, 13.01, 4.16
 
 **Client messages:** MSG_SETINSTANCEFISH, MSG_ADDINSTANCEFISH, MSG_SETFISHINGPLAYERS, MSG_BEGINFISHINGCAST, MSG_SHOWFISHINGCAST, MSG_ENDFISHINGCAST
 
 **Acceptance**
 
 - [ ] Real client: bobber shows for self and others
+- [ ] Changing Fishing.RespawnSeconds or Rate.Respawn affects the next fish respawn in a loaded pond without a restart
 
 ### Detailed spec from EXT-32: Fishing: fish spawns and catching
 
@@ -480,9 +485,9 @@ Players fish in world ponds, catch fish, and earn fishing XP.
 
 **Deliverables**
 
-- game/Fishing/FishingMgr: per-instance fish population from pond data, respawn
+- game/Fishing/FishingMgr: per-instance fish population from pond data, respawn from the live setting Fishing.RespawnSeconds, scaled by Rate.Respawn
 - Cast/catch/escape state machine with server-side success roll
-- Fishing XP/level from FishingXPConfig.xml
+- Fishing XP/level from FishingXPConfig.xml, with every fishing XP grant passing through Rate.XP.Fishing
 
 **Client messages:** MSG_SETINSTANCEFISH, MSG_ADDINSTANCEFISH, MSG_SETFISHINGPLAYERS, MSG_BEGINFISHINGCAST, MSG_SHOWFISHINGCAST, MSG_ENDFISHINGCAST, MSG_CATCHFISH, MSG_REQUESTCATCHSUCCESS, MSG_CATCHSUCCESS, MSG_MISSFISH, MSG_FISHESCAPED, MSG_DISPLAYCATCHFISH, MSG_DISPLAYCAUGHTFISH
 
@@ -514,6 +519,7 @@ Players fish in world ponds, catch fish, and earn fishing XP.
 
 - [ ] Caught fish removed for all anglers
 - [ ] Real client: caught window, basket, others see fish vanish
+- [ ] `.settings set Rate.XP.Fishing 2` doubles the next catch's fishing XP without a restart
 
 ### Detailed spec from EXT-32: Fishing: fish spawns and catching
 
@@ -521,9 +527,9 @@ Players fish in world ponds, catch fish, and earn fishing XP.
 
 **Deliverables**
 
-- game/Fishing/FishingMgr: per-instance fish population from pond data, respawn
+- game/Fishing/FishingMgr: per-instance fish population from pond data, respawn from the live setting Fishing.RespawnSeconds, scaled by Rate.Respawn
 - Cast/catch/escape state machine with server-side success roll
-- Fishing XP/level from FishingXPConfig.xml
+- Fishing XP/level from FishingXPConfig.xml, with every fishing XP grant passing through Rate.XP.Fishing
 
 **Client messages:** MSG_SETINSTANCEFISH, MSG_ADDINSTANCEFISH, MSG_SETFISHINGPLAYERS, MSG_BEGINFISHINGCAST, MSG_SHOWFISHINGCAST, MSG_ENDFISHINGCAST, MSG_CATCHFISH, MSG_REQUESTCATCHSUCCESS, MSG_CATCHSUCCESS, MSG_MISSFISH, MSG_FISHESCAPED, MSG_DISPLAYCATCHFISH, MSG_DISPLAYCAUGHTFISH
 
@@ -563,7 +569,7 @@ Fishing spells, aquarium placement, fish selling and fish tournaments work.
 
 - Fishing spell effects (reveal, chest)
 - Aquarium storage and patching in houses
-- Fish sell shop, catch of the day, fish tournament entry and leaderboard
+- Fish sell shop, catch of the day, fish tournament entry and leaderboard, with sell gold passing through Rate.Gold.Fishing
 
 **Client messages:** MSG_FISHINGSPELLCAST, MSG_ADDFISHTOAQUARIUM, MSG_PATCHAQUARIUM, MSG_REMOVEFISHFROMAQUARIUM, MSG_PLACEHOUSINGFISH, MSG_NOFISHSPACE, MSG_SELLFISHOPEN, MSG_SELLFISHREQUEST, MSG_REQUESTALLFISH, MSG_REQUESTFISHHISTORY, MSG_DELETEFISH, MSG_CATCHOFTHEDAYOPEN, MSG_FISHTOURNAMENTOPEN, MSG_ENTERTOURNAMENTFISH, MSG_ENTERTOURNAMENTFISHRESULT, MSG_FISHTOURNAMENTLEADERBOARDOPEN, MSG_FISHTOURNAMENTLEADERBOARDREQUEST, MSG_FISHINGCSRRESULTS
 

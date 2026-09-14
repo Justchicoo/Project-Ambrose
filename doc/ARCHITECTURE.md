@@ -52,11 +52,11 @@ Tools depend only on `database`, `shared`, and `common`. Modules depend on `game
 
 ### Content is data
 
-Templates, spawns, quests, quest givers, loot, and vendor lists live in the world database, not in code. The game server loads them into global managers at startup, and GM commands reload single tables without a restart. Code implements only the behavior data cannot express.
+Templates, spawns, quests, quest givers, loot, and vendor lists live in the world database, not in code. The game server loads them into global managers at startup, and every manager reloads live through the reload framework from GM commands, the console, or the admin API. Tables that reference each other reload and validate together as one snapshot. Code implements only the behavior data cannot express.
 
 ### Databases and updates
 
-There are three databases: `login`, `characters`, and `world`. Every change is a new file in `data/sql/updates/db_<name>/` named `YYYY_MM_DD_NN.sql`. At startup the updater applies unapplied files in order and records each one in an `updates` table. Open pull requests put their files in `pending_db_<name>/`, and they move into `updates/` when merged. `base/` is regenerated periodically by squashing old updates.
+There are three databases: `login`, `characters`, and `world`. Every change is a new file in `data/sql/updates/db_<name>/` named `YYYY_MM_DD_NN.sql`. At startup the updater applies unapplied files in order and records each one in an `updates` table. The `db update` command and the admin API apply data-only updates live and then reload the affected managers; an update that changes a schema the running binary reads waits for the next binary upgrade. Open pull requests put their files in `pending_db_<name>/`, and they move into `updates/` when merged. `base/` is regenerated periodically by squashing old updates.
 
 ### Message handlers
 
@@ -68,15 +68,15 @@ Each client message is registered once in a dispatch table with four parts: the 
 
 ### GM commands
 
-Each command group is one file, `scripts/Commands/cs_<group>.cpp`, holding a `CommandScript` with a command table and the account security level each command requires.
+Each command group is one file, `scripts/Commands/cs_<group>.cpp`, holding a `CommandScript` with a command table and the default account security level each command requires. A `command_security` table overrides levels live and reloads with the other command data.
 
 ### Modules
 
-A module is a folder in `modules/` with its own `src/`, `conf/`, and `data/sql/`. CMake discovers it and registers its scripts through a generated loader, so a module never edits core files.
+A module is a folder in `modules/` with its own `src/`, `conf/`, and `data/sql/`. CMake discovers it and registers its scripts through a generated loader, so a module never edits core files. Adding or removing a module needs a rebuild and restart; a module's own configuration and settings reload live.
 
 ### Configuration
 
-Each app ships `<app>.conf.dist` listing every option with its default. Users copy it to `<app>.conf`, which git ignores.
+Each app ships `<app>.conf.dist` listing every option with its default. Users copy it to `<app>.conf`, which git ignores. `reload config` on the console, `.reload config` in game, and the admin API re-read every layer and apply the changed options live.
 
 ### Client data
 
@@ -84,7 +84,7 @@ Nothing from the game client is committed. Tools in `src/tools/` read the user's
 
 ### Operations
 
-Servers stay headless so they run the same on a desktop, a Linux VPS, or in Docker. Each app writes colored logs and accepts commands on its console. An optional admin API, bound to localhost and protected by a token, serves health, status, live logs, audited commands, and Prometheus metrics. The web dashboard in `apps/dashboard/` and the Grafana dashboards in `apps/grafana/` are built on that API. Phase 17 of doc/ROADMAP.md plans this work.
+Servers stay headless so they run the same on a desktop, a Linux VPS, or in Docker. Each app writes colored logs and accepts commands on its console. An optional admin API, bound to localhost and protected by a token, serves health, status, live logs, audited commands, live settings, reloads, and Prometheus metrics. The web dashboard in `apps/dashboard/` and the Grafana dashboards in `apps/grafana/` are built on that API. Phase 17 of doc/ROADMAP.md plans this work.
 
 ### Tests
 
@@ -142,9 +142,13 @@ Settled on 2026-09-13. Changing one needs the maintainer's approval and an updat
 
 ### Protocol and type data load at runtime
 
-The client's message definitions and type dump are never compiled into the build. At startup each app loads the message definition XML files from the user's install into a `MessageRegistry`, and the type dump into a `TypeRegistry`. Code that uses a message or class declares only the fields it needs, with their C++ types. At startup every declaration is resolved to field indices and checked against the loaded definitions, and the app refuses to start if any declaration is wrong. Wire layout always comes from the loaded definitions, so fields a declaration omits are still encoded correctly with default values.
+The client's message definitions and type dump are never compiled into the build. At startup each app loads the message definition XML files from the user's install into a `MessageRegistry`, and the type dump into a `TypeRegistry`. Code that uses a message or class declares only the fields it needs, with their C++ types. At startup every declaration is resolved to field indices and checked against the loaded definitions, and the app refuses to start if any declaration is wrong. A reload resolves every declaration against the new definitions before it swaps them in, and keeps the active definitions if any declaration fails. Wire layout always comes from the loaded definitions, so fields a declaration omits are still encoded correctly with default values.
 
 As a result, the project builds and its unit tests run on any machine, including CI, with no client files. Unit tests use small definition fixtures written by the project. Tests that need a real install carry the CTest label `client` and run only when `AMBROSE_CLIENT_DIR` is set.
+
+### Live reload and live settings
+
+Settled on 2026-09-14 at the maintainer's direction. Anything that can change while a server runs does, without restarting a process. A subsystem that holds loaded state builds the new state off to the side, validates it completely, and swaps it in atomically, so threads in the middle of an operation keep a consistent snapshot. If anything fails, the old state stays active and every error is reported. Runtime limits apply from the next operation. Every gameplay value, such as respawn times, drop rates, experience and gold rates, and every other tunable number, is a typed setting with a default and bounds. Settings are changed live from the control center (the admin API and web dashboard), GM commands, or configuration reloads, and each change is validated, persisted, and written to an audit log. Message definitions reload this way today, and configuration and logging have reload functions that keep their old values on failure. The reload framework and its triggers arrive in milestone 4.15, the live settings registry in 4.16, and the control center pages in 17.12 and 17.13. Live settings persist in the database the app owns (`characters` for the game server, `login` for the login and patch servers) with an audit table. Environment variables and command-line overrides lock a key, and a live edit to a locked key is refused with a message naming the layer. Live world database edits from the control center are journaled and can be exported as a pending SQL update. A restart is required only where the operating system or the client forces one, such as replacing the server binary, and each such case is documented where it arises.
 
 ### Message definition quirks
 
@@ -160,7 +164,7 @@ Server code is C++. Tools may use whatever language does the job best, and they 
 
 ### Configuration
 
-A `.conf.dist` file contains only its branding header and `Key = value` lines. Each option is documented in `doc/config/<app>.md`. Layers apply in the order `<app>.conf.dist`, `conf.d/*.conf.dist`, `<app>.conf`, `conf.d/*.conf`, `AMBROSE_` environment variables, then command-line overrides, so every default sits below every local edit. Environment variable names follow the rule in doc/config/README.md, for example `WorldServerPort` becomes `AMBROSE_WORLD_SERVER_PORT`.
+A `.conf.dist` file contains only its branding header and `Key = value` lines. Each option is documented in `doc/config/<app>.md`. Layers apply in the order `<app>.conf.dist`, `conf.d/*.conf.dist`, `<app>.conf`, `conf.d/*.conf`, persisted live settings, `AMBROSE_` environment variables, then command-line overrides, so every default sits below every local edit and a live edit sits above the files. Environment variable names follow the rule in doc/config/README.md, for example `WorldServerPort` becomes `AMBROSE_WORLD_SERVER_PORT`.
 
 ### C++ modules
 

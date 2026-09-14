@@ -14,12 +14,14 @@
 | 4.06 | Login-to-game handoff transport (NET-13) | S | 4.05, 2.10 |
 | 4.07 | Gameserver login key validation (LOG-12) | S | 4.06 |
 | 4.08 | Zone extractor part 1: WizZoneData (WLD-2 + QST-4 zone objects) | M | 3.11, 2.07 |
-| 4.09 | sZoneMgr and reload (WLD-4) | S | 4.08, 4.02 |
+| 4.09 | sZoneMgr and reload (WLD-4) | S | 4.08, 4.02, 4.15 |
 | 4.10 | Maps, instances, mobile ids, GID service (WLD-5) | M | 4.09, 4.01 |
 | 4.11 | CoreObject serializer and client-object builder (OBJ-9 + WLD-6) | M | 3.05, 3.07 |
 | 4.12 | Wizard service skeleton and login chatter (WIZ-1, without wizbang broadcast) | S | 2.09, 4.01 |
 | 4.13 | Attach handler server side (WLD-7 part 1) | M | 4.07, 4.10, 4.04 |
 | 4.14 | LOGINCOMPLETE and standing in zone (WLD-7 part 2 + WLD-8 CLIENTZONED) | M | 4.13, 4.11, 4.12 |
+| 4.15 | Reload framework and reload commands | M | 4.01, 4.02, 1.10 |
+| 4.16 | Live settings registry | M | 4.15, 2.08, 2.13 |
 
 ## Review notes for this phase
 
@@ -32,6 +34,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Missing work.** Multi-realm inter-process communication: friends presence, cross-realm whispers, party member zones, realm-transfer handoff, and kicking a character online on another realm all need a login<->game or game<->game bus (or DB polling). Only heartbeat rows (4.03) and login keys exist.
 - **Oversized.** 4.14 LOGINCOMPLETE and standing in zone (M). This is the first full CoreObject acceptance by the real client, with segmentation, CriticalObjects and CLIENTZONED. It is historically the hardest single step and should be split: byte-level LOGINCOMPLETE against a decoded capture, then real-client zone-in.
 - **Oversized.** 4.08 zone extractor across 3356 zone WADs with 0 failures (M). The failure triage alone is open-ended.
+- **Ordering.** 4.09 depends on 4.15, so 4.15 lands before 4.09. Settings named in 4.02-4.14 read their config value until 4.16 lands, then become live settings with the same keys.
 
 ## 4.01 sWorld tick, GameSession, ScriptMgr hooks and AddSC loaders (new core)
 
@@ -68,7 +71,8 @@ An account's security level decides which chat-prefixed GM commands it may run, 
 - src/server/scripts/Commands/cs_gm.cpp (.gm on/off, .gm visible), cs_character.cpp (.character level, .character gold, .character xp, .character heal), cs_lookup.cpp (.lookup item / spell by name)
 - Replies via SYSTEM MSG_SERVERMESSAGE or GAME MSG_CLIENTNOTIFYTEXT
 - Set LOGINCOMPLETE IsCSR and Permissions from the security level (coordinate with NET/LOG)
-- gameserver.conf.dist: GM.CommandPrefix, GM.LogCommands
+- gameserver.conf.dist: GM.CommandPrefix, GM.LogCommands, which become live settings applying from the next command once 4.16 lands
+- Each command table declares a default security level; a command_security row (command, security_level) overrides it, and `.reload command_security` applies an edited row once 4.15 lands
 - src/test/server/game/CommandMgrTest.cpp
 
 **Client messages:** GAME MSG_COMMAND, GAME MSG_COMMANDRESULT, SYSTEM MSG_SERVERMESSAGE, GAME MSG_CLIENTNOTIFYTEXT
@@ -76,12 +80,14 @@ An account's security level decides which chat-prefixed GM commands it may run, 
 **Database tables**
 
 - login.account_access
+- world.command_security
 - characters.gm_command_log (optional)
 
 **Acceptance**
 
 - [ ] Unit test: a PLAYER-level account running a GAMEMASTER command gets 'no such command' and nothing executes
 - [ ] Unit test: the command table parses '.character gold 500' into (character, gold, [500])
+- [ ] Unit test: a command_security row raising a command to ADMINISTRATOR refuses a GAMEMASTER account
 - [ ] Real client, GM account: typing '.help' shows the command list in the chat window, and nearby players see no bubble. The same text from a player account shows up as normal chat or is refused, depending on config.
 
 **Risks**
@@ -99,7 +105,7 @@ An account's security level decides which chat-prefixed GM commands it may run, 
 
 **Acceptance**
 
-- [ ] A realm with last_heartbeat older than 3 intervals is excluded; policy picks the named, else least-full realm
+- [ ] A realm with last_heartbeat older than Realm.OfflineAfterIntervals (default 3) is excluded; policy picks the named, else least-full realm
 - [ ] Starting a gameserver refreshes its heartbeat; stopping it goes offline
 
 ### Detailed spec from LOG-10: Realm registry: realmlist table and gameserver heartbeat
@@ -110,8 +116,9 @@ The login server knows which gameservers (realms) are up, where they listen, and
 
 - data/sql/updates/db_login/<date>_NN.sql: realmlist (id, name VARCHAR(32) = RealmNames.lang key, address, local_address, port, flags (offline/recommended/full/test), population INT, player_limit INT, last_heartbeat DATETIME), realm_online_character (realm_id, character_guid, account_id)
 - src/server/shared/Realms/RealmList.{h,cpp} (sRealmList) with no DB access; loading lives in apps/loginserver/Realms/RealmLoader.cpp using LoginDatabase
-- src/server/game/World/RealmHeartbeat.{h,cpp}: the gameserver updates its realmlist row every N seconds (population, last_heartbeat)
-- Realm selection policy: the realm named in MSG_SELECTCHARACTER.ServerName if valid, otherwise a config default, otherwise the least-full online realm
+- src/server/game/World/RealmHeartbeat.{h,cpp}: the gameserver updates its realmlist row every Realm.HeartbeatInterval seconds (population, last_heartbeat)
+- Realm selection policy: the realm named in MSG_SELECTCHARACTER.ServerName if valid, otherwise Realm.DefaultRealm, otherwise the least-full online realm
+- Realm.HeartbeatInterval, Realm.DefaultRealm and Realm.OfflineAfterIntervals become live settings once 4.16 lands; a changed interval applies from the next heartbeat, and the loginserver's realmlist refresh picks up new or edited rows without a restart
 - HandleRequestServerList: reply with an empty MSG_SERVERLIST (the reference does the same; the capture never shows the request)
 
 **Client messages:** MSG_REQUESTSERVERLIST, MSG_SERVERLIST
@@ -127,7 +134,7 @@ The login server knows which gameservers (realms) are up, where they listen, and
 
 **Acceptance**
 
-- [ ] Unit: a realm whose last_heartbeat is older than 3 intervals is excluded; the selection policy picks the named realm when it is online, otherwise the least-full one, and returns none when every realm is offline
+- [ ] Unit: a realm whose last_heartbeat is older than Realm.OfflineAfterIntervals heartbeat intervals (default 3) is excluded; the selection policy picks the named realm when it is online, otherwise the least-full one, and returns none when every realm is offline
 - [ ] Integration: starting one gameserver makes its realmlist row show a fresh heartbeat within 1 interval, and stopping it makes the loginserver treat it as offline
 
 **Risks**
@@ -185,7 +192,7 @@ Picking a wizard sends the client to the right gameserver with a one-time key, s
 
 **Deliverables**
 
-- CharacterHandler::HandleSelectCharacter: check ownership and not deleted; pick a realm (LOG-10); create a login key (base64 32 random bytes) in login_key (key PK, account_id, character_guid, realm_id, machine_id, created, expires = now + Login.KeyTTL, used TINYINT)
+- CharacterHandler::HandleSelectCharacter: check ownership and not deleted; pick a realm (LOG-10); create a login key (base64 32 random bytes) in login_key (key PK, account_id, character_guid, realm_id, machine_id, created, expires = now + Login.KeyTTL, used TINYINT); Login.KeyTTL becomes a live setting once 4.16 lands and applies to the next key issued
 - Reply MSG_CHARACTERSELECTED{IP=realm.address (or local_address for LAN clients), TCPPort=realm.port, UDPPort=realm.port, Key, UserID, CharID, ZoneID=<zone instance GID, 0 or realm-assigned>, ZoneName=characters.zone, Location='x,y,z,yaw' or 'Start' when position is unset, Slot=0, PrepPhase=0, Error=0, LoginServer=Login.Name, PlatformType=0}; mark the session CharacterSelected and let the client close the socket
 - On failure: MSG_CHARACTERSELECTED{Error=1} then close
 - src/server/shared/Util/LocationString.{h,cpp}: format and parse the compact 'x,y,z,yaw' string
@@ -234,7 +241,7 @@ Picking a wizard sends the client to the right gameserver with a one-time key, s
 
 **Deliverables**
 
-- CharacterHandler::HandleSelectCharacter: check ownership and not deleted; pick a realm (LOG-10); create a login key (base64 32 random bytes) in login_key (key PK, account_id, character_guid, realm_id, machine_id, created, expires = now + Login.KeyTTL, used TINYINT)
+- CharacterHandler::HandleSelectCharacter: check ownership and not deleted; pick a realm (LOG-10); create a login key (base64 32 random bytes) in login_key (key PK, account_id, character_guid, realm_id, machine_id, created, expires = now + Login.KeyTTL, used TINYINT); Login.KeyTTL becomes a live setting once 4.16 lands and applies to the next key issued
 - Reply MSG_CHARACTERSELECTED{IP=realm.address (or local_address for LAN clients), TCPPort=realm.port, UDPPort=realm.port, Key, UserID, CharID, ZoneID=<zone instance GID, 0 or realm-assigned>, ZoneName=characters.zone, Location='x,y,z,yaw' or 'Start' when position is unset, Slot=0, PrepPhase=0, Error=0, LoginServer=Login.Name, PlatformType=0}; mark the session CharacterSelected and let the client close the socket
 - On failure: MSG_CHARACTERSELECTED{Error=1} then close
 - src/server/shared/Util/LocationString.{h,cpp}: format and parse the compact 'x,y,z,yaw' string
@@ -286,6 +293,7 @@ The client disconnects from the loginserver after MSG_CHARACTERSELECTED and reco
 - LoginSession: after sending MSG_CHARACTERSELECTED (7:3; IP STR, TCPPort INT, UDPPort INT, Key STR, UserID/CharID/ZoneID GID, ...) the session enters a Handoff state that suspends the keepalive timeout and waits for the client to close; server-side close only after Network.HandoffGrace
 - GameSession: new SessionOffer on connect; STATUS_CONNECTED allows only MSG_ATTACH (5:7) until LOG/WLD validate the Key; MSG_ATTACHFAILED (5:8) is sent via SendMessageDelayedClose on failure
 - Config: gameserver PublicAddress used to fill the IP field (never auto-discover through external web services)
+- Network.HandoffGrace and PublicAddress become live settings once 4.16 lands; a change applies from the next handoff, and sessions already in Handoff keep the values they started with
 
 **Client messages:** MSG_CHARACTERSELECTED, MSG_ATTACH, MSG_ATTACHFAILED
 
@@ -436,7 +444,7 @@ world.zone_object and world.spawn_* hold every NPC and interactable placement an
 
 **Goal:** Zone rows in memory, GM reload.
 
-**Size:** S. **Depends on:** 4.08, 4.02
+**Size:** S. **Depends on:** 4.08, 4.02, 4.15
 
 **Client messages:** MSG_COMMAND, MSG_COMMANDRESULT
 
@@ -445,6 +453,7 @@ world.zone_object and world.spawn_* hold every NPC and interactable placement an
 - [ ] An unknown location falls back to 'Start'
 - [ ] '.zone info WizardCity/WC_Hub' prints counts
 - [ ] '.reload zone_location' applies without restart
+- [ ] A reload that fails validation keeps the old store and reports every error
 
 ### Detailed spec from WLD-4: Zone templates in memory: sZoneMgr and reload
 
@@ -452,9 +461,10 @@ The game server loads zone, location and object rows at startup into a global ma
 
 **Deliverables**
 
-- src/server/game/Zones/ZoneMgr.h/.cpp (sZoneMgr): ZoneTemplate, ZoneLocation and ZoneObjectSpawn stores keyed by zone path, location lookup with 'Start' fallback
+- src/server/game/Zones/ZoneMgr.h/.cpp (sZoneMgr): ZoneTemplate, ZoneLocation and ZoneObjectSpawn stores keyed by zone path, location lookup with 'Start' fallback, each a 4.15 reload target that builds off to the side, validates, swaps, and keeps the old store on failure
 - src/server/game/World/World.cpp: startup load order and timing log
-- src/server/scripts/Commands/cs_zone.cpp: '.zone info <path>', '.reload zone_template', '.reload zone_location'
+- src/server/scripts/Commands/cs_zone.cpp: '.zone info <path>', '.reload zone_template', '.reload zone_location', '.reload zone_object'
+- '.reload zone_object': live maps spawn rows that were added and despawn rows that were removed once maps (4.10) and object spawning (4.14) exist
 - src/test/server/game/Zones/ZoneMgrTest.cpp using an in-memory fixture DB
 
 **Client messages:** MSG_COMMAND, MSG_COMMANDRESULT
@@ -475,6 +485,7 @@ The game server loads zone, location and object rows at startup into a global ma
 - [ ] gameserver startup logs zone template, location and object counts plus load time
 - [ ] '.zone info WizardCity/WC_Hub' prints display key, object count and location count in chat or console
 - [ ] Editing a zone_location row, then '.reload zone_location', returns the new coordinates without a restart
+- [ ] A zone_location row with an unknown zone path makes '.reload zone_location' fail with that row named, and lookups still return the old coordinates
 
 **Risks**
 
@@ -502,7 +513,7 @@ The server can create, tick and destroy zone instances that allocate mobile ids 
 - src/server/game/Zones/MapMgr.h/.cpp (sMapMgr): find-or-create a public instance by zone path, destroy an empty instance after Zone.UnloadDelay
 - src/server/game/Entities/ObjectGuid.h/.cpp: runtime 64-bit GID generator plus a stable permID derived from zone, template and spawn
 - src/server/game/Zones/MobileIdAllocator.h/.cpp: reserved low range for world objects, upper range for players, delayed release
-- conf/dist/gameserver.conf.dist: Zone.UnloadDelay, Zone.MobileIdReleaseDelay, World.UpdateInterval
+- conf/dist/gameserver.conf.dist: Zone.UnloadDelay, Zone.MobileIdReleaseDelay, World.UpdateInterval, which become live settings once 4.16 lands; the delays apply to the next empty instance or released id, and the interval applies from the next tick
 - src/test/server/game/Zones/MapTest.cpp, MobileIdAllocatorTest.cpp
 
 **Acceptance**
@@ -510,6 +521,7 @@ The server can create, tick and destroy zone instances that allocate mobile ids 
 - [ ] Unit: 1000 allocate/release cycles never hand out an id still held or within its release delay
 - [ ] Unit: exhausting the player range returns an error, not a crash
 - [ ] Unit: two instances of the same zone get different dynamic zone ids; an empty instance is destroyed only after the delay
+- [ ] Unit: the delay is read when an instance empties, so a changed Zone.UnloadDelay applies to the next instance that empties with no restart
 - [ ] Unit: the same zone_object row gives the same permID across restarts, while runtime GIDs are unique
 
 **Risks**
@@ -539,6 +551,7 @@ Game objects for MSG_LOGINCOMPLETE and MSG_NEWOBJECT serialize with the block/ty
 
 - src/server/shared/ObjectProperty/CoreObjectSerializer.h/.cpp: the object header is u8 block, u8 type, u32 template id. Block 0 and type 0 mean a plain class hash follows instead
 - A block/type table as a config/data table (not code constants): ClientObject 2/2, WizClientObject 104/2, WizClientObjectItem 115/9, WizClientPet 106/2, WizClientMount 108/2, ClientReagentItem 132/9, ClientRecipe 131/131 (from behavior study; each entry to be confirmed)
+- `.reload core_object_type` once 4.15 lands: validates that every class resolves in the type registry and no block/type pair repeats, swaps the table, and keeps the old one on failure; objects already sent keep the prefix they were sent with
 - src/test/server/shared/ObjectProperty/CoreObjectSerializerTest.cpp
 
 **Acceptance**
@@ -644,9 +657,9 @@ A real client that selects a character loads into its saved zone and stands at t
 
 - src/server/game/Handlers/AttachHandler.cpp: Session::HandleAttach (state never -> logged in): check LoginKey/UserID against the login session issued at MSG_CHARACTERSELECTED, confirm CharID belongs to the account, resolve ZoneName and Location (named or compact), join a Map, allocate a mobile id, send MSG_LOGINCOMPLETE
 - MSG_ATTACHFAILED on a bad key (Rejected=1), wrong character, or zone resolve failure; session closed after Attach.Timeout without MSG_ATTACH
-- characters DB: character position columns (zone path, x, y, z, yaw) with a default start zone from conf
+- characters DB: character position columns (zone path, x, y, z, yaw) with a default start zone from Player.StartZone
 - ScriptMgr hooks: PlayerScript::OnLogin, ZoneScript::OnPlayerEnter
-- conf/dist/gameserver.conf.dist: Attach.Timeout, Player.StartZone, Player.StartLocation, Realm.Name
+- conf/dist/gameserver.conf.dist: Attach.Timeout, Player.StartZone, Player.StartLocation, Realm.Name, which become live settings once 4.16 lands; each applies from the next attach
 
 **Client messages:** MSG_ATTACH, MSG_ATTACHFAILED, MSG_LOGINCOMPLETE
 
@@ -697,9 +710,9 @@ A real client that selects a character loads into its saved zone and stands at t
 
 - src/server/game/Handlers/AttachHandler.cpp: Session::HandleAttach (state never -> logged in): check LoginKey/UserID against the login session issued at MSG_CHARACTERSELECTED, confirm CharID belongs to the account, resolve ZoneName and Location (named or compact), join a Map, allocate a mobile id, send MSG_LOGINCOMPLETE
 - MSG_ATTACHFAILED on a bad key (Rejected=1), wrong character, or zone resolve failure; session closed after Attach.Timeout without MSG_ATTACH
-- characters DB: character position columns (zone path, x, y, z, yaw) with a default start zone from conf
+- characters DB: character position columns (zone path, x, y, z, yaw) with a default start zone from Player.StartZone
 - ScriptMgr hooks: PlayerScript::OnLogin, ZoneScript::OnPlayerEnter
-- conf/dist/gameserver.conf.dist: Attach.Timeout, Player.StartZone, Player.StartLocation, Realm.Name
+- conf/dist/gameserver.conf.dist: Attach.Timeout, Player.StartZone, Player.StartLocation, Realm.Name, which become live settings once 4.16 lands; each applies from the next attach
 
 **Client messages:** MSG_ATTACH, MSG_ATTACHFAILED, MSG_LOGINCOMPLETE
 
@@ -737,6 +750,7 @@ NPCs, signs, doors and props from the zone data appear for a player entering a z
 - Map::AddPlayer: send MSG_NEWOBJECT for each visible object to the entering player; Map::RemovePlayer: nothing for the leaver (the client tears down)
 - Critical objects: templates whose adjective list holds 'Critical' go into LOGINCOMPLETE.CriticalObjects
 - MSG_CLIENTZONED (service 53) handler marks the session in world, and object streaming waits for or follows it as the capture shows
+- On a successful '.reload zone_object', each live Map spawns objects for added rows and removes objects for deleted rows, sending MSG_NEWOBJECT and MSG_REMOVEOBJECT to players in it
 - src/test/server/game/Zones/MapObjectSpawnTest.cpp
 
 **Client messages:** MSG_NEWOBJECT, MSG_LOGINCOMPLETE, MSG_CLIENTZONED
@@ -755,9 +769,106 @@ NPCs, signs, doors and props from the zone data appear for a player entering a z
 - [ ] Real client: in WizardCity/WC_Hub, statues, kiosks and NPC models stand where they do on retail, and nothing floats at 0,0,0
 - [ ] Real client: entering a zone with a Critical object leaves the loading screen (it does not hang)
 - [ ] Unit: a zone_object with a missing template is logged once and skipped; the Map still loads
+- [ ] Unit: after '.reload zone_object' adds one row and deletes another, a live Map holds the new object and not the deleted one, with no restart; a reload that fails validation leaves the Map unchanged
 - [ ] Server log: '<n> objects spawned in WizardCity/WC_Hub' matches the count of eligible zone_object rows
 
 **Risks**
 
 - That the client waits on CriticalObjects before dropping the loading screen is inferred from the reference, not confirmed
 - Objects with m_spawnRequirements (quest-gated) are shown to everyone until WLD-19
+
+## 4.15 Reload framework and reload commands
+
+**Goal:** Every loaded store reloads live through one pattern: build off to the side, validate, swap atomically, keep the old store on failure, and report every error.
+
+**Size:** M. **Depends on:** 4.01, 4.02, 1.10
+
+**Acceptance**
+
+- [ ] A failed reload keeps the previous generation serving and returns every error
+- [ ] A reader holding a snapshot during a swap keeps a consistent view (TSan clean)
+- [ ] `Logger.network` edit plus `reload config` changes routing without a restart
+- [ ] Broken message XML on reload keeps the old generation
+- [ ] `.reload all` reports each target's result and generation
+- [ ] A live world edit is journaled and exports as a pending SQL update
+
+### Detailed spec
+
+Stores that load at startup share one reload path, so every later manager becomes reloadable by registering a target instead of writing its own swap logic.
+
+**Deliverables**
+
+- src/server/shared/Reload/ReloadableStore.h: ReloadableStore<T> holding an immutable snapshot behind a shared_ptr; readers take a snapshot, and a reload builds a new T, validates it, and swaps the pointer atomically
+- src/server/shared/Reload/ReloadMgr.{h,cpp} (sReloadMgr): named targets with dependencies (a target reloads after the targets it depends on), a generation counter, the last result, and every error from the last attempt
+- ConfigMgr change notification: subscribers receive the changed keys after a successful reload, and logging subscribes so appenders and logger levels apply at once
+- The message registry and configuration register as the targets `messages` and `config`
+- src/server/scripts/Commands/cs_reload.cpp: `.reload config`, `.reload messages`, `.reload <target>` and `.reload all`, at ADMINISTRATOR level
+- Console `reload <target>` on every app, and SIGHUP on Linux, which runs `reload config`
+- src/server/shared/Reload/WorldEditJournal.{h,cpp}: every live world-database edit from a GM command or the admin API is journaled with time, account, source and statement, and `.journal export` writes the journal as a pending update file in data/sql/updates/pending_db_world/
+- src/test/server/shared/Reload/ReloadableStoreTest.cpp, ReloadMgrTest.cpp, WorldEditJournalTest.cpp
+
+**Acceptance**
+
+- [ ] Unit: a reload that fails validation leaves the previous generation serving, keeps its generation number, and returns every error, not only the first
+- [ ] Unit: reader threads holding a snapshot during repeated swaps always see one whole generation, and the test is clean under TSan
+- [ ] Integration: editing `Logger.network` in the `.conf` file and running `reload config` on the console changes log routing without a restart
+- [ ] Integration: reloading message XML with a broken definition keeps the old generation, and declared messages still encode
+- [ ] `.reload all` reports each target's result and generation, in dependency order
+- [ ] Integration: a live world-database edit writes one journal entry, and `.journal export` writes a pending_db_world file that applies cleanly to a fresh world database
+
+**Risks**
+
+- A snapshot held for a long operation keeps the old generation's memory alive. `.reload all` should list retired generations still held.
+- Stores that hold references into each other must reload together or be rebound, or a swap can leave one pointing at a retired generation. Declare those as target dependencies.
+
+## 4.16 Live settings registry
+
+**Goal:** Every tunable value is a typed setting with a default, bounds, and an apply mode, changeable live, persisted, and audited.
+
+**Size:** M. **Depends on:** 4.15, 2.08, 2.13
+
+**Acceptance**
+
+- [ ] Out-of-bounds or wrong-type value refused; nothing persisted
+- [ ] A set value survives a restart; `reset` returns to the config value
+- [ ] Exactly one change event per successful set
+- [ ] Every change writes one audit row with old, new, who and why
+- [ ] Editing an environment-locked key names the locking layer
+- [ ] `.settings set World.UpdateInterval 100` changes the measured tick within two ticks
+
+### Detailed spec
+
+Gameplay values and runtime options live in one typed registry, so the console, GM commands, configuration reloads and later the control center all change them the same way.
+
+**Deliverables**
+
+- src/server/shared/Settings/Settings.{h,cpp} (sSettings): declarations with key, type, default, min, max, unit, category, description and apply mode (live, next connection or operation, or restart-required with a reason); Get<T> reads an atomic snapshot
+- Resolution order: declared default, the `.conf` layers, the persisted live value, then `AMBROSE_` environment variables and command-line overrides, which lock the key
+- data/sql/updates/db_characters and db_login: settings (key, value, updated_by, updated_at) and setting_audit (id, key, old_value, new_value, source, account_id, reason, created); the gameserver uses characters, and the loginserver and patchserver use login
+- Change events delivered on the world thread, with the changed key, old value and new value
+- A config reload through 4.15 re-resolves every setting and raises change events only for keys whose effective value changed
+- src/server/scripts/Commands/cs_settings.cpp: `.settings list [category]`, `.settings get <key>`, `.settings set <key> <value> [reason]`, `.settings reset <key>`, `.settings history <key>`
+- doc/config/settings.md generated from the declarations, with default, bounds, unit and apply mode per key
+- First settings: Rate.XP.*, Rate.Gold.*, Rate.Drop.*, Rate.Respawn, plus the live-capable options from phases 1-4 (World.UpdateInterval, Zone.UnloadDelay, Zone.MobileIdReleaseDelay, Realm.HeartbeatInterval, Realm.DefaultRealm, Realm.OfflineAfterIntervals, Login.KeyTTL, Network.HandoffGrace, PublicAddress, Attach.Timeout, Player.StartZone, Player.StartLocation, Realm.Name, GM.CommandPrefix, GM.LogCommands and the phase 1-3 options)
+- src/test/server/shared/Settings/SettingsTest.cpp
+
+**Database tables**
+
+- characters.settings
+- characters.setting_audit
+- login.settings
+- login.setting_audit
+
+**Acceptance**
+
+- [ ] Unit: an out-of-bounds or wrong-type value is refused with a message naming the bound or type, and nothing is persisted or audited
+- [ ] Integration: a set value survives a restart, and `.settings reset` returns the key to its config value
+- [ ] Unit: exactly one change event fires per successful set, and none for a refused one
+- [ ] Integration: every change writes one setting_audit row with old and new values, who made it, the source and the reason
+- [ ] Unit: `.settings set` on a key set by an environment variable is refused with a message naming that layer
+- [ ] Integration: `.settings set World.UpdateInterval 100` changes the measured tick within two ticks, with no restart
+
+**Risks**
+
+- A persisted value can fall outside bounds changed by a newer binary. Refuse it at startup, log it, and fall back to the config value instead of refusing to start.
+- A subscriber that caches a value at startup silently ignores live changes. Declared keys must be read through Get<T> or a change subscription, never copied into a member at startup.

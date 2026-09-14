@@ -44,7 +44,7 @@ First milestones:
 | 1 | [Foundations to first handshake](roadmap/phase-01-foundations-to-first-handshake.md) | 22 | The retail client, started with -L 127.0.0.1 12000 -P 0, completes SessionOffer/SessionAccept with Ambrose loginserver and stays connected. The server log names its MSG_USER_AUTHEN_V3 (7:27). |
 | 2 | [Log in to character select](roadmap/phase-02-log-in-to-character-select.md) | 15 | The correct password lands on an empty character select screen. A wrong password shows the client's invalid-login dialog and allows a retry. |
 | 3 | [Create, list and delete a wizard](roadmap/phase-03-create-list-and-delete-a-wizard.md) | 19 | A player creates a wizard (school, look, name). It appears on character select with the right appearance, persists across restarts, and can be deleted. |
-| 4 | [A wizard stands in Ravenwood](roadmap/phase-04-a-wizard-stands-in-ravenwood.md) | 14 | After Play, the client leaves loginserver, attaches to gameserver and the player controls their wizard in WizardCity/WC_Ravenwood (or WC_Hub 'Start'). No other objects are streamed yet. |
+| 4 | [A wizard stands in Ravenwood](roadmap/phase-04-a-wizard-stands-in-ravenwood.md) | 16 | After Play, the client leaves loginserver, attaches to gameserver and the player controls their wizard in WizardCity/WC_Ravenwood (or WC_Hub 'Start'). No other objects are streamed yet. |
 | 5 | [The zone comes alive for one player](roadmap/phase-05-the-zone-comes-alive-for-one-player.md) | 8 | Ravenwood shows its NPCs and props where retail has them, and the HUD shows real health, mana, gold and level from the DB. Relogging returns to the same spot, and quit-to-select works without a password. |
 | 6 | [Other players are visible](roadmap/phase-06-other-players-are-visible.md) | 18 | Two clients in WC_Hub see each other walk, jump, chat and emote, and one sees the other vanish on logout. Walking through the Ravenwood gate transfers zones. GMs teleport, kick and ban. |
 | 7 | [An NPC offers a quest](roadmap/phase-07-an-npc-offers-a-quest.md) | 13 | A test NPC in Ravenwood shows '!' and plays its Prep dialog. It opens the quest offer window, and accepting fills the quest book. Talking to the persona NPC ('?') completes the goal and chains the next offer. |
@@ -57,9 +57,9 @@ First milestones:
 | 14 | [Dungeons, tutorial and PvP](roadmap/phase-14-dungeons-tutorial-and-pvp.md) | 16 | Groups enter sigil dungeons with countdowns. New wizards play the scripted tutorial, and players queue for ranked PvP, tournaments, pet derby and daily assignments. |
 | 15 | [Housing, gardening and fishing](roadmap/phase-15-housing-gardening-and-fishing.md) | 21 | Players go home, decorate, store items in attic and vaults, grow gardens, fish ponds, publish castle tours and build castle magic. |
 | 16 | [Patch server and tooling ownership](roadmap/phase-16-patch-server-and-tooling-ownership.md) | 12 | The retail client patches against Ambrose with 0 files altered, restores a deleted WAD, and streams missing zone packages. Users produce their own type dump with Ambrose tooling. This track can run in parallel any time after phase 2. |
-| 17 | [Operations: console, admin API, dashboard and metrics](roadmap/phase-17-operations-console-admin-api-dashboard-and-metrics.md) | 11 | From a browser on a desktop or a phone, an operator sees every server's health and player counts, follows live logs, runs audited commands, restarts a crashed server, and reviews performance history in Grafana. Runs in parallel: 17.01 after 1.20, the rest after phase 2. |
+| 17 | [Operations: console, admin API, dashboard and metrics](roadmap/phase-17-operations-console-admin-api-dashboard-and-metrics.md) | 13 | From a browser on a desktop or a phone, an operator sees every server's health and player counts, follows live logs, runs audited commands, restarts a crashed server, and reviews performance history in Grafana, and edits game settings and reloads content live. Runs in parallel: 17.01 after 1.20, 17.12 and 17.13 after 4.16, the rest after phase 2. |
 
-Total: 282 milestones.
+Total: 286 milestones.
 
 ## Decisions needed
 
@@ -88,6 +88,8 @@ These block specific milestones. The maintainer decides each one, then this list
 
 ### Resolved
 
+Settled on 2026-09-14 at the maintainer's direction, and recorded under Decisions, Live reload and live settings in doc/ARCHITECTURE.md: everything that can change while a server runs changes live, gameplay values are typed live settings edited from the control center, live settings persist in the database the app owns with an audit table, environment and command-line layers lock a key, and live world database edits are journaled and exportable as pending SQL. New milestones 4.15 (reload framework), 4.16 (live settings registry), 17.12 (settings and reload admin API), and 17.13 (dashboard settings editor) carry the work.
+
 Settled on 2026-09-13 with the maintainer's direction to favor the most capable option, and recorded under Decisions, Operations in doc/ARCHITECTURE.md: Crow for the admin API, TypeScript and Svelte with Vite for the dashboard, an Ambrose supervisor for process control, and localhost-only access unless TLS and a token are configured.
 
 - Operations: the HTTP and WebSocket library for the admin API, either hand-written HTTP/1.1 on the Asio layer, Boost.Beast, or a small embedded server library. Blocks 17.02.
@@ -114,11 +116,14 @@ Settled on 2026-09-13 and recorded under Decisions in doc/ARCHITECTURE.md: runti
 - Combat math parity: if the client replays CombatActions with its own resolver, any formula mismatch shows as visible health desync. The formulas exist in no local source and need client RE.
 - No way to test in hosted CI: the builds, type registry, extractors and real-client tests all need the user's install and dump, so regressions may only surface on the maintainer's machine.
 - ObjectProperty edge cases: the per-field envelope policy, DirtyEncode semantics, Matrix3x3 width, and CoreObject block/type pairs other than 104/2 are unverified. Getting any of them wrong crashes the client rather than failing gracefully.
-- Scope: about 250 milestones, with phases 13-15 (pets, housing, PvP) holding the most poorly documented systems. Keep the phase gates honest and do not start later phases before phase 10's playable loop exists.
+- Settings the client mirrors or simulates, such as combat constants, MSG_SETST values, and fields fixed at LOGINCOMPLETE, can desync if changed live. Each such setting must either push the change to connected clients or apply from the next duel or session, and its documentation must say which.
+- Scope: about 280 milestones, with phases 13-15 (pets, housing, PvP) holding the most poorly documented systems. Keep the phase gates honest and do not start later phases before phase 10's playable loop exists.
 
 ## Review findings not tied to one phase
 
 **Missing work**
+
+- Live settings and reloads: a typed settings registry, a reload framework, settings and reload endpoints, and a dashboard editor did not exist in the plan. **Planned:** 4.15, 4.16, 17.12, and 17.13, with reload paths and live settings added to the milestones that load stores or use tunable values.
 
 - Unassigned LOGIN messages: MSG_CHANGECHARACTERNAME (order 26), MSG_SAVECHARACTER (23), MSG_FULFILLPROMOCODE (29), MSG_WEBCHARACTERINFO (21). Also character rename (WIZ3 MSG_REQUESTRENAMECHARACTER) and purchased character slots (WIZ2 MSG_UPDATEPURCHASEDCHARACTERSLOTS, ResAddCharacterSlotResult).
 - Most of WizardMessages2 (53) and WizardMessages3 (56), 467 messages, has no milestone even though the roadmap itself flags them. Missing systems include jewels/sockets (EQUIPJEWELTOITEM, UNLOCKSOCKETS, UNSOCKETJEWELREQUEST), mounts (RIDEOBJECT, SETSTOREDMOUNT), Team Up/Team Help (REQUESTTEAMUP, TEAMUP*), resume-instance (SETRESUMEINSTANCE, UPDATERESUMEINSTANCETIME), zone gates/recall (ZONEGATELIST, ZONEHOP, RecallLocationConfirm, GotoDormConfirm), guilds/kinhouses (GUILD*, VISITGUILDHOUSE), Pixie Post mail, loyalty store, season pass, Rate My Stitch, Magic Mirror appearance change, spell fusion (ADDSPELLFUSIONTODECK), tiered spell upgrade/refund, Hatchmaking, pet elixirs, class projects/gauntlets, basic chat channels, zone tokens (AddZoneToken/ModifyZoneToken), environmental damage, holiday/event currency (HOLIDAYDATA, UPDATEEVENTCURRENCY1/2), and GameMessages2 (55) MSG_BADGESEGMENT and MSG_PVPBLOCK.
