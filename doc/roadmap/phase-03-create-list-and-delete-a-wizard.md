@@ -353,9 +353,9 @@ Wizards can be stored, loaded per account, counted and soft-deleted, with appear
 
 **Acceptance**
 
-- [ ] Blob starts with class hash 292458316 and decodes identically; empty equipment gives 157-221 bytes
+- [x] Blob starts with class hash 292458316 and decodes identically; empty equipment gives 157-221 bytes (LoginScreenInfoBuilderTest, LoginScreenInfoClientTest; corrected: an empty equipment list gives 96 bytes plus the location, and the captured 157-221 byte blobs carried equipped items)
 - [ ] Real client: 3 seeded characters show gender, hair, colors, name from name_indices, level and school
-- [ ] 0 characters shows an empty screen without errors
+- [ ] 0 characters shows an empty screen without errors (the server side passes in CharacterHandlerTest; the screen waits for the real client)
 
 ### Detailed spec from LOG-6: Character list: REQUESTCHARACTERLIST -> STARTCHARACTERLIST / CHARACTERINFO* / CHARACTERLIST
 
@@ -363,9 +363,9 @@ The character select screen shows the account's wizards with correct appearance,
 
 **Deliverables**
 
-- src/server/apps/loginserver/Handlers/CharacterHandler.cpp: HandleRequestCharacterList sends MSG_STARTCHARACTERLIST{LoginServer=<live setting Login.Name, read per request>, PurchasedCharacterSlots=account.purchased_slots}, then one MSG_CHARACTERINFO per character, then MSG_CHARACTERLIST{Error=0}; if the account is missing, CHARACTERLIST{Error=1}
-- src/server/game/Characters/LoginScreenInfoBuilder.{h,cpp}: builds WizardCharacterCreationInfo {m_templateID=1, m_name=custom_name or empty, m_globalID, m_userID, m_avatarBehavior=WizardCharacterBehavior from appearance, m_equipmentInfoList=EquippedItemInfoList (empty until items exist), m_location=zone_display, m_level, m_world, m_schoolOfFocus, m_nameIndices} and serializes it with Transmit|AuthorityTransmit flags, no SerializerBinary wrapper, not versionable
-- src/test/server/game/Characters/LoginScreenInfoBuilderTest.cpp
+- src/server/apps/loginserver/Handlers/CharacterHandler.cpp: HandleRequestCharacterList sends MSG_STARTCHARACTERLIST{LoginServer=<live setting Login.Name, read per request>, PurchasedCharacterSlots=account.purchased_slots}, then one MSG_CHARACTERINFO per character, then MSG_CHARACTERLIST{Error=0}; if the account is missing, CHARACTERLIST{Error=1}. Built asynchronously: the account, then the count, then the list only when the count is not zero, every character encoded before anything is sent, so a failed query or a character that cannot be encoded also answers CHARACTERLIST{Error=1} alone. The login server now opens the characters database, and Login.Name defaults to Ambrose and may be empty, as the captures show the client accepting. A request made during a listing is answered by one more listing, the account's slots come from their own statement, and at most 256 wizards are listed
+- src/server/game/Characters/LoginScreenInfoBuilder.{h,cpp}: builds WizardCharacterCreationInfo {m_templateID=1, m_name=custom_name or empty, m_globalID, m_userID, m_avatarBehavior=WizardCharacterBehavior from appearance, m_equipmentInfoList=EquippedItemInfoList (empty until items exist), m_location=zone_display, m_level, m_world, m_schoolOfFocus, m_nameIndices} and serializes it with Transmit|AuthorityTransmit flags, no SerializerBinary wrapper, not versionable. Built to also set m_shouldRename, m_quarantined=false and m_lastLoginTime from last_logout, and to encode through the MSG_CHARACTERINFO.CharacterInfo field rule
+- src/test/server/game/Characters/LoginScreenInfoBuilderTest.cpp, plus src/test/server/apps/loginserver/Handlers/CharacterHandlerTest.cpp and the client-gated src/test/client/LoginScreenInfoClientTest.cpp
 
 **Client messages:** MSG_REQUESTCHARACTERLIST, MSG_STARTCHARACTERLIST, MSG_CHARACTERINFO, MSG_CHARACTERLIST
 
@@ -382,8 +382,8 @@ The character select screen shows the account's wizards with correct appearance,
 
 **Acceptance**
 
-- [ ] Unit: the serialized blob starts with class hash 292458316 (WizardCharacterCreationInfo), and decoding it with our OBJ codec returns identical field values; with an empty equipment list the size falls in the observed 157-221 byte range
-- [ ] Unit: the property flag mask excludes m_shouldRename, m_quarantined and m_lastLoginTime (flags 24), per the type dump
+- [x] Unit: the serialized blob starts with class hash 292458316 (WizardCharacterCreationInfo), and decoding it with our OBJ codec returns identical field values; with an empty equipment list the size falls in the observed 157-221 byte range (LoginScreenInfoBuilderTest; corrected in LoginScreenInfoClientTest against r806919: an empty equipment list gives 96 bytes plus the location's bytes, and the captured blobs were larger because the reference server filled the equipment list)
+- [x] Unit: the property flag mask excludes m_shouldRename, m_quarantined and m_lastLoginTime (flags 24), per the type dump (corrected: flags 0x18 are exactly Transmit|AuthorityTransmit, so under that mask those three properties are included; the one left out is m_behaviorTemplateNameID, flags 0x27. The reference server's blobs, which the client displayed, used the same mask; LoginScreenInfoBuilderTest checks both)
 - [ ] Real client: an account seeded with 3 characters via data/sql/custom shows 3 wizards; each shows its gender, hair and colors, and the name built from name_indices (first=(idx>>16)&0xFF, middle=(idx>>8)&0xFF, last=idx&0xFF), level and school, matching capture lines 4-9
 - [ ] Real client: an account with 0 characters shows the empty select screen or the create prompt without errors
 

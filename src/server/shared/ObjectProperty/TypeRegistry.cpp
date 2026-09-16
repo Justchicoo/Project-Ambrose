@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the type dump file, hashes it with SHA-256 for revision pinning, builds and validates a new catalog generation off to the side, binds the registry's typed views to it, and publishes it atomically, logging the load time, size and every problem, and keeping the active catalog when a load fails.
+ * Reads the type dump file, hashes it with SHA-256 for revision pinning, builds and validates a new catalog generation off to the side, binds the typed views of the view registry it was given, which tools and tests can change between loads, to it, and publishes it atomically, logging the load time, size and every problem, and keeping the active catalog when a load fails.
  */
 
 #include "TypeRegistry.h"
@@ -47,6 +47,12 @@ ViewBinding const* TypeCatalog::FindView(ViewDefinition const& definition) const
 
 TypeRegistry::TypeRegistry(TypedViewRegistry* views) : _views(views)
 {
+}
+
+void TypeRegistry::SetViews(TypedViewRegistry* views)
+{
+    std::lock_guard const lock(_writeMutex);
+    _views = views;
 }
 
 TypeRegistry& TypeRegistry::Instance()

@@ -1,9 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Registers every characters database statement with its name, SQL, and the connections that prepare it: an account's live characters and one character by guid, each with its appearance, inserting a character and its appearance, soft deletion of an offline character that remembers the owner and restoring it, counting an account's live characters the way the list finds them, the online flag, and the highest guid ever used, kept in id_sequences so deleted rows cannot hand a guid out again.
+ * Registers every characters database statement with its name, SQL, and the connections that prepare it: an account's live characters in creation order, at most MaxCharactersListed of them, and one character by guid, each with its appearance, inserting a character and its appearance, soft deletion of an offline character that remembers the owner and restoring it, counting an account's live characters the way the list finds them, the online flag, and the highest guid ever used, kept in id_sequences so deleted rows cannot hand a guid out again.
  */
 
 #include "CharacterDatabase.h"
+
+#include <fmt/format.h>
 
 #include <string>
 
@@ -17,7 +19,7 @@ void CharacterDatabaseConnection::DoPrepareStatements()
         "a.`skin_color`, a.`skin_decal`, a.`hair_color`, a.`hat_color`, a.`hat_decal`, a.`torso_color`, a.`torso_decal`, a.`torso_decal2`, a.`feet_color`, a.`feet_decal`, "
         "a.`skin_decal2`, a.`extended_hair_color`, a.`extended_skin_decal`, a.`after_combat_dance`, a.`after_combat_victory_dance`, a.`new_player_options`, a.`new_player_options2` "
         "FROM `characters` c INNER JOIN `character_appearance` a ON a.`guid` = c.`guid`";
-    PrepareStatement(CHAR_SEL_CHARACTERS_BY_ACCOUNT, "CHAR_SEL_CHARACTERS_BY_ACCOUNT", characterColumns + " WHERE c.`account` = ? AND c.`deleted_at` IS NULL ORDER BY c.`created`, c.`guid`", ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_CHARACTERS_BY_ACCOUNT, "CHAR_SEL_CHARACTERS_BY_ACCOUNT", characterColumns + fmt::format(" WHERE c.`account` = ? AND c.`deleted_at` IS NULL ORDER BY c.`created`, c.`guid` LIMIT {}", MaxCharactersListed), ConnectionFlags::Both);
     PrepareStatement(CHAR_SEL_CHARACTER, "CHAR_SEL_CHARACTER", characterColumns + " WHERE c.`guid` = ?", ConnectionFlags::Both);
 
     PrepareStatement(CHAR_INS_CHARACTER, "CHAR_INS_CHARACTER", "INSERT INTO `characters` (`guid`, `account`, `name_indices`, `custom_name`, `should_rename`, `school_id`, `level`, `xp`, `world`, `zone`, `zone_display`, "

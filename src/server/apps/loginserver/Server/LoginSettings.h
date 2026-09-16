@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Login rules read from configuration, which each authentication attempt and idle check takes a snapshot of: revision enforcement, failed-attempt limits and lockouts, what a second login to an online account does, how long session keys last, when idle clients are dropped, and how long a shutdown waits for clients to leave.
+ * Login rules read from configuration, which each authentication attempt, character list and idle check takes a snapshot of: the name the login server shows, revision enforcement, failed-attempt limits and lockouts, what a second login to an online account does, how long session keys last, when idle clients are dropped, and how long a shutdown waits for clients to leave.
  */
 
 #ifndef AMBROSE_LOGINSETTINGS_H
@@ -35,6 +35,10 @@ struct LoginSettings
     static constexpr uint32 DefaultShutdownGraceSeconds = 5;
     static constexpr uint32 MaxShutdownGraceSeconds = 60;
 
+    static constexpr std::string_view DefaultName = "Ambrose";
+    static constexpr std::size_t MaxNameBytes = 64;
+
+    std::string Name{ DefaultName };
     bool EnforceRevision = false;
     std::vector<std::string> AllowedRevisions;
     uint32 MaxAuthAttempts = DefaultMaxAuthAttempts;

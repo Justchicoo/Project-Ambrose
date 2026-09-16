@@ -12,6 +12,7 @@ target_link_libraries(client_tests
     PRIVATE
         ambrose-compile-options
         shared
+        characters
         nlohmann_json::nlohmann_json
         GTest::gmock)
 

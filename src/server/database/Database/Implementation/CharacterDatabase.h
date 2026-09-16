@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The characters database's statement ids and the connection type that prepares them.
+ * The characters database's statement ids, the most characters one account's list returns, and the connection type that prepares them.
  */
 
 #ifndef AMBROSE_CHARACTERDATABASE_H
@@ -23,6 +23,8 @@ enum CharacterDatabaseStatements : uint32
     CHAR_INS_ID_SEQUENCE,
     MAX_CHARACTERDATABASE_STATEMENTS
 };
+
+inline constexpr uint32 MaxCharactersListed = 256;
 
 class CharacterDatabaseConnection : public MySQLConnection
 {

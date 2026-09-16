@@ -83,6 +83,7 @@ public:
 
     static TypeRegistry& Instance();
 
+    void SetViews(TypedViewRegistry* views);
     bool LoadFromFile(std::filesystem::path const& path);
     bool LoadFromText(std::string_view text, std::string sourceName);
     void Clear();

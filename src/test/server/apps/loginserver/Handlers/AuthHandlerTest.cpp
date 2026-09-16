@@ -81,11 +81,11 @@ namespace
 
         void TearDown() override
         {
+            if (_open)
+                LoginDatabase.Close();
             _server.reset();
             sLoginMgr.Reset();
             sAccountMgr.SetSettings(AccountSettings{});
-            if (_open)
-                LoginDatabase.Close();
             if (_info.Database.empty())
                 return;
             MySQLConnectionInfo server = _info;

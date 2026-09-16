@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Login server entry point: loads account and login settings and the type dump, declares the login message table and checks it against the client's message definitions, opens the login database, listens for clients, and offers account console commands until shutdown, telling connected clients before it shuts down.
+ * Login server entry point: loads account and login settings and the type dump, declares the login message table and checks it against the client's message definitions, refuses to serve clients without the type dump and both databases, opens the login and characters databases, listens for clients, and offers account console commands until shutdown, telling connected clients before it shuts down and closing the databases, which drains their callbacks, before its network threads stop.
  */
 
 #include "AccountCommands.h"
@@ -23,9 +23,13 @@
 #include "SocketMgr.h"
 #include "TypeRegistry.h"
 
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+
 #include <iostream>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace
@@ -60,6 +64,19 @@ namespace
             }
 
             std::string const clientDir = Config().GetOption<std::string>("ClientDir", "", true);
+            if (!clientDir.empty())
+            {
+                std::vector<std::string_view> missing;
+                for (std::string_view const option : { "TypeDumpPath", "LoginDatabaseInfo", "CharacterDatabaseInfo" })
+                    if (Config().GetOption<std::string>(std::string(option), "", true).empty())
+                        missing.push_back(option);
+                if (!missing.empty())
+                {
+                    LOG_ERROR("server.loginserver", "ClientDir is set, so clients will be served, but {} {} empty; the login server needs the type dump and both databases to authenticate clients and list their characters",
+                        fmt::join(missing, ", "), missing.size() == 1 ? "is" : "are");
+                    return false;
+                }
+            }
             if (clientDir.empty())
                 LOG_WARN("server.loginserver", "ClientDir is not set, so client messages are logged by service and order only");
             else if (!sMessageRegistry.LoadFromClient(LogConfig::Utf8Path(clientDir)))
@@ -90,10 +107,11 @@ namespace
             }
 
             _databases = std::make_unique<DatabaseLoader>(Config());
-            _databases->AddDatabase(LoginDatabase, "Login", DatabaseLoader::DATABASE_LOGIN);
+            _databases->AddDatabase(LoginDatabase, "Login", DatabaseLoader::DATABASE_LOGIN)
+                .AddDatabase(CharacterDatabase, "Character", DatabaseLoader::DATABASE_CHARACTER);
             if (!_databases->Load())
             {
-                LOG_ERROR("server.loginserver", "Cannot open the login database");
+                LOG_ERROR("server.loginserver", "Cannot open the login and characters databases");
                 _databases.reset();
                 return false;
             }
@@ -127,14 +145,13 @@ namespace
         {
             AccountCommands::Unregister(Commands());
             if (_sockets)
-            {
                 LoginShutdown::NotifyAndDrain(*_sockets, sLoginMgr.GetSettings()->ShutdownGrace);
-                _sockets->StopNetwork();
-            }
-            _sockets.reset();
             AppenderDB::Disable(Logger());
             if (_databases)
                 _databases->Close();
+            if (_sockets)
+                _sockets->StopNetwork();
+            _sockets.reset();
             _databases.reset();
         }
 

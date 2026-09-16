@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The login server's session: routes every client message through the login message table, authenticates MSG_USER_AUTHEN_V3 against the login database without blocking its network thread, holds the account it claimed and admitted, drops the client once it idles past the AFK timeout before choosing a character, and tells it when the login server shuts down.
+ * The login server's session: routes every client message through the login message table, authenticates MSG_USER_AUTHEN_V3 against the login database without blocking its network thread, holds the account it claimed and admitted, lists the account's characters from the login and characters databases the same way, coalescing a request made meanwhile into one more list, drops the client once it idles past the AFK timeout before choosing a character, and tells it when the login server shuts down.
  */
 
 #ifndef AMBROSE_LOGINSESSION_H
@@ -41,6 +41,7 @@ public:
     void HandleWebAuthen(LoginMessages::WebAuthen& message);
     void HandleWebValidate(LoginMessages::WebValidate& message);
     void HandleLoginNotAfk(LoginMessages::LoginNotAfk& message);
+    void HandleRequestCharacterList(LoginMessages::RequestCharacterList& message);
 
 protected:
     void OnAccepted() override;
@@ -55,6 +56,12 @@ private:
     void FailAuthentication(AuthAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, bool close = false);
     void AbortAuthentication(AuthAttempt* attempt, std::exception const& failure);
     void RefuseUnsupportedAuthentication(std::string_view tag);
+    void StartCharacterList();
+    void ListCharacters(uint32 purchasedSlots, uint32 expected);
+    void FinishCharacterList(uint32 purchasedSlots, PreparedQueryResult result);
+    void FailCharacterList(std::string_view detail);
+    bool AbandonCharacterList();
+    void EndCharacterList();
     void ReleaseClaim();
     SQLOperation::CompletionHandler MakeCompletionHandler();
     void ProcessCallbacks();
@@ -68,6 +75,8 @@ private:
     std::chrono::steady_clock::time_point _nextAfkCheck;
     std::atomic<uint64> _afkChecks{ 0 };
     bool _authenticating = false;
+    bool _listingCharacters = false;
+    bool _relistCharacters = false;
     uint32 _failedResponses = 0;
     uint64 _claimedAccountId = 0;
     std::atomic<uint64> _accountId{ 0 };

@@ -155,6 +155,54 @@ namespace LoginMessages
         }
     };
 
+    struct RequestCharacterList
+    {
+        static constexpr uint8 ServiceId = LoginService;
+        static constexpr std::string_view Tag = "MSG_REQUESTCHARACTERLIST";
+
+        static constexpr auto Fields() { return std::tuple<>{}; }
+    };
+
+    struct StartCharacterList
+    {
+        static constexpr uint8 ServiceId = LoginService;
+        static constexpr std::string_view Tag = "MSG_STARTCHARACTERLIST";
+
+        std::string LoginServer;
+        int32 PurchasedCharacterSlots = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("LoginServer", &StartCharacterList::LoginServer), DmlField("PurchasedCharacterSlots", &StartCharacterList::PurchasedCharacterSlots) };
+        }
+    };
+
+    struct CharacterInfo
+    {
+        static constexpr uint8 ServiceId = LoginService;
+        static constexpr std::string_view Tag = "MSG_CHARACTERINFO";
+
+        std::string Info;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("CharacterInfo", &CharacterInfo::Info) };
+        }
+    };
+
+    struct CharacterList
+    {
+        static constexpr uint8 ServiceId = LoginService;
+        static constexpr std::string_view Tag = "MSG_CHARACTERLIST";
+
+        uint32 Error = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Error", &CharacterList::Error) };
+        }
+    };
+
     struct WebValidate
     {
         static constexpr uint8 ServiceId = LoginService;

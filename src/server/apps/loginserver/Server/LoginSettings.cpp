@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the Login options from config, clamping out-of-range values and the AFK warning byte, refusing to enforce an empty revision list, and reporting each problem.
+ * Reads the Login options from config, refusing an empty or overlong server name, clamping out-of-range values and the AFK warning byte, refusing to enforce an empty revision list, and reporting each problem.
  */
 
 #include "LoginSettings.h"
@@ -33,6 +33,11 @@ LoginSettings LoginSettings::Load(ConfigMgr const& config, std::vector<std::stri
     };
 
     LoginSettings settings;
+    std::string const name = std::string(Ambrose::Trim(config.GetOption<std::string>("Login.Name", std::string(DefaultName), true)));
+    if (name.size() > MaxNameBytes)
+        report(fmt::format("Login.Name must be at most {} bytes; using {}", MaxNameBytes, DefaultName));
+    else
+        settings.Name = name;
     std::string const revisions = config.GetOption<std::string>("Login.AllowedRevision", "", true);
     for (std::string_view const revision : Ambrose::Tokenize(revisions, ',', false))
         if (std::string_view const trimmed = Ambrose::Trim(revision); !trimmed.empty())

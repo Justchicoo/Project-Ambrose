@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the Login options: defaults, a revision list with spaces and empty entries, clamped limits, durations and AFK warning byte, a disabled AFK timeout and shutdown grace, an unknown duplicate login policy, and enforcement refused without any allowed revision.
+ * Tests the Login options: defaults, the server name trimmed, allowed empty and bounded, a revision list with spaces and empty entries, clamped limits, durations and AFK warning byte, a disabled AFK timeout and shutdown grace, an unknown duplicate login policy, and enforcement refused without any allowed revision.
  */
 
 #include "ConfigMgr.h"
@@ -27,6 +27,7 @@ TEST(LoginSettingsTest, DefaultsApplyWithoutOptions)
     LoginSettings const settings = LoadFrom("", problems);
     EXPECT_TRUE(problems.empty());
     EXPECT_EQ(settings, LoginSettings{});
+    EXPECT_EQ(settings.Name, "Ambrose");
     EXPECT_FALSE(settings.EnforceRevision);
     EXPECT_EQ(settings.MaxAuthAttempts, 5u);
     EXPECT_EQ(settings.Lockout, std::chrono::seconds(900));
@@ -77,4 +78,18 @@ TEST(LoginSettingsTest, EnforcementNeedsAnAllowedRevision)
     EXPECT_FALSE(settings.EnforceRevision);
     EXPECT_TRUE(settings.AllowedRevisions.empty());
     EXPECT_EQ(problems, (std::vector<std::string>{ "Login.EnforceRevision = 1 with no Login.AllowedRevision would refuse every client; revisions are not enforced" }));
+}
+
+TEST(LoginSettingsTest, TheServerNameIsTrimmedMayBeEmptyAndIsBoundedInLength)
+{
+    std::vector<std::string> problems;
+    EXPECT_EQ(LoadFrom("Login.Name = \"  Spiral Realm  \"\n", problems).Name, "Spiral Realm");
+    EXPECT_TRUE(problems.empty());
+    EXPECT_EQ(LoadFrom("Login.Name = \"   \"\n", problems).Name, "");
+    EXPECT_TRUE(problems.empty());
+    EXPECT_EQ(LoadFrom("Login.Name = " + std::string(64, 'n') + "\n", problems).Name, std::string(64, 'n'));
+    EXPECT_TRUE(problems.empty());
+    EXPECT_EQ(LoadFrom("Login.Name = " + std::string(65, 'n') + "\n", problems).Name, "Ambrose");
+    ASSERT_EQ(problems.size(), 1u);
+    EXPECT_EQ(problems.front(), "Login.Name must be at most 64 bytes; using Ambrose");
 }

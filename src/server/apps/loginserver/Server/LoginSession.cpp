@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Dispatches each client message against the live message catalog and counts it as activity, checks once a second from its network thread's update whether a client that has not chosen a character and is not being authenticated has idled past Login.AfkTimeout and drops it with MSG_DISCONNECT_LOGIN_AFK, sends the shutdown notice, derives the login salt from the session's offer, runs database callbacks on the session's own network thread when the database signals their results, fails an attempt whose callback was lost, and releases the session's account claim when it closes.
+ * Dispatches each client message against the live message catalog and counts it as activity, checks once a second from its network thread's update whether a client that has not chosen a character and is not being authenticated has idled past Login.AfkTimeout and drops it with MSG_DISCONNECT_LOGIN_AFK, sends the shutdown notice, derives the login salt from the session's offer, runs database callbacks on the session's own network thread when the database signals their results, fails an attempt or a character list whose callback was lost, and releases the session's account claim when it closes.
  */
 
 #include "LoginSession.h"
@@ -116,6 +116,8 @@ void LoginSession::ProcessCallbacks()
         ReleaseClaim();
         FailAuthentication(nullptr, AuthResult::Timeout, "its database callback was lost", false, true);
     }
+    if (_listingCharacters && _queryCallbacks.GetPendingCount() == 0)
+        FailCharacterList("its database callback was lost");
 }
 
 std::shared_ptr<LoginSession> LoginSession::SharedSelf()

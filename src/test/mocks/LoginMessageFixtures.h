@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Ambrose-authored LOGIN and GAME message definitions for login server tests: the authentication requests and replies, the AFK and shutdown messages with their field layouts, a character list request, and a game message the login server never accepts.
+ * Ambrose-authored LOGIN and GAME message definitions for login server tests: the authentication requests and replies, the AFK and shutdown messages with their field layouts, the character list request and its replies, and a game message the login server never accepts.
  */
 
 #ifndef AMBROSE_LOGINMESSAGEFIXTURES_H
@@ -16,7 +16,10 @@ namespace LoginMessageFixtures
     inline constexpr std::string_view LoginXml = R"(<?xml version="1.0" ?>
 <FixtureLoginMessages>
 <_ProtocolInfo><RECORD><ServiceID TYPE="UBYT">7</ServiceID><ProtocolType TYPE="STR">LOGIN</ProtocolType></RECORD></_ProtocolInfo>
+<MSG_CHARACTERINFO><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">3</_MsgOrder><CharacterInfo TYPE="STR"></CharacterInfo></RECORD></MSG_CHARACTERINFO>
+<MSG_CHARACTERLIST><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">4</_MsgOrder><Error TYPE="UINT"></Error></RECORD></MSG_CHARACTERLIST>
 <MSG_REQUESTCHARACTERLIST><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">8</_MsgOrder></RECORD></MSG_REQUESTCHARACTERLIST>
+<MSG_STARTCHARACTERLIST><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">12</_MsgOrder><LoginServer TYPE="STR"></LoginServer><PurchasedCharacterSlots TYPE="INT"></PurchasedCharacterSlots></RECORD></MSG_STARTCHARACTERLIST>
 <MSG_USER_AUTHEN><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">13</_MsgOrder><Rec1 TYPE="STR"></Rec1><Version TYPE="STR"></Version><Revision TYPE="STR"></Revision><DataRevision TYPE="STR"></DataRevision><CRC TYPE="STR"></CRC><MachineID TYPE="GID"></MachineID><PatchClientID TYPE="STR"></PatchClientID><PlatformChatID TYPE="STR"></PlatformChatID></RECORD></MSG_USER_AUTHEN>
 <MSG_USER_AUTHEN_RSP><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">14</_MsgOrder><Error TYPE="INT"></Error><UserID TYPE="GID"></UserID><Rec1 TYPE="STR"></Rec1><Reason TYPE="STR"></Reason><TimeStamp TYPE="STR"></TimeStamp><PayingUser TYPE="INT"></PayingUser><Flags TYPE="INT"></Flags><SupportID TYPE="STR"></SupportID><PublicPlayerName TYPE="STR"></PublicPlayerName></RECORD></MSG_USER_AUTHEN_RSP>
 <MSG_DISCONNECT_LOGIN_AFK><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">17</_MsgOrder><Warning TYPE="BYT"></Warning></RECORD></MSG_DISCONNECT_LOGIN_AFK>

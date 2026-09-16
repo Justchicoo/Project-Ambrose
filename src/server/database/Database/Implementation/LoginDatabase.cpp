@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Registers every login database statement with its name, SQL, and the connections that prepare it: the log sink, accounts, verifiers, security levels, locks, last logins, account, IP and machine bans, the one-query authentication lookup, hashed session keys, and verifier resealing that never overwrites a changed password.
+ * Registers every login database statement with its name, SQL, and the connections that prepare it: the log sink, accounts, verifiers, security levels, locks, last logins, account, IP and machine bans, the one-query authentication lookup, hashed session keys, verifier resealing that never overwrites a changed password, and an account's purchased character slots.
  */
 
 #include "LoginDatabase.h"
@@ -34,4 +34,5 @@ void LoginDatabaseConnection::DoPrepareStatements()
     PrepareStatement(LOGIN_INS_ACCOUNT_SESSION, "LOGIN_INS_ACCOUNT_SESSION", "INSERT INTO `account_session` (`account_id`, `machine_id`, `session_key_hash`, `created`, `expires`) VALUES (?, ?, ?, ?, ?) "
         "ON DUPLICATE KEY UPDATE `machine_id` = ?, `session_key_hash` = ?, `created` = ?, `expires` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_UPD_VERIFIER_RESEAL, "LOGIN_UPD_VERIFIER_RESEAL", "UPDATE `account` SET `verifier` = ?, `verifier_key_id` = ? WHERE `id` = ? AND `verifier` = ? AND `verifier_key_id` = ?", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_SEL_ACCOUNT_PURCHASED_SLOTS, "LOGIN_SEL_ACCOUNT_PURCHASED_SLOTS", "SELECT `purchased_slots` FROM `account` WHERE `id` = ?", ConnectionFlags::Both);
 }
