@@ -165,7 +165,7 @@ The server loads the user's client type dump and answers every schema question b
 
 - [x] Unit test on the synthetic dump: alias collapse, base-chain lookup, ordering by property id, enum option lookup in both directions
 - [x] Unit test: reloading from a synthetic dump with a bad hash keeps the previous registry serving and reports the mismatch
-- [x] Client-gated test: the r806919 dump loads into 2205 property classes and 140 enums with no unclassified property type; load time and memory are logged (target under 2 s, under 150 MB) (TypeRegistryClientTest; 2197 counting the PropertyClass root, loading in about 190 ms into about 10 MiB in an optimized build)
+- [x] Client-gated test: the r806919 dump loads into 2205 property classes and 140 enums with no unclassified property type; load time and memory are logged (target under 2 s, under 150 MB) (TypeRegistryClientTest; 2197 counting the PropertyClass root, loading in about 180 ms into about 11 MiB in an optimized build, resolved defaults included)
 - [x] Client-gated test: the class 'class WizClientObject' has 14 properties in id order, starting with m_inactiveBehaviors, m_globalID.m_full, m_permID
 
 **Risks**
@@ -181,8 +181,8 @@ The server loads the user's client type dump and answers every schema question b
 
 **Acceptance**
 
-- [ ] Derived-class list passes IsA; clone equals original
-- [ ] Wrong kind rejected; Bits value 5 renders 'A|C' and parses back
+- [x] Derived-class list passes IsA; clone equals original
+- [x] Wrong kind rejected; Bits value 5 renders 'A|C' and parses back
 
 ### Detailed spec from OBJ-5: Dynamic property object model
 
@@ -190,16 +190,16 @@ Any of the ~2205 client classes can be instantiated, inspected, and edited at ru
 
 **Deliverables**
 
-- src/server/shared/ObjectProperty/PropertyValue.h: variant over the ValueKinds plus std::vector<PropertyValue> for List/Vector and std::unique_ptr<PropertyObject> (or shared) for object slots, with null allowed
-- src/server/shared/ObjectProperty/PropertyObject.h/.cpp: holds a ClassInfo* and values stored by property ordinal; Get/Set by name, ordinal, or hash; IsA(base); default construction; deep Clone; equality
-- Enum helpers: integer<->string for enum and Bits properties using enum_options (Bits values are '|'-joined names)
-- src/test/server/shared/ObjectProperty/PropertyObjectTest.cpp
+- src/server/shared/ObjectProperty/PropertyValue.h: variant over the ValueKinds plus std::vector<PropertyValue> for List/Vector and std::unique_ptr<PropertyObject> (or shared) for object slots, with null allowed. Built with std::unique_ptr, one alternative per C++ storage type (so Gid shares uint64, the bit fields share int32 and uint32, and an enum is an int64), the fixed-layout value types as plain structs in PropertyTypes, and `AsObject` for the child object, because `GetObject` is a Windows header macro
+- src/server/shared/ObjectProperty/PropertyObject.h/.cpp: holds a ClassInfo* and values stored by property ordinal; Get/Set by name, ordinal, or hash; IsA(base); default construction; deep Clone; equality. Built to also keep the catalog it came from alive, edit list elements and child objects in place under the same checks (SetElementAt, EraseElementAt, EditObjectAt), report why a write is refused, refuse children from another catalog generation and writes that would make an object own itself, take a value only when its write succeeds, and compare exactly, floating values by bit pattern. Defaults are resolved and validated once at load in PropertyDefaults.h/.cpp
+- Enum helpers: integer<->string for enum and Bits properties using enum_options (Bits values are '|'-joined names). Built in PropertyEnums.h/.cpp, with every enum value kept as its 32 bits read as unsigned and Bits names chosen greedily in dump order, multi-bit options included
+- src/test/server/shared/ObjectProperty/PropertyObjectTest.cpp, plus the client-gated src/test/client/PropertyObjectClientTest.cpp, which builds all 2197 r806919 property classes with their defaults
 
 **Acceptance**
 
-- [ ] Unit test: on a synthetic class, setting a list of child objects of a derived class passes IsA checks, and clone equals the original
-- [ ] Unit test: setting the wrong kind (a string into a float property) is rejected
-- [ ] Unit test: a Bits property with value 5 renders as 'A|C' and parses back
+- [x] Unit test: on a synthetic class, setting a list of child objects of a derived class passes IsA checks, and clone equals the original
+- [x] Unit test: setting the wrong kind (a string into a float property) is rejected
+- [x] Unit test: a Bits property with value 5 renders as 'A|C' and parses back
 
 ## 3.05 Compact network codec (OBJ-8)
 

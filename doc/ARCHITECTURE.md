@@ -150,7 +150,7 @@ As a result, the project builds and its unit tests run on any machine, including
 
 Settled on 2026-09-16 under the maintainer's standing direction to decide.
 
-- `sTypeRegistry` loads the user's own type dump (format v2) from `TypeDumpPath` through nlohmann-json's SAX interface, keeping only the fields the schema needs. The file text and the raw classes live only while the load runs; the r806919 catalog then takes about 10 MiB and loads in about 190 ms in an optimized build. The dump's SHA-256 is logged with its counts, load time and approximate size so a server pins the revision it runs.
+- `sTypeRegistry` loads the user's own type dump (format v2) from `TypeDumpPath` through nlohmann-json's SAX interface, keeping only the fields the schema needs. The file text and the raw classes live only while the load runs; the r806919 catalog then takes about 11 MiB, resolved defaults included, and loads in about 180 ms in an optimized build. The dump's SHA-256 is logged with its counts, load time and approximate size so a server pins the revision it runs.
 - A load refuses the dump, reports every problem and keeps the active catalog when:
   - the JSON is broken, is not an object, or has no classes, an empty classes object, or no `class PropertyClass`;
   - a field the schema knows has the wrong JSON type, or a property lacks one of its nine fields;
@@ -165,8 +165,42 @@ Settled on 2026-09-16 under the maintainer's standing direction to decide.
   - The other kinds are enum, the fixed-layout value types the codec knows (Vector3D, Quaternion, Matrix3x3, Euler, Color, Point<int>, Point<float>, Size<int>, Rect<int>, Rect<float>, SerializedBuffer, SimpleVert, SimpleFace), primitive, std container, and opaque for the remaining classes without reflected properties.
 - Classes list their base chain nearest first, and their properties include the inherited ones, in id order, found by hash or name without a scan. The catalog hands out only const classes.
 - Property types classify into value kinds: the primitives, which need no entry of their own in the dump, `bi<N>` and `bui<N>` bit fields of 1 to 32 bits, enums, property-class objects, and the value types.
-- Enum options belong to the property, not the enum type, because the dump attaches them per property and they differ between properties of the same enum. Integer options are found by name or value through sorted indexes, the first listed name winning when values repeat. `__DEFAULT` is kept as the property's default, as an integer or text as the dump gives it, `__BASECLASS` as a text hint, and other text options as text.
+- Enum options belong to the property, not the enum type, because the dump attaches them per property and they differ between properties of the same enum. Integer options are 32-bit values kept in one form, their bits read as unsigned, so -2 is stored as 4294967294; a value outside INT32_MIN to UINT32_MAX refuses the load. They are found by name or value through sorted indexes, the first listed name winning when values repeat. `__DEFAULT` is kept as the dump gives it, an integer or text, and also resolved into the value new objects start with, `__BASECLASS` is kept as a text hint, and other text options as text.
 - A load builds a new catalog generation off to the side and swaps it in atomically. Code holds a shared pointer to the catalog it started with, so objects built from an older generation stay valid after a swap. 4.15's reload triggers call `LoadFromFile` again.
+- A load also refuses a class that holds an object of its own class inline, directly or through other classes, because no real layout can do that and building its defaults would never end, and a `__DEFAULT` that does not resolve to a value of its property's type.
+
+### Dynamic property objects
+
+Settled on 2026-09-16 under the maintainer's standing direction to decide.
+
+- A `PropertyObject` is an instance of one property class from one catalog generation. It keeps a shared pointer to that catalog and its values in property id order. Each class knows the catalog it belongs to, so `PropertyObject::Create` refuses a class from another catalog with a pointer comparison, and refuses types that are not property classes.
+- A `PropertyValue` holds one alternative per C++ storage type rather than one per value kind:
+  - Gid shares `uint64`;
+  - signed and unsigned bit fields and s24/u24 share `int32` and `uint32`;
+  - an enum is an `int64` holding its 32 bits read as unsigned, from 0 to 4294967295, so one value has one form;
+  - lists and vectors are a `std::vector` of values;
+  - a child object is a `std::unique_ptr`, so an object tree has one owner and copies are deep.
+- A const value hands out a child only as `PropertyObject const*`, so an object shared read-only cannot be changed through it.
+- Every write is checked:
+  - the value must be the property's exact alternative;
+  - a list is checked element by element;
+  - bit fields must fit their width, and an enum its 32-bit range;
+  - an inline object cannot be null;
+  - a child must be of the property's class or derive from it;
+  - a child must come from the same catalog generation as the property's class. A child from another generation is refused as `OtherCatalog`, so build children with the parent's `GetCatalog()`.
+  - a write that would make an object own itself, directly or through its children, is refused.
+- The setters take the value as an rvalue and move it in only when the write succeeds. A refused write changes neither the object nor the caller's value.
+- A child object or list element can be edited in place, so a large list is never copied to change one entry:
+  - `EditObjectAt` hands out a child, whose own writes are checked and whose class cannot change.
+  - `SetElementAt` replaces an element, or appends one when the index equals the list's size, under the same checks.
+  - `EraseElementAt` removes an element.
+- Defaults are resolved once, when the type dump loads, and a new object copies them. Inline children are created and pointers start null. Resolution follows these rules:
+  - a number, enum or Bits default written as text resolves through the property's option names, so `INSIDE` and `A|C` work, and a text number parses as a number;
+  - an integer past a signed type's range wraps to the same bits, so 4294967295 on an `int` is -1, and a bit field keeps its low bits, so 15 on a `bi4` is -1;
+  - an integer default on a text property is ignored, because the dump writes 0 there;
+  - a default on a list, an object or a value type refuses the load.
+- Equality and cloning are deep and exact. Floating values compare by bit pattern, so an object holding a NaN equals its clone, and 0.0 differs from -0.0.
+- An enum value renders as its option name. A Bits value renders as an exact option name, or else as every nonzero option, in dump order, whose bits it holds and no earlier chosen option covered, joined by `|`; multi-bit options are included, and a duplicate value keeps its first name. A value with bits no option names does not render as a name, and a caller shows the number instead.
 
 ### Live reload and live settings
 

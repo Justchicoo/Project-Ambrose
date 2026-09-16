@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the type registry on small dumps written by the test with invented classes: aliases collapsed into their class, into an unprefixed template class, or standing in for a missing one; base chains; properties in id order found by hash and name; per-property enum options in both directions with text options, integer and text defaults in dump order and the base class hint; value, primitive and bit kinds; the class kind counts; and loads refused while the active catalog keeps serving: bad hashes, unknown bases and types, broken, empty or misshapen JSON, fields of the wrong JSON type or missing, duplicates, id gaps, oversized values, bad containers, keys that differ from the hash, inconsistent base chains and the wrong version.
+ * Tests the type registry on small dumps written by the test with invented classes: aliases collapsed into their class, into an unprefixed template class, or standing in for a missing one; base chains; properties in id order found by hash and name; per-property enum options in both directions with text options, integer and text defaults in dump order and the base class hint; value, primitive and bit kinds; the class kind counts; and loads refused while the active catalog keeps serving: bad hashes, unknown bases and types, broken, empty or misshapen JSON, fields of the wrong JSON type or missing, duplicates, id gaps, oversized values, bad containers, keys that differ from the hash, inconsistent base chains, classes that hold themselves inline and the wrong version.
  */
 
 #include "StringHash.h"
@@ -200,14 +200,17 @@ TEST_F(TypeRegistryTest, EnumOptionsLookUpInBothDirections)
     EXPECT_TRUE(mood->HasFlag(PropertyFlag::Transmit));
     EXPECT_FALSE(mood->HasFlag(PropertyFlag::Bits));
     EXPECT_EQ(mood->FindOptionValue("kAngry"), 4);
-    EXPECT_EQ(mood->FindOptionValue("kNegative"), -2);
+    EXPECT_EQ(mood->FindOptionValue("kNegative"), 4294967294);
     EXPECT_EQ(mood->FindOptionName(0), "kCalm");
-    EXPECT_EQ(mood->FindOptionName(-2), "kNegative");
+    EXPECT_EQ(mood->FindOptionName(4294967294), "kNegative");
+    EXPECT_FALSE(mood->FindOptionName(-2));
     EXPECT_FALSE(mood->FindOptionValue("kHappy"));
     EXPECT_FALSE(mood->FindOptionName(7));
     EXPECT_EQ(mood->Options.size(), 3u);
     ASSERT_TRUE(mood->Default);
     EXPECT_EQ(std::get<std::string>(*mood->Default), "kCalm");
+    ASSERT_TRUE(mood->DefaultValue.Holds<int64>());
+    EXPECT_EQ(*mood->DefaultValue.GetIf<int64>(), 0);
     EXPECT_EQ(mood->OptionBaseClass, "TestMoodTable");
     ASSERT_EQ(mood->TextOptions.size(), 1u);
     EXPECT_EQ(mood->TextOptions[0].Name, "Loud Voice");
@@ -246,6 +249,10 @@ TEST_F(TypeRegistryTest, DefaultsKeepTheirTypeWhereverTheyAppearAndDuplicateValu
     EXPECT_TRUE(opacityInfo.Options.empty());
     ASSERT_TRUE(opacityInfo.Default);
     EXPECT_EQ(std::get<std::string>(*opacityInfo.Default), "1.0");
+    ASSERT_TRUE(opacityInfo.DefaultValue.Holds<float>());
+    EXPECT_EQ(*opacityInfo.DefaultValue.GetIf<float>(), 1.0f);
+    ASSERT_TRUE(axisInfo.DefaultValue.Holds<int64>());
+    EXPECT_EQ(*axisInfo.DefaultValue.GetIf<int64>(), 1);
 }
 
 TEST_F(TypeRegistryTest, EmptyOrMisshapenDumpsAreRefused)
@@ -369,6 +376,51 @@ TEST_F(TypeRegistryTest, StructuralProblemsAreAllReported)
     std::vector<std::string> const duplicated = Refuse(text);
     ASSERT_EQ(duplicated.size(), 1u);
     EXPECT_EQ(duplicated[0], "class TestDerived is listed twice");
+
+    Json defaults = SyntheticDump();
+    Json& derived = defaults["classes"][derivedKey]["properties"];
+    derived["m_mood"]["enum_options"]["__DEFAULT"] = "kAngyr";
+    derived["m_flags"]["enum_options"] = Json{ { "__DEFAULT", 32 } };
+    derived["m_position"]["enum_options"] = Json{ { "__DEFAULT", "1,2,3" } };
+    derived["m_children"]["enum_options"] = Json{ { "__DEFAULT", 0 } };
+    defaults["classes"][baseKey]["properties"]["m_id"]["enum_options"] = Json{ { "__DEFAULT", "many" } };
+    defaults["classes"][derivedKey]["properties"]["m_id"]["enum_options"] = Json{ { "__DEFAULT", "many" } };
+    std::vector<std::string> refusedDefaults = Refuse(defaults.dump());
+    std::sort(refusedDefaults.begin(), refusedDefaults.end());
+    std::vector<std::string> expectedDefaults{
+        "class TestBase property m_id has the default 'many', which does not resolve to a value of type unsigned __int64",
+        "class TestDerived property m_children has the default 0, but a list property takes none",
+        "class TestDerived property m_flags has the default 32, which does not resolve to a value of type bui5",
+        "class TestDerived property m_id has the default 'many', which does not resolve to a value of type unsigned __int64",
+        "class TestDerived property m_mood has the default 'kAngyr', which does not resolve to a value of type enum TestMood",
+        "class TestDerived property m_position has the default '1,2,3', but a Vector3D property takes none" };
+    std::sort(expectedDefaults.begin(), expectedDefaults.end());
+    EXPECT_EQ(refusedDefaults, expectedDefaults);
+
+    Json huge = SyntheticDump();
+    huge["classes"][derivedKey]["properties"]["m_mood"]["enum_options"]["kHuge"] = int64{ 1 } << 33;
+    EXPECT_EQ(Refuse(huge.dump()), (std::vector<std::string>{ "class TestDerived property m_mood has option kHuge with the value 8589934592, which does not fit 32 bits" }));
+
+    Json self = SyntheticDump();
+    Json nested = Json::object();
+    nested["m_inner"] = Property("class TestNest", "m_inner", 0);
+    AddClass(self["classes"], "class TestNest", Json::array({ "PropertyClass" }), nested);
+    EXPECT_EQ(Refuse(self.dump()), (std::vector<std::string>{ "class TestNest holds itself inline through class TestNest.m_inner" }));
+
+    Json loop = SyntheticDump();
+    Json first = Json::object();
+    first["m_id"] = Property("int", "m_id", 0);
+    first["m_second"] = Property("class TestLoopB", "m_second", 1);
+    AddClass(loop["classes"], "class TestLoopA", Json::array({ "PropertyClass" }), first);
+    Json second = Json::object();
+    second["m_first"] = Property("class TestLoopA", "m_first", 0);
+    second["m_self"] = Property("class SharedPointer<class TestLoopB>", "m_self", 1, "Static", 31, true);
+    second["m_many"] = Property("class TestLoopB", "m_many", 2, "List");
+    AddClass(loop["classes"], "class TestLoopB", Json::array({ "PropertyClass" }), second);
+    std::vector<std::string> const looped = Refuse(loop.dump());
+    ASSERT_EQ(looped.size(), 1u);
+    EXPECT_TRUE(looped[0] == "class TestLoopA holds itself inline through class TestLoopA.m_second -> class TestLoopB.m_first"
+        || looped[0] == "class TestLoopB holds itself inline through class TestLoopB.m_first -> class TestLoopA.m_second") << looped[0];
 }
 
 TEST_F(TypeRegistryTest, ASuccessfulLoadStartsANewGenerationWhileOlderCatalogsStayUsable)

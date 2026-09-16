@@ -1,9 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Streams a type dump through a JSON SAX handler that keeps only the fields the schema needs and refuses a known field of the wrong JSON type, then validates versions, duplicates, hashes, property ids and base chains, collapses pointer and SharedPointer aliases into their classes, matching unprefixed template names before inventing a class, classifies classes and property types, indexes enum options, and reports every problem with the class and property it belongs to.
+ * Streams a type dump through a JSON SAX handler that keeps only the fields the schema needs and refuses a known field of the wrong JSON type, then validates versions, duplicates, hashes, property ids, 32-bit option values, base chains, defaults and classes that hold themselves inline, collapses pointer and SharedPointer aliases into their classes, matching unprefixed template names before inventing a class, classifies classes and property types, indexes enum options, and reports every problem with the class and property it belongs to.
  */
 
 #include "TypeDumpLoader.h"
+#include "PropertyDefaults.h"
+#include "PropertyEnums.h"
 #include "StringHash.h"
 #include "StringUtil.h"
 
@@ -604,6 +606,7 @@ TypeCatalogPtr TypeCatalogBuilder::Build(TypeDumpLoader::RawDump dump, std::stri
         info->Name = std::move(name);
         info->Hash = StringHash::KiStringHash(info->Name);
         info->Kind = Classify(info->Name, source);
+        info->Owner = catalog.get();
         ClassInfo* const created = info.get();
         byCanonical.emplace(info->Name, created);
         sources.emplace_back(created, &source);
@@ -690,7 +693,12 @@ TypeCatalogPtr TypeCatalogBuilder::Build(TypeDumpLoader::RawDump dump, std::stri
                 else if (optionName == "__BASECLASS")
                     property.OptionBaseClass = std::get<std::string>(value);
                 else if (int64 const* const number = std::get_if<int64>(&value))
-                    property.Options.push_back(EnumOption{ optionName, *number });
+                {
+                    std::optional<int64> const normalized = PropertyEnums::Normalize(*number);
+                    if (!normalized)
+                        errors.push_back(fmt::format("{} property {} has option {} with the value {}, which does not fit 32 bits", info->Name, property.Name, optionName, *number));
+                    property.Options.push_back(EnumOption{ optionName, normalized.value_or(0) });
+                }
                 else
                     property.TextOptions.push_back(TextOption{ optionName, std::get<std::string>(value) });
             }
@@ -750,6 +758,57 @@ TypeCatalogPtr TypeCatalogBuilder::Build(TypeDumpLoader::RawDump dump, std::stri
     if (errors.size() != initialErrors)
         return nullptr;
 
+    for (std::unique_ptr<ClassInfo> const& info : catalog->_classes)
+    {
+        for (PropertyInfo& property : info->Properties)
+        {
+            std::string problem;
+            if (std::optional<PropertyValue> resolved = PropertyDefaults::Resolve(property, problem))
+                property.DefaultValue = std::move(*resolved);
+            else
+                errors.push_back(fmt::format("{} property {} {}", info->Name, property.Name, problem));
+        }
+    }
+
+    enum class Visit : uint8 { New, Open, Done };
+    std::unordered_map<ClassInfo const*, Visit> visits;
+    for (std::unique_ptr<ClassInfo> const& root : catalog->_classes)
+    {
+        if (visits[root.get()] != Visit::New)
+            continue;
+        std::vector<std::pair<ClassInfo const*, std::size_t>> path{ { root.get(), 0 } };
+        visits[root.get()] = Visit::Open;
+        while (!path.empty())
+        {
+            auto& [current, next] = path.back();
+            if (next == current->Properties.size())
+            {
+                visits[current] = Visit::Done;
+                path.pop_back();
+                continue;
+            }
+            PropertyInfo const& property = current->Properties[next++];
+            if (property.Kind != ValueKind::Object || property.Container != ContainerKind::Static || property.Pointer || !property.Type)
+                continue;
+            Visit& state = visits[property.Type];
+            if (state == Visit::New)
+            {
+                state = Visit::Open;
+                path.emplace_back(property.Type, 0);
+            }
+            else if (state == Visit::Open)
+            {
+                auto const start = std::find_if(path.begin(), path.end(), [&property](auto const& step) { return step.first == property.Type; });
+                std::string chain;
+                for (auto step = start; step != path.end(); ++step)
+                    chain += fmt::format("{}{}.{}", chain.empty() ? "" : " -> ", step->first->Name, step->first->Properties[step->second - 1].Name);
+                errors.push_back(fmt::format("{} holds itself inline through {}", property.Type->Name, chain));
+            }
+        }
+    }
+    if (errors.size() != initialErrors)
+        return nullptr;
+
     std::size_t bytes = sizeof(TypeCatalog);
     for (std::unique_ptr<ClassInfo> const& info : catalog->_classes)
     {
@@ -766,6 +825,10 @@ TypeCatalogPtr TypeCatalogBuilder::Build(TypeDumpLoader::RawDump dump, std::stri
                 + (property.OptionsByName.capacity() + property.OptionsByValue.capacity()) * sizeof(uint32) + property.TextOptions.capacity() * sizeof(TextOption);
             if (property.Default && std::holds_alternative<std::string>(*property.Default))
                 bytes += Capacity(std::get<std::string>(*property.Default));
+            if (std::string const* const text = property.DefaultValue.GetIf<std::string>())
+                bytes += Capacity(*text);
+            if (std::u16string const* const text = property.DefaultValue.GetIf<std::u16string>())
+                bytes += text->capacity() * sizeof(char16_t);
             for (EnumOption const& option : property.Options)
                 bytes += Capacity(option.Name);
             for (TextOption const& option : property.TextOptions)
