@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds client_tests, which read the user's own client install or type dump and carry the CTest label client, including the login message table check when the login library is built.
+# Builds client_tests, which read the user's own client install or type dump and carry the CTest label client, including the login message table check when the login library is built, and runs the whole-archive sweep on its own because it uses every hardware thread.
 file(GLOB client_test_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 if(NOT TARGET login)
     list(FILTER client_test_sources EXCLUDE REGEX "LoginMessageTableClientTest")
@@ -20,7 +20,14 @@ if(TARGET login)
     target_link_libraries(client_tests PRIVATE login)
 endif()
 
+set(client_serial_tests "BindFileClientTest.EveryRootWadBindFileDecodesOrNamesItsUnknownRootClass")
 gtest_discover_tests(client_tests
     DISCOVERY_MODE PRE_TEST
     DISCOVERY_TIMEOUT 120
+    TEST_FILTER "-${client_serial_tests}"
     PROPERTIES LABELS client)
+gtest_discover_tests(client_tests
+    DISCOVERY_MODE PRE_TEST
+    DISCOVERY_TIMEOUT 120
+    TEST_FILTER "${client_serial_tests}"
+    PROPERTIES LABELS client RUN_SERIAL TRUE)

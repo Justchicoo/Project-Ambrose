@@ -273,7 +273,7 @@ Client-sent ObjectProperty blobs cannot crash, hang, or exhaust the server.
 **Acceptance**
 
 - [x] A view naming a missing property fails startup precisely (TypedViewTest)
-- [x] Client-gated: first views bind against r806919 (TypedViewClientTest; reading the decoded hat waits for 3.11)
+- [x] Client-gated: first views bind against r806919 (TypedViewClientTest; BindFileClientTest reads the decoded hat through the views)
 
 ### Detailed spec from OBJ-10: Typed wrappers over dynamic objects
 
@@ -290,7 +290,7 @@ Game code uses compile-checked C++ accessors for the few dozen classes it touche
 
 - [x] Unit test: a view over a synthetic class binds; a view naming a nonexistent property fails startup with a precise message (TypedViewTest)
 - [x] Unit test: reloading a synthetic registry that drops a bound property refuses the swap and leaves the views bound to the old registry (TypedViewTest)
-- [ ] Client-gated test: all first views bind against r806919; reading WizItemTemplate::templateId() on the decoded hat returns 1652259 (binding passes in TypedViewClientTest; decoding the hat needs 3.11's BINd files)
+- [x] Client-gated test: all first views bind against r806919; reading WizItemTemplate::templateId() on the decoded hat returns 1652259 (binding in TypedViewClientTest; the decoded hat in BindFileClientTest, 3.11)
 - [x] Unit test: accessing a field through a view costs one indexed load (no hash lookup per access) (TypedViewTest checks each cached ordinal, that a read returns the object's stored value itself, and that a view given another ordinal reads that property instead)
 
 **Risks**
@@ -420,9 +420,9 @@ Every BINd client file (templates, spells, states, decks, the manifest) decodes 
 **Acceptance**
 
 - [x] Unit test: hand-assembled versionable bytes for a synthetic class decode correctly, including an unknown property (skipped) and an unknown nested class (skipped, reported) (VersionableDecodeTest)
-- [ ] Client-gated test: TemplateManifest.xml decodes to a TemplateManifest with 137423 TemplateLocation entries, the first being {ObjectData/PlayerObject.xml, 1} (needs 3.11's BINd files)
-- [ ] Client-gated test: ObjectData/CrownItems/Series58/Hats/Crowns-S58-Hats-L110-BS-008-01.xml decodes to a WizItemTemplate with m_templateID 1652259, m_displayName 'Items_00028316', a JewelSocketBehaviorTemplate holding 3 sockets, and m_equipRequirements of ReqSchoolOfFocus 'Balance' plus ReqMagicLevel 110 (needs 3.11's BINd files)
-- [ ] Client-gated sweep over all 134076 Root.wad BINd files: zero crashes and zero property-size mismatches on known classes; a report of unknown class hashes with counts and paths (feeds OBJ-11) (3.11; a scratch sweep before committing decoded 134,635 of the 134,640 BINd files with the Save mask, with no size mismatch, unknown or unselected property, invalid object, unsupported type or unknown enum name, 26,921 unknown nested classes reported, and 5 files refused because the dump does not list their root class; re-encoding the 114,687 issue-free files with defaults as clean reproduced 114,342 byte for byte)
+- [x] Client-gated test: TemplateManifest.xml decodes to a TemplateManifest with 137423 TemplateLocation entries, the first being {ObjectData/PlayerObject.xml, 1} (BindFileClientTest, 3.11)
+- [x] Client-gated test: ObjectData/CrownItems/Series58/Hats/Crowns-S58-Hats-L110-BS-008-01.xml decodes to a WizItemTemplate with m_templateID 1652259, m_displayName 'Items_00028316', a JewelSocketBehaviorTemplate holding 3 sockets, and m_equipRequirements of ReqSchoolOfFocus 'Balance' plus ReqMagicLevel 110 (BindFileClientTest, 3.11)
+- [x] Client-gated sweep over all 134076 Root.wad BINd files: zero crashes and zero property-size mismatches on known classes; a report of unknown class hashes with counts and paths (feeds OBJ-11) (BindFileClientTest, 3.11, over the 134,640 BINd files r806919 actually holds; a scratch sweep before committing 3.10 decoded 134,635 of the 134,640 BINd files with the Save mask, with no size mismatch, unknown or unselected property, invalid object, unsupported type or unknown enum name, 26,921 unknown nested classes reported, and 5 files refused because the dump does not list their root class; re-encoding the 114,687 issue-free files with defaults as clean reproduced 114,342 byte for byte)
 
 **Risks**
 
@@ -437,9 +437,9 @@ Every BINd client file (templates, spells, states, decks, the manifest) decodes 
 
 **Acceptance**
 
-- [ ] TemplateManifest.xml gives 137423 TemplateLocation entries, first {ObjectData/PlayerObject.xml, 1}
-- [ ] Crowns-S58-Hats-L110-BS-008-01.xml is WizItemTemplate 1652259, 'Items_00028316', 3 sockets, ReqSchoolOfFocus Balance + ReqMagicLevel 110
-- [ ] Sweep of 134076 BINd: zero crashes, unknown-class report
+- [x] TemplateManifest.xml gives 137423 TemplateLocation entries, first {ObjectData/PlayerObject.xml, 1} (BindFileClientTest)
+- [x] Crowns-S58-Hats-L110-BS-008-01.xml is WizItemTemplate 1652259, 'Items_00028316', 3 sockets, ReqSchoolOfFocus Balance + ReqMagicLevel 110 (BindFileClientTest, through the typed views)
+- [x] Sweep of 134076 BINd: zero crashes, unknown-class report (BindFileClientTest; corrected: r806919's Root.wad holds 134,640 BINd files among 173,088 entries. 134,635 decode with no issue but 26,921 uses of 104 classes the dump does not list, which the test reports with counts and first paths, and the other 5 have a root class it does not list)
 
 ### Detailed spec from OBJ-6: Versionable BINd decoder
 
@@ -447,25 +447,28 @@ Every BINd client file (templates, spells, states, decks, the manifest) decodes 
 
 **Deliverables**
 
-- src/server/shared/ObjectProperty/ObjectSerializer.h/.cpp, Decode path. Serializer flags: SerializeFlags 1, CompactLength 2, StringEnums 4, Compress 8, ForceDirtyEncode 16
-- BindFile.h/.cpp: magic 'BINd'; u32 flags; if flags&8, one padding bit (so a byte), u32 uncompressed size, then a zlib stream (data at offset 13)
-- Versionable framing: u32 class hash (0 means null); u32 object size in bits counted from its own start; repeated {u32 property size in bits, u32 property hash, value}. Unknown property hashes are skipped by size, unknown classes are skipped by size and recorded, and per-property size mismatches resync to the declared end
-- CompactLength encoding for strings, wstrings and container counts: 1 bit, then 7 bits if the bit is 0 or 31 bits if it is 1 (wstring count is in UTF-16 units). StringEnums: enum and Prop_Bits properties are carried as strings. Fixed math types are byte-aligned float/int/byte tuples
-- A decode-limits struct (max depth, max elements, max bytes)
-- src/tools/bindecode: a CLI that prints any WAD entry as JSON for debugging, reading the user's install
-- src/test/server/shared/ObjectProperty/VersionableDecodeTest.cpp with hand-built golden bytes for synthetic classes
+- src/server/shared/ObjectProperty/ObjectSerializer.h/.cpp, Decode path. Serializer flags: SerializeFlags 1, CompactLength 2, StringEnums 4, Compress 8, ForceDirtyEncode 16. Built in 3.10
+- BindFile.h/.cpp: magic 'BINd'; u32 flags; if flags&8, one padding bit (so a byte), u32 uncompressed size, then a zlib stream (data at offset 13). Built for reading and writing:
+  - reading refuses a file that is not BINd, ends inside its header, carries unknown flag bits, would inflate past MaxInflatedSize or holds a corrupt stream, and decodes the object with the Save mask under generous default limits for the user's own data, returning the root class hash and the decode's issues;
+  - writing sets SerializeFlags and, as the client's own files do, leaves out dirty-encoded properties at their defaults unless ForceDirtyEncode is set.
+  BindSweep.h/.cpp sweeps every BINd entry of an archive on every hardware thread and merges the tallies in entry order
+- Versionable framing: u32 class hash (0 means null); u32 object size in bits counted from its own start; repeated {u32 property size in bits, u32 property hash, value}. Unknown property hashes are skipped by size, unknown classes are skipped by size and recorded, and per-property size mismatches resync to the declared end. Built in 3.10
+- CompactLength encoding for strings, wstrings and container counts: 1 bit, then 7 bits if the bit is 0 or 31 bits if it is 1 (wstring count is in UTF-16 units). StringEnums: enum and Prop_Bits properties are carried as strings. Fixed math types are byte-aligned float/int/byte tuples. Built in 3.10
+- A decode-limits struct (max depth, max elements, max bytes). The SerializerLimits of 3.05, with BindFile::GetDefaultLimits raising every limit to its ceiling for the user's own data
+- src/tools/bindecode: a CLI that prints any WAD entry as JSON for debugging, reading the user's install. Built with --client, --wad and --type-dump defaulting to AMBROSE_CLIENT_DIR, Root.wad and AMBROSE_TYPE_DUMP_PATH. It prints entries as ordered JSON through PropertyJson.h/.cpp and their issues on standard error, and --compact prints one line per entry. --list prints entry names containing a pattern, and --sweep reports failures, unknown classes and other issues grouped by kind and hash on --threads threads (1-1024). It exits 0, 1 when something cannot be read or decoded, and 2 on bad usage, a sweep counting files that fail only for an unknown root class as a success. Arguments and environment variables are read as UTF-8 on Windows too. The BinDecode CTest checks the usage paths, and with the client variables set also a listing, the hat's JSON and a missing entry
+- src/test/server/shared/ObjectProperty/VersionableDecodeTest.cpp with hand-built golden bytes for synthetic classes. Built in 3.10, with BindFileTest (headers, refusals, the dirty rule and a synthetic archive swept on 1, 3 and 16 threads), PropertyJsonTest and the client-gated BindFileClientTest added here
 
 **Acceptance**
 
-- [ ] Unit test: hand-assembled versionable bytes for a synthetic class decode correctly, including an unknown property (skipped) and an unknown nested class (skipped, reported)
-- [ ] Client-gated test: TemplateManifest.xml decodes to a TemplateManifest with 137423 TemplateLocation entries, the first being {ObjectData/PlayerObject.xml, 1}
-- [ ] Client-gated test: ObjectData/CrownItems/Series58/Hats/Crowns-S58-Hats-L110-BS-008-01.xml decodes to a WizItemTemplate with m_templateID 1652259, m_displayName 'Items_00028316', a JewelSocketBehaviorTemplate holding 3 sockets, and m_equipRequirements of ReqSchoolOfFocus 'Balance' plus ReqMagicLevel 110
-- [ ] Client-gated sweep over all 134076 Root.wad BINd files: zero crashes and zero property-size mismatches on known classes; a report of unknown class hashes with counts and paths (feeds OBJ-11)
+- [x] Unit test: hand-assembled versionable bytes for a synthetic class decode correctly, including an unknown property (skipped) and an unknown nested class (skipped, reported) (VersionableDecodeTest, 3.10)
+- [x] Client-gated test: TemplateManifest.xml decodes to a TemplateManifest with 137423 TemplateLocation entries, the first being {ObjectData/PlayerObject.xml, 1} (BindFileClientTest)
+- [x] Client-gated test: ObjectData/CrownItems/Series58/Hats/Crowns-S58-Hats-L110-BS-008-01.xml decodes to a WizItemTemplate with m_templateID 1652259, m_displayName 'Items_00028316', a JewelSocketBehaviorTemplate holding 3 sockets, and m_equipRequirements of ReqSchoolOfFocus 'Balance' plus ReqMagicLevel 110 (BindFileClientTest)
+- [x] Client-gated sweep over all 134076 Root.wad BINd files: zero crashes and zero property-size mismatches on known classes; a report of unknown class hashes with counts and paths (feeds OBJ-11) (BindFileClientTest; corrected to the 134,640 BINd files r806919 holds, with no issue other than unknown classes and 5 files whose root class the dump does not list)
 
 **Risks**
 
 - My sweep showed mismatches on CharacterElement.m_flags (Bits), AvatarTextureOption.m_textures and TemplateLocation.m_filename until two rules were applied: Bits as strings, and a 31-bit long-length form. Imcodec's reference reader uses 15 bits for long strings, which looks like a latent bug. Golden tests must cover strings of 128 bytes or more
-- Matrix3x3 serialized width is unconfirmed: Imcodec reads 12 floats, but the name suggests 9
+- Matrix3x3 serialized width is unconfirmed: Imcodec reads 12 floats, but the name suggests 9. Still unconfirmed: no Root.wad file holds one
 
 ## 3.12 Text XML ObjectProperty reader (OBJ-13)
 

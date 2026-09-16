@@ -22,3 +22,7 @@ target_link_libraries(common
         genrev
         ${ambrose_botan_target}
         ZLIB::ZLIB)
+
+if(WIN32)
+    target_link_libraries(common PRIVATE shell32)
+endif()

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Portable reads and writes of process environment variables, and the folder holding the running executable.
+ * Portable reads and writes of process environment variables and the command line arguments, both as UTF-8 on every platform, switching the console to UTF-8, and the folder holding the running executable.
  */
 
 #ifndef AMBROSE_ENVIRONMENT_H
@@ -9,12 +9,15 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace Ambrose
 {
     std::optional<std::string> GetEnv(std::string const& name);
     bool SetEnv(std::string const& name, std::string const& value);
     bool UnsetEnv(std::string const& name);
+    std::vector<std::string> GetArguments(int argc, char** argv);
+    void UseUtf8Console();
     std::filesystem::path GetExecutableDirectory();
 }
 

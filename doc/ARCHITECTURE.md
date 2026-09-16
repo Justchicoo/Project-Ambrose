@@ -253,6 +253,30 @@ Settled on 2026-09-16 under the maintainer's standing direction to decide. The c
 - Message fields that carry objects are described in one table, `ObjectFields`: the classes each field's object may be, whether its blob is enveloped, and whether it may be empty. `DecodeField` opens the envelope within `MaxInflatedSize` and holds the root to the field's classes. `EncodeField` refuses an object the field cannot carry and wraps the blob when the field is enveloped. The table is code because it describes how a client revision parses its messages, and it changes only with the revision.
 - Decoders of untrusted data are fuzzed two ways. Both share seeds made of a mode byte and a golden blob: bare, with text enums, with compact lengths, versionable with and without both, or inside a stored or compressed envelope decoded through `DecodeField`. `DecoderFuzzTest` runs seeded mutations in every build, a million under AddressSanitizer, and checks that no decode allocates more in total than the memory budget and inflation limit allow. The `linux-clang-fuzz` preset builds libFuzzer targets with coverage instrumentation, AddressSanitizer and UBSan, and CI runs each from its seed corpus. Anything that decodes must re-encode and decode back equal.
 
+### BINd files
+
+Settled on 2026-09-16 under the maintainer's standing direction to decide.
+
+- `BindFile` reads and writes the client's BINd data files: the `BINd` magic, the u32 serializer flags, and for a compressed file a padding byte, the u32 inflated size and a zlib stream at offset 13, around one versionable object.
+- Reading:
+  - it refuses a file that is not BINd, ends inside its header, carries flag bits no mode uses, would inflate past `MaxInflatedSize`, or holds a stream that does not inflate to exactly its size;
+  - it decodes with the file's own length and enum modes and the Save mask, and refuses a null root object;
+  - it returns the root class hash, so a file whose root class the dump does not list can still be reported by hash.
+  `BindFile::GetDefaultLimits` raises every limit to its ceiling because the data is the user's own install: the template manifest alone holds 137,423 objects and inflates to 11 MiB. A caller loading untrusted files passes its own limits.
+- Writing uses the same limits, leaves out a dirty-encoded property equal to its default, the rule that reproduces the client's files, unless `ForceDirtyEncode` is set, and compresses when `Compress` is set.
+- `BindSweep` decodes every BINd entry of an archive on every hardware thread. Workers take entries one index at a time, read them through the archive's lock, decode in parallel and keep their own tallies. The tallies are merged in entry order, so the report is identical however the work was split. It lists:
+  - failures;
+  - unknown classes with their use and file counts and the first file and path each appears at;
+  - every other issue, grouped the same way by kind and hash, so a sweep against a dump from another revision stays small.
+  An entry that throws counts as unreadable or failed, and no exception leaves a worker. If some workers cannot be started, the sweep runs on those that did. On r806919's Root.wad it covers 173,088 entries and 134,640 BINd files in about 80 seconds in a debug build.
+- `PropertyJson` renders an object as ordered JSON for tools and debugging:
+  - `$class` comes first, then the properties in id order;
+  - enums and flag integers appear as option names when they have them;
+  - wide text becomes UTF-8, and math and color types become arrays;
+  - text that is not UTF-8 is repaired with replacement characters rather than refused;
+  - NaN and infinities become the strings `NaN`, `Infinity` and `-Infinity`, so they cannot be mistaken for a null value.
+- `bindecode` (src/tools/bindecode) prints named entries of an archive as JSON with their issues on standard error, lists entry names, or sweeps the archive. It reads only the user's own install and type dump, from `--client` and `--type-dump` or `AMBROSE_CLIENT_DIR` and `AMBROSE_TYPE_DUMP_PATH`, and exits 0, 1 on a read or decode failure, or 2 on bad usage. A sweep exits 0 when the only failures are files whose root class the dump does not list and no issue other than unknown classes is reported. Like every app, it takes its arguments and environment variables as UTF-8: `Ambrose::GetArguments` reads the wide command line on Windows, and `Ambrose::GetEnv` and `SetEnv` use the wide environment there. A path such as a user folder with accented letters therefore opens instead of failing to convert.
+
 ### Typed views
 
 Settled on 2026-09-16 under the maintainer's standing direction to decide.

@@ -7,6 +7,7 @@
 #include "ConfigMgr.h"
 #include "DatabaseEnv.h"
 #include "DatabaseLoader.h"
+#include "Environment.h"
 #include "Log.h"
 #include "LogConfig.h"
 #include "ObjectSerializer.h"
@@ -91,5 +92,5 @@ namespace
 int main(int argc, char** argv)
 {
     GameServerApp app;
-    return app.Run(std::vector<std::string>(argv, argv + argc));
+    return app.Run(Ambrose::GetArguments(argc, argv));
 }

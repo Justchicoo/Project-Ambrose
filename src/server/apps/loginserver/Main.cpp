@@ -9,12 +9,13 @@
 #include "ConfigMgr.h"
 #include "DatabaseEnv.h"
 #include "DatabaseLoader.h"
+#include "Environment.h"
 #include "Log.h"
 #include "LogConfig.h"
 #include "LoginMessageTable.h"
 #include "LoginMgr.h"
-#include "LoginShutdown.h"
 #include "LoginSession.h"
+#include "LoginShutdown.h"
 #include "MessageRegistry.h"
 #include "NetworkSettings.h"
 #include "ObjectSerializer.h"
@@ -165,5 +166,5 @@ namespace
 int main(int argc, char** argv)
 {
     LoginServerApp app;
-    return app.Run(std::vector<std::string>(argv, argv + argc));
+    return app.Run(Ambrose::GetArguments(argc, argv));
 }

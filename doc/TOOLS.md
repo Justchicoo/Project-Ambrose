@@ -6,7 +6,7 @@ The Ambrose tool suite takes the AzerothCore content toolchain and changes it in
 
 One source of truth ties the suite together: a per-table schema definition file in data/schema/world/<table>.yaml, inspired by WDE DbDefinitions and Keira field models. The same file drives the Studio editor forms and pickers, the gameserver startup and reload validator, the reload-command mapping and generated doc/world/<table>.md pages. Tables are defined as data, so adding a world table means adding one file.
 
-Current repo state (): src/tools/{dbimport, template_extractor, wad_extractor, zone_extractor} exist as empty folders. apps/{ci, codestyle, installer} exist. data/sql/base/db_world is empty. scripts/Commands is empty. ARCHITECTURE.md already sets the rules that tools depend only on shared+common and that GM commands reload single tables.
+Current repo state (): src/tools/bindecode and src/tools/dbimport are built; src/tools/{template_extractor, wad_extractor, zone_extractor} exist as empty folders. apps/{ci, codestyle, installer} exist. data/sql/base/db_world is empty. scripts/Commands is empty. ARCHITECTURE.md already sets the rules that tools depend only on shared+common and that GM commands reload single tables.
 
 Build order:
 1. **Early foundation:** codec_registry, wad_extractor, template_extractor, dbimport + codestyle-sql, the ambrose.sh dashboard, the reload framework (4.15) and its admin API (17.12).
@@ -28,6 +28,10 @@ Unverified assumptions behind some tools:
 Sources: the actools, anatomy, patchmod and renderers research results in the brief, and doc\ARCHITECTURE.md.
 
 ## Early
+
+### bindecode (built in 3.11)
+
+Prints BINd entries of any KIWAD archive in the user's own install as ordered JSON, lists entry names, and sweeps an archive for decode failures and unknown classes, which feed the type registry work. `bindecode --help` lists its options; it reads the install and type dump named by `--client` and `--type-dump` or `AMBROSE_CLIENT_DIR` and `AMBROSE_TYPE_DUMP_PATH`, and writes nothing.
 
 ### codec_registry (type registry dumper + schema generator)
 

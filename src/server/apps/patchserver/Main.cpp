@@ -4,6 +4,7 @@
  */
 
 #include "ConfigMgr.h"
+#include "Environment.h"
 #include "Log.h"
 #include "ServerApp.h"
 
@@ -14,5 +15,5 @@
 int main(int argc, char** argv)
 {
     ServerApp app({ "patchserver", "patchserver.conf" }, sConfigMgr, sLog, std::cout, std::cerr);
-    return app.Run(std::vector<std::string>(argv, argv + argc));
+    return app.Run(Ambrose::GetArguments(argc, argv));
 }

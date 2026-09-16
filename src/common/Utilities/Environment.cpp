@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements environment access with the secure CRT calls on MSVC and POSIX calls elsewhere, and finds the executable through the module path or /proc/self/exe.
+ * Implements environment access with the wide secure CRT calls on MSVC, converting names and values between UTF-8 and UTF-16, and POSIX calls elsewhere; reads the arguments from the wide command line on Windows; sets the console code pages to UTF-8 on Windows; and finds the executable through the module path or /proc/self/exe.
  */
 
 #include "Environment.h"
+#include "Utf.h"
 
 #include <cstdlib>
 
@@ -15,29 +16,36 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <shellapi.h>
 #endif
 
 #ifdef _MSC_VER
 
 std::optional<std::string> Ambrose::GetEnv(std::string const& name)
 {
-    char* buffer = nullptr;
-    std::size_t length = 0;
-    if (_dupenv_s(&buffer, &length, name.c_str()) != 0 || buffer == nullptr)
+    std::optional<std::u16string> const wideName = Utf::Utf8ToUtf16(name, Utf::InvalidPolicy::Reject);
+    if (!wideName)
         return std::nullopt;
-    std::string value(buffer);
+    wchar_t* buffer = nullptr;
+    std::size_t length = 0;
+    if (_wdupenv_s(&buffer, &length, reinterpret_cast<wchar_t const*>(wideName->c_str())) != 0 || buffer == nullptr)
+        return std::nullopt;
+    std::optional<std::string> value = Utf::Utf16ToUtf8(std::u16string_view(reinterpret_cast<char16_t const*>(buffer)), Utf::InvalidPolicy::ReplaceWithU_FFFD);
     std::free(buffer);
     return value;
 }
 
 bool Ambrose::SetEnv(std::string const& name, std::string const& value)
 {
-    return _putenv_s(name.c_str(), value.c_str()) == 0;
+    std::optional<std::u16string> const wideName = Utf::Utf8ToUtf16(name, Utf::InvalidPolicy::Reject);
+    std::optional<std::u16string> const wideValue = Utf::Utf8ToUtf16(value, Utf::InvalidPolicy::Reject);
+    return wideName && wideValue && _wputenv_s(reinterpret_cast<wchar_t const*>(wideName->c_str()), reinterpret_cast<wchar_t const*>(wideValue->c_str())) == 0;
 }
 
 bool Ambrose::UnsetEnv(std::string const& name)
 {
-    return _putenv_s(name.c_str(), "") == 0;
+    std::optional<std::u16string> const wideName = Utf::Utf8ToUtf16(name, Utf::InvalidPolicy::Reject);
+    return wideName && _wputenv_s(reinterpret_cast<wchar_t const*>(wideName->c_str()), L"") == 0;
 }
 
 #else
@@ -61,6 +69,31 @@ bool Ambrose::UnsetEnv(std::string const& name)
 }
 
 #endif
+
+std::vector<std::string> Ambrose::GetArguments(int argc, char** argv)
+{
+#ifdef _WIN32
+    int count = 0;
+    if (LPWSTR* const wide = CommandLineToArgvW(GetCommandLineW(), &count))
+    {
+        std::vector<std::string> arguments;
+        arguments.reserve(static_cast<std::size_t>(count));
+        for (int index = 0; index < count; ++index)
+            arguments.push_back(Utf::Utf16ToUtf8(std::u16string_view(reinterpret_cast<char16_t const*>(wide[index])), Utf::InvalidPolicy::ReplaceWithU_FFFD).value_or(std::string()));
+        LocalFree(wide);
+        return arguments;
+    }
+#endif
+    return std::vector<std::string>(argv, argv + argc);
+}
+
+void Ambrose::UseUtf8Console()
+{
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
+}
 
 std::filesystem::path Ambrose::GetExecutableDirectory()
 {
