@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the type registry on small dumps written by the test with invented classes: aliases collapsed into their class, into an unprefixed template class, or standing in for a missing one; base chains; properties in id order found by hash and name; per-property enum options in both directions with text options, integer and text defaults in dump order and the base class hint; value, primitive and bit kinds; the class kind counts; and loads refused while the active catalog keeps serving: bad hashes, unknown bases and types, broken, empty or misshapen JSON, fields of the wrong JSON type or missing, duplicates, id gaps, oversized values, bad containers, keys that differ from the hash, inconsistent base chains, classes that hold themselves inline and the wrong version.
+ * Tests the type registry on small dumps written by the test with invented classes: aliases collapsed into their class, into an unprefixed template class, or standing in for a missing one; base chains; properties in id order found by hash and name; per-property enum options in both directions with text options, integer and text defaults in dump order and the base class hint; value, primitive and bit kinds; the class kind counts; and loads refused while the active catalog keeps serving: bad hashes, unknown bases and types, broken, empty or misshapen JSON, fields of the wrong JSON type or missing, duplicates, id gaps, oversized values, bad containers, keys that differ from the hash, inconsistent base chains and inherited property ids, classes that hold themselves inline and the wrong version.
  */
 
 #include "StringHash.h"
@@ -352,7 +352,8 @@ TEST_F(TypeRegistryTest, StructuralProblemsAreAllReported)
 
     Json gap = SyntheticDump();
     gap["classes"][baseKey]["properties"]["m_name"]["id"] = 2;
-    EXPECT_EQ(Refuse(gap.dump()), (std::vector<std::string>{ "class TestBase property m_name has id 2, but property ids must run from 0 to 1" }));
+    EXPECT_EQ(Refuse(gap.dump()), (std::vector<std::string>{ "class TestBase property m_name has id 2, but property ids must run from 0 to 1",
+        "class TestDerived lists class TestBase's property m_name with id 1 instead of 2, but views and compact data rely on inherited properties keeping their id" }));
 
     Json chain = SyntheticDump();
     chain["classes"][baseKey]["bases"] = Json::array();

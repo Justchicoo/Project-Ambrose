@@ -9,6 +9,7 @@
 #include "TypeRegistry.h"
 
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -58,7 +59,7 @@ namespace TypeDumpLoader
 class TypeCatalogBuilder
 {
 public:
-    static TypeCatalogPtr Build(TypeDumpLoader::RawDump dump, std::string sourceName, std::string sha256, uint64 generation, std::vector<std::string>& errors);
+    static TypeCatalogPtr Build(TypeDumpLoader::RawDump dump, std::string sourceName, std::string sha256, uint64 generation, std::span<ViewDefinition const* const> views, std::vector<std::string>& errors);
 };
 
 #endif

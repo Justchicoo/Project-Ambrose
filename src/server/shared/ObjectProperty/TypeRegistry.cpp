@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the type dump file, hashes it with SHA-256 for revision pinning, builds and validates a new catalog generation off to the side, and publishes it atomically, logging the load time, size and every problem, and keeping the active catalog when a load fails.
+ * Reads the type dump file, hashes it with SHA-256 for revision pinning, builds and validates a new catalog generation off to the side, binds the registry's typed views to it, and publishes it atomically, logging the load time, size and every problem, and keeping the active catalog when a load fails.
  */
 
 #include "TypeRegistry.h"
@@ -9,6 +9,7 @@
 #include "Log.h"
 #include "SHA256.h"
 #include "TypeDumpLoader.h"
+#include "TypedView.h"
 
 #include <chrono>
 #include <fstream>
@@ -36,11 +37,21 @@ std::size_t TypeCatalog::GetClassCount(ClassKind kind) const noexcept
     return _kindCounts[static_cast<std::size_t>(kind)];
 }
 
-TypeRegistry::TypeRegistry() = default;
+ViewBinding const* TypeCatalog::FindView(ViewDefinition const& definition) const noexcept
+{
+    for (ViewBinding const& binding : _views)
+        if (binding.Definition == &definition)
+            return &binding;
+    return nullptr;
+}
+
+TypeRegistry::TypeRegistry(TypedViewRegistry* views) : _views(views)
+{
+}
 
 TypeRegistry& TypeRegistry::Instance()
 {
-    static TypeRegistry instance;
+    static TypeRegistry instance(&sTypedViewRegistry);
     return instance;
 }
 
@@ -84,8 +95,9 @@ bool TypeRegistry::Build(std::string_view text, std::string sourceName)
     std::vector<std::string> errors;
     TypeDumpLoader::RawDump dump;
     TypeCatalogPtr catalog;
+    std::vector<ViewDefinition const*> const views = _views ? _views->Seal() : std::vector<ViewDefinition const*>();
     if (TypeDumpLoader::Parse(text, dump, errors))
-        catalog = TypeCatalogBuilder::Build(std::move(dump), sourceName, sha256, _nextGeneration, errors);
+        catalog = TypeCatalogBuilder::Build(std::move(dump), sourceName, sha256, _nextGeneration, views, errors);
     if (!catalog)
     {
         if (errors.empty())
@@ -103,10 +115,10 @@ bool TypeRegistry::Build(std::string_view text, std::string sourceName)
     ++_nextGeneration;
     _errors.clear();
     auto const elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
-    LOG_INFO(LogFilter, "Loaded type dump generation {} from {} in {} ms: {} property classes, {} enums, {} value types, {} primitives, {} containers, {} opaque classes, {} properties and {} aliases, about {} MiB, SHA-256 {}",
+    LOG_INFO(LogFilter, "Loaded type dump generation {} from {} in {} ms: {} property classes, {} enums, {} value types, {} primitives, {} containers, {} opaque classes, {} properties and {} aliases, {} typed views bound, about {} MiB, SHA-256 {}",
         catalog->GetGeneration(), sourceName, elapsed.count(), catalog->GetClassCount(ClassKind::PropertyClass), catalog->GetClassCount(ClassKind::Enum), catalog->GetClassCount(ClassKind::ValueType),
         catalog->GetClassCount(ClassKind::Primitive), catalog->GetClassCount(ClassKind::Container), catalog->GetClassCount(ClassKind::Opaque), catalog->GetPropertyCount(), catalog->GetAliasCount(),
-        (catalog->GetApproximateBytes() + (std::size_t{ 1 } << 19)) >> 20, catalog->GetSha256());
+        catalog->GetViews().size(), (catalog->GetApproximateBytes() + (std::size_t{ 1 } << 19)) >> 20, catalog->GetSha256());
     _catalog.store(std::move(catalog));
     return true;
 }

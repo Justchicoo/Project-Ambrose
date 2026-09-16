@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One ObjectProperty value: any value kind the type dump uses, a list of values for List and Vector properties, or an owned child object that may be null, with deep copies, deep and exact equality, and a child reachable only as const through a const value.
+ * One ObjectProperty value: any value kind the type dump uses, a list of values for List and Vector properties, or an owned child object that may be null, with deep copies, deep and exact equality, a child reachable only as const through a const value, and the compile-time index of each storage type.
  */
 
 #ifndef AMBROSE_PROPERTYVALUE_H
@@ -10,6 +10,7 @@
 
 #include <array>
 #include <cstddef>
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -143,6 +144,12 @@ public:
         PropertyTypes::Vector3D, PropertyTypes::Quaternion, PropertyTypes::Matrix3x3, PropertyTypes::Euler, PropertyTypes::Color, PropertyTypes::PointInt, PropertyTypes::PointFloat,
         PropertyTypes::SizeInt, PropertyTypes::RectInt, PropertyTypes::RectFloat, PropertyTypes::SerializedBuffer, PropertyTypes::SimpleVert, PropertyTypes::SimpleFace, PropertyObjectPtr, List>;
 
+    template<typename T>
+    static constexpr std::size_t IndexOf() noexcept
+    {
+        return IndexIn<T, Storage>();
+    }
+
     PropertyValue() noexcept;
 
     template<typename T>
@@ -180,7 +187,26 @@ public:
     bool operator==(PropertyValue const& other) const;
 
 private:
+    template<typename T, typename Variant>
+    static constexpr std::size_t IndexIn() noexcept;
+
     Storage _value;
 };
+
+template<typename T, typename Variant>
+constexpr std::size_t PropertyValue::IndexIn() noexcept
+{
+    return []<typename... Types>(std::variant<Types...> const*) constexpr
+    {
+        std::size_t index = 0;
+        for (bool const same : { std::is_same_v<T, Types>... })
+        {
+            if (same)
+                return index;
+            ++index;
+        }
+        return std::variant_npos;
+    }(static_cast<Variant const*>(nullptr));
+}
 
 #endif

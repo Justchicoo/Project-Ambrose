@@ -272,8 +272,8 @@ Client-sent ObjectProperty blobs cannot crash, hang, or exhaust the server.
 
 **Acceptance**
 
-- [ ] A view naming a missing property fails startup precisely
-- [ ] Client-gated: first views bind against r806919
+- [x] A view naming a missing property fails startup precisely (TypedViewTest)
+- [x] Client-gated: first views bind against r806919 (TypedViewClientTest; reading the decoded hat waits for 3.11)
 
 ### Detailed spec from OBJ-10: Typed wrappers over dynamic objects
 
@@ -281,21 +281,21 @@ Game code uses compile-checked C++ accessors for the few dozen classes it touche
 
 **Deliverables**
 
-- src/server/shared/ObjectProperty/TypedView.h: a template base plus declaration macros that give a class name and (type string, property name) pairs. The hash is computed constexpr with OBJ-2 and the property ordinal is cached once at bind time
-- TypedViewRegistry: at startup and on every registry reload each view resolves its class and properties in sTypeRegistry; a missing class, property or type mismatch lists every problem, and is a fatal error at startup or refuses the swap on reload
+- src/server/shared/ObjectProperty/TypedView.h: a template base plus declaration macros that give a class name and (type string, property name) pairs. The hash is computed constexpr with OBJ-2 and the property ordinal is cached once at bind time. Built with each view as a class deriving from TypedView, a constexpr array of ViewField::Of<C++ type>(position, dump type, property name) entries and a ViewDefinition, and one macro, AMBROSE_TYPED_VIEW, that makes the view's constructor private and gives the base access to it. Accessors read through Read<Field>(), typed by the field's declared storage type, and static assertions keep fields in enum order and on real storage types. Views are built with View::From(object), which returns nothing unless the object's catalog bound the view and the object is of the view's class; accessors are named GetTemplateId(), IsOnPet() and ShouldRename() in the project's style
+- TypedViewRegistry: at startup and on every registry reload each view resolves its class and properties in sTypeRegistry; a missing class, property or type mismatch lists every problem, and is a fatal error at startup or refuses the swap on reload. Built with the bindings stored in each catalog generation, so views over objects from an older generation keep that generation's ordinals after a reload; the loader also refuses a dump whose derived class gives an inherited property a different id or container, which all 14,400 inherited properties of r806919 keep, and a registry's first load closes it to new views
 - First views: WizardCharacterCreationInfo, WizClientObject, ClientObject, CoreObject, GameObjectTemplate, WizItemTemplate, TemplateManifest, TemplateLocation, RequirementList, NamedEffect
-- A codestyle note for apps/codestyle: views carry only the branding header, no comments
+- A codestyle note for apps/codestyle: views carry only the branding header, no comments. Already enforced for every file by codestyle's no-comments rule, so nothing view-specific was added
 
 **Acceptance**
 
-- [ ] Unit test: a view over a synthetic class binds; a view naming a nonexistent property fails startup with a precise message
-- [ ] Unit test: reloading a synthetic registry that drops a bound property refuses the swap and leaves the views bound to the old registry
-- [ ] Client-gated test: all first views bind against r806919; reading WizItemTemplate::templateId() on the decoded hat returns 1652259
-- [ ] Unit test: accessing a field through a view costs one indexed load (no hash lookup per access)
+- [x] Unit test: a view over a synthetic class binds; a view naming a nonexistent property fails startup with a precise message (TypedViewTest)
+- [x] Unit test: reloading a synthetic registry that drops a bound property refuses the swap and leaves the views bound to the old registry (TypedViewTest)
+- [ ] Client-gated test: all first views bind against r806919; reading WizItemTemplate::templateId() on the decoded hat returns 1652259 (binding passes in TypedViewClientTest; decoding the hat needs 3.11's BINd files)
+- [x] Unit test: accessing a field through a view costs one indexed load (no hash lookup per access) (TypedViewTest checks each cached ordinal, that a read returns the object's stored value itself, and that a view given another ordinal reads that property instead)
 
 **Risks**
 
-- Pure build-time codegen from the dump would put client-derived output in the build, and CI has no dump. Hand-written views with constexpr hashes avoid committing extracted data. The maintainer should confirm this approach
+- Pure build-time codegen from the dump would put client-derived output in the build, and CI has no dump. Hand-written views with constexpr hashes avoid committing extracted data. The maintainer should confirm this approach. Settled under the maintainer's standing direction to decide: hand-written views, recorded in doc/ARCHITECTURE.md
 
 ## 3.08 db_characters schema, CharacterRepository, GuidGenerator (LOG-5)
 

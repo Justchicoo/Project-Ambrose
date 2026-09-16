@@ -160,6 +160,50 @@ PropertySetResult PropertyObject::Check(PropertyInfo const& property, PropertyVa
     return PropertySetResult::Ok;
 }
 
+std::size_t PropertyObject::StorageIndexOf(PropertyInfo const& property) noexcept
+{
+    if (property.Container != ContainerKind::Static)
+        return PropertyValue::IndexOf<PropertyValue::List>();
+    switch (property.Kind)
+    {
+        case ValueKind::Bool: return PropertyValue::IndexOf<bool>();
+        case ValueKind::Int8: return PropertyValue::IndexOf<int8>();
+        case ValueKind::UInt8: return PropertyValue::IndexOf<uint8>();
+        case ValueKind::Int16: return PropertyValue::IndexOf<int16>();
+        case ValueKind::UInt16: return PropertyValue::IndexOf<uint16>();
+        case ValueKind::Int32:
+        case ValueKind::SignedBits:
+        case ValueKind::S24: return PropertyValue::IndexOf<int32>();
+        case ValueKind::UInt32:
+        case ValueKind::UnsignedBits:
+        case ValueKind::U24: return PropertyValue::IndexOf<uint32>();
+        case ValueKind::Int64:
+        case ValueKind::Enum: return PropertyValue::IndexOf<int64>();
+        case ValueKind::UInt64:
+        case ValueKind::Gid: return PropertyValue::IndexOf<uint64>();
+        case ValueKind::Float: return PropertyValue::IndexOf<float>();
+        case ValueKind::Double: return PropertyValue::IndexOf<double>();
+        case ValueKind::WideChar: return PropertyValue::IndexOf<char16_t>();
+        case ValueKind::String: return PropertyValue::IndexOf<std::string>();
+        case ValueKind::WideString: return PropertyValue::IndexOf<std::u16string>();
+        case ValueKind::Object: return PropertyValue::IndexOf<PropertyObjectPtr>();
+        case ValueKind::Vector3D: return PropertyValue::IndexOf<PropertyTypes::Vector3D>();
+        case ValueKind::Quaternion: return PropertyValue::IndexOf<PropertyTypes::Quaternion>();
+        case ValueKind::Matrix3x3: return PropertyValue::IndexOf<PropertyTypes::Matrix3x3>();
+        case ValueKind::Euler: return PropertyValue::IndexOf<PropertyTypes::Euler>();
+        case ValueKind::Color: return PropertyValue::IndexOf<PropertyTypes::Color>();
+        case ValueKind::PointInt: return PropertyValue::IndexOf<PropertyTypes::PointInt>();
+        case ValueKind::PointFloat: return PropertyValue::IndexOf<PropertyTypes::PointFloat>();
+        case ValueKind::SizeInt: return PropertyValue::IndexOf<PropertyTypes::SizeInt>();
+        case ValueKind::RectInt: return PropertyValue::IndexOf<PropertyTypes::RectInt>();
+        case ValueKind::RectFloat: return PropertyValue::IndexOf<PropertyTypes::RectFloat>();
+        case ValueKind::SerializedBuffer: return PropertyValue::IndexOf<PropertyTypes::SerializedBuffer>();
+        case ValueKind::SimpleVert: return PropertyValue::IndexOf<PropertyTypes::SimpleVert>();
+        case ValueKind::SimpleFace: return PropertyValue::IndexOf<PropertyTypes::SimpleFace>();
+    }
+    return std::variant_npos;
+}
+
 std::string_view PropertyObject::GetResultName(PropertySetResult result) noexcept
 {
     switch (result)

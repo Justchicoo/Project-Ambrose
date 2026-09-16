@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Streams a type dump through a JSON SAX handler that keeps only the fields the schema needs and refuses a known field of the wrong JSON type, then validates versions, duplicates, hashes, property ids, 32-bit option values, base chains, defaults and classes that hold themselves inline, measures the memory each default object takes, collapses pointer and SharedPointer aliases into their classes, matching unprefixed template names before inventing a class, classifies classes and property types, indexes enum options, and reports every problem with the class and property it belongs to.
+ * Streams a type dump through a JSON SAX handler that keeps only the fields the schema needs and refuses a known field of the wrong JSON type, then validates versions, duplicates, hashes, property ids, 32-bit option values, base chains, defaults and classes that hold themselves inline, measures the memory each default object takes, checks inherited properties keep their ids and containers, binds the typed views, collapses pointer and SharedPointer aliases into their classes, matching unprefixed template names before inventing a class, classifies classes and property types, indexes enum options, and reports every problem with the class and property it belongs to.
  */
 
 #include "TypeDumpLoader.h"
 #include "PropertyDefaults.h"
 #include "PropertyEnums.h"
 #include "PropertyObject.h"
+#include "TypedView.h"
 #include "StringHash.h"
 #include "StringUtil.h"
 
@@ -527,7 +528,7 @@ std::string TypeDumpLoader::Normalize(std::string_view typeName)
     return std::string(Ambrose::Trim(result));
 }
 
-TypeCatalogPtr TypeCatalogBuilder::Build(TypeDumpLoader::RawDump dump, std::string sourceName, std::string sha256, uint64 generation, std::vector<std::string>& errors)
+TypeCatalogPtr TypeCatalogBuilder::Build(TypeDumpLoader::RawDump dump, std::string sourceName, std::string sha256, uint64 generation, std::span<ViewDefinition const* const> views, std::vector<std::string>& errors)
 {
     std::size_t const initialErrors = errors.size();
     if (dump.Version != TypeDumpLoader::SupportedVersion)
@@ -755,6 +756,16 @@ TypeCatalogPtr TypeCatalogBuilder::Build(TypeDumpLoader::RawDump dump, std::stri
         std::vector<ClassInfo const*> const inherited(info->Bases.begin() + 1, info->Bases.end());
         if (info->Bases.front()->Bases != inherited)
             errors.push_back(fmt::format("{} lists {} bases after {}, but {} itself lists {}", info->Name, inherited.size(), info->Bases.front()->Name, info->Bases.front()->Name, info->Bases.front()->Bases.size()));
+        for (PropertyInfo const& inheritedProperty : info->Bases.front()->Properties)
+        {
+            PropertyInfo const* const own = info->FindProperty(inheritedProperty.Hash);
+            if (!own || own->Id != inheritedProperty.Id)
+                errors.push_back(fmt::format("{} lists {}'s property {} {}, but views and compact data rely on inherited properties keeping their id", info->Name, info->Bases.front()->Name, inheritedProperty.Name,
+                    own ? fmt::format("with id {} instead of {}", own->Id, inheritedProperty.Id) : std::string("not at all")));
+            else if (own->Container != inheritedProperty.Container)
+                errors.push_back(fmt::format("{} lists {}'s property {} with container {} instead of {}, but views rely on inherited properties keeping their layout", info->Name, info->Bases.front()->Name,
+                    inheritedProperty.Name, TypeKinds::GetName(own->Container), TypeKinds::GetName(inheritedProperty.Container)));
+        }
     }
     if (errors.size() != initialErrors)
         return nullptr;
@@ -863,6 +874,15 @@ TypeCatalogPtr TypeCatalogBuilder::Build(TypeDumpLoader::RawDump dump, std::stri
         if (auto const [existing, inserted] = catalog->_byHash.emplace(static_cast<uint32>(*raw->Hash), target); !inserted && existing->second != target)
             errors.push_back(fmt::format("alias {} shares the hash {} with {}", *raw->Name, *raw->Hash, existing->second->Name));
         catalog->_byName.emplace(*raw->Name, target);
+    }
+    if (errors.size() != initialErrors)
+        return nullptr;
+    catalog->_views.reserve(views.size());
+    for (ViewDefinition const* view : views)
+    {
+        ViewBinding binding;
+        if (TypedViewRegistry::Bind(*catalog, *view, binding, errors))
+            catalog->_views.push_back(std::move(binding));
     }
     if (errors.size() != initialErrors)
         return nullptr;

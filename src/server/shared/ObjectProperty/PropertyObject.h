@@ -52,6 +52,7 @@ public:
     static PropertyObjectPtr CreateBlank(BuildKey key, TypeCatalogPtr const& catalog, ClassInfo const& type);
     static PropertyValue MakeDefault(TypeCatalogPtr const& catalog, PropertyInfo const& property);
     static PropertySetResult Check(PropertyInfo const& property, PropertyValue const& value) noexcept;
+    static std::size_t StorageIndexOf(PropertyInfo const& property) noexcept;
     static std::string_view GetResultName(PropertySetResult result) noexcept;
 
     ClassInfo const& GetClass() const noexcept { return *_type; }
