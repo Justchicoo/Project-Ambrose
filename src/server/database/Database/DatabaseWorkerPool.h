@@ -47,6 +47,7 @@ public:
     QueryCallback AsyncQuery(std::string sql);
     bool DirectExecute(std::string_view sql);
     QueryResult Query(std::string_view sql);
+    bool TryQuery(std::string_view sql, QueryResult& result);
 
     void KeepAlive();
     void SetKeepAliveInterval(std::chrono::milliseconds interval) noexcept { _keepAliveMs = interval.count(); }
@@ -64,7 +65,7 @@ protected:
     void ExecuteStatement(std::unique_ptr<PreparedStatementBase> statement);
     QueryCallback AsyncQueryStatement(std::unique_ptr<PreparedStatementBase> statement);
     bool DirectExecuteStatement(PreparedStatementBase const* statement);
-    PreparedQueryResult QueryStatement(PreparedStatementBase const* statement);
+    PreparedQueryResult QueryStatement(PreparedStatementBase const* statement, bool* failed = nullptr);
     SQLQueryHolderCallback DelayQueryHolderBase(std::shared_ptr<SQLQueryHolderBase> holder);
     void CommitTransactionBase(std::shared_ptr<TransactionBase> transaction);
     TransactionCallback AsyncCommitTransactionBase(std::shared_ptr<TransactionBase> transaction);
@@ -114,6 +115,7 @@ public:
     using DatabaseWorkerPoolBase::DirectExecute;
     using DatabaseWorkerPoolBase::Execute;
     using DatabaseWorkerPoolBase::Query;
+    using DatabaseWorkerPoolBase::TryQuery;
 
     std::unique_ptr<Statement> GetPreparedStatement(StatementId index) const
     {
@@ -125,6 +127,12 @@ public:
     QueryCallback AsyncQuery(std::unique_ptr<Statement> statement) { return AsyncQueryStatement(std::move(statement)); }
     bool DirectExecute(Statement const& statement) { return DirectExecuteStatement(&statement); }
     PreparedQueryResult Query(Statement const& statement) { return QueryStatement(&statement); }
+    bool TryQuery(Statement const& statement, PreparedQueryResult& result)
+    {
+        bool failed = false;
+        result = QueryStatement(&statement, &failed);
+        return !failed;
+    }
     SQLQueryHolderCallback DelayQueryHolder(std::shared_ptr<SQLQueryHolder<ConnectionType>> holder) { return DelayQueryHolderBase(std::move(holder)); }
     std::shared_ptr<Transaction<ConnectionType>> BeginTransaction() const { return std::make_shared<Transaction<ConnectionType>>(); }
     void CommitTransaction(std::shared_ptr<Transaction<ConnectionType>> transaction) { CommitTransactionBase(std::move(transaction)); }

@@ -66,8 +66,8 @@ An account's security level decides which chat-prefixed GM commands it may run, 
 
 **Deliverables**
 
-- data/sql/updates/db_login: account_access (account_id, realm_id, security_level) with levels PLAYER=0, MODERATOR=1, GAMEMASTER=2, ADMINISTRATOR=3, CONSOLE=4 (AzerothCore precedent)
-- src/server/game/Chat/CommandMgr: CommandScript tables, argument parsing, security check, per-command help
+- data/sql/updates/db_login: account_access (account_id, realm_id, security_level) with the levels 2.13 settled, PLAYER=0, MODERATOR=1, GAMEMASTER=2, ADMINISTRATOR=3, CONSOLE=4 (AzerothCore precedent), holding per-realm overrides of `login.account.security_level`
+- src/server/game/Chat/CommandMgr: CommandScript tables, argument parsing, security check, per-command help. It takes over the console command table from 2.13, including the login server's account commands
 - src/server/scripts/Commands/cs_gm.cpp (.gm on/off, .gm visible), cs_character.cpp (.character level, .character gold, .character xp, .character heal), cs_lookup.cpp (.lookup item / spell by name)
 - Replies via SYSTEM MSG_SERVERMESSAGE or GAME MSG_CLIENTNOTIFYTEXT
 - Set LOGINCOMPLETE IsCSR and Permissions from the security level (coordinate with NET/LOG)

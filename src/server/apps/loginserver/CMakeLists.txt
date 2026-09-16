@@ -2,6 +2,6 @@
 # Builds the loginserver executable that authenticates accounts and lists characters.
 ambrose_add_executable(loginserver "${CMAKE_CURRENT_SOURCE_DIR}")
 
-target_link_libraries(loginserver PRIVATE database)
+target_link_libraries(loginserver PRIVATE accounts)
 ambrose_copy_conf_dist(loginserver)
 ambrose_copy_mariadb_plugins(loginserver)

@@ -18,7 +18,7 @@ target_include_directories(unit_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/mocks
 target_link_libraries(unit_tests
     PRIVATE
         ambrose-compile-options
-        database
+        accounts
         GTest::gmock)
 
 ambrose_copy_mariadb_plugins(unit_tests)

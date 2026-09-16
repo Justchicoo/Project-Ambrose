@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * With AMBROSE_TEST_DB set, tests the worker pool: async queries from many threads, exclusive sync leases, draining and deadline cancels on close, query holders, refused statements, keepalive past wait_timeout, and refusing work when closed.
+ * With AMBROSE_TEST_DB set, tests the worker pool: async queries from many threads, exclusive sync leases, draining and deadline cancels on close, query holders, refused statements, TryQuery telling empty results from failures, keepalive past wait_timeout, and refusing work when closed.
  */
 
 #include "DatabaseWorkerPool.h"
@@ -74,6 +74,8 @@ TEST(DatabaseWorkerPoolTest, ClosedPoolRefusesWorkWithoutBlocking)
     EXPECT_FALSE(pool.IsOpen());
     EXPECT_FALSE(pool.DirectExecute("SELECT 1"));
     EXPECT_FALSE(pool.Query("SELECT 1"));
+    QueryResult refused;
+    EXPECT_FALSE(pool.TryQuery("SELECT 1", refused));
     QueryCallback callback = pool.AsyncQuery("SELECT 1");
     bool ran = false;
     callback.WithCallback([&ran](QueryResult result) { ran = !result; });
@@ -258,6 +260,40 @@ TEST(DatabaseWorkerPoolTest, InvalidStatementsAreRefusedAtTheCallSite)
 
     pool.Close();
     EXPECT_TRUE(pool.GetPreparedStatement(PoolTestConnection::POOL_SEL_ECHO));
+}
+
+TEST(DatabaseWorkerPoolTest, TryQuerySeparatesEmptyResultsFromFailures)
+{
+    std::optional<std::string> const info = TestDatabase();
+    if (!info)
+        GTEST_SKIP() << "AMBROSE_TEST_DB is not set";
+    TestPool pool("try");
+    ASSERT_TRUE(pool.SetConnectionInfo(*info, 1, 1));
+    ASSERT_EQ(pool.Open(), 0u);
+
+    QueryResult text;
+    EXPECT_TRUE(pool.TryQuery("SELECT 1 FROM DUAL WHERE 1 = 0", text));
+    EXPECT_FALSE(text);
+    EXPECT_TRUE(pool.TryQuery("SELECT 7", text));
+    ASSERT_TRUE(text);
+    EXPECT_EQ((*text)[0].Get<uint32>(), 7u);
+    EXPECT_FALSE(pool.TryQuery("SELECT * FROM `ambrose_try_query_missing_table`", text));
+    EXPECT_FALSE(text);
+
+    auto statement = pool.GetPreparedStatement(PoolTestConnection::POOL_SEL_ECHO);
+    ASSERT_TRUE(statement);
+    statement->SetData(0, uint32{ 9 });
+    PreparedQueryResult prepared;
+    EXPECT_TRUE(pool.TryQuery(*statement, prepared));
+    ASSERT_TRUE(prepared);
+    EXPECT_EQ((*prepared)[0].Get<uint32>(), 9u);
+    auto asyncOnly = pool.GetPreparedStatement(PoolTestConnection::POOL_SEL_ASYNC_ONLY);
+    ASSERT_TRUE(asyncOnly);
+    EXPECT_FALSE(pool.TryQuery(*asyncOnly, prepared));
+    EXPECT_FALSE(prepared);
+
+    pool.Close();
+    EXPECT_FALSE(pool.TryQuery(*statement, prepared));
 }
 
 TEST(DatabaseWorkerPoolTest, CloseCancelsWorkLeftAfterTheDrainDeadline)

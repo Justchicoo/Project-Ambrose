@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a built server executable to check --version, a missing config, and --check with its shipped .conf.dist; with AMBROSE_TEST_DB the game and login servers create, update, open and close uniquely named databases that are dropped afterwards, and a bad login database string exits 1.
+# Runs a built server executable to check --version, a missing config, and --check with its shipped .conf.dist; with AMBROSE_TEST_DB the game and login servers create, update, open and close uniquely named databases that are dropped afterwards, the login server runs account commands piped into its console input, and a bad login database string exits 1.
 if(NOT APP OR NOT NAME OR NOT WORKDIR)
     message(FATAL_ERROR "APP, NAME and WORKDIR must be set")
 endif()
@@ -52,6 +52,24 @@ if(NAME STREQUAL "loginserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AM
     endforeach()
     if(NOT databaseOutput MATCHES "The login database is up to date")
         ambrose_test_fail("loginserver's second start did not report the login database up to date: ${databaseOutput}")
+    endif()
+
+    file(WRITE "${WORKDIR}/console.txt" "help account\naccount create smoke_user smoke_secret\naccount create SMOKE_USER smoke_secret\naccount info Smoke_User\nshutdown\n")
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E cat "${WORKDIR}/console.txt"
+        COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=${smokeDatabase}"
+        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE consoleResult OUTPUT_VARIABLE consoleOutput ERROR_VARIABLE consoleError TIMEOUT 60)
+    if(NOT consoleResult EQUAL 0)
+        ambrose_test_fail("loginserver reading console commands exited ${consoleResult}: ${consoleOutput}${consoleError}")
+    endif()
+    foreach(expected IN ITEMS "account create <username> <password> \\[email\\] - create an account" "Account smoke_user created with id [0-9]+" "Account SMOKE_USER already exists"
+            "Account smoke_user \\(id [0-9]+\\): security level 0, not locked, verifier key 0" "Not banned" "loginserver is shutting down"
+            "Console: account create \\(arguments hidden\\)" "loginserver shutting down after the shutdown command" "loginserver stopped")
+        if(NOT consoleOutput MATCHES "${expected}")
+            ambrose_test_fail("loginserver's console run did not print '${expected}': ${consoleOutput}${consoleError}")
+        endif()
+    endforeach()
+    if(consoleOutput MATCHES "smoke_secret" OR consoleError MATCHES "smoke_secret")
+        ambrose_test_fail("loginserver's console run printed a password: ${consoleOutput}${consoleError}")
     endif()
 endif()
 

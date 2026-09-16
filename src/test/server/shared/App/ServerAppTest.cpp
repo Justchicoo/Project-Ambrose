@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the shared app lifecycle in process: options, version, missing or broken config, ready and stop logging, --check, live update intervals, repeated runs, and shutdown on signals.
+ * Tests the shared app lifecycle in process: options, version, missing or broken config, ready and stop logging, --check, console commands and input, live update intervals, repeated runs, and shutdown on signals.
  */
 
 #include "AppOptions.h"
 #include "ConfigMgr.h"
+#include "ConsoleInput.h"
 #include "GitRevision.h"
 #include "LogTestDirectory.h"
 #include "LogTestHarness.h"
@@ -16,14 +17,58 @@
 #include <atomic>
 #include <csignal>
 #include <chrono>
+#include <condition_variable>
 #include <cstdlib>
 #include <fstream>
 #include <functional>
+#include <mutex>
 #include <sstream>
 #include <thread>
 
 namespace
 {
+    class ScriptedConsoleInput : public ConsoleInput
+    {
+    public:
+        ScriptedConsoleInput(std::vector<std::string> lines, bool closeAtEnd, std::atomic<int>& interrupts)
+            : _lines(std::move(lines)), _closeAtEnd(closeAtEnd), _interrupts(interrupts)
+        {
+        }
+
+        ReadResult ReadLine(std::string& line, std::chrono::milliseconds timeout) override
+        {
+            std::unique_lock lock(_mutex);
+            if (_interrupted)
+                return ReadResult::Closed;
+            if (_next < _lines.size())
+            {
+                line = _lines[_next++];
+                return ReadResult::Line;
+            }
+            if (_closeAtEnd)
+                return ReadResult::Closed;
+            _wake.wait_for(lock, timeout, [this] { return _interrupted; });
+            return _interrupted ? ReadResult::Closed : ReadResult::Timeout;
+        }
+
+        void Interrupt() override
+        {
+            std::lock_guard const lock(_mutex);
+            _interrupted = true;
+            _interrupts.fetch_add(1);
+            _wake.notify_all();
+        }
+
+    private:
+        std::vector<std::string> _lines;
+        std::size_t _next = 0;
+        bool _closeAtEnd;
+        bool _interrupted = false;
+        std::atomic<int>& _interrupts;
+        std::mutex _mutex;
+        std::condition_variable _wake;
+    };
+
     class TickApp : public ServerApp
     {
     public:
@@ -35,12 +80,18 @@ namespace
         std::atomic<bool> Stopped{ false };
         bool FailStart = false;
         bool SignalDuringStop = false;
+        std::function<std::unique_ptr<ConsoleInput>()> ConsoleFactory;
 
     protected:
         bool OnStart() override
         {
             Started = true;
             return !FailStart;
+        }
+
+        std::unique_ptr<ConsoleInput> CreateConsoleInput() override
+        {
+            return ConsoleFactory ? ConsoleFactory() : nullptr;
         }
 
         std::chrono::milliseconds GetUpdateInterval() const override { return std::chrono::milliseconds(IntervalMs.load()); }
@@ -184,6 +235,80 @@ TEST_F(ServerAppTest, CheckStartsReportsReadyAndStopsCleanly)
     EXPECT_NE(output.find("testserver ready"), std::string::npos) << output;
     EXPECT_NE(output.find("testserver shutting down after --check"), std::string::npos) << output;
     EXPECT_NE(output.find("testserver stopped"), std::string::npos) << output;
+}
+
+TEST_F(ServerAppTest, ConsoleLinesRunCommandsUntilShutdown)
+{
+    std::filesystem::path const file = WriteConfig();
+    TickApp app({ "testserver", "testserver.conf" }, _config, _harness.GetLog(), _out, _err);
+    std::atomic<int> interrupts{ 0 };
+    app.ConsoleFactory = [&interrupts]
+    {
+        return std::make_unique<ScriptedConsoleInput>(std::vector<std::string>{ "help", "   ", "bogus words here", "shutdown now", "SHUTDOWN" }, false, interrupts);
+    };
+    int exitCode = -1;
+    std::thread runner([&] { exitCode = app.Run({ "testserver", "-c", ConfigMgr::PathToUtf8(file) }); });
+    ScopeExit const joinOnExit([&] { if (runner.joinable()) { app.RequestStop(); runner.join(); } });
+    ASSERT_TRUE(WaitFor([&] { return app.Stopped.load(); }));
+    runner.join();
+    EXPECT_EQ(exitCode, EXIT_SUCCESS);
+    EXPECT_GE(interrupts.load(), 1);
+
+    std::string const out = _out.str();
+    EXPECT_NE(out.find("help [command] - list commands, or the commands starting with the given words\n"), std::string::npos) << out;
+    EXPECT_NE(out.find("shutdown - stop the server gracefully\n"), std::string::npos) << out;
+    EXPECT_NE(out.find("Unknown command 'bogus'. Type 'help' to list commands.\n"), std::string::npos) << out;
+    EXPECT_NE(out.find("Usage: shutdown\n"), std::string::npos) << out;
+    EXPECT_NE(out.find("testserver is shutting down\n"), std::string::npos) << out;
+
+    std::string const log = _harness.Device().Output();
+    EXPECT_NE(log.find("Console: help"), std::string::npos) << log;
+    EXPECT_NE(log.find("Console: unknown command 'bogus'"), std::string::npos) << log;
+    EXPECT_EQ(log.find("words here"), std::string::npos) << log;
+    EXPECT_NE(log.find("testserver shutting down after the shutdown command"), std::string::npos) << log;
+    EXPECT_NE(log.find("testserver stopped"), std::string::npos) << log;
+}
+
+TEST_F(ServerAppTest, ClosedConsoleKeepsRunningAndStopInterruptsAWaitingReader)
+{
+    std::filesystem::path const file = WriteConfig();
+    TickApp app({ "testserver", "testserver.conf" }, _config, _harness.GetLog(), _out, _err);
+    std::atomic<int> interrupts{ 0 };
+    app.ConsoleFactory = [&interrupts] { return std::make_unique<ScriptedConsoleInput>(std::vector<std::string>{}, true, interrupts); };
+    std::thread runner([&] { app.Run({ "testserver", "-c", ConfigMgr::PathToUtf8(file) }); });
+    ScopeExit const joinOnExit([&] { if (runner.joinable()) { app.RequestStop(); runner.join(); } });
+    ASSERT_TRUE(WaitFor([&] { return app.IsReady(); }));
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_TRUE(app.IsReady());
+    EXPECT_FALSE(app.Stopped.load());
+    app.RequestStop();
+    runner.join();
+
+    TickApp waiting({ "testserver", "testserver.conf" }, _config, _harness.GetLog(), _out, _err);
+    std::atomic<int> waitingInterrupts{ 0 };
+    waiting.ConsoleFactory = [&waitingInterrupts] { return std::make_unique<ScriptedConsoleInput>(std::vector<std::string>{}, false, waitingInterrupts); };
+    std::thread second([&] { waiting.Run({ "testserver", "-c", ConfigMgr::PathToUtf8(file) }); });
+    ScopeExit const joinSecond([&] { if (second.joinable()) { waiting.RequestStop(); second.join(); } });
+    ASSERT_TRUE(WaitFor([&] { return waiting.IsReady(); }));
+    auto const stopAt = std::chrono::steady_clock::now();
+    waiting.RequestStop();
+    second.join();
+    EXPECT_LT(std::chrono::steady_clock::now() - stopAt, std::chrono::seconds(5));
+    EXPECT_EQ(waitingInterrupts.load(), 1);
+}
+
+TEST_F(ServerAppTest, ConsoleEnableZeroStartsNoReader)
+{
+    std::filesystem::path const file = WriteConfig("Console.Enable = 0\n");
+    TickApp app({ "testserver", "testserver.conf" }, _config, _harness.GetLog(), _out, _err);
+    std::atomic<bool> created{ false };
+    app.ConsoleFactory = [&created] { created = true; return std::unique_ptr<ConsoleInput>(); };
+    std::thread runner([&] { app.Run({ "testserver", "-c", ConfigMgr::PathToUtf8(file) }); });
+    ScopeExit const joinOnExit([&] { if (runner.joinable()) { app.RequestStop(); runner.join(); } });
+    ASSERT_TRUE(WaitFor([&] { return app.IsReady(); }));
+    app.RequestStop();
+    runner.join();
+    EXPECT_FALSE(created.load());
 }
 
 TEST_F(ServerAppTest, LifecycleLinesFollowTheAppCategory)

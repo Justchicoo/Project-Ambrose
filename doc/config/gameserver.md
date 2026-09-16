@@ -38,6 +38,7 @@ The Applies column says when a changed value takes effect after a configuration 
 | `Log.Utc` | bool | `0` | `AMBROSE_LOG_UTC` | Live | Timestamps and file names in UTC instead of local time |
 | `Log.PendingBuffer` | uint32 | `1000` | `AMBROSE_LOG_PENDING_BUFFER` | Live | Lines kept for an appender whose type registers later, such as DB |
 | `Console.Colors` | uint8 | `1` | `AMBROSE_CONSOLE_COLORS` | Live | 0 never, 1 when stdout is a terminal, 2 always; `NO_COLOR` disables 1 |
+| `Console.Enable` | bool | `1` | `AMBROSE_CONSOLE_ENABLE` | At startup, and live once 4.15's reload triggers restart the console reader | Read commands such as `help` and `shutdown` from standard input; 0 starts no input thread. A closed or redirected-from-nothing input leaves the server running, and a terminal owned by another foreground job is not read |
 | `Appender.Console` | appender | `1,3,3,"1 9 3 6 5 8"` | `AMBROSE_APPENDER_CONSOLE` | Live | Colored console output at Info with time and level |
 | `Appender.Server` | appender | `2,2,7,Server.log,w` | `AMBROSE_APPENDER_SERVER` | Live | Server.log in LogsDir, rewritten each start, with time, level and category |
 | `Appender.Errors` | appender | `2,4,7,Errors.log,a,16M,10` | `AMBROSE_APPENDER_ERRORS` | Live | Warnings and worse, appended across restarts, rotated at 16 MiB keeping 10 backups |

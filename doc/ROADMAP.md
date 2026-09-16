@@ -6,7 +6,7 @@ Work through the phases in order. Each phase ends with something visible in the 
 
 ## Where we are
 
-Phase 1 is built through 1.20: toolchain and CI, utilities, configuration, logging, threading, crypto, the KIWAD reader, the runtime message registry, frames and control messages, the socket layer, and the gameserver, loginserver and patchserver app skeletons. 1.21 (the patch-free launcher) and 1.22 (the session handshake, keepalives and the loginserver bootstrap) are implemented and pass their automated checks. Their real-client checks need the maintainer's own client and follow doc/PATCHING.md. Until they are recorded, work continues on milestones that do not depend on them, starting with the database layer in phase 2. 2.01-2.08 and 2.11 are done, and 2.12-2.13 come next.
+Phase 1 is built through 1.20: toolchain and CI, utilities, configuration, logging, threading, crypto, the KIWAD reader, the runtime message registry, frames and control messages, the socket layer, and the gameserver, loginserver and patchserver app skeletons. 1.21 (the patch-free launcher) and 1.22 (the session handshake, keepalives and the loginserver bootstrap) are implemented and pass their automated checks. Their real-client checks need the maintainer's own client and follow doc/PATCHING.md. Until they are recorded, work continues on milestones that do not depend on them, starting with the database layer in phase 2. 2.01-2.08 and 2.11-2.13 are done, and 2.09, 2.10 and 2.14 come next.
 
 I checked these against the sources, read-only:
 (1) Root.wad holds 29 *Messages*.xml files, not 26. GameMessages2.xml (svc 55, 10 msgs), WizardMessages2.xml (53, 254) and WizardMessages3.xml (56, 213) exist. That gives 1448 records, 1446 distinct ids and still only 9 field types. MSG_CLIENTZONED arrives as svc=53 order=64 right after LOGINCOMPLETE in a local session capture line 120, so the registry must load all 29 files.
@@ -56,18 +56,16 @@ First milestones:
 | 13 | [Pets, cantrips, crafting and minigames](roadmap/phase-13-pets-cantrips-crafting-and-minigames.md) | 21 | An equipped pet follows the wizard, eats snacks, levels up and casts in duels. Cantrips cast. Reagents are harvested and crafted. Kiosk minigames pay rewards, and the Crown Shop browses and sells. |
 | 14 | [Dungeons, tutorial and PvP](roadmap/phase-14-dungeons-tutorial-and-pvp.md) | 16 | Groups enter sigil dungeons with countdowns. New wizards play the scripted tutorial, and players queue for ranked PvP, tournaments, pet derby and daily assignments. |
 | 15 | [Housing, gardening and fishing](roadmap/phase-15-housing-gardening-and-fishing.md) | 21 | Players go home, decorate, store items in attic and vaults, grow gardens, fish ponds, publish castle tours and build castle magic. |
-| 16 | [Patch server and tooling ownership](roadmap/phase-16-patch-server-and-tooling-ownership.md) | 12 | The retail client patches against Ambrose with 0 files altered, restores a deleted WAD, and streams missing zone packages. Users produce their own type dump with Ambrose tooling. This track can run in parallel any time after phase 2. |
+| 16 | [Patch server and tooling ownership](roadmap/phase-16-patch-server-and-tooling-ownership.md) | 13 | The retail client patches against Ambrose with 0 files altered, restores a deleted WAD, and streams missing zone packages. Users produce their own type dump with Ambrose tooling. This track can run in parallel any time after phase 2. |
 | 17 | [Operations: console, admin API, dashboard and metrics](roadmap/phase-17-operations-console-admin-api-dashboard-and-metrics.md) | 13 | From a browser on a desktop or a phone, an operator sees every server's health and player counts, follows live logs, runs audited commands, restarts a crashed server, and reviews performance history in Grafana, and edits game settings and reloads content live. Runs in parallel: 17.01 after 1.20, 17.12 and 17.13 after 4.16, the rest after phase 2. |
 
-Total: 286 milestones.
+Total: 287 milestones.
 
 ## Decisions needed
 
 These block specific milestones. The maintainer decides each one, then this list and doc/ARCHITECTURE.md are updated.
 
 - Pending SQL promotion. Naming of pending_ files, and whether a CI bot may push to main. Blocks 3.19.
-- Whether a password-equivalent verifier base64(SHA-512(password)) may be stored in db_login, as the ClientKey1 scheme forces. Blocks 2.13 and 2.14.
-- Where AccountMgr and the security-level tables live (game/Accounts linked into loginserver, or apps/loginserver). Blocks 2.13 and 4.02.
 - Session state names across the three apps (connected, handoff, authenticated, logged in, in world). Blocks 2.09.
 - MSG_COMBATMOVE MoveType values: the XML description says 0 pass, 1 attack, 2 enchant, 3 flee, the reference says Attack 0, Flee 1, Discard 2, Pass 3, ChangeMind 4. A capture or client RE must settle it. Blocks 9.06.
 - Whether the client simulates spell results from server-supplied rolls, which would require bit-exact server math. Must be settled in 9.08. Blocks 11.05 and 11.06.
@@ -77,7 +75,7 @@ These block specific milestones. The maintainer decides each one, then this list
 - Whether supplemental server-side class schemas are a committed file under data/ or a world DB table. Blocks 6.10 and 6.11.
 - Whether Ambrose builds its own type dumper (reads a live client process) or documents an external tool, and which revision and dump hash to pin. Blocks 3.03 in practice and 16.11.
 - Threading model: one world thread vs map-per-thread or strands. Blocks 4.01, 4.10, 6.01 and duel timers in 9.06.
-- Whether ranked-style security levels copy AzerothCore's SEC_PLAYER..SEC_CONSOLE numbering, and how they map to LOGINCOMPLETE IsCSR/Permissions. Blocks 4.02 and 6.04.
+- How account security levels map to LOGINCOMPLETE IsCSR/Permissions. Blocks 4.02 and 6.04.
 - Whether zone spawns for all 3356 zones load at startup or lazily per instance. Blocks 4.09 and 5.02.
 - Whether to embed a Lua runtime to run the client-shipped minigame Server.lua scripts or reimplement them in C++. Blocks 13.11.
 - Crowns policy: GM grant only, or earned in game. Blocks 12.15 and 13.20.
@@ -87,6 +85,8 @@ These block specific milestones. The maintainer decides each one, then this list
 
 
 ### Resolved
+
+Settled on 2026-09-14 under the maintainer's standing direction, and recorded under Decisions, Accounts and the console in doc/ARCHITECTURE.md: the password verifier is stored and encrypted at rest when verifier keys are configured, AccountMgr builds as the `accounts` library in `game/Accounts` that the login server links, and security levels use AzerothCore's 0-4 numbering.
 
 Settled on 2026-09-14 at the maintainer's direction, and recorded under Decisions, Live reload and live settings in doc/ARCHITECTURE.md: everything that can change while a server runs changes live, gameplay values are typed live settings edited from the control center, live settings persist in the database the app owns with an audit table, environment and command-line layers lock a key, and live world database edits are journaled and exportable as pending SQL. New milestones 4.15 (reload framework), 4.16 (live settings registry), 17.12 (settings and reload admin API), and 17.13 (dashboard settings editor) carry the work.
 

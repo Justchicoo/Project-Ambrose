@@ -29,6 +29,8 @@ endfunction()
 function(ambrose_add_executable name root)
     ambrose_collect_sources("${root}" sources)
     add_executable(${name} ${sources})
+    ambrose_collect_include_dirs("${root}" include_dirs)
+    target_include_directories(${name} PRIVATE ${include_dirs})
     target_link_libraries(${name} PRIVATE ambrose-compile-options)
 endfunction()
 

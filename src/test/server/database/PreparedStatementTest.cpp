@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests parameter storage offline, and with AMBROSE_TEST_DB set runs typed prepared statements, binary results, byte-exact strings and blobs, unbound parameters, failed prepares, and re-preparing after a reconnect.
+ * Tests parameter storage offline, and with AMBROSE_TEST_DB set runs typed prepared statements, binary results, byte-exact strings and blobs, unbound parameters, failed prepares, re-preparing after a reconnect, and empty results that leave the connection reusable.
  */
 
 #include "CharacterDatabase.h"
@@ -32,7 +32,8 @@ namespace
         TEST_SEL_SUBTRACT,
         TEST_SEL_META,
         TEST_SEL_DUPLICATE,
-        TEST_SEL_ASYNC_ONLY
+        TEST_SEL_ASYNC_ONLY,
+        TEST_SEL_MAYBE
     };
 
     class TestConnection : public MySQLConnection
@@ -44,6 +45,7 @@ namespace
         bool IncludeTypes = false;
         bool IncludeErrors = false;
         bool IncludeDuplicate = false;
+        bool IncludeMaybe = false;
 
     protected:
         void DoPrepareStatements() override
@@ -58,6 +60,8 @@ namespace
                 PrepareStatement(TEST_SEL_SUBTRACT, "TEST_SEL_SUBTRACT", "SELECT a - ? FROM prepared_errors", ConnectionFlags::Sync);
                 PrepareStatement(TEST_SEL_META, "TEST_SEL_META", "SELECT * FROM prepared_meta", ConnectionFlags::Sync);
             }
+            if (IncludeMaybe)
+                PrepareStatement(TEST_SEL_MAYBE, "TEST_SEL_MAYBE", "SELECT 5 FROM DUAL WHERE ? = 1", ConnectionFlags::Both);
             if (IncludeDuplicate)
                 PrepareStatement(TEST_SEL_SUM, "TEST_SEL_DUPLICATE", "SELECT 2", ConnectionFlags::Both);
             if (IncludeBroken)
@@ -369,4 +373,36 @@ TEST(PreparedStatementTest, DatabaseConnectionsPrepareTheirStatements)
     PreparedQueryResult const result = login.Query(*time);
     ASSERT_TRUE(result) << login.GetLastErrorText();
     EXPECT_GT((*result)[0].Get<uint64>(), 1700000000u);
+}
+
+TEST(PreparedStatementTest, EmptyResultsLeaveTheConnectionReusable)
+{
+    std::optional<MySQLConnectionInfo> const info = TestDatabase();
+    if (!info)
+        GTEST_SKIP() << "AMBROSE_TEST_DB is not set";
+    MySQLConnectionSettings settings = SyncSettings();
+    settings.ReadTimeout = std::chrono::seconds(5);
+    TestConnection connection(*info, settings);
+    connection.IncludeMaybe = true;
+    ASSERT_EQ(connection.Open(), 0u);
+    ASSERT_TRUE(connection.PrepareStatements());
+    CapturedLog log;
+    for (int round = 0; round < 3; ++round)
+    {
+        PreparedStatementBase empty(TEST_SEL_MAYBE, 1);
+        empty.SetData(0, uint32{ 0 });
+        EXPECT_FALSE(connection.Query(empty));
+        EXPECT_EQ(connection.GetLastErrorCode(), 0u) << connection.GetLastErrorText();
+        ASSERT_TRUE(connection.Query("SELECT 1")) << connection.GetLastErrorText();
+        PreparedStatementBase one(TEST_SEL_MAYBE, 1);
+        one.SetData(0, uint32{ 1 });
+        PreparedQueryResult const row = connection.Query(one);
+        ASSERT_TRUE(row) << round << ": " << connection.GetLastErrorText();
+        EXPECT_EQ((*row)[0].Get<uint32>(), 5u);
+        PreparedStatementBase again(TEST_SEL_MAYBE, 1);
+        again.SetData(0, uint32{ 0 });
+        EXPECT_FALSE(connection.Query(again));
+        EXPECT_EQ(connection.GetLastErrorCode(), 0u) << connection.GetLastErrorText();
+    }
+    EXPECT_FALSE(log.Contains("Reconnecting"));
 }

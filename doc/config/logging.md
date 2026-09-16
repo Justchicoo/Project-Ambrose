@@ -114,6 +114,8 @@ A message goes to the logger with the longest matching name at a dot boundary. `
 | `network`, `network.opcode` | Sockets and client messages by protocol and name |
 | `network.session` | Session offers, accepts and closes at Info, keepalives in both directions at Debug |
 | `sql.sql`, `sql.updates`, `sql.driver` | Database queries, updates and connections |
+| `accounts` | Accounts created, passwords, security levels, locks and bans, and verifiers that do not open |
+| `commands.console` | Console lines accepted, refused during shutdown, dropped when the queue is full, and the input closing. Arguments of commands marked sensitive, such as `account create`, are never written |
 
 ## Async mode
 

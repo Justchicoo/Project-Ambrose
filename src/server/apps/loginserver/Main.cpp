@@ -1,8 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Login server entry point: loads the client's message definitions, opens the login database, listens for clients, and runs the session handshake until a shutdown signal.
+ * Login server entry point: loads account settings and the client's message definitions, opens the login database, listens for clients, runs the session handshake, and offers account console commands until shutdown.
  */
 
+#include "AccountCommands.h"
+#include "AccountMgr.h"
 #include "AppenderDB.h"
 #include "ConfigMgr.h"
 #include "DatabaseEnv.h"
@@ -35,6 +37,12 @@ namespace
     protected:
         bool OnStart() override
         {
+            if (!sAccountMgr.LoadSettings(Config()))
+            {
+                LOG_ERROR("server.loginserver", "Cannot load the account settings");
+                return false;
+            }
+
             std::string const clientDir = Config().GetOption<std::string>("ClientDir", "", true);
             if (clientDir.empty())
                 LOG_WARN("server.loginserver", "ClientDir is not set, so client messages are logged by service and order only");
@@ -74,11 +82,13 @@ namespace
                 _databases.reset();
                 return false;
             }
+            AccountCommands::Register(Commands());
             return true;
         }
 
         void OnStop() override
         {
+            AccountCommands::Unregister(Commands());
             if (_sockets)
                 _sockets->StopNetwork();
             _sockets.reset();

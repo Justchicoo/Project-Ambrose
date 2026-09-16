@@ -217,7 +217,8 @@ PreparedQueryResult PreparedResultSet::Load(st_mysql_stmt* statement, uint32& er
                 rowFields[i].SetText(data.data() + offsets[i], length, &set->_metadata[i]);
         }
     }
-    mysql_stmt_data_seek(statement, 0);
+    if (!set->_rowData.empty())
+        mysql_stmt_data_seek(statement, 0);
     mysql_stmt_free_result(statement);
     set->_rowCount = set->_rowData.size();
     set->_fields.resize(static_cast<std::size_t>(set->_rowCount) * fieldCount);

@@ -15,6 +15,7 @@ Log.Async.QueueFull = 0
 Log.Utc = 0
 Log.PendingBuffer = 1000
 Console.Colors = 1
+Console.Enable = 1
 Appender.Console = 1,3,3,"1 9 3 6 5 8"
 Appender.Server = 2,2,7,Patch.log,w
 Appender.Errors = 2,4,7,PatchErrors.log,a,16M,10

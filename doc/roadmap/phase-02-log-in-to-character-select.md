@@ -26,7 +26,7 @@
 
 The roadmap critic flagged these. Resolve each one before or while implementing the milestones it names.
 
-- **Ordering.** 2.13 acceptance runs a console `account create test test` in loginserver, but the command/console framework (CommandMgr, 4.02) comes later and itself depends on 2.13. Either add a minimal console to 2.13 or 1.20, or move account creation after 4.02.
+- **Ordering.** 2.13 acceptance runs a console `account create test test` in loginserver, but the command/console framework (CommandMgr, 4.02) comes later and itself depends on 2.13. Either add a minimal console to 2.13 or 1.20, or move account creation after 4.02. Resolved in 2.13: every app has a console command table and reader, and 4.02 takes it over.
 
 ## 2.01 MySQLConnection and raw queries (FND-13)
 
@@ -541,8 +541,8 @@ The server can decrypt and encrypt Rec1 and verify ClientKey1 and PassKey3 exact
 
 **Acceptance**
 
-- [ ] verifier == base64(SHA-512(utf8(password))), 88 chars; duplicate username rejected case-insensitively
-- [ ] `account create test test` inserts once; rerun says it exists
+- [x] verifier == base64(SHA-512(utf8(password))), 88 chars; duplicate username rejected case-insensitively (AccountMgrTest on MariaDB 10.11 and MySQL 8.0.46; with a verifier key configured the stored value is its AES-256-GCM seal and opens to the same verifier)
+- [x] `account create test test` inserts once; rerun says it exists (AppSmoke.loginserver feeds the real binary's console; checked by hand on 2026-09-14: `account create test test` twice through a pipe created one row with an 88-character verifier and then reported that the account exists, and commands typed into a real Windows console ran)
 
 ### Detailed spec from LOG-2: db_login base schema, LoginDatabase statements and account creation
 
@@ -550,7 +550,7 @@ Accounts exist in MySQL and an operator can create one with a password, so authe
 
 **Deliverables**
 
-- data/sql/base/db_login/: account (id BIGINT UNSIGNED PK, username VARCHAR(32) UNIQUE, verifier CHAR(88) = base64(SHA-512(password)), email, security_level TINYINT, chat_mode TINYINT, locked TINYINT, purchased_slots INT, online TINYINT, joindate, last_login, last_ip, last_machine_id BIGINT UNSIGNED), account_banned (account_id, bandate, unbandate, bannedby, reason, active), ip_banned, machine_banned (machine_id, ...), updates, updates_include
+- data/sql/updates/db_login/2026_09_14_01.sql: account (id BIGINT UNSIGNED PK, username VARCHAR(32) ascii_general_ci UNIQUE, verifier VARCHAR(160) ascii_bin holding base64(SHA-512(password)) or its AES-256-GCM seal, verifier_key_id TINYINT, email, security_level TINYINT, chat_mode TINYINT, locked TINYINT, purchased_slots INT, online TINYINT, joindate, last_login, last_ip, last_machine_id BIGINT UNSIGNED), account_banned (account_id, bandate, unbandate, bannedby, reason, active), ip_banned, machine_banned (machine_id, ...). base/db_login keeps only the updater tables until base/ is squashed
 - src/server/database/Implementation/LoginDatabase.{h,cpp}: prepared statements LOGIN_SEL_ACCOUNT_BY_NAME, LOGIN_SEL_ACCOUNT_BY_ID, LOGIN_INS_ACCOUNT, LOGIN_UPD_LAST_LOGIN, LOGIN_SEL_BANS (account, ip, machine)
 - src/server/game/Accounts/AccountMgr.{h,cpp} (sAccountMgr): CreateAccount, ChangePassword, SetSecurityLevel, Ban/Unban; username normalization and length rules
 - src/server/apps/loginserver/Console: a minimal `account create <user> <pass>` and `account set gmlevel` console so login can be tested before the gameserver exists
@@ -567,9 +567,9 @@ Accounts exist in MySQL and an operator can create one with a password, so authe
 
 **Acceptance**
 
-- [ ] Unit: CreateAccount stores verifier == base64(SHA-512(utf8(password))), an 88-character string, and rejects a duplicate username case-insensitively
-- [ ] Unit: the updater applies data/sql/updates/db_login files in order and records them in updates
-- [ ] Manual: `account create test test` on the loginserver console inserts one row, and a second run reports that the account exists
+- [x] Unit: CreateAccount stores verifier == base64(SHA-512(utf8(password))), an 88-character string, and rejects a duplicate username case-insensitively
+- [x] Unit: the updater applies data/sql/updates/db_login files in order and records them in updates
+- [x] Manual: `account create test test` on the loginserver console inserts one row, and a second run reports that the account exists
 
 **Risks**
 
@@ -598,7 +598,7 @@ A real client with valid credentials is authenticated and admitted to character 
 **Deliverables**
 
 - src/server/apps/loginserver/Handlers/AuthHandler.cpp: HandleUserAuthenV3 decrypts Rec1 with the session's offer values and parses the plaintext as 'sid username ck1' (split on spaces; exactly 3 parts; sid must equal this session's id), then checks optional revision enforcement (Login.EnforceRevision, Login.AllowedRevision), account existence, account, IP and machine bans (MachineID GID), locked accounts, and CK1
-- On success: generate a session key, store it in account_session, update last_login/last_ip/last_machine_id, and send MSG_USER_AUTHEN_RSP{Error=0, UserID=account id, Rec1=Rec1.Encode(sessionKey), Reason='', TimeStamp='', PayingUser=1, Flags=0, SupportID='', PublicPlayerName=''} then MSG_USER_ADMIT_IND{Status=1, PositionInQueue=0}; mark the session Authenticated
+- On success: generate a session key, store it in account_session, update last_login/last_ip/last_machine_id, seal the verifier again when its key id is not the active verifier key, and send MSG_USER_AUTHEN_RSP{Error=0, UserID=account id, Rec1=Rec1.Encode(sessionKey), Reason='', TimeStamp='', PayingUser=1, Flags=0, SupportID='', PublicPlayerName=''} then MSG_USER_ADMIT_IND{Status=1, PositionInQueue=0}; mark the session Authenticated
 - On failure: MSG_USER_AUTHEN_RSP{Error=<code>, Reason=<text>} and keep the socket open for a retry, closing it after N failures (config Login.MaxAuthAttempts) with an IP lockout lasting Login.LockoutSeconds, like AzerothCore's WrongPass policy
 - Duplicate login policy (config Login.DuplicateLoginPolicy): an account already marked online either rejects with Error=AuthenFailed plus MSG_SERVERMESSAGE, or kicks the old session
 - Login.EnforceRevision, Login.AllowedRevision, Login.MaxAuthAttempts, Login.LockoutSeconds and Login.DuplicateLoginPolicy are live settings read on each attempt, so a change applies without a restart (registered with 4.16 when it lands)

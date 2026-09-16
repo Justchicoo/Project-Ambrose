@@ -1,12 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, stops gracefully on signals or requests, and ticks updates on its io loop.
+ * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, stops gracefully on signals, requests or the shutdown command, ticks updates on its io loop, and runs queued console lines on a command thread that shutdown waits for.
  */
 
 #include "ServerApp.h"
 #include "AppOptions.h"
 #include "Banner.h"
 #include "ConfigMgr.h"
+#include "ConsoleInput.h"
+#include "ConsoleReader.h"
 #include "GitRevision.h"
 #include "Log.h"
 #include "SignalHandler.h"
@@ -16,15 +18,41 @@
 #include <fmt/format.h>
 
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <ostream>
 
 ServerApp::ServerApp(ServerAppInfo info, ConfigMgr& config, Log& log, std::ostream& out, std::ostream& err)
     : _info(std::move(info)), _category("server." + _info.Name), _config(config), _log(log), _out(out), _err(err), _updateTimer(_io.GetImpl())
 {
+    _commands.Register({ "help", "[command]", "list commands, or the commands starting with the given words", false,
+        [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
+        {
+            std::string prefix;
+            for (std::string const& argument : arguments)
+                prefix += (prefix.empty() ? "" : " ") + argument;
+            std::vector<std::string> const lines = _commands.DescribeCommands(prefix);
+            if (lines.empty())
+                reply(fmt::format("No command starts with '{}'", prefix));
+            for (std::string const& line : lines)
+                reply(line);
+            return true;
+        } });
+    _commands.Register({ "shutdown", "", "stop the server gracefully", false,
+        [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
+        {
+            if (!arguments.empty())
+                return false;
+            reply(fmt::format("{} is shutting down", _info.Name));
+            RequestStop("the shutdown command");
+            return true;
+        } });
 }
 
-ServerApp::~ServerApp() = default;
+ServerApp::~ServerApp()
+{
+    StopConsole();
+}
 
 bool ServerApp::OnStart()
 {
@@ -42,6 +70,11 @@ std::chrono::milliseconds ServerApp::GetUpdateInterval() const
 
 void ServerApp::OnStop()
 {
+}
+
+std::unique_ptr<ConsoleInput> ServerApp::CreateConsoleInput()
+{
+    return std::make_unique<StandardConsoleInput>();
 }
 
 int ServerApp::Run(std::vector<std::string> const& arguments)
@@ -126,8 +159,11 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
         StopNow("a stop request");
     else if (options.CheckOnly)
         StopNow("--check");
+    else
+        StartConsole();
     _io.Run();
 
+    StopConsole();
     _ready = false;
     OnStop();
     LogLifecycle(LogLevel::Info, fmt::format("{} stopped", _info.Name));
@@ -135,16 +171,108 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
     return EXIT_SUCCESS;
 }
 
-void ServerApp::RequestStop()
+void ServerApp::RequestStop(std::string reason)
 {
     _stopRequested = true;
-    asio::post(_io.GetExecutor(), [this] { StopNow("a stop request"); });
+    asio::post(_io.GetExecutor(), [this, reason = std::move(reason)] { StopNow(reason); });
 }
 
 void ServerApp::LogLifecycle(LogLevel level, std::string const& text)
 {
     if (_log.ShouldLog(_category, level))
         _log.Write(_category, level, "{}", text);
+}
+
+void ServerApp::StartConsole()
+{
+    if (!_config.GetOption<bool>("Console.Enable", true, true))
+        return;
+    std::unique_ptr<ConsoleInput> input = CreateConsoleInput();
+    if (!input)
+        return;
+    {
+        std::lock_guard const lock(_commandMutex);
+        _commandStop = false;
+        _commandQueue.clear();
+    }
+    _commandThread = std::thread([this] { RunConsoleCommands(); });
+    _console = std::make_unique<ConsoleReader>(std::move(input),
+        [this](std::string line) { QueueConsoleLine(std::move(line)); },
+        [this] { AMBROSE_LOG(_log, LogLevel::Debug, "commands.console", "Console input closed; the server keeps running"); });
+    _console->Start();
+}
+
+void ServerApp::StopConsole()
+{
+    if (_console)
+        _console->Stop();
+    _console.reset();
+    {
+        std::lock_guard const lock(_commandMutex);
+        _commandStop = true;
+    }
+    _commandWake.notify_all();
+    if (_commandThread.joinable())
+        _commandThread.join();
+}
+
+void ServerApp::QueueConsoleLine(std::string line)
+{
+    std::lock_guard const lock(_commandMutex);
+    if (_commandStop)
+        return;
+    if (_commandQueue.size() >= MaxQueuedCommands)
+    {
+        AMBROSE_LOG(_log, LogLevel::Warn, "commands.console", "Dropped a console line because {} are already waiting", _commandQueue.size());
+        return;
+    }
+    _commandQueue.push_back(std::move(line));
+    _commandWake.notify_one();
+}
+
+void ServerApp::RunConsoleCommands()
+{
+    for (;;)
+    {
+        std::string line;
+        {
+            std::unique_lock lock(_commandMutex);
+            _commandWake.wait(lock, [this] { return _commandStop || !_commandQueue.empty(); });
+            if (_commandQueue.empty())
+                return;
+            line = std::move(_commandQueue.front());
+            _commandQueue.pop_front();
+        }
+        RunConsoleLine(line);
+    }
+}
+
+void ServerApp::RunConsoleLine(std::string const& line)
+{
+    std::string const described = _commands.DescribeForLog(line);
+    if (described.empty())
+        return;
+    auto const reply = [this](std::string_view text)
+    {
+        _out << text << '\n';
+        _out.flush();
+    };
+    if (_stopping)
+    {
+        AMBROSE_LOG(_log, LogLevel::Warn, "commands.console", "Console: {} did not run because {} is shutting down", described, _info.Name);
+        reply(fmt::format("{} is shutting down, so '{}' did not run", _info.Name, described));
+        return;
+    }
+    AMBROSE_LOG(_log, LogLevel::Info, "commands.console", "Console: {}", described);
+    try
+    {
+        _commands.Execute(line, reply);
+    }
+    catch (std::exception const& failure)
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, "commands.console", "Console: {} failed with {}", described, failure.what());
+        reply(fmt::format("'{}' failed: {}", described, failure.what()));
+    }
 }
 
 void ServerApp::FinishShutdown()

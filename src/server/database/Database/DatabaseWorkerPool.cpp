@@ -279,13 +279,22 @@ bool DatabaseWorkerPoolBase::DirectExecute(std::string_view sql)
 
 QueryResult DatabaseWorkerPoolBase::Query(std::string_view sql)
 {
+    QueryResult result;
+    TryQuery(sql, result);
+    return result;
+}
+
+bool DatabaseWorkerPoolBase::TryQuery(std::string_view sql, QueryResult& result)
+{
+    result = nullptr;
     SyncLease connection([this] { return GetCurrent(); });
     if (!connection)
     {
         LOG_ERROR("sql.sql", "Database pool {} is not open, so Query was refused", _name);
-        return nullptr;
+        return false;
     }
-    return connection->Query(sql);
+    result = connection->Query(sql);
+    return result || connection->GetLastErrorCode() == 0;
 }
 
 bool DatabaseWorkerPoolBase::DirectExecuteStatement(PreparedStatementBase const* statement)
@@ -301,8 +310,10 @@ bool DatabaseWorkerPoolBase::DirectExecuteStatement(PreparedStatementBase const*
     return connection->Execute(*statement);
 }
 
-PreparedQueryResult DatabaseWorkerPoolBase::QueryStatement(PreparedStatementBase const* statement)
+PreparedQueryResult DatabaseWorkerPoolBase::QueryStatement(PreparedStatementBase const* statement, bool* failed)
 {
+    if (failed)
+        *failed = true;
     if (!CheckStatement(statement, true, "Query"))
         return nullptr;
     SyncLease connection([this] { return GetCurrent(); });
@@ -311,7 +322,10 @@ PreparedQueryResult DatabaseWorkerPoolBase::QueryStatement(PreparedStatementBase
         LOG_ERROR("sql.sql", "Database pool {} is not open, so statement {} was refused", _name, statement->GetIndex());
         return nullptr;
     }
-    return connection->Query(*statement);
+    PreparedQueryResult result = connection->Query(*statement);
+    if (failed)
+        *failed = !result && connection->GetLastErrorCode() != 0;
+    return result;
 }
 
 void DatabaseWorkerPoolBase::KeepAlive()
