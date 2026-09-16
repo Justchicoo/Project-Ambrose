@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One TCP connection: an async read loop into the frame reassembler, a coalescing write queue capped in bytes, and immediate or delayed close, all on its network thread.
+ * One TCP connection: an async read loop into the frame reassembler, a coalescing write queue capped in bytes, a periodic update its network thread runs, and immediate or delayed close, all on its network thread.
  */
 
 #ifndef AMBROSE_SOCKET_H
@@ -39,6 +39,7 @@ public:
     void CloseSocket();
     void DelayedCloseSocket();
     void SetFrameLimits(FrameLimits limits);
+    virtual void Update();
 
     bool IsOpen() const noexcept { return !_closed.load(std::memory_order_relaxed); }
     asio::ip::address const& GetRemoteAddress() const noexcept { return _remoteAddress; }

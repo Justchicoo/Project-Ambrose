@@ -51,9 +51,11 @@ Session 1 sent MSG_USER_AUTHEN_V3: version W.1.610.x, revision r806919.Wizard_1_
 Session 1 from 127.0.0.1 authenticated as <name> (id 1) on machine ...: sent MSG_USER_AUTHEN_RSP Error=0 and MSG_USER_ADMIT_IND Status=1
 ```
 
+Client strings in the decoded request are escaped and cut to 64 bytes, so a client cannot write its own log lines.
+
 The client should then show the empty character select screen. A wrong password logs `failed to authenticate as <name>: the password is wrong; sent MSG_USER_AUTHEN_RSP Error=AuthenFailed`, and the client should show its invalid-login dialog and let you try again. After `Login.MaxAuthAttempts` wrong passwords the session closes and your address is refused for `Login.LockoutSeconds`.
 
-Client strings in that line are escaped and cut to 64 bytes, so a client cannot write its own log lines.
+To check the idle drop without waiting six minutes, start the server with `--set Login.AfkTimeout=30` and leave the client on the login or character select screen. After 30 seconds without input it should show its AFK disconnect message rather than a generic connection-lost error. To check the shutdown notice, type `shutdown` in the server console while the client is connected; the client should show a server-shutdown notice. The server stops accepting clients first and waits up to `Login.ShutdownGrace` for the notice to be written.
 
 Leave the client idle at the login stage for 5 minutes. Keepalive lines should appear in both directions (`keepalive from the client` and `keepalive sent to the client`, then `answered by the client`), and no `Closing session` line should appear.
 

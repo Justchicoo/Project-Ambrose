@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Swaps login settings atomically and logs their problems, rations authentication failure log lines across every session, and tracks one live session per account, forgetting closed ones and handing back a replaced session so its new owner can kick it.
+ * Swaps login settings atomically and logs their problems, serves a clock tests can freeze and move, rations authentication failure log lines across every session, and tracks one live session per account, forgetting closed ones and handing back a replaced session so its new owner can kick it.
  */
 
 #include "LoginMgr.h"
@@ -31,15 +31,36 @@ void LoginMgr::LoadSettings(ConfigMgr const& config)
 
 void LoginMgr::SetSettings(LoginSettings settings)
 {
-    auto replacement = std::make_shared<LoginSettings const>(std::move(settings));
-    std::lock_guard const lock(_settingsMutex);
-    _settings = std::move(replacement);
+    _settings.store(std::make_shared<LoginSettings const>(std::move(settings)));
 }
 
 std::shared_ptr<LoginSettings const> LoginMgr::GetSettings() const
 {
-    std::lock_guard const lock(_settingsMutex);
-    return _settings;
+    return _settings.load();
+}
+
+AuthThrottle::Clock::time_point LoginMgr::Now() const noexcept
+{
+    AuthThrottle::Clock::rep const frozen = _frozenClock.load(std::memory_order_relaxed);
+    if (frozen != 0)
+        return AuthThrottle::Clock::time_point(AuthThrottle::Clock::duration(frozen));
+    return AuthThrottle::Clock::now() + std::chrono::seconds(_clockOffset.load(std::memory_order_relaxed));
+}
+
+void LoginMgr::FreezeClock() noexcept
+{
+    _frozenClock.store(Now().time_since_epoch().count(), std::memory_order_relaxed);
+}
+
+void LoginMgr::AdvanceClock(std::chrono::seconds offset) noexcept
+{
+    AuthThrottle::Clock::rep frozen = _frozenClock.load(std::memory_order_relaxed);
+    AuthThrottle::Clock::rep const step = std::chrono::duration_cast<AuthThrottle::Clock::duration>(offset).count();
+    while (frozen != 0 && !_frozenClock.compare_exchange_weak(frozen, frozen + step, std::memory_order_relaxed))
+    {
+    }
+    if (frozen == 0)
+        _clockOffset.fetch_add(offset.count(), std::memory_order_relaxed);
 }
 
 bool LoginMgr::AllowAuthLog()
@@ -102,6 +123,8 @@ std::size_t LoginMgr::GetAccountSessionCount() const
 void LoginMgr::Reset()
 {
     SetSettings(LoginSettings{});
+    _clockOffset.store(0, std::memory_order_relaxed);
+    _frozenClock.store(0, std::memory_order_relaxed);
     _throttle.Clear();
     std::lock_guard const lock(_accountsMutex);
     _accounts.clear();

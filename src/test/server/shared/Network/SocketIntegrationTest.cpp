@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Loopback tests of the socket layer: many fragmented clients, mid-frame closes, delayed close flushing, duplicate binds, and live setting changes.
+ * Loopback tests of the socket layer: many fragmented clients, mid-frame closes, visiting every open socket on its network thread including retiring threads and throwing visitors, closing only the listener, delayed close flushing, duplicate binds, and live setting changes.
  */
 
 #include "ConfigMgr.h"
@@ -22,6 +22,8 @@
 #include <functional>
 #include <mutex>
 #include <random>
+#include <set>
+#include <stdexcept>
 #include <thread>
 
 namespace
@@ -247,6 +249,64 @@ TEST_F(SocketIntegrationTest, PeerClosingMidFrameReleasesTheSocket)
         return created.expired();
     }));
     EXPECT_EQ(_counters.ProtocolErrors.load(), 0u);
+}
+
+TEST_F(SocketIntegrationTest, ForEachSocketVisitsEveryOpenSocketAndStopAcceptingClosesOnlyTheListener)
+{
+    SocketMgr<CountingSocket> manager;
+    std::string error;
+    ASSERT_TRUE(manager.StartNetwork(LoopbackSettings(3), error)) << error;
+    std::vector<std::unique_ptr<asio::ip::tcp::socket>> clients;
+    for (int i = 0; i < 6; ++i)
+    {
+        clients.push_back(std::make_unique<asio::ip::tcp::socket>(_clientContext));
+        clients.back()->connect(Endpoint(manager.GetPort()));
+    }
+    ASSERT_TRUE(WaitFor([&] { return _counters.Started.load() == 6; }));
+
+    std::atomic<std::size_t> visited{ 0 };
+    std::atomic<std::size_t> completed{ 0 };
+    std::mutex threadsMutex;
+    std::set<std::thread::id> threads;
+    EXPECT_EQ(manager.ForEachSocket([&](std::shared_ptr<CountingSocket> const& socket)
+    {
+        EXPECT_TRUE(socket->IsOpen());
+        std::lock_guard const lock(threadsMutex);
+        threads.insert(std::this_thread::get_id());
+        visited.fetch_add(1);
+    }, [&] { completed.fetch_add(1); }), 3u);
+    ASSERT_TRUE(WaitFor([&] { return visited.load() == 6 && completed.load() == 3; }));
+    {
+        std::lock_guard const lock(threadsMutex);
+        EXPECT_EQ(threads.size(), 3u);
+        EXPECT_EQ(threads.count(std::this_thread::get_id()), 0u);
+    }
+
+    NetworkSettings shrunk = manager.GetSettings();
+    shrunk.Threads = 1;
+    ASSERT_TRUE(manager.ApplySettings(shrunk, error)) << error;
+    EXPECT_EQ(manager.GetRetiringThreadCount(), 2u);
+    visited = 0;
+    completed = 0;
+    EXPECT_EQ(manager.ForEachSocket([&](std::shared_ptr<CountingSocket> const&) { visited.fetch_add(1); throw std::runtime_error("a visitor failure"); }, [&] { completed.fetch_add(1); }), 3u);
+    ASSERT_TRUE(WaitFor([&] { return visited.load() == 6 && completed.load() == 3; }));
+
+    clients.front()->close();
+    ASSERT_TRUE(WaitFor([&] { return manager.GetConnectionCount() == 5; }));
+    visited = 0;
+    manager.ForEachSocket([&](std::shared_ptr<CountingSocket> const&) { visited.fetch_add(1); });
+    ASSERT_TRUE(WaitFor([&] { return visited.load() == 5; }));
+
+    EXPECT_TRUE(manager.IsListening());
+    uint16 const port = manager.GetPort();
+    manager.StopAccepting();
+    EXPECT_FALSE(manager.IsListening());
+    asio::ip::tcp::socket refused(_clientContext);
+    std::error_code connectError;
+    refused.connect(Endpoint(port), connectError);
+    EXPECT_TRUE(connectError);
+    EXPECT_EQ(manager.GetConnectionCount(), 5u);
+    manager.StopNetwork();
 }
 
 TEST_F(SocketIntegrationTest, DelayedCloseFlushesEveryQueuedFrameBeforeFin)

@@ -48,7 +48,7 @@ struct LoginSession::AuthAttempt
     ~AuthAttempt()
     {
         if (!Finished && Settings)
-            sLoginMgr.GetThrottle().Finish(Address, Admission, false, Settings->MaxAuthAttempts, Settings->Lockout, AuthThrottle::Clock::now());
+            sLoginMgr.GetThrottle().Finish(Address, Admission, false, Settings->MaxAuthAttempts, Settings->Lockout, sLoginMgr.Now());
     }
 
     std::shared_ptr<LoginSettings const> Settings;
@@ -78,7 +78,7 @@ void LoginSession::HandleUserAuthenV3(LoginMessages::UserAuthenV3& message)
     attempt->AddressText = attempt->Address.to_string();
     attempt->Salt = GetLoginSalt();
     attempt->MachineId = message.MachineId;
-    attempt->Admission = sLoginMgr.GetThrottle().Begin(attempt->Address, attempt->Settings->MaxAuthAttempts, attempt->Settings->Lockout, AuthThrottle::Clock::now());
+    attempt->Admission = sLoginMgr.GetThrottle().Begin(attempt->Address, attempt->Settings->MaxAuthAttempts, attempt->Settings->Lockout, sLoginMgr.Now());
     if (attempt->Admission == AuthAdmission::LockedOut || attempt->Admission == AuthAdmission::TooManyInFlight)
     {
         LOG_DEBUG(AuthLog, "Session {} from {} was refused: {}; sent MSG_USER_AUTHEN_RSP Error=AuthenFailed and closed the session", GetSessionId(), attempt->AddressText,
@@ -297,7 +297,7 @@ void LoginSession::CompleteAuthentication(std::shared_ptr<AuthAttempt> const& at
         return;
     }
 
-    sLoginMgr.GetThrottle().Finish(attempt->Address, attempt->Admission, false, attempt->Settings->MaxAuthAttempts, attempt->Settings->Lockout, AuthThrottle::Clock::now());
+    sLoginMgr.GetThrottle().Finish(attempt->Address, attempt->Admission, false, attempt->Settings->MaxAuthAttempts, attempt->Settings->Lockout, sLoginMgr.Now());
     attempt->Finished = true;
     _authenticating = false;
     _failedResponses = 0;
@@ -332,7 +332,7 @@ void LoginSession::FailAuthentication(AuthAttempt* attempt, AuthResult result, s
         AuthLockState lock = AuthLockState::NotLocked;
         if (!attempt->Finished)
         {
-            lock = sLoginMgr.GetThrottle().Finish(attempt->Address, attempt->Admission, countsAsGuess, limit, attempt->Settings->Lockout, AuthThrottle::Clock::now());
+            lock = sLoginMgr.GetThrottle().Finish(attempt->Address, attempt->Admission, countsAsGuess, limit, attempt->Settings->Lockout, sLoginMgr.Now());
             attempt->Finished = true;
         }
         if (lock == AuthLockState::LockedNow)

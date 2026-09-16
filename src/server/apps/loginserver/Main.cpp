@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Login server entry point: loads account and login settings, declares the login message table and checks it against the client's message definitions, opens the login database, listens for clients, and offers account console commands until shutdown.
+ * Login server entry point: loads account and login settings, declares the login message table and checks it against the client's message definitions, opens the login database, listens for clients, and offers account console commands until shutdown, telling connected clients before it shuts down.
  */
 
 #include "AccountCommands.h"
@@ -13,6 +13,7 @@
 #include "LogConfig.h"
 #include "LoginMessageTable.h"
 #include "LoginMgr.h"
+#include "LoginShutdown.h"
 #include "LoginSession.h"
 #include "MessageRegistry.h"
 #include "NetworkSettings.h"
@@ -110,7 +111,10 @@ namespace
         {
             AccountCommands::Unregister(Commands());
             if (_sockets)
+            {
+                LoginShutdown::NotifyAndDrain(*_sockets, sLoginMgr.GetSettings()->ShutdownGrace);
                 _sockets->StopNetwork();
+            }
             _sockets.reset();
             AppenderDB::Disable(Logger());
             if (_databases)

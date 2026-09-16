@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * One network thread running its own io_context: it owns the sockets placed on it, counts them and pending accepts, and sweeps closed sockets nobody else holds.
+ * One network thread running its own io_context: it owns the sockets placed on it, counts them and pending accepts, visits its open sockets on its own thread, and every sweep updates its open sockets and releases closed ones nobody else holds, logging any update or visit that throws.
  */
 
 #ifndef AMBROSE_NETWORKTHREAD_H
 #define AMBROSE_NETWORKTHREAD_H
 
+#include "Log.h"
 #include "ThreadName.h"
 
 #include <asio/executor_work_guard.hpp>
@@ -16,6 +17,8 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <exception>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <thread>
@@ -86,6 +89,28 @@ public:
         });
     }
 
+    void ForEachSocket(std::function<void(std::shared_ptr<SocketType> const&)> visitor, std::function<void()> completed = {})
+    {
+        asio::post(_context, [this, visitor = std::move(visitor), completed = std::move(completed)]
+        {
+            for (std::shared_ptr<SocketType> const& socket : _sockets)
+            {
+                if (!socket->IsOpen())
+                    continue;
+                try
+                {
+                    visitor(socket);
+                }
+                catch (std::exception const& failure)
+                {
+                    LOG_ERROR("network", "Visiting a socket threw: {}", failure.what());
+                }
+            }
+            if (completed)
+                completed();
+        });
+    }
+
     asio::io_context& GetIoContext() noexcept { return _context; }
     std::size_t GetConnectionCount() const noexcept { return _connections.load(); }
     void ReserveAccept() noexcept { _pendingAccepts.fetch_add(1); }
@@ -100,6 +125,19 @@ private:
         {
             if (error || _stopping.load())
                 return;
+            for (std::shared_ptr<SocketType> const& socket : _sockets)
+            {
+                if (!socket->IsOpen())
+                    continue;
+                try
+                {
+                    socket->Update();
+                }
+                catch (std::exception const& failure)
+                {
+                    LOG_ERROR("network", "A socket update threw: {}", failure.what());
+                }
+            }
             std::erase_if(_sockets, [this](std::shared_ptr<SocketType> const& socket)
             {
                 if (socket->IsOpen() || socket.use_count() != 1)

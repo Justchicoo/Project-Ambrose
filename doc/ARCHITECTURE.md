@@ -201,6 +201,14 @@ Settled on 2026-09-16 under the maintainer's standing direction to decide.
 - Failure lines share a budget of 256 lines refilled at 64 a second across every session; beyond it they are logged at Debug, so reconnecting clients cannot flood the logs.
 - Each attempt reads the `Login` options current when it starts. They load at startup, and 4.15's reload triggers refresh them live through `LoginMgr::LoadSettings`.
 
+### Login idle drop and shutdown notice
+
+Settled on 2026-09-16 under the maintainer's standing direction to decide.
+
+- Every client message counts as activity for a login session; keepalives do not, because the client sends them on its own. MSG_LOGIN_NOT_AFK is handled only to count as activity, and its BadgeNameID is ignored. Each network thread updates its open sockets on its 50 ms sweep, as AzerothCore's `NetworkThread` updates its sockets, instead of every session arming its own timer. Until a character is selected, a login session uses that update once a second to check whether it has been idle for `Login.AfkTimeout`, reading the settings lock-free at each check, so a lowered timeout applies within a second. A session whose login is still being checked is not idle. An idle client is sent MSG_DISCONNECT_LOGIN_AFK carrying `Login.AfkWarning` as its Warning byte and closed once the message is flushed. The reference server sends Warning=1; other values are unverified.
+- Idle checks and lockouts read time through `LoginMgr::Now`, which tests freeze and move forward instead of waiting.
+- When the login server stops, from a signal or the `shutdown` command, it first closes its listener, so no client arrives after the notice goes out. It then visits every accepted session on its own network thread through `SocketMgr::ForEachSocket`, sends MSG_LOGINSERVERSHUTDOWN and closes each once the notice is flushed, and waits until every notice is written, or every connection has ended, for at most `Login.ShutdownGrace` before stopping the network. A second signal during that wait does not cut it short, so the grace stays at most 60 seconds, below the stop timeout of common service managers. The Message value is sent as 0 because the reference server never sends this message and its meaning is unverified.
+
 ### Database updates
 
 Update files run through the connector with multi-statement support, so `DELIMITER` is not allowed in them. The `updates` table records each file's SHA-256 hash.

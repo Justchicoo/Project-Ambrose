@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the Login options: defaults, a revision list with spaces and empty entries, clamped limits and durations, an unknown duplicate login policy, and enforcement refused without any allowed revision.
+ * Tests the Login options: defaults, a revision list with spaces and empty entries, clamped limits, durations and AFK warning byte, a disabled AFK timeout and shutdown grace, an unknown duplicate login policy, and enforcement refused without any allowed revision.
  */
 
 #include "ConfigMgr.h"
@@ -32,6 +32,9 @@ TEST(LoginSettingsTest, DefaultsApplyWithoutOptions)
     EXPECT_EQ(settings.Lockout, std::chrono::seconds(900));
     EXPECT_EQ(settings.DuplicateLogins, DuplicateLoginPolicy::KickExisting);
     EXPECT_EQ(settings.SessionKeyLifetime, std::chrono::hours(30));
+    EXPECT_EQ(settings.AfkTimeout, std::chrono::seconds(360));
+    EXPECT_EQ(settings.AfkWarning, 1);
+    EXPECT_EQ(settings.ShutdownGrace, std::chrono::seconds(5));
 }
 
 TEST(LoginSettingsTest, ReadsListsAndClampsEveryOption)
@@ -54,6 +57,17 @@ TEST(LoginSettingsTest, ReadsListsAndClampsEveryOption)
     EXPECT_EQ(unlimited.MaxAuthAttempts, 0u);
     EXPECT_EQ(unlimited.DuplicateLogins, DuplicateLoginPolicy::KickExisting);
     EXPECT_EQ(problems, (std::vector<std::string>{ "Login.DuplicateLoginPolicy = 7 is not 0 (reject) or 1 (kick the existing session); using 1" }));
+
+    LoginSettings const idle = LoadFrom("Login.AfkTimeout = 90000\nLogin.AfkWarning = 300\nLogin.ShutdownGrace = 61\n", problems);
+    EXPECT_EQ(idle.AfkTimeout, std::chrono::hours(24));
+    EXPECT_EQ(idle.AfkWarning, 127);
+    EXPECT_EQ(idle.ShutdownGrace, std::chrono::seconds(60));
+    EXPECT_EQ(problems, (std::vector<std::string>{ "Login.AfkTimeout = 90000 is outside 0-86400; using 86400", "Login.ShutdownGrace = 61 is outside 0-60; using 60", "Login.AfkWarning = 300 is outside -128-127; using 127" }));
+    LoginSettings const off = LoadFrom("Login.AfkTimeout = 0\nLogin.AfkWarning = -1\nLogin.ShutdownGrace = 0\n", problems);
+    EXPECT_EQ(off.AfkTimeout, std::chrono::seconds(0));
+    EXPECT_EQ(off.AfkWarning, -1);
+    EXPECT_EQ(off.ShutdownGrace, std::chrono::seconds(0));
+    EXPECT_TRUE(problems.empty());
 }
 
 TEST(LoginSettingsTest, EnforcementNeedsAnAllowedRevision)

@@ -113,6 +113,10 @@ void Socket::OnStart()
 {
 }
 
+void Socket::Update()
+{
+}
+
 void Socket::OnProtocolError(FrameError error)
 {
     LOG_WARN("network", "Closing {}:{} after a protocol error: {}", _remoteAddress.to_string(), _remotePort, FrameLayout::GetErrorName(error));

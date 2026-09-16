@@ -77,6 +77,45 @@ namespace LoginMessages
         }
     };
 
+    struct DisconnectLoginAfk
+    {
+        static constexpr uint8 ServiceId = LoginService;
+        static constexpr std::string_view Tag = "MSG_DISCONNECT_LOGIN_AFK";
+
+        int8 Warning = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Warning", &DisconnectLoginAfk::Warning) };
+        }
+    };
+
+    struct LoginNotAfk
+    {
+        static constexpr uint8 ServiceId = LoginService;
+        static constexpr std::string_view Tag = "MSG_LOGIN_NOT_AFK";
+
+        uint32 BadgeNameId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("BadgeNameID", &LoginNotAfk::BadgeNameId) };
+        }
+    };
+
+    struct LoginServerShutdown
+    {
+        static constexpr uint8 ServiceId = LoginService;
+        static constexpr std::string_view Tag = "MSG_LOGINSERVERSHUTDOWN";
+
+        uint32 Message = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Message", &LoginServerShutdown::Message) };
+        }
+    };
+
     struct UserAuthen
     {
         static constexpr uint8 ServiceId = LoginService;

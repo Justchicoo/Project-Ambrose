@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * State the login server's sessions share: the live login settings, the failed-login throttle, a log budget for authentication failures, and which session holds each account, applying the duplicate login policy when a second session claims one.
+ * State the login server's sessions share: the live login settings, read without locking, the clock idle checks and lockouts read, which tests can freeze and move forward, the failed-login throttle, a log budget for authentication failures, and which session holds each account, applying the duplicate login policy when a second session claims one.
  */
 
 #ifndef AMBROSE_LOGINMGR_H
@@ -10,6 +10,8 @@
 #include "LoginSettings.h"
 #include "TokenBucket.h"
 
+#include <atomic>
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -35,6 +37,10 @@ public:
     static constexpr uint32 AuthLogBurst = 256;
     static constexpr double AuthLogsPerSecond = 64.0;
 
+    AuthThrottle::Clock::time_point Now() const noexcept;
+    void FreezeClock() noexcept;
+    void AdvanceClock(std::chrono::seconds offset) noexcept;
+
     AuthThrottle& GetThrottle() noexcept { return _throttle; }
     bool AllowAuthLog();
 
@@ -50,8 +56,9 @@ private:
 
     static bool IsLive(std::shared_ptr<LoginSession> const& session) noexcept;
 
-    mutable std::mutex _settingsMutex;
-    std::shared_ptr<LoginSettings const> _settings;
+    std::atomic<std::shared_ptr<LoginSettings const>> _settings;
+    std::atomic<int64> _clockOffset{ 0 };
+    std::atomic<AuthThrottle::Clock::rep> _frozenClock{ 0 };
     AuthThrottle _throttle;
     std::mutex _logMutex;
     TokenBucket _authLogs;

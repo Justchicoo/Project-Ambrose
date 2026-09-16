@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Starts an app's listener and network threads, places each accepted socket on the least-loaded thread, and applies setting changes live.
+ * Starts an app's listener and network threads, places each accepted socket on the least-loaded thread, visits every open socket on its own thread, stops accepting ahead of a shutdown, and applies setting changes live.
  */
 
 #ifndef AMBROSE_SOCKETMGR_H
@@ -244,6 +244,27 @@ public:
         for (ThreadPtr const& thread : _retiring)
             count += thread->GetConnectionCount();
         return count;
+    }
+
+    std::size_t ForEachSocket(std::function<void(std::shared_ptr<SocketType> const&)> visitor, std::function<void()> threadCompleted = {})
+    {
+        std::lock_guard<std::mutex> state(_stateMutex);
+        for (ThreadPtr const& thread : _threads)
+            thread->ForEachSocket(visitor, threadCompleted);
+        for (ThreadPtr const& thread : _retiring)
+            thread->ForEachSocket(visitor, threadCompleted);
+        return _threads.size() + _retiring.size();
+    }
+
+    void StopAccepting()
+    {
+        std::shared_ptr<AsyncAcceptor> acceptor;
+        {
+            std::lock_guard<std::mutex> state(_stateMutex);
+            acceptor = _acceptor;
+        }
+        if (acceptor)
+            acceptor->CloseAndWait();
     }
 
     NetworkSettings GetSettings() const

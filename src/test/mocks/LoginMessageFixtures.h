@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Ambrose-authored LOGIN and GAME message definitions for login server tests: the authentication requests and replies with their field layouts, a character list request, and a game message the login server never accepts.
+ * Ambrose-authored LOGIN and GAME message definitions for login server tests: the authentication requests and replies, the AFK and shutdown messages with their field layouts, a character list request, and a game message the login server never accepts.
  */
 
 #ifndef AMBROSE_LOGINMESSAGEFIXTURES_H
@@ -19,6 +19,9 @@ namespace LoginMessageFixtures
 <MSG_REQUESTCHARACTERLIST><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">8</_MsgOrder></RECORD></MSG_REQUESTCHARACTERLIST>
 <MSG_USER_AUTHEN><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">13</_MsgOrder><Rec1 TYPE="STR"></Rec1><Version TYPE="STR"></Version><Revision TYPE="STR"></Revision><DataRevision TYPE="STR"></DataRevision><CRC TYPE="STR"></CRC><MachineID TYPE="GID"></MachineID><PatchClientID TYPE="STR"></PatchClientID><PlatformChatID TYPE="STR"></PlatformChatID></RECORD></MSG_USER_AUTHEN>
 <MSG_USER_AUTHEN_RSP><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">14</_MsgOrder><Error TYPE="INT"></Error><UserID TYPE="GID"></UserID><Rec1 TYPE="STR"></Rec1><Reason TYPE="STR"></Reason><TimeStamp TYPE="STR"></TimeStamp><PayingUser TYPE="INT"></PayingUser><Flags TYPE="INT"></Flags><SupportID TYPE="STR"></SupportID><PublicPlayerName TYPE="STR"></PublicPlayerName></RECORD></MSG_USER_AUTHEN_RSP>
+<MSG_DISCONNECT_LOGIN_AFK><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">17</_MsgOrder><Warning TYPE="BYT"></Warning></RECORD></MSG_DISCONNECT_LOGIN_AFK>
+<MSG_LOGIN_NOT_AFK><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">18</_MsgOrder><BadgeNameID TYPE="UINT"></BadgeNameID></RECORD></MSG_LOGIN_NOT_AFK>
+<MSG_LOGINSERVERSHUTDOWN><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">19</_MsgOrder><Message TYPE="UINT"></Message></RECORD></MSG_LOGINSERVERSHUTDOWN>
 <MSG_USER_ADMIT_IND><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">20</_MsgOrder><Status TYPE="INT"></Status><PositionInQueue TYPE="UINT"></PositionInQueue></RECORD></MSG_USER_ADMIT_IND>
 <MSG_USER_AUTHEN_V2><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">22</_MsgOrder><Rec1 TYPE="STR"></Rec1><Version TYPE="STR"></Version><Revision TYPE="STR"></Revision><DataRevision TYPE="STR"></DataRevision><CRC TYPE="STR"></CRC><MachineID TYPE="GID"></MachineID><Locale TYPE="STR"></Locale><PatchClientID TYPE="STR"></PatchClientID><PlatformChatID TYPE="STR"></PlatformChatID></RECORD></MSG_USER_AUTHEN_V2>
 <MSG_WEB_AUTHEN><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">24</_MsgOrder><Rec1 TYPE="STR"></Rec1><Version TYPE="STR"></Version><Revision TYPE="STR"></Revision><DataRevision TYPE="STR"></DataRevision><CRC TYPE="STR"></CRC><MachineID TYPE="GID"></MachineID></RECORD></MSG_WEB_AUTHEN>

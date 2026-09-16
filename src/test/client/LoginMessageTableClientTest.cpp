@@ -57,8 +57,8 @@ TEST(LoginMessageTableClientTest, EveryLoginMessageHasOneRuleThatMatchesTheInsta
     EXPECT_EQ(orders.size(), 29u);
     EXPECT_EQ(*orders.begin(), 1u);
     EXPECT_EQ(*orders.rbegin(), 29u);
-    EXPECT_EQ(handled, 5u);
-    EXPECT_EQ(pending, 11u);
+    EXPECT_EQ(handled, 6u);
+    EXPECT_EQ(pending, 10u);
     EXPECT_EQ(refused, 13u);
 
     MessageRule const* const authen = table.FindRule(catalog, LoginMessages::LoginService, 27);

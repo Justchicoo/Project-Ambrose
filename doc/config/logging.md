@@ -108,7 +108,7 @@ A message goes to the logger with the longest matching name at a dot boundary. `
 
 | Category | Used for |
 |---|---|
-| `server.<app>` | App lifecycle and each app's own events. The login server logs each admitted login and each kick for a second login at Info, each failed login with its error at Info within a budget shared by every session and at Debug beyond it, address lockouts at Warn, and each decoded authentication request and each request refused while its address is locked out at Debug |
+| `server.<app>` | App lifecycle and each app's own events. The login server logs each admitted login, each kick for a second login, each client dropped for idling and the shutdown notice with how many notices were still unwritten when the wait ended at Info, each failed login with its error at Info within a budget shared by every session and at Debug beyond it, address lockouts at Warn, and each decoded authentication request and each request refused while its address is locked out at Debug |
 | `server.config` | Configuration warnings |
 | `server.logging` | Logging problems such as dropped lines |
 | `network`, `network.opcode` | Sockets and client messages by protocol and name: handled messages at Debug, messages not handled yet at Info, and messages dropped for their session status or refused with a strike, protocol errors, and connections closed at the send queue limit at Warn. A session's dropped and refused messages are logged only within `Network.DroppedMessageBurst`, so a flood from one client cannot fill the logs |

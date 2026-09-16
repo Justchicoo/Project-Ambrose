@@ -647,7 +647,7 @@ A real client with valid credentials is authenticated and admitted to character 
 
 **Acceptance**
 
-- [ ] Fake clock: idle session closed; MSG_LOGIN_NOT_AFK every 30 s keeps it
+- [x] Fake clock: idle session closed; MSG_LOGIN_NOT_AFK every 30 s keeps it (LoginAfkTest moves LoginMgr's clock forward over loopback sessions)
 - [ ] Real client: AFK message rather than connection-lost; shutdown notice shown
 
 ### Detailed spec from LOG-14: Login AFK timeout and graceful shutdown notice
@@ -656,16 +656,16 @@ Idle clients at the login screen are dropped politely, and a login server shutdo
 
 **Deliverables**
 
-- LoginSocket idle tracking: MSG_LOGIN_NOT_AFK (BadgeNameID ignored) and any other client message reset the timer; after Login.AfkTimeout send MSG_DISCONNECT_LOGIN_AFK{Warning} and close; the timer is suspended once CharacterSelected
-- Shutdown: on SIGINT or console `server shutdown`, send MSG_LOGINSERVERSHUTDOWN{Message} to every session, then close after a grace delay
-- conf/dist/loginserver.conf.dist: Login.AfkTimeout, Login.AfkWarning, Login.ShutdownGrace. They are live settings read at each timer check, so a change applies without a restart (registered with 4.16 when it lands)
+- LoginSocket idle tracking: MSG_LOGIN_NOT_AFK (BadgeNameID ignored) and any other client message reset the timer; after Login.AfkTimeout send MSG_DISCONNECT_LOGIN_AFK{Warning} and close; the timer is suspended once CharacterSelected. Built in LoginSession, checked once a second from its network thread's update against LoginMgr's clock and skipped while a login is being checked; keepalives do not count as activity, Login.AfkTimeout = 0 disables the drop, and MSG_LOGIN_NOT_AFK is accepted from connection through character selection
+- Shutdown: on SIGINT or console `server shutdown`, send MSG_LOGINSERVERSHUTDOWN{Message} to every session, then close after a grace delay. Built as LoginShutdown::NotifyAndDrain, run when the app stops from a signal or the console's `shutdown` command: it closes the listener first so no client arrives unnotified, sends Message=0 to every accepted session over the new SocketMgr::ForEachSocket, closes each once its notice is flushed, and stops waiting as soon as every notice is written or every connection has ended
+- conf/dist/loginserver.conf.dist: Login.AfkTimeout, Login.AfkWarning, Login.ShutdownGrace. They are live settings read at each timer check, so a change applies without a restart (registered with 4.16 when it lands). Built in src/server/apps/loginserver/loginserver.conf.dist, with Login.AfkWarning as the Warning byte sent and Login.ShutdownGrace = 0 sending no notice
 
 **Client messages:** MSG_LOGIN_NOT_AFK, MSG_DISCONNECT_LOGIN_AFK, MSG_LOGINSERVERSHUTDOWN
 
 **Acceptance**
 
-- [ ] Unit: with a fake clock, a session with no traffic for AfkTimeout seconds is closed, while one sending MSG_LOGIN_NOT_AFK every 30s is kept
-- [ ] Unit: with a fake clock, lowering Login.AfkTimeout on a running loginserver closes an idle session at the new timeout
+- [x] Unit: with a fake clock, a session with no traffic for AfkTimeout seconds is closed, while one sending MSG_LOGIN_NOT_AFK every 30s is kept
+- [x] Unit: with a fake clock, lowering Login.AfkTimeout on a running loginserver closes an idle session at the new timeout
 - [ ] Real client: leave the client on character select past the timeout; it shows the client's AFK disconnect message rather than a generic connection-lost error
 - [ ] Real client: stopping the loginserver while on character select shows a server-shutdown notice
 

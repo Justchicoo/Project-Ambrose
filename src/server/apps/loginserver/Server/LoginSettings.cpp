@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the Login options from config, clamping out-of-range values, refusing to enforce an empty revision list, and reporting each problem.
+ * Reads the Login options from config, clamping out-of-range values and the AFK warning byte, refusing to enforce an empty revision list, and reporting each problem.
  */
 
 #include "LoginSettings.h"
@@ -47,6 +47,13 @@ LoginSettings LoginSettings::Load(ConfigMgr const& config, std::vector<std::stri
     settings.MaxAuthAttempts = bounded("Login.MaxAuthAttempts", DefaultMaxAuthAttempts, 0, MaxAuthAttemptsLimit);
     settings.Lockout = std::chrono::seconds(bounded("Login.LockoutSeconds", DefaultLockoutSeconds, 1, MaxDurationSeconds));
     settings.SessionKeyLifetime = std::chrono::seconds(bounded("Login.SessionKeyLifetime", DefaultSessionKeyLifetimeSeconds, MinSessionKeyLifetimeSeconds, MaxDurationSeconds));
+
+    settings.AfkTimeout = std::chrono::seconds(bounded("Login.AfkTimeout", DefaultAfkTimeoutSeconds, 0, MaxAfkTimeoutSeconds));
+    settings.ShutdownGrace = std::chrono::seconds(bounded("Login.ShutdownGrace", DefaultShutdownGraceSeconds, 0, MaxShutdownGraceSeconds));
+    int32 const warning = config.GetOption<int32>("Login.AfkWarning", DefaultAfkWarning, true);
+    settings.AfkWarning = static_cast<int8>(std::clamp<int32>(warning, -128, 127));
+    if (settings.AfkWarning != warning)
+        report(fmt::format("Login.AfkWarning = {} is outside -128-127; using {}", warning, settings.AfkWarning));
 
     uint32 const policy = config.GetOption<uint32>("Login.DuplicateLoginPolicy", static_cast<uint32>(DuplicateLoginPolicy::KickExisting), true);
     if (policy <= static_cast<uint32>(DuplicateLoginPolicy::KickExisting))
