@@ -65,25 +65,30 @@ Total: 287 milestones.
 
 These block specific milestones. The maintainer decides each one, then this list and doc/ARCHITECTURE.md are updated.
 
-- Pending SQL promotion. Naming of pending_ files, and whether a CI bot may push to main. Blocks 3.19.
+- Pending SQL promotion: naming of pending_ files. Blocks 3.19.
 - MSG_COMBATMOVE MoveType values: the XML description says 0 pass, 1 attack, 2 enchant, 3 flee, the reference says Attack 0, Flee 1, Discard 2, Pass 3, ChangeMind 4. A capture or client RE must settle it. Blocks 9.06.
 - Whether the client simulates spell results from server-supplied rolls, which would require bit-exact server math. Must be settled in 9.08. Blocks 11.05 and 11.06.
-- Whether client identifiers (locale keys, template ids, internal quest/goal names) may be committed in authored SQL while display text may not, and whether a door destination table derived from client location names counts as extracted data. Blocks 6.14, 7.05, 10.16.
 - Where server-side content not in the client comes from, clean-room: quests, creature decks, drop tables, vendor stock, trainer lists, badges, XP/gold formulas, bank capacities, potion rates. Blocks 8.13, 10.07-10.10, 10.16, 11.14, 12.08.
 - Whether extractor-filled tables (object_template, zone_*, item_template, spells) are generated locally into the shared world DB or into a separate local-only DB, and whether templates are decoded at runtime from WADs or stored in the DB. Blocks 4.08, 5.01, 7.01, 8.04, 8.06.
 - Whether supplemental server-side class schemas are a committed file under data/ or a world DB table. Blocks 6.10 and 6.11.
-- Whether Ambrose builds its own type dumper (reads a live client process) or documents an external tool, and which revision and dump hash to pin. Blocks 3.03 in practice and 16.11.
+- Which client revision and type dump hash to pin. Blocks 3.03 in practice and 16.11.
 - Threading model: one world thread vs map-per-thread or strands. Blocks 4.01, 4.10, 6.01 and duel timers in 9.06.
 - How account security levels map to LOGINCOMPLETE IsCSR/Permissions. Blocks 4.02 and 6.04.
 - Whether zone spawns for all 3356 zones load at startup or lazily per instance. Blocks 4.09 and 5.02.
-- Whether to embed a Lua runtime to run the client-shipped minigame Server.lua scripts or reimplement them in C++. Blocks 13.11.
 - Crowns policy: GM grant only, or earned in game. Blocks 12.15 and 13.20.
-- Whether battlegrounds, castle magic and monster magic stay in scope. Blocks 14.14, 14.15 and 15.17-15.20.
 - Whether the tutorial moves earlier, since new characters see it first. Affects where 14.02/14.03 sit and 3.16's playercreateinfo start zone.
 - Whether the loginserver enforces Revision/DataRevision against the patch manifest. Blocks 16.07.
 
 
 ### Resolved
+
+Settled on 2026-09-16 at the maintainer's direction that the project rejects nothing, and recorded under Decisions, Experimental features in doc/ARCHITECTURE.md: authored SQL may commit client identifiers but not display text, so a door destination table holding only identifiers may be committed; Ambrose builds its own type dumper, an opt-in tool that reads the user's own running client with the terms risk stated; an embedded Lua runtime runs the client-shipped minigame scripts from the user's own install; and battlegrounds, castle magic and monster magic stay in scope. The same day plain HTTP for the admin API beyond localhost became an opt-in setting, off by default, recorded under Decisions, Operations.
+
+- Whether client identifiers (locale keys, template ids, internal quest/goal names) may be committed in authored SQL while display text may not, and whether a door destination table derived from client location names counts as extracted data. Blocks 6.14, 7.05, 10.16.
+- Whether Ambrose builds its own type dumper (reads a live client process) or documents an external tool. Blocks 16.11.
+- Whether to embed a Lua runtime to run the client-shipped minigame Server.lua scripts or reimplement them in C++. Blocks 13.11.
+- Whether battlegrounds, castle magic and monster magic stay in scope. Blocks 14.14, 14.15 and 15.17-15.20.
+- Whether a CI bot may push promoted pending SQL to main. Blocks 3.19.
 
 Settled on 2026-09-16 at the maintainer's direction to make CI cheaper, and recorded under Decisions, Continuous integration in doc/ARCHITECTURE.md: checks run daily, on pushes that change CI files and on pull requests; builds run on a schedule when code changed, by `ci:` label or on demand; and a repository variable stops builds.
 
@@ -115,12 +120,12 @@ Settled on 2026-09-13 and recorded under Decisions in doc/ARCHITECTURE.md: runti
 - Unverified wire basics could block the first real-client contact: SessionOffer length (23 vs 28 bytes), long-frame length semantics, and the Rec1/CK1 salt number formatting. 1.18 and 2.14 must be checked with a real client before anything else builds on them.
 - The only capture comes from the reference server (CHARACTERSELECTED to 127.0.0.2:12333), not retail. It proves what the client accepts, not what retail sends, so ordering, error codes and blob masks inferred from it may be wrong.
 - Message coverage: the domain plans counted only 26 of the 29 XML files. WIZARD2 (53), WIZARD3 (56) and GAME2 (55) hold 477 more records, including MSG_CLIENTZONED (53:64), which is needed at world entry. A duplicate tag shifts WIZARD ids after position 122, so each ordinal must stay test-guarded.
-- Much content is absent from the client and must be authored clean-room: quest templates, drop tables, vendor stock, creature decks, trainer lists, badges, door destinations (ResTeleport has 0 properties), and server-only classes (Trigger, WizZoneTriggers, Res*, WizardQuestingBehaviorTemplate, MobDeckBehavior are all missing from the dump). This content work is large and the maintainer's ruling on committing client identifiers gates it.
+- Much content is absent from the client and must be authored clean-room, or imported at runtime from the user's own copy of another project's data set, which is never committed: quest templates, drop tables, vendor stock, creature decks, trainer lists, badges, door destinations (ResTeleport has 0 properties), and server-only classes (Trigger, WizZoneTriggers, Res*, WizardQuestingBehaviorTemplate, MobDeckBehavior are all missing from the dump). This content work is large. Since 2026-09-16 authored SQL may commit client identifiers but not display text.
 - Combat math parity: if the client replays CombatActions with its own resolver, any formula mismatch shows as visible health desync. The formulas exist in no local source and need client RE.
 - No way to test in hosted CI: the builds, type registry, extractors and real-client tests all need the user's install and dump, so regressions may only surface on the maintainer's machine.
 - ObjectProperty edge cases: the per-field envelope policy, DirtyEncode semantics, Matrix3x3 width, and CoreObject block/type pairs other than 104/2 are unverified. Getting any of them wrong crashes the client rather than failing gracefully.
 - Settings the client mirrors or simulates, such as combat constants, MSG_SETST values, and fields fixed at LOGINCOMPLETE, can desync if changed live. Each such setting must either push the change to connected clients or apply from the next duel or session, and its documentation must say which.
-- Scope: about 280 milestones, with phases 13-15 (pets, housing, PvP) holding the most poorly documented systems. Keep the phase gates honest and do not start later phases before phase 10's playable loop exists.
+- Scope: about 280 milestones, with phases 13-15 (pets, housing, PvP) holding the most poorly documented systems. Every phase stays planned. Keep the phase gates honest and take later phases in order once phase 10's playable loop exists, apart from the parallel tracks of phases 16 and 17.
 
 ## Review findings not tied to one phase
 
@@ -135,4 +140,4 @@ Settled on 2026-09-13 and recorded under Decisions in doc/ARCHITECTURE.md: runti
 - Player-facing account lifecycle and security: account registration path beyond the console, password change/reset, login brute-force throttling per IP/account, and audit logs of GM actions and chat for moderation (reports/Infraction, MSG_REPORTHOUSE handling).
 - Remote administration (AzerothCore RA/SOAP equivalent) or an operator console on each app, plus metrics/health endpoints for multi-realm operation. **Planned in phase 17.**
 - Message identity collisions: service 54 (CatchAKeyMessages.xml) and service 44 (ShockALockMessages.xml) both define MSG_MG3_CONNECT/MOVED/REWARDS. GAME also has duplicate MSG_REMOVEOBJECT tags with different descriptions (S->C out of proximity vs C->S remove instance object). The registry and msggen must key by (service, name) and handle direction. Only the PETHATCHREADYSTATUS duplicate is mentioned. **Resolved in 1.14 and 1.15:** definitions and declarations key by (service, tag), duplicates merge only with identical fields, and the phase 2 dispatch tables curate direction.
-- Localization and locale for server-generated text (MSG_ATTACH carries Locale). Server-side notice strings are not planned.
+- Localization and locale for server-generated text (MSG_ATTACH carries Locale). **Planned, not yet scheduled:** server-side notice strings in each session's locale.

@@ -56,7 +56,7 @@ Templates, spawns, quests, quest givers, loot, and vendor lists live in the worl
 
 ### Databases and updates
 
-There are three databases: `login`, `characters`, and `world`. Every change is a new file in `data/sql/updates/db_<name>/` named `YYYY_MM_DD_NN.sql`. At startup the updater applies unapplied files in order and records each one in an `updates` table. The `db update` command and the admin API apply data-only updates live and then reload the affected managers; an update that changes a schema the running binary reads waits for the next binary upgrade. Open pull requests put their files in `pending_db_<name>/`, and they move into `updates/` when merged. `base/` is regenerated periodically by squashing old updates.
+There are three databases: `login`, `characters`, and `world`. Every change is a new file in `data/sql/updates/db_<name>/` named `YYYY_MM_DD_NN.sql`. At startup the updater applies unapplied files in order and records each one in an `updates` table. The `db update` command and the admin API apply data-only updates live and then reload the affected managers; an update that changes a schema the running binary reads applies at the next binary upgrade for now, and applying such an update live, when the running binary's statements still work against the new schema, is planned, not yet scheduled. Open pull requests put their files in `pending_db_<name>/`, and they move into `updates/` when merged. `base/` is regenerated periodically by squashing old updates.
 
 ### Message handlers
 
@@ -72,7 +72,7 @@ Each command group is one file, `scripts/Commands/cs_<group>.cpp`, holding a `Co
 
 ### Modules
 
-A module is a folder in `modules/` with its own `src/`, `conf/`, and `data/sql/`. CMake discovers it and registers its scripts through a generated loader, so a module never edits core files. Adding or removing a module needs a rebuild and restart; a module's own configuration and settings reload live.
+A module is a folder in `modules/` with its own `src/`, `conf/`, and `data/sql/`. CMake discovers it and registers its scripts through a generated loader, so a module needs no edits to core files. Adding or removing a module needs a rebuild and restart; a module's own configuration and settings reload live.
 
 ### Configuration
 
@@ -84,7 +84,7 @@ Nothing from the game client is committed. Tools in `src/tools/` read the user's
 
 ### Operations
 
-Servers stay headless so they run the same on a desktop, a Linux VPS, or in Docker. Each app writes colored logs and accepts commands on its console. An optional admin API, bound to localhost and protected by a token, serves health, status, live logs, audited commands, live settings, reloads, and Prometheus metrics. The web dashboard in `apps/dashboard/` and the Grafana dashboards in `apps/grafana/` are built on that API. Phase 17 of doc/ROADMAP.md plans this work.
+Servers stay headless so they run the same on a desktop, a Linux VPS, or in Docker. Each app writes colored logs and accepts commands on its console. An optional admin API, bound to localhost by default and protected by a token, serves health, status, live logs, audited commands, live settings, reloads, and Prometheus metrics. The web dashboard in `apps/dashboard/` and the Grafana dashboards in `apps/grafana/` are built on that API. Phase 17 of doc/ROADMAP.md plans this work.
 
 ### Tests
 
@@ -238,7 +238,7 @@ Settled on 2026-09-16 under the maintainer's standing direction to decide. The c
   - wide strings, `char`, `short`, `unsigned short`, `unsigned char`, `__int64`, gid, `float`, `double`, `wchar_t`, bit fields, s24/u24 and enums, in both forms;
   - every value type, including Color's byte order (kept as red, green, blue, alpha), Euler, and Matrix3x3 as nine floats.
   The character creation and list milestones exercise wide strings, bit fields, enums and small integers against the real client, and their captures confirm or correct these layouts. The client's data files confirm char, short, unsigned __int64, double, gid, float, wchar_t, bit fields, u24, `Point<int>`, `Size<int>`, `Rect<float>`, compact lengths and text enums and flags in the versionable format. No data file holds a Matrix3x3, Euler, Quaternion or SerializedBuffer value.
-- Refused as unsupported: `SerializeFlags` and `Compress`, because they frame a whole blob or file, which `BlobEnvelope` wraps for messages and 3.11's `BindFile` reads for data files; and SerializedBuffer, SimpleVert and SimpleFace values, whose layout is not known.
+- The serializer refuses `SerializeFlags` and `Compress`, because they frame a whole blob or file, which `BlobEnvelope` wraps for messages and 3.11's `BindFile` reads for data files. SerializedBuffer, SimpleVert and SimpleFace values are not supported yet and are refused, because their layout is not known; supporting them is planned, not yet scheduled, once captures or client reverse engineering recover it.
 - A decode trusts nothing:
   - depth, object count and list length have limits, and depth never exceeds a ceiling of 128 whatever the setting, so a decode cannot exhaust a thread's stack;
   - every object, list element, default value and string is charged against a memory budget, 16 MiB by default, before it is allocated. Each class's default object size is measured once when the type dump loads, so a small blob naming a large class cannot grow into hundreds of megabytes;
@@ -433,7 +433,7 @@ A `.conf.dist` file contains only its branding header and `Key = value` lines. E
 
 ### C++ modules
 
-Settled on 2026-09-13. The code uses headers, not C++20 modules, and CMake's module scanning is turned off. A trial build of a named module worked on MSVC, Clang 18, and GCC 14, but the main benefit, `import std`, is still experimental in CMake, works only with Ninja generators and not the Visual Studio generator, and needs GCC 15. Modules also cannot export macros such as `LOG_INFO` and `sLog`, the vcpkg libraries are headers, and editor and lint tooling for modules is weaker. Revisit when `import std` is no longer experimental in CMake, the Visual Studio generator supports it, and the CI images ship GCC 15 with working module metadata.
+Settled on 2026-09-13. The code uses headers, not C++20 modules, and CMake's module scanning is turned off. A trial build of a named module worked on MSVC, Clang 18, and GCC 14, but the main benefit, `import std`, is still experimental in CMake, works only with Ninja generators and not the Visual Studio generator, and needs GCC 15. Modules also cannot export macros such as `LOG_INFO` and `sLog`, the vcpkg libraries are headers, and editor and lint tooling for modules is weaker. Moving to modules is planned, not yet scheduled, for when `import std` is no longer experimental in CMake, the Visual Studio generator supports it, and the CI images ship GCC 15 with working module metadata.
 
 ### Operations
 
@@ -444,7 +444,7 @@ Settled on 2026-09-13 with the maintainer's direction to favor the most capable 
 | Admin API server | Crow on the standalone Asio layer, serving HTTP and WebSocket from one library |
 | Dashboard front end | TypeScript and Svelte, built by Vite into static files the admin API can serve |
 | Process control | An Ambrose supervisor process that starts, stops, restarts, and crash-restarts every app on Windows and Linux, and can itself run under systemd or as a Windows service |
-| Remote access | The admin API listens on localhost by default. Any other address requires TLS and the token, and plain HTTP is never exposed beyond the machine |
+| Remote access | The admin API listens on localhost by default. Any other address requires TLS and the token. Plain HTTP beyond the machine is an explicit opt-in setting, off by default, added on 2026-09-16 at the maintainer's direction; it still requires the token, but sends the token, commands and logs unencrypted, so anyone on the network path can read them and reuse the token |
 
 ### Continuous integration
 
@@ -460,6 +460,26 @@ Settled on 2026-09-16 at the maintainer's direction to make CI cheaper. A privat
 - Each operating system keeps one vcpkg binary cache, keyed by the archives it holds. A build prunes archives older than 30 days that it no longer uses, and saves a new cache only when the set changed. GitHub drops caches unused for 7 days, so scheduled checks restore the Linux cache daily. On Sunday and Wednesday slots that do not build Windows, a short job restores the Windows cache.
 - `python apps/ci/ci_usage.py` adds up this month's billed minutes through `gh`, for a look before a large manual run.
 - Pushes build nothing, so run `ctest` with a preset before every push. Besides the unit tests it runs `codestyle.selftest`, `codestyle.tree`, `ci.selftest` and `ci.forbidden`, the checks CI runs.
+
+### Experimental features
+
+Settled on 2026-09-16 at the maintainer's direction. The project is experimental and rules out no idea, feature or approach: each is planned work or an available experimental feature, usually opt-in. A scope cut or deferral is planned work, placed in a named milestone when one fits and otherwise marked planned, not yet scheduled. These rules keep that work lawful:
+
+- Bring your own files. Client data, models, captures and other projects' data sets, such as another project's decks, teleport or vendor data, are read at runtime from the user's own copy, the way emulator players bring their own ROMs, and an importer may read such a copy the user has. Nothing the project does not own is hosted, mirrored, redistributed or committed.
+- Bring your own license. Proprietary SDKs, tools and assets, such as Gamebryo, back optional features only for someone holding their own license, through a build option that points at their licensed copy. Nothing from them is committed, builds without them keep working, and leaked copies are never used.
+- GPL and AGPL tools may be used as separate tools. Reusing their code needs a license-compatible decision by the maintainer, and otherwise they are studied only.
+- Modified client executables are never distributed. Users apply patches, as binary diffs or a hook DLL of Ambrose's own code, to their own copy locally, at their own risk. Local binary modification and runtime hooks are experimental features for the user's own copy, never the pinned development install.
+- Capturing live KingsIsle sessions, contacting KingsIsle servers, reading a running client's memory and fetching from KingsIsle's patch servers may break KingsIsle's terms and put the user's account at risk. Each is the user's own choice on their own account and machine, and its documentation states that risk plainly.
+- Security-sensitive choices are explicit settings, off by default, each documented with its risk: plain HTTP for the admin API beyond localhost, serving executables from the patchserver, discovering a public address through an external service, and a separate development reload socket. Executables from the patchserver must match a manifest signed with the operator's own key.
+- Web clients and model previews read the user's own install, such as a browser build that loads the user's local files or a previewer served from the operator's own install. They never serve KingsIsle assets from a public host.
+- The clean-room rule and the rule that client files are never committed still hold, and the retail launcher or patcher never runs against the pinned development install, though a separate copy may be patched.
+
+Questions decided under these rules the same day:
+
+- Client identifiers, such as locale keys, template ids, zone and location names, and internal quest and goal names, may be committed in authored SQL, and display text may not. A door destination table that holds only such identifiers may be committed, even when its rows were matched from client location names. This unblocks 6.14, 7.05 and 10.16.
+- Ambrose builds its own type dumper in 16.11, an opt-in tool that reads the user's own running client on their own machine, with the risk above stated.
+- An embedded Lua runtime, added through vcpkg, runs the client-shipped minigame Server.lua scripts from the user's own install in 13.11, so the scripts reload live.
+- Battlegrounds, castle magic and monster magic stay in scope, in 14.14, 14.15 and 15.17-15.20.
 
 ### Still open
 

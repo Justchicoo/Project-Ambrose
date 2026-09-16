@@ -31,7 +31,7 @@ Run it from the install's `Bin` folder, because the client resolves its data rel
 2. Set `ClientDir` to the folder that contains `Bin`. `LoginHost`, `LoginPort`, and `Locale` are optional.
 3. Run `apps\launcher\run-client.bat`. Add `-WhatIf` to print the command without starting the client, or `-LoginPort 12001` to override a value.
 
-The launcher only ever starts `WizardGraphicalClient.exe` with `-P 0`.
+This development launcher always starts `WizardGraphicalClient.exe` with `-P 0`. A player launcher that patches a copy of the install from an Ambrose patchserver is planned for milestone 16.13.
 
 ## First handshake with the login server
 
@@ -61,7 +61,9 @@ Leave the client idle at the login stage for 5 minutes. Keepalive lines should a
 
 ## Rules
 
-- Never run the retail launcher or patcher against the install you develop with. It updates files, changes the client revision, and breaks the pinned 1.610 message and type data.
+- Never run the retail launcher or patcher against the install you develop with. It updates files, changes the client revision, and breaks the pinned 1.610 message and type data. A separate copy may be patched: the retail patcher contacts KingsIsle's servers, which is your own choice on your own account and machine, and the patched copy may no longer match Ambrose's pinned message and type data.
+- An Ambrose patchserver serves executables only when its operator turns that on, and each one must match a manifest signed with the operator's own key. The client checks only CRC-32 of what it downloads, so patch from a server only if you trust its operator.
+- Modified client executables are never distributed. Binary patches or a hook DLL of Ambrose's own code are applied by you to your own copy locally, at your own risk, and never to the install you develop with.
 - The install stays yours. Ambrose reads it at runtime and never copies its files into the repository.
 
 ## Verification

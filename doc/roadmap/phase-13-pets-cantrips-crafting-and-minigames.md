@@ -491,7 +491,7 @@ The server-authoritative Sorcery Stones minigame works, including rows, levels, 
 
 **Data sources**
 
-- Root.wad Scripts/Soblocks/{Server,ServerCore,Shared,Config,GameData}.lua (behavior study only)
+- Root.wad Scripts/Soblocks/{Server,ServerCore,Shared,Config,GameData}.lua (behavior study for the C++ state machine; the opt-in Lua runtime runs them from the user's install)
 
 **Acceptance**
 
@@ -500,7 +500,7 @@ The server-authoritative Sorcery Stones minigame works, including rows, levels, 
 
 **Risks**
 
-- Scripts/*/Server.lua are the original server logic shipped in the client. Running them needs an embedded Lua runtime, a new dependency the maintainer has to approve, which would let the scripts reload live; reimplementing in C++ is clean-room but costs more, and its tunables become live settings instead
+- Scripts/*/Server.lua are the original server logic shipped in the client. Decided on 2026-09-16 at the maintainer's direction: an embedded Lua runtime that runs them is planned as an experimental opt-in feature in a follow-up milestone in this phase. It loads the scripts at runtime from the user's own install, commits nothing from them, and lets them reload live, and its library is recorded in doc/ARCHITECTURE.md when that milestone starts. The clean-room C++ state machine stays the default, and its tunables are live settings
 
 ## 13.12 Sorcery Stones handlers and client (EXT-18 part 2)
 
@@ -528,7 +528,7 @@ The server-authoritative Sorcery Stones minigame works, including rows, levels, 
 
 **Data sources**
 
-- Root.wad Scripts/Soblocks/{Server,ServerCore,Shared,Config,GameData}.lua (behavior study only)
+- Root.wad Scripts/Soblocks/{Server,ServerCore,Shared,Config,GameData}.lua (behavior study for the C++ state machine; the opt-in Lua runtime runs them from the user's install)
 
 **Acceptance**
 
@@ -537,7 +537,7 @@ The server-authoritative Sorcery Stones minigame works, including rows, levels, 
 
 **Risks**
 
-- Scripts/*/Server.lua are the original server logic shipped in the client. Running them needs an embedded Lua runtime, a new dependency the maintainer has to approve, which would let the scripts reload live; reimplementing in C++ is clean-room but costs more, and its tunables become live settings instead
+- Scripts/*/Server.lua are the original server logic shipped in the client. Decided on 2026-09-16 at the maintainer's direction: an embedded Lua runtime that runs them is planned as an experimental opt-in feature in a follow-up milestone in this phase. It loads the scripts at runtime from the user's own install, commits nothing from them, and lets them reload live, and its library is recorded in doc/ARCHITECTURE.md when that milestone starts. The clean-room C++ state machine stays the default, and its tunables are live settings
 
 ## 13.13 Pet games: dance (EXT-19 part 1)
 

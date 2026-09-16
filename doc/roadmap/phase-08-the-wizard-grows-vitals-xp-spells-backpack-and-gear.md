@@ -593,7 +593,7 @@ Players can build their equipped deck from their spellbook, within copy and size
 **Risks**
 
 - The SpellID encoding in ADDSPELLTODECK (template id versus name hash) needs checking against a real client before handlers are written.
-- Spell fusion (WIZARD3 ADDSPELLFUSIONTODECK) is deliberately deferred.
+- Spell fusion (WIZARD3 ADDSPELLFUSIONTODECK) is not part of this milestone; it is planned, not yet scheduled.
 
 ## 8.12 Treasure cards (WIZ-15)
 
@@ -689,7 +689,7 @@ Players can spend training points at a school trainer to learn spells, with the 
 
 **Risks**
 
-- Trainer spell lists and training point costs may exist only on the server. The reference loaded them from a data set this project may not copy, so they need clean-room authoring or client-side reverse engineering (NPCServices.xml).
+- Trainer spell lists and training point costs may exist only on the server. The reference loaded them from its own data set, which is never committed here, so committed lists need clean-room authoring or client-side reverse engineering (NPCServices.xml). An opt-in importer that reads such a data set from a copy the user has, into that user's local world database only, is planned, not yet scheduled.
 
 ## 8.14 Versionable BINd encoder, byte-exact (OBJ-7)
 

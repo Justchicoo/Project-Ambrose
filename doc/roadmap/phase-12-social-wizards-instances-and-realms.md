@@ -82,7 +82,7 @@ Players can add, accept, deny and remove friends and ignored players, see online
 **Risks**
 
 - The Status, FriendInfo and Permissions bit meanings in BUDDYENTRY are unverified.
-- True-friend chat codes (REQUESTCHATCODE/SENDCHATCODE/USECHATCODE) are left out to keep this milestone small.
+- True-friend chat codes (REQUESTCHATCODE/SENDCHATCODE/USECHATCODE) are planned as a follow-up milestone in this phase, kept apart to keep this milestone small.
 
 ## 12.02 Ignore list (WIZ-17 part 2)
 
@@ -126,7 +126,7 @@ Players can add, accept, deny and remove friends and ignored players, see online
 **Risks**
 
 - The Status, FriendInfo and Permissions bit meanings in BUDDYENTRY are unverified.
-- True-friend chat codes (REQUESTCHATCODE/SENDCHATCODE/USECHATCODE) are left out to keep this milestone small.
+- True-friend chat codes (REQUESTCHATCODE/SENDCHATCODE/USECHATCODE) are planned as a follow-up milestone in this phase, kept apart to keep this milestone small.
 
 ## 12.03 Whispers and inspect (WIZ-18)
 
@@ -201,7 +201,7 @@ Players can invite each other into a group of up to four, see member info and le
 **Risks**
 
 - ErrorCode values for PARTYREQUESTRESPONSE and PARTYJOINFAILED are unknown and must be found by watching the client's error text.
-- Multi-player mount party messages are deferred.
+- Multi-player mount party messages are planned, not yet scheduled, and follow mount support.
 
 ## 12.05 Groups: updates, member zones, channel chat, leader (WIZ-19 part 2)
 
@@ -238,7 +238,7 @@ Players can invite each other into a group of up to four, see member info and le
 **Risks**
 
 - ErrorCode values for PARTYREQUESTRESPONSE and PARTYJOINFAILED are unknown and must be found by watching the client's error text.
-- Multi-player mount party messages are deferred.
+- Multi-player mount party messages are planned, not yet scheduled, and follow mount support.
 
 ## 12.06 Privacy, friendly player, teleport to friend (WIZ-20)
 
@@ -352,7 +352,7 @@ Wizards earn badges, can pick one as the title above their head, and the badge b
 - BadgeFilterDescriptions.xml extractor -> world.badge_filter
 - data/sql/updates/db_characters: character_badge (badge, progress, complete), character_stats.selected_badge
 - GAME BADGES (segmented, with the BadgeInfo/BadgeFilterInfo blobs), SELECT_BADGE handler that updates ClientWizPlayerNameBehavior.m_badgeTitle and broadcasts NEWTITLE
-- WIZARD3 REQUESTNEWBADGE / REQUESTPLAYERBADGE minimal handlers; the leaderboard and reward-loot badge messages deferred
+- WIZARD3 REQUESTNEWBADGE / REQUESTPLAYERBADGE minimal handlers; the leaderboard and reward-loot badge messages are planned as a follow-up milestone in this phase
 - cs_badge.cpp: .badge add/remove
 
 **Client messages:** GAME MSG_BADGES, GAME MSG_SELECT_BADGE, MSG_NEWTITLE, WIZARD3 MSG_REQUESTNEWBADGE, WIZARD3 MSG_REQUESTPLAYERBADGE
@@ -745,7 +745,7 @@ The HUD shows a crowns balance and crown services (energy refill, respec, crown 
 
 **Risks**
 
-- Real-money purchase of crowns is out of scope; crowns only granted by GM command or the live setting Crowns.StartingGrant
+- Real-money purchase of crowns is planned, not yet scheduled, as an experimental opt-in setting, off by default, that hands payment to a provider the operator configures. Charging real money on a server for KingsIsle's game carries legal risk, which the operator takes on. Until it lands, crowns are only granted by GM command or the live setting Crowns.StartingGrant
 
 ## 12.16 Bazaar (EXT-5)
 
@@ -835,7 +835,7 @@ Busy zones split across instances, dungeons get private per-group instances, and
 **Risks**
 
 - How groups and parties key private instances depends on the social/party domain (EXT)
-- MSG_TRANSFER_REALMS needs multi-realm support from LOG. Answer with an error until then.
+- MSG_TRANSFER_REALMS needs multi-realm support from LOG, which lands in 12.20 (realm transfer). Answer with an error until then.
 
 ## 12.18 Private dungeon instances (WLD-22 part 2)
 
@@ -880,7 +880,7 @@ Busy zones split across instances, dungeons get private per-group instances, and
 **Risks**
 
 - How groups and parties key private instances depends on the social/party domain (EXT)
-- MSG_TRANSFER_REALMS needs multi-realm support from LOG. Answer with an error until then.
+- MSG_TRANSFER_REALMS needs multi-realm support from LOG, which lands in 12.20 (realm transfer). Answer with an error until then.
 
 ## 12.19 Realm and instance picker (LOG-16 part 1 + WLD-22 part 3)
 
@@ -960,7 +960,7 @@ Busy zones split across instances, dungeons get private per-group instances, and
 **Risks**
 
 - How groups and parties key private instances depends on the social/party domain (EXT)
-- MSG_TRANSFER_REALMS needs multi-realm support from LOG. Answer with an error until then.
+- MSG_TRANSFER_REALMS needs multi-realm support from LOG, which lands in 12.20 (realm transfer). Answer with an error until then.
 
 ## 12.20 Realm transfer (LOG-16 part 2)
 
@@ -1123,4 +1123,4 @@ Settle whether services 15 and 16 are ever used by the retail client in normal w
 **Risks**
 
 - Mount speed multipliers and m_speedMultiplier come from WIZ; false positives would rubber-band honest players, so ship with validation off by default
-- Server-side collision (collision.bcd, zone.nav) is out of scope; only speed is checked
+- Server-side collision (collision.bcd, zone.nav) is planned, not yet scheduled; until it lands only speed is checked

@@ -219,7 +219,7 @@ Objects inside client messages can be decoded from and encoded to the non-versio
 **Deliverables**
 
 - ObjectSerializer compact mode: u32 class hash (0 = null), then the class's full property list in id order with no per-property headers. A property is included only if (flags & mask) == mask and it is not Deprecated. The default mask is Transmit|AuthorityTransmit, with Public added for other-player views. Built in src/server/shared/ObjectProperty/ObjectSerializer.h/.cpp, with SerializerOptions::TransmitMask and PublicMask; the captures confirm the wire carries plain class hashes
-- Without CompactLength: strings and wstrings use u16 length, containers use u32 count, enums use u32 unless StringEnums is set, bool is 1 bit, nested objects are prefixed by class hash. Built with bits packed least significant first and byte-aligned values starting on the next byte, wide strings as a u16 unit count and UTF-16LE units, bit fields and s24/u24 at their width, and value types as their fields in order; StringEnums writes option names. CompactLength, SerializeFlags and Compress are refused as unsupported, because no sample verifies compact lengths and the envelope is BlobEnvelope's job, and SerializedBuffer, SimpleVert and SimpleFace are refused as having no known layout (no r806919 property of those types is transmitted)
+- Without CompactLength: strings and wstrings use u16 length, containers use u32 count, enums use u32 unless StringEnums is set, bool is 1 bit, nested objects are prefixed by class hash. Built with bits packed least significant first and byte-aligned values starting on the next byte, wide strings as a u16 unit count and UTF-16LE units, bit fields and s24/u24 at their width, and value types as their fields in order; StringEnums writes option names. CompactLength was refused at first because no sample verified compact lengths, and 3.10 later supported it in both formats. SerializeFlags and Compress are refused because they frame a whole blob or file, which BlobEnvelope and 3.11's BindFile handle, and SerializedBuffer, SimpleVert and SimpleFace are not supported yet because their layout is unknown (no r806919 property of those types is transmitted)
 - DirtyEncode (flag bit 8) properties carry a 1-bit present prefix; the encoder always sets it unless a dirty set is supplied. Built with the dirty set as a SerializerOptions::IsDirty test, overridden by ForceDirtyEncode; a property marked absent decodes to its default
 - A symmetric API: Decode(bytes, mask, limits) -> PropertyObject and Encode(obj, mask, flags) -> bytes. Built as ObjectSerializer::Decode(catalog, bytes, options) and Encode(object, options), with options holding the mask, flags, limits (MaxDepth 64 under a hard ceiling of 128, MaxObjects 65536, MaxContainerCount 65536 and MaxDecodedBytes 16 MiB by default, made live settings in 3.06), whether trailing bytes are allowed, the classes a root may be and whether it may be null, and the dirty test. Each class's default object size is measured at load so the memory budget charges objects, list elements, defaults and strings before allocating them. Results carry a status, the bytes read and the property path a failure happened at. A count the remaining bytes cannot hold is refused before anything is allocated, and a child's class is checked as soon as its hash is read
 - src/test/server/shared/ObjectProperty/CompactCodecTest.cpp, plus the client-gated src/test/client/CompactCodecClientTest.cpp, which round-trips a default object of all 2197 r806919 property classes with both masks and, when AMBROSE_OBJECT_SAMPLES_DIR names a folder of captured blobs named after their class, checks every capture
@@ -390,7 +390,7 @@ The character select screen shows the account's wizards with correct appearance,
 **Risks**
 
 - Whether m_location must be a locale key or a literal display string is unverified; a wrong form shows a blank or raw key on the select screen.
-- The equipment preview (what EquippedItemInfo.m_itemID refers to) is unverified and deferred to the item domain; characters appear without gear until then.
+- The equipment preview (what EquippedItemInfo.m_itemID refers to) is unverified; filling it is planned with equipment in 8.10, and characters appear without gear until then.
 
 ## 3.10 Versionable decode core (OBJ-6 part 1)
 
@@ -639,7 +639,7 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 **Deliverables**
 
 - CharacterHandler::HandleCreateCharacter: deserialize CreationInfo as WizardCharacterCreationInfo (Transmit|AuthorityTransmit, unwrapped); on a decode failure send ErrorCode!=0 and keep the session
-- Validation: count < Character.MaxPerAccount (live setting, default 6) + purchased_slots; m_schoolOfFocus is in character_create_school; m_avatarBehavior.m_eGender is Female=0 or Male=1 (Neutral=2 rejected); m_eRace == Human (79806088); every appearance field fits its bit width; nameIndices pass CharacterNameMgr and the disallowed list; optional uniqueness (live setting Character.UniqueNames); m_name (custom name) ignored unless security_level allows. Both settings are read per request (registered with 4.16 when it lands)
+- Validation: count < Character.MaxPerAccount (live setting, default 6) + purchased_slots; m_schoolOfFocus is in character_create_school; m_avatarBehavior.m_eGender is Female=0 or Male=1 (Neutral=2 rejected); m_eRace == Human (79806088); every appearance field fits its bit width; nameIndices pass CharacterNameMgr and the disallowed list; optional uniqueness (live setting Character.UniqueNames); m_name (custom name) is used when security_level allows it, or for any account when an opt-in experimental live setting, off by default, allows custom names, which lets players pick names the retail flow never offers; a custom name is still validated for length and characters and refused when invalid. These settings are read per request (registered with 4.16 when it lands)
 - Starting state from world DB playercreateinfo (school_id, zone, location, orientation, level, world), AzerothCore precedent: write the characters and character_appearance rows in one transaction
 - `.reload playercreateinfo` and `.reload character_create_school` (through 4.15 when it lands) rebuild their rows off to the side, validate them, swap, and keep the old rows on failure
 - CharacterHandler::HandleLoginLogCharacterCreation: store Stage and Parameter on the session and log them (telemetry, no reply)
@@ -674,7 +674,7 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 
 - Which ErrorCode values the client maps to which dialog is unverified; the reference only ever sends 0 or 1.
 - Whether the client automatically sends MSG_REQUESTCHARACTERLIST after a successful create, or expects the server to push the list, is unverified.
-- Strict appearance validation against avatar option templates in ObjectData (AvatarOption, WizardCharacterBehaviorTemplate) is not scoped here; bit-width checks alone let through combinations the client UI never offers.
+- Strict appearance validation against avatar option templates in ObjectData (AvatarOption, WizardCharacterBehaviorTemplate) is planned, not yet scheduled; until it lands, bit-width checks alone let through combinations the client UI never offers.
 - The starting zone and location (the reference uses WizardCity/Tutorial_Exterior) belong to the tutorial and world domains; until they exist, playercreateinfo must point at a zone the gameserver can load.
 
 ## 3.16 Character creation persist and real-client flow (LOG-8 part 2)
@@ -698,7 +698,7 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 **Deliverables**
 
 - CharacterHandler::HandleCreateCharacter: deserialize CreationInfo as WizardCharacterCreationInfo (Transmit|AuthorityTransmit, unwrapped); on a decode failure send ErrorCode!=0 and keep the session
-- Validation: count < Character.MaxPerAccount (live setting, default 6) + purchased_slots; m_schoolOfFocus is in character_create_school; m_avatarBehavior.m_eGender is Female=0 or Male=1 (Neutral=2 rejected); m_eRace == Human (79806088); every appearance field fits its bit width; nameIndices pass CharacterNameMgr and the disallowed list; optional uniqueness (live setting Character.UniqueNames); m_name (custom name) ignored unless security_level allows. Both settings are read per request (registered with 4.16 when it lands)
+- Validation: count < Character.MaxPerAccount (live setting, default 6) + purchased_slots; m_schoolOfFocus is in character_create_school; m_avatarBehavior.m_eGender is Female=0 or Male=1 (Neutral=2 rejected); m_eRace == Human (79806088); every appearance field fits its bit width; nameIndices pass CharacterNameMgr and the disallowed list; optional uniqueness (live setting Character.UniqueNames); m_name (custom name) is used when security_level allows it, or for any account when an opt-in experimental live setting, off by default, allows custom names, which lets players pick names the retail flow never offers; a custom name is still validated for length and characters and refused when invalid. These settings are read per request (registered with 4.16 when it lands)
 - Starting state from world DB playercreateinfo (school_id, zone, location, orientation, level, world), AzerothCore precedent: write the characters and character_appearance rows in one transaction
 - `.reload playercreateinfo` and `.reload character_create_school` (through 4.15 when it lands) rebuild their rows off to the side, validate them, swap, and keep the old rows on failure
 - CharacterHandler::HandleLoginLogCharacterCreation: store Stage and Parameter on the session and log them (telemetry, no reply)
@@ -733,7 +733,7 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 
 - Which ErrorCode values the client maps to which dialog is unverified; the reference only ever sends 0 or 1.
 - Whether the client automatically sends MSG_REQUESTCHARACTERLIST after a successful create, or expects the server to push the list, is unverified.
-- Strict appearance validation against avatar option templates in ObjectData (AvatarOption, WizardCharacterBehaviorTemplate) is not scoped here; bit-width checks alone let through combinations the client UI never offers.
+- Strict appearance validation against avatar option templates in ObjectData (AvatarOption, WizardCharacterBehaviorTemplate) is planned, not yet scheduled; until it lands, bit-width checks alone let through combinations the client UI never offers.
 - The starting zone and location (the reference uses WizardCity/Tutorial_Exterior) belong to the tutorial and world domains; until they exist, playercreateinfo must point at a zone the gameserver can load.
 
 ## 3.17 Character deletion (LOG-9)
@@ -833,7 +833,7 @@ Pending SQL from merged PRs becomes correctly numbered dated files, and CI prove
 
 **Deliverables**
 
-- apps/ci/ci-pending-sql.py: on push to main, move data/sql/updates/pending_db_<name>/*.sql to updates/db_<name>/YYYY_MM_DD_NN.sql (NN = next free for that UTC date, in pending-name order), then commit with an AI trailer as a bot commit (maintainer approval needed)
+- apps/ci/ci-pending-sql.py: on push to main, move data/sql/updates/pending_db_<name>/*.sql to updates/db_<name>/YYYY_MM_DD_NN.sql (NN = next free for that UTC date, in pending-name order), then commit with an AI trailer as a bot commit (approved on 2026-09-16 at the maintainer's direction)
 - apps/ci/ci-sql-check.py: on PR, fails if any existing file in updates/db_* or base/ was modified or deleted (unless the PR is labelled squash), checks naming rules and SQL headers
 - Workflow job with a MariaDB/MySQL service container that runs the pending and updates files on a fresh DB (through dbimport once FND-20 lands)
 

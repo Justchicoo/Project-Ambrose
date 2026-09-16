@@ -11,7 +11,7 @@ Current repo state (3.13): src/tools/bindecode, src/tools/dbimport and src/tools
 Build order:
 1. **Early foundation:** codec_registry, wad_extractor, template_extractor, dbimport + codestyle-sql, the ambrose.sh dashboard, the reload framework (4.15) and its admin API (17.12).
 2. **Mid authoring:** Ambrose Studio (database editor) with quest/dialogue and NPC/loot/vendor sub-editors, GM build sessions (.spawn/.session), zone_extractor + zone/spawn editor, wadview, spell inspector, create_module.
-3. **Late:** capture_to_sql (blocked on a capture-policy decision because of KingsIsle ToS risk), a server-side event/action script table + editor, a Lua scripting module, client_content_builder + manifest_builder for custom WAD overlays (blocked on a test proving the client accepts a changed WAD), navmesh_generator, a content DSL.
+3. **Late:** capture_to_sql (capture sources decided on 2026-09-16; capturing live KingsIsle sessions is the user's own choice and risk), a server-side event/action script table + editor, a Lua scripting module, client_content_builder + manifest_builder for custom WAD overlays (blocked on a test proving the client accepts a changed WAD), navmesh_generator, a content DSL.
 
 Formerly rejected ideas, reopened on 2026-09-16 at the maintainer's direction as experimental opt-in features:
 - Client data in the style of acore.sh: bring your own files, as players of emulators bring their own ROMs. Every tool reads client data only from the user's own install. The project never hosts, mirrors, downloads or ships client files, or models extracted from them.
@@ -71,7 +71,7 @@ List, stream and inflate KIWAD entries from the user's 3,589 GameData WADs (550,
 - Filters by glob/extension; skips leaked art-source junk (.psd, .mov, Thumbs.db, .mine)
 - Detects the BINd container and hands it to the codec; handles UTF-16LE .lang files
 - Checks install path and revision before running; output goes to a git-ignored cache folder
-- Has no 'download pre-extracted data' option
+- Can import a pre-extracted cache the user built from their own install, for example on another machine; it never downloads pre-extracted client data from a host
 
 ### template_extractor (template index builder)
 
@@ -88,7 +88,7 @@ Turn the 104,869 ObjectData templates, 18,173 Spells, 599 Decks, 740 TalentData,
 - Tables: template (id, class, name key, path, school, etc.), spell, deck, talent, locale_string, template_manifest
 - Decodes names through the Locale keys so pickers search in English
 - Records the source revision (r806919) in the index metadata
-- Optional: generates server-owned world rows (mob/npc template stubs) as a pending SQL update, never client data
+- Optional: generates server-owned world rows (mob/npc template stubs) as a pending SQL update, never client data; rows that need client values go into a git-ignored local overlay built per user
 - Reserves a custom template-id range and fails on collision with retail TemplateManifest ids (duplicate ids silently replace retail templates)
 
 ### dbimport + SQL updater + codestyle-sql
@@ -144,7 +144,7 @@ A single entry point for contributors and agents: install deps, compile, run the
 - db: setup / update / squash
 - run: loginserver, gameserver, patchserver; test: ctest
 - module new/list; studio (launch local web editor); wadview
-- Never downloads client data
+- Reads client data only from the user's own install and never downloads it from a host the project runs. An opt-in step that fills a separate copy from KingsIsle's patch servers is planned, not yet scheduled; using it is the user's own choice on their own account and machine, may break KingsIsle's terms, and never touches the pinned development install
 
 ### Reload channel (.reload + admin API)
 
@@ -159,7 +159,7 @@ Let editors, GMs and operators push world database changes into any running game
 
 - cs_reload.cpp: one subcommand per world table plus groups (all, quests, locales), security level gated
 - Every reload builds the new store off to the side, validates it, swaps it atomically, and keeps the old store with every error reported on failure
-- `POST /api/reload/{target}` and `GET /api/reload` accept the same targets on every server, gated by the admin token and security level, and every call is audited; there is no separate dev socket
+- `POST /api/reload/{target}` and `GET /api/reload` accept the same targets on every server, gated by the admin token and security level, and every call is audited. A separate dev reload socket in the WDE.RemoteSOAP style is an opt-in setting, off by default; it opens a second control port outside the admin API, so anyone who can reach it can reload the world
 - Studio and the build-session tools call it after 'Execute'
 - Reload names come from the schema definitions
 
@@ -169,7 +169,7 @@ Let editors, GMs and operators push world database changes into any running game
 
 The main content editor: schema-aware forms over the world database with linked navigation between entities, a live SQL diff preview, and 'Save as pending update'. Content creation becomes fast, and the SQL never drifts from git.
 
-- **Form:** Local web app served on localhost (C++ backend in src/tools using shared/database, simple TS/HTML frontend); no client files bundled
+- **Form:** Local web app served on localhost (C++ backend in src/tools using shared/database, simple TS/HTML frontend); no client files bundled, since it reads the user's own install at runtime
 - **Inspired by:** Keira3 (EditorService diffQuery/fullQuery, handler services, route guards, unused GUID search); WoW Database Editor (sessions, diff viewer, remote reload)
 - **Lives in:** src/tools/studio/
 - **Needs:** World schema definitions, dbimport/updater, template_extractor index, reload channel, world tables for NPCs/quests/spawns/loot
@@ -223,7 +223,7 @@ Edit server-owned NPC/mob rows: which client template an NPC uses, its interacti
 
 ### GM build sessions (.spawn / .session / .zone commands)
 
-Place and tune spatial content from inside the retail Wizard101 client (spawn position, yaw, patrol paths, teleporter targets). Edits apply live on dev and are recorded as a pending SQL update instead of silently changing the database. On other servers the same commands need an admin security level, apply live, and are audited.
+Place and tune spatial content from inside the retail Wizard101 client (spawn position, yaw, patrol paths, teleporter targets). Edits apply live on dev and are recorded as a pending SQL update. The opt-in direct-to-database mode also saves them to the database at once, journaled, so the database never changes silently. On other servers the same commands need an admin security level, apply live, and are audited.
 
 - **Form:** In-game GM chat commands
 - **Inspired by:** AzerothCore cs_npc (.npc add/move/near), cs_wp (waypoints), cs_pooltools (session that dumps SQL to sql.dev log)
@@ -259,7 +259,7 @@ Turn each zone WAD (3,356 contain gamedata.bin) into server data: retail spawn p
 
 ### Zone and spawn editor (Studio module)
 
-See and edit spawns, mob patrol areas, NPC placements, trigger volumes and teleporter links on a top-down view of each zone. Changes are written as pending SQL overlays, never back into the client files.
+See and edit spawns, mob patrol areas, NPC placements, trigger volumes and teleporter links on a top-down view of each zone. Changes are written as pending SQL overlays. Changes the client must also see go out through the manifest_builder WAD overlay or, as an opt-in experimental step, are written into a separate copy of the user's install, never the pinned development install.
 
 - **Form:** Studio sub-editor (local web app, 2D canvas)
 - **Inspired by:** Keira3 map viewer (spawn pins on world map images); Noggit's overlay-project idea (write only changed things)
@@ -291,14 +291,14 @@ A read-only local browser for the user's WADs. It shows BINd decoded through the
 - BINd rendered as typed property trees; .gui Window trees; .lang tables
 - DDS preview (DXT1/3/5) and NiPixelData texture preview
 - Cross-links: template id -> ObjectData file -> references in spawns, quests, decks
-- Runs on localhost only against the user's install; nothing committed, no export of client files to the repo
+- Runs against the user's install and listens on localhost by default. Listening beyond localhost is an opt-in setting, off by default, because anyone who can reach it can browse that install; it never becomes a public host of client files. Nothing committed, no export of client files to the repo
 
 ### Spell and deck inspector
 
 Read-only decoding of the 18,173 Spells and 599 Decks into readable effects, pips, school, accuracy and targets, linked to the mobs, decks, items and treasure cards that use them. It doubles as the test oracle while combat is implemented.
 
 - **Form:** Studio sub-view + CLI dump mode
-- **Inspired by:** TrinityCore SpellWork (read-only spell inspector); stoneharry Spell Editor (only its import/inspect half)
+- **Inspired by:** TrinityCore SpellWork (read-only spell inspector); stoneharry Spell Editor (its import/inspect half first; an editing mode like its writing half is planned, not yet scheduled, and saves pending SQL or a WAD overlay built on the user's machine)
 - **Lives in:** src/tools/studio/ (features/spell); CLI in src/tools/template_extractor
 - **Needs:** template_extractor spell/deck tables; combat subsystem (for oracle mode)
 
@@ -311,7 +311,7 @@ Read-only decoding of the 18,173 Spells and 599 Decks into readable effects, pip
 
 ### create_module + module skeleton
 
-Scaffold drop-in modules (custom content, events, QoL features) that never edit core files, with their own SQL and config.
+Scaffold drop-in modules (custom content, events, QoL features) that plug in through ScriptMgr hooks rather than core edits, with their own SQL and config. A module that needs a hook core lacks gets that hook added to core.
 
 - **Form:** CLI script
 - **Inspired by:** AzerothCore modules/create_module.sh, skeleton-module, acore.sh module search and catalogue.json
@@ -320,7 +320,7 @@ Scaffold drop-in modules (custom content, events, QoL features) that never edit 
 
 **Key features**
 
-- ambrose.sh module new <Name>: generates modules/<name>/ from an in-repo template (no network clone)
+- ambrose.sh module new <Name>: generates modules/<name>/ from an in-repo template by default, or, as an opt-in, clones a template repository the user names
 - Skeleton: src/<Name>_loader.cpp with AddSC_, a sample PlayerScript/NpcScript, conf/<name>.conf.dist, data/sql/db_world/ example update, Ambrose headers
 - CMake auto-discovery and a generated loader
 - module list reads installed modules; a later 'ambrose-module' GitHub topic can feed a catalogue
@@ -329,12 +329,12 @@ Scaffold drop-in modules (custom content, events, QoL features) that never edit 
 
 ### capture_to_sql (packet capture to SQL)
 
-Decode session captures with the 971 message definitions from the client's 26 *Messages.xml plus the ObjectProperty codec. Collect spawned objects, NPC dialogue, quest offers and goals, shop lists and combat encounters, diff them against the world database, and write the minimum pending SQL update. It never writes to the database.
+Decode session captures with the 971 message definitions from the client's 26 *Messages.xml plus the ObjectProperty codec. Collect spawned objects, NPC dialogue, quest offers and goals, shop lists and combat encounters, diff them against the world database, and write the minimum pending SQL update. By default it does not write to the database; an opt-in mode also applies the update to a local dev database through the updater, so the change is still recorded.
 
 - **Form:** CLI (C++; shares message codecs generated from the message XMLs)
 - **Inspired by:** TrinityCore WowPacketParser (per-table SQL builders, DB diff 'minimum changes', VerifiedBuild) + ymir sniffer; AzerothCore wiki sniffing-and-parsing.md
 - **Lives in:** src/tools/capture_to_sql/
-- **Needs:** Message codec generation from *Messages.xml; ObjectProperty codec; world tables for spawns/quests/shops/loot; policy decision on capture sources
+- **Needs:** Message codec generation from *Messages.xml; ObjectProperty codec; world tables for spawns/quests/shops/loot; the capture source rules decided on 2026-09-16
 
 **Key features**
 
@@ -344,7 +344,7 @@ Decode session captures with the 971 message definitions from the client's 26 *M
 - Aggregates loot and deck samples across many captures into statistical chances with a sample-count column
 - Readable text dump mode annotated with names from the template index
 - Companion doc/content/capturing.md listing what to do in-game
-- Blocked on a project policy decision: capturing live KingsIsle sessions may violate their ToS. Default input is captures of the user's own sessions against Ambrose or legacy captures they own
+- Capture sources, decided on 2026-09-16 at the maintainer's direction: the default input is captures of the user's own sessions against Ambrose or legacy captures they own. Capturing live KingsIsle sessions is allowed as the user's own choice on their own account and machine; it may break KingsIsle's terms and put that account at risk of a ban. Captures, including another project's capture sets, are read from the user's own copy and never committed, and SQL built from live KingsIsle captures or another project's captures goes into a git-ignored local overlay, never a committed update
 
 ### npc_script table + visual behavior editor
 
@@ -375,7 +375,7 @@ Optional drop-in module that binds ScriptMgr hook classes to Lua so quest, event
 **Key features**
 
 - Binds PlayerScript, NpcScript, QuestScript, ZoneScript, CommandScript hooks
-- lua_scripts/ folder with an AutoReload file watcher (dev only) and .reload lua, which on every server loads and validates the new scripts, swaps them, and keeps the old scripts on failure
+- lua_scripts/ folder with an AutoReload file watcher (on by default on dev, an opt-in setting elsewhere) and .reload lua, which on every server loads and validates the new scripts, swaps them, and keeps the old scripts on failure
 - Versioned Lua API with docs generated from the binding code (avoids the ALE/Eluna split)
 - Written from scratch; no Eluna/ALE code
 
@@ -392,14 +392,14 @@ For content the retail client must also see (new templates, locale text, GUI lay
 
 - Builds WADs with per-entry CRC, HeaderSize/HeaderCRC, gzip header size; writes LatestFileList.bin/.xml (DML tables) and computes ListFileCRC
 - Template id collision check against the retail TemplateManifest; generates the manifest overlay and matching SQL rows from one source
-- Serves data only: refuses FileType 1/4 executables and DLLs
+- Serves data only by default. Serving FileType 1/4 executables and DLLs is an opt-in setting, off by default: each file must match the manifest signed with the operator's own key (see Formerly rejected ideas), only files the operator owns, such as a hook DLL of Ambrose's own code, are served, and a modified KingsIsle executable never is. The client checks only CRC-32, so players must trust the operator
 - Custom revision naming (e.g. V_r806919.Ambrose_N); separate install folder guidance
 - Output never committed; built on the user's machine
 - Blocked on an unverified test: that the client accepts a rebuilt or new WAD, and which WAD wins on duplicate paths
 
 ### navmesh_generator
 
-Generate server-side pathing meshes for mob movement and spawn validation from the extracted zone collision and walkable meshes, only if the client's zone.nav proves insufficient.
+Generate server-side pathing meshes for mob movement and spawn validation from the extracted zone collision and walkable meshes. It is planned late work, and a per-zone setting chooses between its mesh and the client's zone.nav.
 
 - **Form:** CLI (C++)
 - **Inspired by:** mmaps_generator + mmaps-config.yaml (off-mesh connections, per-map overrides)

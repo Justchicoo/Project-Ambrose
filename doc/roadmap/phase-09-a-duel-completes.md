@@ -23,7 +23,7 @@
 
 The roadmap critic flagged these. Resolve each one before or while implementing the milestones it names.
 
-- **Ordering.** Phase 9 outcome and 9.10 require a 'wandering mob', but path-walking NPCs (10.14) come after phase 9 and 9.10 does not depend on them. Creature decks (11.14) also come after 9.10, although 9.10 says the mob 'casts its attack'. An interim hard-coded or authored creature spell source is needed, or 9.10 has to drop 'wandering'.
+- **Ordering.** Phase 9 outcome and 9.10 require a 'wandering mob', but path-walking NPCs (10.14) come after phase 9 and 9.10 does not depend on them. Creature decks (11.14) also come after 9.10, although 9.10 says the mob 'casts its attack'. An interim hard-coded or authored creature spell source is needed, or 9.10 starts with a stationary mob and its 'wandering' check moves to 10.14.
 - **Ordering.** 9.04 spawns creatures but does not depend on 7.01 (object_template extractor). Creature names, behaviors and templates come from there, and 7.01 is not reachable through 9.04's dependency chain.
 - **Missing work.** Game event / holiday scheduler and daily reset (AzerothCore game_event equivalent). It gates HalloweenSpawner1's ReqGlobalRegistryValue (9.04), daily assignments (14.16), daily PvP and holiday data. Global registry storage is also missing.
 - **Oversized.** 9.08 single-target damage cast with cinematic parity (M). It bundles COMBATACTIONS encoding, m_effectChosen bits, fizzle, pips and hit rolls, and it is also where the open 'client simulates results' question must be settled.

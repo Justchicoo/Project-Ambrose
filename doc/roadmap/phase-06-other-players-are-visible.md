@@ -643,7 +643,7 @@ Walking through a zone exit (e.g. WC_Hub -> Ravenwood) transfers the player to t
 - world.zone_teleport table: zone, trigger_name -> dest_zone, dest_location, transition_id, same_zone flag
 - `.reload zone_teleport` rebuilds the destination map off to the side, validates every destination zone and location, and swaps it; a failure keeps the old rows and reports every error
 - ResTeleport result handler: a same-zone destination uses WLD-12; otherwise WLD-13. When paired triggers share an event, only the first teleport in data order runs.
-- src/tools/zone_extractor --propose-teleports: suggests pairs by matching 'Target location (<SrcZone> <DstZone> Exit)'-style location names and 'TeleportTo<X>' trigger names across zones, and writes a review CSV (never auto-committed)
+- src/tools/zone_extractor --propose-teleports: suggests pairs by matching 'Target location (<SrcZone> <DstZone> Exit)'-style location names and 'TeleportTo<X>' trigger names across zones, and writes a review CSV. The opt-in --apply-proposals also writes the suggestions into the user's local world database as journaled edits exportable as a pending SQL update; proposals reach the repository only as rows a human has reviewed
 - data/sql/updates/db_world: hand-reviewed zone_teleport rows for the Wizard City starting area (WC_Hub <-> Ravenwood, Shopping District, Unicorn Way, Golem Court, Library)
 
 **Client messages:** MSG_ZONETRANSFERREQUEST, MSG_ZONETRANSFERACK, MSG_SERVERTRANSFER, MSG_SERVERTELEPORT, MSG_ENTERSTATE
@@ -668,8 +668,8 @@ Walking through a zone exit (e.g. WC_Hub -> Ravenwood) transfers the player to t
 
 **Risks**
 
-- Destination data is not in the client: authoring rows for ~3356 zones is a large manual content job. Only a name-matching heuristic plus human review is clean-room. Never import another project's teleport DB.
-- Is a destination table derived from client names 'client-extracted data' that must stay uncommitted? The maintainer should decide.
+- Destination data is not in the client: authoring rows for ~3356 zones is a large manual content job. Committed rows come only from a name-matching heuristic plus human review, which keeps them clean-room. An opt-in importer that reads another project's teleport data from a copy the user has, into that user's local world database only, is planned, not yet scheduled; imported rows are never committed or redistributed.
+- Decided on 2026-09-16 at the maintainer's direction: a destination table that names zones, locations and triggers by their client identifiers may be committed as hand-reviewed zone_teleport rows, like key-only quest SQL. No client file or client text is copied into them.
 
 ## 6.15 AOI grid and visibility sets, unit level (WLD-11 part 1)
 

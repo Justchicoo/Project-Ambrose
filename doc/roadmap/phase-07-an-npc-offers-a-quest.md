@@ -50,7 +50,7 @@ The key fields of client templates land in world DB tables that managers and GM 
 
 **Risks**
 
-- Schema depends on the pending MySQL/MariaDB decision
+- The schema must work on both database servers settled in doc/ARCHITECTURE.md, MySQL 8.0 or newer and MariaDB 10.6 or newer
 - Some ObjectData behaviors use classes missing from the dump until OBJ-12 fills them. The extractor must not fail on them
 
 ### Detailed spec from QST-3: Object template extractor for NPCs and interactables
@@ -170,7 +170,7 @@ Quests authored as SQL rows load into an immutable sQuestMgr snapshot built on t
 
 **Risks**
 
-- Normalized tables vs JSON columns for dialogs, requirements and results depends on the pending MySQL/MariaDB decision (JSON support differs).
+- Normalized tables vs JSON columns for dialogs, requirements and results must suit both database servers settled in doc/ARCHITECTURE.md, MySQL 8.0 or newer and MariaDB 10.6 or newer, whose JSON support differs.
 - The name-hash algorithm for quest_template.name_id and goal name_id is unverified (retail capture shows QuestNameID=120047678). It must match the client's string hash, likely owned by OBJ.
 
 ## 7.04 Requirement engine v1 (QST-6)
@@ -259,7 +259,7 @@ A contributor can write a new quest as a dated SQL update that uses only keys an
 
 **Risks**
 
-- The line between an identifier (key, template id, internal quest name) and extracted data needs a maintainer ruling before any quest SQL is committed.
+- The line between an identifier (key, template id, internal quest name) and extracted data was decided on 2026-09-16 at the maintainer's direction: quest SQL that refers to the client only through such identifiers may be committed. Client text and client files stay out of the repository and are read from the user's install at run time.
 
 ## 7.06 Character quest persistence and registry (QST-7)
 
@@ -409,7 +409,7 @@ Clicking a quest giver opens the retail quest offer window (Prep dialog, title, 
 
 **Deliverables**
 
-- src/server/game/Quests/QuestOfferProvider.cpp (NpcServiceProvider): attach when starterByTemplateId has the NPC's template id. Available = not active, not completed (unless repeatable), requirements pass; ordering by title (Persona m_maintainQuestOrder is future work). Option PrepEntry{m_displayKey = title key, m_iconKey 'Prep', m_serviceName 'QuestOfferService'}.
+- src/server/game/Quests/QuestOfferProvider.cpp (NpcServiceProvider): attach when starterByTemplateId has the NPC's template id. Available = not active, not completed (unless repeatable), requirements pass; ordering by title (ordering by Persona m_maintainQuestOrder is planned, not yet scheduled). Option PrepEntry{m_displayKey = title key, m_iconKey 'Prep', m_serviceName 'QuestOfferService'}.
 - On select, send in this order: WIZARD MSG_INTERACTAVAILABLEQUEST (MobileID, QuestName); MSG_ACTORDIALOG (CompletionType 'QuestInfo', ActorDialog = Prep dialog, RangeCheck, IsYesNo); QUEST MSG_QUESTOFFER (MobileID, QuestName, QuestTitle, Level, Rewards = LootInfoList preview, GoalData = GoalCompilation of start goals, Mainline).
 - Per-session offered-quest cache keyed by quest name plus NPC GID. MSG_DECLINEQUEST removes the entry; leaving service range expires it.
 
@@ -599,7 +599,7 @@ Quest start, goal prep, underway, completion and quest-complete dialogs play at 
 - src/server/game/Dialogs/DialogMgr.cpp: send by tag: quest 'Start' -> CompletionType 'QuestStart'; goal 'Prep' on activate -> 'QuestStart' with ids; goal 'Completion' -> 'Completion'; quest 'Complete' -> 'QuestComplete'. Filter entries by their own RequirementList (meetsRequirements).
 - Per-player pending-dialog state. HandleCompleteDialog (MSG_COMPLETEDIALOG: MobileID, CompletionType, EntryEvent) fires dialogEvents, runs deferred results, and releases chained offers.
 - HandleInteractUnderwayQuest (MSG_INTERACTUNDERWAYQUEST) sends the Underway dialog. HandleRequestQuestDialog (MSG_REQUESTQUESTDIALOG by QuestNameID) replies MSG_QUESTDIALOG (QuestNameID, ActorDialog).
-- Party broadcast stub for MSG_ENCOUNTERDIALOG (gated off until party support).
+- Party broadcast stub for MSG_ENCOUNTERDIALOG, gated off until groups exist (12.04); wiring it to group members once they do is planned, not yet scheduled.
 
 **Client messages:** MSG_ACTORDIALOG, MSG_COMPLETEDIALOG, MSG_INTERACTUNDERWAYQUEST, MSG_REQUESTQUESTDIALOG, MSG_QUESTDIALOG, MSG_ENCOUNTERDIALOG
 

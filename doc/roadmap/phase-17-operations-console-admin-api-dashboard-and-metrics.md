@@ -23,7 +23,7 @@
 ## Review notes for this phase
 
 - **Origin.** Added on 2026-09-13 at the maintainer's request for a modern, intuitive way to run the servers. It also covers the roadmap review's missing work item for remote administration and health endpoints.
-- **Decisions.** Settled on 2026-09-13 under Decisions, Operations in doc/ARCHITECTURE.md: Crow for 17.02, TypeScript and Svelte with Vite for 17.06, an Ambrose supervisor for 17.08, and localhost-only access unless TLS and a token are configured. 17.11 picks FTXUI, which vcpkg provides.
+- **Decisions.** Settled on 2026-09-13 under Decisions, Operations in doc/ARCHITECTURE.md: Crow for 17.02, TypeScript and Svelte with Vite for 17.06, an Ambrose supervisor for 17.08, and localhost-only access unless TLS and a token are configured. On 2026-09-16 at the maintainer's direction, plain HTTP beyond localhost became an opt-in setting, off by default (see 17.02). 17.11 picks FTXUI, which vcpkg provides.
 - **Live settings.** 17.12 and 17.13 were added on 2026-09-14 for the Live reload and live settings rule in doc/ARCHITECTURE.md. Config editing moved from 17.08 to 17.13, so edits apply live through the settings API instead of writing the `.conf` file and asking for a restart.
 
 ## 17.01 Server console: colored logs and a command prompt
@@ -59,13 +59,14 @@
 - Bearer token authentication with a constant-time comparison; the token comes from config or is generated on first start into a file readable only by the current user, and it rotates live on a config reload
 - A per-address TokenBucket that limits failed authentication attempts
 - `GET /api/health` returning app name, realm, revision, uptime in seconds, and lifecycle state as JSON
-- Startup refuses a non-loopback bind address unless a TLS certificate and key are configured; on a config reload an unsafe non-loopback bind is refused with an error naming the option and the old binding stays, while a safe bind change rebinds live and a failed bind keeps the old listener. This hooks into 4.15 when it lands
+- Startup refuses a non-loopback bind address unless a TLS certificate and key are configured, or the operator sets the opt-in `Admin.AllowPlainHttpRemote = 1`, which is off by default. With that setting the token is still required and startup logs a warning naming the option, but the token, commands and logs cross the network unencrypted, so anyone on the path can read them and reuse the token. On a config reload an unsafe non-loopback bind is refused with an error naming the option and the old binding stays, while a safe bind change rebinds live and a failed bind keeps the old listener. This hooks into 4.15 when it lands
 
 **Acceptance**
 
 - [ ] `GET /api/health` without a token returns 401, and with the token returns 200 and the running revision
 - [ ] Twenty wrong tokens within one second from one address produce 429 responses
 - [ ] Setting `Admin.BindIP = 0.0.0.0` without TLS logs an error naming the option and exits 1 at startup, and on a config reload is refused while the old binding keeps serving
+- [ ] With `Admin.AllowPlainHttpRemote = 1` and no TLS, a non-loopback bind starts, still requires the token, and logs a warning naming the option
 - [ ] Rotating the token and reloading config makes the old token return 401 and the new one 200 without a restart
 - [ ] Routing, authentication, and rate limiting are unit tested without opening sockets
 

@@ -625,7 +625,7 @@ Mobs fight with authored decks and personalities (smart, selfish, aggressive) in
 **Risks**
 
 - Real mob deck contents are not in the client (sampled ObjectData/Decks entries hold only name/adjectives), so decks must be authored clean-room. Content volume is large
-- Must not import SpiralDB or other projects' deck data
+- Committed decks never come from SpiralDB or other projects' deck data. An opt-in importer that reads SpiralDB or another project's deck data from a copy the user has, into that user's local world database only and never committed, is planned, not yet scheduled
 
 ## 11.15 Weighted creature AI (CMB-18 part 2)
 
@@ -678,7 +678,7 @@ Mobs fight with authored decks and personalities (smart, selfish, aggressive) in
 **Risks**
 
 - Real mob deck contents are not in the client (sampled ObjectData/Decks entries hold only name/adjectives), so decks must be authored clean-room. Content volume is large
-- Must not import SpiralDB or other projects' deck data
+- Committed decks never come from SpiralDB or other projects' deck data. An opt-in importer that reads SpiralDB or another project's deck data from a copy the user has, into that user's local world database only and never committed, is planned, not yet scheduled
 
 ## 11.16 Treasure cards, item cards, enchantments in combat (CMB-21)
 

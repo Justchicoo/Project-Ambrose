@@ -294,7 +294,7 @@ Defeating mobs whose adjectives match a bounty goal advances its tally ('Defeat 
 **Risks**
 
 - Combat is another domain; the victory event contract (CMB) must carry mob adjectives.
-- Party kill credit (MSG_GROUPQUESTCREDIT) is not covered.
+- Party kill credit (MSG_GROUPQUESTCREDIT) is not part of this milestone; it needs groups (12.04) and is planned, not yet scheduled.
 
 ## 10.07 LootMgr core (QST-19 + CMB-20 merged)
 
@@ -535,7 +535,7 @@ Talking to a vendor NPC opens the native shop window, and the player can buy and
 **Data sources**
 
 - ObjectData item templates (WizItemTemplate price fields) via template extractor
-- Vendor stock lists are NOT in the client. The world DB authors them (GM command or hand-written custom SQL), and they are never copied from another project's data
+- Vendor stock lists are NOT in the client. The world DB authors them (GM command or hand-written custom SQL), and committed stock is never copied from another project's data. An opt-in importer that reads another project's vendor data from a copy the user has, into that user's local world database only, is planned, not yet scheduled
 
 **Database tables**
 
@@ -970,7 +970,7 @@ A new wizard can play the first real Wizard City quests end to end, covering off
 
 **Risks**
 
-- Retail goal structure, dialog-key-to-quest mapping and rewards must be reconstructed from observed behavior without importing any other project's data, and may not match retail exactly.
+- Retail goal structure, dialog-key-to-quest mapping and rewards for the committed chain must be reconstructed from observed behavior, not from any other project's data, and may not match retail exactly. An opt-in importer that reads another project's quest data from a copy the user has, into that user's local world database only and never committed, is planned, not yet scheduled.
 - Real zone triggers may reference goals we do not author, leaving gates closed.
 
 ## 10.17 Wizard City chain real-client playthrough (QST-23 part 2)
@@ -1016,7 +1016,7 @@ A new wizard can play the first real Wizard City quests end to end, covering off
 
 **Risks**
 
-- Retail goal structure, dialog-key-to-quest mapping and rewards must be reconstructed from observed behavior without importing any other project's data, and may not match retail exactly.
+- Retail goal structure, dialog-key-to-quest mapping and rewards for the committed chain must be reconstructed from observed behavior, not from any other project's data, and may not match retail exactly. An opt-in importer that reads another project's quest data from a copy the user has, into that user's local world database only and never committed, is planned, not yet scheduled.
 - Real zone triggers may reference goals we do not author, leaving gates closed.
 
 ## 10.18 Quest helper extras (QST-24)

@@ -191,7 +191,7 @@ An empty database is created from base/ and then brought current by applying dat
 - UpdateFetcher.h/.cpp: file discovery and hashing (SHA-256 of file bytes with line endings normalized to LF)
 - SQL file execution: multi-statement execution via CLIENT_MULTI_STATEMENTS on a dedicated connection (settled in doc/ARCHITECTURE.md), with a quote- and comment-aware splitter that names the failing statement and its line and refuses DELIMITER, stopping on the first error
 - Config: Updates.EnableDatabases (bitmask login=1, characters=2, world=4), Updates.AutoSetup, Updates.SourcePath
-- `db update` on a running server applies pending data-only update files live, then reloads the stores they touch; a file with schema statements is refused, since schema updates the running binary needs are a documented restart case. Deferred to 4.15, which adds the command and reload framework; until then updates run at startup only
+- `db update` on a running server applies pending data-only update files live, then reloads the stores they touch. By default a file with schema statements is refused, since schema updates the running binary needs are a documented restart case; an opt-in experimental setting, off by default, applies such a file live instead, at the operator's risk that the running binary fails against a schema it does not expect. Deferred to 4.15, which adds the command and reload framework; until then updates run at startup only
 
 **Acceptance**
 
@@ -230,7 +230,7 @@ An empty database is created from base/ and then brought current by applying dat
 - UpdateFetcher.h/.cpp: file discovery and hashing (SHA-256 of file bytes with line endings normalized to LF)
 - SQL file execution: multi-statement execution via CLIENT_MULTI_STATEMENTS on a dedicated connection (settled in doc/ARCHITECTURE.md), with a quote- and comment-aware splitter that names the failing statement and its line and refuses DELIMITER, stopping on the first error
 - Config: Updates.EnableDatabases (bitmask login=1, characters=2, world=4), Updates.AutoSetup, Updates.SourcePath
-- `db update` on a running server applies pending data-only update files live, then reloads the stores they touch; a file with schema statements is refused, since schema updates the running binary needs are a documented restart case. Deferred to 4.15, which adds the command and reload framework; until then updates run at startup only
+- `db update` on a running server applies pending data-only update files live, then reloads the stores they touch. By default a file with schema statements is refused, since schema updates the running binary needs are a documented restart case; an opt-in experimental setting, off by default, applies such a file live instead, at the operator's risk that the running binary fails against a schema it does not expect. Deferred to 4.15, which adds the command and reload framework; until then updates run at startup only
 
 **Acceptance**
 
@@ -275,7 +275,7 @@ A standalone tool creates and updates all three databases without starting any s
 
 **Risks**
 
-- ARCHITECTURE.md says tools depend only on shared and common, but dbimport must link the database layer; the doc needs an exception
+- ARCHITECTURE.md says tools depend only on shared and common, but dbimport must link the database layer. Settled on 2026-09-13: tools may depend on database, shared and common (see Layering in doc/ARCHITECTURE.md)
 
 ## 2.08 Pools wired into apps, DB appender (FND-21)
 
@@ -491,7 +491,7 @@ The server can decrypt and encrypt Rec1 and verify ClientKey1 and PassKey3 exact
 
 **Risks**
 
-- Pending stack decision: OpenSSL has SHA and base64 but no Twofish. The options are Botan, Crypto++, or our own implementation from the public Twofish spec, and the choice affects deps/ and vcpkg.
+- Settled on 2026-09-13: OpenSSL has SHA and base64 but no Twofish, so Botan 3 from vcpkg was chosen for Twofish and SHA-2 (see Stack in doc/ARCHITECTURE.md).
 - The number formatting in the salt (decimal, no separators, milliseconds not zero-padded) is inferred from the reference; if it is wrong, every login fails. Confirm with a real client in LOG-4.
 
 ## 2.12 Rec1, ClientKey1, PassKey3, session keys (LOG-3)
@@ -531,7 +531,7 @@ The server can decrypt and encrypt Rec1 and verify ClientKey1 and PassKey3 exact
 
 **Risks**
 
-- Pending stack decision: OpenSSL has SHA and base64 but no Twofish. The options are Botan, Crypto++, or our own implementation from the public Twofish spec, and the choice affects deps/ and vcpkg.
+- Settled on 2026-09-13: OpenSSL has SHA and base64 but no Twofish, so Botan 3 from vcpkg was chosen for Twofish and SHA-2 (see Stack in doc/ARCHITECTURE.md).
 - The number formatting in the salt (decimal, no separators, milliseconds not zero-padded) is inferred from the reference; if it is wrong, every login fails. Confirm with a real client in LOG-4.
 
 ## 2.13 db_login schema, AccountMgr, console account create (LOG-2)
@@ -574,8 +574,8 @@ Accounts exist in MySQL and an operator can create one with a password, so authe
 
 **Risks**
 
-- The verifier the client protocol needs (base64 SHA-512 of the password, unsalted) is password-equivalent: anyone who reads db_login can log in as any user. This is forced by the client's ClientKey1 scheme, so db_login needs strict access control. Maintainer decision.
-- Layering: loginserver (an app) linking game/Accounts is allowed by apps -> game, but it drags the game library into the loginserver. The alternative is an AccountMgr kept in apps/loginserver plus a copy for cs_account. Needs a decision.
+- The verifier the client protocol needs (base64 SHA-512 of the password, unsalted) is password-equivalent: anyone who reads db_login can log in as any user. This is forced by the client's ClientKey1 scheme, so db_login needs strict access control. Settled on 2026-09-14: the verifier is encrypted at rest when verifier keys are configured (see Accounts and the console in doc/ARCHITECTURE.md).
+- Layering: loginserver (an app) linking game/Accounts is allowed by apps -> game, but it drags the game library into the loginserver. The alternative is an AccountMgr kept in apps/loginserver plus a copy for cs_account. Settled on 2026-09-14: account management builds as the `accounts` library in game/Accounts, which the login server links (see Accounts and the console in doc/ARCHITECTURE.md).
 
 ## 2.14 Authentication: AUTHEN_V3 -> AUTHEN_RSP + ADMIT_IND (LOG-4)
 

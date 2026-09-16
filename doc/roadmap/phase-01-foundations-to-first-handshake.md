@@ -80,7 +80,7 @@ Prove the whole toolchain works: configure, vendored dep, static lib, generated 
 
 **Risks**
 
-- Vendoring fmt vs using a package manager (vcpkg/Conan) is a pending decision; the vendored-folder shape follows AzerothCore
+- Settled on 2026-09-13: dependencies, fmt included, come from vcpkg manifest mode instead of vendored copies (see Stack in doc/ARCHITECTURE.md)
 - Generated header must be regenerated per build without forcing a full rebuild (use configure_file with copy_if_different)
 
 ## 1.02 Unit test harness (FND-2)
@@ -117,7 +117,7 @@ Every later milestone can add GoogleTest tests that CTest runs from one executab
 
 **Risks**
 
-- GoogleTest is a pending decision (Catch2 is the alternative); gtest_discover_tests needs the exe runnable at build time (cross builds)
+- GoogleTest and GoogleMock were chosen on 2026-09-13 (see Stack in doc/ARCHITECTURE.md); gtest_discover_tests needs the exe runnable at build time (cross builds)
 
 ## 1.03 Codestyle checker (FND-3)
 
@@ -138,13 +138,13 @@ A tool rejects any file that lacks the exact Project Ambrose header for its type
 
 **Deliverables**
 
-- apps/codestyle/codestyle.py (Python 3, header '# Project Ambrose by Imjustchico' + brief) or a C++ tool in src/tools; language choice to confirm
+- apps/codestyle/codestyle.py (Python 3, header '# Project Ambrose by Imjustchico' + brief); Python was settled for repository tooling on 2026-09-13 (see Tools in doc/ARCHITECTURE.md)
 - Per-type rules taken from doc/ARCHITECTURE.md Conventions table: C/C++ (`/*`, ` * Project Ambrose by Imjustchico`, ` * <non-empty brief>`, ` */`), # family (CMake, sh, ps1, py, yml, conf/.conf.dist, .gitignore/.gitattributes/.editorconfig), SQL `--`, Batch `REM`, Markdown `<!-- Project Ambrose by Imjustchico: <brief> -->`; JSON exempt
 - Comment lexers that respect string literals: C++ `//` and `/* */` outside "...", '...' and raw strings R"d(...)d"; SQL `--`/`/* */` outside quotes; CMake `#` and `#[[ ]]` outside quoted args; shell/Python `#` outside quotes, with shebang allowed on line 1 before the header; Batch `REM`/`::`; Markdown `<!-- -->`
 - Excludes: deps/**, build*/**, .git/**, empty .gitkeep files, generated build/src/genrev
 - Extra checks: LF endings except .bat/.ps1 (matches .editorconfig/.gitattributes), trailing whitespace, final newline, include guard `AMBROSE_<FILE>_H` in .h
 - apps/codestyle/tests/ fixtures (good/bad samples) + test runner
-- Exit code 0/1 with file:line messages; `--fix-header` is not provided (headers need a human-written brief)
+- Exit code 0/1 with file:line messages; `--fix-header` is planned, not yet scheduled, as an opt-in experimental option that inserts the header form for a file's type around a brief the caller supplies, because headers need a human-written brief
 
 **Acceptance**
 
@@ -159,7 +159,7 @@ A tool rejects any file that lacks the exact Project Ambrose header for its type
 
 - The no-comments rule conflicts with AzerothCore-style commented .conf.dist files, and with Doxygen or license text in vendored deps (deps/ must be excluded)
 - A lexer that misreads C++ raw strings, digit separators (1'000) or character literals gives false positives
-- Python in apps/ may clash with 'Server code is C++' in CLAUDE.md; tooling is probably fine but the maintainer should confirm
+- Python in apps/ does not clash with 'Server code is C++' in CLAUDE.md: settled on 2026-09-13, repository tooling in apps/ may be Python or shell (see Tools in doc/ARCHITECTURE.md)
 
 ## 1.04 CI pipeline (FND-4)
 
@@ -492,7 +492,7 @@ Thread-safe queues, worker threads and thin Asio wrappers that network and datab
 
 **Deliverables**
 
-- Decision point: Boost.Asio (AzerothCore precedent) vs standalone Asio; Boost is not vendored (too large), found via find_package, which affects install docs and CI
+- Settled on 2026-09-13: standalone Asio with no Boost, from vcpkg (see Stack in doc/ARCHITECTURE.md)
 - src/common/Threading/ProducerConsumerQueue.h: blocking Pop with Cancel, WaitAndPop
 - src/common/Threading/ThreadPool.h (named threads running one asio::io_context; asio::thread_pool was not used because attaching named threads to it races with join), ThreadName helper, LockedQueue.h, MPSCQueue.h
 - src/common/Asio/IoContext.h, Strand.h, DeadlineTimer.h, Resolver.h (IPv4/IPv6 resolve to endpoint), IpAddress.h (parse, is-loopback), SignalSet helper
@@ -508,7 +508,7 @@ Thread-safe queues, worker threads and thin Asio wrappers that network and datab
 
 **Risks**
 
-- Boost vs standalone Asio changes include paths and error_code types in every networking file; decide before NET starts
+- Standalone Asio was chosen before NET started, which fixed include paths and error_code types for every networking file (see Stack in doc/ARCHITECTURE.md)
 
 ## 1.12 Crypto basics: SHA-256/512, CRC32 both variants, CSPRNG (FND-7 + PAT-2 Crc32)
 
@@ -529,7 +529,7 @@ The hash and checksum primitives login and patch flows need are available with k
 
 **Deliverables**
 
-- deps decision: OpenSSL (system, as AzerothCore) or vendored minimal implementations
+- Settled on 2026-09-13: Botan 3 from vcpkg for SHA-2 and the random number generator, with the client's CRC-32 implemented in common (see Stack in doc/ARCHITECTURE.md)
 - src/common/Cryptography/SHA256.h/.cpp, SHA512.h/.cpp: incremental Update/Finalize
 - src/common/Cryptography/CRC32.h/.cpp: reflected polynomial 0xEDB88320 with caller-supplied initial value (the reference uses both Calculate(0,...) for patch file lists and ~crc for WAD segments)
 - src/common/Cryptography/CryptoRandom.h: GetRandomBytes via OS CSPRNG
@@ -545,7 +545,7 @@ The hash and checksum primitives login and patch flows need are available with k
 
 **Risks**
 
-- OpenSSL on Windows adds a DLL dependency and a vcpkg/installer step
+- Botan 3 was chosen instead of system OpenSSL, so the crypto library comes from vcpkg on every platform
 - Which CRC variant KIWAD entries use is not verified (the reference uses different init values in different places)
 
 ### Detailed spec from PAT-2: KI CRC-32 and KIWAD header measurement primitives
@@ -920,7 +920,7 @@ All three executables run the standard lifecycle (args, config, logging, banner,
 - SIGINT/SIGTERM and Windows console Ctrl+C handler trigger graceful stop; process exit code 0
 - Main loop tick with configurable update diff for gameserver (World update placeholder for WLD); World.UpdateInterval is read every tick, so a reload applies from the next tick
 - src/test/server/shared/App/ServerAppTest.cpp (in process, including a real SIGINT) and src/test/apps/AppSmokeTest.cmake, which runs each built executable for --version and a missing config
-- Optional Windows service/daemon hooks deferred
+- Optional Windows service and daemon hooks are planned for 17.08, where the Ambrose supervisor can itself run under systemd or as a Windows service (see Operations in doc/ARCHITECTURE.md)
 
 **Acceptance**
 

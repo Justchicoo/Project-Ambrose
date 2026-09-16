@@ -101,7 +101,7 @@ One in-memory manifest can be emitted as both LatestFileList.xml and LatestFileL
 
 **Risks**
 
-- The XML library is not chosen yet (pugixml or similar goes into deps/), so flag it for the maintainer
+- The XML library is pugixml through vcpkg, settled in doc/ARCHITECTURE.md, so no library choice is pending
 
 ## 16.03 Install scanner manifest generator (PAT-5)
 
@@ -166,7 +166,7 @@ A client or probe that connects to the patch port gets a correct pointer to our 
 
 **Deliverables**
 
-- src/server/apps/patchserver/Main.cpp + PatchServerApp (Boost.Asio acceptor, pending the stack decision)
+- src/server/apps/patchserver/Main.cpp + PatchServerApp (standalone Asio acceptor, as settled in doc/ARCHITECTURE.md)
 - src/server/game-independent handler file src/server/apps/patchserver/Handlers/PatchHandler.cpp registering MSG_LATEST_FILE_LIST_V2 (state: never authenticated) and MSG_LATEST_FILE_LIST (v1, same reply without Locale)
 - Reply fields: LatestVersion=1, ListFileName='LatestFileList.bin', ListFileType=1, ListFileTime=manifest mtime (unix), ListFileSize and ListFileCRC of the .bin, ListFileURL='<BaseUrl>/<V_revision>/Windows/LatestFileList.bin' (path style unverified), URLPrefix='<BaseUrl>/<V_revision>', URLSuffix='', Locale echoed
 - Manifest loaded at startup and reloaded from the console or the admin API with an atomic swap; a manifest that fails to load or validate keeps the old one serving and reports every error. This hooks into the 4.15 reload framework and the 17.12 admin API when those land
@@ -212,7 +212,7 @@ The client can fetch the manifest, whole files and byte ranges from our server, 
 
 **Deliverables**
 
-- src/server/apps/patchserver/Http/ (Boost.Beast if Boost is chosen, otherwise flagged): GET and HEAD for /<V_revision>/<SrcFileName>; LatestFileList.bin/.xml served from Patch.OutputDir, everything else mapped Src->Tar->install path using the manifest (only paths listed in the manifest are servable)
+- src/server/apps/patchserver/Http/ (Crow on the standalone Asio layer, the HTTP library doc/ARCHITECTURE.md settled for the admin API): GET and HEAD for /<V_revision>/<SrcFileName>; LatestFileList.bin/.xml served from Patch.OutputDir, everything else mapped Src->Tar->install path using the manifest (only paths listed in the manifest are servable)
 - Range: bytes=a-b support (206 + Content-Range), Content-Length on every response, correct 404/416
 - Path traversal rejection (.., absolute, drive prefixes), case-insensitive lookup on Windows installs
 - Optional serving of the compressed variant for FileType 4 once its URL/format is confirmed (see open questions)
@@ -233,7 +233,7 @@ The client can fetch the manifest, whole files and byte ranges from our server, 
 
 **Risks**
 
-- HTTP library choice pending (Boost.Beast vs another), flag for the maintainer
+- The HTTP library is Crow on the standalone Asio layer, as settled in doc/ARCHITECTURE.md; whether Range responses need Ambrose's own handling on top of it is unverified
 - Unverified whether the client uses HTTP Range for 'DownloadSegment ... Offset=%u, Size=%u' or a different segment URL scheme
 - Retail uses HTTP (user agent 'KingsIsle Patcher'); TLS need is unverified
 
@@ -386,7 +386,7 @@ A client missing zone WADs streams them from Ambrose during play instead of bein
 
 **Deliverables**
 
-- RE note in doc/ of the Data string format of MSG_DOWNLOADPACKAGE / MSG_DOWNLOADPACKAGEELEMENT (from the client, via Ghidra or sniffing of our own server only)
+- RE note in doc/ of the Data string format of MSG_DOWNLOADPACKAGE / MSG_DOWNLOADPACKAGEELEMENT (from the client via Ghidra, or from sniffing our own server. A user may also capture their own live KingsIsle session as their own choice, on their own account and machine: that may break KingsIsle's terms and risks the account, and such captures are never committed)
 - gameserver: before a zone transfer, send MSG_DOWNLOADPACKAGE for the destination package when Patch.Enabled=1 and the client reports it is not patched
 - patchserver: segment-download support confirmed (Range or other URL form), plus the compressed type-4 variant if required
 
@@ -424,7 +424,7 @@ A client missing zone WADs streams them from Ambrose during play instead of bein
 
 **Deliverables**
 
-- RE note in doc/ of the Data string format of MSG_DOWNLOADPACKAGE / MSG_DOWNLOADPACKAGEELEMENT (from the client, via Ghidra or sniffing of our own server only)
+- RE note in doc/ of the Data string format of MSG_DOWNLOADPACKAGE / MSG_DOWNLOADPACKAGEELEMENT (from the client via Ghidra, or from sniffing our own server. A user may also capture their own live KingsIsle session as their own choice, on their own account and machine: that may break KingsIsle's terms and risks the account, and such captures are never committed)
 - gameserver: before a zone transfer, send MSG_DOWNLOADPACKAGE for the destination package when Patch.Enabled=1 and the client reports it is not patched
 - patchserver: segment-download support confirmed (Range or other URL form), plus the compressed type-4 variant if required
 
@@ -470,7 +470,7 @@ Users generate their own type dump from their own client, so Ambrose does not de
 
 **Risks**
 
-- Requires reading a live process's memory, which is platform-specific and fragile across client revisions and may conflict with the client's terms. This needs a maintainer decision before any work
+- Requires reading a live process's memory, which is platform-specific and fragile across client revisions. Decided on 2026-09-16 at the maintainer's direction: the dumper is planned as an experimental opt-in tool. Reading a running client's memory may break KingsIsle's terms, so the user runs it only as their own choice, on their own account and machine, at their own risk
 - Cannot be verified in CI
 
 ## 16.12 Type dump v2 emission and validator (OBJ-20 part 2)
@@ -499,7 +499,7 @@ Users generate their own type dump from their own client, so Ambrose does not de
 
 **Risks**
 
-- Requires reading a live process's memory, which is platform-specific and fragile across client revisions and may conflict with the client's terms. This needs a maintainer decision before any work
+- Requires reading a live process's memory, which is platform-specific and fragile across client revisions. Decided on 2026-09-16 at the maintainer's direction: the dumper is planned as an experimental opt-in tool. Reading a running client's memory may break KingsIsle's terms, so the user runs it only as their own choice, on their own account and machine, at their own risk
 - Cannot be verified in CI
 
 ## 16.13 Player launcher that patches from Ambrose (new)
@@ -517,12 +517,12 @@ Users generate their own type dump from their own client, so Ambrose does not de
 
 ### Detailed spec: player launcher
 
-The maintainer's direction on 2026-09-14: WizardLauncher.exe patches the client from KingsIsle's servers to their latest revision, which must never happen to an Ambrose install. Development keeps starting WizardGraphicalClient.exe directly through apps/launcher (1.21), which skips the retail launcher. Players get a launcher that patches from Ambrose instead.
+The maintainer's direction on 2026-09-14: WizardLauncher.exe patches the client from KingsIsle's servers to their latest revision, which must never happen to the pinned development install. A separate copy may be patched that way as the user's own choice, on their own account and machine: fetching from KingsIsle's patch servers may break KingsIsle's terms, and the copy then leaves the revision Ambrose supports. Development keeps starting WizardGraphicalClient.exe directly through apps/launcher (1.21), which skips the retail launcher. Players get a launcher that patches from Ambrose instead.
 
 **Deliverables**
 
 - Static analysis of WizardLauncher.exe with Ghidra or radare2 on a copy of the file, never run against the pinned install: where it reads its patch server host and port (Bin/PatchConfig.xml, command-line arguments, the registry, or built-in addresses), every host and protocol it contacts (patch TCP service, HTTP file host, news pages, telemetry), and how it starts WizardGraphicalClient.exe and with which arguments. The findings go in doc/CLIENT.md as behavior notes, with no client code or data copied
-- If the retail launcher takes its endpoints from data it reads: an apps/launcher mode that writes the Ambrose endpoints into the player's own copy of those files at run time, refuses to start while any endpoint still names a KingsIsle host, and then starts WizardLauncher.exe. Client binaries are never modified
+- If the retail launcher takes its endpoints from data it reads: an apps/launcher mode that writes the Ambrose endpoints into the player's own copy of those files at run time, refuses to start while any endpoint still names a KingsIsle host, and then starts WizardLauncher.exe. This mode does not modify client binaries
 - Otherwise: an Ambrose launcher executable in apps/launcher that runs the 16.04 and 16.05 patch protocol against the configured patch server, verifies and repairs files against the manifest with progress shown to the player, and starts WizardGraphicalClient.exe with the configured login server; settings come from launcher.conf
 - Player documentation in doc/PATCHING.md for installing and running the launcher
 
@@ -535,6 +535,6 @@ The maintainer's direction on 2026-09-14: WizardLauncher.exe patches the client 
 
 **Risks**
 
-- Distributing a modified KingsIsle executable is out of scope, so redirection must come from data the launcher reads, or Ambrose ships its own launcher
-- The retail launcher may reach KingsIsle, for example for its news page, before or regardless of its configuration, which leaves only the Ambrose launcher path
+- A modified KingsIsle executable is never distributed. Redirection comes from data the launcher reads, from Ambrose's own launcher, or, as an experimental opt-in feature planned as a follow-up milestone in this phase, from a patch the user applies locally to their own copy of WizardLauncher.exe (a binary diff, or a hook DLL of Ambrose's own code), never to the pinned development install and at the user's own risk
+- The retail launcher may reach KingsIsle, for example for its news page, before or regardless of its configuration, which leaves the Ambrose launcher path or a local patch
 - Cannot be verified in CI

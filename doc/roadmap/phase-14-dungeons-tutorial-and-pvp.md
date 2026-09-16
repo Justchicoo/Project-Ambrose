@@ -27,7 +27,7 @@
 
 The roadmap critic flagged these. Resolve each one before or while implementing the milestones it names.
 
-- **Ordering.** 14.02/14.03 (tutorial) sit after 10.17, yet every new character's first session is the tutorial. Until then, 3.16 must place new characters directly in WC_Hub and skip the tutorial flags. That should be an explicit interim decision, not only a question in decisions_needed.
+- **Ordering.** 14.02/14.03 (tutorial) sit after 10.17, yet every new character's first session is the tutorial. Decided on 2026-09-16 at the maintainer's direction as an explicit interim decision: until 14.02 and 14.03 land, 3.16 places new characters directly in WC_Hub and skips the tutorial flags. Once they land, new characters start in the tutorial, and skipping it stays available as an opt-in setting.
 - **Oversized.** 14.15 battleground match (L). Explicitly large. With the corrected facts (dedicated BG messages exist) it should be split into queue, polymorph select, POI scoring and end/rewards.
 - **Correction.** 14.14 'Battlegrounds RE spike: Find where BG state travels (no dedicated messages)' is wrong. WizardMessages2.xml (svc 53) has dozens of BG messages: MSG_BATTLEGROUNDQUEUEPLAYER, MSG_BATTLEGROUNDQUEUEUPDATE, MSG_BGQueueStatus, MSG_BGPOIUpdate, MSG_BGPlayerSync, MSG_BGPlayerStatsUpdate, MSG_SetBGPolymorphLevel, MSG_BGSELECTPOLYMORPHREQUEST, MSG_BATTLEGROUNDUPDATEPOINTS, MSG_BATTLEGROUNDEND, MSG_REQUESTBATTLEGROUNDSLOOT, among others. Root.wad also has Sigils/BGPolymorphSigil.xml and Sigils/BattlegroundSigil.xml. 14.15's message list (MATCHMAKERUPDATE etc.) is the wrong set.
 - **Correction.** 14.06 lists MSG_ARENAERROR. The actual name is MSG_ARENA_ERROR.
