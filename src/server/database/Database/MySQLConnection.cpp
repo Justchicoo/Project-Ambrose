@@ -240,6 +240,7 @@ void MySQLConnection::Close()
 
 void MySQLConnection::ClearError() noexcept
 {
+    _lastAffectedRows = 0;
     _lastErrorCode = 0;
     _lastErrorText.clear();
 }
@@ -702,6 +703,8 @@ bool MySQLConnection::RunStatement(PreparedStatementBase const& values, bool rea
         std::string text;
         if (mysql_stmt_execute(handle) == 0)
         {
+            my_ulonglong const affected = mysql_stmt_affected_rows(handle);
+            _lastAffectedRows = affected == static_cast<my_ulonglong>(-1) ? 0 : static_cast<uint64>(affected);
             PreparedQueryResult loaded = PreparedResultSet::Load(handle, code, text);
             while (code == 0 && mysql_stmt_more_results(handle))
             {

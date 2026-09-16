@@ -351,17 +351,22 @@ TEST(PreparedStatementTest, DatabaseConnectionsPrepareTheirStatements)
         GTEST_SKIP() << "AMBROSE_TEST_DB is not set";
     MySQLConnectionInfo loginInfo = *info;
     loginInfo.Database = fmt::format("ambrose_statements_{:08x}", std::random_device()());
-    ScopeExit const dropLogin([&loginInfo]
+    MySQLConnectionInfo charactersInfo = *info;
+    charactersInfo.Database = loginInfo.Database + "_characters";
+    ScopeExit const dropDatabases([&loginInfo, &charactersInfo]
     {
         MySQLConnectionInfo server = loginInfo;
         server.Database.clear();
         MySQLConnection connection(server);
-        if (connection.Open() == 0)
-            connection.Execute(fmt::format("DROP DATABASE IF EXISTS {}", DBUpdater::QuoteIdentifier(loginInfo.Database)));
+        if (connection.Open() != 0)
+            return;
+        for (MySQLConnectionInfo const* created : { &loginInfo, &charactersInfo })
+            connection.Execute(fmt::format("DROP DATABASE IF EXISTS {}", DBUpdater::QuoteIdentifier(created->Database)));
     });
     ASSERT_TRUE(DBUpdater::Run(loginInfo, "login", UpdaterSettings{}));
+    ASSERT_TRUE(DBUpdater::Run(charactersInfo, "characters", UpdaterSettings{}));
     LoginDatabaseConnection login(loginInfo);
-    CharacterDatabaseConnection characters(*info);
+    CharacterDatabaseConnection characters(charactersInfo);
     WorldDatabaseConnection world(*info);
     for (MySQLConnection* connection : { static_cast<MySQLConnection*>(&login), static_cast<MySQLConnection*>(&characters), static_cast<MySQLConnection*>(&world) })
     {

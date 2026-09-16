@@ -320,6 +320,22 @@ Settled on 2026-09-16 under the maintainer's standing direction to decide.
 - Idle checks and lockouts read time through `LoginMgr::Now`, which tests freeze and move forward instead of waiting.
 - When the login server stops, from a signal or the `shutdown` command, it first closes its listener, so no client arrives after the notice goes out. It then visits every accepted session on its own network thread through `SocketMgr::ForEachSocket`, sends MSG_LOGINSERVERSHUTDOWN and closes each once the notice is flushed, and waits until every notice is written, or every connection has ended, for at most `Login.ShutdownGrace` before stopping the network. A second signal during that wait does not cut it short, so the grace stays at most 60 seconds, below the stop timeout of common service managers. The Message value is sent as 0 because the reference server never sends this message and its meaning is unverified.
 
+### Characters
+
+Settled on 2026-09-16 under the maintainer's standing direction to decide.
+
+- A wizard is a `characters` row and a `character_appearance` row with one column per `WizardCharacterBehavior` property, so appearance can be queried and edited field by field. Times are Unix seconds in `BIGINT UNSIGNED`, as in the login tables. The account list and count both join the appearance, so a wizard missing its appearance is neither listed nor counted.
+- Deleting a wizard is a soft delete. It records `deleted_at`, and it moves the owner into `deleted_account` while setting `account` to 0, so no account query can return the wizard by mistake. A check constraint keeps `deleted_at` and `deleted_account` set or unset together.
+  - Only an offline wizard can be deleted: the update itself requires `online = 0`, so a wizard entering the world cannot be deleted in between.
+  - A deleted wizard stays readable by guid, and `Restore` gives it back to its owner.
+- Updates that change one wizard report how many rows they changed, through `DirectExecuteCounted`. Deleting, restoring and the online flag are single conditional statements whose count tells success apart from a wizard that is missing, owned by someone else, already deleted or online. There is no read-then-write gap.
+- A create inserts the character, its appearance and the guid high-water mark in one transaction. If the commit reports a failure but the stored character matches, the create counts as done, because the reply was lost and not the commit.
+- `CharacterRepository` offers synchronous calls for tools, commands and tests. It also offers statement builders and a row reader, so the login server can run the same queries asynchronously. The asynchronous character list pairs the list with the count, which always returns a row, so an empty account is not mistaken for a failed query. Before the database is touched, a create is refused when:
+  - its guid or account is zero;
+  - it is marked deleted;
+  - a name or zone is not UTF-8, holds control characters or is too long.
+- `GuidGenerator` hands out ids without a lock from any number of threads, never zero and never twice, and it refuses once the 64-bit range is used up. The highest guid ever used is kept in `id_sequences` and raised with every create, and the generator resumes above it at startup, so removing a wizard's row can never give its guid to a new wizard. One process allocates each kind of id. Character guids are plain sequential numbers until the object id layout is settled in phase 4.
+
 ### Database updates
 
 Update files run through the connector with multi-statement support, so `DELIMITER` is not allowed in them. The `updates` table records each file's SHA-256 hash.

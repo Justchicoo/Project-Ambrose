@@ -305,9 +305,9 @@ Game code uses compile-checked C++ accessors for the few dozen classes it touche
 
 **Acceptance**
 
-- [ ] 3 characters round-trip every appearance field
-- [ ] Soft-deleted characters are excluded from list and count
-- [ ] GUIDs never repeat across 1e6 and resume after restart
+- [x] 3 characters round-trip every appearance field (CharacterRepositoryTest)
+- [x] Soft-deleted characters are excluded from list and count (CharacterRepositoryTest)
+- [x] GUIDs never repeat across 1e6 and resume after restart (GuidGeneratorTest, CharacterRepositoryTest)
 
 ### Detailed spec from LOG-5: db_characters base schema and CharacterRepository
 
@@ -315,11 +315,11 @@ Wizards can be stored, loaded per account, counted and soft-deleted, with appear
 
 **Deliverables**
 
-- data/sql/base/db_characters/: characters (guid BIGINT UNSIGNED PK, account BIGINT UNSIGNED, name_indices INT UNSIGNED, custom_name VARCHAR(64) NULL, should_rename TINYINT, school_id INT UNSIGNED (string-ID hash, e.g. Fire=2343174), level INT, xp INT, world INT, zone VARCHAR(128), zone_display VARCHAR(128), pos_x, pos_y, pos_z, orientation FLOAT, created, last_logout, online TINYINT, deleted_at DATETIME NULL, deleted_account BIGINT UNSIGNED NULL), character_appearance (guid PK plus one column per WizardCharacterBehavior property: gender, race, head_hands_model, hair_model, hat_model, torso_model, feet_model, wand_model, skin_color, skin_decal, hair_color, hat_color, hat_decal, torso_color, torso_decal, torso_decal2, feet_color, feet_decal, skin_decal2, extended_hair_color, extended_skin_decal, after_combat_dance, after_combat_victory_dance, new_player_options, new_player_options2), updates, updates_include
-- src/server/database/Implementation/CharacterDatabase.{h,cpp}: prepared statements CHAR_SEL_CHARACTERS_BY_ACCOUNT, CHAR_SEL_CHARACTER, CHAR_INS_CHARACTER, CHAR_INS_APPEARANCE, CHAR_UPD_SOFT_DELETE, CHAR_SEL_COUNT_BY_ACCOUNT, CHAR_UPD_ONLINE
-- src/server/game/Characters/CharacterRepository.{h,cpp} and CharacterSummary.h (a plain struct the login screen needs)
-- src/server/game/Globals/GuidGenerator.{h,cpp}: 64-bit character GID allocation
-- src/test/server/game/Characters/CharacterRepositoryTest.cpp
+- data/sql/base/db_characters/: characters (guid BIGINT UNSIGNED PK, account BIGINT UNSIGNED, name_indices INT UNSIGNED, custom_name VARCHAR(64) NULL, should_rename TINYINT, school_id INT UNSIGNED (string-ID hash, e.g. Fire=2343174), level INT, xp INT, world INT, zone VARCHAR(128), zone_display VARCHAR(128), pos_x, pos_y, pos_z, orientation FLOAT, created, last_logout, online TINYINT, deleted_at DATETIME NULL, deleted_account BIGINT UNSIGNED NULL), character_appearance (guid PK plus one column per WizardCharacterBehavior property: gender, race, head_hands_model, hair_model, hat_model, torso_model, feet_model, wand_model, skin_color, skin_decal, hair_color, hat_color, hat_decal, torso_color, torso_decal, torso_decal2, feet_color, feet_decal, skin_decal2, extended_hair_color, extended_skin_decal, after_combat_dance, after_combat_victory_dance, new_player_options, new_player_options2), updates, updates_include. Built as the dated update data/sql/updates/db_characters/2026_09_16_00.sql, since base/ holds only the updater's own tables. created, last_logout and deleted_at are Unix seconds in BIGINT UNSIGNED like the login tables rather than DATETIME; character_appearance also keeps behavior_template_name_id, stores gender and race as INT UNSIGNED so any enum value round-trips, and cascades when its character row is removed; a check constraint keeps deleted_at and deleted_account set together, and id_sequences keeps the highest guid ever used
+- src/server/database/Implementation/CharacterDatabase.{h,cpp}: prepared statements CHAR_SEL_CHARACTERS_BY_ACCOUNT, CHAR_SEL_CHARACTER, CHAR_INS_CHARACTER, CHAR_INS_APPEARANCE, CHAR_UPD_SOFT_DELETE, CHAR_SEL_COUNT_BY_ACCOUNT, CHAR_UPD_ONLINE. Built in src/server/database/Database/Implementation, plus CHAR_UPD_RESTORE for undelete, CHAR_INS_ID_SEQUENCE and CHAR_SEL_MAX_GUID for the guid high-water mark; soft delete only matches offline characters, and the database layer gains DirectExecuteCounted so updates report the rows they changed
+- src/server/game/Characters/CharacterRepository.{h,cpp} and CharacterSummary.h (a plain struct the login screen needs). Built as the characters library: synchronous Create, LoadByAccount, Load, CountByAccount, SoftDelete, Restore, SetOnline and GetMaxGuid, plus statement builders and a row reader for 3.09's asynchronous list; a zero guid or account, a character marked deleted, and text that is not UTF-8, holds control characters or is too long are refused before the database is touched; SoftDelete answers CharacterOnline for an online character
+- src/server/game/Globals/GuidGenerator.{h,cpp}: 64-bit character GID allocation. Built as the globals library: a lock-free sequential allocator that never hands out zero or the same id twice, resumes above a stored high-water mark, and refuses once the 64-bit range is used
+- src/test/server/game/Characters/CharacterRepositoryTest.cpp, plus src/test/server/game/Globals/GuidGeneratorTest.cpp; both database tests pass on MariaDB 10.11 and MySQL 8
 
 **Data sources**
 
@@ -334,13 +334,13 @@ Wizards can be stored, loaded per account, counted and soft-deleted, with appear
 
 **Acceptance**
 
-- [ ] Unit (DB-backed test fixture or in-memory fake): inserting 3 characters for an account and loading them returns 3 summaries with every appearance field round-tripped bit for bit
-- [ ] Unit: a soft-deleted character is excluded from the account list and the count but can still be read by guid for undelete
-- [ ] Unit: the GUID generator never repeats across 1e6 allocations and survives a restart, resuming from max(guid)
+- [x] Unit (DB-backed test fixture or in-memory fake): inserting 3 characters for an account and loading them returns 3 summaries with every appearance field round-tripped bit for bit (CharacterRepositoryTest, every field of the summary compared, for random characters and for characters at every width's smallest and largest value)
+- [x] Unit: a soft-deleted character is excluded from the account list and the count but can still be read by guid for undelete (CharacterRepositoryTest, which also restores it)
+- [x] Unit: the GUID generator never repeats across 1e6 allocations and survives a restart, resuming from max(guid) (GuidGeneratorTest claims the million from eight threads released together and also while another thread resumes; CharacterRepositoryTest resumes from the high-water mark even after the newest row is removed)
 
 **Risks**
 
-- Retail character GIDs look structured (captured CharID 5739324522485080744 is 0x4FA5...); whether the client reads type bits in the high byte is unverified. Coordinate with OBJ on the GID format.
+- Retail character GIDs look structured (captured CharID 5739324522485080744 is 0x4FA5...); whether the client reads type bits in the high byte is unverified. Coordinate with OBJ on the GID format. Built note: the available captures come from the reference server, whose ids look random with the top nibble 4, so they say nothing about retail. Character guids start at 1 for now; 3.09's character list shows whether the client accepts them, and the object id layout is settled with OBJ in phase 4
 - The appearance column list is tied to this revision's type dump; a revision bump that adds fields needs a dated update file.
 
 ## 3.09 Character list (LOG-6)

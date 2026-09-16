@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One connection to a MariaDB or MySQL server: parses the connection string, opens and closes, prepares registered statements, runs text and prepared queries, escapes, and reconnects with backoff when the server goes away.
+ * One connection to a MariaDB or MySQL server: parses the connection string, opens and closes, prepares registered statements, runs text and prepared queries, reports the rows the last prepared statement changed, escapes, and reconnects with backoff when the server goes away.
  */
 
 #ifndef AMBROSE_MYSQLCONNECTION_H
@@ -115,6 +115,7 @@ public:
     uint64 GetConcurrentUseCount() const noexcept { return _concurrentUses.load(std::memory_order_relaxed); }
 
     uint32 GetLastErrorCode() const noexcept { return _lastErrorCode; }
+    uint64 GetLastAffectedRows() const noexcept { return _lastAffectedRows; }
     std::string const& GetLastErrorText() const noexcept { return _lastErrorText; }
     std::string GetServerInfo() const;
     uint64 GetServerVersion() const;
@@ -162,6 +163,7 @@ private:
     st_mysql* _mysql = nullptr;
     std::mutex _mutex;
     uint32 _lastErrorCode = 0;
+    uint64 _lastAffectedRows = 0;
     std::string _lastErrorText;
     std::atomic<uint64> _reconnects{ 0 };
     bool _mariaDB = false;

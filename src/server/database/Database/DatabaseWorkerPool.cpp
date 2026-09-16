@@ -313,6 +313,21 @@ bool DatabaseWorkerPoolBase::DirectExecuteStatement(PreparedStatementBase const*
     return connection->Execute(*statement);
 }
 
+std::optional<uint64> DatabaseWorkerPoolBase::DirectExecuteCountedStatement(PreparedStatementBase const* statement)
+{
+    if (!CheckStatement(statement, true, "DirectExecute"))
+        return std::nullopt;
+    SyncLease connection([this] { return GetCurrent(); });
+    if (!connection)
+    {
+        LOG_ERROR("sql.sql", "Database pool {} is not open, so statement {} was refused", _name, statement->GetIndex());
+        return std::nullopt;
+    }
+    if (!connection->Execute(*statement))
+        return std::nullopt;
+    return connection->GetLastAffectedRows();
+}
+
 PreparedQueryResult DatabaseWorkerPoolBase::QueryStatement(PreparedStatementBase const* statement, bool* failed)
 {
     if (failed)

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A named connection pool for one database that serves every call from the current connection generation, so opening, closing and live reconfiguring never block callers, with typed statements, holders and transactions whose async forms can signal a handler once their result is ready.
+ * A named connection pool for one database that serves every call from the current connection generation, so opening, closing and live reconfiguring never block callers, with typed statements, including executes that report the rows they changed, holders and transactions whose async forms can signal a handler once their result is ready.
  */
 
 #ifndef AMBROSE_DATABASEWORKERPOOL_H
@@ -65,6 +65,7 @@ protected:
     void ExecuteStatement(std::unique_ptr<PreparedStatementBase> statement);
     QueryCallback AsyncQueryStatement(std::unique_ptr<PreparedStatementBase> statement, SQLOperation::CompletionHandler onCompleted = {});
     bool DirectExecuteStatement(PreparedStatementBase const* statement);
+    std::optional<uint64> DirectExecuteCountedStatement(PreparedStatementBase const* statement);
     PreparedQueryResult QueryStatement(PreparedStatementBase const* statement, bool* failed = nullptr);
     SQLQueryHolderCallback DelayQueryHolderBase(std::shared_ptr<SQLQueryHolderBase> holder, SQLOperation::CompletionHandler onCompleted = {});
     void CommitTransactionBase(std::shared_ptr<TransactionBase> transaction);
@@ -126,6 +127,7 @@ public:
     void Execute(std::unique_ptr<Statement> statement) { ExecuteStatement(std::move(statement)); }
     QueryCallback AsyncQuery(std::unique_ptr<Statement> statement, SQLOperation::CompletionHandler onCompleted = {}) { return AsyncQueryStatement(std::move(statement), std::move(onCompleted)); }
     bool DirectExecute(Statement const& statement) { return DirectExecuteStatement(&statement); }
+    std::optional<uint64> DirectExecuteCounted(Statement const& statement) { return DirectExecuteCountedStatement(&statement); }
     PreparedQueryResult Query(Statement const& statement) { return QueryStatement(&statement); }
     bool TryQuery(Statement const& statement, PreparedQueryResult& result)
     {
