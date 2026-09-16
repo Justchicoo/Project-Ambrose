@@ -1304,6 +1304,7 @@ std::string_view ObjectSerializer::GetIssueName(DecodeIssueKind kind) noexcept
         case DecodeIssueKind::UnknownEnumName: return "unknown enum name";
         case DecodeIssueKind::InvalidObject: return "invalid object";
         case DecodeIssueKind::UnselectedProperty: return "unselected property";
+        case DecodeIssueKind::InvalidValue: return "invalid value";
     }
     return "unknown";
 }

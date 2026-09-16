@@ -62,7 +62,8 @@ enum class DecodeIssueKind : uint8
     UnsupportedType,
     UnknownEnumName,
     InvalidObject,
-    UnselectedProperty
+    UnselectedProperty,
+    InvalidValue
 };
 
 class ConfigMgr;

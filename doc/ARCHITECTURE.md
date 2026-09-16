@@ -277,6 +277,24 @@ Settled on 2026-09-16 under the maintainer's standing direction to decide.
   - NaN and infinities become the strings `NaN`, `Infinity` and `-Infinity`, so they cannot be mistaken for a null value.
 - `bindecode` (src/tools/bindecode) prints named entries of an archive as JSON with their issues on standard error, lists entry names, or sweeps the archive. It reads only the user's own install and type dump, from `--client` and `--type-dump` or `AMBROSE_CLIENT_DIR` and `AMBROSE_TYPE_DUMP_PATH`, and exits 0, 1 on a read or decode failure, or 2 on bad usage. A sweep exits 0 when the only failures are files whose root class the dump does not list and no issue other than unknown classes is reported. Like every app, it takes its arguments and environment variables as UTF-8: `Ambrose::GetArguments` reads the wide command line on Windows, and `Ambrose::GetEnv` and `SetEnv` use the wide environment there. A path such as a user folder with accented letters therefore opens instead of failing to convert.
 
+### Plain-XML ObjectProperty files
+
+Settled on 2026-09-16 under the maintainer's standing direction to decide.
+
+- A few client files, such as ActionList.xml, InputBindings.xml and CharacterCreation/CharacterCreationConfig.xml, hold ObjectProperty objects as text XML instead of BINd. `XmlObjectReader` reads them as UTF-8 with pugixml, which the message definitions already use. An upper bound of the parsed document's memory is charged against `MaxDecodedBytes` before parsing, and a document with text or a second element beside its root is refused. The document holds:
+  - an `Objects` element holds `Class` elements named by class;
+  - each property is an element named by the property, holding text or a nested `Class`;
+  - a container is every element of its name in document order.
+- Each object starts from its class's defaults. A value's text is joined across comments and CDATA, and a whitespace-only value is kept. Text becomes the property's type:
+  - numbers, and `true` or `false`;
+  - option names and `|` flag lists;
+  - UTF-8 text and wide text;
+  - colors as AARRGGBB hex;
+  - math types as numbers separated by commas or spaces.
+  An empty element is a null pointer. Each container element is checked and appended on its own, so one bad element costs only itself.
+- Nothing unreadable stops a file. An unknown class or property, an object of the wrong class, a value that does not read, or a static property given twice is skipped and reported as a `DecodeIssue` with its property path and line. The property keeps its default, or its last good value when repeated. An explicit inline object takes the place of its default in the object and memory counts. Malformed XML, a root other than `Objects`, and documents past the depth, object, element or memory limits are refused, and default inline objects count toward the depth and object limits as in the binary formats.
+- The r806919 type dump does not list the classes of CharacterCreationConfig.xml, Chatter.xml or Colors.xml. Those files read as well-formed and report only their root class until 6.10's supplemental schemas describe those classes.
+
 ### Typed views
 
 Settled on 2026-09-16 under the maintainer's standing direction to decide.

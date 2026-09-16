@@ -478,7 +478,7 @@ Every BINd client file (templates, spells, states, decks, the manifest) decodes 
 
 **Acceptance**
 
-- [ ] CharacterCreationConfig.xml decodes with non-empty m_creationOptions and m_schoolOptions
+- [ ] CharacterCreationConfig.xml decodes with non-empty m_creationOptions and m_schoolOptions (waits for 6.10: the file reads as well-formed, but the r806919 type dump lists none of WizCharacterCreationConfig, AllowedCreationOption or AllowedSchoolOption, so XmlObjectReaderClientTest checks that its root class is reported instead)
 
 ### Detailed spec from OBJ-13: Text XML ObjectProperty reader
 
@@ -486,18 +486,26 @@ The handful of plain-XML ObjectProperty files (character creation config, action
 
 **Deliverables**
 
-- src/server/shared/ObjectProperty/XmlObjectReader.h/.cpp: <Objects><Class Name="class X"> elements, property elements by name, nested <Class> for objects, repeated elements (with key attribute) for containers, enum names and '|' Bits text, bool 'true'/'false', UTF-8 BOM tolerant
-- src/test/server/shared/ObjectProperty/XmlObjectReaderTest.cpp with a synthetic XML file
+- src/server/shared/ObjectProperty/XmlObjectReader.h/.cpp: <Objects><Class Name="class X"> elements, property elements by name, nested <Class> for objects, repeated elements (with key attribute) for containers, enum names and '|' Bits text, bool 'true'/'false', UTF-8 BOM tolerant. Built on pugixml, already in the stack:
+  - each Class becomes an object of its class starting from its defaults, and elements fill its properties;
+  - containers take every element of their name in document order, the key attribute is not needed for that, and an empty element is a null pointer;
+  - values read as numbers, bools, option names and flag lists (also on int and unsigned int properties with the Bits or Enum flag), UTF-8 text, colors as AARRGGBB hex as Colors.xml writes them, and math types as numbers separated by commas or spaces;
+  - unknown classes and properties, objects of the wrong class, values that do not read, and a static property given twice are skipped and reported in DecodeIssue form with their property path and line, the property keeping its default (or, when repeated, its last value);
+  - malformed XML, text or a second element beside the root, a root other than Objects, and documents past the depth, object, element or memory limits (the parsed document's memory estimated before parsing) are refused;
+  - text is read as UTF-8, joined across comments and CDATA, whitespace-only values kept, and each container element checked on its own.
+- src/test/server/shared/ObjectProperty/XmlObjectReaderTest.cpp with a synthetic XML file. Built with the client-gated src/test/client/XmlObjectReaderClientTest.cpp
 
 **Acceptance**
 
-- [ ] Unit test on synthetic XML covers nested lists and enums
-- [ ] Client-gated test: CharacterCreation/CharacterCreationConfig.xml decodes to WizCharacterCreationConfig with non-empty m_creationOptions and m_schoolOptions; ActionList.xml, Chatter.xml, Colors.xml and InputBindings.xml parse with no unknown properties
+- [x] Unit test on synthetic XML covers nested lists and enums (XmlObjectReaderTest, with flag lists, colors, vectors, wide text, reported problems and refused documents)
+- [ ] Client-gated test: CharacterCreation/CharacterCreationConfig.xml decodes to WizCharacterCreationConfig with non-empty m_creationOptions and m_schoolOptions; ActionList.xml, Chatter.xml, Colors.xml and InputBindings.xml parse with no unknown properties (partly passes in XmlObjectReaderClientTest: ActionList.xml and InputBindings.xml read with no issue at all. The r806919 type dump does not list the root classes of CharacterCreationConfig.xml, Chatter.xml or Colors.xml (WizCharacterCreationConfig, ChatterManager, ShoppingColors), so each reads as well-formed and reports only that class; decoding them waits for 6.10's supplemental schemas)
 - [ ] Real client, with LOG wiring: the character-creation screen offers exactly the schools and options the server validates against
 
 **Risks**
 
-- Needs an XML parser dependency (pugixml or similar), which is not yet a listed stack decision
+- Needs an XML parser dependency (pugixml or similar), which is not yet a listed stack decision. Resolved: pugixml was already in the stack for the message definitions
+- The character creation files' classes are missing from the r806919 type dump, so the server cannot validate creation against CharacterCreationConfig.xml through this reader until 6.10. The 3.14 extractor can read the school names from the XML directly
+- The AARRGGBB order of colors follows the palette Colors.xml holds, which reads as sensible colors only in that order; no other source confirms it yet
 
 ## 3.13 Locale .lang loader and localetool (OBJ-14 + QST-1)
 
