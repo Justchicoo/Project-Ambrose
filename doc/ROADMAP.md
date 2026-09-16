@@ -85,6 +85,8 @@ These block specific milestones. The maintainer decides each one, then this list
 
 ### Resolved
 
+Settled on 2026-09-16 at the maintainer's direction to make CI cheaper, and recorded under Decisions, Continuous integration in doc/ARCHITECTURE.md: checks run daily, on pushes that change CI files and on pull requests; builds run on a schedule when code changed, by `ci:` label or on demand; and a repository variable stops builds.
+
 Settled on 2026-09-16 under the maintainer's standing direction, and recorded under Decisions, Message dispatch and session states in doc/ARCHITECTURE.md: sessions share the statuses Connected, Authenticated, CharacterSelected, LoggedIn and InWorld, tables name messages by tag and are checked against the loaded definitions at startup, and only protocol violations count strikes.
 
 Settled on 2026-09-14 under the maintainer's standing direction, and recorded under Decisions, Accounts and the console in doc/ARCHITECTURE.md: the password verifier is stored and encrypted at rest when verifier keys are configured, AccountMgr builds as the `accounts` library in `game/Accounts` that the login server links, and security levels use AzerothCore's 0-4 numbering.

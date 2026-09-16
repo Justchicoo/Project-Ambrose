@@ -1,18 +1,28 @@
 # Project Ambrose by Imjustchico
-# Checks style, forbidden files, and commit trailers, then builds and tests on Windows MSVC, Linux GCC, Linux Clang, Linux GCC with ASan and UBSan, and Linux Clang with TSan, and runs the libFuzzer targets on Linux Clang with ASan and UBSan.
+# Checks style, forbidden files, and commit trailers daily, on CI file pushes, and on pull requests, then builds and tests the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by the schedule, a label, or a manual run.
 name: core-build
 
 on:
   push:
     branches: [main]
-    paths-ignore: ["doc/**", "**/*.md"]
+    paths: [".github/**", "apps/ci/**", "vcpkg.json"]
   pull_request:
-    paths-ignore: ["doc/**", "**/*.md"]
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    - cron: "17 6 * * 0"
+    - cron: "17 6 * * 3"
+    - cron: "17 6 * * 1,2,4,5,6"
   workflow_dispatch:
+    inputs:
+      legs:
+        description: "Legs to build and test"
+        type: choice
+        default: linux-gcc
+        options: [none, linux-gcc, linux-clang, linux-gcc-asan, linux-clang-tsan, linux-clang-fuzz, windows-msvc-x64, weekly, linux, all]
 
 concurrency:
-  group: core-build-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || startsWith(github.event.label.name, 'ci:')) && format('core-build-pr-{0}', github.event.pull_request.number) || github.event_name == 'pull_request' && format('core-build-label-{0}', github.run_id) || format('core-build-{0}-{1}-{2}', github.event_name, github.ref, github.event_name == 'push' && github.sha || inputs.legs) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
 
 permissions:
   contents: read
@@ -20,9 +30,18 @@ permissions:
 jobs:
   checks:
     name: checks
+    if: github.event_name != 'pull_request' || github.event.action != 'labeled' || startsWith(github.event.label.name, 'ci:')
     runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      actions: read
     env:
       PYTHONDONTWRITEBYTECODE: "1"
+    outputs:
+      build: ${{ steps.select.outputs.build }}
+      matrix: ${{ steps.select.outputs.matrix }}
+      windows_keepalive: ${{ steps.select.outputs.windows_keepalive }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,33 +70,55 @@ jobs:
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_AFTER: ${{ github.sha }}
         run: python apps/ci/ci_commit_trailer.py --from-github-env
+      - name: Select build legs
+        id: select
+        if: ${{ !cancelled() }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          DISPATCH_LEGS: ${{ inputs.legs }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python apps/ci/ci_select_legs.py --from-github-env
+      - name: Refresh Linux vcpkg binary cache
+        if: ${{ !cancelled() && github.event_name == 'schedule' }}
+        timeout-minutes: 3
+        continue-on-error: true
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: vcpkg-${{ runner.os }}-
+          restore-keys: vcpkg-${{ runner.os }}-
+
+  windows-cache:
+    name: windows-cache
+    needs: checks
+    if: ${{ !cancelled() && github.event_name == 'schedule' && (github.event.schedule == '17 6 * * 0' || github.event.schedule == '17 6 * * 3') && (needs.checks.outputs.windows_keepalive == 'true' || needs.checks.outputs.build == '' || vars.AMBROSE_CI_BUILDS == 'off') }}
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Refresh Windows vcpkg binary cache
+        timeout-minutes: 3
+        continue-on-error: true
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: vcpkg-${{ runner.os }}-
+          restore-keys: vcpkg-${{ runner.os }}-
 
   build:
     name: build (${{ matrix.configure }})
     needs: checks
+    if: ${{ !cancelled() && needs.checks.outputs.build == 'true' && (github.event_name == 'schedule' || needs.checks.result == 'success') && (github.event_name == 'workflow_dispatch' || vars.AMBROSE_CI_BUILDS != 'off') }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.job_timeout }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            configure: windows-msvc-x64
-            build: windows-debug
-          - os: ubuntu-latest
-            configure: linux-gcc
-            build: linux-gcc-debug
-          - os: ubuntu-latest
-            configure: linux-clang
-            build: linux-clang-debug
-          - os: ubuntu-latest
-            configure: linux-gcc-asan
-            build: linux-gcc-asan
-          - os: ubuntu-latest
-            configure: linux-clang-tsan
-            build: linux-clang-tsan
-          - os: ubuntu-latest
-            configure: linux-clang-fuzz
-            build: linux-clang-fuzz
+      matrix: ${{ fromJSON(needs.checks.outputs.matrix) }}
     env:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
@@ -87,24 +128,48 @@ jobs:
           python-version: "3.12"
       - name: Install Ninja and Clang
         if: runner.os == 'Linux'
+        timeout-minutes: 5
         run: sudo apt-get update && sudo apt-get install -y ninja-build clang
       - name: Lower mmap randomization for ThreadSanitizer
         if: matrix.configure == 'linux-clang-tsan'
         run: sudo sysctl -w vm.mmap_rnd_bits=28
       - name: Start MySQL for database tests
         if: runner.os == 'Linux'
+        timeout-minutes: 3
         run: |
           sudo systemctl start mysql.service
           mysql -h127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS ambrose_test"
       - name: Restore vcpkg binary cache
-        uses: actions/cache@v4
+        id: vcpkg-restore
+        uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/vcpkg-binary-cache
-          key: vcpkg-${{ matrix.configure }}-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-${{ matrix.configure }}-
-      - name: Build and test
+          key: vcpkg-${{ runner.os }}-
+          restore-keys: vcpkg-${{ runner.os }}-
+      - name: Install dependencies and configure
+        id: configure
+        timeout-minutes: ${{ matrix.configure_timeout }}
         env:
           VCPKG_BINARY_SOURCES: clear;files,${{ runner.temp }}/vcpkg-binary-cache,readwrite
+        run: python apps/ci/ci_build.py --setup-vcpkg "${{ runner.temp }}/vcpkg" --configure-preset ${{ matrix.configure }} --build-preset ${{ matrix.build }} --warnings-as-errors --stage configure
+      - name: Name vcpkg binary cache
+        id: vcpkg-key
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: python apps/ci/ci_vcpkg_cache.py --cache-dir "${{ runner.temp }}/vcpkg-binary-cache" --status "build/${{ matrix.configure }}/vcpkg_installed/vcpkg/status" --prefix "vcpkg-${{ runner.os }}-" --github-output
+      - name: Save vcpkg binary cache
+        if: ${{ !cancelled() && steps.vcpkg-key.outputs.key != '' && steps.vcpkg-key.outputs.key != steps.vcpkg-restore.outputs.cache-matched-key }}
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: ${{ steps.vcpkg-key.outputs.key }}
+      - name: Build and test
+        if: ${{ !cancelled() && steps.configure.outcome == 'success' }}
+        timeout-minutes: ${{ matrix.build_timeout }}
+        env:
+          VCPKG_ROOT: ${{ runner.temp }}/vcpkg
+          VCPKG_BINARY_SOURCES: clear;files,${{ runner.temp }}/vcpkg-binary-cache,readwrite
           AMBROSE_TEST_DB: ${{ runner.os == 'Linux' && '127.0.0.1;3306;root;root;ambrose_test' || '' }}
-        run: python apps/ci/ci_build.py --setup-vcpkg "${{ runner.temp }}/vcpkg" --configure-preset ${{ matrix.configure }} --build-preset ${{ matrix.build }} --warnings-as-errors
+          CL: ${{ runner.os == 'Windows' && '/MP' || '' }}
+        run: python apps/ci/ci_build.py --configure-preset ${{ matrix.configure }} --build-preset ${{ matrix.build }} --warnings-as-errors --stage build-test

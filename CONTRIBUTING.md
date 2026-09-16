@@ -23,4 +23,5 @@ Project Ambrose is an AI-driven project. Contributions written with AI tools are
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   ```
 
+- **CI builds on request.** Pull requests get the style, forbidden file and commit trailer checks automatically. A maintainer adds a `ci:` label, such as `ci:weekly`, `ci:windows-msvc-x64` or `ci:all`, to build and test a pull request in CI. A label stays until removed, so every later push to the pull request builds its legs again. Build your change and run `ctest` with the presets before every push; it runs the unit tests and the `codestyle` and `ci` checks CI runs.
 - **Verify it.** Say in the pull request how the change was tested. Unverified changes will not be merged.

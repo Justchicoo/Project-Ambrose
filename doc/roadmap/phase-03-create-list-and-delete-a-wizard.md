@@ -848,3 +848,4 @@ Pending SQL from merged PRs becomes correctly numbered dated files, and CI prove
 
 - A bot pushing to main in a private repo needs a token and branch-protection exceptions
 - Two PRs merged the same day race for NN; the job must be serialized (concurrency group)
+- Since 2026-09-16 core-build builds only on a schedule, by label or on demand (Continuous integration in doc/ARCHITECTURE.md), so pending SQL promotion on push to main and the SQL checks on pull requests need their own workflow or jobs. They must run on every merge and pull request, and stay cheap: a Linux runner with a database container, not a full build

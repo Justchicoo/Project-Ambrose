@@ -88,7 +88,7 @@ Servers stay headless so they run the same on a desktop, a Linux VPS, or in Dock
 
 ### Tests
 
-`src/test/` mirrors `src/` and builds a single unit test executable. Database integration tests run only when `AMBROSE_TEST_DB` holds a connection string such as `127.0.0.1;3306;root;root;ambrose_test` for a disposable server, and skip otherwise. Each test creates uniquely named databases and drops them when it finishes, including the app smoke tests, which start the real executables with `--check`. The Linux CI legs run them against the runner's MySQL 8, and local runs can use MariaDB.
+`src/test/` mirrors `src/` and builds a single unit test executable. Database integration tests run only when `AMBROSE_TEST_DB` holds a connection string such as `127.0.0.1;3306;root;root;ambrose_test` for a disposable server, and skip otherwise. Each test creates uniquely named databases and drops them when it finishes, including the app smoke tests, which start the real executables with `--check`. The Linux CI legs run them against the runner's MySQL 8 whenever those legs build, and local runs can use MariaDB.
 
 ## Conventions
 
@@ -445,6 +445,21 @@ Settled on 2026-09-13 with the maintainer's direction to favor the most capable 
 | Dashboard front end | TypeScript and Svelte, built by Vite into static files the admin API can serve |
 | Process control | An Ambrose supervisor process that starts, stops, restarts, and crash-restarts every app on Windows and Linux, and can itself run under systemd or as a Windows service |
 | Remote access | The admin API listens on localhost by default. Any other address requires TLS and the token, and plain HTTP is never exposed beyond the machine |
+
+### Continuous integration
+
+Settled on 2026-09-16 at the maintainer's direction to make CI cheaper. A private repository gets 2,000 Actions minutes a month, and with no payment method a run over the quota is blocked, not billed. Building every leg on each push cost about 105 billed minutes, since Windows minutes count twice.
+
+- `.github/workflows/core-build.yml` runs the checks job: codestyle and its self-tests, the CI script self-tests, the forbidden file scan and the commit trailer check. It runs daily at 06:17 UTC, on pushes to main that change `.github/`, `apps/ci/` or `vcpkg.json`, and on pull requests. A scheduled run checks the commits of the last eight days for trailers.
+- `apps/ci/ci_select_legs.py` picks the build legs:
+  - A schedule slot builds Windows MSVC on Sundays and Wednesdays, the ASan with UBSan and TSan legs on Sundays, and Linux GCC, Clang and libFuzzer on the first Sunday of the month. A slot's leg builds only when code outside `doc/` and Markdown files changed since the commit its last finished build tested, which the checks job reads from the Actions API. When earlier runs cannot be read, every leg of the slot builds.
+  - A push or pull request that changes the workflow, `ci_build.py`, `ci_vcpkg_cache.py` or `vcpkg.json` builds Linux GCC as a smoke test. A pull request's changes are taken from its merge base.
+  - A pull request labeled `ci:<option>`, in any letter case, builds that option's legs. The options are each leg's name, `weekly`, `linux`, `all` and `none`, and several labels build every leg they name. Labels stay on the pull request, so each later push builds them again, and a newer run for the same pull request cancels the older one.
+  - A manual run builds the option it names, `linux-gcc` by default.
+- Setting the repository variable `AMBROSE_CI_BUILDS` to `off` stops scheduled, push and pull request builds. The checks, manual runs and cache keepalives still run.
+- Each operating system keeps one vcpkg binary cache, keyed by the archives it holds. A build prunes archives older than 30 days that it no longer uses, and saves a new cache only when the set changed. GitHub drops caches unused for 7 days, so scheduled checks restore the Linux cache daily. On Sunday and Wednesday slots that do not build Windows, a short job restores the Windows cache.
+- `python apps/ci/ci_usage.py` adds up this month's billed minutes through `gh`, for a look before a large manual run.
+- Pushes build nothing, so run `ctest` with a preset before every push. Besides the unit tests it runs `codestyle.selftest`, `codestyle.tree`, `ci.selftest` and `ci.forbidden`, the checks CI runs.
 
 ### Still open
 

@@ -1,6 +1,7 @@
 # Project Ambrose by Imjustchico
-# Fails when any non-merge commit in a range lacks the Co-Authored-By trailer naming the AI that wrote it.
+# Fails when any non-merge commit in a range, or committed in the last eight days on a scheduled run, lacks the Co-Authored-By trailer naming the AI that wrote it.
 import argparse
+import datetime
 import os
 import re
 import subprocess
@@ -8,6 +9,7 @@ import sys
 
 TRAILER = re.compile(r"^Co-Authored-By:[ \t]*\S.*<[^<>\s]+>[ \t]*$", re.IGNORECASE | re.MULTILINE)
 ZERO_SHA = re.compile(r"^0+$")
+SCHEDULE_WINDOW_DAYS = 8
 
 
 def has_trailer(message):
@@ -18,8 +20,12 @@ def git(root, *args):
     return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=True).stdout
 
 
-def range_from_github_environment(environment):
+def range_from_github_environment(environment, now=None):
     event = environment.get("EVENT_NAME", "")
+    if event == "schedule":
+        moment = now or datetime.datetime.now(datetime.timezone.utc)
+        since = (moment - datetime.timedelta(days=SCHEDULE_WINDOW_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return [f"--since={since}", environment.get("PUSH_AFTER", "") or "HEAD"]
     if event == "pull_request" and environment.get("PR_BASE") and environment.get("PR_HEAD"):
         return [f"{environment['PR_BASE']}..{environment['PR_HEAD']}"]
     before = environment.get("PUSH_BEFORE", "")

@@ -265,7 +265,7 @@ A standalone tool creates and updates all three databases without starting any s
 
 - src/tools/dbimport/Main.cpp + CMakeLists.txt + dbimport.conf.dist (LoginDatabaseInfo, CharacterDatabaseInfo, WorldDatabaseInfo, Updates.*, Appender/Logger)
 - Runs DatabaseLoader with open, AutoSetup, populate and update for each enabled DB, then exits: 0 on success, 1 on any failure
-- CI job switched to dbimport for SQL validation: the DbImport CTest runs dbimport against the Linux legs' MySQL 8 and validates every repository SQL file on each push
+- CI job switched to dbimport for SQL validation: the DbImport CTest runs dbimport against the Linux legs' MySQL 8 and validates every repository SQL file on each Linux CI leg run (on every push until 2026-09-16)
 
 **Acceptance**
 

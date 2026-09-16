@@ -33,6 +33,7 @@
 
 The roadmap critic flagged these. Resolve each one before or while implementing the milestones it names.
 
+- **Decision 2026-09-16.** To fit the included Actions minutes of a private repository, 1.04's build legs no longer run on every push or pull request. Checks run daily, on pushes that change CI files and on pull requests. A push or pull request that changes a CI build input also builds Linux GCC. Other builds run on a schedule when code changed, by label or on demand. The ccache/sccache deliverable is dropped because runs are days apart. 1.04's goal, spec summary and matrix deliverable below are superseded where they say every push or PR builds. See Continuous integration in doc/ARCHITECTURE.md.
 - **Decision 2026-09-13.** Protocol definitions load at runtime (see Decisions in doc/ARCHITECTURE.md). 1.15 becomes the runtime `MessageRegistry` loader plus startup-validated message declarations instead of a build-time generator, and 1.16 tests it against project-authored fixtures, with real-install checks under the `client` CTest label. 1.04 CI therefore needs no client files. Dependencies come from vcpkg manifest mode rather than vendored copies, which replaces the `deps/fmt` and `deps/gtest` deliverables in 1.01 and 1.02.
 
 - **Ordering.** 1.04 CI is built and made mandatory before the 'how CI builds without client files' decision is taken, and before 1.15 msggen makes the build client-dependent. Either 1.04 depends on that decision or CI is rebuilt at 1.15. **Resolved:** the 2026-09-13 decision loads protocol data at runtime, so CI builds and tests without client files and 1.15 needs no CI rebuild.
@@ -162,7 +163,7 @@ A tool rejects any file that lacks the exact Project Ambrose header for its type
 
 ## 1.04 CI pipeline (FND-4)
 
-**Goal:** Build, test, style and forbidden-file scan on every PR.
+**Goal:** Build, test, style and forbidden-file scan on every PR. Superseded on 2026-09-16: every PR still gets the style, forbidden-file and trailer checks, and builds run on a schedule, by label or on demand (see the decision note above)
 
 **Size:** M. **Depends on:** 1.02, 1.03
 
@@ -175,7 +176,7 @@ A tool rejects any file that lacks the exact Project Ambrose header for its type
 
 ### Detailed spec from FND-4: CI pipeline
 
-Every push and PR builds, tests, style-checks and scans for forbidden content on Windows and Linux.
+Every push and PR builds, tests, style-checks and scans for forbidden content on Windows and Linux. Superseded on 2026-09-16: see the decision note above and Continuous integration in doc/ARCHITECTURE.md.
 
 **Deliverables**
 
@@ -184,7 +185,7 @@ Every push and PR builds, tests, style-checks and scans for forbidden content on
 - apps/ci/ci-codestyle.sh: runs apps/codestyle
 - apps/ci/ci-forbidden-files.py: fails on *.wad, *.pcap(ng), files starting with 'KIWAD' or 'BINd', any committed copy of a client protocol XML (root element <...Messages> with <_ProtocolInfo>), the wiztype dump JSON shape ({version, classes}), .conf files (not .dist), and any file over a size limit outside deps/
 - apps/ci/ci-commit-trailer.py: every commit in the PR has a Co-Authored-By AI trailer (CONTRIBUTING.md requirement)
-- Build matrix: windows-latest MSVC, ubuntu-latest GCC and Clang; ccache/sccache caching
+- Build matrix: windows-latest MSVC, ubuntu-latest GCC and Clang; ccache/sccache caching. The matrix now also holds the sanitizer and fuzz legs and is chosen per run; ccache/sccache was dropped on 2026-09-16, and a vcpkg binary cache per operating system remains
 
 **Acceptance**
 
