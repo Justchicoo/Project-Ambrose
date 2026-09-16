@@ -17,6 +17,7 @@
 #include "LoginSession.h"
 #include "MessageRegistry.h"
 #include "NetworkSettings.h"
+#include "ObjectSerializer.h"
 #include "ServerApp.h"
 #include "SessionContext.h"
 #include "SocketMgr.h"
@@ -73,6 +74,11 @@ namespace
                 LOG_ERROR("server.loginserver", "The login message table does not match the client's message definitions in {}", clientDir);
                 return false;
             }
+
+            std::vector<std::string> limitProblems;
+            SerializerLimits::Apply(SerializerLimits::Load(Config(), &limitProblems));
+            for (std::string const& problem : limitProblems)
+                LOG_WARN("server.loginserver", "{}", problem);
 
             std::string const typeDump = Config().GetOption<std::string>("TypeDumpPath", "", true);
             if (typeDump.empty())

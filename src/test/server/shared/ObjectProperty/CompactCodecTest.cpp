@@ -351,23 +351,23 @@ TEST_F(CompactCodecTest, MalformedOrHostileDataIsRefusedWithWhereItFailed)
     Append(huge, { 0, 0 });
     ASSERT_EQ(huge.size(), 10u);
     SerializerOptions unlimited;
-    unlimited.Limits.MaxContainerCount = 0xFFFFFFFFu;
+    unlimited.Limits.emplace().MaxContainerCount = 0xFFFFFFFFu;
     DecodeResult const bomb = ObjectSerializer::DecodeCompact(_catalog, huge, unlimited);
     EXPECT_EQ(bomb.Status, SerializerStatus::Truncated);
     EXPECT_EQ(bomb.Detail, "class TestDeck.m_cards lists 2147483647 elements, more than the 2 bytes left can hold");
     EXPECT_EQ(ObjectSerializer::DecodeCompact(_catalog, huge).Status, SerializerStatus::ContainerTooLarge);
 
     SerializerOptions tight;
-    tight.Limits.MaxContainerCount = 2;
+    tight.Limits.emplace().MaxContainerCount = 2;
     EXPECT_EQ(ObjectSerializer::DecodeCompact(_catalog, bytes, tight).Status, SerializerStatus::ContainerTooLarge);
     tight = {};
-    tight.Limits.MaxDepth = 1;
+    tight.Limits.emplace().MaxDepth = 1;
     DecodeResult const deep = ObjectSerializer::DecodeCompact(_catalog, bytes, tight);
     EXPECT_EQ(deep.Status, SerializerStatus::TooDeep);
     EXPECT_EQ(deep.Detail, "class TestDeck.m_cards[0] nests objects deeper than 1");
     EXPECT_EQ(ObjectSerializer::EncodeCompact(deck.get(), tight).Status, SerializerStatus::TooDeep);
     tight = {};
-    tight.Limits.MaxObjects = 3;
+    tight.Limits.emplace().MaxObjects = 3;
     EXPECT_EQ(ObjectSerializer::DecodeCompact(_catalog, bytes, tight).Status, SerializerStatus::TooManyObjects);
 
     SerializerOptions compactLength;
@@ -511,7 +511,7 @@ TEST_F(CompactCodecTest, DecodesStayWithinTheMemoryBudgetAndTheDepthCeiling)
     ASSERT_TRUE(deck);
     std::vector<uint8> const bytes = ObjectSerializer::EncodeCompact(deck.get()).Bytes;
     SerializerOptions small;
-    small.Limits.MaxDecodedBytes = 512;
+    small.Limits.emplace().MaxDecodedBytes = 512;
     DecodeResult const refused = ObjectSerializer::DecodeCompact(_catalog, bytes, small);
     EXPECT_EQ(refused.Status, SerializerStatus::BudgetExceeded);
     EXPECT_FALSE(refused.Object);
@@ -530,7 +530,7 @@ TEST_F(CompactCodecTest, DecodesStayWithinTheMemoryBudgetAndTheDepthCeiling)
         return blob;
     };
     SerializerOptions deep;
-    deep.Limits.MaxDepth = 100000;
+    deep.Limits.emplace().MaxDepth = 100000;
     EXPECT_TRUE(ObjectSerializer::DecodeCompact(_catalog, chain(SerializerLimits::DepthCeiling), deep).Ok());
     DecodeResult const tooDeep = ObjectSerializer::DecodeCompact(_catalog, chain(SerializerLimits::DepthCeiling + 1), deep);
     EXPECT_EQ(tooDeep.Status, SerializerStatus::TooDeep);

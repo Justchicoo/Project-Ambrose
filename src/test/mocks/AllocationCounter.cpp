@@ -15,15 +15,17 @@ namespace
         bool Active;
         std::size_t Count;
         std::size_t Largest;
+        std::size_t Total;
     };
 
-    thread_local AllocationState State{ false, 0, 0 };
+    thread_local AllocationState State{ false, 0, 0, 0 };
 
     void Record(std::size_t size)
     {
         if (!State.Active)
             return;
         ++State.Count;
+        State.Total += size;
         if (size > State.Largest)
             State.Largest = size;
     }
@@ -31,7 +33,7 @@ namespace
 
 AllocationScope::AllocationScope()
 {
-    State = AllocationState{ true, 0, 0 };
+    State = AllocationState{ true, 0, 0, 0 };
 }
 
 AllocationScope::~AllocationScope()
@@ -47,6 +49,11 @@ std::size_t AllocationScope::GetCount() const
 std::size_t AllocationScope::GetLargest() const
 {
     return State.Largest;
+}
+
+std::size_t AllocationScope::GetTotal() const
+{
+    return State.Total;
 }
 
 #if (defined(AMBROSE_SANITIZE_ADDRESS) || defined(AMBROSE_SANITIZE_THREAD)) && !defined(_MSC_VER)

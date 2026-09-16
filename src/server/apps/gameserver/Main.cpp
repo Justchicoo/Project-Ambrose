@@ -9,6 +9,7 @@
 #include "DatabaseLoader.h"
 #include "Log.h"
 #include "LogConfig.h"
+#include "ObjectSerializer.h"
 #include "ServerApp.h"
 #include "TypeRegistry.h"
 
@@ -32,6 +33,11 @@ namespace
     protected:
         bool OnStart() override
         {
+            std::vector<std::string> limitProblems;
+            SerializerLimits::Apply(SerializerLimits::Load(Config(), &limitProblems));
+            for (std::string const& problem : limitProblems)
+                LOG_WARN("server.gameserver", "{}", problem);
+
             std::string const typeDump = Config().GetOption<std::string>("TypeDumpPath", "", true);
             if (typeDump.empty())
                 LOG_WARN("server.gameserver", "TypeDumpPath is not set, so ObjectProperty data cannot be read or written");

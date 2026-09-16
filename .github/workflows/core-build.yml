@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks style, forbidden files, and commit trailers, then builds and tests on Windows MSVC, Linux GCC, Linux Clang, Linux GCC with ASan and UBSan, and Linux Clang with TSan.
+# Checks style, forbidden files, and commit trailers, then builds and tests on Windows MSVC, Linux GCC, Linux Clang, Linux GCC with ASan and UBSan, and Linux Clang with TSan, and runs the libFuzzer targets on Linux Clang with ASan and UBSan.
 name: core-build
 
 on:
@@ -75,6 +75,9 @@ jobs:
           - os: ubuntu-latest
             configure: linux-clang-tsan
             build: linux-clang-tsan
+          - os: ubuntu-latest
+            configure: linux-clang-fuzz
+            build: linux-clang-fuzz
     env:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:

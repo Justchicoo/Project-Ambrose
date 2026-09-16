@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Counts heap allocations made on the current thread while a scope is active, for no-allocation tests.
+ * Counts heap allocations made on the current thread while a scope is active, with the largest and the total bytes requested, for allocation tests.
  */
 
 #ifndef AMBROSE_ALLOCATIONCOUNTER_H
@@ -19,6 +19,7 @@ public:
 
     std::size_t GetCount() const;
     std::size_t GetLargest() const;
+    std::size_t GetTotal() const;
 
     static bool IsSupported();
 };

@@ -28,6 +28,7 @@ option(APPS_BUILD "Build the server apps" ON)
 option(AMBROSE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(AMBROSE_SANITIZE_ADDRESS "Build project code with AddressSanitizer, plus UndefinedBehaviorSanitizer where supported" OFF)
 option(AMBROSE_SANITIZE_THREAD "Build project code with ThreadSanitizer (GCC or Clang only)" OFF)
+option(AMBROSE_BUILD_FUZZERS "Build libFuzzer targets for decoders of untrusted data, with coverage instrumentation on project code (Clang only)" OFF)
 
 include(PlatformDetect)
 include(CompilerFlags)

@@ -1,23 +1,30 @@
 /*
  * Project Ambrose by Imjustchico
- * Walks the class's properties in id order, skipping those the mask does not select and those marked deprecated, reading or writing a dirty-present bit where the property asks for one, u32 element counts, u16-length strings, u32 or text enums, bit fields at their width, and a class hash before every object, refusing counts the remaining bytes cannot hold before allocating for them and charging every object, element, default and string against the decode's memory budget.
+ * Walks the class's properties in id order, skipping those the mask does not select and those marked deprecated, reading or writing a dirty-present bit where the property asks for one, u32 element counts, u16-length strings, u32 or text enums, bit fields at their width, and a class hash before every object, refusing counts the remaining bytes cannot hold before allocating for them and charging every object, element, default and string against the decode's memory budget; also opens and closes message fields by their envelope, class and null rules, and loads the decode limits from configuration into the snapshot each decode reads, through a per-thread copy refreshed when the snapshot changes, unless its options carry their own.
  */
 
 #include "ObjectSerializer.h"
 #include "BitReader.h"
 #include "BitWriter.h"
+#include "BlobEnvelope.h"
+#include "ConfigMgr.h"
 #include "PropertyEnums.h"
 
 #include <fmt/format.h>
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <bit>
 #include <cstring>
 #include <iterator>
 #include <limits>
+#include <memory>
+#include <mutex>
 #include <new>
+#include <stdexcept>
 #include <optional>
+#include <string>
 
 namespace
 {
@@ -25,6 +32,24 @@ namespace
     constexpr SerializerFlag UnsupportedFlags = SerializerFlag::SerializeFlags | SerializerFlag::CompactLength | SerializerFlag::Compress;
     constexpr std::size_t ReserveCap = 4096;
     constexpr std::size_t ValueBytes = sizeof(PropertyValue);
+
+    struct LimitsStore
+    {
+        std::mutex Mutex;
+        SerializerLimits Limits;
+        std::atomic<uint64> Generation{ 1 };
+    };
+
+    LimitsStore& GetLimitsStore()
+    {
+        static LimitsStore store;
+        return store;
+    }
+
+    std::string FieldName(ObjectField const& field)
+    {
+        return fmt::format("{}.{}", field.Message, field.Field);
+    }
 
     struct PathStep
     {
@@ -120,8 +145,8 @@ namespace
     class Decoder
     {
     public:
-        Decoder(TypeCatalogPtr const& catalog, std::span<uint8 const> bytes, SerializerOptions const& options, PropertyObject::BuildKey key)
-            : _catalog(catalog), _reader(bytes), _options(options), _key(key)
+        Decoder(TypeCatalogPtr const& catalog, std::span<uint8 const> bytes, SerializerOptions const& options, SerializerLimits const& limits, PropertyObject::BuildKey key)
+            : _catalog(catalog), _reader(bytes), _options(options), _limits(limits), _key(key)
         {
         }
 
@@ -159,8 +184,8 @@ namespace
 
         bool Charge(std::size_t bytes)
         {
-            if (bytes > _options.Limits.MaxDecodedBytes - _charged)
-                return Fail(SerializerStatus::BudgetExceeded, fmt::format("needs more than the {} bytes of memory a decode may use", _options.Limits.MaxDecodedBytes));
+            if (bytes > _limits.MaxDecodedBytes - _charged)
+                return Fail(SerializerStatus::BudgetExceeded, fmt::format("needs more than the {} bytes of memory a decode may use", _limits.MaxDecodedBytes));
             _charged += bytes;
             return true;
         }
@@ -184,8 +209,8 @@ namespace
                 return Fail(SerializerStatus::WrongClass, fmt::format("names {}, which is not a class allowed here", type->Name));
             if (depth > _depthLimit)
                 return Fail(SerializerStatus::TooDeep, fmt::format("nests objects deeper than {}", _depthLimit));
-            if (++_objects > _options.Limits.MaxObjects)
-                return Fail(SerializerStatus::TooManyObjects, fmt::format("holds more than {} objects", _options.Limits.MaxObjects));
+            if (++_objects > _limits.MaxObjects)
+                return Fail(SerializerStatus::TooManyObjects, fmt::format("holds more than {} objects", _limits.MaxObjects));
             if (!_root)
                 _root = type;
             if (!Charge(sizeof(PropertyObject) + type->Properties.size() * ValueBytes))
@@ -236,8 +261,8 @@ namespace
             uint32 const count = _reader.Read<uint32>();
             if (_reader.Failed())
                 return Truncated();
-            if (count > _options.Limits.MaxContainerCount)
-                return Fail(SerializerStatus::ContainerTooLarge, fmt::format("lists {} elements, above the limit of {}", count, _options.Limits.MaxContainerCount));
+            if (count > _limits.MaxContainerCount)
+                return Fail(SerializerStatus::ContainerTooLarge, fmt::format("lists {} elements, above the limit of {}", count, _limits.MaxContainerCount));
             if (count > _reader.GetRemainingBits() / minimum)
                 return Fail(SerializerStatus::Truncated, fmt::format("lists {} elements, more than the {} bytes left can hold", count, _reader.GetRemainingBits() / 8));
             if (!Charge(std::size_t{ count } * ValueBytes))
@@ -423,8 +448,9 @@ namespace
         TypeCatalogPtr const& _catalog;
         BitReader _reader;
         SerializerOptions const& _options;
+        SerializerLimits _limits;
         PropertyObject::BuildKey _key;
-        uint32 _depthLimit = std::min(_options.Limits.MaxDepth, SerializerLimits::DepthCeiling);
+        uint32 _depthLimit = std::min(_limits.MaxDepth, SerializerLimits::DepthCeiling);
         PathTracker _path;
         ClassInfo const* _root = nullptr;
         uint32 _objects = 0;
@@ -436,7 +462,7 @@ namespace
     class Encoder
     {
     public:
-        explicit Encoder(SerializerOptions const& options) : _options(options)
+        Encoder(SerializerOptions const& options, SerializerLimits const& limits) : _options(options), _limits(limits)
         {
         }
 
@@ -726,7 +752,8 @@ namespace
         }
 
         SerializerOptions const& _options;
-        uint32 _depthLimit = std::min(_options.Limits.MaxDepth, SerializerLimits::DepthCeiling);
+        SerializerLimits _limits;
+        uint32 _depthLimit = std::min(_limits.MaxDepth, SerializerLimits::DepthCeiling);
         BitWriter _writer;
         PathTracker _path;
         ClassInfo const* _root = nullptr;
@@ -752,7 +779,7 @@ DecodeResult ObjectSerializer::DecodeCompact(TypeCatalogPtr const& catalog, std:
     }
     try
     {
-        return Decoder(catalog, bytes, options, PropertyObject::BuildKey()).Run(bytes.size());
+        return Decoder(catalog, bytes, options, options.Limits.value_or(SerializerLimits::Current()), PropertyObject::BuildKey()).Run(bytes.size());
     }
     catch (std::bad_alloc const&)
     {
@@ -773,7 +800,7 @@ EncodeResult ObjectSerializer::EncodeCompact(PropertyObject const* object, Seria
     }
     try
     {
-        return Encoder(options).Run(object);
+        return Encoder(options, options.Limits.value_or(SerializerLimits::Current())).Run(object);
     }
     catch (std::bad_alloc const&)
     {
@@ -782,6 +809,136 @@ EncodeResult ObjectSerializer::EncodeCompact(PropertyObject const* object, Seria
         result.Detail = "memory ran out while encoding";
         return result;
     }
+}
+
+DecodeResult ObjectSerializer::DecodeField(TypeCatalogPtr const& catalog, ObjectField const& field, std::span<uint8 const> bytes, SerializerOptions options)
+{
+    DecodeResult result;
+    auto const refuse = [&result, &field](SerializerStatus status, std::string detail)
+    {
+        result.Status = status;
+        result.Detail = fmt::format("{} {}", FieldName(field), detail);
+        return std::move(result);
+    };
+    if (!catalog)
+        return refuse(SerializerStatus::UnknownClass, "cannot be read without a type catalog");
+    options.RootClasses.clear();
+    for (std::string_view const name : field.Classes)
+    {
+        ClassInfo const* const type = catalog->FindClass(name);
+        if (!type || type->Kind != ClassKind::PropertyClass)
+            return refuse(SerializerStatus::UnknownClass, fmt::format("allows {}, which the type dump does not list as a property class", name));
+        options.RootClasses.push_back(type);
+    }
+    options.AllowNullRoot = field.AllowNull;
+    if (!options.Limits)
+        options.Limits = SerializerLimits::Current();
+
+    BlobEnvelope::UnwrapResult unwrapped;
+    std::span<uint8 const> payload = bytes;
+    if (field.Enveloped)
+    {
+        try
+        {
+            unwrapped = BlobEnvelope::Unwrap(bytes, options.Limits->MaxInflatedSize);
+        }
+        catch (std::exception const& error)
+        {
+            return refuse(SerializerStatus::OutOfMemory, fmt::format("could not be inflated: {}", error.what()));
+        }
+        if (unwrapped.Code == BlobEnvelope::Status::OutOfMemory)
+            return refuse(SerializerStatus::OutOfMemory, "ran out of memory while inflating");
+        if (!unwrapped.Succeeded())
+            return refuse(SerializerStatus::BadEnvelope, fmt::format("holds an envelope that cannot be opened: {}", BlobEnvelope::GetStatusName(unwrapped.Code)));
+        payload = unwrapped.Data;
+    }
+    result = DecodeCompact(catalog, payload, options);
+    if (!result.Ok())
+        result.Detail = fmt::format("{}: {}", FieldName(field), result.Detail);
+    else if (field.Enveloped)
+        result.BytesRead = bytes.size();
+    return result;
+}
+
+EncodeResult ObjectSerializer::EncodeField(ObjectField const& field, PropertyObject const* object, SerializerOptions options)
+{
+    EncodeResult result;
+    auto const refuse = [&result, &field](SerializerStatus status, std::string detail)
+    {
+        result.Status = status;
+        result.Detail = fmt::format("{} {}", FieldName(field), detail);
+        return std::move(result);
+    };
+    if (!object && !field.AllowNull)
+        return refuse(SerializerStatus::NullNotAllowed, "needs an object");
+    if (object && std::none_of(field.Classes.begin(), field.Classes.end(), [object](std::string_view name) { return object->IsA(name); }))
+        return refuse(SerializerStatus::WrongClass, fmt::format("cannot carry a {}", object->GetClass().Name));
+    result = EncodeCompact(object, options);
+    if (!result.Ok())
+    {
+        result.Detail = fmt::format("{}: {}", FieldName(field), result.Detail);
+        return result;
+    }
+    if (field.Enveloped)
+    {
+        try
+        {
+            result.Bytes = BlobEnvelope::Wrap(result.Bytes, BlobEnvelope::Packing::Compress);
+        }
+        catch (std::length_error const&)
+        {
+            result.Bytes.clear();
+            return refuse(SerializerStatus::ValueTooLong, "holds more bytes than an envelope can carry");
+        }
+        catch (std::exception const& error)
+        {
+            result.Bytes.clear();
+            return refuse(SerializerStatus::OutOfMemory, fmt::format("could not be compressed: {}", error.what()));
+        }
+    }
+    return result;
+}
+
+SerializerLimits SerializerLimits::Load(ConfigMgr const& config, std::vector<std::string>* problems)
+{
+    auto const bounded = [&config, problems](std::string const& option, uint64 fallback, uint64 minimum, uint64 maximum)
+    {
+        uint64 const configured = config.GetOption<uint64>(option, fallback, true);
+        uint64 const value = std::clamp(configured, minimum, maximum);
+        if (value != configured && problems)
+            problems->push_back(fmt::format("{} = {} is outside {}-{}; using {}", option, configured, minimum, maximum, value));
+        return value;
+    };
+    SerializerLimits const defaults;
+    SerializerLimits limits;
+    limits.MaxDepth = static_cast<uint32>(bounded("ObjectProperty.MaxDepth", defaults.MaxDepth, 1, DepthCeiling));
+    limits.MaxObjects = static_cast<uint32>(bounded("ObjectProperty.MaxObjects", defaults.MaxObjects, 1, CountCeiling));
+    limits.MaxContainerCount = static_cast<uint32>(bounded("ObjectProperty.MaxContainerCount", defaults.MaxContainerCount, 0, CountCeiling));
+    limits.MaxDecodedBytes = static_cast<std::size_t>(bounded("ObjectProperty.MaxDecodedBytes", defaults.MaxDecodedBytes, DecodedBytesFloor, DecodedBytesCeiling));
+    limits.MaxInflatedSize = static_cast<std::size_t>(bounded("ObjectProperty.MaxInflatedSize", defaults.MaxInflatedSize, InflatedSizeFloor, InflatedSizeCeiling));
+    return limits;
+}
+
+SerializerLimits SerializerLimits::Current()
+{
+    thread_local uint64 seen = 0;
+    thread_local SerializerLimits cached;
+    LimitsStore& store = GetLimitsStore();
+    if (store.Generation.load(std::memory_order_acquire) != seen)
+    {
+        std::lock_guard const lock(store.Mutex);
+        cached = store.Limits;
+        seen = store.Generation.load(std::memory_order_acquire);
+    }
+    return cached;
+}
+
+void SerializerLimits::Apply(SerializerLimits const& limits)
+{
+    LimitsStore& store = GetLimitsStore();
+    std::lock_guard const lock(store.Mutex);
+    store.Limits = limits;
+    store.Generation.fetch_add(1, std::memory_order_acq_rel);
 }
 
 bool ObjectSerializer::IsSelected(PropertyInfo const& property, uint32 mask) noexcept
@@ -805,6 +962,7 @@ std::string_view ObjectSerializer::GetStatusName(SerializerStatus status) noexce
         case SerializerStatus::ContainerTooLarge: return "a list holds more elements than the limit";
         case SerializerStatus::BudgetExceeded: return "the decoded objects need more memory than the limit";
         case SerializerStatus::OutOfMemory: return "memory ran out";
+        case SerializerStatus::BadEnvelope: return "the blob's envelope cannot be opened";
         case SerializerStatus::UnknownEnumName: return "an enum names no option";
         case SerializerStatus::ValueTooLong: return "a value is too long for its length field";
         case SerializerStatus::UnsupportedFlags: return "the serializer flags ask for a mode that is not implemented";

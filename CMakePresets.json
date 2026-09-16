@@ -69,6 +69,15 @@
       "cacheVariables": {
         "AMBROSE_SANITIZE_THREAD": "ON"
       }
+    },
+    {
+      "name": "linux-clang-fuzz",
+      "displayName": "Linux Clang with libFuzzer, AddressSanitizer and UBSan",
+      "inherits": "linux-clang",
+      "cacheVariables": {
+        "AMBROSE_SANITIZE_ADDRESS": "ON",
+        "AMBROSE_BUILD_FUZZERS": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -110,6 +119,11 @@
     {
       "name": "linux-clang-tsan",
       "configurePreset": "linux-clang-tsan",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-clang-fuzz",
+      "configurePreset": "linux-clang-fuzz",
       "configuration": "Debug"
     }
   ],
@@ -215,6 +229,27 @@
       },
       "environment": {
         "TSAN_OPTIONS": "halt_on_error=1:abort_on_error=1:second_deadlock_stack=1"
+      }
+    },
+    {
+      "name": "linux-clang-fuzz",
+      "configurePreset": "linux-clang-fuzz",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "include": {
+          "label": "fuzz"
+        }
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "timeout": 1200
+      },
+      "environment": {
+        "ASAN_OPTIONS": "detect_leaks=1:abort_on_error=1",
+        "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1"
       }
     }
   ]

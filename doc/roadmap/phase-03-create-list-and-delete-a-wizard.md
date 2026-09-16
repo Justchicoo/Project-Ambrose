@@ -244,9 +244,9 @@ Objects inside client messages can be decoded from and encoded to the non-versio
 
 **Acceptance**
 
-- [ ] 1M mutations under ASan/UBSan with no crash
-- [ ] Vector count 0x7FFFFFFF in a 10-byte blob rejected immediately
-- [ ] Zero versionable property size returns an error
+- [x] 1M mutations under ASan/UBSan with no crash (DecoderFuzzTest in the linux-gcc-asan leg)
+- [x] Vector count 0x7FFFFFFF in a 10-byte blob rejected immediately
+- [ ] Zero versionable property size returns an error (waits for 3.10's versionable decoder)
 
 ### Detailed spec from OBJ-19: Hostile-input hardening and fuzzing
 
@@ -254,15 +254,15 @@ Client-sent ObjectProperty blobs cannot crash, hang, or exhaust the server.
 
 **Deliverables**
 
-- Limits enforced in all decoders: max nesting depth, max container count (checked against remaining bits before allocating), max total objects, max inflated size, rejection of zero-sized versionable properties (infinite-loop guard). The limits are live settings with defaults and bounds (ObjectProperty.MaxDepth, ObjectProperty.MaxContainerCount, ObjectProperty.MaxObjects, ObjectProperty.MaxInflatedSize), read per decode so a change applies to the next blob (registered with 4.16 when it lands)
-- A class allow-list per message field (e.g. MSG_CREATECHARACTER.CreationInfo accepts only WizardCharacterCreationInfo)
-- src/test/server/shared/ObjectProperty/DecoderFuzzTest.cpp (seeded random mutations of synthetic golden blobs) plus a libFuzzer target where the toolchain allows
+- Limits enforced in all decoders: max nesting depth, max container count (checked against remaining bits before allocating), max total objects, max inflated size, rejection of zero-sized versionable properties (infinite-loop guard). The limits are live settings with defaults and bounds (ObjectProperty.MaxDepth, ObjectProperty.MaxContainerCount, ObjectProperty.MaxObjects, ObjectProperty.MaxInflatedSize), read per decode so a change applies to the next blob (registered with 4.16 when it lands). Built as SerializerLimits::Load, clamping each option and reporting it, and SerializerLimits::Apply, which both servers call at startup; a decode whose options carry no limits reads the applied snapshot when it starts. Added ObjectProperty.MaxDecodedBytes for the memory budget 3.05 introduced. The zero-size guard arrives with 3.10's versionable decoder
+- A class allow-list per message field (e.g. MSG_CREATECHARACTER.CreationInfo accepts only WizardCharacterCreationInfo). Built as ObjectFields.h/.cpp, a table naming each field's classes, whether its blob is enveloped and whether it may be empty, used by ObjectSerializer::DecodeField and EncodeField. It lists MSG_BADGES BadgeInfo and BadgeFilterInfo (enveloped), MSG_CHARACTERINFO.CharacterInfo and MSG_CREATECHARACTER.CreationInfo (unwrapped; the creation field's envelope is confirmed in 3.15)
+- src/test/server/shared/ObjectProperty/DecoderFuzzTest.cpp (seeded random mutations of synthetic golden blobs) plus a libFuzzer target where the toolchain allows. Built with the golden corpus shared in src/test/mocks/ObjectFuzzCorpus.h/.cpp; seeds carry a mode byte and include stored and compressed envelopes decoded through DecodeField; the test runs a million mutations under AddressSanitizer and a hundred thousand elsewhere (AMBROSE_FUZZ_ITERATIONS overrides), checking that anything decoded re-encodes and decodes back equal and that no decode allocates more in total than the memory budget and inflation limit allow. The libFuzzer target src/test/fuzz/ObjectPropertyFuzzer.cpp builds with AMBROSE_BUILD_FUZZERS in the linux-clang-fuzz preset, which CI runs for 500,000 inputs from the seed corpus. ObjectFieldTest covers the field rules and the limits from configuration
 
 **Acceptance**
 
-- [ ] The fuzz test runs 1M mutations under ASan/UBSan with no crash and no allocation over the configured cap
-- [ ] Unit test: a vector count of 0x7FFFFFFF in a 10-byte blob is rejected immediately
-- [ ] Unit test: a zero property size in versionable mode returns an error instead of looping
+- [x] The fuzz test runs 1M mutations under ASan/UBSan with no crash and no allocation over the configured cap (DecoderFuzzTest; the linux-gcc-asan leg runs the million)
+- [x] Unit test: a vector count of 0x7FFFFFFF in a 10-byte blob is rejected immediately (DecoderFuzzTest, which also checks nothing over 4 KiB is allocated)
+- [ ] Unit test: a zero property size in versionable mode returns an error instead of looping (waits for 3.10, which adds versionable mode)
 
 ## 3.07 Typed wrappers over dynamic objects (OBJ-10)
 

@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds unit_tests from every test source outside the compile and client folders, and outside the login server's folder unless its library is built, registers each test with CTest, adds those two folders, and smoke-tests each server executable.
+# Builds unit_tests from every test source outside the compile, client and fuzz folders, and outside the login server's folder unless its library is built, registers each test with CTest, adds the compile and client folders and the fuzz folder when fuzzers are built, and smoke-tests each server executable.
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
@@ -7,7 +7,7 @@ ambrose_collect_sources("${CMAKE_CURRENT_SOURCE_DIR}" all_test_sources)
 set(test_sources "")
 foreach(source IN LISTS all_test_sources)
     file(RELATIVE_PATH relative "${CMAKE_CURRENT_SOURCE_DIR}" "${source}")
-    if(relative MATCHES "^(compile|client)/")
+    if(relative MATCHES "^(compile|client|fuzz)/")
         continue()
     endif()
     if(relative MATCHES "^server/apps/loginserver/" AND NOT TARGET login)
@@ -35,6 +35,9 @@ gtest_discover_tests(unit_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT 120)
 
 add_subdirectory(compile)
 add_subdirectory(client)
+if(AMBROSE_BUILD_FUZZERS)
+    add_subdirectory(fuzz)
+endif()
 
 foreach(app IN ITEMS gameserver loginserver patchserver)
     if(TARGET ${app})
