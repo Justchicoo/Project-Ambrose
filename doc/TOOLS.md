@@ -6,7 +6,7 @@ The Ambrose tool suite takes the AzerothCore content toolchain and changes it in
 
 One source of truth ties the suite together: a per-table schema definition file in data/schema/world/<table>.yaml, inspired by WDE DbDefinitions and Keira field models. The same file drives the Studio editor forms and pickers, the gameserver startup and reload validator, the reload-command mapping and generated doc/world/<table>.md pages. Tables are defined as data, so adding a world table means adding one file.
 
-Current repo state (): src/tools/bindecode and src/tools/dbimport are built; src/tools/{template_extractor, wad_extractor, zone_extractor} exist as empty folders. apps/{ci, codestyle, installer} exist. data/sql/base/db_world is empty. scripts/Commands is empty. ARCHITECTURE.md already sets the rules that tools depend only on shared+common and that GM commands reload single tables.
+Current repo state (): src/tools/bindecode, src/tools/dbimport and src/tools/localetool are built; src/tools/{template_extractor, wad_extractor, zone_extractor} exist as empty folders. apps/{ci, codestyle, installer} exist. data/sql/base/db_world is empty. scripts/Commands is empty. ARCHITECTURE.md already sets the rules that tools depend only on shared+common and that GM commands reload single tables.
 
 Build order:
 1. **Early foundation:** codec_registry, wad_extractor, template_extractor, dbimport + codestyle-sql, the ambrose.sh dashboard, the reload framework (4.15) and its admin API (17.12).
@@ -28,6 +28,10 @@ Unverified assumptions behind some tools:
 Sources: the actools, anatomy, patchmod and renderers research results in the brief, and doc\ARCHITECTURE.md.
 
 ## Early
+
+### localetool (built in 3.13)
+
+Finds the keys whose text matches, checks that a key exists and prints its text, dumps a table, and lists the installed locales with the files each skips, all from the `.lang` files of the user's own Root.wad. `localetool --help` lists its options. It reads the install named by `--client` or `AMBROSE_CLIENT_DIR` and writes nothing.
 
 ### bindecode (built in 3.11)
 

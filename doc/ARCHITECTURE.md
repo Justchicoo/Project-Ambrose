@@ -277,6 +277,20 @@ Settled on 2026-09-16 under the maintainer's standing direction to decide.
   - NaN and infinities become the strings `NaN`, `Infinity` and `-Infinity`, so they cannot be mistaken for a null value.
 - `bindecode` (src/tools/bindecode) prints named entries of an archive as JSON with their issues on standard error, lists entry names, or sweeps the archive. It reads only the user's own install and type dump, from `--client` and `--type-dump` or `AMBROSE_CLIENT_DIR` and `AMBROSE_TYPE_DUMP_PATH`, and exits 0, 1 on a read or decode failure, or 2 on bad usage. A sweep exits 0 when the only failures are files whose root class the dump does not list and no issue other than unknown classes is reported. Like every app, it takes its arguments and environment variables as UTF-8: `Ambrose::GetArguments` reads the wide command line on Windows, and `Ambrose::GetEnv` and `SetEnv` use the wide environment there. A path such as a user folder with accented letters therefore opens instead of failing to convert.
 
+### Locale text
+
+Settled on 2026-09-16 under the maintainer's standing direction to decide.
+
+- Client display text lives in `Locale/<locale>/*.lang` files in Root.wad. Each is UTF-16LE with a byte order mark: a header line `1:<Stem>`, then each entry as a key line, a metadata line and a text line. The full key is `<Stem>_<Key>`, for example `QuestTitle_00001718`. `LangFile` parses one file of at most 64 MiB into UTF-8. One or two blank lines after the last entry are padding, as most r806919 es, el and pl files end with one and most de, fr and it files with two; a malformed file, an empty key or an unfinished entry is refused with the reason.
+- `sLocaleStore` resolves full keys in any installed locale:
+  - loading groups the files by locale folder and parses the default locale at once;
+  - every other locale parses once, on first use, even when several threads ask at the same time;
+  - lookups read an immutable snapshot;
+  - a file that cannot be read or parsed is skipped and named on its locale's table, and a locale fails only when none of its files load; on r806919 only pl/WizardFurniture.lang is skipped;
+  - a reload or a default locale change builds and checks the new data first, including every locale already in use, and a failure keeps the previous store resolving keys with the reason.
+- A key defined twice keeps its later text and is counted. r806919's en-US repeats 40 keys, 39 of them with different text; which copy the client shows is not confirmed. The metadata line is kept per parsed entry but not stored, since its meaning is unknown.
+- The game server loads `Locale.Default` from `ClientDir` at startup, warns for each skipped file, and refuses to start when the locale cannot load. `localetool` finds keys by text, checks and dumps keys, and lists locales with the files they skip from the user's own install.
+
 ### Plain-XML ObjectProperty files
 
 Settled on 2026-09-16 under the maintainer's standing direction to decide.

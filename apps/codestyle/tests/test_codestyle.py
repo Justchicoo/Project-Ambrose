@@ -75,6 +75,10 @@ class CppTests(CheckerTestCase):
     def test_brief_repeating_branding_fails(self):
         self.assertIssue("src/Sample.cpp", "/*\n * Project Ambrose by Imjustchico\n * Project Ambrose file\n */\n", "header", 3)
 
+    def test_brief_with_a_comment_marker_fails(self):
+        self.assertIssue("src/Sample.cpp", "/*\n * Project Ambrose by Imjustchico\n * Reads Locale/<locale>/*.lang files.\n */\n", "header", 3)
+        self.assertIssue("src/Sample.cpp", "/*\n * Project Ambrose by Imjustchico\n * Ends early */ here.\n */\n", "header", 3)
+
 
 class SqlTests(CheckerTestCase):
     def test_extra_comment_fails(self):
@@ -142,6 +146,7 @@ class OtherFormatTests(CheckerTestCase):
 
     def test_markdown_header_brief_required(self):
         self.assertIssue("doc/Sample.md", "<!-- Project Ambrose by Imjustchico:  -->\n", "header", 1)
+        self.assertIssue("doc/Sample.md", "<!-- Project Ambrose by Imjustchico: Notes --> more -->\n", "header", 1)
 
     def test_json_is_exempt(self):
         self.assertClean("vcpkg.json", "{\n  \"name\": \"x\"\n}\n")

@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds unit_tests from every test source outside the compile, client and fuzz folders, and outside the login server's folder unless its library is built, registers each test with CTest, adds the compile and client folders and the fuzz folder when fuzzers are built, and smoke-tests each server executable and the bindecode and dbimport tools.
+# Builds unit_tests from every test source outside the compile, client and fuzz folders, and outside the login server's folder unless its library is built, registers each test with CTest, adds the compile and client folders and the fuzz folder when fuzzers are built, and smoke-tests each server executable and the bindecode, dbimport and localetool tools.
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
@@ -51,6 +51,13 @@ endforeach()
 if(TARGET bindecode)
     add_test(NAME BinDecode
         COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:bindecode> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/bindecode -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/BinDecodeTest.cmake")
+    set_tests_properties(BinDecode PROPERTIES SKIP_REGULAR_EXPRESSION "bindecode test skipped")
+endif()
+
+if(TARGET localetool)
+    add_test(NAME LocaleTool
+        COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:localetool> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/localetool -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/LocaleToolTest.cmake")
+    set_tests_properties(LocaleTool PROPERTIES SKIP_REGULAR_EXPRESSION "localetool test skipped")
 endif()
 
 if(TARGET dbimport)

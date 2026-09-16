@@ -80,6 +80,12 @@ def brief_problem(brief):
     return None
 
 
+def cpp_brief_problem(brief):
+    if "/*" in brief or "*/" in brief:
+        return "the brief holds '/*' or '*/', which nests in or ends the header comment"
+    return brief_problem(brief)
+
+
 def check_header(kind, lines):
     issues = []
     start = 0
@@ -100,7 +106,7 @@ def check_header(kind, lines):
                 if not match:
                     issues.append((offset + 1, "expected ' * <brief>' as the third header line"))
                 else:
-                    problem = brief_problem(match.group(1))
+                    problem = cpp_brief_problem(match.group(1))
                     if problem:
                         issues.append((offset + 1, problem))
             elif got != want:
@@ -119,7 +125,7 @@ def check_header(kind, lines):
         match = re.fullmatch(r"<!-- " + re.escape(BRAND) + r": (.*) -->", line_at(0) or "")
         if not match:
             return (1 if (line_at(0) or "").startswith("<!--") else 0), [(1, f"expected '<!-- {BRAND}: <brief> -->'")]
-        problem = brief_problem(match.group(1))
+        problem = brief_problem(match.group(1)) or ("the brief holds '-->', which ends the header comment" if "-->" in match.group(1) else None)
         return 1, ([(1, problem)] if problem else [])
 
     marker = {"sql": "--", "batch": "REM"}.get(kind, "#")

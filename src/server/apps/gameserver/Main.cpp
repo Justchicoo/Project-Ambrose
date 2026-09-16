@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: loads the type dump, brings the login, characters and world databases current and opens them, then runs the world update tick whose interval follows World.UpdateInterval live.
+ * Game server entry point: loads the type dump and, when ClientDir names the user's install, the locale text of its Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, then runs the world update tick whose interval follows World.UpdateInterval live.
  */
 
 #include "AppenderDB.h"
@@ -9,6 +9,7 @@
 #include "DatabaseLoader.h"
 #include "Environment.h"
 #include "Log.h"
+#include "LocaleStore.h"
 #include "LogConfig.h"
 #include "ObjectSerializer.h"
 #include "ServerApp.h"
@@ -17,6 +18,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -46,6 +48,31 @@ namespace
             {
                 LOG_ERROR("server.gameserver", "Cannot load the type dump {}", typeDump);
                 return false;
+            }
+
+            std::string const clientDir = Config().GetOption<std::string>("ClientDir", "", true);
+            std::string const locale = Config().GetOption<std::string>("Locale.Default", "en-US", true);
+            if (clientDir.empty())
+                LOG_WARN("server.gameserver", "ClientDir is not set, so locale keys cannot be resolved to text");
+            else
+            {
+                std::filesystem::path const rootWad = LogConfig::Utf8Path(clientDir) / "Data" / "GameData" / "Root.wad";
+                std::string error;
+                if (!sLocaleStore.Load(rootWad, locale, error))
+                {
+                    LOG_ERROR("server.gameserver", "Cannot load the {} locale from {}: {}", locale, ConfigMgr::PathToUtf8(rootWad), error);
+                    return false;
+                }
+                std::shared_ptr<LocaleTable const> const table = sLocaleStore.GetTable(locale, &error);
+                if (!table)
+                {
+                    LOG_ERROR("server.gameserver", "The {} locale was unloaded while starting: {}", locale, error);
+                    return false;
+                }
+                for (std::string const& problem : table->GetProblems())
+                    LOG_WARN("server.gameserver", "The {} locale skipped {}", locale, problem);
+                LOG_INFO("server.gameserver", "Loaded the {} locale: {} files, {} keys, {} repeated keys whose later text is kept, {} files skipped; {} locales installed, the others load when first used",
+                    locale, table->GetFileCount(), table->GetKeyCount(), table->GetDuplicateCount(), table->GetProblems().size(), sLocaleStore.GetLocales().size());
             }
 
             _databases = std::make_unique<DatabaseLoader>(Config());

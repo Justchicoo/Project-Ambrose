@@ -515,9 +515,9 @@ The handful of plain-XML ObjectProperty files (character creation config, action
 
 **Acceptance**
 
-- [ ] Synthetic UTF-16 fixture parses; leading-zero keys stay strings
-- [ ] en-US 5132 tables / 217032 keys; Items_00028316 = 'Cute Fairy Kei Broadbrim'; QuestTitle_00001718 = 'To Ravenwood!'; ZoneLocName_1451497 = 'Wizard City|Ravenwood'
-- [ ] localetool find 'To Ravenwood!' prints QuestTitle_00001718
+- [x] Synthetic UTF-16 fixture parses; leading-zero keys stay strings (LangFileTest)
+- [x] en-US 5132 tables / 217032 keys; Items_00028316 = 'Cute Fairy Kei Broadbrim'; QuestTitle_00001718 = 'To Ravenwood!'; ZoneLocName_1451497 = 'Wizard City|Ravenwood' (LocaleStoreClientTest)
+- [x] localetool find 'To Ravenwood!' prints QuestTitle_00001718 (the LocaleTool CTest; QuestTitle_1625D7 holds the same text and is printed too)
 
 ### Detailed spec from OBJ-14: Locale .lang loader
 
@@ -525,23 +525,24 @@ Any localized key a template or message references (for example Items_00028316) 
 
 **Deliverables**
 
-- src/server/shared/Locale/LangFile.h/.cpp: UTF-16LE with BOM, CRLF lines; header line '1:<TableName>', then triplets of key line, metadata line (usually blank), text line
-- src/server/shared/Locale/LocaleStore.h/.cpp (sLocaleStore): lookup of '<Table>_<Key>' for locale en-US/de/es/fr/it/pl/el; both 8-digit numeric keys and named keys supported
-- Optional support for the BINd Locale/<lang>/StringTable.xml via OBJ-6
-- conf option ClientDataDir, DefaultLocale. DefaultLocale is a live setting; `.reload locale` (through 4.15 when it lands) rebuilds the store off to the side from ClientDataDir, swaps it, and keeps the old store on failure
-- src/test/server/shared/Locale/LangFileTest.cpp with a synthetic .lang
+- src/server/shared/Locale/LangFile.h/.cpp: UTF-16LE with BOM, CRLF lines; header line '1:<TableName>', then triplets of key line, metadata line (usually blank), text line. Built: a lone LF also ends a line, a final line break is optional, a last entry may have empty text, and one or two blank lines after the last entry are padding: most r806919 es, el and pl files end with one, and most de, fr and it files with two. A file over 64 MiB, without the byte order mark, with an odd length, an unpaired surrogate, a missing header, an empty key or an unfinished entry is refused with the reason
+- src/server/shared/Locale/LocaleStore.h/.cpp (sLocaleStore): lookup of '<Table>_<Key>' for locale en-US/de/es/fr/it/pl/el; both 8-digit numeric keys and named keys supported. Built for every locale folder Root.wad holds (de, el, en-US, es, fr, gr, it, pl on r806919): loading groups the .lang files by locale and parses the default one at once, and the others parse once on first use. A file that cannot be read or parsed is skipped and named on its locale's table, so one bad file costs only its own keys; a locale none of whose files load fails. On r806919 every locale loads, and pl skips only WizardFurniture.lang, whose 10143 lines end in the middle of an entry. Lookups read an immutable snapshot, and a key defined twice keeps its later text and is counted; r806919's en-US repeats 40 keys, 39 of them with different text, and which copy the client keeps is not confirmed. LocaleTable::FindKeys and GetEntries serve localetool
+- Optional support for the BINd Locale/<lang>/StringTable.xml via OBJ-6. Not built: only de, es and it hold one, and every key the roadmap names resolves from the .lang files
+- conf option ClientDataDir, DefaultLocale. DefaultLocale is a live setting; `.reload locale` (through 4.15 when it lands) rebuilds the store off to the side from ClientDataDir, swaps it, and keeps the old store on failure. Built as the game server's ClientDir, the same option the login server uses for the install, and Locale.Default (en-US). The server loads the default locale at startup, logs a warning for each file it skipped, and refuses to start when the locale cannot load at all. LocaleStore::Load and SetDefaultLocale build and check the new data, including every locale already in use, before swapping it in and keep the old store on failure, for 4.15's reload triggers to call
+- src/test/server/shared/Locale/LangFileTest.cpp with a synthetic .lang. Built with LocaleStoreTest on synthetic archives and the client-gated LocaleStoreClientTest
 
 **Acceptance**
 
-- [ ] Unit test: a synthetic UTF-16 file with numeric and named keys and a non-blank metadata line parses correctly
-- [ ] Unit test: a reload that meets a malformed .lang file keeps the previous store resolving keys and names the file
-- [ ] Client-gated test: en-US loads 5132 tables and 217032 keys; Items_00028316 resolves to 'Cute Fairy Kei Broadbrim'; the German Items table resolves the same key
-- [ ] Client-gated test: every m_displayName in the 2000-template sample resolves or is reported as missing
+- [x] Unit test: a synthetic UTF-16 file with numeric and named keys and a non-blank metadata line parses correctly (LangFileTest)
+- [x] Unit test: a reload that meets a malformed .lang file keeps the previous store resolving keys and names the file (LocaleStoreTest: a malformed file in a locale that otherwise loads is skipped and named on the table, and a reload whose default locale or a locale already in use cannot load keeps the previous store with the reason; it also covers a default locale change)
+- [x] Client-gated test: en-US loads 5132 tables and 217032 keys; Items_00028316 resolves to 'Cute Fairy Kei Broadbrim'; the German Items table resolves the same key (LocaleStoreClientTest: 5132 files holding 217032 entries under 216992 distinct keys with 40 repeats and no file skipped, and the German text differs from the English; every installed locale also loads, with pl skipping only WizardFurniture.lang)
+- [x] Client-gated test: every m_displayName in the 2000-template sample resolves or is reported as missing (LocaleStoreClientTest over the first 2000 object templates in Root.wad: 1999 resolve or are empty, and ObjectData/AV/AV-Pixie.xml names WizQst72D26_00000006, which en-US does not define)
 
 **Risks**
 
-- The meaning of the metadata line (non-blank in some keys across 247 en-US files) is unknown
-- The 'gr' folder has only 3 files, while 'el' has 4417
+- The meaning of the metadata line (non-blank in some keys across 247 en-US files) is unknown. Still unknown; it is kept on each parsed entry but not stored in the locale tables, and r806919's en-US holds 9,180 non-blank metadata lines
+- The 'gr' folder has only 3 files, while 'el' has 4417. Both load; which one the client uses for Greek is not confirmed
+- The client's own handling of a malformed file such as pl/WizardFurniture.lang is unknown; the store skips the file rather than guessing where its entries realign
 
 ### Detailed spec from QST-1: Locale .lang reader and key resolver
 
@@ -551,7 +552,7 @@ Server and tools can resolve a client locale key such as QuestTitle_00001718 to 
 
 - src/server/shared/Locale/LangFile.h/.cpp: parse a UTF-16 .lang file. Line 1 is '1:<Stem>'; after it come triplets of key, comment, text. Full key = '<Stem>_<Key>'.
 - src/server/shared/Locale/LocaleStore.h/.cpp: lazy per-language index over Root.wad Locale/<lang>/*.lang, with HasKey and Resolve.
-- src/tools/localetool: 'find <text>' prints matching keys, 'check <key>' exits nonzero if the key is missing, 'dump <stem>'.
+- src/tools/localetool: 'find <text>' prints matching keys, 'check <key>' exits nonzero if the key is missing, 'dump <stem>'. Built with --client, --wad, --locale and -- to end the options, plus a locales command listing each locale's files, keys, repeats and skipped files, which exits 1 when a locale cannot load; the LocaleTool CTest checks usage and, with AMBROSE_CLIENT_DIR set, find, check, dump and locales, and reports itself skipped without it
 - src/test/server/shared/Locale/LangFileTest.cpp
 
 **Data sources**
@@ -560,13 +561,13 @@ Server and tools can resolve a client locale key such as QuestTitle_00001718 to 
 
 **Acceptance**
 
-- [ ] Unit test with an in-memory UTF-16 fixture written by the test (no client text committed): header stem and triplets parse; a key made of digits with leading zeros stays a string.
-- [ ] Integration test, skipped unless AMBROSE_CLIENT_DIR is set: Resolve('QuestTitle_00001718') == 'To Ravenwood!', Resolve('WizardQuestGoals_TalkNPC') == 'Talk To', Resolve('ZoneLocName_1451497') == 'Wizard City|Ravenwood', Resolve('NPCFormats_Name') contains '$NPC_NAME$'.
-- [ ] localetool find 'To Ravenwood!' prints QuestTitle_00001718.
+- [x] Unit test with an in-memory UTF-16 fixture written by the test (no client text committed): header stem and triplets parse; a key made of digits with leading zeros stays a string. (LangFileTest)
+- [x] Integration test, skipped unless AMBROSE_CLIENT_DIR is set: Resolve('QuestTitle_00001718') == 'To Ravenwood!', Resolve('WizardQuestGoals_TalkNPC') == 'Talk To', Resolve('ZoneLocName_1451497') == 'Wizard City|Ravenwood', Resolve('NPCFormats_Name') contains '$NPC_NAME$'. (LocaleStoreClientTest; NPCFormats_Name is '#1:$NPC_NAME$')
+- [x] localetool find 'To Ravenwood!' prints QuestTitle_00001718. (the LocaleTool CTest)
 
 **Risks**
 
-- Some .lang files use different key styles (numeric vs named, e.g. Quest.lang BountyChat) and some stems contain spaces or commas ('Persona, First.lang'). The key-join rule must handle both.
+- Some .lang files use different key styles (numeric vs named, e.g. Quest.lang BountyChat) and some stems contain spaces or commas ('Persona, First.lang'). The key-join rule must handle both. Resolved: the full key is the header's stem, an underscore and the key line, whatever characters the stem holds, so "Persona, First" and "Persona,First" stay distinct tables
 
 ## 3.14 Name tables and creation config extractor (LOG-7)
 

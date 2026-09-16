@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs bindecode to check its usage text, that bad usage exits 2 and a missing archive exits 1, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install and type dump, that it lists a crown hat, prints that hat as JSON with its template id and display name, and exits 1 for an entry that does not exist.
+# Runs bindecode to check its usage text, that bad usage exits 2 and a missing archive exits 1, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install and type dump, that it lists a crown hat, prints that hat as JSON with its template id and display name, and exits 1 for an entry that does not exist; it reports itself skipped when the client checks cannot run.
 if(NOT APP OR NOT WORKDIR)
     message(FATAL_ERROR "APP and WORKDIR must be set")
 endif()
@@ -24,7 +24,7 @@ if(NOT missingResult EQUAL 1 OR NOT missingError MATCHES "cannot open .*missing\
 endif()
 
 if("$ENV{AMBROSE_CLIENT_DIR}" STREQUAL "" OR "$ENV{AMBROSE_TYPE_DUMP_PATH}" STREQUAL "")
-    message(STATUS "bindecode client checks skipped: set AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH to run them")
+    message(STATUS "bindecode test skipped: its client checks need AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH")
     return()
 endif()
 set(hat "ObjectData/CrownItems/Series58/Hats/Crowns-S58-Hats-L110-BS-008-01.xml")
