@@ -1,8 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests zlib, gzip, and raw round trips, the output cap that stops zip bombs, and corrupt, truncated, or mismatched streams.
+ * Tests zlib, gzip, and raw round trips, the output cap that stops zip bombs, output reserved in proportion to the input rather than a declared size, and corrupt, truncated, or mismatched streams.
  */
 
+#include "AllocationCounter.h"
 #include "Compression.h"
 
 #include <gtest/gtest.h>
@@ -122,4 +123,27 @@ TEST(CompressionTest, TruncatedChecksumsAndHuffmanStreamsAreRejected)
     std::vector<uint8> badChecksum = zlibStream;
     badChecksum.back() ^= 0x01;
     EXPECT_EQ(Inflate(badChecksum, input.size()).Code, Status::Corrupt);
+}
+
+TEST(CompressionTest, ADeclaredSizeDoesNotReserveMoreThanTheInputCanProduce)
+{
+    std::vector<uint8> const garbage(16 * 1024, 0xAB);
+    std::size_t largest = 0;
+    Ambrose::Compression::Status status = Ambrose::Compression::Status::Ok;
+    {
+        AllocationScope const allocations;
+        status = Ambrose::Compression::InflateExact(garbage, std::size_t{ 16 } << 20).Code;
+        largest = allocations.GetLargest();
+    }
+    EXPECT_EQ(status, Ambrose::Compression::Status::Corrupt);
+    if (AllocationScope::IsSupported())
+    {
+        EXPECT_LE(largest, std::size_t{ 256 } * 1024);
+    }
+
+    std::vector<uint8> const plain(200000, 7);
+    std::vector<uint8> const packed = Ambrose::Compression::Deflate(plain);
+    Ambrose::Compression::InflateResult const exact = Ambrose::Compression::InflateExact(packed, plain.size());
+    ASSERT_TRUE(exact.Succeeded());
+    EXPECT_EQ(exact.Data, plain);
 }

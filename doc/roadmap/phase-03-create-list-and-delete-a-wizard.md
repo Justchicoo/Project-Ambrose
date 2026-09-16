@@ -110,8 +110,8 @@ The server knows the valid first, middle and last name index ranges per gender, 
 
 **Acceptance**
 
-- [ ] Stored wrap of 10 bytes has header 0x8000000A
-- [ ] Size mismatch rejected; oversize rejected without allocating
+- [x] Stored wrap of 10 bytes has header 0x8000000A (BlobEnvelopeTest)
+- [x] Size mismatch rejected; oversize rejected without allocating (BlobEnvelopeTest, counting allocations)
 
 ### Detailed spec from OBJ-3: Zlib and SerializerBinary blob envelope
 
@@ -119,14 +119,14 @@ ObjectProperty blobs can be packed and unpacked in the 4-byte envelope that the 
 
 **Deliverables**
 
-- src/common/Compression/Zlib.h/.cpp: inflate/deflate (RFC1950) with a caller-supplied maximum output size to block decompression bombs
-- src/server/shared/ObjectProperty/BlobEnvelope.h/.cpp: Wrap(bytes, Compress|Store) and Unwrap. The header is u32: with bit31 set it is stored and the low 31 bits are the length; with bit31 clear it holds the uncompressed size and zlib data follows
+- src/common/Compression/Zlib.h/.cpp: inflate/deflate (RFC1950) with a caller-supplied maximum output size to block decompression bombs. Already built in 1.13 as src/common/Utilities/Compression.{h,cpp}, which caps output while streaming, so the envelope uses it
+- src/server/shared/ObjectProperty/BlobEnvelope.h/.cpp: Wrap(bytes, Compress|Store) and Unwrap. The header is u32: with bit31 set it is stored and the low 31 bits are the length; with bit31 clear it holds the uncompressed size and zlib data follows. Built with the header little-endian, Unwrap taking the caller's cap, and a status that tells a truncated blob, a length above the cap, a length that disagrees with the payload, and a corrupt stream apart
 - src/test/server/shared/ObjectProperty/BlobEnvelopeTest.cpp
 
 **Acceptance**
 
-- [ ] Unit test: a stored wrap of 10 bytes gives header 0x8000000A followed by the payload; Unwrap returns the same bytes
-- [ ] Unit test: a compressed wrap round-trips; a header size that disagrees with the inflated length is rejected; a declared size above the limit is rejected without allocating
+- [x] Unit test: a stored wrap of 10 bytes gives header 0x8000000A followed by the payload; Unwrap returns the same bytes
+- [x] Unit test: a compressed wrap round-trips; a header size that disagrees with the inflated length is rejected; a declared size above the limit is rejected without allocating
 - [ ] Real client, once NET/WIZ send MSG_BADGES (GameMessages.xml) with BadgeInfo wrapped: the badge window opens without a crash. Captures show an unwrapped blob in that field crashes the client
 
 **Risks**

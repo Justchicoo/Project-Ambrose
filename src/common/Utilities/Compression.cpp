@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Streams zlib inflate and deflate in bounded chunks, stopping as soon as output would exceed the caller's cap.
+ * Streams zlib inflate and deflate in bounded chunks, reserving output in proportion to the input rather than any declared size and stopping as soon as output would exceed the caller's cap.
  */
 
 #include "Compression.h"
@@ -59,17 +59,20 @@ namespace
     };
 }
 
+static Ambrose::Compression::InflateResult InflateWithReserve(std::span<uint8 const> input, std::size_t maxOutputSize, Ambrose::Compression::Format format, bool allowTrailingData, std::size_t reserve);
+
 namespace
 {
-    constexpr std::size_t MaxDeflateRatio = 1032;
+    std::size_t InitialReserve(std::size_t inputSize, std::size_t maxOutputSize) noexcept
+    {
+        std::size_t const scaled = inputSize > std::numeric_limits<std::size_t>::max() / 4 ? maxOutputSize : inputSize * 4;
+        return std::min(maxOutputSize, std::max(scaled, ChunkSize));
+    }
 }
-
-static Ambrose::Compression::InflateResult InflateWithReserve(std::span<uint8 const> input, std::size_t maxOutputSize, Ambrose::Compression::Format format, bool allowTrailingData, std::size_t reserve);
 
 Ambrose::Compression::InflateResult Ambrose::Compression::Inflate(std::span<uint8 const> input, std::size_t maxOutputSize, Format format, bool allowTrailingData)
 {
-    std::size_t const scaled = input.size() > std::numeric_limits<std::size_t>::max() / 4 ? maxOutputSize : input.size() * 4;
-    return InflateWithReserve(input, maxOutputSize, format, allowTrailingData, std::min(maxOutputSize, std::max(scaled, ChunkSize)));
+    return InflateWithReserve(input, maxOutputSize, format, allowTrailingData, InitialReserve(input.size(), maxOutputSize));
 }
 
 static Ambrose::Compression::InflateResult InflateWithReserve(std::span<uint8 const> input, std::size_t maxOutputSize, Ambrose::Compression::Format format, bool allowTrailingData, std::size_t reserve)
@@ -136,9 +139,7 @@ static Ambrose::Compression::InflateResult InflateWithReserve(std::span<uint8 co
 
 Ambrose::Compression::InflateResult Ambrose::Compression::InflateExact(std::span<uint8 const> input, std::size_t expectedSize, Format format)
 {
-    std::size_t const bound = input.size() > (std::numeric_limits<std::size_t>::max() - ChunkSize) / MaxDeflateRatio ? expectedSize : input.size() * MaxDeflateRatio + ChunkSize;
-    std::size_t const reserve = expectedSize == std::numeric_limits<std::size_t>::max() ? bound : std::min(expectedSize + 1, bound);
-    InflateResult result = InflateWithReserve(input, expectedSize, format, false, reserve);
+    InflateResult result = InflateWithReserve(input, expectedSize, format, false, InitialReserve(input.size(), expectedSize));
     if (result.Succeeded() && result.Data.size() != expectedSize)
     {
         result.Code = Status::SizeMismatch;
