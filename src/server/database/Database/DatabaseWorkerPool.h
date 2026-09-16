@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A named connection pool for one database that serves every call from the current connection generation, so opening, closing and live reconfiguring never block callers, with typed statements, including executes that report the rows they changed, holders and transactions whose async forms can signal a handler once their result is ready.
+ * A named connection pool for one database that serves every call from the current connection generation, so opening, closing and live reconfiguring never block callers, with typed statements, including executes that report the rows they changed and several queries read from one consistent snapshot, holders and transactions whose async forms can signal a handler once their result is ready.
  */
 
 #ifndef AMBROSE_DATABASEWORKERPOOL_H
@@ -17,7 +17,9 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <initializer_list>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -67,6 +69,7 @@ protected:
     bool DirectExecuteStatement(PreparedStatementBase const* statement);
     std::optional<uint64> DirectExecuteCountedStatement(PreparedStatementBase const* statement);
     PreparedQueryResult QueryStatement(PreparedStatementBase const* statement, bool* failed = nullptr);
+    bool QuerySnapshotStatements(std::span<PreparedStatementBase const* const> statements, std::vector<PreparedQueryResult>& results);
     SQLQueryHolderCallback DelayQueryHolderBase(std::shared_ptr<SQLQueryHolderBase> holder, SQLOperation::CompletionHandler onCompleted = {});
     void CommitTransactionBase(std::shared_ptr<TransactionBase> transaction);
     TransactionCallback AsyncCommitTransactionBase(std::shared_ptr<TransactionBase> transaction, SQLOperation::CompletionHandler onCompleted = {});
@@ -134,6 +137,11 @@ public:
         bool failed = false;
         result = QueryStatement(&statement, &failed);
         return !failed;
+    }
+    bool QuerySnapshot(std::initializer_list<Statement const*> statements, std::vector<PreparedQueryResult>& results)
+    {
+        std::vector<PreparedStatementBase const*> const list(statements.begin(), statements.end());
+        return QuerySnapshotStatements(list, results);
     }
     SQLQueryHolderCallback DelayQueryHolder(std::shared_ptr<SQLQueryHolder<ConnectionType>> holder, SQLOperation::CompletionHandler onCompleted = {}) { return DelayQueryHolderBase(std::move(holder), std::move(onCompleted)); }
     std::shared_ptr<Transaction<ConnectionType>> BeginTransaction() const { return std::make_shared<Transaction<ConnectionType>>(); }

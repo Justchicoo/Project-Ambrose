@@ -93,9 +93,9 @@ The server knows the valid first, middle and last name index ranges per gender, 
 **Acceptance**
 
 - [x] Unit: StringId('Fire') == 2343174, StringId('Ice') == 72777 and StringId('Balance') == 1027491821, matching the reference enum values (StringHashTest; StringHash::StringId in src/common/Cryptography/StringHash.h replaces the separate StringId files)
-- [ ] Unit: FormatName with middle=0 and last=0 returns only the first name, and out-of-range indices are rejected (built in 3.14, which repeats this check)
-- [ ] Unit: reloading sCharacterNameMgr applies an edited character_name_part row, and a reload with an invalid row keeps the old tables and reports it (built in 3.14, which repeats this check)
-- [ ] Tool run against the local install fills character_name_part with non-zero counts for all 4 tables and exactly 7 character_create_school rows; git status shows no new data files (built in 3.14, which repeats this check)
+- [x] Unit: FormatName with middle=0 and last=0 returns only the first name, and out-of-range indices are rejected (built in 3.14, which repeats this check: CharacterNamesTest)
+- [x] Unit: reloading sCharacterNameMgr applies an edited character_name_part row, and a reload with an invalid row keeps the old tables and reports it (built in 3.14, which repeats this check: CharacterNameMgrDatabaseTest)
+- [x] Tool run against the local install fills character_name_part with non-zero counts for all 4 tables and exactly 7 character_create_school rows; git status shows no new data files (built in 3.14, which repeats this check: the Extractor CTest and CharacterNameExtractorClientTest)
 
 **Risks**
 
@@ -577,8 +577,8 @@ Server and tools can resolve a client locale key such as QuestTitle_00001718 to 
 
 **Acceptance**
 
-- [ ] FormatName with middle=0, last=0 gives first name only; out-of-range rejected
-- [ ] Tool fills 4 name tables and exactly 7 character_create_school rows; git status clean
+- [x] FormatName with middle=0, last=0 gives first name only; out-of-range rejected (CharacterNamesTest and CharacterNameMgrDatabaseTest)
+- [x] Tool fills 4 name tables and exactly 7 character_create_school rows; git status clean (the Extractor CTest and CharacterNameExtractorClientTest, on MariaDB 10.11 and MySQL 8; rows go only to the database or a --sql file the user names)
 
 ### Detailed spec from LOG-7: Character name tables and creation config extraction
 
@@ -586,12 +586,22 @@ The server knows the valid first, middle and last name index ranges per gender, 
 
 **Deliverables**
 
-- src/tools/extractor (name module): reads Root.wad CharacterNames.xml (tables FirstName_HumanMale, FirstName_HumanFemale, MiddleName_Human, LastName_Human; the per-locale copies list the same keys, so take one), Locale/en-US/CharacterNames.lang (UTF-16 key/blank/text triplets), CharacterNamesDisallowedList.xml (a BINd ObjectProperty file, not zlib-wrapped here) and CharacterCreation/CharacterCreationConfig.xml (WizCharacterCreationConfig: the allowed schools Fire, Ice, Storm, Life, Myth, Death, Balance)
-- The extractor writes world DB rows: character_name_part (table_name, idx, locale_key, text_en), character_name_disallowed, character_create_school (school_name, school_id = KI string-ID hash)
-- data/sql/base/db_world/: the empty table definitions only (no extracted rows committed)
-- src/server/game/Characters/CharacterNameMgr.{h,cpp} (sCharacterNameMgr): IsValidIndices(nameIndices, gender), FormatName(nameIndices, gender), IsDisallowed(). `.reload character_name` (through 4.15 when it lands) rebuilds the name parts and disallowed list off to the side, validates them, swaps, and keeps the old tables on failure
+- src/tools/extractor (name module): reads Root.wad CharacterNames.xml (tables FirstName_HumanMale, FirstName_HumanFemale, MiddleName_Human, LastName_Human; the per-locale copies list the same keys, so take one), Locale/en-US/CharacterNames.lang (UTF-16 key/blank/text triplets), CharacterNamesDisallowedList.xml (a BINd ObjectProperty file, not zlib-wrapped here) and CharacterCreation/CharacterCreationConfig.xml (WizCharacterCreationConfig: the allowed schools Fire, Ice, Storm, Life, Myth, Death, Balance). Built as the extractor tool over the extraction library in src/tools/extractor, whose `names` command reads every table CharacterNames.xml holds, not only the four human ones:
+  - The per-locale copies do not list the same keys. de, en-US, es and fr hold 250 names in each human table, while el, it and pl hold 154 male and 144 female first names, 85 middle names and 79 last names, so every table is kept per locale.
+  - A table's Section minus its -<locale> suffix names its .lang stem: CharacterNames, PetNames or AdventurePartyNames. A table without a Locale, such as the pet name tables, is kept in each locale that has its stem. r806919 gives 63 tables holding 7955 names.
+  - Position 0 of MiddleName_Human and LastName_Human is empty and means no middle or last name. Keys skip retired numbers (the male table has no First_Boy_28), so a name index is a position in the table, not the number in its key.
+  - CharacterCreationConfig.xml is read as plain XML by element name, since the type dump lacks its classes. It also lists one m_creationOptions template id, 1, kept in character_create_option.
+  - The disallowed list decodes through typed views the extractor binds to its own type registry.
+- The extractor writes world DB rows: character_name_part (table_name, idx, locale_key, text_en), character_name_disallowed, character_create_school (school_name, school_id = KI string-ID hash). Built as data/sql/updates/db_world/2026_09_16_00.sql: character_name_part (table_name, locale, idx, locale_key, text) keeps each row's text in its own locale instead of text_en; character_name_disallowed (id, locale_id, gender, first_idx, middle_idx, last_idx); character_create_school (school_id, school_name, sort_order); and character_create_option (sort_order, template_id). The extractor replaces all four tables in one transaction, writes the same script to a file with --sql, or checks everything and writes nothing with --dry-run. Text travels as hex literals, a --sql file is replaced only once written whole, a dry run given a database checks its world tables, and a database without the tables is refused with a pointer to dbimport
+- data/sql/base/db_world/: the empty table definitions only (no extracted rows committed). Built as the dated update above, as every schema change is; no extracted rows are committed
+- src/server/game/Characters/CharacterNameMgr.{h,cpp} (sCharacterNameMgr): IsValidIndices(nameIndices, gender), FormatName(nameIndices, gender), IsDisallowed(). `.reload character_name` (through 4.15 when it lands) rebuilds the name parts and disallowed list off to the side, validates them, swaps, and keeps the old tables on failure. Built over CharacterNameSet in src/server/shared/Characters/CharacterNames.{h,cpp}, which the extractor also uses to validate before it writes:
+  - Name indices pack the first, middle and last positions as 8 bits each (first << 16 | middle << 8 | last), and a set high byte is refused.
+  - FormatName gives the first name alone when middle and last are 0. Otherwise it gives the first name, a space, then the middle and last names joined.
+  - Checks take a locale, defaulting to the manager's default locale, which the game server sets from Locale.Default. Check also names the reason a name fails.
+  - Load reads both tables in one consistent snapshot, requires each table's positions to run from 0 without gaps, validates, and swaps. On failure it keeps the previous tables and reports every problem, for 4.15's reload triggers to call, and it warns when the new tables leave the default locale without human names.
+  - The game server loads the tables at startup when the world database is open, refuses to start when they are invalid, and warns when they are empty or lack human names for Locale.Default.
 - src/server/shared/Util/StringId.{h,cpp}: the KI string-ID hash, if OBJ has not already provided it. Provided in 3.01 as StringHash::StringId in src/common/Cryptography/StringHash.h
-- src/test/server/game/Characters/CharacterNameMgrTest.cpp
+- src/test/server/game/Characters/CharacterNameMgrTest.cpp. Built with CharacterNamesTest, CharacterNameExtractorTest on a Root.wad the test builds, the client-gated CharacterNameExtractorClientTest and the Extractor CTest
 
 **Data sources**
 
@@ -610,14 +620,17 @@ The server knows the valid first, middle and last name index ranges per gender, 
 **Acceptance**
 
 - [x] Unit: StringId('Fire') == 2343174, StringId('Ice') == 72777 and StringId('Balance') == 1027491821, matching the reference enum values (done in 3.01)
-- [ ] Unit: FormatName with middle=0 and last=0 returns only the first name, and out-of-range indices are rejected
-- [ ] Unit: reloading sCharacterNameMgr applies an edited character_name_part row, and a reload with an invalid row keeps the old tables and reports it
-- [ ] Tool run against the local install fills character_name_part with non-zero counts for all 4 tables and exactly 7 character_create_school rows; git status shows no new data files
+- [x] Unit: FormatName with middle=0 and last=0 returns only the first name, and out-of-range indices are rejected (CharacterNamesTest: the first name alone, first space middle and last, out-of-range first, middle and last indices, set high bits, and unknown genders and locales)
+- [x] Unit: reloading sCharacterNameMgr applies an edited character_name_part row, and a reload with an invalid row keeps the old tables and reports it (CharacterNameMgrDatabaseTest on MariaDB 10.11 and MySQL 8: an edited middle name applies, and an empty first name, a gap in a table's positions, a bad gender and a dropped table each keep the previous tables with the reason)
+- [x] Tool run against the local install fills character_name_part with non-zero counts for all 4 tables and exactly 7 character_create_school rows; git status shows no new data files (the Extractor CTest creates a world database with dbimport, runs `extractor names` against it twice, and starts the game server on it, which loads 63 tables holding 7955 names in 7 locales and 4 disallowed names; CharacterNameExtractorClientTest counts 250 en-US names in each human table and 7 schools in the database; output goes only to the database or a --sql file the user names)
 
 **Risks**
 
-- The internal layout of CharacterNamesDisallowedList.xml (BINd, version 7) is not yet decoded; it needs the OBJ reader for BINd files.
-- Whether the client sends nameIndices built from the locale-specific table or the shared one is unverified.
+- The internal layout of CharacterNamesDisallowedList.xml (BINd, version 7) is not yet decoded; it needs the OBJ reader for BINd files. Resolved: 3.11's BindFile decodes it as a DisallowedNameList of DisallowedName (m_locale, m_gender, m_first, m_middle, m_last), and r806919 holds 4 names
+- Whether the client sends nameIndices built from the locale-specific table or the shared one is unverified. Still unverified; the tables differ by locale, so checks take a locale, and 3.15 and 3.16 must learn the client's locale (MSG_ATTACH carries one)
+- A disallowed name's m_locale is 1 or 2. Locale 1's indices form English names in the 250-name tables, and locale 2 is not identified, so checks match every locale unless the caller names a locale id
+- One disallowed name has the last index 999, above any 8-bit index. Checks treat an index of 256 or more as matching any index, which is unconfirmed
+- Gender 0 selects the female first names and 1 the male ones, matching eGender, and the high byte of name indices is assumed unused; the real-client creation checks in 3.16 confirm both
 
 ## 3.15 CreationInfo decode and validation (LOG-8 part 1)
 

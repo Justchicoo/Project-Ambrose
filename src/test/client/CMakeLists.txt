@@ -1,8 +1,11 @@
 # Project Ambrose by Imjustchico
-# Builds client_tests, which read the user's own client install or type dump and carry the CTest label client, including the login message table check when the login library is built, and runs the whole-archive sweep on its own because it uses every hardware thread.
+# Builds client_tests, which read the user's own client install or type dump and carry the CTest label client, including the login message table check when the login library is built and the character name extractor check when the extraction library is built, with the MariaDB client plugins beside it for database checks, and runs the whole-archive sweep on its own because it uses every hardware thread.
 file(GLOB client_test_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 if(NOT TARGET login)
     list(FILTER client_test_sources EXCLUDE REGEX "LoginMessageTableClientTest")
+endif()
+if(NOT TARGET extraction)
+    list(FILTER client_test_sources EXCLUDE REGEX "CharacterNameExtractorClientTest")
 endif()
 add_executable(client_tests ${client_test_sources} "${CMAKE_CURRENT_SOURCE_DIR}/../Main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../mocks/MessageRoundTrip.cpp")
 
@@ -19,6 +22,10 @@ target_link_libraries(client_tests
 if(TARGET login)
     target_link_libraries(client_tests PRIVATE login)
 endif()
+if(TARGET extraction)
+    target_link_libraries(client_tests PRIVATE extraction)
+endif()
+ambrose_copy_mariadb_plugins(client_tests)
 
 set(client_serial_tests "BindFileClientTest.EveryRootWadBindFileDecodesOrNamesItsUnknownRootClass")
 gtest_discover_tests(client_tests

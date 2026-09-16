@@ -6,6 +6,7 @@
 #ifndef AMBROSE_TRANSACTION_H
 #define AMBROSE_TRANSACTION_H
 
+#include "MySQLConnection.h"
 #include "PreparedStatement.h"
 #include "SQLOperation.h"
 
@@ -70,7 +71,7 @@ public:
     void Execute(MySQLConnection& connection) override;
     void Cancel() override;
 
-    static bool Commit(MySQLConnection& connection, TransactionBase const& transaction, std::chrono::milliseconds retryLimit = DeadlockRetryLimit);
+    static bool Commit(MySQLConnection& connection, TransactionBase const& transaction, std::chrono::milliseconds retryLimit = DeadlockRetryLimit, TransactionResult* outcome = nullptr);
 
 private:
     std::shared_ptr<TransactionBase> _transaction;

@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds unit_tests from every test source outside the compile, client and fuzz folders, and outside the login server's folder unless its library is built, registers each test with CTest, adds the compile and client folders and the fuzz folder when fuzzers are built, and smoke-tests each server executable and the bindecode, dbimport and localetool tools.
+# Builds unit_tests from every test source outside the compile, client and fuzz folders, and outside the login server's and extractor's folders unless their libraries are built, registers each test with CTest, adds the compile and client folders and the fuzz folder when fuzzers are built, and smoke-tests each server executable and the bindecode, dbimport, extractor and localetool tools.
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
@@ -11,6 +11,9 @@ foreach(source IN LISTS all_test_sources)
         continue()
     endif()
     if(relative MATCHES "^server/apps/loginserver/" AND NOT TARGET login)
+        continue()
+    endif()
+    if(relative MATCHES "^tools/extractor/" AND NOT TARGET extraction)
         continue()
     endif()
     list(APPEND test_sources "${source}")
@@ -30,6 +33,9 @@ target_link_libraries(unit_tests
 
 if(TARGET login)
     target_link_libraries(unit_tests PRIVATE login)
+endif()
+if(TARGET extraction)
+    target_link_libraries(unit_tests PRIVATE extraction)
 endif()
 
 ambrose_copy_mariadb_plugins(unit_tests)
@@ -52,6 +58,12 @@ if(TARGET bindecode)
     add_test(NAME BinDecode
         COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:bindecode> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/bindecode -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/BinDecodeTest.cmake")
     set_tests_properties(BinDecode PROPERTIES SKIP_REGULAR_EXPRESSION "bindecode test skipped")
+endif()
+
+if(TARGET extractor)
+    add_test(NAME Extractor
+        COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:extractor> -DDBIMPORT=$<$<TARGET_EXISTS:dbimport>:$<TARGET_FILE:dbimport>> -DGAMESERVER=$<$<TARGET_EXISTS:gameserver>:$<TARGET_FILE:gameserver>> -DUNIT_TESTS=$<TARGET_FILE:unit_tests> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/extractor -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/ExtractorTest.cmake")
+    set_tests_properties(Extractor PROPERTIES SKIP_REGULAR_EXPRESSION "extractor test skipped")
 endif()
 
 if(TARGET localetool)

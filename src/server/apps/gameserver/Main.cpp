@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: loads the type dump and, when ClientDir names the user's install, the locale text of its Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, then runs the world update tick whose interval follows World.UpdateInterval live.
+ * Game server entry point: loads the type dump and, when ClientDir names the user's install, the locale text of its Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, loads the character name tables when the world database is open, then runs the world update tick whose interval follows World.UpdateInterval live.
  */
 
 #include "AppenderDB.h"
+#include "CharacterNameMgr.h"
 #include "ConfigMgr.h"
 #include "DatabaseEnv.h"
 #include "DatabaseLoader.h"
@@ -84,6 +85,28 @@ namespace
                 LOG_ERROR("server.gameserver", "Cannot open the realm's databases");
                 _databases.reset();
                 return false;
+            }
+            sCharacterNameMgr.SetDefaultLocale(locale);
+            if (!WorldDatabase.IsOpen())
+                LOG_WARN("server.gameserver", "WorldDatabaseInfo is empty, so the character name tables are not loaded");
+            else
+            {
+                CharacterNameLoadResult const names = sCharacterNameMgr.Load();
+                if (!names.Loaded)
+                {
+                    for (std::string const& problem : names.Errors)
+                        LOG_ERROR("server.gameserver", "Character name tables: {}", problem);
+                    LOG_ERROR("server.gameserver", "Cannot load the character name tables from the world database");
+                    _databases->Close();
+                    _databases.reset();
+                    return false;
+                }
+                if (names.Tables == 0)
+                    LOG_WARN("server.gameserver", "The world database holds no character name tables, so wizard names cannot be checked or shown; run the extractor's names command against your install");
+                else
+                    LOG_INFO("server.gameserver", "Loaded {} character name tables holding {} names in {} locales, and {} disallowed names", names.Tables, names.Parts, names.HumanLocales, names.Disallowed);
+                for (std::string const& warning : names.Warnings)
+                    LOG_WARN("server.gameserver", "Character name tables: {}", warning);
             }
             AppenderDB::Enable(Logger(), Config().GetOption<uint32>("RealmID", 1, true));
             return true;

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Appends transaction entries until submitted, commits them on one connection and retries deadlocks, lock timeouts and reconnected losses before COMMIT with backoff until a time limit, signals the completion handler once settled, and runs completion callbacks when polled.
+ * Appends transaction entries until submitted, commits them on one connection and retries deadlocks, lock timeouts and reconnected losses before COMMIT with backoff until a time limit, reports the last attempt's result to a caller that asks, signals the completion handler once settled, and runs completion callbacks when polled.
  */
 
 #include "Transaction.h"
@@ -48,27 +48,29 @@ TransactionTask::TransactionTask(std::shared_ptr<TransactionBase> transaction) :
 {
 }
 
-bool TransactionTask::Commit(MySQLConnection& connection, TransactionBase const& transaction, std::chrono::milliseconds retryLimit)
+bool TransactionTask::Commit(MySQLConnection& connection, TransactionBase const& transaction, std::chrono::milliseconds retryLimit, TransactionResult* outcome)
 {
     auto const start = std::chrono::steady_clock::now();
     std::chrono::milliseconds delay{ 25 };
     for (uint32 attempt = 1;; ++attempt)
     {
-        TransactionResult const outcome = connection.ExecuteTransaction(transaction);
-        if (outcome.Code == 0)
+        TransactionResult const result = connection.ExecuteTransaction(transaction);
+        if (outcome)
+            *outcome = result;
+        if (result.Code == 0)
         {
             if (attempt > 1)
                 LOG_INFO("sql.sql", "Transaction on {} committed after {} attempt(s)", connection.GetInfo().ToLogString(), attempt);
             return true;
         }
-        bool const lostBeforeCommit = MySQLConnection::IsConnectionLost(outcome.Code, connection.IsMariaDB()) && !outcome.CommitSent && connection.IsOpen();
-        bool const retryable = outcome.Code == ErrorLockDeadlock || outcome.Code == ErrorLockWaitTimeout || lostBeforeCommit;
+        bool const lostBeforeCommit = MySQLConnection::IsConnectionLost(result.Code, connection.IsMariaDB()) && !result.CommitSent && connection.IsOpen();
+        bool const retryable = result.Code == ErrorLockDeadlock || result.Code == ErrorLockWaitTimeout || lostBeforeCommit;
         if (!retryable || std::chrono::steady_clock::now() - start + delay >= retryLimit)
         {
-            LOG_ERROR("sql.sql", "Transaction of {} entries on {} failed after {} attempt(s): [{}] {}", transaction.GetSize(), connection.GetInfo().ToLogString(), attempt, outcome.Code, connection.GetLastErrorText());
+            LOG_ERROR("sql.sql", "Transaction of {} entries on {} failed after {} attempt(s): [{}] {}", transaction.GetSize(), connection.GetInfo().ToLogString(), attempt, result.Code, connection.GetLastErrorText());
             return false;
         }
-        LOG_WARN("sql.sql", "Transaction on {} was rolled back by [{}] {}; retrying in {} ms, attempt {}", connection.GetInfo().ToLogString(), outcome.Code, connection.GetLastErrorText(), delay.count(), attempt + 1);
+        LOG_WARN("sql.sql", "Transaction on {} was rolled back by [{}] {}; retrying in {} ms, attempt {}", connection.GetInfo().ToLogString(), result.Code, connection.GetLastErrorText(), delay.count(), attempt + 1);
         std::this_thread::sleep_for(delay);
         delay = std::min(delay * 2, std::chrono::milliseconds(1000));
     }

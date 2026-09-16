@@ -353,21 +353,24 @@ TEST(PreparedStatementTest, DatabaseConnectionsPrepareTheirStatements)
     loginInfo.Database = fmt::format("ambrose_statements_{:08x}", std::random_device()());
     MySQLConnectionInfo charactersInfo = *info;
     charactersInfo.Database = loginInfo.Database + "_characters";
-    ScopeExit const dropDatabases([&loginInfo, &charactersInfo]
+    MySQLConnectionInfo worldInfo = *info;
+    worldInfo.Database = loginInfo.Database + "_world";
+    ScopeExit const dropDatabases([&loginInfo, &charactersInfo, &worldInfo]
     {
         MySQLConnectionInfo server = loginInfo;
         server.Database.clear();
         MySQLConnection connection(server);
         if (connection.Open() != 0)
             return;
-        for (MySQLConnectionInfo const* created : { &loginInfo, &charactersInfo })
+        for (MySQLConnectionInfo const* created : { &loginInfo, &charactersInfo, &worldInfo })
             connection.Execute(fmt::format("DROP DATABASE IF EXISTS {}", DBUpdater::QuoteIdentifier(created->Database)));
     });
     ASSERT_TRUE(DBUpdater::Run(loginInfo, "login", UpdaterSettings{}));
     ASSERT_TRUE(DBUpdater::Run(charactersInfo, "characters", UpdaterSettings{}));
+    ASSERT_TRUE(DBUpdater::Run(worldInfo, "world", UpdaterSettings{}));
     LoginDatabaseConnection login(loginInfo);
     CharacterDatabaseConnection characters(charactersInfo);
-    WorldDatabaseConnection world(*info);
+    WorldDatabaseConnection world(worldInfo);
     for (MySQLConnection* connection : { static_cast<MySQLConnection*>(&login), static_cast<MySQLConnection*>(&characters), static_cast<MySQLConnection*>(&world) })
     {
         ASSERT_EQ(connection->Open(), 0u) << connection->GetLastErrorText();

@@ -6,7 +6,7 @@ The Ambrose tool suite takes the AzerothCore content toolchain and changes it in
 
 One source of truth ties the suite together: a per-table schema definition file in data/schema/world/<table>.yaml, inspired by WDE DbDefinitions and Keira field models. The same file drives the Studio editor forms and pickers, the gameserver startup and reload validator, the reload-command mapping and generated doc/world/<table>.md pages. Tables are defined as data, so adding a world table means adding one file.
 
-Current repo state (3.13): src/tools/bindecode, src/tools/dbimport and src/tools/localetool are built; src/tools/{template_extractor, wad_extractor, zone_extractor} exist as empty folders. apps/{ci, codestyle, installer} exist. data/sql/base/db_world is empty. scripts/Commands is empty. ARCHITECTURE.md already sets the rules that tools depend only on shared+common and that GM commands reload single tables.
+Current repo state (3.14): src/tools/bindecode, src/tools/dbimport, src/tools/extractor and src/tools/localetool are built; src/tools/{template_extractor, wad_extractor, zone_extractor} exist as empty folders. apps/{ci, codestyle, installer} exist. data/sql/base/db_world is empty. scripts/Commands is empty. ARCHITECTURE.md already sets the rules that tools depend only on database, shared and common and that GM commands reload single tables.
 
 Build order:
 1. **Early foundation:** codec_registry, wad_extractor, template_extractor, dbimport + codestyle-sql, the ambrose.sh dashboard, the reload framework (4.15) and its admin API (17.12).
@@ -28,6 +28,10 @@ Unverified assumptions behind some tools:
 Sources: the actools, anatomy, patchmod and renderers research results in the brief, and doc\ARCHITECTURE.md.
 
 ## Early
+
+### extractor (built in 3.14)
+
+Extracts world database rows from the user's own install. `extractor names` reads every character name table in every locale with its text, the disallowed name list and the schools and creation options a new wizard is offered. It replaces those world tables in one transaction, writes the SQL to a file with `--sql`, or checks everything and writes nothing with `--dry-run`, which also checks the world tables of a database it is given. `extractor --help` lists its options. It reads the install, type dump and world database named by `--client`, `--type-dump` and `--world-db` or by `AMBROSE_CLIENT_DIR`, `AMBROSE_TYPE_DUMP_PATH` and `AMBROSE_WORLD_DATABASE_INFO`, and the world tables must already exist, which dbimport creates. Later extractors join it as more commands.
 
 ### localetool (built in 3.13)
 

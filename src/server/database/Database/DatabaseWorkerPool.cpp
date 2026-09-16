@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds and validates a new connection generation before publishing it, swaps generations live and drains retired ones in the background, takes a snapshot for every call, and refuses empty or wrong-side statements and transactions.
+ * Builds and validates a new connection generation before publishing it, swaps generations live and drains retired ones in the background, takes a snapshot for every call, reads several queries on one leased connection inside a read-only repeatable-read transaction so they see one database state, and refuses empty or wrong-side statements and transactions.
  */
 
 #include "DatabaseWorkerPool.h"
@@ -344,6 +344,38 @@ PreparedQueryResult DatabaseWorkerPoolBase::QueryStatement(PreparedStatementBase
     if (failed)
         *failed = !result && connection->GetLastErrorCode() != 0;
     return result;
+}
+
+bool DatabaseWorkerPoolBase::QuerySnapshotStatements(std::span<PreparedStatementBase const* const> statements, std::vector<PreparedQueryResult>& results)
+{
+    results.clear();
+    for (PreparedStatementBase const* statement : statements)
+        if (!CheckStatement(statement, true, "QuerySnapshot"))
+            return false;
+    SyncLease connection([this] { return GetCurrent(); });
+    if (!connection)
+    {
+        LOG_ERROR("sql.sql", "Database pool {} is not open, so a snapshot read of {} statement(s) was refused", _name, statements.size());
+        return false;
+    }
+    if (!connection->Execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ") || !connection->Execute("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY"))
+        return false;
+    for (PreparedStatementBase const* statement : statements)
+    {
+        PreparedQueryResult result = connection->Query(*statement);
+        if (!result && connection->GetLastErrorCode() != 0)
+        {
+            uint32 const code = connection->GetLastErrorCode();
+            std::string const text = connection->GetLastErrorText();
+            connection->Execute("ROLLBACK");
+            LOG_ERROR("sql.sql", "A snapshot read on pool {} failed at statement {}: [{}] {}", _name, statement->GetIndex(), code, text);
+            results.clear();
+            return false;
+        }
+        results.push_back(std::move(result));
+    }
+    connection->Execute("COMMIT");
+    return true;
 }
 
 void DatabaseWorkerPoolBase::KeepAlive()
