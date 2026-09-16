@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Login server entry point: loads account and login settings, declares the login message table and checks it against the client's message definitions, opens the login database, listens for clients, and offers account console commands until shutdown, telling connected clients before it shuts down.
+ * Login server entry point: loads account and login settings and the type dump, declares the login message table and checks it against the client's message definitions, opens the login database, listens for clients, and offers account console commands until shutdown, telling connected clients before it shuts down.
  */
 
 #include "AccountCommands.h"
@@ -20,6 +20,7 @@
 #include "ServerApp.h"
 #include "SessionContext.h"
 #include "SocketMgr.h"
+#include "TypeRegistry.h"
 
 #include <iostream>
 #include <memory>
@@ -70,6 +71,15 @@ namespace
                 for (std::string const& error : messageErrors)
                     LOG_ERROR("server.loginserver", "{}", error);
                 LOG_ERROR("server.loginserver", "The login message table does not match the client's message definitions in {}", clientDir);
+                return false;
+            }
+
+            std::string const typeDump = Config().GetOption<std::string>("TypeDumpPath", "", true);
+            if (typeDump.empty())
+                LOG_WARN("server.loginserver", "TypeDumpPath is not set, so ObjectProperty data cannot be read or written");
+            else if (!sTypeRegistry.LoadFromFile(LogConfig::Utf8Path(typeDump)))
+            {
+                LOG_ERROR("server.loginserver", "Cannot load the type dump {}", typeDump);
                 return false;
             }
 

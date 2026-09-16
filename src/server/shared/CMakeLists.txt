@@ -6,4 +6,5 @@ target_link_libraries(shared
     PUBLIC
         common
     PRIVATE
-        pugixml::pugixml)
+        pugixml::pugixml
+        nlohmann_json::nlohmann_json)

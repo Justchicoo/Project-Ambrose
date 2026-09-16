@@ -5,6 +5,7 @@ BindIP = 0.0.0.0
 WorldServerPort = 12333
 RealmID = 1
 Patch.Enabled = 0
+TypeDumpPath =
 LoginDatabaseInfo = "127.0.0.1;3306;ambrose;ambrose;ambrose_login"
 LoginDatabase.WorkerThreads = 1
 LoginDatabase.SynchThreads = 1

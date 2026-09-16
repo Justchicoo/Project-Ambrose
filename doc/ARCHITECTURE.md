@@ -146,6 +146,28 @@ The client's message definitions and type dump are never compiled into the build
 
 As a result, the project builds and its unit tests run on any machine, including CI, with no client files. Unit tests use small definition fixtures written by the project. Tests that need a real install carry the CTest label `client` and run only when `AMBROSE_CLIENT_DIR` is set; tests that need the user's own type dump also carry the label `client` and run only when `AMBROSE_TYPE_DUMP_PATH` names it.
 
+### Type dump and type registry
+
+Settled on 2026-09-16 under the maintainer's standing direction to decide.
+
+- `sTypeRegistry` loads the user's own type dump (format v2) from `TypeDumpPath` through nlohmann-json's SAX interface, keeping only the fields the schema needs. The file text and the raw classes live only while the load runs; the r806919 catalog then takes about 10 MiB and loads in about 190 ms in an optimized build. The dump's SHA-256 is logged with its counts, load time and approximate size so a server pins the revision it runs.
+- A load refuses the dump, reports every problem and keeps the active catalog when:
+  - the JSON is broken, is not an object, or has no classes, an empty classes object, or no `class PropertyClass`;
+  - a field the schema knows has the wrong JSON type, or a property lacks one of its nine fields;
+  - the version is not 2;
+  - a class or property is listed twice, or a class is listed under a key other than its hash;
+  - a class or property hash is not what its names hash to, or two classes share a hash;
+  - property ids do not run from 0 without gaps, or an id, offset or flags value does not fit 32 bits, or a container is not Static, List or Vector;
+  - a base is not listed, a class's base chain disagrees with its first base's own chain, or a property's class or enum type is not listed or no value kind covers it.
+- `class X*` and `class SharedPointer<class X>` entries collapse into `X`, and lookups by an alias's name or hash return `X`. When `X` is not listed, the loader first looks for a listed class whose name matches once `class` and `struct` prefixes and the long `std::basic_string` spellings are removed, because the dump names some templates, such as `MadlibArgT<float>`, only that way; only when none matches is `X` built from the alias, with the hash of its own name.
+- Every class gets a kind:
+  - A property class lists properties or bases, or is the `PropertyClass` root. This includes the templates listed without a `class` prefix.
+  - The other kinds are enum, the fixed-layout value types the codec knows (Vector3D, Quaternion, Matrix3x3, Euler, Color, Point<int>, Point<float>, Size<int>, Rect<int>, Rect<float>, SerializedBuffer, SimpleVert, SimpleFace), primitive, std container, and opaque for the remaining classes without reflected properties.
+- Classes list their base chain nearest first, and their properties include the inherited ones, in id order, found by hash or name without a scan. The catalog hands out only const classes.
+- Property types classify into value kinds: the primitives, which need no entry of their own in the dump, `bi<N>` and `bui<N>` bit fields of 1 to 32 bits, enums, property-class objects, and the value types.
+- Enum options belong to the property, not the enum type, because the dump attaches them per property and they differ between properties of the same enum. Integer options are found by name or value through sorted indexes, the first listed name winning when values repeat. `__DEFAULT` is kept as the property's default, as an integer or text as the dump gives it, `__BASECLASS` as a text hint, and other text options as text.
+- A load builds a new catalog generation off to the side and swaps it in atomically. Code holds a shared pointer to the catalog it started with, so objects built from an older generation stay valid after a swap. 4.15's reload triggers call `LoadFromFile` again.
+
 ### Live reload and live settings
 
 Settled on 2026-09-14 at the maintainer's direction. Anything that can change while a server runs does, without restarting a process. A subsystem that holds loaded state builds the new state off to the side, validates it completely, and swaps it in atomically, so threads in the middle of an operation keep a consistent snapshot. If anything fails, the old state stays active and every error is reported. Runtime limits apply from the next operation. Every gameplay value, such as respawn times, drop rates, experience and gold rates, and every other tunable number, is a typed setting with a default and bounds. Settings are changed live from the control center (the admin API and web dashboard), GM commands, or configuration reloads, and each change is validated, persisted, and written to an audit log. Message definitions reload this way today, and configuration and logging have reload functions that keep their old values on failure. The reload framework and its triggers arrive in milestone 4.15, the live settings registry in 4.16, and the control center pages in 17.12 and 17.13. Live settings persist in the database the app owns (`characters` for the game server, `login` for the login and patch servers) with an audit table. Environment variables and command-line overrides lock a key, and a live edit to a locked key is refused with a message naming the layer. Live world database edits from the control center are journaled and can be exported as a pending SQL update. A restart is required only where the operating system or the client forces one, such as replacing the server binary, and each such case is documented where it arises.

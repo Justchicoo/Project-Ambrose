@@ -141,9 +141,9 @@ ObjectProperty blobs can be packed and unpacked in the 4-byte envelope that the 
 
 **Acceptance**
 
-- [ ] Synthetic dump: alias collapse, base chain, id order, enum lookup
-- [ ] Client-gated: ~2205 property classes and 140 enums, no unclassified type
-- [ ] 'class WizClientObject' has 14 properties starting m_inactiveBehaviors, m_globalID.m_full, m_permID
+- [x] Synthetic dump: alias collapse, base chain, id order, enum lookup (TypeRegistryTest)
+- [x] Client-gated: ~2205 property classes and 140 enums, no unclassified type (TypeRegistryClientTest: 2197 counting the PropertyClass root)
+- [x] 'class WizClientObject' has 14 properties starting m_inactiveBehaviors, m_globalID.m_full, m_permID
 
 ### Detailed spec from OBJ-4: Type dump loader and TypeRegistry
 
@@ -152,21 +152,21 @@ The server loads the user's client type dump and answers every schema question b
 **Deliverables**
 
 - src/server/shared/ObjectProperty/TypeDumpLoader.h/.cpp: parses dump format v2 (classes{hash:{name,bases,hash,properties{name:{type,id,offset,flags,container,dynamic,singleton,pointer,hash,enum_options?}}}})
-- Canonicalization: collapse the `X*` and `SharedPointer<X>` aliases into X; separate enums (140), std-container and primitive pseudo-classes (186), and the ~2205 real property classes
-- src/server/shared/ObjectProperty/TypeRegistry.h/.cpp (singleton accessed as sTypeRegistry): ClassInfo (name, hash, base chain, ordered PropertyInfo list), PropertyInfo (name, hash, ordinal/id, flags, container Static/List/Vector, ValueKind, element class, enum table)
+- Canonicalization: collapse the `X*` and `SharedPointer<X>` aliases into X; separate enums (140), std-container and primitive pseudo-classes (186), and the ~2205 real property classes. Built with six kinds; r806919 gives 2197 property classes counting the PropertyClass root, 140 enums, 13 value types, 37 primitives, 168 std containers and 37 opaque classes, and 16493 properties. Of its 4397 alias entries, 9 name templates the dump lists without a class prefix and join those classes, and 8 stand in for a class the dump does not list
+- src/server/shared/ObjectProperty/TypeRegistry.h/.cpp (singleton accessed as sTypeRegistry): ClassInfo (name, hash, base chain, ordered PropertyInfo list), PropertyInfo (name, hash, ordinal/id, flags, container Static/List/Vector, ValueKind, element class, enum table). Built with ClassInfo and PropertyInfo in TypeInfo.h and the catalog as an immutable generation; the enum table is per property with sorted name and value indexes, and the dump's __DEFAULT (integer or text), __BASECLASS and text options are kept alongside the integer options
 - src/server/shared/ObjectProperty/PropertyFlags.h: Save 0, Copy 1, Public 2, Transmit 3, AuthorityTransmit 4, Persistent 5, Deprecated 6, NoScript 7, DirtyEncode 8, Blob 9, Immutable 16, FileName 17, Color 18, Bits 20, Enum 21, Localized 22, StringKey 23, ObjectId 24, ReferenceId 25, ObjectName 27, HasBaseClass 28
-- ValueKind classifier over the measured vocabulary: bool, char, unsigned char, short, unsigned short, int, unsigned int, unsigned __int64, gid, float, double, wchar_t, std::string, std::wstring, bui2/4/5/7, s24/u24, the fixed math types, enum, object (inline/pointer/SharedPointer)
-- Load-time validation: recompute every hash and fail loudly on mismatch; SHA-256 of the dump logged for revision pinning
+- ValueKind classifier over the measured vocabulary: bool, char, unsigned char, short, unsigned short, int, unsigned int, unsigned __int64, gid, float, double, wchar_t, std::string, std::wstring, bui2/4/5/7, s24/u24, the fixed math types, enum, object (inline/pointer/SharedPointer). Built with bit fields as any bi<N> or bui<N> of 1 to 32 bits with the width kept, plus __int64, and the value types r806919 uses: Vector3D, Quaternion, Matrix3x3, Euler, Color, Point<int>, Point<float>, Size<int>, Rect<int>, Rect<float>, SerializedBuffer, SimpleVert and SimpleFace
+- Load-time validation: recompute every hash and fail loudly on mismatch; SHA-256 of the dump logged for revision pinning. Built to also refuse broken, empty or misshapen dumps, known fields of the wrong JSON type or missing, duplicates, gaps in property ids, oversized values, bad containers, keys that differ from the hash and inconsistent base chains
 - conf/dist gameserver.conf.dist and loginserver.conf.dist options: TypeDumpPath
 - Reload: `.reload typedump` (through 4.15 when it lands) loads TypeDumpPath into a new registry off to the side, validates every hash, rebinds the typed views (3.07), and swaps; any failure keeps the old registry and reports every error. Live PropertyObjects keep the registry generation they were built from; if that cannot be made safe, a type-dump change is documented as a restart case instead
 - src/test/server/shared/ObjectProperty/TypeRegistryTest.cpp using a small synthetic dump written by us (invented classes), never client data
 
 **Acceptance**
 
-- [ ] Unit test on the synthetic dump: alias collapse, base-chain lookup, ordering by property id, enum option lookup in both directions
-- [ ] Unit test: reloading from a synthetic dump with a bad hash keeps the previous registry serving and reports the mismatch
-- [ ] Client-gated test: the r806919 dump loads into 2205 property classes and 140 enums with no unclassified property type; load time and memory are logged (target under 2 s, under 150 MB)
-- [ ] Client-gated test: the class 'class WizClientObject' has 14 properties in id order, starting with m_inactiveBehaviors, m_globalID.m_full, m_permID
+- [x] Unit test on the synthetic dump: alias collapse, base-chain lookup, ordering by property id, enum option lookup in both directions
+- [x] Unit test: reloading from a synthetic dump with a bad hash keeps the previous registry serving and reports the mismatch
+- [x] Client-gated test: the r806919 dump loads into 2205 property classes and 140 enums with no unclassified property type; load time and memory are logged (target under 2 s, under 150 MB) (TypeRegistryClientTest; 2197 counting the PropertyClass root, loading in about 190 ms into about 10 MiB in an optimized build)
+- [x] Client-gated test: the class 'class WizClientObject' has 14 properties in id order, starting with m_inactiveBehaviors, m_globalID.m_full, m_permID
 
 **Risks**
 

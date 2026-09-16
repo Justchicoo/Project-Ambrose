@@ -23,6 +23,7 @@ target_link_libraries(unit_tests
     PRIVATE
         ambrose-compile-options
         accounts
+        nlohmann_json::nlohmann_json
         GTest::gmock)
 
 if(TARGET login)

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: brings the login, characters and world databases current and opens them, then runs the world update tick whose interval follows World.UpdateInterval live.
+ * Game server entry point: loads the type dump, brings the login, characters and world databases current and opens them, then runs the world update tick whose interval follows World.UpdateInterval live.
  */
 
 #include "AppenderDB.h"
@@ -8,7 +8,9 @@
 #include "DatabaseEnv.h"
 #include "DatabaseLoader.h"
 #include "Log.h"
+#include "LogConfig.h"
 #include "ServerApp.h"
+#include "TypeRegistry.h"
 
 #include <algorithm>
 #include <atomic>
@@ -30,6 +32,15 @@ namespace
     protected:
         bool OnStart() override
         {
+            std::string const typeDump = Config().GetOption<std::string>("TypeDumpPath", "", true);
+            if (typeDump.empty())
+                LOG_WARN("server.gameserver", "TypeDumpPath is not set, so ObjectProperty data cannot be read or written");
+            else if (!sTypeRegistry.LoadFromFile(LogConfig::Utf8Path(typeDump)))
+            {
+                LOG_ERROR("server.gameserver", "Cannot load the type dump {}", typeDump);
+                return false;
+            }
+
             _databases = std::make_unique<DatabaseLoader>(Config());
             _databases->AddDatabase(LoginDatabase, "Login", DatabaseLoader::DATABASE_LOGIN)
                 .AddDatabase(CharacterDatabase, "Character", DatabaseLoader::DATABASE_CHARACTER)
