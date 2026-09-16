@@ -1,0 +1,94 @@
+/*
+ * Project Ambrose by Imjustchico
+ * Checks the login message table against the user's own client install: its declarations resolve, every one of the 29 LOGIN messages and every SYSTEM and EXTENDEDBASE message has exactly one rule with matching order and tag, and game messages stay outside the login server's services.
+ */
+
+#include "Environment.h"
+#include "LogConfig.h"
+#include "LoginMessageTable.h"
+#include "MessageRegistry.h"
+
+#include <gtest/gtest.h>
+
+#include <set>
+#include <string>
+#include <vector>
+
+TEST(LoginMessageTableClientTest, EveryLoginMessageHasOneRuleThatMatchesTheInstall)
+{
+    std::optional<std::string> const directory = Ambrose::GetEnv("AMBROSE_CLIENT_DIR");
+    if (!directory || directory->empty())
+        GTEST_SKIP() << "set AMBROSE_CLIENT_DIR to a Wizard101 install folder to run client data tests";
+
+    MessageHandlerTable<LoginSession> const& table = LoginMessageTable::Get();
+    MessageRegistry registry;
+    std::vector<std::string> errors;
+    ASSERT_TRUE(table.Declare(registry, errors));
+    ASSERT_TRUE(registry.LoadFromClient(LogConfig::Utf8Path(*directory)));
+    MessageCatalogPtr const catalog = registry.GetCatalog();
+    ASSERT_TRUE(catalog);
+    ASSERT_TRUE(table.Validate(*catalog, errors)) << (errors.empty() ? std::string() : errors.front());
+    EXPECT_TRUE(errors.empty());
+
+    auto const& protocols = catalog->GetDefinitions().GetProtocols();
+    auto const login = protocols.find(LoginMessages::LoginService);
+    ASSERT_NE(login, protocols.end());
+    EXPECT_EQ(login->second.ProtocolType, "LOGIN");
+    ASSERT_EQ(login->second.Messages.size(), 29u);
+
+    std::set<uint32> orders;
+    std::size_t handled = 0;
+    std::size_t pending = 0;
+    std::size_t refused = 0;
+    for (MessageDef const& message : login->second.Messages)
+    {
+        orders.insert(message.Order);
+        MessageRule const* const rule = table.FindRule(catalog, LoginMessages::LoginService, message.Order);
+        ASSERT_NE(rule, nullptr) << message.Tag << " has no rule";
+        EXPECT_EQ(rule->Tag, message.Tag);
+        switch (rule->Kind)
+        {
+            case MessageRuleKind::Handled: ++handled; break;
+            case MessageRuleKind::Pending: ++pending; break;
+            case MessageRuleKind::Refused: ++refused; break;
+        }
+    }
+    EXPECT_EQ(orders.size(), 29u);
+    EXPECT_EQ(*orders.begin(), 1u);
+    EXPECT_EQ(*orders.rbegin(), 29u);
+    EXPECT_EQ(handled, 1u);
+    EXPECT_EQ(pending, 15u);
+    EXPECT_EQ(refused, 13u);
+
+    MessageRule const* const authen = table.FindRule(catalog, LoginMessages::LoginService, 27);
+    ASSERT_NE(authen, nullptr);
+    EXPECT_EQ(authen->Tag, "MSG_USER_AUTHEN_V3");
+    EXPECT_EQ(authen->Kind, MessageRuleKind::Handled);
+    EXPECT_EQ(authen->HandlerName, "LoginSession::HandleUserAuthenV3");
+    EXPECT_EQ(authen->Statuses, SessionStatuses::Connected);
+
+    MessageInfo const* const attach = catalog->Find(5, 7);
+    ASSERT_NE(attach, nullptr);
+    EXPECT_EQ(attach->Definition->Tag, "MSG_ATTACH");
+    EXPECT_EQ(table.FindRule(catalog, 5, 7), nullptr);
+    EXPECT_FALSE(table.IsOwnService(5));
+
+    MessageInfo const* const serverMessageInfo = catalog->Find(LoginMessages::ExtendedBaseService, "MSG_SERVERMESSAGE");
+    ASSERT_NE(serverMessageInfo, nullptr);
+    MessageRule const* const serverMessage = table.FindRule(catalog, LoginMessages::ExtendedBaseService, serverMessageInfo->Definition->Order);
+    ASSERT_NE(serverMessage, nullptr);
+    EXPECT_EQ(serverMessage->Kind, MessageRuleKind::Refused);
+
+    for (uint8 const service : { LoginMessages::SystemService, LoginMessages::ExtendedBaseService })
+    {
+        auto const protocol = protocols.find(service);
+        ASSERT_NE(protocol, protocols.end());
+        for (MessageDef const& message : protocol->second.Messages)
+        {
+            MessageRule const* const rule = table.FindRule(catalog, service, message.Order);
+            ASSERT_NE(rule, nullptr) << message.Tag << " has no rule";
+            EXPECT_EQ(rule->Tag, message.Tag);
+        }
+    }
+    EXPECT_EQ(table.GetRules().size(), 37u);
+}

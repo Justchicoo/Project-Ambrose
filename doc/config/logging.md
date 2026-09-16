@@ -108,10 +108,10 @@ A message goes to the logger with the longest matching name at a dot boundary. `
 
 | Category | Used for |
 |---|---|
-| `server.<app>` | App lifecycle |
+| `server.<app>` | App lifecycle and each app's own events, such as the login server logging a decoded authentication request |
 | `server.config` | Configuration warnings |
 | `server.logging` | Logging problems such as dropped lines |
-| `network`, `network.opcode` | Sockets and client messages by protocol and name |
+| `network`, `network.opcode` | Sockets and client messages by protocol and name: handled messages at Debug, messages not handled yet at Info, and messages dropped for their session status or refused with a strike at Warn. A session's dropped and refused messages are logged only within `Network.DroppedMessageBurst`, so a flood from one client cannot fill the logs |
 | `network.session` | Session offers, accepts and closes at Info, keepalives in both directions at Debug |
 | `sql.sql`, `sql.updates`, `sql.driver` | Database queries, updates and connections |
 | `accounts` | Accounts created, passwords, security levels, locks and bans, and verifiers that do not open |

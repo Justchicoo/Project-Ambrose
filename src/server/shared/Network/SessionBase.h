@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A client session over one socket: sends SessionOffer at once, waits for a matching SessionAccept, answers and sends keepalives, and hands DML messages to the app.
+ * A client session over one socket: sends SessionOffer at once, waits for a matching SessionAccept, answers and sends keepalives, hands DML messages to the app, and tracks its status, protocol strikes and queued inbound work.
  */
 
 #ifndef AMBROSE_SESSIONBASE_H
@@ -8,15 +8,21 @@
 
 #include "ControlMessages.h"
 #include "SessionContext.h"
+#include "SessionStatus.h"
 #include "Socket.h"
+#include "TokenBucket.h"
 
 #include <asio/steady_timer.hpp>
 
 #include <atomic>
 #include <chrono>
 #include <deque>
+#include <functional>
 #include <memory>
+#include <mutex>
 #include <span>
+#include <string_view>
+#include <utility>
 
 enum class SessionState : uint8
 {
@@ -30,6 +36,8 @@ public:
     static constexpr std::size_t MaxPendingFrames = 256;
     static constexpr std::size_t MaxPendingBytes = std::size_t{ 1 } << 20;
     static constexpr std::chrono::seconds DisabledKeepAliveRecheck{ 1 };
+    static constexpr std::size_t MaxQueuedMessages = 4096;
+    static constexpr std::size_t MaxQueuedBytes = std::size_t{ 4 } << 20;
 
     SessionBase(asio::ip::tcp::socket&& socket, FrameLimits limits, std::shared_ptr<SessionContext> context);
     ~SessionBase() override;
@@ -41,6 +49,17 @@ public:
     std::chrono::milliseconds GetKeepAliveRoundTrip() const noexcept { return std::chrono::milliseconds(_keepAliveRoundTripMs.load(std::memory_order_relaxed)); }
     uint64 GetKeepAlivesSent() const noexcept { return _keepAlivesSent.load(std::memory_order_relaxed); }
     uint64 GetKeepAlivesAnswered() const noexcept { return _keepAlivesAnswered.load(std::memory_order_relaxed); }
+
+    SessionStatus GetStatus() const noexcept { return _status.load(std::memory_order_relaxed); }
+    void SetStatus(SessionStatus status) noexcept { _status.store(status, std::memory_order_relaxed); }
+    uint32 GetStrikes() const noexcept { return _strikes.load(std::memory_order_relaxed); }
+    bool IsKicked() const noexcept { return _kicked.load(std::memory_order_relaxed); }
+    bool AddStrike(std::string_view reason);
+    void Kick(std::string_view reason);
+    bool AllowDropLog();
+    bool QueueInbound(std::function<void()> work, std::size_t bytes = 0);
+    std::size_t ProcessQueuedMessages(std::size_t limit = MaxQueuedMessages);
+    std::size_t GetQueuedMessageCount() const;
 
 protected:
     virtual void OnAccepted();
@@ -68,7 +87,15 @@ private:
     std::shared_ptr<SessionBase> Self();
 
     std::shared_ptr<SessionContext> _context;
+    std::mutex _dropMutex;
+    TokenBucket _dropBudget;
     uint16 _sessionId = 0;
+    std::atomic<SessionStatus> _status{ SessionStatus::Connected };
+    std::atomic<uint32> _strikes{ 0 };
+    std::atomic<bool> _kicked{ false };
+    mutable std::mutex _inboundMutex;
+    std::deque<std::pair<std::function<void()>, std::size_t>> _inbound;
+    std::size_t _inboundBytes = 0;
     std::atomic<SessionState> _state{ SessionState::Offered };
     std::atomic<uint64> _offerSeconds{ 0 };
     std::atomic<uint32> _offerMilliseconds{ 0 };

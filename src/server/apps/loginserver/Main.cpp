@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Login server entry point: loads account settings and the client's message definitions, opens the login database, listens for clients, runs the session handshake, and offers account console commands until shutdown.
+ * Login server entry point: loads account settings, declares the login message table and checks it against the client's message definitions, opens the login database, listens for clients, and offers account console commands until shutdown.
  */
 
 #include "AccountCommands.h"
@@ -11,6 +11,7 @@
 #include "DatabaseLoader.h"
 #include "Log.h"
 #include "LogConfig.h"
+#include "LoginMessageTable.h"
 #include "LoginSession.h"
 #include "MessageRegistry.h"
 #include "NetworkSettings.h"
@@ -43,12 +44,29 @@ namespace
                 return false;
             }
 
+            MessageHandlerTable<LoginSession> const& messages = LoginMessageTable::Get();
+            std::vector<std::string> messageErrors;
+            if (!messages.Declare(sMessageRegistry, messageErrors))
+            {
+                for (std::string const& error : messageErrors)
+                    LOG_ERROR("server.loginserver", "{}", error);
+                LOG_ERROR("server.loginserver", "The login message table does not match the loaded message definitions");
+                return false;
+            }
+
             std::string const clientDir = Config().GetOption<std::string>("ClientDir", "", true);
             if (clientDir.empty())
                 LOG_WARN("server.loginserver", "ClientDir is not set, so client messages are logged by service and order only");
             else if (!sMessageRegistry.LoadFromClient(LogConfig::Utf8Path(clientDir)))
             {
                 LOG_ERROR("server.loginserver", "Cannot load the message definitions from the client in {}", clientDir);
+                return false;
+            }
+            else if (!messages.Validate(*sMessageRegistry.GetCatalog(), messageErrors))
+            {
+                for (std::string const& error : messageErrors)
+                    LOG_ERROR("server.loginserver", "{}", error);
+                LOG_ERROR("server.loginserver", "The login message table does not match the client's message definitions in {}", clientDir);
                 return false;
             }
 

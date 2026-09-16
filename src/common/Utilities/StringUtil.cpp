@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements tokenizing, trimming, and ASCII case helpers without locale dependence.
+ * Implements tokenizing, trimming, and ASCII case helpers without locale dependence, and escapes control bytes and caps the length of untrusted text for logs.
  */
 
 #include "StringUtil.h"
+#include "Types.h"
 
 #include <algorithm>
 
@@ -78,4 +79,24 @@ std::string Ambrose::ToUpper(std::string_view str)
 bool Ambrose::EqualsIgnoreCase(std::string_view left, std::string_view right)
 {
     return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](char a, char b) { return AsciiLower(a) == AsciiLower(b); });
+}
+
+std::string Ambrose::ForLog(std::string_view text, std::size_t maxBytes)
+{
+    std::string_view const kept = text.substr(0, std::min(text.size(), maxBytes));
+    std::string result;
+    result.reserve(kept.size() + 16);
+    for (char const c : kept)
+    {
+        uint8 const byte = static_cast<uint8>(c);
+        if (c == '\\')
+            result += "\\\\";
+        else if (byte < 0x20 || byte == 0x7F)
+            result += fmt::format("\\x{:02X}", byte);
+        else
+            result += c;
+    }
+    if (kept.size() < text.size())
+        result += fmt::format("...({} bytes)", text.size());
+    return result;
 }

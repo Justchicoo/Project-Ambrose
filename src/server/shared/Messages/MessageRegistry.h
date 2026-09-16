@@ -17,6 +17,7 @@
 #include <mutex>
 #include <span>
 #include <stdexcept>
+#include <atomic>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -163,8 +164,7 @@ private:
     void Publish(MessageCatalogPtr catalog);
     void ReportLoadIssues(std::vector<MessageIssue> const& errors, std::vector<MessageIssue> const& warnings) const;
 
-    mutable std::mutex _catalogMutex;
-    MessageCatalogPtr _catalog;
+    std::atomic<MessageCatalogPtr> _catalog;
     mutable std::mutex _writeMutex;
     std::vector<Declaration> _declarations;
     std::vector<MessageIssue> _errors;

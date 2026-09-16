@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Fake-client tests of the session handshake: offer bytes, accept matching, accept timeout, keepalive echo and proof of life, queued early messages, id allocation, and live settings.
+ * Fake-client tests of the session handshake: offer bytes, accept matching, accept timeout, keepalive echo and proof of life, queued early messages, id allocation, live settings, protocol strikes, kicks and queued inbound work.
  */
 
 #include "ConfigMgr.h"
 #include "ControlMessages.h"
+#include "FakeSessionClient.h"
 #include "FrameReassembler.h"
 #include "FrameWriter.h"
 #include "LogTestDirectory.h"
@@ -40,6 +41,7 @@ namespace
         std::vector<std::weak_ptr<RecordingSession>> Sessions;
         std::atomic<int> Accepted{ 0 };
         std::atomic<int> Closed{ 0 };
+        std::atomic<bool> StrikeEveryMessage{ false };
     };
 
     SessionEvents* gEvents = nullptr;
@@ -62,6 +64,11 @@ namespace
                 gEvents->Messages.push_back(message);
                 gEvents->StatesAtMessage.push_back(GetState());
             }
+            if (gEvents->StrikeEveryMessage.load())
+            {
+                AddStrike("a test strike");
+                return;
+            }
             SendDml(message.ServiceId, message.Order, message.Body);
         }
 
@@ -71,127 +78,6 @@ namespace
         }
     };
 
-    bool WaitFor(std::function<bool()> const& condition, std::chrono::milliseconds timeout = std::chrono::seconds(30))
-    {
-        auto const deadline = std::chrono::steady_clock::now() + timeout;
-        while (!condition())
-        {
-            if (std::chrono::steady_clock::now() > deadline)
-                return false;
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
-        }
-        return true;
-    }
-
-    class FakeClient
-    {
-    public:
-        explicit FakeClient(uint16 port) : _socket(_context)
-        {
-            _socket.connect(asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), port));
-        }
-
-        std::optional<Frame> ReadFrame(std::chrono::milliseconds timeout = std::chrono::seconds(30))
-        {
-            auto const deadline = std::chrono::steady_clock::now() + timeout;
-            while (true)
-            {
-                if (std::optional<Frame> frame = _reassembler.Next())
-                    return frame;
-                if (_closed || _reassembler.HasError())
-                    return std::nullopt;
-                auto const now = std::chrono::steady_clock::now();
-                if (now >= deadline)
-                    return std::nullopt;
-                bool done = false;
-                std::error_code readError;
-                std::size_t readBytes = 0;
-                _socket.async_read_some(asio::buffer(_buffer), [&](std::error_code const& error, std::size_t bytes)
-                {
-                    done = true;
-                    readError = error;
-                    readBytes = bytes;
-                });
-                _context.restart();
-                _context.run_for(std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now));
-                if (!done)
-                {
-                    _socket.cancel();
-                    _context.restart();
-                    _context.run();
-                    if (!done || readError == asio::error::operation_aborted)
-                        return std::nullopt;
-                }
-                if (readError)
-                {
-                    _closed = true;
-                    return std::nullopt;
-                }
-                _received += readBytes;
-                _reassembler.Feed(std::span<uint8 const>(_buffer.data(), readBytes));
-            }
-        }
-
-        std::optional<Frame> ReadControl(ControlOpcode opcode, std::chrono::milliseconds timeout = std::chrono::seconds(30))
-        {
-            auto const deadline = std::chrono::steady_clock::now() + timeout;
-            while (std::chrono::steady_clock::now() < deadline)
-            {
-                std::optional<Frame> frame = ReadFrame(std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now()));
-                if (!frame)
-                    return std::nullopt;
-                if (ControlMessages::GetOpcode(*frame) == opcode)
-                    return frame;
-            }
-            return std::nullopt;
-        }
-
-        bool WaitForClose(std::chrono::milliseconds timeout = std::chrono::seconds(30))
-        {
-            auto const deadline = std::chrono::steady_clock::now() + timeout;
-            while (!_closed && std::chrono::steady_clock::now() < deadline)
-                ReadFrame(std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now()));
-            return _closed;
-        }
-
-        void Send(ByteBuffer const& bytes)
-        {
-            asio::write(_socket, asio::buffer(bytes.GetData().data(), bytes.GetData().size()));
-        }
-
-        uint16 Handshake()
-        {
-            std::optional<Frame> const offerFrame = ReadControl(ControlOpcode::SessionOffer);
-            if (!offerFrame)
-                return 0;
-            std::optional<SessionOffer> const offer = ControlMessages::DecodeSessionOffer(offerFrame->Payload);
-            if (!offer)
-                return 0;
-            SendAccept(offer->SessionId, offer->Time);
-            return offer->SessionId;
-        }
-
-        void SendAccept(uint16 sessionId, SessionTimestamp time = {})
-        {
-            SessionAccept accept;
-            accept.SessionId = sessionId;
-            accept.Time = time;
-            ByteBuffer out;
-            ControlMessages::WriteFrame(out, accept);
-            Send(out);
-        }
-
-        bool IsClosed() const noexcept { return _closed; }
-        std::size_t GetReceivedBytes() const noexcept { return _received; }
-
-    private:
-        asio::io_context _context;
-        asio::ip::tcp::socket _socket;
-        FrameReassembler _reassembler;
-        std::array<uint8, 4096> _buffer{};
-        std::size_t _received = 0;
-        bool _closed = false;
-    };
 
     class SessionBaseTest : public testing::Test
     {
@@ -303,16 +189,37 @@ TEST(SessionSettingsTest, LoadsDefaultsAndClampsOutOfRangeSeconds)
     EXPECT_EQ(bounded.AcceptTimeout, std::chrono::seconds(1));
     EXPECT_EQ(bounded.KeepAliveInterval, std::chrono::seconds(SessionSettings::MaxSeconds));
     EXPECT_EQ(bounded.KeepAliveTimeout, std::chrono::seconds(7));
+    EXPECT_EQ(bounded.MaxStrikes, SessionSettings::DefaultMaxStrikes);
     EXPECT_EQ(problems.size(), 2u);
+
+    std::ofstream(file) << "Network.MaxStrikes = 0\n";
+    ConfigMgr noStrikes;
+    ASSERT_TRUE(noStrikes.LoadInitial(file).Succeeded());
+    problems.clear();
+    EXPECT_EQ(SessionSettings::Load(noStrikes, &problems).MaxStrikes, 1u);
+    ASSERT_EQ(problems.size(), 1u);
+    EXPECT_EQ(problems.front(), "Network.MaxStrikes = 0 is outside 1-1000; using 1");
+
+    std::ofstream(file) << "Network.MaxStrikes = 25\nNetwork.DroppedMessageBurst = 3\nNetwork.DroppedMessagesPerSecond = 0\n";
+    ConfigMgr someStrikes;
+    ASSERT_TRUE(someStrikes.LoadInitial(file).Succeeded());
+    problems.clear();
+    SessionSettings const budget = SessionSettings::Load(someStrikes, &problems);
+    EXPECT_EQ(budget.MaxStrikes, 25u);
+    EXPECT_EQ(budget.DroppedMessageBurst, 3u);
+    EXPECT_EQ(budget.DroppedMessagesPerSecond, 1u);
+    EXPECT_EQ(problems, std::vector<std::string>{ "Network.DroppedMessagesPerSecond = 0 is outside 1-100000; using 1" });
+    EXPECT_EQ(loaded.DroppedMessageBurst, SessionSettings::DefaultDroppedMessageBurst);
+    EXPECT_EQ(loaded.DroppedMessagesPerSecond, SessionSettings::DefaultDroppedMessagesPerSecond);
 }
 
 TEST_F(SessionBaseTest, OfferIsTheFirstFrameWithTheSessionIdAndOfferTime)
 {
-    FakeClient client(Start(Timing(std::chrono::seconds(30))));
+    FakeSessionClient client(Start(Timing(std::chrono::seconds(30))));
     auto const before = std::chrono::system_clock::now();
     std::optional<Frame> const frame = client.ReadFrame();
     ASSERT_TRUE(frame);
-    ASSERT_TRUE(WaitFor([&] { return SessionAt(0) != nullptr; }));
+    ASSERT_TRUE(WaitForCondition([&] { return SessionAt(0) != nullptr; }));
     std::shared_ptr<RecordingSession> const session = SessionAt(0);
 
     SessionOffer expected;
@@ -335,7 +242,7 @@ TEST_F(SessionBaseTest, OfferIsTheFirstFrameWithTheSessionIdAndOfferTime)
 
 TEST_F(SessionBaseTest, MatchingAcceptDeliversEarlyAndLaterMessagesInOrder)
 {
-    FakeClient client(Start(Timing(std::chrono::seconds(30))));
+    FakeSessionClient client(Start(Timing(std::chrono::seconds(30))));
     std::optional<Frame> const offerFrame = client.ReadControl(ControlOpcode::SessionOffer);
     ASSERT_TRUE(offerFrame);
     std::optional<SessionOffer> const offer = ControlMessages::DecodeSessionOffer(offerFrame->Payload);
@@ -350,7 +257,7 @@ TEST_F(SessionBaseTest, MatchingAcceptDeliversEarlyAndLaterMessagesInOrder)
     ByteBuffer later;
     FrameWriter::WriteDml(later, 7, 28, std::vector<uint8>{ 4 });
     client.Send(later);
-    ASSERT_TRUE(WaitFor([&] { return MessageCount() == 2; }));
+    ASSERT_TRUE(WaitForCondition([&] { return MessageCount() == 2; }));
     {
         std::lock_guard<std::mutex> lock(_events.Mutex);
         EXPECT_EQ(_events.Messages[0], (DmlMessageData{ 7, 27, { 1, 2, 3 } }));
@@ -373,14 +280,14 @@ TEST_F(SessionBaseTest, MatchingAcceptDeliversEarlyAndLaterMessagesInOrder)
 
 TEST_F(SessionBaseTest, AcceptWithTheWrongIdClosesAndFreesTheId)
 {
-    FakeClient client(Start(Timing(std::chrono::seconds(30))));
+    FakeSessionClient client(Start(Timing(std::chrono::seconds(30))));
     std::optional<Frame> const offerFrame = client.ReadControl(ControlOpcode::SessionOffer);
     ASSERT_TRUE(offerFrame);
     std::optional<SessionOffer> const offer = ControlMessages::DecodeSessionOffer(offerFrame->Payload);
     ASSERT_TRUE(offer);
     client.SendAccept(static_cast<uint16>(offer->SessionId + 1), offer->Time);
     EXPECT_TRUE(client.WaitForClose());
-    EXPECT_TRUE(WaitFor([&] { return _events.Closed.load() == 1; }));
+    EXPECT_TRUE(WaitForCondition([&] { return _events.Closed.load() == 1; }));
     EXPECT_EQ(_events.Accepted.load(), 0);
     EXPECT_FALSE(_context->IsIdInUse(offer->SessionId));
 }
@@ -389,7 +296,7 @@ TEST_F(SessionBaseTest, NoAcceptWithinTheTimeoutCloses)
 {
     uint16 const port = Start(Timing(std::chrono::milliseconds(200)));
     auto const start = std::chrono::steady_clock::now();
-    FakeClient client(port);
+    FakeSessionClient client(port);
     ASSERT_TRUE(client.ReadControl(ControlOpcode::SessionOffer));
     EXPECT_TRUE(client.WaitForClose(std::chrono::seconds(10)));
     EXPECT_GE(std::chrono::steady_clock::now() - start, std::chrono::milliseconds(200));
@@ -398,10 +305,10 @@ TEST_F(SessionBaseTest, NoAcceptWithinTheTimeoutCloses)
 
 TEST_F(SessionBaseTest, ClientKeepAliveIsAnsweredWithTheElapsedMinutes)
 {
-    FakeClient client(Start(Timing(std::chrono::seconds(30))));
+    FakeSessionClient client(Start(Timing(std::chrono::seconds(30))));
     uint16 const sessionId = client.Handshake();
     ASSERT_NE(sessionId, 0);
-    ASSERT_TRUE(WaitFor([&] { return _events.Accepted.load() == 1; }));
+    ASSERT_TRUE(WaitForCondition([&] { return _events.Accepted.load() == 1; }));
 
     ByteBuffer keepAlive;
     ControlMessages::WriteFrame(keepAlive, ClientKeepAlive{ sessionId, 321, 9 });
@@ -422,7 +329,7 @@ TEST_F(SessionBaseTest, ClientKeepAliveIsAnsweredWithTheElapsedMinutes)
 
 TEST_F(SessionBaseTest, ServerKeepAlivesCloseOnlyASilentClient)
 {
-    FakeClient client(Start(Timing(std::chrono::seconds(30), std::chrono::milliseconds(100), std::chrono::seconds(2))));
+    FakeSessionClient client(Start(Timing(std::chrono::seconds(30), std::chrono::milliseconds(100), std::chrono::seconds(2))));
     uint16 const sessionId = client.Handshake();
     ASSERT_NE(sessionId, 0);
 
@@ -441,7 +348,7 @@ TEST_F(SessionBaseTest, ServerKeepAlivesCloseOnlyASilentClient)
     }
     std::shared_ptr<RecordingSession> const session = SessionAt(0);
     ASSERT_TRUE(session);
-    ASSERT_TRUE(WaitFor([&] { return session->GetKeepAlivesAnswered() >= 3; }));
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetKeepAlivesAnswered() >= 3; }));
     EXPECT_GE(session->GetKeepAliveRoundTrip().count(), 0);
 
     EXPECT_TRUE(client.WaitForClose(std::chrono::seconds(20)));
@@ -450,7 +357,7 @@ TEST_F(SessionBaseTest, ServerKeepAlivesCloseOnlyASilentClient)
 
 TEST_F(SessionBaseTest, AnyClientTrafficCountsAsProofOfLife)
 {
-    FakeClient client(Start(Timing(std::chrono::seconds(30), std::chrono::milliseconds(100), std::chrono::milliseconds(500))));
+    FakeSessionClient client(Start(Timing(std::chrono::seconds(30), std::chrono::milliseconds(100), std::chrono::milliseconds(500))));
     uint16 const sessionId = client.Handshake();
     ASSERT_NE(sessionId, 0);
 
@@ -477,17 +384,17 @@ TEST_F(SessionBaseTest, AnyClientTrafficCountsAsProofOfLife)
 TEST_F(SessionBaseTest, TimingChangesApplyFromTheNextTimer)
 {
     uint16 const port = Start(Timing(std::chrono::seconds(30)));
-    FakeClient waiting(port);
+    FakeSessionClient waiting(port);
     ASSERT_TRUE(waiting.ReadControl(ControlOpcode::SessionOffer));
     _context->SetSettings(Timing(std::chrono::milliseconds(150)));
-    FakeClient hurried(port);
+    FakeSessionClient hurried(port);
     ASSERT_TRUE(hurried.ReadControl(ControlOpcode::SessionOffer));
     EXPECT_TRUE(hurried.WaitForClose(std::chrono::seconds(10)));
     EXPECT_FALSE(waiting.ReadFrame(std::chrono::milliseconds(300)));
     EXPECT_FALSE(waiting.IsClosed());
 
     _context->SetSettings(Timing(std::chrono::seconds(30)));
-    FakeClient keptAlive(port);
+    FakeSessionClient keptAlive(port);
     uint16 const sessionId = keptAlive.Handshake();
     ASSERT_NE(sessionId, 0);
     EXPECT_FALSE(keptAlive.ReadControl(ControlOpcode::KeepAlive, std::chrono::milliseconds(1500)));
@@ -497,7 +404,7 @@ TEST_F(SessionBaseTest, TimingChangesApplyFromTheNextTimer)
 
 TEST_F(SessionBaseTest, TooManyFramesBeforeAcceptClose)
 {
-    FakeClient client(Start(Timing(std::chrono::seconds(30))));
+    FakeSessionClient client(Start(Timing(std::chrono::seconds(30))));
     ASSERT_TRUE(client.ReadControl(ControlOpcode::SessionOffer));
     ByteBuffer flood;
     for (std::size_t i = 0; i <= SessionBase::MaxPendingFrames; ++i)
@@ -505,4 +412,82 @@ TEST_F(SessionBaseTest, TooManyFramesBeforeAcceptClose)
     client.Send(flood);
     EXPECT_TRUE(client.WaitForClose());
     EXPECT_EQ(MessageCount(), 0u);
+}
+
+TEST_F(SessionBaseTest, StrikesCloseAtTheLimitAndStopFurtherMessages)
+{
+    _events.StrikeEveryMessage = true;
+    SessionSettings settings = Timing(std::chrono::seconds(30));
+    settings.MaxStrikes = 3;
+    FakeSessionClient client(Start(settings));
+    ASSERT_NE(client.Handshake(), 0);
+    ASSERT_TRUE(WaitForCondition([&] { return _events.Accepted.load() == 1; }));
+
+    ByteBuffer burst;
+    for (int i = 0; i < 6; ++i)
+        FrameWriter::WriteDml(burst, 7, 1, std::vector<uint8>{ static_cast<uint8>(i) });
+    client.Send(burst);
+    EXPECT_TRUE(client.WaitForClose());
+    ASSERT_TRUE(WaitForCondition([&] { return _events.Closed.load() == 1; }));
+    EXPECT_EQ(MessageCount(), 3u);
+    std::shared_ptr<RecordingSession> const session = SessionAt(0);
+    ASSERT_TRUE(session);
+    EXPECT_EQ(session->GetStrikes(), 3u);
+    EXPECT_TRUE(session->IsKicked());
+    EXPECT_EQ(session->GetStatus(), SessionStatus::Connected);
+}
+
+TEST_F(SessionBaseTest, DropLogBudgetAndQueuedBytesAreBounded)
+{
+    SessionSettings settings = Timing(std::chrono::seconds(30));
+    settings.DroppedMessageBurst = 3;
+    settings.DroppedMessagesPerSecond = 1;
+    FakeSessionClient client(Start(settings));
+    ASSERT_NE(client.Handshake(), 0);
+    ASSERT_TRUE(WaitForCondition([&] { return _events.Accepted.load() == 1; }));
+    std::shared_ptr<RecordingSession> const session = SessionAt(0);
+    ASSERT_TRUE(session);
+
+    EXPECT_TRUE(session->AllowDropLog());
+    EXPECT_TRUE(session->AllowDropLog());
+    EXPECT_TRUE(session->AllowDropLog());
+    EXPECT_FALSE(session->AllowDropLog());
+
+    EXPECT_TRUE(session->QueueInbound([] { }, SessionBase::MaxQueuedBytes));
+    EXPECT_FALSE(session->QueueInbound([] { }, 1));
+    EXPECT_TRUE(session->IsKicked());
+    EXPECT_TRUE(client.WaitForClose());
+}
+
+TEST_F(SessionBaseTest, QueuedInboundWorkRunsInOrderUntilTheBoundKicks)
+{
+    FakeSessionClient client(Start(Timing(std::chrono::seconds(30))));
+    ASSERT_NE(client.Handshake(), 0);
+    ASSERT_TRUE(WaitForCondition([&] { return _events.Accepted.load() == 1; }));
+    std::shared_ptr<RecordingSession> const session = SessionAt(0);
+    ASSERT_TRUE(session);
+
+    session->SetStatus(SessionStatus::Authenticated);
+    EXPECT_EQ(session->GetStatus(), SessionStatus::Authenticated);
+    std::vector<int> ran;
+    for (int i = 0; i < 3; ++i)
+        EXPECT_TRUE(session->QueueInbound([&ran, i] { ran.push_back(i); }));
+    EXPECT_EQ(session->GetQueuedMessageCount(), 3u);
+    EXPECT_EQ(session->ProcessQueuedMessages(2), 2u);
+    EXPECT_EQ(ran, (std::vector<int>{ 0, 1 }));
+    EXPECT_EQ(session->GetQueuedMessageCount(), 1u);
+    EXPECT_EQ(session->ProcessQueuedMessages(), 1u);
+    EXPECT_EQ(ran, (std::vector<int>{ 0, 1, 2 }));
+
+    EXPECT_TRUE(session->QueueInbound([] { }, SessionBase::MaxQueuedBytes - 10));
+    EXPECT_TRUE(session->QueueInbound([] { }, 10));
+    EXPECT_EQ(session->ProcessQueuedMessages(), 2u);
+    for (std::size_t i = 0; i < SessionBase::MaxQueuedMessages; ++i)
+        ASSERT_TRUE(session->QueueInbound([] { }));
+    EXPECT_FALSE(session->QueueInbound([] { }));
+    EXPECT_TRUE(session->IsKicked());
+    EXPECT_TRUE(client.WaitForClose());
+    ASSERT_TRUE(WaitForCondition([&] { return _events.Closed.load() == 1; }));
+    EXPECT_EQ(session->GetQueuedMessageCount(), 0u);
+    EXPECT_EQ(session->ProcessQueuedMessages(), 0u);
 }

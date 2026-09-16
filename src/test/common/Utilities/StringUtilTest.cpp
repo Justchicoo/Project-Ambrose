@@ -90,3 +90,14 @@ TEST(StringUtilTest, StringFormatUsesFmt)
 {
     EXPECT_EQ(Ambrose::StringFormat("{} has {} pips", "Wizard", 3), "Wizard has 3 pips");
 }
+
+TEST(StringUtilTest, ForLogEscapesControlBytesAndCapsLength)
+{
+    EXPECT_EQ(Ambrose::ForLog("W.1.610.0"), "W.1.610.0");
+    EXPECT_EQ(Ambrose::ForLog("x\nSession 9 accepted\r\t"), "x\\x0ASession 9 accepted\\x0D\\x09");
+    EXPECT_EQ(Ambrose::ForLog(std::string_view("a\0b\x7F\\", 5)), "a\\x00b\\x7F\\\\");
+    EXPECT_EQ(Ambrose::ForLog("caf\xC3\xA9"), "caf\xC3\xA9");
+    EXPECT_EQ(Ambrose::ForLog(std::string(100, 'n'), 8), "nnnnnnnn...(100 bytes)");
+    EXPECT_EQ(Ambrose::ForLog(std::string(64, '\n')).size(), 256u);
+    EXPECT_EQ(Ambrose::ForLog(""), "");
+}

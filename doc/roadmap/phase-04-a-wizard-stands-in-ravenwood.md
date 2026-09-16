@@ -290,7 +290,7 @@ The client disconnects from the loginserver after MSG_CHARACTERSELECTED and reco
 
 **Deliverables**
 
-- LoginSession: after sending MSG_CHARACTERSELECTED (7:3; IP STR, TCPPort INT, UDPPort INT, Key STR, UserID/CharID/ZoneID GID, ...) the session enters a Handoff state that suspends the keepalive timeout and waits for the client to close; server-side close only after Network.HandoffGrace
+- LoginSession: after sending MSG_CHARACTERSELECTED (7:3; IP STR, TCPPort INT, UDPPort INT, Key STR, UserID/CharID/ZoneID GID, ...) the session moves to the CharacterSelected status, suspends the keepalive timeout and waits for the client to close; server-side close only after Network.HandoffGrace
 - GameSession: new SessionOffer on connect; STATUS_CONNECTED allows only MSG_ATTACH (5:7) until LOG/WLD validate the Key; MSG_ATTACHFAILED (5:8) is sent via SendMessageDelayedClose on failure
 - Config: gameserver PublicAddress used to fill the IP field (never auto-discover through external web services)
 - Network.HandoffGrace and PublicAddress become live settings once 4.16 lands; a change applies from the next handoff, and sessions already in Handoff keep the values they started with

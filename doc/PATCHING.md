@@ -37,7 +37,7 @@ The launcher only ever starts `WizardGraphicalClient.exe` with `-P 0`.
 
 1. Build Ambrose, then copy `loginserver.conf.dist` next to `loginserver.exe` as `loginserver.conf`.
 2. Set `ClientDir` in it to your install, so client messages are logged by name.
-3. Start the server. Keepalives log at Debug, so they appear in `Login.log` in `LogsDir` but not on the console. To see them on the console too, start it as `loginserver --set "Appender.Console=1,2,3"`.
+3. Start the server. Keepalives and handled client messages log at Debug, so they appear in `Login.log` in `LogsDir` but not on the console. To see them on the console too, start it as `loginserver --set "Appender.Console=1,2,3"`.
 4. Start the client with the launcher and log in.
 
 A working session logs lines like these, in this order. The session id, port, timing and size vary.
@@ -46,7 +46,10 @@ A working session logs lines like these, in this order. The session id, port, ti
 Session 1 offered to 127.0.0.1:50512
 Session 1 accepted by 127.0.0.1:50512 after 12 ms
 LOGIN MSG_USER_AUTHEN_V3 (7:27) from session 1, 213 bytes
+Session 1 sent MSG_USER_AUTHEN_V3: version W.1.610.x, revision r806919.Wizard_1_610, data revision ..., locale enUS, machine ..., patch client ..., Steam patcher 0, console type 0, ...-byte Rec1
 ```
+
+Client strings in that line are escaped and cut to 64 bytes, so a client cannot write its own log lines.
 
 Leave the client idle at the login stage for 5 minutes. Keepalive lines should appear in both directions (`keepalive from the client` and `keepalive sent to the client`, then `answered by the client`), and no `Closing session` line should appear.
 

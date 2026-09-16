@@ -68,8 +68,7 @@ MessageRegistry& MessageRegistry::Instance()
 
 MessageCatalogPtr MessageRegistry::GetCatalog() const
 {
-    std::lock_guard<std::mutex> lock(_catalogMutex);
-    return _catalog;
+    return _catalog.load();
 }
 
 bool MessageRegistry::IsLoaded() const
@@ -105,8 +104,7 @@ MessageCatalogPtr MessageRegistry::GetLoadedCatalog() const
 
 void MessageRegistry::Publish(MessageCatalogPtr catalog)
 {
-    std::lock_guard<std::mutex> lock(_catalogMutex);
-    _catalog = std::move(catalog);
+    _catalog.store(std::move(catalog));
 }
 
 void MessageRegistry::Clear()

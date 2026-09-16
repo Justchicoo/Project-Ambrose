@@ -321,10 +321,10 @@ Apps open their databases and run the updater at startup, and log lines can be s
 
 **Acceptance**
 
-- [ ] Wrong state is dropped with 'received <NAME> in state X'
-- [ ] STATUS_NEVER strikes; MaxStrikes disconnects
-- [ ] LOGIN table has 29 entries matching _MsgOrder
-- [ ] Coverage check fails the build on a missing id
+- [x] Wrong state is dropped with 'received <NAME> in state X' (MessageHandlerTableTest, and LoginSessionTest over a real socket)
+- [x] STATUS_NEVER strikes; MaxStrikes disconnects (refused and foreign-service messages strike; LoginSessionTest closes a session at Network.MaxStrikes)
+- [x] LOGIN table has 29 entries matching _MsgOrder (LoginMessageTableClientTest against the r806919 install: 1 handled, 15 not handled yet, 13 refused)
+- [x] Coverage check fails the build on a missing id (adapted: ids load at runtime, so the check runs at startup and stops the login server, and the client test runs it against the install)
 - [ ] Real client: MSG_USER_AUTHEN_V3 reaches LoginSession::HandleUserAuthenV3
 
 ### Detailed spec from NET-9: Message dispatch table and session states
@@ -334,8 +334,8 @@ Each incoming DML message is routed to exactly one Session::Handle<Message> memb
 **Deliverables**
 
 - src/server/shared/Messages/MessageHandlerTable.h: template MessageHandlerTable<SessionT> indexed [service][order] -> {status: STATUS_NEVER|STATUS_CONNECTED|STATUS_AUTHED|STATUS_LOGGEDIN|STATUS_INWORLD, mode: PROCESS_INPLACE|PROCESS_THREADUNSAFE|PROCESS_ZONE, handler: void (SessionT::*)(Msg&)}. It is built from DEFINE_HANDLER(Msg, status, mode, &SessionT::HandleX) so the generated struct type supplies (service, order)
-- src/server/game/Server/GameSession.h/.cpp with src/server/game/Server/Protocol/GameMessageTable.cpp. src/server/apps/loginserver/Server/LoginSession.h/.cpp with LoginMessageTable.cpp. src/server/apps/patchserver/Server/PatchSession.* with PatchMessageTable.cpp
-- Every client->server message not yet implemented is registered STATUS_NEVER with HandleNULL, so unimplemented is explicit. Server->client-only messages are marked STATUS_NEVER with HandleServerSide
+- src/server/game/Server/GameSession.h/.cpp with src/server/game/Server/Protocol/GameMessageTable.cpp. src/server/apps/loginserver/Server/LoginSession.h/.cpp with LoginMessageTable.cpp. src/server/apps/patchserver/Server/PatchSession.* with PatchMessageTable.cpp. Built in 2.09: the shared MessageHandlerTable and the login table; the game table arrives with GameSession in 4.01 and the patch table with the TCP service in 16.04
+- Every client->server message not yet implemented is registered STATUS_NEVER with HandleNULL, so unimplemented is explicit. Server->client-only messages are marked STATUS_NEVER with HandleServerSide. Adapted in 2.09 after AzerothCore's STATUS_UNHANDLED: messages not handled yet are listed with the statuses they will need and are dropped without a strike, so a real client is not disconnected for traffic Ambrose has not implemented; only server-only messages are refused with a strike
 - Inbound queue: PROCESS_INPLACE runs on the network thread; others are queued and drained in Session::Update(diff) (world tick) or by the zone that owns the player
 - Handler grouping per doc: src/server/game/Handlers/<Subsystem>Handler.cpp (empty stubs created only when a subsystem lands)
 - Network.MaxStrikes is a live setting read at each strike, so a change applies to the next strike (registered with 4.16 when it lands)
@@ -349,10 +349,10 @@ Each incoming DML message is routed to exactly one Session::Handle<Message> memb
 
 **Acceptance**
 
-- [ ] Test: a message in the wrong state is dropped with a logged 'received <NAME> in state X', and the handler is not called
-- [ ] Test: a STATUS_NEVER message increments a strike counter; Network.MaxStrikes (default 10) disconnects
-- [ ] Test: a body that fails Decode is dropped, logged with the service/order name, and counts a strike
-- [ ] Test: every (service, order) in MessageRegistry has an entry in each app's table, so a coverage check fails the build if an id is missing
+- [x] Test: a message in the wrong state is dropped with a logged 'received <NAME> in state X', and the handler is not called
+- [x] Test: a STATUS_NEVER message increments a strike counter; Network.MaxStrikes (default 10) disconnects
+- [x] Test: a body that fails Decode is dropped, logged with the service/order name, and counts a strike
+- [x] Test: every (service, order) in MessageRegistry has an entry in each app's table, so a coverage check fails the build if an id is missing (adapted as above: at startup the table must hold exactly one rule for every message of the login server's own services, SYSTEM, EXTENDEDBASE and LOGIN, or the server stops; every other service is refused; the client test checks all 37 rules against the install)
 - [ ] Real client: LOGIN MSG_USER_AUTHEN_V3 reaches LoginSession::HandleUserAuthenV3 (a stub that logs); a crafted GAME MSG_ATTACH (5:7) from a test client to loginserver is rejected by state
 
 **Risks**
@@ -381,8 +381,8 @@ A real client started with -L 127.0.0.1 12000 connects to our loginserver, compl
 
 **Acceptance**
 
-- [ ] Unit: the dispatch table holds exactly 29 entries whose ids match _MsgOrder 1..29 and whose names match LoginMessages.xml (the test reads the XML from the user's install via the DAT WAD reader and skips when no install is configured)
-- [ ] Unit: a message received in the wrong state (for example MSG_REQUESTCHARACTERLIST before authentication) is dropped and logged, and the session stays open
+- [x] Unit: the dispatch table holds exactly 29 entries whose ids match _MsgOrder 1..29 and whose names match LoginMessages.xml (the test reads the XML from the user's install via the DAT WAD reader and skips when no install is configured)
+- [x] Unit: a message received in the wrong state (for example MSG_REQUESTCHARACTERLIST before authentication) is dropped and logged, and the session stays open
 - [ ] Real client: WizardGraphicalClient.exe -L 127.0.0.1 12000 connects; the server log shows SessionOffer sent and SessionAccept received with a matching SessionID; the connection survives at least 2 minutes of keepalives; the client shows its login UI (no -U) or sits waiting for authentication, with no crash and no disconnect dialog
 - [ ] Real client: MSG_USER_AUTHEN_V3 (order 27) arrives, is decoded field by field (Version=W.1.610.x, Revision=r806919.Wizard_1_610, Locale, MachineID) and logged
 

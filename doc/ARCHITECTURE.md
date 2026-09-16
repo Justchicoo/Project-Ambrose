@@ -60,7 +60,7 @@ There are three databases: `login`, `characters`, and `world`. Every change is a
 
 ### Message handlers
 
-Each client message is registered once in a dispatch table with four parts: the message, the session state it requires (never, authenticated, logged in, in world), its processing mode, and the `Session::Handle<Message>` member that handles it. Handlers are grouped by subsystem in `game/Handlers/<Subsystem>Handler.cpp`.
+Each app lists every client message once in a `MessageHandlerTable`: the message, the session statuses it is accepted in, its processing mode, and the `Session::Handle<Message>` member that handles it. A message can also be listed as not handled yet, with the statuses it will need, or as refused because only the server sends it. Handlers are grouped by subsystem in `game/Handlers/<Subsystem>Handler.cpp`.
 
 ### Scripting
 
@@ -159,6 +159,16 @@ Settled on 2026-09-14. A field whose type attribute is misspelled `TPYE` or `TYP
 Settled on 2026-09-14. A session sends SessionOffer before any other work and closes on a SessionAccept or client keepalive that names another session id. DML frames that arrive before SessionAccept are queued, up to 256 frames or 1 MiB, and delivered in order after it. A KeepAliveRsp echoes the client's elapsed minutes and carries the server's milliseconds into the current second. A server keepalive closes the session only when nothing at all arrives from the client within `Network.KeepAliveTimeout`, so a client that never answers server keepalives but sends its own stays connected. Session ids are nonzero, handed out in rotating order, and reused only after their session closes. These choices hold until doc/CAPTURE.md records otherwise.
 
 Work that needs the maintainer's own client, such as the real-client checks of 1.21 and 1.22, is listed in doc/ROADMAP.md under Where we are. Milestones that do not depend on those checks go ahead while they wait.
+
+### Message dispatch and session states
+
+Settled on 2026-09-16 under the maintainer's standing direction to decide.
+
+- Every app shares one `SessionStatus`: `Connected` once the handshake is done, `Authenticated` once credentials are verified, `CharacterSelected` once the login server hands the client to a realm or the game server has validated that hand-off, `LoggedIn` once LOGINCOMPLETE is sent, and `InWorld` once the character is in a zone. Each app uses the statuses it needs, and a rule accepts a mask of them.
+- Message ids come from the client's definitions at runtime, so a table cannot be checked against them at build time. Rules name messages by service and tag instead. Handled messages are declared with the message registry, so a definition load that lacks one is refused. At startup every rule is also checked against the loaded definitions, and a rule for a message the definitions lack, a duplicated or status-less rule, a queued rule in an app that drains no queues, or any message of the app's own services without a rule stops the app. Each loaded catalog resolves the rules to service and order slots once, so a reload that renumbers messages routes them correctly.
+- Dispatch follows AzerothCore's split between messages the server never accepts and messages it does not handle yet. A message listed as refused, a message from a service the app does not serve, an id the definitions do not have, or a body shorter than its definition counts a strike, and `Network.MaxStrikes` strikes close the session. A message in the wrong status, or one not handled yet, is dropped and logged without a strike, so a real client is not disconnected for sending something Ambrose has not implemented. Each session may drop only `Network.DroppedMessageBurst` messages, refilled at `Network.DroppedMessagesPerSecond`, while every drop is logged; beyond that a drop is not logged and counts a strike, so one client can neither fill the logs nor stay connected by flooding. Client-supplied text is escaped and cut to 64 bytes before it reaches a log line.
+- A handled message runs in place on its network thread, or is queued on its session and run when the owner drains the queue, with the status checked again at that moment. A session holds at most 4096 queued messages and 4 MiB of their bodies, and a handler that throws closes its session. Queued work can still run after the socket closes, so the owner that drains a session's queue also runs its close cleanup on that thread, as AzerothCore's `WorldSession::Update` does.
+- The login server's table lives in `apps/loginserver/Server`. The game server's table arrives with its sessions in milestone 4.01, and the patch server's with its TCP service in 16.04, both on the same `MessageHandlerTable`.
 
 ### Database pools
 

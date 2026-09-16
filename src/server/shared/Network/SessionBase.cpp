@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the KI session handshake and keepalives on the socket's network thread, queues DML frames that arrive before SessionAccept, and closes on mismatched ids or silence.
+ * Runs the KI session handshake and keepalives on the socket's network thread, queues DML frames that arrive before SessionAccept, closes on mismatched ids, silence or too many strikes, and holds inbound work for the app to drain.
  */
 
 #include "SessionBase.h"
@@ -8,6 +8,9 @@
 #include "Log.h"
 
 #include <fmt/format.h>
+
+#include <algorithm>
+#include <iterator>
 
 namespace
 {
@@ -26,7 +29,7 @@ namespace
 }
 
 SessionBase::SessionBase(asio::ip::tcp::socket&& socket, FrameLimits limits, std::shared_ptr<SessionContext> context)
-    : Socket(std::move(socket), limits), _context(std::move(context)), _acceptTimer(GetExecutor()), _keepAliveTimer(GetExecutor()), _keepAliveResponseTimer(GetExecutor())
+    : Socket(std::move(socket), limits), _context(std::move(context)), _dropBudget(_context->GetSettings().DroppedMessageBurst, _context->GetSettings().DroppedMessagesPerSecond), _acceptTimer(GetExecutor()), _keepAliveTimer(GetExecutor()), _keepAliveResponseTimer(GetExecutor())
 {
     if (std::optional<uint16> const id = _context->AllocateId())
         _sessionId = *id;
@@ -54,6 +57,82 @@ void SessionBase::OnAccepted()
 
 void SessionBase::OnSessionClosed()
 {
+}
+
+bool SessionBase::AddStrike(std::string_view reason)
+{
+    uint32 const strikes = _strikes.fetch_add(1, std::memory_order_relaxed) + 1;
+    uint32 const limit = _context->GetSettings().MaxStrikes;
+    if (strikes < limit)
+    {
+        LOG_DEBUG(SessionLog, "Session {} strike {} of {}: {}", _sessionId, strikes, limit, reason);
+        return true;
+    }
+    Kick(fmt::format("strike {} of {}, the last for {}", strikes, limit, reason));
+    return false;
+}
+
+bool SessionBase::AllowDropLog()
+{
+    std::lock_guard const lock(_dropMutex);
+    return _dropBudget.TryConsume();
+}
+
+void SessionBase::Kick(std::string_view reason)
+{
+    if (_kicked.exchange(true, std::memory_order_relaxed))
+        return;
+    LOG_WARN(SessionLog, "Closing session {} from {}:{}: {}", _sessionId, GetRemoteAddress().to_string(), GetRemotePort(), reason);
+    CloseSocket();
+}
+
+bool SessionBase::QueueInbound(std::function<void()> work, std::size_t bytes)
+{
+    std::size_t waiting = 0;
+    std::size_t waitingBytes = 0;
+    {
+        std::lock_guard const lock(_inboundMutex);
+        waiting = _inbound.size();
+        waitingBytes = _inboundBytes;
+        if (waiting < MaxQueuedMessages && waitingBytes + bytes <= MaxQueuedBytes && !IsKicked())
+        {
+            _inbound.emplace_back(std::move(work), bytes);
+            _inboundBytes += bytes;
+            return true;
+        }
+    }
+    if (!IsKicked())
+        Kick(fmt::format("{} messages of {} bytes were already waiting to be processed", waiting, waitingBytes));
+    return false;
+}
+
+std::size_t SessionBase::ProcessQueuedMessages(std::size_t limit)
+{
+    std::deque<std::pair<std::function<void()>, std::size_t>> batch;
+    {
+        std::lock_guard const lock(_inboundMutex);
+        std::size_t const count = std::min(limit, _inbound.size());
+        auto const end = _inbound.begin() + static_cast<std::ptrdiff_t>(count);
+        batch.assign(std::make_move_iterator(_inbound.begin()), std::make_move_iterator(end));
+        _inbound.erase(_inbound.begin(), end);
+        for (auto const& entry : batch)
+            _inboundBytes -= entry.second;
+    }
+    std::size_t processed = 0;
+    for (auto& entry : batch)
+    {
+        if (!IsOpen() || IsKicked())
+            break;
+        entry.first();
+        ++processed;
+    }
+    return processed;
+}
+
+std::size_t SessionBase::GetQueuedMessageCount() const
+{
+    std::lock_guard const lock(_inboundMutex);
+    return _inbound.size();
 }
 
 void SessionBase::SendDml(uint8 serviceId, uint8 order, std::span<uint8 const> body)
@@ -88,6 +167,8 @@ void SessionBase::OnStart()
 
 void SessionBase::OnFrame(Frame& frame)
 {
+    if (IsKicked())
+        return;
     _lastInbound = std::chrono::steady_clock::now();
     if (frame.IsControl)
     {
@@ -115,6 +196,11 @@ void SessionBase::OnClose()
     _keepAliveResponseTimer.cancel();
     _pendingFrames.clear();
     _pendingBytes = 0;
+    {
+        std::lock_guard const lock(_inboundMutex);
+        _inbound.clear();
+        _inboundBytes = 0;
+    }
     if (_sessionId != 0 && !_idReleased)
     {
         _idReleased = true;
@@ -176,7 +262,7 @@ void SessionBase::HandleAccept(Frame const& frame)
     LOG_INFO(SessionLog, "Session {} accepted by {}:{} after {} ms", _sessionId, GetRemoteAddress().to_string(), GetRemotePort(), roundTrip);
 
     OnAccepted();
-    while (IsOpen() && !_pendingFrames.empty())
+    while (IsOpen() && !IsKicked() && !_pendingFrames.empty())
     {
         Frame pending = std::move(_pendingFrames.front());
         _pendingFrames.pop_front();
@@ -239,7 +325,7 @@ void SessionBase::DispatchDml(Frame& frame)
     for (DmlMessageData& message : messages)
     {
         OnMessage(message);
-        if (!IsOpen())
+        if (!IsOpen() || IsKicked())
             return;
     }
 }

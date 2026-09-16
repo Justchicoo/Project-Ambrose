@@ -1,6 +1,9 @@
 # Project Ambrose by Imjustchico
-# Builds client_tests, which read the user's own client install and carry the CTest label client.
+# Builds client_tests, which read the user's own client install and carry the CTest label client, including the login message table check when the login library is built.
 file(GLOB client_test_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+if(NOT TARGET login)
+    list(FILTER client_test_sources EXCLUDE REGEX "LoginMessageTableClientTest")
+endif()
 add_executable(client_tests ${client_test_sources} "${CMAKE_CURRENT_SOURCE_DIR}/../Main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../mocks/MessageRoundTrip.cpp")
 
 target_include_directories(client_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../mocks")
@@ -10,6 +13,10 @@ target_link_libraries(client_tests
         ambrose-compile-options
         shared
         GTest::gmock)
+
+if(TARGET login)
+    target_link_libraries(client_tests PRIVATE login)
+endif()
 
 gtest_discover_tests(client_tests
     DISCOVERY_MODE PRE_TEST
