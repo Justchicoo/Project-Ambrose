@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Streams a type dump through a JSON SAX handler that keeps only the fields the schema needs and refuses a known field of the wrong JSON type, then validates versions, duplicates, hashes, property ids, 32-bit option values, base chains, defaults and classes that hold themselves inline, measures the memory each default object takes, checks inherited properties keep their ids and containers, binds the typed views, collapses pointer and SharedPointer aliases into their classes, matching unprefixed template names before inventing a class, classifies classes and property types, indexes enum options, and reports every problem with the class and property it belongs to.
+ * Streams a type dump through a JSON SAX handler that keeps only the fields the schema needs and refuses a known field of the wrong JSON type, then validates versions, duplicates, hashes, property ids, 32-bit option values, base chains, defaults and classes that hold themselves inline, measures the memory, object count and depth each default object takes, checks inherited properties keep their ids and containers, binds the typed views, collapses pointer and SharedPointer aliases into their classes, matching unprefixed template names before inventing a class, classifies classes and property types, indexes enum options, and reports every problem with the class and property it belongs to.
  */
 
 #include "TypeDumpLoader.h"
@@ -828,12 +828,21 @@ TypeCatalogPtr TypeCatalogBuilder::Build(TypeDumpLoader::RawDump dump, std::stri
     {
         ClassInfo& type = const_cast<ClassInfo&>(*done);
         type.DefaultBytes = sizeof(PropertyObject);
+        type.DefaultObjects = 1;
+        type.DefaultDepth = 1;
         for (PropertyInfo& property : type.Properties)
         {
             if (property.Container != ContainerKind::Static || property.Pointer)
                 property.DefaultBytes = 0;
             else if (property.Kind == ValueKind::Object)
+            {
                 property.DefaultBytes = property.Type ? property.Type->DefaultBytes : 0;
+                if (property.Type)
+                {
+                    type.DefaultObjects = static_cast<uint32>(std::min<uint64>(uint64{ type.DefaultObjects } + property.Type->DefaultObjects, std::numeric_limits<uint32>::max()));
+                    type.DefaultDepth = std::max(type.DefaultDepth, property.Type->DefaultDepth + 1);
+                }
+            }
             else if (std::string const* const text = property.DefaultValue.GetIf<std::string>())
                 property.DefaultBytes = text->size();
             else if (std::u16string const* const wide = property.DefaultValue.GetIf<std::u16string>())

@@ -74,7 +74,7 @@ TEST(CompactCodecClientTest, CapturedSamplesDecodeExactlyAndReencodeByteForByte)
             bytes = std::move(unwrapped.Data);
         }
 
-        DecodeResult const decoded = ObjectSerializer::DecodeCompact(catalog, bytes);
+        DecodeResult const decoded = ObjectSerializer::Decode(catalog, bytes);
         if (!decoded.Ok())
         {
             ADD_FAILURE() << stem << ": " << ObjectSerializer::GetStatusName(decoded.Status) << ": " << decoded.Detail;
@@ -83,7 +83,7 @@ TEST(CompactCodecClientTest, CapturedSamplesDecodeExactlyAndReencodeByteForByte)
         ASSERT_TRUE(decoded.Object) << stem;
         EXPECT_EQ(decoded.BytesRead, bytes.size()) << stem;
 
-        EncodeResult const encoded = ObjectSerializer::EncodeCompact(decoded.Object.get());
+        EncodeResult const encoded = ObjectSerializer::Encode(decoded.Object.get());
         ASSERT_TRUE(encoded.Ok()) << stem << ": " << encoded.Detail;
         EXPECT_TRUE(encoded.Bytes == bytes) << stem << " re-encodes to " << encoded.Bytes.size() << " bytes instead of the " << bytes.size() << " it was read from";
         checked[decoded.Object->GetClass().Name].insert(bytes.size());
@@ -123,8 +123,8 @@ TEST(CompactCodecClientTest, EveryPropertyClassRoundTripsWithItsDefaults)
         {
             SerializerOptions options;
             options.Mask = mask;
-            EncodeResult const encoded = ObjectSerializer::EncodeCompact(object.get(), options);
-            DecodeResult const decoded = encoded.Ok() ? ObjectSerializer::DecodeCompact(catalog, encoded.Bytes, options) : DecodeResult{};
+            EncodeResult const encoded = ObjectSerializer::Encode(object.get(), options);
+            DecodeResult const decoded = encoded.Ok() ? ObjectSerializer::Decode(catalog, encoded.Bytes, options) : DecodeResult{};
             if (!encoded.Ok() || !decoded.Ok() || !decoded.Object || !(*decoded.Object == *object))
             {
                 if (++failures <= 20)

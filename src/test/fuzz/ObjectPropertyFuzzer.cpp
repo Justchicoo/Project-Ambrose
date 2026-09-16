@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The libFuzzer target for the compact ObjectProperty decoder: the first input byte picks text enums, trailing bytes and whether the rest is an enveloped message field, the rest is decoded against the fuzz corpus catalog under tight limits, and anything that decodes must re-encode and decode back equal; the corpus seeds, each with its mode byte, are written into the first corpus folder named on the command line.
+ * The libFuzzer target for the ObjectProperty decoder: the first input byte picks text enums, trailing bytes, whether the rest is an enveloped message field, the versionable format and compact lengths, the rest is decoded against the fuzz corpus catalog under tight limits, and anything that decodes must re-encode and decode back equal; the corpus seeds, each with its mode byte, are written into the first corpus folder named on the command line.
  */
 
 #include "ObjectFuzzCorpus.h"

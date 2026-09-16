@@ -109,7 +109,7 @@ TEST(ObjectFieldTest, EnvelopedFieldsRoundTripAndRefuseBadEnvelopes)
 
     EncodeResult const wrapped = ObjectSerializer::EncodeField(field, badges.get());
     ASSERT_TRUE(wrapped.Ok()) << wrapped.Detail;
-    EncodeResult const plain = ObjectSerializer::EncodeCompact(badges.get());
+    EncodeResult const plain = ObjectSerializer::Encode(badges.get());
     ASSERT_TRUE(plain.Ok()) << plain.Detail;
     EXPECT_NE(wrapped.Bytes, plain.Bytes);
     DecodeResult const decoded = ObjectSerializer::DecodeField(catalog, field, wrapped.Bytes);
@@ -139,12 +139,12 @@ TEST(ObjectFieldTest, FieldsHoldTheirRootToAllowedClassesAndRequireOne)
 
     EncodeResult const encoded = ObjectSerializer::EncodeField(field, creation.get());
     ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
-    EXPECT_EQ(encoded.Bytes, ObjectSerializer::EncodeCompact(creation.get()).Bytes);
+    EXPECT_EQ(encoded.Bytes, ObjectSerializer::Encode(creation.get()).Bytes);
     DecodeResult const decoded = ObjectSerializer::DecodeField(catalog, field, encoded.Bytes);
     ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
     EXPECT_TRUE(*decoded.Object == *creation);
 
-    DecodeResult const wrong = ObjectSerializer::DecodeField(catalog, field, ObjectSerializer::EncodeCompact(badges.get()).Bytes);
+    DecodeResult const wrong = ObjectSerializer::DecodeField(catalog, field, ObjectSerializer::Encode(badges.get()).Bytes);
     EXPECT_EQ(wrong.Status, SerializerStatus::WrongClass);
     EXPECT_EQ(wrong.Detail, "MSG_CREATECHARACTER.CreationInfo: the object names class BadgeInfoList, which is not a class allowed here");
     DecodeResult const missing = ObjectSerializer::DecodeField(catalog, field, std::vector<uint8>{ 0, 0, 0, 0 });
@@ -188,6 +188,6 @@ TEST(ObjectFieldTest, LimitsLoadFromConfigurationClampedAndApplyToNewOptions)
     ASSERT_TRUE(catalog);
     PropertyObjectPtr const badges = MakeBadges(catalog);
     ASSERT_TRUE(badges);
-    DecodeResult const limited = ObjectSerializer::DecodeCompact(catalog, ObjectSerializer::EncodeCompact(badges.get()).Bytes);
+    DecodeResult const limited = ObjectSerializer::Decode(catalog, ObjectSerializer::Encode(badges.get()).Bytes);
     EXPECT_EQ(limited.Status, SerializerStatus::TooManyObjects);
 }

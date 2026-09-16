@@ -1,11 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Extracts bits least significant bit first and latches failure instead of reading out of bounds.
+ * Extracts bits least significant bit first and latches failure instead of reading past the data or the current bit limit.
  */
 
 #include "BitReader.h"
 
-BitReader::BitReader(std::span<uint8 const> data) : _data(data)
+BitReader::BitReader(std::span<uint8 const> data) : _data(data), _limit(data.size() * 8)
 {
 }
 
@@ -77,10 +77,15 @@ void BitReader::Realign()
 
 void BitReader::SeekBit(std::size_t bitPosition)
 {
-    if (bitPosition > GetBitSize())
+    if (bitPosition > _limit)
     {
         _failed = true;
         return;
     }
     _bitPosition = bitPosition;
+}
+
+void BitReader::SetLimit(std::size_t bitLimit) noexcept
+{
+    _limit = std::min(bitLimit, GetBitSize());
 }

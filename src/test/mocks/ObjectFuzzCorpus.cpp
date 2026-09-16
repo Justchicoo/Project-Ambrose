@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Writes the fuzz catalog as a format v2 type dump and loads it; encodes a tree with plain, derived, null, pointer and inline children and a richly typed leaf, each with and without text enums, bare and inside stored and compressed envelopes, as the seeds; decodes an input by its mode under tight limits; and checks a decode is refused cleanly or re-encodes and decodes back equal.
+ * Writes the fuzz catalog as a format v2 type dump, with a save-only and a deprecated property no mask selects, and loads it; encodes a tree with plain, derived, null, pointer and inline children and a richly typed leaf, each with and without text enums, bare and inside stored and compressed envelopes, and with compact lengths, versionable, and versionable with compact lengths and text enums, as the seeds; decodes an input by its mode under tight limits; and checks a decode is refused cleanly or re-encodes and decodes back equal.
  */
 
 #include "ObjectFuzzCorpus.h"
@@ -20,6 +20,8 @@ namespace
     constexpr uint32 Wire = 1 | 2 | 8 | 16;
     constexpr uint32 Dirty = Wire | 256;
     constexpr uint32 WireBits = Wire | (uint32{ 1 } << 20);
+    constexpr uint32 SaveOnly = 1;
+    constexpr uint32 Deprecated = Wire | 64;
 
     Json Property(std::string const& type, std::string const& name, uint32 id, uint32 flags = Wire, std::string container = "Static")
     {
@@ -50,6 +52,8 @@ namespace
         Json mask = Property("enum FuzzMask", "m_mask", 9, WireBits);
         mask["enum_options"] = Json{ { "A", 1 }, { "B", 2 }, { "AB", 3 } };
         leaf["m_mask"] = mask;
+        leaf["m_secret"] = Property("int", "m_secret", 10, SaveOnly);
+        leaf["m_old"] = Property("float", "m_old", 11, Deprecated);
         return leaf;
     }
 
@@ -72,7 +76,7 @@ namespace
         bool const complete = Set(*leaf, "m_flag", seed % 2 == 0) && Set(*leaf, "m_small", int32{ seed % 16 - 8 }) && Set(*leaf, "m_tiny", static_cast<uint32>(seed % 8))
             && Set(*leaf, "m_name", std::string(static_cast<std::size_t>(seed % 7), 'n')) && Set(*leaf, "m_title", std::u16string(static_cast<std::size_t>(seed % 5), u'w'))
             && Set(*leaf, "m_mood", int64{ seed % 2 == 0 ? 4 : 0 }) && Set(*leaf, "m_wide", int32{ -seed * 1000 }) && Set(*leaf, "m_values", std::move(values))
-            && Set(*leaf, "m_flags", std::move(flags)) && Set(*leaf, "m_mask", int64{ seed % 4 });
+            && Set(*leaf, "m_flags", std::move(flags)) && Set(*leaf, "m_mask", int64{ seed % 4 }) && Set(*leaf, "m_secret", int32{ seed }) && Set(*leaf, "m_old", static_cast<float>(seed));
         return complete ? std::move(leaf) : nullptr;
     }
 }
@@ -86,21 +90,21 @@ TypeCatalogPtr ObjectFuzzCorpus::LoadCatalog(std::string& error)
     AddClass(classes, "class FuzzLeaf", Json::array({ "PropertyClass" }), LeafProperties());
 
     Json rich = LeafProperties();
-    rich["m_position"] = Property("class Vector3D", "m_position", 10);
-    rich["m_rotation"] = Property("class Quaternion", "m_rotation", 11);
-    rich["m_tint"] = Property("class Color", "m_tint", 12);
-    rich["m_angles"] = Property("class Euler", "m_angles", 13);
-    rich["m_matrix"] = Property("class Matrix3x3", "m_matrix", 14);
-    rich["m_point"] = Property("class Point<int>", "m_point", 15);
-    rich["m_pointF"] = Property("class Point<float>", "m_pointF", 16);
-    rich["m_size"] = Property("class Size<int>", "m_size", 17);
-    rich["m_rect"] = Property("class Rect<int>", "m_rect", 18);
-    rich["m_rectF"] = Property("class Rect<float>", "m_rectF", 19);
-    rich["m_id"] = Property("gid", "m_id", 20);
-    rich["m_ratio"] = Property("double", "m_ratio", 21);
-    rich["m_letter"] = Property("wchar_t", "m_letter", 22);
-    rich["m_unsigned"] = Property("u24", "m_unsigned", 23);
-    rich["m_shorts"] = Property("unsigned short", "m_shorts", 24, Wire, "List");
+    rich["m_position"] = Property("class Vector3D", "m_position", 12);
+    rich["m_rotation"] = Property("class Quaternion", "m_rotation", 13);
+    rich["m_tint"] = Property("class Color", "m_tint", 14);
+    rich["m_angles"] = Property("class Euler", "m_angles", 15);
+    rich["m_matrix"] = Property("class Matrix3x3", "m_matrix", 16);
+    rich["m_point"] = Property("class Point<int>", "m_point", 17);
+    rich["m_pointF"] = Property("class Point<float>", "m_pointF", 18);
+    rich["m_size"] = Property("class Size<int>", "m_size", 19);
+    rich["m_rect"] = Property("class Rect<int>", "m_rect", 20);
+    rich["m_rectF"] = Property("class Rect<float>", "m_rectF", 21);
+    rich["m_id"] = Property("gid", "m_id", 22);
+    rich["m_ratio"] = Property("double", "m_ratio", 23);
+    rich["m_letter"] = Property("wchar_t", "m_letter", 24);
+    rich["m_unsigned"] = Property("u24", "m_unsigned", 25);
+    rich["m_shorts"] = Property("unsigned short", "m_shorts", 26, Wire, "List");
     AddClass(classes, "class FuzzRich", Json::array({ "FuzzLeaf", "PropertyClass" }), rich);
 
     Json tree = Json::object();
@@ -143,15 +147,17 @@ std::vector<ObjectFuzzCorpus::Seed> ObjectFuzzCorpus::MakeSeeds(TypeCatalogPtr c
     if (!richComplete || !branchComplete || !rootComplete || !leaf)
         return seeds;
 
-    for (uint8 const mode : { uint8{ 0 }, TextEnums })
+    for (uint8 const mode : { uint8{ 0 }, TextEnums, CompactLengths, Versionable, static_cast<uint8>(Versionable | CompactLengths | TextEnums) })
     {
         SerializerOptions const options = MakeOptions(mode);
         for (PropertyObject const* object : { root.get(), leaf.get() })
         {
-            EncodeResult encoded = ObjectSerializer::EncodeCompact(object, options);
+            EncodeResult encoded = ObjectSerializer::Encode(object, options);
             if (!encoded.Ok())
                 continue;
             seeds.push_back(Seed{ mode, encoded.Bytes });
+            if (mode != 0 && mode != TextEnums)
+                continue;
             seeds.push_back(Seed{ static_cast<uint8>(mode | Enveloped), BlobEnvelope::Wrap(encoded.Bytes, BlobEnvelope::Packing::Store) });
             seeds.push_back(Seed{ static_cast<uint8>(mode | Enveloped), BlobEnvelope::Wrap(encoded.Bytes, BlobEnvelope::Packing::Compress) });
         }
@@ -169,7 +175,12 @@ ObjectField const& ObjectFuzzCorpus::GetEnvelopedField() noexcept
 SerializerOptions ObjectFuzzCorpus::MakeOptions(uint8 mode)
 {
     SerializerOptions options;
-    options.Flags = (mode & TextEnums) != 0 ? SerializerFlag::StringEnums : SerializerFlag::None;
+    options.Flags = SerializerFlag::None;
+    if ((mode & TextEnums) != 0)
+        options.Flags |= SerializerFlag::StringEnums;
+    if ((mode & CompactLengths) != 0)
+        options.Flags |= SerializerFlag::CompactLength;
+    options.Versionable = (mode & Versionable) != 0;
     options.AllowTrailingBytes = (mode & AllowTrailing) != 0;
     SerializerLimits& limits = options.Limits.emplace();
     limits.MaxDepth = 16;
@@ -185,7 +196,7 @@ DecodeResult ObjectFuzzCorpus::Decode(TypeCatalogPtr const& catalog, uint8 mode,
     SerializerOptions const options = MakeOptions(mode);
     if ((mode & Enveloped) != 0)
         return ObjectSerializer::DecodeField(catalog, GetEnvelopedField(), bytes, options);
-    return ObjectSerializer::DecodeCompact(catalog, bytes, options);
+    return ObjectSerializer::Decode(catalog, bytes, options);
 }
 
 std::string ObjectFuzzCorpus::CheckDecoded(TypeCatalogPtr const& catalog, uint8 mode, std::span<uint8 const> bytes, DecodeResult const& decoded)
@@ -204,7 +215,7 @@ std::string ObjectFuzzCorpus::CheckDecoded(TypeCatalogPtr const& catalog, uint8 
         return {};
     SerializerOptions const options = MakeOptions(mode);
     bool const enveloped = (mode & Enveloped) != 0;
-    EncodeResult const encoded = enveloped ? ObjectSerializer::EncodeField(GetEnvelopedField(), decoded.Object.get(), options) : ObjectSerializer::EncodeCompact(decoded.Object.get(), options);
+    EncodeResult const encoded = enveloped ? ObjectSerializer::EncodeField(GetEnvelopedField(), decoded.Object.get(), options) : ObjectSerializer::Encode(decoded.Object.get(), options);
     if (!encoded.Ok())
         return "a decoded object did not encode: " + encoded.Detail;
     DecodeResult const again = Decode(catalog, static_cast<uint8>(mode & ~AllowTrailing), encoded.Bytes);

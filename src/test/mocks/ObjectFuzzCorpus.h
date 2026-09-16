@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A small type catalog of invented classes covering every value layout, list, pointer, inline and derived object the compact codec handles, seed inputs made of a mode byte and a golden blob, plain, with text enums or inside a stored or compressed envelope, and the decode and round-trip check shared by the decoder fuzz test and the libFuzzer target.
+ * A small type catalog of invented classes covering every value layout, list, pointer, inline and derived object the codec handles, seed inputs made of a mode byte and a golden blob, plain, with text enums, with compact lengths, versionable, or inside a stored or compressed envelope, and the decode and round-trip check shared by the decoder fuzz test and the libFuzzer target.
  */
 
 #ifndef AMBROSE_OBJECTFUZZCORPUS_H
@@ -17,6 +17,9 @@ namespace ObjectFuzzCorpus
     inline constexpr uint8 TextEnums = 1;
     inline constexpr uint8 AllowTrailing = 2;
     inline constexpr uint8 Enveloped = 4;
+    inline constexpr uint8 Versionable = 8;
+    inline constexpr uint8 CompactLengths = 16;
+    inline constexpr uint8 ModeBits = 5;
 
     struct Seed
     {

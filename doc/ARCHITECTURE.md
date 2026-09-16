@@ -202,28 +202,43 @@ Settled on 2026-09-16 under the maintainer's standing direction to decide.
 - Equality and cloning are deep and exact. Floating values compare by bit pattern, so an object holding a NaN equals its clone, and 0.0 differs from -0.0.
 - An enum value renders as its option name. A Bits value renders as an exact option name, or else as every nonzero option, in dump order, whose bits it holds and no earlier chosen option covered, joined by `|`; multi-bit options are included, and a duplicate value keeps its first name. A value with bits no option names does not render as a name, and a caller shows the number instead.
 
-### Compact ObjectProperty codec
+### ObjectProperty codec
 
-Settled on 2026-09-16 under the maintainer's standing direction to decide. The layout below reproduces every captured badge blob byte for byte, but those blobs use only class hashes, `int`, `unsigned int`, `bool`, `std::string` and lists of pointers; every other layout follows the reference implementation and is pinned by golden-bytes tests until a capture confirms it.
+Settled on 2026-09-16 under the maintainer's standing direction to decide. The compact layout below reproduces every captured badge blob byte for byte, but those blobs use only class hashes, `int`, `unsigned int`, `bool`, `std::string` and lists of pointers. The versionable layout decodes the client's own data files, which exercise far more types. Every layout neither source confirms follows the reference implementation and is pinned by golden-bytes tests.
 
-- `ObjectSerializer::EncodeCompact` and `DecodeCompact` handle the compact format the client uses inside messages. Every object starts with its u32 class hash, 0 for null, inline objects included. Its properties follow in id order with no headers. A property is written when its flags hold every bit of the mask and it is not deprecated. `TransmitMask` is the default, and `PublicMask` adds Public for views of other players.
+- `ObjectSerializer::Encode` and `Decode` handle both formats. `SerializerOptions::Versionable` picks between them; the default is the compact format the client uses inside messages. Every object starts with its u32 class hash, 0 for null, inline objects included. Its properties follow in id order with no headers. A property is written when its flags hold every bit of the mask and it is not deprecated. `TransmitMask` is the default, and `PublicMask` adds Public for views of other players.
 - The wire layout:
   - bits pack least significant bit first, and a byte-aligned value starts on the next whole byte;
   - a bool is one bit, a bit field its width, and s24/u24 24 bits;
   - integers and floats are little-endian;
   - a string is a u16 byte length and its bytes, and a wide string is a u16 unit count and UTF-16LE units;
   - a list is a u32 count and its elements;
-  - an enum is a u32, or its option name as a string when `StringEnums` is set;
+  - with `CompactLength`, every string length, wide string count and list count is instead one bit, then 7 bits for a length under 128 or 31 bits otherwise, and the bytes that follow start on the next whole byte;
+  - an enum is a u32, or its option name as a string when `StringEnums` is set, and `StringEnums` carries int and unsigned int properties with the Bits or Enum flag the same way, with Bits values written as option names joined by `|`;
   - a value type is its fields in order.
-- A DirtyEncode property carries a present bit first. The encoder sets it unless `IsDirty` says the property is clean and `ForceDirtyEncode` is off. A property marked absent decodes to its default.
+- The versionable format, which BINd files use, frames everything with sizes in bits:
+  - an object is its u32 class hash, 0 for null, then a u32 size counted from that size field, then its properties in any order;
+  - a property is a u32 size, a u32 property hash and its value, and its size counts from where the previous property ended, before the size realigns to a byte;
+  - properties are written and read only when the mask selects them, as in the compact format;
+  - a DirtyEncode property carries no present bit: the writer leaves it out when `IsDirty` calls it clean and `ForceDirtyEncode` is off, and a property left out decodes to its default.
+  A property the class does not list, the mask does not select, or that is deprecated is skipped by its size, and so is an object of a class the dump does not list. The object becomes null in a pointer slot and a default object of the property's class in an inline slot. A value is read inside a bit limit at its property's end. Some values keep their default, or the value an earlier copy of the same property gave them:
+  - a value that would run past that end, including a list count the bits left cannot hold;
+  - a value with no known layout, or that names no enum option;
+  - an object of the wrong class, or a null inline object.
+  A value that ends early keeps what it read. Every one of these is reported in `DecodeResult::Issues` with its kind, hash, the bits skipped and its property path, and decoding resumes at the property's end. An unknown root class is refused, and so is a list count that fits but exceeds `MaxContainerCount`. So is an object or property size that cannot fit in the object or data holding it, with `BadSize`, by the object it belongs to. A property whose nested object is refused that way reports a size mismatch instead, so one bad object costs only its property. Every property size covers at least its header, so a zero size can never loop. A default inline object that a written property takes counts toward the depth and object limits through the depth and object count the loader measures for each class's default object, so anything that decodes can be encoded and decoded again under the same limits. Checked on r806919 with scratch sweeps over Root.wad before the rules were committed:
+  - with the Save mask, 134,635 of the 134,640 BINd files decode with no size mismatch, unknown or unselected property, unknown enum name, invalid object or unsupported value;
+  - 26,921 nested objects of classes the dump does not list are reported, and the other 5 files have a root class it does not list;
+  - the files leave out DirtyEncode properties at their default values. Re-encoding the 114,687 files that decode without issues, with clean meaning equal to the default, reproduces 114,342 byte for byte under the Save, Save and Copy, Save and Public, or all three masks. The rest hold a DirtyEncode property at its default, and no mask without those bits reproduces as many.
+  Milestone 3.11 makes the sweep a client test.
+- A DirtyEncode property carries a present bit first in the compact format. The encoder sets it unless `IsDirty` says the property is clean and `ForceDirtyEncode` is off. A property marked absent decodes to its default.
 - The captures carry plain class hashes. An alias hash decodes to its class and re-encodes as the plain hash.
 - What no capture has confirmed yet:
   - whether an inline object carries a hash on the wire (the codec writes one, as the reference does);
   - DirtyEncode, which no sample exercises;
   - wide strings, `char`, `short`, `unsigned short`, `unsigned char`, `__int64`, gid, `float`, `double`, `wchar_t`, bit fields, s24/u24 and enums, in both forms;
   - every value type, including Color's byte order (kept as red, green, blue, alpha), Euler, and Matrix3x3 as nine floats.
-  The character creation and list milestones exercise wide strings, bit fields, enums and small integers against the real client, and their captures confirm or correct these layouts.
-- Refused as unsupported: `CompactLength`, because no sample verifies it and the reference's own writer drops string bytes in that mode; `SerializeFlags` and `Compress`, because `BlobEnvelope` wraps blobs; and SerializedBuffer, SimpleVert and SimpleFace values, whose layout is not known.
+  The character creation and list milestones exercise wide strings, bit fields, enums and small integers against the real client, and their captures confirm or correct these layouts. The client's data files confirm char, short, unsigned __int64, double, gid, float, wchar_t, bit fields, u24, `Point<int>`, `Size<int>`, `Rect<float>`, compact lengths and text enums and flags in the versionable format. No data file holds a Matrix3x3, Euler, Quaternion or SerializedBuffer value.
+- Refused as unsupported: `SerializeFlags` and `Compress`, because they frame a whole blob or file, which `BlobEnvelope` wraps for messages and 3.11's `BindFile` reads for data files; and SerializedBuffer, SimpleVert and SimpleFace values, whose layout is not known.
 - A decode trusts nothing:
   - depth, object count and list length have limits, and depth never exceeds a ceiling of 128 whatever the setting, so a decode cannot exhaust a thread's stack;
   - every object, list element, default value and string is charged against a memory budget, 16 MiB by default, before it is allocated. Each class's default object size is measured once when the type dump loads, so a small blob naming a large class cannot grow into hundreds of megabytes;
@@ -236,7 +251,7 @@ Settled on 2026-09-16 under the maintainer's standing direction to decide. The l
   Every failure names the property path it happened at, such as `class BadgeInfoList.m_badges[2]`. Running out of memory anyway is reported as a status rather than thrown. Decoded objects are filled directly through a key only the serializer holds, and properties the mask skips take their defaults.
 - The limits are live settings: `ObjectProperty.MaxDepth`, `MaxObjects`, `MaxContainerCount`, `MaxDecodedBytes` and `MaxInflatedSize`. `SerializerLimits::Load` reads them from configuration, clamping out-of-range values and reporting each one. `SerializerLimits::Apply` publishes them as a snapshot. Each decode or encode whose options carry no limits of their own reads the snapshot when it starts, through a per-thread copy refreshed only when a generation counter changes. A reload therefore applies to the next decode, even through options kept from before it, and decoding threads never contend on a shared count.
 - Message fields that carry objects are described in one table, `ObjectFields`: the classes each field's object may be, whether its blob is enveloped, and whether it may be empty. `DecodeField` opens the envelope within `MaxInflatedSize` and holds the root to the field's classes. `EncodeField` refuses an object the field cannot carry and wraps the blob when the field is enveloped. The table is code because it describes how a client revision parses its messages, and it changes only with the revision.
-- Decoders of untrusted data are fuzzed two ways. Both share seeds made of a mode byte and a golden blob, bare, with text enums, or inside a stored or compressed envelope decoded through `DecodeField`. `DecoderFuzzTest` runs seeded mutations in every build, a million under AddressSanitizer, and checks that no decode allocates more in total than the memory budget and inflation limit allow. The `linux-clang-fuzz` preset builds libFuzzer targets with coverage instrumentation, AddressSanitizer and UBSan, and CI runs each from its seed corpus. Anything that decodes must re-encode and decode back equal.
+- Decoders of untrusted data are fuzzed two ways. Both share seeds made of a mode byte and a golden blob: bare, with text enums, with compact lengths, versionable with and without both, or inside a stored or compressed envelope decoded through `DecodeField`. `DecoderFuzzTest` runs seeded mutations in every build, a million under AddressSanitizer, and checks that no decode allocates more in total than the memory budget and inflation limit allow. The `linux-clang-fuzz` preset builds libFuzzer targets with coverage instrumentation, AddressSanitizer and UBSan, and CI runs each from its seed corpus. Anything that decodes must re-encode and decode back equal.
 
 ### Typed views
 

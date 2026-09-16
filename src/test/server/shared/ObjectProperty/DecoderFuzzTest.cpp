@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Feeds seeded random mutations of the fuzz corpus's seeds, bare and enveloped, to the decoder, a million in AddressSanitizer builds and a hundred thousand otherwise unless AMBROSE_FUZZ_ITERATIONS says, and checks every one either decodes to an object that re-encodes and decodes back equal or is refused, never reading past its input, making an allocation larger than the limits allow or allocating more in total than the memory budget and inflation limit allow, plus a list that would outgrow the budget refused before it allocates and a huge list count in a 10-byte blob refused before anything is allocated.
+ * Feeds seeded random mutations of the fuzz corpus's seeds, compact and versionable, with fixed or compact lengths, bare and enveloped, to the decoder, a million in AddressSanitizer builds and a hundred thousand otherwise unless AMBROSE_FUZZ_ITERATIONS says, and checks every one either decodes to an object that re-encodes and decodes back equal or is refused, never reading past its input, making an allocation larger than the limits allow or allocating more in total than the memory budget and inflation limit allow, plus a list that would outgrow the budget refused before it allocates and a huge list count in a 10-byte blob refused before anything is allocated.
  */
 
 #include "AllocationCounter.h"
@@ -39,7 +39,7 @@ namespace
         {
             ObjectFuzzCorpus::Seed input = _corpus[Pick(_corpus.size())];
             if (Pick(16) == 0)
-                input.Mode = static_cast<uint8>(input.Mode ^ (1u << Pick(3)));
+                input.Mode = static_cast<uint8>(input.Mode ^ (1u << Pick(ObjectFuzzCorpus::ModeBits)));
             std::size_t const rounds = 1 + Pick(4);
             for (std::size_t round = 0; round < rounds; ++round)
                 Mutate(input.Bytes);
@@ -134,7 +134,7 @@ TEST(DecoderFuzzTest, SeededMutationsNeverCrashAndDecodedObjectsRoundTrip)
     TypeCatalogPtr const catalog = ObjectFuzzCorpus::LoadCatalog(error);
     ASSERT_TRUE(catalog) << error;
     std::vector<ObjectFuzzCorpus::Seed> const corpus = ObjectFuzzCorpus::MakeSeeds(catalog);
-    ASSERT_EQ(corpus.size(), 12u);
+    ASSERT_EQ(corpus.size(), 18u);
     for (ObjectFuzzCorpus::Seed const& seed : corpus)
     {
         DecodeResult const decoded = ObjectFuzzCorpus::Decode(catalog, seed.Mode, seed.Bytes);
@@ -189,7 +189,7 @@ TEST(DecoderFuzzTest, ABlobThatWouldOutgrowTheBudgetIsRefusedBeforeItAllocates)
     ASSERT_EQ(leaf->Set("m_flags", PropertyValue::List(60000, PropertyValue(true))), PropertySetResult::Ok);
     SerializerOptions unlimited;
     unlimited.Limits.emplace().MaxContainerCount = 1u << 20;
-    EncodeResult const encoded = ObjectSerializer::EncodeCompact(leaf.get(), unlimited);
+    EncodeResult const encoded = ObjectSerializer::Encode(leaf.get(), unlimited);
     ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
     ASSERT_LT(encoded.Bytes.size(), 8000u);
 
@@ -199,7 +199,7 @@ TEST(DecoderFuzzTest, ABlobThatWouldOutgrowTheBudgetIsRefusedBeforeItAllocates)
     std::size_t total = 0;
     {
         AllocationScope allocations;
-        refused = ObjectSerializer::DecodeCompact(catalog, encoded.Bytes, budgeted);
+        refused = ObjectSerializer::Decode(catalog, encoded.Bytes, budgeted);
         total = allocations.GetTotal();
     }
     EXPECT_EQ(refused.Status, SerializerStatus::BudgetExceeded);
@@ -207,7 +207,7 @@ TEST(DecoderFuzzTest, ABlobThatWouldOutgrowTheBudgetIsRefusedBeforeItAllocates)
     {
         EXPECT_LE(total, budgeted.Limits->MaxDecodedBytes);
     }
-    EXPECT_TRUE(ObjectSerializer::DecodeCompact(catalog, encoded.Bytes, unlimited).Ok());
+    EXPECT_TRUE(ObjectSerializer::Decode(catalog, encoded.Bytes, unlimited).Ok());
 }
 
 TEST(DecoderFuzzTest, AHugeListCountInATinyBlobIsRefusedBeforeAllocating)
@@ -229,7 +229,7 @@ TEST(DecoderFuzzTest, AHugeListCountInATinyBlobIsRefusedBeforeAllocating)
     std::size_t largest = 0;
     {
         AllocationScope allocations;
-        decoded = ObjectSerializer::DecodeCompact(catalog, blob, unlimited);
+        decoded = ObjectSerializer::Decode(catalog, blob, unlimited);
         largest = allocations.GetLargest();
     }
     EXPECT_EQ(decoded.Status, SerializerStatus::Truncated);

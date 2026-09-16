@@ -221,7 +221,7 @@ Objects inside client messages can be decoded from and encoded to the non-versio
 - ObjectSerializer compact mode: u32 class hash (0 = null), then the class's full property list in id order with no per-property headers. A property is included only if (flags & mask) == mask and it is not Deprecated. The default mask is Transmit|AuthorityTransmit, with Public added for other-player views. Built in src/server/shared/ObjectProperty/ObjectSerializer.h/.cpp, with SerializerOptions::TransmitMask and PublicMask; the captures confirm the wire carries plain class hashes
 - Without CompactLength: strings and wstrings use u16 length, containers use u32 count, enums use u32 unless StringEnums is set, bool is 1 bit, nested objects are prefixed by class hash. Built with bits packed least significant first and byte-aligned values starting on the next byte, wide strings as a u16 unit count and UTF-16LE units, bit fields and s24/u24 at their width, and value types as their fields in order; StringEnums writes option names. CompactLength, SerializeFlags and Compress are refused as unsupported, because no sample verifies compact lengths and the envelope is BlobEnvelope's job, and SerializedBuffer, SimpleVert and SimpleFace are refused as having no known layout (no r806919 property of those types is transmitted)
 - DirtyEncode (flag bit 8) properties carry a 1-bit present prefix; the encoder always sets it unless a dirty set is supplied. Built with the dirty set as a SerializerOptions::IsDirty test, overridden by ForceDirtyEncode; a property marked absent decodes to its default
-- A symmetric API: Decode(bytes, mask, limits) -> PropertyObject and Encode(obj, mask, flags) -> bytes. Built as ObjectSerializer::DecodeCompact(catalog, bytes, options) and EncodeCompact(object, options), with options holding the mask, flags, limits (MaxDepth 64 under a hard ceiling of 128, MaxObjects 65536, MaxContainerCount 65536 and MaxDecodedBytes 16 MiB by default, made live settings in 3.06), whether trailing bytes are allowed, the classes a root may be and whether it may be null, and the dirty test. Each class's default object size is measured at load so the memory budget charges objects, list elements, defaults and strings before allocating them. Results carry a status, the bytes read and the property path a failure happened at. A count the remaining bytes cannot hold is refused before anything is allocated, and a child's class is checked as soon as its hash is read
+- A symmetric API: Decode(bytes, mask, limits) -> PropertyObject and Encode(obj, mask, flags) -> bytes. Built as ObjectSerializer::Decode(catalog, bytes, options) and Encode(object, options), with options holding the mask, flags, limits (MaxDepth 64 under a hard ceiling of 128, MaxObjects 65536, MaxContainerCount 65536 and MaxDecodedBytes 16 MiB by default, made live settings in 3.06), whether trailing bytes are allowed, the classes a root may be and whether it may be null, and the dirty test. Each class's default object size is measured at load so the memory budget charges objects, list elements, defaults and strings before allocating them. Results carry a status, the bytes read and the property path a failure happened at. A count the remaining bytes cannot hold is refused before anything is allocated, and a child's class is checked as soon as its hash is read
 - src/test/server/shared/ObjectProperty/CompactCodecTest.cpp, plus the client-gated src/test/client/CompactCodecClientTest.cpp, which round-trips a default object of all 2197 r806919 property classes with both masks and, when AMBROSE_OBJECT_SAMPLES_DIR names a folder of captured blobs named after their class, checks every capture
 
 **Acceptance**
@@ -246,7 +246,7 @@ Objects inside client messages can be decoded from and encoded to the non-versio
 
 - [x] 1M mutations under ASan/UBSan with no crash (DecoderFuzzTest in the linux-gcc-asan leg)
 - [x] Vector count 0x7FFFFFFF in a 10-byte blob rejected immediately
-- [ ] Zero versionable property size returns an error (waits for 3.10's versionable decoder)
+- [x] Zero versionable property size returns an error (VersionableDecodeTest: refused with BadSize in the object that holds it, and reported as a size mismatch by a property whose nested object holds it)
 
 ### Detailed spec from OBJ-19: Hostile-input hardening and fuzzing
 
@@ -254,7 +254,7 @@ Client-sent ObjectProperty blobs cannot crash, hang, or exhaust the server.
 
 **Deliverables**
 
-- Limits enforced in all decoders: max nesting depth, max container count (checked against remaining bits before allocating), max total objects, max inflated size, rejection of zero-sized versionable properties (infinite-loop guard). The limits are live settings with defaults and bounds (ObjectProperty.MaxDepth, ObjectProperty.MaxContainerCount, ObjectProperty.MaxObjects, ObjectProperty.MaxInflatedSize), read per decode so a change applies to the next blob (registered with 4.16 when it lands). Built as SerializerLimits::Load, clamping each option and reporting it, and SerializerLimits::Apply, which both servers call at startup; a decode whose options carry no limits reads the applied snapshot when it starts. Added ObjectProperty.MaxDecodedBytes for the memory budget 3.05 introduced. The zero-size guard arrives with 3.10's versionable decoder
+- Limits enforced in all decoders: max nesting depth, max container count (checked against remaining bits before allocating), max total objects, max inflated size, rejection of zero-sized versionable properties (infinite-loop guard). The limits are live settings with defaults and bounds (ObjectProperty.MaxDepth, ObjectProperty.MaxContainerCount, ObjectProperty.MaxObjects, ObjectProperty.MaxInflatedSize), read per decode so a change applies to the next blob (registered with 4.16 when it lands). Built as SerializerLimits::Load, clamping each option and reporting it, and SerializerLimits::Apply, which both servers call at startup; a decode whose options carry no limits reads the applied snapshot when it starts. Added ObjectProperty.MaxDecodedBytes for the memory budget 3.05 introduced. The zero-size guard arrived with 3.10's versionable decoder, which refuses any property size smaller than its own header
 - A class allow-list per message field (e.g. MSG_CREATECHARACTER.CreationInfo accepts only WizardCharacterCreationInfo). Built as ObjectFields.h/.cpp, a table naming each field's classes, whether its blob is enveloped and whether it may be empty, used by ObjectSerializer::DecodeField and EncodeField. It lists MSG_BADGES BadgeInfo and BadgeFilterInfo (enveloped), MSG_CHARACTERINFO.CharacterInfo and MSG_CREATECHARACTER.CreationInfo (unwrapped; the creation field's envelope is confirmed in 3.15)
 - src/test/server/shared/ObjectProperty/DecoderFuzzTest.cpp (seeded random mutations of synthetic golden blobs) plus a libFuzzer target where the toolchain allows. Built with the golden corpus shared in src/test/mocks/ObjectFuzzCorpus.h/.cpp; seeds carry a mode byte and include stored and compressed envelopes decoded through DecodeField; the test runs a million mutations under AddressSanitizer and a hundred thousand elsewhere (AMBROSE_FUZZ_ITERATIONS overrides), checking that anything decoded re-encodes and decodes back equal and that no decode allocates more in total than the memory budget and inflation limit allow. The libFuzzer target src/test/fuzz/ObjectPropertyFuzzer.cpp builds with AMBROSE_BUILD_FUZZERS in the linux-clang-fuzz preset, which CI runs for 500,000 inputs from the seed corpus. ObjectFieldTest covers the field rules and the limits from configuration
 
@@ -262,7 +262,7 @@ Client-sent ObjectProperty blobs cannot crash, hang, or exhaust the server.
 
 - [x] The fuzz test runs 1M mutations under ASan/UBSan with no crash and no allocation over the configured cap (DecoderFuzzTest; the linux-gcc-asan leg runs the million)
 - [x] Unit test: a vector count of 0x7FFFFFFF in a 10-byte blob is rejected immediately (DecoderFuzzTest, which also checks nothing over 4 KiB is allocated)
-- [ ] Unit test: a zero property size in versionable mode returns an error instead of looping (waits for 3.10, which adds versionable mode)
+- [x] Unit test: a zero property size in versionable mode returns an error instead of looping (VersionableDecodeTest, 3.10)
 
 ## 3.07 Typed wrappers over dynamic objects (OBJ-10)
 
@@ -400,8 +400,8 @@ The character select screen shows the account's wizards with correct appearance,
 
 **Acceptance**
 
-- [ ] Hand-built bytes with an unknown property (skipped) and unknown nested class (skipped, reported)
-- [ ] Golden tests cover strings of 128 bytes or more (31-bit long length)
+- [x] Hand-built bytes with an unknown property (skipped) and unknown nested class (skipped, reported) (VersionableDecodeTest)
+- [x] Golden tests cover strings of 128 bytes or more (31-bit long length) (VersionableDecodeTest, with wide strings and lists too)
 
 ### Detailed spec from OBJ-6: Versionable BINd decoder
 
@@ -409,25 +409,25 @@ Every BINd client file (templates, spells, states, decks, the manifest) decodes 
 
 **Deliverables**
 
-- src/server/shared/ObjectProperty/ObjectSerializer.h/.cpp, Decode path. Serializer flags: SerializeFlags 1, CompactLength 2, StringEnums 4, Compress 8, ForceDirtyEncode 16
-- BindFile.h/.cpp: magic 'BINd'; u32 flags; if flags&8, one padding bit (so a byte), u32 uncompressed size, then a zlib stream (data at offset 13)
-- Versionable framing: u32 class hash (0 means null); u32 object size in bits counted from its own start; repeated {u32 property size in bits, u32 property hash, value}. Unknown property hashes are skipped by size, unknown classes are skipped by size and recorded, and per-property size mismatches resync to the declared end
-- CompactLength encoding for strings, wstrings and container counts: 1 bit, then 7 bits if the bit is 0 or 31 bits if it is 1 (wstring count is in UTF-16 units). StringEnums: enum and Prop_Bits properties are carried as strings. Fixed math types are byte-aligned float/int/byte tuples
-- A decode-limits struct (max depth, max elements, max bytes)
-- src/tools/bindecode: a CLI that prints any WAD entry as JSON for debugging, reading the user's install
-- src/test/server/shared/ObjectProperty/VersionableDecodeTest.cpp with hand-built golden bytes for synthetic classes
+- src/server/shared/ObjectProperty/ObjectSerializer.h/.cpp, Decode path. Serializer flags: SerializeFlags 1, CompactLength 2, StringEnums 4, Compress 8, ForceDirtyEncode 16. Built in ObjectSerializer itself, for encoding too: SerializerOptions::Versionable picks the format for Decode and Encode, renamed from DecodeCompact and EncodeCompact. CompactLength and StringEnums work in both formats, and SerializeFlags and Compress stay refused there because they frame a whole file, which BindFile reads in 3.11
+- BindFile.h/.cpp: magic 'BINd'; u32 flags; if flags&8, one padding bit (so a byte), u32 uncompressed size, then a zlib stream (data at offset 13). Built in 3.11
+- Versionable framing: u32 class hash (0 means null); u32 object size in bits counted from its own start; repeated {u32 property size in bits, u32 property hash, value}. Unknown property hashes are skipped by size, unknown classes are skipped by size and recorded, and per-property size mismatches resync to the declared end. Built with every skip reported in DecodeResult::Issues by kind, hash, bits skipped, property path and detail. Checked against r806919's Root.wad before committing: a property's size counts from where the previous property ended, before the u32 size realigns to a byte, and an object's size counts from its size field. A value is read inside a bit limit at its property's end. Some values are reported and keep their default, or an earlier copy's value: a value that runs past that end (a list count the bits left cannot hold included), cannot be laid out, names no enum option, or is an object of the wrong class or a null inline object. One that ends early is reported and keeps its value. Sizes that cannot fit are refused with BadSize by the object holding them, and reported as a size mismatch by the property whose nested object holds them. An unknown class in a pointer slot decodes to null, and in an inline slot to a default object of the property's class; an unknown root class is refused. Properties are read and written only when the mask selects them, and others are skipped and reported. A DirtyEncode property carries no present bit and is left out when clean; r806919's files leave out those at their defaults. Default inline objects count toward the depth and object limits
+- CompactLength encoding for strings, wstrings and container counts: 1 bit, then 7 bits if the bit is 0 or 31 bits if it is 1 (wstring count is in UTF-16 units). StringEnums: enum and Prop_Bits properties are carried as strings. Fixed math types are byte-aligned float/int/byte tuples. Built as specified: the encoder takes the 31-bit form for 128 or more, and StringEnums also covers int and unsigned int properties with the Enum flag, which read and write the same way as Bits ones. Matrix3x3 stays nine floats, because no Root.wad file holds one
+- A decode-limits struct (max depth, max elements, max bytes). The live SerializerLimits of 3.05 and 3.06 bound both formats
+- src/tools/bindecode: a CLI that prints any WAD entry as JSON for debugging, reading the user's install. Built in 3.11
+- src/test/server/shared/ObjectProperty/VersionableDecodeTest.cpp with hand-built golden bytes for synthetic classes. Built with a literal object, assembled trees, sizes that do not fit, the limits, and round trips in both formats with and without compact lengths and text enums. The decoder fuzz test and libFuzzer target gained versionable and compact-length seeds
 
 **Acceptance**
 
-- [ ] Unit test: hand-assembled versionable bytes for a synthetic class decode correctly, including an unknown property (skipped) and an unknown nested class (skipped, reported)
-- [ ] Client-gated test: TemplateManifest.xml decodes to a TemplateManifest with 137423 TemplateLocation entries, the first being {ObjectData/PlayerObject.xml, 1}
-- [ ] Client-gated test: ObjectData/CrownItems/Series58/Hats/Crowns-S58-Hats-L110-BS-008-01.xml decodes to a WizItemTemplate with m_templateID 1652259, m_displayName 'Items_00028316', a JewelSocketBehaviorTemplate holding 3 sockets, and m_equipRequirements of ReqSchoolOfFocus 'Balance' plus ReqMagicLevel 110
-- [ ] Client-gated sweep over all 134076 Root.wad BINd files: zero crashes and zero property-size mismatches on known classes; a report of unknown class hashes with counts and paths (feeds OBJ-11)
+- [x] Unit test: hand-assembled versionable bytes for a synthetic class decode correctly, including an unknown property (skipped) and an unknown nested class (skipped, reported) (VersionableDecodeTest)
+- [ ] Client-gated test: TemplateManifest.xml decodes to a TemplateManifest with 137423 TemplateLocation entries, the first being {ObjectData/PlayerObject.xml, 1} (needs 3.11's BINd files)
+- [ ] Client-gated test: ObjectData/CrownItems/Series58/Hats/Crowns-S58-Hats-L110-BS-008-01.xml decodes to a WizItemTemplate with m_templateID 1652259, m_displayName 'Items_00028316', a JewelSocketBehaviorTemplate holding 3 sockets, and m_equipRequirements of ReqSchoolOfFocus 'Balance' plus ReqMagicLevel 110 (needs 3.11's BINd files)
+- [ ] Client-gated sweep over all 134076 Root.wad BINd files: zero crashes and zero property-size mismatches on known classes; a report of unknown class hashes with counts and paths (feeds OBJ-11) (3.11; a scratch sweep before committing decoded 134,635 of the 134,640 BINd files with the Save mask, with no size mismatch, unknown or unselected property, invalid object, unsupported type or unknown enum name, 26,921 unknown nested classes reported, and 5 files refused because the dump does not list their root class; re-encoding the 114,687 issue-free files with defaults as clean reproduced 114,342 byte for byte)
 
 **Risks**
 
 - My sweep showed mismatches on CharacterElement.m_flags (Bits), AvatarTextureOption.m_textures and TemplateLocation.m_filename until two rules were applied: Bits as strings, and a 31-bit long-length form. Imcodec's reference reader uses 15 bits for long strings, which looks like a latent bug. Golden tests must cover strings of 128 bytes or more
-- Matrix3x3 serialized width is unconfirmed: Imcodec reads 12 floats, but the name suggests 9
+- Matrix3x3 serialized width is unconfirmed: Imcodec reads 12 floats, but the name suggests 9. Still unconfirmed after 3.10: no Root.wad file holds a Matrix3x3, Euler, Quaternion or SerializedBuffer value
 
 ## 3.11 BINd files, bindecode CLI, corpus sweep (OBJ-6 part 2)
 

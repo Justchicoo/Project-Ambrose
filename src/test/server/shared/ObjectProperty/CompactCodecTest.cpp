@@ -189,11 +189,11 @@ TEST_F(CompactCodecTest, TheMaskSelectsPropertiesDeprecatedOnesAreSkippedAndBits
 {
     PropertyObjectPtr const card = MakeCard("class TestCard", 0x11223344u);
     ASSERT_TRUE(card);
-    EncodeResult const encoded = ObjectSerializer::EncodeCompact(card.get());
+    EncodeResult const encoded = ObjectSerializer::Encode(card.get());
     ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
     EXPECT_EQ(encoded.Bytes, CardBytes(0x11223344u, true));
 
-    DecodeResult const decoded = ObjectSerializer::DecodeCompact(_catalog, encoded.Bytes);
+    DecodeResult const decoded = ObjectSerializer::Decode(_catalog, encoded.Bytes);
     ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
     ASSERT_TRUE(decoded.Object);
     EXPECT_EQ(decoded.BytesRead, encoded.Bytes.size());
@@ -206,13 +206,13 @@ TEST_F(CompactCodecTest, TheMaskSelectsPropertiesDeprecatedOnesAreSkippedAndBits
 
     SerializerOptions publicView;
     publicView.Mask = SerializerOptions::PublicMask;
-    EncodeResult const visible = ObjectSerializer::EncodeCompact(card.get(), publicView);
+    EncodeResult const visible = ObjectSerializer::Encode(card.get(), publicView);
     ASSERT_TRUE(visible.Ok()) << visible.Detail;
     std::vector<uint8> expected;
     AppendU32(expected, StringHash::KiStringHash("class TestCard"));
     Append(expected, { 0x03, 0x00, 'A', 'c', 'e' });
     EXPECT_EQ(visible.Bytes, expected);
-    DecodeResult const seen = ObjectSerializer::DecodeCompact(_catalog, visible.Bytes, publicView);
+    DecodeResult const seen = ObjectSerializer::Decode(_catalog, visible.Bytes, publicView);
     ASSERT_TRUE(seen.Ok()) << seen.Detail;
     EXPECT_EQ(*seen.Object->Get("m_name")->GetIf<std::string>(), "Ace");
     EXPECT_EQ(*seen.Object->Get("m_id")->GetIf<uint32>(), 0u);
@@ -224,17 +224,17 @@ TEST_F(CompactCodecTest, DirtyEncodedPropertiesCarryAPresentBit)
     ASSERT_TRUE(card);
     SerializerOptions clean;
     clean.IsDirty = [](PropertyObject const&, PropertyInfo const& property) { return property.Name != "m_count"; };
-    EncodeResult const encoded = ObjectSerializer::EncodeCompact(card.get(), clean);
+    EncodeResult const encoded = ObjectSerializer::Encode(card.get(), clean);
     ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
     EXPECT_EQ(encoded.Bytes, CardBytes(5, false));
 
-    DecodeResult const decoded = ObjectSerializer::DecodeCompact(_catalog, encoded.Bytes);
+    DecodeResult const decoded = ObjectSerializer::Decode(_catalog, encoded.Bytes);
     ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
     EXPECT_EQ(*decoded.Object->Get("m_count")->GetIf<int32>(), 0);
     EXPECT_EQ(*decoded.Object->Get("m_mood")->GetIf<int64>(), 4);
 
     clean.Flags = SerializerFlag::ForceDirtyEncode;
-    EncodeResult const forced = ObjectSerializer::EncodeCompact(card.get(), clean);
+    EncodeResult const forced = ObjectSerializer::Encode(card.get(), clean);
     ASSERT_TRUE(forced.Ok()) << forced.Detail;
     EXPECT_EQ(forced.Bytes, CardBytes(5, true));
 }
@@ -243,7 +243,7 @@ TEST_F(CompactCodecTest, ANestedListOfDerivedAndNullChildrenRoundTripsExactly)
 {
     PropertyObjectPtr const deck = MakeDeck();
     ASSERT_TRUE(deck);
-    EncodeResult const encoded = ObjectSerializer::EncodeCompact(deck.get());
+    EncodeResult const encoded = ObjectSerializer::Encode(deck.get());
     ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
     std::vector<uint8> prefix;
     AppendU32(prefix, StringHash::KiStringHash("class TestDeck"));
@@ -252,7 +252,7 @@ TEST_F(CompactCodecTest, ANestedListOfDerivedAndNullChildrenRoundTripsExactly)
     ASSERT_GE(encoded.Bytes.size(), prefix.size());
     EXPECT_TRUE(std::equal(prefix.begin(), prefix.end(), encoded.Bytes.begin()));
 
-    DecodeResult const decoded = ObjectSerializer::DecodeCompact(_catalog, encoded.Bytes);
+    DecodeResult const decoded = ObjectSerializer::Decode(_catalog, encoded.Bytes);
     ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
     PropertyValue::List const& cards = *decoded.Object->Get("m_cards")->GetList();
     ASSERT_EQ(cards.size(), 3u);
@@ -273,14 +273,14 @@ TEST_F(CompactCodecTest, ANestedListOfDerivedAndNullChildrenRoundTripsExactly)
         ASSERT_EQ(card->Set("m_old", 0.0f), PropertySetResult::Ok);
     }
     EXPECT_TRUE(*decoded.Object == *expected);
-    EncodeResult const again = ObjectSerializer::EncodeCompact(decoded.Object.get());
+    EncodeResult const again = ObjectSerializer::Encode(decoded.Object.get());
     ASSERT_TRUE(again.Ok()) << again.Detail;
     EXPECT_EQ(again.Bytes, encoded.Bytes);
 
-    EncodeResult const nothing = ObjectSerializer::EncodeCompact(nullptr);
+    EncodeResult const nothing = ObjectSerializer::Encode(nullptr);
     ASSERT_TRUE(nothing.Ok());
     EXPECT_EQ(nothing.Bytes, (std::vector<uint8>{ 0, 0, 0, 0 }));
-    DecodeResult const empty = ObjectSerializer::DecodeCompact(_catalog, nothing.Bytes);
+    DecodeResult const empty = ObjectSerializer::Decode(_catalog, nothing.Bytes);
     EXPECT_TRUE(empty.Ok());
     EXPECT_FALSE(empty.Object);
 }
@@ -291,26 +291,26 @@ TEST_F(CompactCodecTest, ChildrenMustBeOfTheirPropertysClassAndInlineOnesCannotB
     AppendU32(wrongClass, StringHash::KiStringHash("class TestDeck"));
     AppendU32(wrongClass, 1);
     AppendU32(wrongClass, StringHash::KiStringHash("class TestDeck"));
-    DecodeResult const wrong = ObjectSerializer::DecodeCompact(_catalog, wrongClass);
+    DecodeResult const wrong = ObjectSerializer::Decode(_catalog, wrongClass);
     EXPECT_EQ(wrong.Status, SerializerStatus::WrongClass);
     EXPECT_EQ(wrong.Detail, "class TestDeck.m_cards[0] holds a class TestDeck, which is not a class TestCard");
     EXPECT_FALSE(wrong.Object);
 
     PropertyObjectPtr const deck = MakeDeck();
     ASSERT_TRUE(deck);
-    std::vector<uint8> bytes = ObjectSerializer::EncodeCompact(deck.get()).Bytes;
+    std::vector<uint8> bytes = ObjectSerializer::Encode(deck.get()).Bytes;
     std::vector<uint8> cover;
     AppendU32(cover, StringHash::KiStringHash("class TestCard"));
     PropertyObjectPtr const blank = PropertyObject::Create(_catalog, "class TestCard");
     ASSERT_TRUE(blank);
-    std::size_t const coverSize = ObjectSerializer::EncodeCompact(blank.get()).Bytes.size();
+    std::size_t const coverSize = ObjectSerializer::Encode(blank.get()).Bytes.size();
     ASSERT_EQ(coverSize, 22u);
     ASSERT_GE(bytes.size(), coverSize);
     std::size_t const coverAt = bytes.size() - coverSize;
     ASSERT_TRUE(std::equal(cover.begin(), cover.end(), bytes.begin() + static_cast<std::ptrdiff_t>(coverAt)));
     bytes.resize(coverAt);
     AppendU32(bytes, 0);
-    DecodeResult const nullCover = ObjectSerializer::DecodeCompact(_catalog, bytes);
+    DecodeResult const nullCover = ObjectSerializer::Decode(_catalog, bytes);
     EXPECT_EQ(nullCover.Status, SerializerStatus::NullNotAllowed);
     EXPECT_EQ(nullCover.Detail, "class TestDeck.m_cover holds a null inline object");
 }
@@ -319,31 +319,31 @@ TEST_F(CompactCodecTest, MalformedOrHostileDataIsRefusedWithWhereItFailed)
 {
     PropertyObjectPtr const deck = MakeDeck();
     ASSERT_TRUE(deck);
-    std::vector<uint8> const bytes = ObjectSerializer::EncodeCompact(deck.get()).Bytes;
+    std::vector<uint8> const bytes = ObjectSerializer::Encode(deck.get()).Bytes;
     for (std::size_t length = 0; length < bytes.size(); ++length)
     {
-        DecodeResult const cut = ObjectSerializer::DecodeCompact(_catalog, std::span<uint8 const>(bytes.data(), length));
+        DecodeResult const cut = ObjectSerializer::Decode(_catalog, std::span<uint8 const>(bytes.data(), length));
         EXPECT_EQ(cut.Status, SerializerStatus::Truncated) << "length " << length;
         EXPECT_FALSE(cut.Object);
     }
 
     std::vector<uint8> trailing = bytes;
     trailing.push_back(0);
-    EXPECT_EQ(ObjectSerializer::DecodeCompact(_catalog, trailing).Status, SerializerStatus::TrailingBytes);
+    EXPECT_EQ(ObjectSerializer::Decode(_catalog, trailing).Status, SerializerStatus::TrailingBytes);
     SerializerOptions lenient;
     lenient.AllowTrailingBytes = true;
-    DecodeResult const tolerated = ObjectSerializer::DecodeCompact(_catalog, trailing, lenient);
+    DecodeResult const tolerated = ObjectSerializer::Decode(_catalog, trailing, lenient);
     EXPECT_TRUE(tolerated.Ok());
     EXPECT_EQ(tolerated.BytesRead, bytes.size());
 
     std::vector<uint8> unknown;
     AppendU32(unknown, 12345);
-    DecodeResult const missing = ObjectSerializer::DecodeCompact(_catalog, unknown);
+    DecodeResult const missing = ObjectSerializer::Decode(_catalog, unknown);
     EXPECT_EQ(missing.Status, SerializerStatus::UnknownClass);
     EXPECT_EQ(missing.Detail, "the object names class hash 12345, which the type dump does not list");
     std::vector<uint8> enumRoot;
     AppendU32(enumRoot, StringHash::KiStringHash("enum TestMood"));
-    EXPECT_EQ(ObjectSerializer::DecodeCompact(_catalog, enumRoot).Status, SerializerStatus::NotAPropertyClass);
+    EXPECT_EQ(ObjectSerializer::Decode(_catalog, enumRoot).Status, SerializerStatus::NotAPropertyClass);
 
     std::vector<uint8> huge;
     AppendU32(huge, StringHash::KiStringHash("class TestDeck"));
@@ -352,33 +352,36 @@ TEST_F(CompactCodecTest, MalformedOrHostileDataIsRefusedWithWhereItFailed)
     ASSERT_EQ(huge.size(), 10u);
     SerializerOptions unlimited;
     unlimited.Limits.emplace().MaxContainerCount = 0xFFFFFFFFu;
-    DecodeResult const bomb = ObjectSerializer::DecodeCompact(_catalog, huge, unlimited);
+    DecodeResult const bomb = ObjectSerializer::Decode(_catalog, huge, unlimited);
     EXPECT_EQ(bomb.Status, SerializerStatus::Truncated);
     EXPECT_EQ(bomb.Detail, "class TestDeck.m_cards lists 2147483647 elements, more than the 2 bytes left can hold");
-    EXPECT_EQ(ObjectSerializer::DecodeCompact(_catalog, huge).Status, SerializerStatus::ContainerTooLarge);
+    EXPECT_EQ(ObjectSerializer::Decode(_catalog, huge).Status, SerializerStatus::ContainerTooLarge);
 
     SerializerOptions tight;
     tight.Limits.emplace().MaxContainerCount = 2;
-    EXPECT_EQ(ObjectSerializer::DecodeCompact(_catalog, bytes, tight).Status, SerializerStatus::ContainerTooLarge);
+    EXPECT_EQ(ObjectSerializer::Decode(_catalog, bytes, tight).Status, SerializerStatus::ContainerTooLarge);
     tight = {};
     tight.Limits.emplace().MaxDepth = 1;
-    DecodeResult const deep = ObjectSerializer::DecodeCompact(_catalog, bytes, tight);
+    DecodeResult const deep = ObjectSerializer::Decode(_catalog, bytes, tight);
     EXPECT_EQ(deep.Status, SerializerStatus::TooDeep);
     EXPECT_EQ(deep.Detail, "class TestDeck.m_cards[0] nests objects deeper than 1");
-    EXPECT_EQ(ObjectSerializer::EncodeCompact(deck.get(), tight).Status, SerializerStatus::TooDeep);
+    EXPECT_EQ(ObjectSerializer::Encode(deck.get(), tight).Status, SerializerStatus::TooDeep);
     tight = {};
     tight.Limits.emplace().MaxObjects = 3;
-    EXPECT_EQ(ObjectSerializer::DecodeCompact(_catalog, bytes, tight).Status, SerializerStatus::TooManyObjects);
+    EXPECT_EQ(ObjectSerializer::Decode(_catalog, bytes, tight).Status, SerializerStatus::TooManyObjects);
 
-    SerializerOptions compactLength;
-    compactLength.Flags = SerializerFlag::CompactLength;
-    EXPECT_EQ(ObjectSerializer::DecodeCompact(_catalog, bytes, compactLength).Status, SerializerStatus::UnsupportedFlags);
-    EXPECT_EQ(ObjectSerializer::EncodeCompact(deck.get(), compactLength).Status, SerializerStatus::UnsupportedFlags);
+    for (SerializerFlag const streamFlag : { SerializerFlag::SerializeFlags, SerializerFlag::Compress })
+    {
+        SerializerOptions stream;
+        stream.Flags = streamFlag;
+        EXPECT_EQ(ObjectSerializer::Decode(_catalog, bytes, stream).Status, SerializerStatus::UnsupportedFlags);
+        EXPECT_EQ(ObjectSerializer::Encode(deck.get(), stream).Status, SerializerStatus::UnsupportedFlags);
+    }
 
     PropertyObjectPtr const card = MakeCard("class TestCard", 1);
     ASSERT_TRUE(card);
     ASSERT_EQ(card->Set("m_name", std::string(70000, 'x')), PropertySetResult::Ok);
-    EncodeResult const tooLong = ObjectSerializer::EncodeCompact(card.get());
+    EncodeResult const tooLong = ObjectSerializer::Encode(card.get());
     EXPECT_EQ(tooLong.Status, SerializerStatus::ValueTooLong);
     EXPECT_TRUE(tooLong.Bytes.empty());
 }
@@ -389,18 +392,18 @@ TEST_F(CompactCodecTest, TextEnumsWriteOptionNames)
     ASSERT_TRUE(card);
     SerializerOptions text;
     text.Flags = SerializerFlag::StringEnums;
-    EncodeResult const encoded = ObjectSerializer::EncodeCompact(card.get(), text);
+    EncodeResult const encoded = ObjectSerializer::Encode(card.get(), text);
     ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
     std::string const named(encoded.Bytes.begin(), encoded.Bytes.end());
     EXPECT_NE(named.find(std::string("\x06\x00kAngry", 8)), std::string::npos);
-    DecodeResult const decoded = ObjectSerializer::DecodeCompact(_catalog, encoded.Bytes, text);
+    DecodeResult const decoded = ObjectSerializer::Decode(_catalog, encoded.Bytes, text);
     ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
-    EXPECT_TRUE(*decoded.Object == *ObjectSerializer::DecodeCompact(_catalog, ObjectSerializer::EncodeCompact(card.get()).Bytes).Object);
+    EXPECT_TRUE(*decoded.Object == *ObjectSerializer::Decode(_catalog, ObjectSerializer::Encode(card.get()).Bytes).Object);
 
     std::vector<uint8> bytes = encoded.Bytes;
     std::size_t const at = named.find("kAngry");
     bytes[at] = 'x';
-    DecodeResult const bad = ObjectSerializer::DecodeCompact(_catalog, bytes, text);
+    DecodeResult const bad = ObjectSerializer::Decode(_catalog, bytes, text);
     EXPECT_EQ(bad.Status, SerializerStatus::UnknownEnumName);
     EXPECT_EQ(bad.Detail, "class TestCard.m_mood holds 'xAngry', which names no option");
 }
@@ -439,30 +442,30 @@ TEST_F(CompactCodecTest, EveryOtherValueLayoutMatchesGoldenBytes)
     AppendU32(expected, 3);
     Append(named, { 0x03, 0x00, 'A', '|', 'B' });
 
-    EncodeResult const encoded = ObjectSerializer::EncodeCompact(gadget.get());
+    EncodeResult const encoded = ObjectSerializer::Encode(gadget.get());
     ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
     EXPECT_EQ(encoded.Bytes, expected);
-    DecodeResult const decoded = ObjectSerializer::DecodeCompact(_catalog, encoded.Bytes);
+    DecodeResult const decoded = ObjectSerializer::Decode(_catalog, encoded.Bytes);
     ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
     EXPECT_TRUE(*decoded.Object == *gadget);
 
     SerializerOptions text;
     text.Flags = SerializerFlag::StringEnums;
-    EncodeResult const flagNames = ObjectSerializer::EncodeCompact(gadget.get(), text);
+    EncodeResult const flagNames = ObjectSerializer::Encode(gadget.get(), text);
     ASSERT_TRUE(flagNames.Ok()) << flagNames.Detail;
     EXPECT_EQ(flagNames.Bytes, named);
-    DecodeResult const fromNames = ObjectSerializer::DecodeCompact(_catalog, flagNames.Bytes, text);
+    DecodeResult const fromNames = ObjectSerializer::Decode(_catalog, flagNames.Bytes, text);
     ASSERT_TRUE(fromNames.Ok()) << fromNames.Detail;
     EXPECT_TRUE(*fromNames.Object == *gadget);
 
     for (int64 const value : { int64{ 0 }, int64{ 8 } })
     {
         ASSERT_EQ(gadget->Set("m_mask", int64{ value }), PropertySetResult::Ok);
-        EncodeResult const odd = ObjectSerializer::EncodeCompact(gadget.get(), text);
+        EncodeResult const odd = ObjectSerializer::Encode(gadget.get(), text);
         ASSERT_TRUE(odd.Ok()) << odd.Detail;
         std::vector<uint8> tail(odd.Bytes.end() - (value == 0 ? 2 : 3), odd.Bytes.end());
         EXPECT_EQ(tail, value == 0 ? (std::vector<uint8>{ 0x00, 0x00 }) : (std::vector<uint8>{ 0x01, 0x00, '8' }));
-        DecodeResult const back = ObjectSerializer::DecodeCompact(_catalog, odd.Bytes, text);
+        DecodeResult const back = ObjectSerializer::Decode(_catalog, odd.Bytes, text);
         ASSERT_TRUE(back.Ok()) << back.Detail;
         EXPECT_TRUE(*back.Object == *gadget);
     }
@@ -477,10 +480,10 @@ TEST_F(CompactCodecTest, AliasHashesDecodeToTheirClassAndReencodePlain)
     uint32 const alias = StringHash::KiStringHash("class TestCard*");
     for (int shift = 0; shift < 4; ++shift)
         aliased[static_cast<std::size_t>(shift)] = static_cast<uint8>(alias >> (8 * shift));
-    DecodeResult const decoded = ObjectSerializer::DecodeCompact(_catalog, aliased);
+    DecodeResult const decoded = ObjectSerializer::Decode(_catalog, aliased);
     ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
     EXPECT_EQ(&decoded.Object->GetClass(), _catalog->FindClass("class TestCard"));
-    EncodeResult const encoded = ObjectSerializer::EncodeCompact(decoded.Object.get());
+    EncodeResult const encoded = ObjectSerializer::Encode(decoded.Object.get());
     ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
     EXPECT_EQ(encoded.Bytes, plain);
 }
@@ -492,15 +495,15 @@ TEST_F(CompactCodecTest, RootsCanBeHeldToAllowedClassesAndRequiredToBePresent)
     ASSERT_TRUE(deck && rare);
     SerializerOptions cardsOnly;
     cardsOnly.RootClasses = { _catalog->FindClass("class TestCard") };
-    DecodeResult const refused = ObjectSerializer::DecodeCompact(_catalog, ObjectSerializer::EncodeCompact(deck.get()).Bytes, cardsOnly);
+    DecodeResult const refused = ObjectSerializer::Decode(_catalog, ObjectSerializer::Encode(deck.get()).Bytes, cardsOnly);
     EXPECT_EQ(refused.Status, SerializerStatus::WrongClass);
     EXPECT_EQ(refused.Detail, "the object names class TestDeck, which is not a class allowed here");
-    EXPECT_TRUE(ObjectSerializer::DecodeCompact(_catalog, ObjectSerializer::EncodeCompact(rare.get()).Bytes, cardsOnly).Ok());
+    EXPECT_TRUE(ObjectSerializer::Decode(_catalog, ObjectSerializer::Encode(rare.get()).Bytes, cardsOnly).Ok());
 
     std::vector<uint8> const nothing{ 0, 0, 0, 0 };
-    EXPECT_TRUE(ObjectSerializer::DecodeCompact(_catalog, nothing, cardsOnly).Ok());
+    EXPECT_TRUE(ObjectSerializer::Decode(_catalog, nothing, cardsOnly).Ok());
     cardsOnly.AllowNullRoot = false;
-    DecodeResult const missing = ObjectSerializer::DecodeCompact(_catalog, nothing, cardsOnly);
+    DecodeResult const missing = ObjectSerializer::Decode(_catalog, nothing, cardsOnly);
     EXPECT_EQ(missing.Status, SerializerStatus::NullNotAllowed);
     EXPECT_EQ(missing.Detail, "the object is null where an object is required");
 }
@@ -509,10 +512,10 @@ TEST_F(CompactCodecTest, DecodesStayWithinTheMemoryBudgetAndTheDepthCeiling)
 {
     PropertyObjectPtr const deck = MakeDeck();
     ASSERT_TRUE(deck);
-    std::vector<uint8> const bytes = ObjectSerializer::EncodeCompact(deck.get()).Bytes;
+    std::vector<uint8> const bytes = ObjectSerializer::Encode(deck.get()).Bytes;
     SerializerOptions small;
     small.Limits.emplace().MaxDecodedBytes = 512;
-    DecodeResult const refused = ObjectSerializer::DecodeCompact(_catalog, bytes, small);
+    DecodeResult const refused = ObjectSerializer::Decode(_catalog, bytes, small);
     EXPECT_EQ(refused.Status, SerializerStatus::BudgetExceeded);
     EXPECT_FALSE(refused.Object);
     EXPECT_NE(refused.Detail.find("needs more than the 512 bytes of memory a decode may use"), std::string::npos) << refused.Detail;
@@ -531,8 +534,8 @@ TEST_F(CompactCodecTest, DecodesStayWithinTheMemoryBudgetAndTheDepthCeiling)
     };
     SerializerOptions deep;
     deep.Limits.emplace().MaxDepth = 100000;
-    EXPECT_TRUE(ObjectSerializer::DecodeCompact(_catalog, chain(SerializerLimits::DepthCeiling), deep).Ok());
-    DecodeResult const tooDeep = ObjectSerializer::DecodeCompact(_catalog, chain(SerializerLimits::DepthCeiling + 1), deep);
+    EXPECT_TRUE(ObjectSerializer::Decode(_catalog, chain(SerializerLimits::DepthCeiling), deep).Ok());
+    DecodeResult const tooDeep = ObjectSerializer::Decode(_catalog, chain(SerializerLimits::DepthCeiling + 1), deep);
     EXPECT_EQ(tooDeep.Status, SerializerStatus::TooDeep);
     EXPECT_NE(tooDeep.Detail.find("nests objects deeper than 128"), std::string::npos) << tooDeep.Detail;
 }

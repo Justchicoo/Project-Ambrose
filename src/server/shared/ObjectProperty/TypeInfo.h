@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The schema of one client type dump: class kinds, value kinds, container kinds, per-property enum options indexed by name and value, text options, the default as the dump writes it and as the value new objects start with, the memory a default value and a default object take, the base class hint, and the class and property descriptions every ObjectProperty lookup answers from, each class knowing the catalog it belongs to.
+ * The schema of one client type dump: class kinds, value kinds, container kinds, per-property enum options indexed by name and value, text options, the default as the dump writes it and as the value new objects start with, the memory a default value and a default object take and how many objects and levels a default object holds, the base class hint, and the class and property descriptions every ObjectProperty lookup answers from, each class knowing the catalog it belongs to.
  */
 
 #ifndef AMBROSE_TYPEINFO_H
@@ -128,6 +128,8 @@ struct ClassInfo
     ClassKind Kind = ClassKind::Opaque;
     TypeCatalog const* Owner = nullptr;
     std::size_t DefaultBytes = 0;
+    uint32 DefaultObjects = 1;
+    uint32 DefaultDepth = 1;
     std::vector<ClassInfo const*> Bases;
     std::vector<PropertyInfo> Properties;
     std::unordered_map<uint32, uint32> PropertyByHash;

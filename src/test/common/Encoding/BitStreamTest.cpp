@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Pins LSB-first bit order with golden bytes and tests widths, realignment, back-patching, and overruns.
+ * Pins LSB-first bit order with golden bytes and tests widths, realignment, back-patching, overruns, and bit limits that fence reads into a region and whose failures a resynchronizing reader clears.
  */
 
 #include "BitReader.h"
@@ -156,6 +156,46 @@ TEST(BitStreamTest, InvalidWidthAndSeekFailSafely)
     BitWriter writer;
     EXPECT_THROW(writer.WriteBits(0, 65), std::invalid_argument);
     EXPECT_THROW(writer.SeekBit(1), std::out_of_range);
+}
+
+TEST(BitStreamTest, ABitLimitFencesReadsSeeksAndTheRemainingCount)
+{
+    std::vector<uint8> const data{ 0xFF, 0x34, 0x12, 0x00 };
+    BitReader reader(data);
+    EXPECT_EQ(reader.GetLimit(), 32u);
+    reader.SetLimit(13);
+    EXPECT_EQ(reader.GetLimit(), 13u);
+    EXPECT_EQ(reader.GetRemainingBits(), 13u);
+    EXPECT_EQ(reader.ReadBits(5), 31u);
+    EXPECT_EQ(reader.GetRemainingBits(), 8u);
+    reader.Realign();
+    EXPECT_EQ(reader.GetRemainingBits(), 5u);
+    EXPECT_EQ(reader.ReadBits(5), 0x14u);
+    EXPECT_EQ(reader.GetRemainingBits(), 0u);
+    EXPECT_EQ(reader.Read<uint8>(), 0u);
+    EXPECT_TRUE(reader.Failed());
+
+    BitReader fenced(data);
+    fenced.SetLimit(12);
+    fenced.SeekBit(8);
+    EXPECT_EQ(fenced.Read<uint16>(), 0u);
+    EXPECT_TRUE(fenced.Failed());
+    fenced.ClearFailure();
+    EXPECT_FALSE(fenced.Failed());
+    EXPECT_EQ(fenced.ReadBits(4), 4u);
+
+    BitReader widened(data);
+    widened.SetLimit(12);
+    widened.SeekBit(12);
+    EXPECT_FALSE(widened.Failed());
+    widened.Realign();
+    EXPECT_EQ(widened.GetRemainingBits(), 0u);
+    widened.SetLimit(1000);
+    EXPECT_EQ(widened.GetLimit(), 32u);
+    EXPECT_EQ(widened.Read<uint16>(), 0x0012u);
+    EXPECT_FALSE(widened.Failed());
+    widened.SeekBit(33);
+    EXPECT_TRUE(widened.Failed());
 }
 
 TEST(BitStreamTest, BackPatchingRewritesAnEarlierUInt32Exactly)
