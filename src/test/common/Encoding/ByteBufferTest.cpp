@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests little-endian layout, scalar round trips, bit-exact floats, patching, and overrun handling.
+ * Tests little-endian layout, scalar round trips, bit-exact floats, patching, insertion, releasing the storage, and overrun handling.
  */
 
 #include "ByteBuffer.h"
@@ -108,4 +108,22 @@ TEST(ByteBufferTest, ReadBytesAndSetReadPosition)
     EXPECT_EQ(buffer.Read<uint8>(), 10u);
     EXPECT_NO_THROW(buffer.SetReadPosition(4));
     EXPECT_THROW(buffer.SetReadPosition(5), ByteBufferException);
+}
+
+TEST(ByteBufferTest, InsertBytesShiftsTheTailAndReleaseEmptiesTheBuffer)
+{
+    ByteBuffer buffer(std::vector<uint8>{ 1, 2, 5 });
+    buffer.InsertBytes(2, std::vector<uint8>{ 3, 4 });
+    buffer.InsertBytes(0, std::vector<uint8>{ 0 });
+    buffer.InsertBytes(buffer.GetSize(), std::vector<uint8>{ 6 });
+    EXPECT_EQ(std::vector<uint8>(buffer.GetData().begin(), buffer.GetData().end()), (std::vector<uint8>{ 0, 1, 2, 3, 4, 5, 6 }));
+    EXPECT_THROW(buffer.InsertBytes(8, std::vector<uint8>{ 7 }), ByteBufferException);
+
+    buffer.Skip(3);
+    std::vector<uint8> const released = buffer.Release();
+    EXPECT_EQ(released, (std::vector<uint8>{ 0, 1, 2, 3, 4, 5, 6 }));
+    EXPECT_EQ(buffer.GetSize(), 0u);
+    EXPECT_EQ(buffer.GetReadPosition(), 0u);
+    buffer.Write<uint8>(9);
+    EXPECT_EQ(buffer.Read<uint8>(), 9u);
 }

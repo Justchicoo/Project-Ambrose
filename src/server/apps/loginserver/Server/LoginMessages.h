@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The login service ids and the client messages the login server decodes, declared by tag with only the fields it reads.
+ * The login service id and the client messages the login server decodes, declared by tag with only the fields it reads.
  */
 
 #ifndef AMBROSE_LOGINMESSAGES_H
@@ -14,8 +14,6 @@
 
 namespace LoginMessages
 {
-    inline constexpr uint8 SystemService = 1;
-    inline constexpr uint8 ExtendedBaseService = 2;
     inline constexpr uint8 LoginService = 7;
 
     struct UserAuthenV3

@@ -200,7 +200,7 @@ TEST(SessionSettingsTest, LoadsDefaultsAndClampsOutOfRangeSeconds)
     ASSERT_EQ(problems.size(), 1u);
     EXPECT_EQ(problems.front(), "Network.MaxStrikes = 0 is outside 1-1000; using 1");
 
-    std::ofstream(file) << "Network.MaxStrikes = 25\nNetwork.DroppedMessageBurst = 3\nNetwork.DroppedMessagesPerSecond = 0\n";
+    std::ofstream(file) << "Network.MaxStrikes = 25\nNetwork.DroppedMessageBurst = 3\nNetwork.DroppedMessagesPerSecond = 0\nNetwork.PingBurst = 200000\nNetwork.PingsPerSecond = 2\n";
     ConfigMgr someStrikes;
     ASSERT_TRUE(someStrikes.LoadInitial(file).Succeeded());
     problems.clear();
@@ -208,9 +208,13 @@ TEST(SessionSettingsTest, LoadsDefaultsAndClampsOutOfRangeSeconds)
     EXPECT_EQ(budget.MaxStrikes, 25u);
     EXPECT_EQ(budget.DroppedMessageBurst, 3u);
     EXPECT_EQ(budget.DroppedMessagesPerSecond, 1u);
-    EXPECT_EQ(problems, std::vector<std::string>{ "Network.DroppedMessagesPerSecond = 0 is outside 1-100000; using 1" });
+    EXPECT_EQ(budget.PingBurst, 100000u);
+    EXPECT_EQ(budget.PingsPerSecond, 2u);
+    EXPECT_EQ(problems, (std::vector<std::string>{ "Network.DroppedMessagesPerSecond = 0 is outside 1-100000; using 1", "Network.PingBurst = 200000 is outside 1-100000; using 100000" }));
     EXPECT_EQ(loaded.DroppedMessageBurst, SessionSettings::DefaultDroppedMessageBurst);
     EXPECT_EQ(loaded.DroppedMessagesPerSecond, SessionSettings::DefaultDroppedMessagesPerSecond);
+    EXPECT_EQ(loaded.PingBurst, SessionSettings::DefaultPingBurst);
+    EXPECT_EQ(loaded.PingsPerSecond, SessionSettings::DefaultPingsPerSecond);
 }
 
 TEST_F(SessionBaseTest, OfferIsTheFirstFrameWithTheSessionIdAndOfferTime)

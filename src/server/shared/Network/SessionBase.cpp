@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the KI session handshake and keepalives on the socket's network thread, queues DML frames that arrive before SessionAccept, closes on mismatched ids, silence or too many strikes, and holds inbound work for the app to drain.
+ * Runs the KI session handshake and keepalives on the socket's network thread, queues DML frames that arrive before SessionAccept, closes on mismatched ids, silence or too many strikes, holds inbound work for the app to drain, answers pings within the ping budget, and sends server messages and forced disconnects.
  */
 
 #include "SessionBase.h"
 #include "FrameWriter.h"
 #include "Log.h"
+#include "StringUtil.h"
 
 #include <fmt/format.h>
 
@@ -29,7 +30,7 @@ namespace
 }
 
 SessionBase::SessionBase(asio::ip::tcp::socket&& socket, FrameLimits limits, std::shared_ptr<SessionContext> context)
-    : Socket(std::move(socket), limits), _context(std::move(context)), _dropBudget(_context->GetSettings().DroppedMessageBurst, _context->GetSettings().DroppedMessagesPerSecond), _acceptTimer(GetExecutor()), _keepAliveTimer(GetExecutor()), _keepAliveResponseTimer(GetExecutor())
+    : Socket(std::move(socket), limits), _context(std::move(context)), _dropBudget(_context->GetSettings().DroppedMessageBurst, _context->GetSettings().DroppedMessagesPerSecond), _pingBudget(_context->GetSettings().PingBurst, _context->GetSettings().PingsPerSecond), _acceptTimer(GetExecutor()), _keepAliveTimer(GetExecutor()), _keepAliveResponseTimer(GetExecutor())
 {
     if (std::optional<uint16> const id = _context->AllocateId())
         _sessionId = *id;
@@ -74,7 +75,7 @@ bool SessionBase::AddStrike(std::string_view reason)
 
 bool SessionBase::AllowDropLog()
 {
-    std::lock_guard const lock(_dropMutex);
+    std::lock_guard const lock(_budgetMutex);
     return _dropBudget.TryConsume();
 }
 
@@ -135,11 +136,59 @@ std::size_t SessionBase::GetQueuedMessageCount() const
     return _inbound.size();
 }
 
+bool SessionBase::SendServerMessage(std::u16string text, bool modal)
+{
+    SystemMessages::ServerMessage message;
+    message.Modal = modal ? 1 : 0;
+    message.Message = std::move(text);
+    return SendDmlMessage(message);
+}
+
+void SessionBase::KickPlayer(uint32 type, std::string_view reason)
+{
+    if (!IsOpen() || _kicked.exchange(true, std::memory_order_relaxed))
+        return;
+    LOG_INFO(SessionLog, "Kicking session {} from {}:{} with disconnect type {}: {}", _sessionId, GetRemoteAddress().to_string(), GetRemotePort(), type, Ambrose::ForLog(reason, 256));
+    try
+    {
+        SystemMessages::ForceDisconnect message;
+        message.Type = type;
+        message.TimeStamp = SystemMessages::FormatTimeStamp(std::chrono::system_clock::now());
+        message.Message = std::string(Ambrose::TruncateUtf8(reason, MaxKickReasonBytes));
+        EncodeAndQueue(message);
+    }
+    catch (std::exception const& failure)
+    {
+        ReportSendFailure(SystemMessages::ForceDisconnect::Tag, failure.what());
+    }
+    DelayedCloseSocket();
+}
+
+void SessionBase::HandlePing(SystemMessages::Ping&)
+{
+    bool allowed = false;
+    {
+        std::lock_guard const lock(_budgetMutex);
+        allowed = _pingBudget.TryConsume();
+    }
+    if (!allowed)
+    {
+        AddStrike("MSG_PING sent faster than the session's ping budget allows");
+        return;
+    }
+    SendDmlMessage(SystemMessages::PingRsp{});
+}
+
+void SessionBase::ReportSendFailure(std::string_view tag, std::string_view reason) const
+{
+    LOG_ERROR(SessionLog, "Could not send {} to session {}: {}", tag, _sessionId, reason);
+}
+
 void SessionBase::SendDml(uint8 serviceId, uint8 order, std::span<uint8 const> body)
 {
     ByteBuffer frame;
     FrameWriter::WriteDml(frame, serviceId, order, body, GetLongFrameLength());
-    QueueFrame(frame);
+    QueueFrame(std::move(frame));
 }
 
 void SessionBase::OnStart()
@@ -158,7 +207,7 @@ void SessionBase::OnStart()
     _offerMilliseconds.store(offer.Time.Milliseconds, std::memory_order_relaxed);
     ByteBuffer frame;
     ControlMessages::WriteFrame(frame, offer);
-    QueueFrame(frame);
+    QueueFrame(std::move(frame));
     _offerSentAt = std::chrono::steady_clock::now();
     _lastInbound = _offerSentAt;
     LOG_INFO(SessionLog, "Session {} offered to {}:{}", _sessionId, GetRemoteAddress().to_string(), GetRemotePort());
@@ -293,7 +342,7 @@ void SessionBase::HandleClientKeepAlive(Frame const& frame)
     response.ElapsedMinutes = keepAlive->ElapsedMinutes;
     ByteBuffer out;
     ControlMessages::WriteFrame(out, response);
-    QueueFrame(out);
+    QueueFrame(std::move(out));
     LOG_DEBUG(SessionLog, "Session {} keepalive from the client at {} minutes, answered", _sessionId, keepAlive->ElapsedMinutes);
 }
 
@@ -367,7 +416,7 @@ void SessionBase::SendKeepAlive()
     keepAlive.Milliseconds = static_cast<uint32>(ElapsedMs(_acceptedAt));
     ByteBuffer out;
     ControlMessages::WriteFrame(out, keepAlive);
-    QueueFrame(out);
+    QueueFrame(std::move(out));
     _keepAliveSentAt = std::chrono::steady_clock::now();
     _awaitingKeepAlive = true;
     uint32 const sequence = ++_keepAliveSequence;

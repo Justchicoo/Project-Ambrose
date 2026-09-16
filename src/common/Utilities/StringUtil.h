@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * String helpers: tokenizing, trimming, ASCII case handling, checked number parsing, formatting, and making untrusted text safe to log.
+ * String helpers: tokenizing, trimming, ASCII case handling, checked number parsing, formatting, cutting UTF-8 text without splitting a character, and making untrusted text safe to log.
  */
 
 #ifndef AMBROSE_STRINGUTIL_H
@@ -28,6 +28,8 @@ namespace Ambrose
     std::string ToLower(std::string_view str);
     std::string ToUpper(std::string_view str);
     bool EqualsIgnoreCase(std::string_view left, std::string_view right);
+
+    std::string_view TruncateUtf8(std::string_view text, std::size_t maxBytes) noexcept;
 
     inline constexpr std::size_t DefaultLogValueBytes = 64;
     std::string ForLog(std::string_view text, std::size_t maxBytes = DefaultLogValueBytes);

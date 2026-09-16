@@ -28,6 +28,7 @@ The Applies column says when a changed value takes effect after a configuration 
 | `Network.Threads` | uint32 | `1` | `AMBROSE_NETWORK_THREADS` | Live; new threads start at once, and removed threads stop taking sockets and exit when their last connection closes | Network threads that read and write sockets (1-256) |
 | `Network.MaxFrameSize` | uint64 | `4194304` | `AMBROSE_NETWORK_MAX_FRAME_SIZE` | Next connection | Largest frame in bytes a client may send, checked before the frame is buffered (17 to 1 GiB) |
 | `Network.MaxDmlMessages` | uint32 | `1024` | `AMBROSE_NETWORK_MAX_DML_MESSAGES` | Next connection | Most DML messages one frame may chain (at least 1) |
+| `Network.MaxSendQueueBytes` | uint64 | `16777216` | `AMBROSE_NETWORK_MAX_SEND_QUEUE_BYTES` | Next connection | Most bytes a connection may have waiting to be sent (1 MiB to 1 GiB). A frame that would pass the limit is not queued and the connection is closed, so a client that stops reading cannot grow server memory without bound |
 | `Network.LongFrameLength` | string | `BodyOnly` | `AMBROSE_NETWORK_LONG_FRAME_LENGTH` | Next connection | What a long frame's 32-bit length counts: `BodyOnly` or `HeaderAndBody`, until doc/CAPTURE.md settles it |
 | `Network.OutKBuff` | int32 | `-1` | `AMBROSE_NETWORK_OUT_K_BUFF` | Next connection | Socket send buffer in bytes; -1 keeps the operating system default |
 | `Network.TcpNoDelay` | bool | `1` | `AMBROSE_NETWORK_TCP_NO_DELAY` | Next connection | Disable Nagle's algorithm so small frames go out at once |

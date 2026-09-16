@@ -1,13 +1,16 @@
 /*
  * Project Ambrose by Imjustchico
- * Lists every message of the login server's services once: MSG_USER_AUTHEN_V3 handled before authentication, the other LOGIN client requests with the status each will need, the server's replies refused, SYSTEM pings and the EXTENDEDBASE record messages not handled yet, and the server-only EXTENDEDBASE messages refused.
+ * Lists every message of the login server's services once: MSG_USER_AUTHEN_V3 handled before authentication, the other LOGIN client requests with the status each will need, the server's replies refused, and the SYSTEM and EXTENDEDBASE rules every app shares.
  */
 
 #include "LoginMessageTable.h"
+#include "SystemMessageRules.h"
 
 namespace
 {
     using namespace LoginMessages;
+    using SystemMessages::ExtendedBaseService;
+    using SystemMessages::SystemService;
 
     class LoginRules : public MessageHandlerTable<LoginSession>
     {
@@ -46,15 +49,7 @@ namespace
             Refuse(LoginService, "MSG_LOGINSERVERSHUTDOWN");
             Refuse(LoginService, "MSG_WEBCHARACTERINFO");
 
-            Pending(SystemService, "MSG_PING", SessionStatuses::Any);
-            Pending(SystemService, "MSG_PING_RSP", SessionStatuses::Any);
-
-            Pending(ExtendedBaseService, "MSG_RAW_TEXT", SessionStatuses::Any);
-            Pending(ExtendedBaseService, "MSG_CUSTOMDICT", SessionStatuses::Any);
-            Pending(ExtendedBaseService, "MSG_CUSTOMRECORD", SessionStatuses::Any);
-            Pending(ExtendedBaseService, "MSG_RAWRECORD", SessionStatuses::Any);
-            Refuse(ExtendedBaseService, "MSG_SERVERMESSAGE");
-            Refuse(ExtendedBaseService, "MSG_FORCE_DISCONNECT");
+            SystemMessages::AddRules(*this);
         }
     };
 }

@@ -3,6 +3,7 @@
  * Drives a real LoginSession over loopback with Ambrose-authored definitions: a character list request before authentication is dropped with the session kept, a game message sent to the login server earns a strike, MSG_USER_AUTHEN_V3 reaches its handler decoded with client strings escaped, and refused server messages close the session at the strike limit.
  */
 
+#include "BaseMessageFixtures.h"
 #include "FakeSessionClient.h"
 #include "FrameWriter.h"
 #include "Log.h"
@@ -79,6 +80,7 @@ TEST(LoginSessionTest, MessagesAreRoutedByStatusWithStrikesForForeignServices)
     MessageDefinitionSet definitions;
     ASSERT_TRUE(definitions.Add(LoginFixtureXml, "LoginSessionFixtureMessages.xml"));
     ASSERT_TRUE(definitions.Add(GameFixtureXml, "LoginSessionGameMessages.xml"));
+    ASSERT_TRUE(BaseMessageFixtures::AddTo(definitions));
     ASSERT_TRUE(sMessageRegistry.Load(std::move(definitions)));
 
     auto const context = std::make_shared<SessionContext>(SessionSettings{});
@@ -159,6 +161,7 @@ TEST(LoginSessionTest, RefusedServerMessagesCloseTheSessionAtTheStrikeLimit)
     ASSERT_TRUE(LoginMessageTable::Get().Declare(sMessageRegistry, errors));
     MessageDefinitionSet definitions;
     ASSERT_TRUE(definitions.Add(LoginFixtureXml, "LoginSessionFixtureMessages.xml"));
+    ASSERT_TRUE(BaseMessageFixtures::AddTo(definitions));
     ASSERT_TRUE(sMessageRegistry.Load(std::move(definitions)));
 
     SessionSettings settings;

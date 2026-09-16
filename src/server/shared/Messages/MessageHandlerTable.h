@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Per-app message dispatch: rules that handle a declared message in given session statuses, list one as not handled yet, or refuse it as server-only, resolved by tag against each loaded catalog, with strikes for protocol violations and a per-session budget on dropped-message logging.
+ * Per-app message dispatch: rules that handle a declared message in given session statuses, list one as not handled yet, or refuse it as server-only, resolved by tag against each loaded catalog, with strikes for protocol violations, a per-session budget on dropped-message logging, and declarations of the messages the app sends.
  */
 
 #ifndef AMBROSE_MESSAGEHANDLERTABLE_H
@@ -90,6 +90,12 @@ public:
     void Pending(uint8 serviceId, std::string_view tag, SessionStatusMask statuses);
     void Refuse(uint8 serviceId, std::string_view tag);
 
+    template<DeclaredMessage T>
+    void Sends()
+    {
+        _sentDeclarations.push_back([](MessageRegistry& registry, std::vector<std::string>& errors) { return registry.Declare<T>(errors); });
+    }
+
     bool Declare(MessageRegistry& registry, std::vector<std::string>& errors) const;
     bool Validate(MessageCatalog const& catalog, std::vector<std::string>& errors) const;
     MessageRule const* FindRule(MessageCatalogPtr const& catalog, uint8 serviceId, uint8 order) const;
@@ -116,6 +122,7 @@ private:
     std::vector<uint8> _ownServices;
     QueuedMessageDrain _drain;
     std::vector<MessageRule> _rules;
+    std::vector<bool (*)(MessageRegistry& registry, std::vector<std::string>& errors)> _sentDeclarations;
     mutable std::mutex _resolutionMutex;
     mutable std::atomic<std::shared_ptr<Resolution const>> _resolution;
 };

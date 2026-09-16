@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One TCP connection: an async read loop into the frame reassembler, a coalescing write queue, and immediate or delayed close, all on its network thread.
+ * One TCP connection: an async read loop into the frame reassembler, a coalescing write queue capped in bytes, and immediate or delayed close, all on its network thread.
  */
 
 #ifndef AMBROSE_SOCKET_H
@@ -33,8 +33,9 @@ public:
     Socket& operator=(Socket const&) = delete;
 
     void Start();
-    void QueueFrame(std::vector<uint8> bytes);
-    void QueueFrame(ByteBuffer const& buffer);
+    bool QueueFrame(std::vector<uint8> bytes);
+    bool QueueFrame(ByteBuffer const& buffer);
+    bool QueueFrame(ByteBuffer&& buffer);
     void CloseSocket();
     void DelayedCloseSocket();
     void SetFrameLimits(FrameLimits limits);
@@ -43,6 +44,7 @@ public:
     asio::ip::address const& GetRemoteAddress() const noexcept { return _remoteAddress; }
     uint16 GetRemotePort() const noexcept { return _remotePort; }
     std::size_t GetQueuedBytes() const noexcept { return _queuedBytes.load(std::memory_order_relaxed); }
+    std::size_t GetMaxQueuedBytes() const noexcept { return _maxQueuedBytes.load(std::memory_order_relaxed); }
 
 protected:
     virtual void OnStart();
@@ -73,6 +75,8 @@ private:
     bool _shutdownSent = false;
     std::atomic<bool> _closed{ false };
     std::atomic<std::size_t> _queuedBytes{ 0 };
+    std::atomic<std::size_t> _maxQueuedBytes;
+    std::atomic<bool> _queueOverflowed{ false };
     std::atomic<LongFrameLength> _longLength{ LongFrameLength::BodyOnly };
 };
 

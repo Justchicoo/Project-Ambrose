@@ -111,8 +111,8 @@ A message goes to the logger with the longest matching name at a dot boundary. `
 | `server.<app>` | App lifecycle and each app's own events, such as the login server logging a decoded authentication request |
 | `server.config` | Configuration warnings |
 | `server.logging` | Logging problems such as dropped lines |
-| `network`, `network.opcode` | Sockets and client messages by protocol and name: handled messages at Debug, messages not handled yet at Info, and messages dropped for their session status or refused with a strike at Warn. A session's dropped and refused messages are logged only within `Network.DroppedMessageBurst`, so a flood from one client cannot fill the logs |
-| `network.session` | Session offers, accepts and closes at Info, keepalives in both directions at Debug |
+| `network`, `network.opcode` | Sockets and client messages by protocol and name: handled messages at Debug, messages not handled yet at Info, and messages dropped for their session status or refused with a strike, protocol errors, and connections closed at the send queue limit at Warn. A session's dropped and refused messages are logged only within `Network.DroppedMessageBurst`, so a flood from one client cannot fill the logs |
+| `network.session` | Session offers, accepts and kicks at Info; sessions closed for too many strikes, a full inbound queue, a failed handler, a protocol error, a missing SessionAccept or silence after a keepalive at Warn; strikes, keepalives in both directions and each closed session at Debug; and messages that could not be sent at Error |
 | `sql.sql`, `sql.updates`, `sql.driver` | Database queries, updates and connections |
 | `accounts` | Accounts created, passwords, security levels, locks and bans, and verifiers that do not open |
 | `commands.console` | Console lines accepted, refused during shutdown, dropped when the queue is full, and the input closing. Arguments of commands marked sensitive, such as `account create`, are never written |

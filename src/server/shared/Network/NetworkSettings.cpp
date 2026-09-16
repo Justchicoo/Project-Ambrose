@@ -39,6 +39,11 @@ NetworkSettings NetworkSettings::Load(ConfigMgr const& config, std::string const
     if (maxMessages == 0)
         report("Network.MaxDmlMessages = 0 would reject every DML frame; using 1");
 
+    uint64 const sendQueue = config.GetOption<uint64>("Network.MaxSendQueueBytes", FrameLimits::DefaultMaxSendQueueBytes, true);
+    settings.Limits.MaxSendQueueBytes = static_cast<std::size_t>(std::clamp<uint64>(sendQueue, MinSendQueueBytes, MaxSendQueueBytesLimit));
+    if (settings.Limits.MaxSendQueueBytes != sendQueue)
+        report(fmt::format("Network.MaxSendQueueBytes = {} is outside {}-{}; using {}", sendQueue, MinSendQueueBytes, MaxSendQueueBytesLimit, settings.Limits.MaxSendQueueBytes));
+
     std::string const longLength = config.GetOption<std::string>("Network.LongFrameLength", "BodyOnly", true);
     if (Ambrose::EqualsIgnoreCase(longLength, "HeaderAndBody"))
         settings.Limits.LongLength = LongFrameLength::HeaderAndBody;
@@ -53,5 +58,6 @@ NetworkSettings NetworkSettings::Load(ConfigMgr const& config, std::string const
 bool NetworkSettings::operator==(NetworkSettings const& other) const noexcept
 {
     return BindIp == other.BindIp && Port == other.Port && Threads == other.Threads && Limits.MaxFrameSize == other.Limits.MaxFrameSize
-        && Limits.LongLength == other.Limits.LongLength && Limits.MaxDmlMessages == other.Limits.MaxDmlMessages && OutKBuff == other.OutKBuff && TcpNoDelay == other.TcpNoDelay;
+        && Limits.LongLength == other.Limits.LongLength && Limits.MaxDmlMessages == other.Limits.MaxDmlMessages
+        && Limits.MaxSendQueueBytes == other.Limits.MaxSendQueueBytes && OutKBuff == other.OutKBuff && TcpNoDelay == other.TcpNoDelay;
 }

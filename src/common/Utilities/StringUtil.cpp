@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements tokenizing, trimming, and ASCII case helpers without locale dependence, and escapes control bytes and caps the length of untrusted text for logs.
+ * Implements tokenizing, trimming, and ASCII case helpers without locale dependence, cuts UTF-8 text at a character boundary, and escapes control bytes and caps the length of untrusted text for logs.
  */
 
 #include "StringUtil.h"
@@ -79,6 +79,18 @@ std::string Ambrose::ToUpper(std::string_view str)
 bool Ambrose::EqualsIgnoreCase(std::string_view left, std::string_view right)
 {
     return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](char a, char b) { return AsciiLower(a) == AsciiLower(b); });
+}
+
+std::string_view Ambrose::TruncateUtf8(std::string_view text, std::size_t maxBytes) noexcept
+{
+    if (text.size() <= maxBytes)
+        return text;
+    std::size_t end = maxBytes;
+    for (std::size_t steps = 0; steps < 3 && end > 0 && (static_cast<uint8>(text[end]) & 0xC0) == 0x80; ++steps)
+        --end;
+    if ((static_cast<uint8>(text[end]) & 0xC0) == 0x80)
+        end = maxBytes;
+    return text.substr(0, end);
 }
 
 std::string Ambrose::ForLog(std::string_view text, std::size_t maxBytes)

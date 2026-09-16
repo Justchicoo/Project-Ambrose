@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A blocking loopback client for session tests that reads frames with timeouts, answers the SessionOffer, sends raw bytes and waits for the server to close, plus a polling wait helper.
+ * A blocking loopback client for session tests, optionally with a small receive buffer, that reads frames with timeouts, answers the SessionOffer, sends raw bytes and waits for the server to close, plus a polling wait helper.
  */
 
 #ifndef AMBROSE_FAKESESSIONCLIENT_H
@@ -24,9 +24,13 @@ bool WaitForCondition(std::function<bool()> const& condition, std::chrono::milli
 class FakeSessionClient
 {
 public:
-    explicit FakeSessionClient(uint16 port) : _socket(_context)
+    explicit FakeSessionClient(uint16 port, int32 receiveBufferBytes = -1) : _socket(_context)
     {
-        _socket.connect(asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), port));
+        asio::ip::tcp::endpoint const endpoint(asio::ip::make_address("127.0.0.1"), port);
+        _socket.open(endpoint.protocol());
+        if (receiveBufferBytes >= 0)
+            _socket.set_option(asio::socket_base::receive_buffer_size(receiveBufferBytes));
+        _socket.connect(endpoint);
     }
 
     std::optional<Frame> ReadFrame(std::chrono::milliseconds timeout = std::chrono::seconds(30))

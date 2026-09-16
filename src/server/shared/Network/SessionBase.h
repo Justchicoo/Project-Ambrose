@@ -1,15 +1,18 @@
 /*
  * Project Ambrose by Imjustchico
- * A client session over one socket: sends SessionOffer at once, waits for a matching SessionAccept, answers and sends keepalives, hands DML messages to the app, and tracks its status, protocol strikes and queued inbound work.
+ * A client session over one socket: sends SessionOffer at once, waits for a matching SessionAccept, answers and sends keepalives, hands DML messages to the app, encodes declared messages against the live definitions straight into their frames, and tracks its status, protocol strikes, ping budget and queued inbound work.
  */
 
 #ifndef AMBROSE_SESSIONBASE_H
 #define AMBROSE_SESSIONBASE_H
 
 #include "ControlMessages.h"
+#include "FrameWriter.h"
+#include "MessageRegistry.h"
 #include "SessionContext.h"
 #include "SessionStatus.h"
 #include "Socket.h"
+#include "SystemMessages.h"
 #include "TokenBucket.h"
 
 #include <asio/steady_timer.hpp>
@@ -17,6 +20,7 @@
 #include <atomic>
 #include <chrono>
 #include <deque>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -38,6 +42,8 @@ public:
     static constexpr std::chrono::seconds DisabledKeepAliveRecheck{ 1 };
     static constexpr std::size_t MaxQueuedMessages = 4096;
     static constexpr std::size_t MaxQueuedBytes = std::size_t{ 4 } << 20;
+    static constexpr std::size_t MaxKickReasonBytes = 1024;
+    static constexpr std::size_t FrameReserveSlack = 64;
 
     SessionBase(asio::ip::tcp::socket&& socket, FrameLimits limits, std::shared_ptr<SessionContext> context);
     ~SessionBase() override;
@@ -60,6 +66,14 @@ public:
     bool QueueInbound(std::function<void()> work, std::size_t bytes = 0);
     std::size_t ProcessQueuedMessages(std::size_t limit = MaxQueuedMessages);
     std::size_t GetQueuedMessageCount() const;
+
+    template<DeclaredMessage T>
+    bool SendDmlMessage(T const& message);
+    template<DeclaredMessage T>
+    bool SendDmlMessageDelayedClose(T const& message);
+    bool SendServerMessage(std::u16string text, bool modal = false);
+    void KickPlayer(uint32 type, std::string_view reason);
+    void HandlePing(SystemMessages::Ping& message);
 
 protected:
     virtual void OnAccepted();
@@ -84,11 +98,15 @@ private:
     void ScheduleKeepAlive(std::chrono::milliseconds delay);
     void SendKeepAlive();
     void CloseForProtocol(std::string const& reason);
+    template<DeclaredMessage T>
+    bool EncodeAndQueue(T const& message);
+    void ReportSendFailure(std::string_view tag, std::string_view reason) const;
     std::shared_ptr<SessionBase> Self();
 
     std::shared_ptr<SessionContext> _context;
-    std::mutex _dropMutex;
+    std::mutex _budgetMutex;
     TokenBucket _dropBudget;
+    TokenBucket _pingBudget;
     uint16 _sessionId = 0;
     std::atomic<SessionStatus> _status{ SessionStatus::Connected };
     std::atomic<uint32> _strikes{ 0 };
@@ -117,5 +135,54 @@ private:
     bool _keepAliveTimeoutSuspended = false;
     bool _idReleased = false;
 };
+
+template<DeclaredMessage T>
+bool SessionBase::SendDmlMessage(T const& message)
+{
+    if (!IsOpen() || IsKicked())
+        return false;
+    return EncodeAndQueue(message);
+}
+
+template<DeclaredMessage T>
+bool SessionBase::SendDmlMessageDelayedClose(T const& message)
+{
+    if (!IsOpen() || _kicked.exchange(true, std::memory_order_relaxed))
+        return false;
+    bool const sent = EncodeAndQueue(message);
+    DelayedCloseSocket();
+    return sent;
+}
+
+template<DeclaredMessage T>
+bool SessionBase::EncodeAndQueue(T const& message)
+{
+    MessageCatalogPtr const catalog = sMessageRegistry.GetCatalog();
+    if (!catalog)
+    {
+        ReportSendFailure(T::Tag, "no message definitions are loaded");
+        return false;
+    }
+    if (!catalog->IsDeclared<T>())
+    {
+        ReportSendFailure(T::Tag, "it is not declared with the message registry");
+        return false;
+    }
+    MessageInfo const& info = catalog->GetInfo<T>();
+    ByteBuffer frame;
+    try
+    {
+        frame.Reserve(FrameLayout::LongPrefixSize + FrameLayout::FrameHeaderSize + FrameLayout::DmlHeaderSize + info.MinSize + FrameLayout::TrailerSize + FrameReserveSlack);
+        std::size_t const start = FrameWriter::BeginDml(frame, info.Protocol->ServiceId, static_cast<uint8>(info.Definition->Order));
+        catalog->Encode(message, frame);
+        FrameWriter::EndDml(frame, start, GetLongFrameLength());
+    }
+    catch (std::exception const& failure)
+    {
+        ReportSendFailure(T::Tag, failure.what());
+        return false;
+    }
+    return QueueFrame(std::move(frame));
+}
 
 #endif

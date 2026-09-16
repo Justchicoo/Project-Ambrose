@@ -6,6 +6,7 @@ PatchServerPort = 12500
 Network.Threads = 1
 Network.MaxFrameSize = 4194304
 Network.MaxDmlMessages = 1024
+Network.MaxSendQueueBytes = 16777216
 Network.LongFrameLength = BodyOnly
 Network.OutKBuff = -1
 Network.TcpNoDelay = 1

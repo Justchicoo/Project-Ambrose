@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Growable little-endian byte buffer with bounds-checked typed reads, writes, and in-place patches.
+ * Growable little-endian byte buffer with bounds-checked typed reads, writes, insertions, and in-place patches, whose storage can be moved out whole.
  */
 
 #ifndef AMBROSE_BYTEBUFFER_H
@@ -68,6 +68,7 @@ public:
     }
 
     void WriteBytes(std::span<uint8 const> bytes);
+    void InsertBytes(std::size_t position, std::span<uint8 const> bytes);
     std::span<uint8 const> ReadBytes(std::size_t count);
     void Skip(std::size_t count);
     void EnsureReadable(std::size_t count) const;
@@ -80,6 +81,7 @@ public:
     void SetReadPosition(std::size_t position);
     void Reserve(std::size_t capacity);
     void Clear();
+    std::vector<uint8> Release() noexcept;
 
 private:
     template<ByteBufferScalar T>

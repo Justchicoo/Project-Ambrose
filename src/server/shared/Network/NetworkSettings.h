@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Listener and socket settings for one app: bind address, port, network threads, frame limits, send buffer, and TCP_NODELAY, loaded from config.
+ * Listener and socket settings for one app: bind address, port, network threads, frame and send queue limits, send buffer, and TCP_NODELAY, loaded from config.
  */
 
 #ifndef AMBROSE_NETWORKSETTINGS_H
@@ -19,6 +19,8 @@ struct ConfigIssue;
 struct NetworkSettings
 {
     static constexpr std::size_t MaxThreads = 256;
+    static constexpr uint64 MinSendQueueBytes = uint64{ 1 } << 20;
+    static constexpr uint64 MaxSendQueueBytesLimit = uint64{ 1 } << 30;
 
     std::string BindIp = "0.0.0.0";
     uint16 Port = 0;

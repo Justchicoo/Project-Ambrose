@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests tokenizing, trimming, case helpers, checked number parsing, and formatting.
+ * Tests tokenizing, trimming, case helpers, checked number parsing, formatting, UTF-8 truncation, and log escaping.
  */
 
 #include "StringUtil.h"
@@ -89,6 +89,19 @@ TEST(StringUtilTest, CaseHelpersAreAsciiOnly)
 TEST(StringUtilTest, StringFormatUsesFmt)
 {
     EXPECT_EQ(Ambrose::StringFormat("{} has {} pips", "Wizard", 3), "Wizard has 3 pips");
+}
+
+TEST(StringUtilTest, TruncateUtf8NeverSplitsACharacter)
+{
+    EXPECT_EQ(Ambrose::TruncateUtf8("wizard", 10), "wizard");
+    EXPECT_EQ(Ambrose::TruncateUtf8("wizard", 3), "wiz");
+    EXPECT_EQ(Ambrose::TruncateUtf8("caf\xC3\xA9", 5), "caf\xC3\xA9");
+    EXPECT_EQ(Ambrose::TruncateUtf8("caf\xC3\xA9!", 4), "caf");
+    EXPECT_EQ(Ambrose::TruncateUtf8("a\xF0\x9F\x94\xA5" "b", 4), "a");
+    EXPECT_EQ(Ambrose::TruncateUtf8("a\xF0\x9F\x94\xA5" "b", 5), "a\xF0\x9F\x94\xA5");
+    EXPECT_EQ(Ambrose::TruncateUtf8("\xE2\x82\xAC", 2), "");
+    EXPECT_EQ(Ambrose::TruncateUtf8("ab\x80\x80\x80\x80\x80", 6), "ab\x80\x80\x80\x80");
+    EXPECT_EQ(Ambrose::TruncateUtf8("", 0), "");
 }
 
 TEST(StringUtilTest, ForLogEscapesControlBytesAndCapsLength)

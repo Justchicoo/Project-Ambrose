@@ -397,7 +397,7 @@ TEST(NetworkSettingsTest, LoadsAndClampsConfigValues)
     std::filesystem::path const file = directory.Path() / "network.conf";
     {
         std::ofstream stream(file);
-        stream << "BindIP = 127.0.0.1\nWorldServerPort = 13000\nNetwork.Threads = 900\nNetwork.MaxFrameSize = 10\nNetwork.MaxDmlMessages = 0\nNetwork.LongFrameLength = HeaderAndBody\nNetwork.OutKBuff = 65536\nNetwork.TcpNoDelay = 0\n";
+        stream << "BindIP = 127.0.0.1\nWorldServerPort = 13000\nNetwork.Threads = 900\nNetwork.MaxFrameSize = 10\nNetwork.MaxDmlMessages = 0\nNetwork.LongFrameLength = HeaderAndBody\nNetwork.OutKBuff = 65536\nNetwork.TcpNoDelay = 0\nNetwork.MaxSendQueueBytes = 1024\n";
     }
     ConfigMgr config;
     ASSERT_TRUE(config.LoadInitial(file).Succeeded());
@@ -411,7 +411,9 @@ TEST(NetworkSettingsTest, LoadsAndClampsConfigValues)
     EXPECT_EQ(settings.Limits.LongLength, LongFrameLength::HeaderAndBody);
     EXPECT_EQ(settings.OutKBuff, 65536);
     EXPECT_FALSE(settings.TcpNoDelay);
-    EXPECT_EQ(problems.size(), 3u);
+    EXPECT_EQ(settings.Limits.MaxSendQueueBytes, NetworkSettings::MinSendQueueBytes);
+    ASSERT_EQ(problems.size(), 4u);
+    EXPECT_EQ(problems.back(), "Network.MaxSendQueueBytes = 1024 is outside 1048576-1073741824; using 1048576");
 
     std::filesystem::path const empty = directory.Path() / "empty.conf";
     {
@@ -427,6 +429,7 @@ TEST(NetworkSettingsTest, LoadsAndClampsConfigValues)
     EXPECT_EQ(fallback.Threads, 1u);
     EXPECT_EQ(fallback.Limits.MaxFrameSize, FrameLimits::DefaultMaxFrameSize);
     EXPECT_EQ(fallback.Limits.LongLength, LongFrameLength::BodyOnly);
+    EXPECT_EQ(fallback.Limits.MaxSendQueueBytes, FrameLimits::DefaultMaxSendQueueBytes);
     EXPECT_TRUE(fallback.TcpNoDelay);
     ASSERT_EQ(problems.size(), 1u);
     EXPECT_NE(problems.front().find("Sideways"), std::string::npos);

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads into the reassembler until close, writes queued frames as one gathered write, and shuts down gracefully after a delayed close drains the queue.
+ * Reads into the reassembler until close, writes queued frames as one gathered write, closes a connection whose send queue outgrows its limit, and shuts down gracefully after a delayed close drains the queue.
  */
 
 #include "Socket.h"
@@ -11,7 +11,7 @@
 #include <asio/post.hpp>
 #include <asio/write.hpp>
 
-Socket::Socket(asio::ip::tcp::socket&& socket, FrameLimits limits) : _socket(std::move(socket)), _reassembler(limits), _lingerTimer(_socket.get_executor()), _longLength(limits.LongLength)
+Socket::Socket(asio::ip::tcp::socket&& socket, FrameLimits limits) : _socket(std::move(socket)), _reassembler(limits), _lingerTimer(_socket.get_executor()), _maxQueuedBytes(limits.MaxSendQueueBytes), _longLength(limits.LongLength)
 {
     std::error_code error;
     asio::ip::tcp::endpoint const remote = _socket.remote_endpoint(error);
@@ -40,11 +40,23 @@ void Socket::Start()
     });
 }
 
-void Socket::QueueFrame(std::vector<uint8> bytes)
+bool Socket::QueueFrame(std::vector<uint8> bytes)
 {
     if (bytes.empty() || !IsOpen())
-        return;
-    _queuedBytes.fetch_add(bytes.size(), std::memory_order_relaxed);
+        return false;
+    std::size_t const size = bytes.size();
+    std::size_t const queued = _queuedBytes.fetch_add(size, std::memory_order_relaxed) + size;
+    std::size_t const limit = _maxQueuedBytes.load(std::memory_order_relaxed);
+    if (queued > limit)
+    {
+        _queuedBytes.fetch_sub(size, std::memory_order_relaxed);
+        if (!_queueOverflowed.exchange(true, std::memory_order_relaxed))
+        {
+            LOG_WARN("network", "Closing {}:{}: a {}-byte frame would leave {} bytes waiting to be sent, over the {}-byte send queue limit", _remoteAddress.to_string(), _remotePort, size, queued, limit);
+            CloseSocket();
+        }
+        return false;
+    }
     asio::post(_socket.get_executor(), [self = shared_from_this(), bytes = std::move(bytes)]() mutable
     {
         if (!self->IsOpen() || self->_delayedClose)
@@ -55,11 +67,17 @@ void Socket::QueueFrame(std::vector<uint8> bytes)
         self->_queue.push_back(std::move(bytes));
         self->WriteNext();
     });
+    return true;
 }
 
-void Socket::QueueFrame(ByteBuffer const& buffer)
+bool Socket::QueueFrame(ByteBuffer const& buffer)
 {
-    QueueFrame(std::vector<uint8>(buffer.GetData().begin(), buffer.GetData().end()));
+    return QueueFrame(std::vector<uint8>(buffer.GetData().begin(), buffer.GetData().end()));
+}
+
+bool Socket::QueueFrame(ByteBuffer&& buffer)
+{
+    return QueueFrame(buffer.Release());
 }
 
 void Socket::CloseSocket()
@@ -87,6 +105,7 @@ void Socket::DelayedCloseSocket()
 void Socket::SetFrameLimits(FrameLimits limits)
 {
     _longLength.store(limits.LongLength, std::memory_order_relaxed);
+    _maxQueuedBytes.store(limits.MaxSendQueueBytes, std::memory_order_relaxed);
     asio::post(_socket.get_executor(), [self = shared_from_this(), limits] { self->_reassembler.SetLimits(limits); });
 }
 

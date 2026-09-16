@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads session timing options in seconds, the strike limit and the dropped-message budget from config, clamping out-of-range values and reporting each problem.
+ * Reads session timing options in seconds, the strike limit, and the dropped-message and ping budgets from config, clamping out-of-range values and reporting each problem.
  */
 
 #include "SessionSettings.h"
@@ -34,7 +34,9 @@ SessionSettings SessionSettings::Load(ConfigMgr const& config, std::vector<std::
         return value;
     };
     settings.MaxStrikes = count("Network.MaxStrikes", DefaultMaxStrikes, MaxStrikesLimit);
-    settings.DroppedMessageBurst = count("Network.DroppedMessageBurst", DefaultDroppedMessageBurst, MaxDroppedMessageRate);
-    settings.DroppedMessagesPerSecond = count("Network.DroppedMessagesPerSecond", DefaultDroppedMessagesPerSecond, MaxDroppedMessageRate);
+    settings.DroppedMessageBurst = count("Network.DroppedMessageBurst", DefaultDroppedMessageBurst, MaxBudgetRate);
+    settings.DroppedMessagesPerSecond = count("Network.DroppedMessagesPerSecond", DefaultDroppedMessagesPerSecond, MaxBudgetRate);
+    settings.PingBurst = count("Network.PingBurst", DefaultPingBurst, MaxBudgetRate);
+    settings.PingsPerSecond = count("Network.PingsPerSecond", DefaultPingsPerSecond, MaxBudgetRate);
     return settings;
 }

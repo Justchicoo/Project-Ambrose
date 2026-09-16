@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests KI frames: hand-built vectors, long frames in both length modes, chained DML messages, protocol errors, and randomized stream splits.
+ * Tests KI frames: hand-built vectors, long frames in both length modes, DML frames finished in place, chained DML messages, protocol errors, and randomized stream splits.
  */
 
 #include "AllocationCounter.h"
@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <random>
 
 namespace
@@ -269,6 +270,51 @@ TEST(FrameTest, LongFramesUseTheMarkerInBothLengthModes)
     Frame badDml;
     badDml.Payload = Sequence(3);
     EXPECT_THROW(FrameWriter::WriteFrame(bodyOnly, badDml), std::invalid_argument);
+}
+
+TEST(FrameTest, DmlFramesFinishedInPlaceMatchTheFrameWriter)
+{
+    for (LongFrameLength mode : { LongFrameLength::BodyOnly, LongFrameLength::HeaderAndBody })
+    {
+        for (std::size_t size : { std::size_t{ 0 }, std::size_t{ 1 }, FrameLayout::MaxShortBody, FrameLayout::MaxShortBody + 1, FrameLayout::MaxDmlBody })
+        {
+            DmlMessageData message;
+            message.ServiceId = 7;
+            message.Order = 27;
+            message.Body = Sequence(size, 3);
+            ByteBuffer expected;
+            expected.Write<uint8>(0xAA);
+            FrameWriter::WriteDml(expected, std::span<DmlMessageData const>(&message, 1), mode);
+
+            ByteBuffer inPlace;
+            inPlace.Write<uint8>(0xAA);
+            std::size_t const start = FrameWriter::BeginDml(inPlace, 7, 27);
+            EXPECT_EQ(start, 1u);
+            inPlace.WriteBytes(message.Body);
+            FrameWriter::EndDml(inPlace, start, mode);
+            EXPECT_TRUE(std::ranges::equal(inPlace.GetData(), expected.GetData())) << size << " bytes, mode " << static_cast<int>(mode);
+
+            ByteBuffer single;
+            single.Write<uint8>(0xAA);
+            FrameWriter::WriteDml(single, 7, 27, message.Body, mode);
+            EXPECT_TRUE(std::ranges::equal(single.GetData(), expected.GetData())) << size << " bytes, mode " << static_cast<int>(mode);
+        }
+    }
+
+    ByteBuffer tooLong;
+    std::size_t const start = FrameWriter::BeginDml(tooLong, 5, 1);
+    tooLong.WriteBytes(Sequence(FrameLayout::MaxDmlBody + 1));
+    EXPECT_THROW(FrameWriter::EndDml(tooLong, start), std::length_error);
+
+    ByteBuffer untouched;
+    untouched.Write<uint8>(1);
+    EXPECT_THROW(FrameWriter::WriteDml(untouched, 5, 1, Sequence(FrameLayout::MaxDmlBody + 1)), std::length_error);
+    EXPECT_EQ(untouched.GetSize(), 1u);
+
+    ByteBuffer headerless;
+    headerless.WriteBytes(Sequence(11));
+    EXPECT_THROW(FrameWriter::EndDml(headerless, 0), std::invalid_argument);
+    EXPECT_THROW(FrameWriter::EndDml(headerless, 12), std::invalid_argument);
 }
 
 TEST(FrameTest, RandomizedSplitsReassembleEveryFrame)

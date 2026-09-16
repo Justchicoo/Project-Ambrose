@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks the login message table against the user's own client install: its declarations resolve, every one of the 29 LOGIN messages and every SYSTEM and EXTENDEDBASE message has exactly one rule with matching order and tag, and game messages stay outside the login server's services.
+ * Checks the login message table against the user's own client install: its declarations resolve, every one of the 29 LOGIN messages and every SYSTEM and EXTENDEDBASE message has exactly one rule with matching order and tag, game messages stay outside the login server's services, the shared ping rule is handled, and a server message encodes against the real definitions.
  */
 
 #include "Environment.h"
 #include "LogConfig.h"
 #include "LoginMessageTable.h"
 #include "MessageRegistry.h"
+#include "SystemMessages.h"
 
 #include <gtest/gtest.h>
 
@@ -73,13 +74,13 @@ TEST(LoginMessageTableClientTest, EveryLoginMessageHasOneRuleThatMatchesTheInsta
     EXPECT_EQ(table.FindRule(catalog, 5, 7), nullptr);
     EXPECT_FALSE(table.IsOwnService(5));
 
-    MessageInfo const* const serverMessageInfo = catalog->Find(LoginMessages::ExtendedBaseService, "MSG_SERVERMESSAGE");
+    MessageInfo const* const serverMessageInfo = catalog->Find(SystemMessages::ExtendedBaseService, "MSG_SERVERMESSAGE");
     ASSERT_NE(serverMessageInfo, nullptr);
-    MessageRule const* const serverMessage = table.FindRule(catalog, LoginMessages::ExtendedBaseService, serverMessageInfo->Definition->Order);
+    MessageRule const* const serverMessage = table.FindRule(catalog, SystemMessages::ExtendedBaseService, serverMessageInfo->Definition->Order);
     ASSERT_NE(serverMessage, nullptr);
     EXPECT_EQ(serverMessage->Kind, MessageRuleKind::Refused);
 
-    for (uint8 const service : { LoginMessages::SystemService, LoginMessages::ExtendedBaseService })
+    for (uint8 const service : { SystemMessages::SystemService, SystemMessages::ExtendedBaseService })
     {
         auto const protocol = protocols.find(service);
         ASSERT_NE(protocol, protocols.end());
@@ -91,4 +92,23 @@ TEST(LoginMessageTableClientTest, EveryLoginMessageHasOneRuleThatMatchesTheInsta
         }
     }
     EXPECT_EQ(table.GetRules().size(), 37u);
+
+    MessageInfo const* const pingInfo = catalog->Find(SystemMessages::SystemService, "MSG_PING");
+    ASSERT_NE(pingInfo, nullptr);
+    MessageRule const* const ping = table.FindRule(catalog, SystemMessages::SystemService, pingInfo->Definition->Order);
+    ASSERT_NE(ping, nullptr);
+    EXPECT_EQ(ping->Kind, MessageRuleKind::Handled);
+    EXPECT_EQ(ping->HandlerName, "SessionBase::HandlePing");
+
+    EXPECT_EQ(serverMessageInfo->Definition->Order, 6);
+    MessageInfo const* const forceDisconnect = catalog->Find(SystemMessages::ExtendedBaseService, "MSG_FORCE_DISCONNECT");
+    ASSERT_NE(forceDisconnect, nullptr);
+    EXPECT_EQ(forceDisconnect->Definition->Order, 3);
+
+    SystemMessages::ServerMessage shown;
+    shown.Modal = 1;
+    shown.Message = u"Hi";
+    ByteBuffer encoded;
+    catalog->Encode(shown, encoded);
+    EXPECT_EQ(std::vector<uint8>(encoded.GetData().begin(), encoded.GetData().end()), (std::vector<uint8>{ 1, 2, 0, 'H', 0, 'i', 0 }));
 }

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements byte buffer bounds checks, raw byte access, and the overrun exception message.
+ * Implements byte buffer bounds checks, raw byte access and insertion, releasing the storage, and the overrun exception message.
  */
 
 #include "ByteBuffer.h"
@@ -28,6 +28,13 @@ ByteBuffer::ByteBuffer(std::span<uint8 const> data) : _storage(data.begin(), dat
 void ByteBuffer::WriteBytes(std::span<uint8 const> bytes)
 {
     _storage.insert(_storage.end(), bytes.begin(), bytes.end());
+}
+
+void ByteBuffer::InsertBytes(std::size_t position, std::span<uint8 const> bytes)
+{
+    if (position > _storage.size())
+        throw ByteBufferException(position, 0, _storage.size());
+    _storage.insert(_storage.begin() + static_cast<std::ptrdiff_t>(position), bytes.begin(), bytes.end());
 }
 
 std::span<uint8 const> ByteBuffer::ReadBytes(std::size_t count)
@@ -66,4 +73,12 @@ void ByteBuffer::Clear()
 {
     _storage.clear();
     _readPosition = 0;
+}
+
+std::vector<uint8> ByteBuffer::Release() noexcept
+{
+    std::vector<uint8> released = std::move(_storage);
+    _storage = {};
+    _readPosition = 0;
+    return released;
 }

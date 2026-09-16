@@ -401,8 +401,8 @@ A real client started with -L 127.0.0.1 12000 connects to our loginserver, compl
 
 **Acceptance**
 
-- [ ] MSG_SERVERMESSAGE frame is service 2 order 6 with a correct WSTR
-- [ ] KickPlayer keeps the socket open until MSG_FORCE_DISCONNECT flushes
+- [x] MSG_SERVERMESSAGE frame is service 2 order 6 with a correct WSTR (OutboundMessagesTest over loopback; the client test confirms order 6 and the encoding against the r806919 install)
+- [x] KickPlayer keeps the socket open until MSG_FORCE_DISCONNECT flushes (OutboundMessagesTest backs up over a megabyte of server messages behind small socket buffers, kicks, and reads every one of them and then MSG_FORCE_DISCONNECT before the connection closes)
 
 ### Detailed spec from NET-10: Outbound send API and base-service messages
 
@@ -410,10 +410,10 @@ Game code sends any generated message with one call, and the server can show a m
 
 **Deliverables**
 
-- SessionBase::SendMessage<T>(T const&): encode into a pooled buffer, frame, and queue. SendMessageDelayedClose<T> for final messages
-- src/server/shared/Network/SystemMessages.cpp: MSG_PING handled inplace by replying MSG_PING_RSP
-- Helpers: Session::SendServerMessage(std::u16string const&, bool modal) via EXTENDEDBASE MSG_SERVERMESSAGE (2:6, Modal UBYT, Message WSTR). Session::KickPlayer(uint32 type, std::string reason) via MSG_FORCE_DISCONNECT (2:3, Type UINT, TimeStamp STR, Message STR) then DelayedClose
-- MSG_RAW_TEXT, MSG_CUSTOMDICT, MSG_CUSTOMRECORD and MSG_RAWRECORD registered STATUS_NEVER until a use is found
+- SessionBase::SendMessage<T>(T const&): encode into a pooled buffer, frame, and queue. SendMessageDelayedClose<T> for final messages. Built as SendDmlMessage and SendDmlMessageDelayedClose, because Windows headers define SendMessage as a macro. Each message is encoded straight into its frame, which moves into the send queue, so no pooled buffer or copy is needed; sends to a closed or closing session return false, and each connection's send queue is capped by Network.MaxSendQueueBytes
+- src/server/shared/Network/SystemMessages.cpp: MSG_PING handled inplace by replying MSG_PING_RSP. Built as SessionBase::HandlePing, registered for every app by SystemMessageRules.h, and limited by Network.PingBurst and Network.PingsPerSecond so a ping flood strikes instead of queueing replies
+- Helpers: Session::SendServerMessage(std::u16string const&, bool modal) via EXTENDEDBASE MSG_SERVERMESSAGE (2:6, Modal UBYT, Message WSTR). Session::KickPlayer(uint32 type, std::string reason) via MSG_FORCE_DISCONNECT (2:3, Type UINT, TimeStamp STR, Message STR) then DelayedClose. The reason is cut to 1024 bytes at a character boundary, and the session closes even when the message cannot be sent
+- MSG_RAW_TEXT, MSG_CUSTOMDICT, MSG_CUSTOMRECORD and MSG_RAWRECORD registered STATUS_NEVER until a use is found. Built in 2.10 as not handled yet in any status, following 2.09's rule that only server-only messages strike, because their direction is unknown. Every app shares these rules through SystemMessages::AddRules, and MSG_FORCE_DISCONNECT's TimeStamp is sent as UTC year-month-day hour:minute:second
 
 **Client messages:** MSG_PING, MSG_PING_RSP, MSG_SERVERMESSAGE, MSG_FORCE_DISCONNECT, MSG_RAW_TEXT, MSG_CUSTOMDICT, MSG_CUSTOMRECORD, MSG_RAWRECORD
 
@@ -423,13 +423,14 @@ Game code sends any generated message with one call, and the server can show a m
 
 **Acceptance**
 
-- [ ] Unit: SendMessage of MSG_SERVERMESSAGE produces a frame with service 2, order 6 and a correct WSTR body
-- [ ] Unit: KickPlayer leaves the socket open until MSG_FORCE_DISCONNECT is flushed
+- [x] Unit: SendMessage of MSG_SERVERMESSAGE produces a frame with service 2, order 6 and a correct WSTR body
+- [x] Unit: KickPlayer leaves the socket open until MSG_FORCE_DISCONNECT is flushed
 - [ ] Real client (once a character is in the world, or at the earliest stage it renders): a GM command (cs_server 'announce' or similar, owned by EXT/WLD) sends MSG_SERVERMESSAGE and the client visibly shows the text; 'kick' sends MSG_FORCE_DISCONNECT and the client shows its disconnect dialog instead of a silent 'connection lost'
 
 **Risks**
 
 - Whether the client sends MSG_PING, and what it does with MSG_SERVERMESSAGE before entering the world, is unverified
+- The reference server never sends MSG_FORCE_DISCONNECT (it shows a modal MSG_SERVERMESSAGE and closes instead), so the TimeStamp format and the client's reaction to the message are unverified until the real-client check
 
 ## 2.11 Twofish-256 OFB (FND-8 + LOG-3 cipher)
 

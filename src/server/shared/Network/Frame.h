@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * KI 0xF00D frame layout: constants, frame and DML message values, length rules for short and long frames, and error names.
+ * KI 0xF00D frame layout: constants, per-socket frame and send queue limits, frame and DML message values, length rules for short and long frames, and error names.
  */
 
 #ifndef AMBROSE_FRAME_H
@@ -35,10 +35,12 @@ struct FrameLimits
 {
     static constexpr std::size_t DefaultMaxFrameSize = std::size_t{ 4 } << 20;
     static constexpr std::size_t DefaultMaxDmlMessages = 1024;
+    static constexpr std::size_t DefaultMaxSendQueueBytes = std::size_t{ 16 } << 20;
 
     std::size_t MaxFrameSize = DefaultMaxFrameSize;
     LongFrameLength LongLength = LongFrameLength::BodyOnly;
     std::size_t MaxDmlMessages = DefaultMaxDmlMessages;
+    std::size_t MaxSendQueueBytes = DefaultMaxSendQueueBytes;
 };
 
 struct DmlMessageData

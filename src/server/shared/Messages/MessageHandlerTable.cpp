@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Stores message rules, declares every handled message with the registry, checks rules and the coverage of the app's own services against a catalog, and caches each catalog's service and order slots behind a lock-free read until a new catalog is loaded.
+ * Stores message rules, declares every handled and sent message with the registry, checks rules and the coverage of the app's own services against a catalog, and caches each catalog's service and order slots behind a lock-free read until a new catalog is loaded.
  */
 
 #include "MessageHandlerTable.h"
@@ -59,6 +59,9 @@ bool MessageHandlerTableBase::Declare(MessageRegistry& registry, std::vector<std
     bool declared = true;
     for (MessageRule const& rule : _rules)
         if (rule.Declare && !rule.Declare(registry, errors))
+            declared = false;
+    for (auto const declare : _sentDeclarations)
+        if (!declare(registry, errors))
             declared = false;
     return declared;
 }
