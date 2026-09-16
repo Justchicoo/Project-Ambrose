@@ -38,6 +38,7 @@ find_package(asio CONFIG REQUIRED)
 find_package(Botan 3 CONFIG REQUIRED COMPONENTS sha2_32 sha2_64 hmac system_rng twofish)
 find_package(ZLIB REQUIRED)
 find_package(pugixml CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 find_package(unofficial-libmariadb CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 

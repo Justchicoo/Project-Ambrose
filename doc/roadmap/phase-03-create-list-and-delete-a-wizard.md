@@ -42,10 +42,10 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Acceptance**
 
-- [ ] KiStringHash("class Duel")==85019234 (verified)
-- [ ] PropertyHash("class SharedPointer<class CombatParticipant>","m_flatParticipantList")==3375244498
-- [ ] StringId('Fire')==2343174, 'Ice'==72777, 'Balance'==1027491821 (verified)
-- [ ] Client-gated: all 6981 class and 49461 property hashes match
+- [x] KiStringHash("class Duel")==85019234 (verified; StringHashTest, also as a static_assert)
+- [x] PropertyHash("class SharedPointer<class CombatParticipant>","m_flatParticipantList")==3375244498
+- [x] StringId('Fire')==2343174, 'Ice'==72777, 'Balance'==1027491821 (verified; the string ID is the KI string hash itself)
+- [x] Client-gated: all 6981 class and 49461 property hashes match (TypeDumpHashClientTest against the r806919 dump)
 
 ### Detailed spec from OBJ-2: KI string hash and property hash
 
@@ -59,9 +59,9 @@ The server computes class, property, and state-name hashes identical to the clie
 
 **Acceptance**
 
-- [ ] Unit test: KiStringHash("class Duel") == 85019234 and PropertyHash("class SharedPointer<class CombatParticipant>", "m_flatParticipantList") == 3375244498 (values derived from strings; no client file committed)
-- [ ] Unit test: a static_assert on one hash proves constexpr evaluation
-- [ ] Client-gated integration test (runs only when AMBROSE_TYPEDUMP is set): all 6981 class hashes and 49461 property hashes in the user's dump match. I confirmed this 100% in Python against r806919
+- [x] Unit test: KiStringHash("class Duel") == 85019234 and PropertyHash("class SharedPointer<class CombatParticipant>", "m_flatParticipantList") == 3375244498 (values derived from strings; no client file committed)
+- [x] Unit test: a static_assert on one hash proves constexpr evaluation
+- [x] Client-gated integration test (runs only when AMBROSE_TYPEDUMP is set): all 6981 class hashes and 49461 property hashes in the user's dump match. I confirmed this 100% in Python against r806919 (TypeDumpHashClientTest in client_tests; the variable is named AMBROSE_TYPE_DUMP_PATH, matching the environment name of the TypeDumpPath option that 3.03 adds)
 
 ### Detailed spec from LOG-7: Character name tables and creation config extraction
 
@@ -92,10 +92,10 @@ The server knows the valid first, middle and last name index ranges per gender, 
 
 **Acceptance**
 
-- [ ] Unit: StringId('Fire') == 2343174, StringId('Ice') == 72777 and StringId('Balance') == 1027491821, matching the reference enum values
-- [ ] Unit: FormatName with middle=0 and last=0 returns only the first name, and out-of-range indices are rejected
-- [ ] Unit: reloading sCharacterNameMgr applies an edited character_name_part row, and a reload with an invalid row keeps the old tables and reports it
-- [ ] Tool run against the local install fills character_name_part with non-zero counts for all 4 tables and exactly 7 character_create_school rows; git status shows no new data files
+- [x] Unit: StringId('Fire') == 2343174, StringId('Ice') == 72777 and StringId('Balance') == 1027491821, matching the reference enum values (StringHashTest; StringHash::StringId in src/common/Cryptography/StringHash.h replaces the separate StringId files)
+- [ ] Unit: FormatName with middle=0 and last=0 returns only the first name, and out-of-range indices are rejected (built in 3.14, which repeats this check)
+- [ ] Unit: reloading sCharacterNameMgr applies an edited character_name_part row, and a reload with an invalid row keeps the old tables and reports it (built in 3.14, which repeats this check)
+- [ ] Tool run against the local install fills character_name_part with non-zero counts for all 4 tables and exactly 7 character_create_school rows; git status shows no new data files (built in 3.14, which repeats this check)
 
 **Risks**
 
@@ -170,7 +170,7 @@ The server loads the user's client type dump and answers every schema question b
 
 **Risks**
 
-- The dump is 13.8 MB of JSON, and the JSON library choice is a pending stack decision (not yet in ARCHITECTURE.md). OBJ-15 adds a binary cache
+- The dump is 13.8 MB of JSON, and the JSON library choice is a pending stack decision (not yet in ARCHITECTURE.md). OBJ-15 adds a binary cache. Resolved: ARCHITECTURE's stack settles nlohmann-json, which 3.01 added to vcpkg
 - 12 pointer aliases and 6 SharedPointer aliases have no plain class entry. They must become their own classes rather than be dropped
 
 ## 3.04 Dynamic property object model (OBJ-5)
@@ -577,7 +577,7 @@ The server knows the valid first, middle and last name index ranges per gender, 
 - The extractor writes world DB rows: character_name_part (table_name, idx, locale_key, text_en), character_name_disallowed, character_create_school (school_name, school_id = KI string-ID hash)
 - data/sql/base/db_world/: the empty table definitions only (no extracted rows committed)
 - src/server/game/Characters/CharacterNameMgr.{h,cpp} (sCharacterNameMgr): IsValidIndices(nameIndices, gender), FormatName(nameIndices, gender), IsDisallowed(). `.reload character_name` (through 4.15 when it lands) rebuilds the name parts and disallowed list off to the side, validates them, swaps, and keeps the old tables on failure
-- src/server/shared/Util/StringId.{h,cpp}: the KI string-ID hash, if OBJ has not already provided it
+- src/server/shared/Util/StringId.{h,cpp}: the KI string-ID hash, if OBJ has not already provided it. Provided in 3.01 as StringHash::StringId in src/common/Cryptography/StringHash.h
 - src/test/server/game/Characters/CharacterNameMgrTest.cpp
 
 **Data sources**
@@ -596,7 +596,7 @@ The server knows the valid first, middle and last name index ranges per gender, 
 
 **Acceptance**
 
-- [ ] Unit: StringId('Fire') == 2343174, StringId('Ice') == 72777 and StringId('Balance') == 1027491821, matching the reference enum values
+- [x] Unit: StringId('Fire') == 2343174, StringId('Ice') == 72777 and StringId('Balance') == 1027491821, matching the reference enum values (done in 3.01)
 - [ ] Unit: FormatName with middle=0 and last=0 returns only the first name, and out-of-range indices are rejected
 - [ ] Unit: reloading sCharacterNameMgr applies an edited character_name_part row, and a reload with an invalid row keeps the old tables and reports it
 - [ ] Tool run against the local install fills character_name_part with non-zero counts for all 4 tables and exactly 7 character_create_school rows; git status shows no new data files
