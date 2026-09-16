@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * With AMBROSE_TEST_DB set, tests the worker pool: async queries from many threads, exclusive sync leases, draining and deadline cancels on close, query holders, refused statements, TryQuery telling empty results from failures, keepalive past wait_timeout, and refusing work when closed.
+ * Tests completion handlers that signal each async result once, even for refused or dropped work, and with AMBROSE_TEST_DB set tests the worker pool: async queries from many threads, exclusive sync leases, draining and deadline cancels on close, query holders, refused statements, TryQuery telling empty results from failures, keepalive past wait_timeout, and refusing work when closed.
  */
 
 #include "DatabaseWorkerPool.h"
@@ -8,14 +8,17 @@
 #include "MySQLConnection.h"
 #include "QueryHolder.h"
 #include "QueryResult.h"
+#include "Transaction.h"
 
 #include <fmt/format.h>
 
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 #include <set>
+#include <stdexcept>
 #include <thread>
 
 namespace
@@ -83,6 +86,83 @@ TEST(DatabaseWorkerPoolTest, ClosedPoolRefusesWorkWithoutBlocking)
     EXPECT_TRUE(ran);
     EXPECT_FALSE(pool.SetConnectionInfo("not;enough", 1, 1));
     EXPECT_NE(pool.Open(), 0u);
+}
+
+TEST(DatabaseWorkerPoolTest, CompletionHandlersSignalRefusedAndDroppedWorkOnce)
+{
+    TestPool pool("closed");
+    int signalled = 0;
+    auto handler = [&signalled] { ++signalled; };
+    QueryCallback text = pool.AsyncQuery("SELECT 1", handler);
+    EXPECT_EQ(signalled, 1);
+    EXPECT_TRUE(text.IsReady());
+    SQLQueryHolderCallback holder = pool.DelayQueryHolder(nullptr, handler);
+    EXPECT_EQ(signalled, 2);
+    EXPECT_TRUE(holder.IsReady());
+
+    {
+        PreparedStatementTask dropped(nullptr, true);
+        dropped.SetCompletionHandler(handler);
+    }
+    EXPECT_EQ(signalled, 3);
+
+    std::future<PreparedQueryResult> result;
+    {
+        PreparedStatementTask cancelled(nullptr, true);
+        cancelled.SetCompletionHandler([&signalled] { ++signalled; throw std::runtime_error("handler failure"); });
+        result = cancelled.GetFuture();
+        cancelled.Cancel();
+        EXPECT_EQ(signalled, 4);
+    }
+    EXPECT_EQ(signalled, 4);
+    EXPECT_EQ(result.wait_for(std::chrono::seconds(0)), std::future_status::ready);
+}
+
+TEST(DatabaseWorkerPoolTest, CompletionHandlersRunAfterEachAsyncResultIsReady)
+{
+    std::optional<std::string> const info = TestDatabase();
+    if (!info)
+        GTEST_SKIP() << "AMBROSE_TEST_DB is not set";
+    TestPool pool("notify");
+    ASSERT_TRUE(pool.SetConnectionInfo(*info, 2, 1));
+    ASSERT_EQ(pool.Open(), 0u);
+
+    std::mutex mutex;
+    std::condition_variable signal;
+    int signalled = 0;
+    auto handler = [&] { std::lock_guard const lock(mutex); ++signalled; signal.notify_all(); };
+
+    auto statement = pool.GetPreparedStatement(PoolTestConnection::POOL_SEL_ECHO);
+    ASSERT_TRUE(statement);
+    statement->SetData(0, uint64{ 7 });
+    QueryCallback prepared = pool.AsyncQuery(std::move(statement), handler);
+    QueryCallback text = pool.AsyncQuery("SELECT 8", handler);
+    auto transaction = pool.BeginTransaction();
+    transaction->Append("DO 1");
+    TransactionCallback committed = pool.AsyncCommitTransaction(transaction, handler);
+    auto holder = std::make_shared<SQLQueryHolder<PoolTestConnection>>(1);
+    EXPECT_TRUE(holder->SetPreparedQuery(0, pool.GetPreparedStatement(PoolTestConnection::POOL_SEL_CONNECTION_ID)));
+    SQLQueryHolderCallback held = pool.DelayQueryHolder(holder, handler);
+    {
+        std::unique_lock lock(mutex);
+        ASSERT_TRUE(signal.wait_for(lock, std::chrono::seconds(30), [&] { return signalled == 4; }));
+    }
+    EXPECT_TRUE(prepared.IsReady());
+    EXPECT_TRUE(text.IsReady());
+    EXPECT_TRUE(committed.IsReady());
+    EXPECT_TRUE(held.IsReady());
+
+    uint64 echoed = 0;
+    prepared.WithPreparedCallback([&echoed](PreparedQueryResult result) { echoed = result ? (*result)[0].Get<uint64>() : 0; });
+    EXPECT_TRUE(prepared.InvokeIfReady());
+    EXPECT_EQ(echoed, 7u);
+    bool success = false;
+    committed.AfterComplete([&success](bool ok) { success = ok; });
+    EXPECT_TRUE(committed.InvokeIfReady());
+    EXPECT_TRUE(success);
+    pool.Close();
+    std::lock_guard const lock(mutex);
+    EXPECT_EQ(signalled, 4);
 }
 
 TEST(DatabaseWorkerPoolTest, ThousandAsyncQueriesFromEightThreadsComplete)

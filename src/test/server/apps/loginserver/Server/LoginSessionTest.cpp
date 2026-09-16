@@ -1,14 +1,15 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives a real LoginSession over loopback with Ambrose-authored definitions: a character list request before authentication is dropped with the session kept, a game message sent to the login server earns a strike, MSG_USER_AUTHEN_V3 reaches its handler decoded with client strings escaped, and refused server messages close the session at the strike limit.
+ * Drives a real LoginSession over loopback with Ambrose-authored definitions: a character list request before authentication is dropped with the session kept, a game message sent to the login server earns a strike, MSG_USER_AUTHEN_V3 reaches its handler decoded with client strings escaped and a Rec1 that does not decrypt is refused, and refused server messages close the session at the strike limit.
  */
 
-#include "BaseMessageFixtures.h"
 #include "FakeSessionClient.h"
 #include "FrameWriter.h"
 #include "Log.h"
 #include "LogTestConfig.h"
+#include "LoginMessageFixtures.h"
 #include "LoginMessageTable.h"
+#include "LoginMgr.h"
 #include "LoginSession.h"
 #include "MessageRegistry.h"
 #include "ScopeExit.h"
@@ -22,22 +23,6 @@
 
 namespace
 {
-    constexpr std::string_view LoginFixtureXml = R"(<?xml version="1.0" ?>
-<LoginSessionFixtureMessages>
-<_ProtocolInfo><RECORD><ServiceID TYPE="UBYT">7</ServiceID><ProtocolType TYPE="STR">LOGIN</ProtocolType></RECORD></_ProtocolInfo>
-<MSG_REQUESTCHARACTERLIST><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">8</_MsgOrder></RECORD></MSG_REQUESTCHARACTERLIST>
-<MSG_USER_AUTHEN_RSP><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">14</_MsgOrder><Error TYPE="INT"></Error></RECORD></MSG_USER_AUTHEN_RSP>
-<MSG_USER_AUTHEN_V3><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">27</_MsgOrder><Rec1 TYPE="STR"></Rec1><Version TYPE="STR"></Version><Revision TYPE="STR"></Revision><DataRevision TYPE="STR"></DataRevision><CRC TYPE="STR"></CRC><MachineID TYPE="GID"></MachineID><Locale TYPE="STR"></Locale><PatchClientID TYPE="STR"></PatchClientID><IsSteamPatcher TYPE="UINT"></IsSteamPatcher><ConsoleType TYPE="UBYT"></ConsoleType></RECORD></MSG_USER_AUTHEN_V3>
-</LoginSessionFixtureMessages>
-)";
-
-    constexpr std::string_view GameFixtureXml = R"(<?xml version="1.0" ?>
-<LoginSessionGameMessages>
-<_ProtocolInfo><RECORD><ServiceID TYPE="UBYT">5</ServiceID><ProtocolType TYPE="STR">GAME</ProtocolType></RECORD></_ProtocolInfo>
-<MSG_ATTACH><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">7</_MsgOrder><LoginKey TYPE="STR"></LoginKey></RECORD></MSG_ATTACH>
-</LoginSessionGameMessages>
-)";
-
     struct CapturedLog
     {
         CapturedLog() : Store(std::make_shared<TestAppenderStore>())
@@ -74,13 +59,12 @@ TEST(LoginSessionTest, MessagesAreRoutedByStatusWithStrikesForForeignServices)
 {
     CapturedLog log;
     sMessageRegistry.Clear();
-    ScopeExit const clearRegistry([] { sMessageRegistry.Clear(); });
+    sLoginMgr.Reset();
+    ScopeExit const clearRegistry([] { sMessageRegistry.Clear(); sLoginMgr.Reset(); });
     std::vector<std::string> errors;
     ASSERT_TRUE(LoginMessageTable::Get().Declare(sMessageRegistry, errors));
     MessageDefinitionSet definitions;
-    ASSERT_TRUE(definitions.Add(LoginFixtureXml, "LoginSessionFixtureMessages.xml"));
-    ASSERT_TRUE(definitions.Add(GameFixtureXml, "LoginSessionGameMessages.xml"));
-    ASSERT_TRUE(BaseMessageFixtures::AddTo(definitions));
+    ASSERT_TRUE(LoginMessageFixtures::AddTo(definitions, true));
     ASSERT_TRUE(sMessageRegistry.Load(std::move(definitions)));
 
     auto const context = std::make_shared<SessionContext>(SessionSettings{});
@@ -126,6 +110,7 @@ TEST(LoginSessionTest, MessagesAreRoutedByStatusWithStrikesForForeignServices)
     client.Send(DmlFrame(7, 27, std::vector<uint8>(body.GetData().begin(), body.GetData().end())));
     ASSERT_TRUE(WaitForCondition([&] { return log.Contains("sent MSG_USER_AUTHEN_V3: version W.1.610.0, revision r0.Test, data revision d1, locale enUS, machine 0123456789ABCDEF, patch client patcher, Steam patcher 1, console type 2, 40-byte Rec1"); }));
     EXPECT_FALSE(log.Contains(authen.Rec1));
+    ASSERT_TRUE(WaitForCondition([&] { return log.Contains("; sent MSG_USER_AUTHEN_RSP Error=AuthenFailed"); }));
 
     authen.Version = "x\nSession 9 accepted by 10.0.0.5:1 after 3 ms";
     authen.Locale = std::string(500, '\n');
@@ -156,12 +141,12 @@ TEST(LoginSessionTest, RefusedServerMessagesCloseTheSessionAtTheStrikeLimit)
 {
     CapturedLog log;
     sMessageRegistry.Clear();
-    ScopeExit const clearRegistry([] { sMessageRegistry.Clear(); });
+    sLoginMgr.Reset();
+    ScopeExit const clearRegistry([] { sMessageRegistry.Clear(); sLoginMgr.Reset(); });
     std::vector<std::string> errors;
     ASSERT_TRUE(LoginMessageTable::Get().Declare(sMessageRegistry, errors));
     MessageDefinitionSet definitions;
-    ASSERT_TRUE(definitions.Add(LoginFixtureXml, "LoginSessionFixtureMessages.xml"));
-    ASSERT_TRUE(BaseMessageFixtures::AddTo(definitions));
+    ASSERT_TRUE(LoginMessageFixtures::AddTo(definitions));
     ASSERT_TRUE(sMessageRegistry.Load(std::move(definitions)));
 
     SessionSettings settings;
@@ -183,7 +168,7 @@ TEST(LoginSessionTest, RefusedServerMessagesCloseTheSessionAtTheStrikeLimit)
     ASSERT_NE(client.Handshake(), 0);
     ByteBuffer burst;
     for (int i = 0; i < 4; ++i)
-        FrameWriter::WriteDml(burst, 7, 14, std::vector<uint8>{ 0, 0, 0, 0 });
+        FrameWriter::WriteDml(burst, 7, 14, std::vector<uint8>(30, 0));
     client.Send(burst);
     EXPECT_TRUE(client.WaitForClose());
     EXPECT_TRUE(log.Contains("LOGIN MSG_USER_AUTHEN_RSP (7:14), which only the server sends"));

@@ -178,9 +178,10 @@ void DatabaseWorkerPoolBase::Execute(std::string sql)
     Enqueue(std::make_unique<AdhocStatementTask>(std::move(sql), false));
 }
 
-QueryCallback DatabaseWorkerPoolBase::AsyncQuery(std::string sql)
+QueryCallback DatabaseWorkerPoolBase::AsyncQuery(std::string sql, SQLOperation::CompletionHandler onCompleted)
 {
     auto task = std::make_unique<AdhocStatementTask>(std::move(sql), true);
+    task->SetCompletionHandler(std::move(onCompleted));
     std::future<QueryResult> result = task->GetFuture();
     Enqueue(std::move(task));
     return QueryCallback(std::move(result));
@@ -240,10 +241,11 @@ void DatabaseWorkerPoolBase::ExecuteStatement(std::unique_ptr<PreparedStatementB
     Enqueue(std::make_unique<PreparedStatementTask>(std::move(statement), false));
 }
 
-QueryCallback DatabaseWorkerPoolBase::AsyncQueryStatement(std::unique_ptr<PreparedStatementBase> statement)
+QueryCallback DatabaseWorkerPoolBase::AsyncQueryStatement(std::unique_ptr<PreparedStatementBase> statement, SQLOperation::CompletionHandler onCompleted)
 {
     bool const valid = CheckStatement(statement.get(), false, "AsyncQuery");
     auto task = std::make_unique<PreparedStatementTask>(std::move(statement), true);
+    task->SetCompletionHandler(std::move(onCompleted));
     std::future<PreparedQueryResult> result = task->GetFuture();
     if (valid)
         Enqueue(std::move(task));
@@ -252,9 +254,10 @@ QueryCallback DatabaseWorkerPoolBase::AsyncQueryStatement(std::unique_ptr<Prepar
     return QueryCallback(std::move(result));
 }
 
-SQLQueryHolderCallback DatabaseWorkerPoolBase::DelayQueryHolderBase(std::shared_ptr<SQLQueryHolderBase> holder)
+SQLQueryHolderCallback DatabaseWorkerPoolBase::DelayQueryHolderBase(std::shared_ptr<SQLQueryHolderBase> holder, SQLOperation::CompletionHandler onCompleted)
 {
     auto task = std::make_unique<QueryHolderTask>(holder);
+    task->SetCompletionHandler(std::move(onCompleted));
     std::future<void> done = task->GetFuture();
     if (!holder)
     {
@@ -464,10 +467,11 @@ void DatabaseWorkerPoolBase::CommitTransactionBase(std::shared_ptr<TransactionBa
     Enqueue(std::make_unique<TransactionTask>(std::move(transaction)));
 }
 
-TransactionCallback DatabaseWorkerPoolBase::AsyncCommitTransactionBase(std::shared_ptr<TransactionBase> transaction)
+TransactionCallback DatabaseWorkerPoolBase::AsyncCommitTransactionBase(std::shared_ptr<TransactionBase> transaction, SQLOperation::CompletionHandler onCompleted)
 {
     bool const valid = LockTransaction(transaction.get()) && CheckTransaction(transaction.get(), false);
     auto task = std::make_unique<TransactionTask>(std::move(transaction));
+    task->SetCompletionHandler(std::move(onCompleted));
     std::future<bool> result = task->GetFuture();
     if (valid)
         Enqueue(std::move(task));

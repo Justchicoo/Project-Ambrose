@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Stores statements by slot, runs every set slot in order on one connection, hands back each slot's result, settles the queued holder task, and runs its completion callback when polled.
+ * Stores statements by slot, runs every set slot in order on one connection, hands back each slot's result, settles the queued holder task and signals its completion handler, and runs its completion callback when polled.
  */
 
 #include "QueryHolder.h"
@@ -57,11 +57,13 @@ void QueryHolderTask::Execute(MySQLConnection& connection)
         LOG_ERROR("sql.sql", "A queued query holder threw an exception on {}", connection.GetInfo().ToLogString());
         _done.set_exception(std::current_exception());
     }
+    NotifyCompleted();
 }
 
 void QueryHolderTask::Cancel()
 {
     _done.set_value();
+    NotifyCompleted();
 }
 
 SQLQueryHolderCallback::SQLQueryHolderCallback(std::shared_ptr<SQLQueryHolderBase> holder, std::future<void>&& done) : _holder(std::move(holder)), _done(std::move(done))

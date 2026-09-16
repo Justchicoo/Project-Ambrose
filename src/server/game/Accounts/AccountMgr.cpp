@@ -20,16 +20,6 @@ namespace
         return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.';
     }
 
-    bool IsLookupName(std::string_view username) noexcept
-    {
-        if (username.empty() || username.size() > AccountSettings::MaxUsernameLength)
-            return false;
-        for (char const c : username)
-            if (!IsUsernameCharacter(c))
-                return false;
-        return true;
-    }
-
     bool IsStorableText(std::string_view text) noexcept
     {
         if (!Utf::IsValidUtf8(text))
@@ -68,6 +58,16 @@ namespace
         account.LastMachineId = row[13].Get<uint64>();
         return account;
     }
+}
+
+bool AccountMgr::IsLookupName(std::string_view username) noexcept
+{
+    if (username.empty() || username.size() > AccountSettings::MaxUsernameLength)
+        return false;
+    for (char const c : username)
+        if (!IsUsernameCharacter(c))
+            return false;
+    return true;
 }
 
 AccountMgr& AccountMgr::Instance()

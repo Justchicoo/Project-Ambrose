@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Appends transaction entries until submitted, commits them on one connection and retries deadlocks, lock timeouts and reconnected losses before COMMIT with backoff until a time limit, and runs completion callbacks when polled.
+ * Appends transaction entries until submitted, commits them on one connection and retries deadlocks, lock timeouts and reconnected losses before COMMIT with backoff until a time limit, signals the completion handler once settled, and runs completion callbacks when polled.
  */
 
 #include "Transaction.h"
@@ -85,11 +85,13 @@ void TransactionTask::Execute(MySQLConnection& connection)
         LOG_ERROR("sql.sql", "A queued transaction threw an exception on {}", connection.GetInfo().ToLogString());
         _result.set_exception(std::current_exception());
     }
+    NotifyCompleted();
 }
 
 void TransactionTask::Cancel()
 {
     _result.set_value(false);
+    NotifyCompleted();
 }
 
 TransactionCallback::TransactionCallback(std::future<bool>&& result) : _result(std::move(result))

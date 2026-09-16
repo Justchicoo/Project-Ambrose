@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Stores parameter values by index, rejects indexes past the statement's placeholder count, describes values for logs without string or blob contents, and runs queued statements.
+ * Stores parameter values by index, rejects indexes past the statement's placeholder count, describes values for logs without string or blob contents, and runs queued statements, signalling each one's completion handler once it is settled.
  */
 
 #include "PreparedStatement.h"
@@ -92,9 +92,11 @@ void PreparedStatementTask::Execute(MySQLConnection& connection)
         LOG_ERROR("sql.sql", "Queued statement {} threw an exception on {}", _statement ? _statement->GetIndex() : 0, connection.GetInfo().ToLogString());
         _result.set_exception(std::current_exception());
     }
+    NotifyCompleted();
 }
 
 void PreparedStatementTask::Cancel()
 {
     _result.set_value(nullptr);
+    NotifyCompleted();
 }

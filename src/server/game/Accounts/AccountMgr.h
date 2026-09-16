@@ -92,6 +92,7 @@ public:
     void SetSettings(AccountSettings settings);
     std::shared_ptr<AccountSettings const> GetSettings() const;
 
+    static bool IsLookupName(std::string_view username) noexcept;
     AccountOpResult ValidateUsername(std::string_view username) const;
     AccountOpResult ValidatePassword(std::string_view password) const;
 

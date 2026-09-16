@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A named connection pool for one database that serves every call from the current connection generation, so opening, closing and live reconfiguring never block callers, with typed statements, holders and transactions.
+ * A named connection pool for one database that serves every call from the current connection generation, so opening, closing and live reconfiguring never block callers, with typed statements, holders and transactions whose async forms can signal a handler once their result is ready.
  */
 
 #ifndef AMBROSE_DATABASEWORKERPOOL_H
@@ -44,7 +44,7 @@ public:
     bool IsOpen() const;
 
     void Execute(std::string sql);
-    QueryCallback AsyncQuery(std::string sql);
+    QueryCallback AsyncQuery(std::string sql, SQLOperation::CompletionHandler onCompleted = {});
     bool DirectExecute(std::string_view sql);
     QueryResult Query(std::string_view sql);
     bool TryQuery(std::string_view sql, QueryResult& result);
@@ -63,12 +63,12 @@ public:
 protected:
     std::optional<std::size_t> GetParameterCount(uint32 index) const;
     void ExecuteStatement(std::unique_ptr<PreparedStatementBase> statement);
-    QueryCallback AsyncQueryStatement(std::unique_ptr<PreparedStatementBase> statement);
+    QueryCallback AsyncQueryStatement(std::unique_ptr<PreparedStatementBase> statement, SQLOperation::CompletionHandler onCompleted = {});
     bool DirectExecuteStatement(PreparedStatementBase const* statement);
     PreparedQueryResult QueryStatement(PreparedStatementBase const* statement, bool* failed = nullptr);
-    SQLQueryHolderCallback DelayQueryHolderBase(std::shared_ptr<SQLQueryHolderBase> holder);
+    SQLQueryHolderCallback DelayQueryHolderBase(std::shared_ptr<SQLQueryHolderBase> holder, SQLOperation::CompletionHandler onCompleted = {});
     void CommitTransactionBase(std::shared_ptr<TransactionBase> transaction);
-    TransactionCallback AsyncCommitTransactionBase(std::shared_ptr<TransactionBase> transaction);
+    TransactionCallback AsyncCommitTransactionBase(std::shared_ptr<TransactionBase> transaction, SQLOperation::CompletionHandler onCompleted = {});
     bool DirectCommitTransactionBase(std::shared_ptr<TransactionBase> const& transaction);
 
 private:
@@ -124,7 +124,7 @@ public:
     }
 
     void Execute(std::unique_ptr<Statement> statement) { ExecuteStatement(std::move(statement)); }
-    QueryCallback AsyncQuery(std::unique_ptr<Statement> statement) { return AsyncQueryStatement(std::move(statement)); }
+    QueryCallback AsyncQuery(std::unique_ptr<Statement> statement, SQLOperation::CompletionHandler onCompleted = {}) { return AsyncQueryStatement(std::move(statement), std::move(onCompleted)); }
     bool DirectExecute(Statement const& statement) { return DirectExecuteStatement(&statement); }
     PreparedQueryResult Query(Statement const& statement) { return QueryStatement(&statement); }
     bool TryQuery(Statement const& statement, PreparedQueryResult& result)
@@ -133,10 +133,10 @@ public:
         result = QueryStatement(&statement, &failed);
         return !failed;
     }
-    SQLQueryHolderCallback DelayQueryHolder(std::shared_ptr<SQLQueryHolder<ConnectionType>> holder) { return DelayQueryHolderBase(std::move(holder)); }
+    SQLQueryHolderCallback DelayQueryHolder(std::shared_ptr<SQLQueryHolder<ConnectionType>> holder, SQLOperation::CompletionHandler onCompleted = {}) { return DelayQueryHolderBase(std::move(holder), std::move(onCompleted)); }
     std::shared_ptr<Transaction<ConnectionType>> BeginTransaction() const { return std::make_shared<Transaction<ConnectionType>>(); }
     void CommitTransaction(std::shared_ptr<Transaction<ConnectionType>> transaction) { CommitTransactionBase(std::move(transaction)); }
-    TransactionCallback AsyncCommitTransaction(std::shared_ptr<Transaction<ConnectionType>> transaction) { return AsyncCommitTransactionBase(std::move(transaction)); }
+    TransactionCallback AsyncCommitTransaction(std::shared_ptr<Transaction<ConnectionType>> transaction, SQLOperation::CompletionHandler onCompleted = {}) { return AsyncCommitTransactionBase(std::move(transaction), std::move(onCompleted)); }
     bool DirectCommitTransaction(std::shared_ptr<Transaction<ConnectionType>> const& transaction) { return DirectCommitTransactionBase(transaction); }
 };
 

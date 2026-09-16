@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Registers every login database statement with its name, SQL, and the connections that prepare it: the log sink, accounts, verifiers, security levels, locks, last logins, and account, IP and machine bans.
+ * Registers every login database statement with its name, SQL, and the connections that prepare it: the log sink, accounts, verifiers, security levels, locks, last logins, account, IP and machine bans, the one-query authentication lookup, hashed session keys, and verifier resealing that never overwrites a changed password.
  */
 
 #include "LoginDatabase.h"
@@ -25,4 +25,13 @@ void LoginDatabaseConnection::DoPrepareStatements()
     PrepareStatement(LOGIN_SEL_ACCOUNT_BANNED, "LOGIN_SEL_ACCOUNT_BANNED", "SELECT `bandate`, `unbandate`, `bannedby`, `reason` FROM `account_banned` WHERE `account_id` = ? AND `active` = 1" + banOrder, ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_IP_BANNED, "LOGIN_SEL_IP_BANNED", "SELECT `bandate`, `unbandate`, `bannedby`, `reason` FROM `ip_banned` WHERE `ip` = ?" + banOrder, ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_MACHINE_BANNED, "LOGIN_SEL_MACHINE_BANNED", "SELECT `bandate`, `unbandate`, `bannedby`, `reason` FROM `machine_banned` WHERE `machine_id` = ?" + banOrder, ConnectionFlags::Both);
+
+    PrepareStatement(LOGIN_SEL_AUTHENTICATION, "LOGIN_SEL_AUTHENTICATION", "SELECT a.`id`, a.`username`, a.`verifier`, a.`verifier_key_id`, a.`locked`, "
+        "EXISTS(SELECT 1 FROM `account_banned` b WHERE b.`account_id` = a.`id` AND b.`active` = 1 AND (b.`unbandate` = 0 OR b.`unbandate` > ?)), "
+        "EXISTS(SELECT 1 FROM `ip_banned` i WHERE i.`ip` = ? AND (i.`unbandate` = 0 OR i.`unbandate` > ?)), "
+        "EXISTS(SELECT 1 FROM `machine_banned` m WHERE m.`machine_id` = ? AND (m.`unbandate` = 0 OR m.`unbandate` > ?)) "
+        "FROM (SELECT 1 AS `probe`) AS `p` LEFT JOIN `account` a ON a.`username` = ?", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_INS_ACCOUNT_SESSION, "LOGIN_INS_ACCOUNT_SESSION", "INSERT INTO `account_session` (`account_id`, `machine_id`, `session_key_hash`, `created`, `expires`) VALUES (?, ?, ?, ?, ?) "
+        "ON DUPLICATE KEY UPDATE `machine_id` = ?, `session_key_hash` = ?, `created` = ?, `expires` = ?", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_UPD_VERIFIER_RESEAL, "LOGIN_UPD_VERIFIER_RESEAL", "UPDATE `account` SET `verifier` = ?, `verifier_key_id` = ? WHERE `id` = ? AND `verifier` = ? AND `verifier_key_id` = ?", ConnectionFlags::Both);
 }

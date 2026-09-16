@@ -37,8 +37,9 @@ The launcher only ever starts `WizardGraphicalClient.exe` with `-P 0`.
 
 1. Build Ambrose, then copy `loginserver.conf.dist` next to `loginserver.exe` as `loginserver.conf`.
 2. Set `ClientDir` in it to your install, so client messages are logged by name.
-3. Start the server. Keepalives and handled client messages log at Debug, so they appear in `Login.log` in `LogsDir` but not on the console. To see them on the console too, start it as `loginserver --set "Appender.Console=1,2,3"`.
-4. Start the client with the launcher and log in.
+3. Start the server. Keepalives, handled client messages and decoded authentication requests log at Debug, so they appear in `Login.log` in `LogsDir` but not on the console. To see them on the console too, start it as `loginserver --set "Appender.Console=1,2,3"`.
+4. Create an account from the server console with `account create <name> <password>`.
+5. Start the client with the launcher and log in with it.
 
 A working session logs lines like these, in this order. The session id, port, timing and size vary.
 
@@ -47,7 +48,10 @@ Session 1 offered to 127.0.0.1:50512
 Session 1 accepted by 127.0.0.1:50512 after 12 ms
 LOGIN MSG_USER_AUTHEN_V3 (7:27) from session 1, 213 bytes
 Session 1 sent MSG_USER_AUTHEN_V3: version W.1.610.x, revision r806919.Wizard_1_610, data revision ..., locale enUS, machine ..., patch client ..., Steam patcher 0, console type 0, ...-byte Rec1
+Session 1 from 127.0.0.1 authenticated as <name> (id 1) on machine ...: sent MSG_USER_AUTHEN_RSP Error=0 and MSG_USER_ADMIT_IND Status=1
 ```
+
+The client should then show the empty character select screen. A wrong password logs `failed to authenticate as <name>: the password is wrong; sent MSG_USER_AUTHEN_RSP Error=AuthenFailed`, and the client should show its invalid-login dialog and let you try again. After `Login.MaxAuthAttempts` wrong passwords the session closes and your address is refused for `Login.LockoutSeconds`.
 
 Client strings in that line are escaped and cut to 64 bytes, so a client cannot write its own log lines.
 

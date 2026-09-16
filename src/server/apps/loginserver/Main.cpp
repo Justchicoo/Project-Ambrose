@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Login server entry point: loads account settings, declares the login message table and checks it against the client's message definitions, opens the login database, listens for clients, and offers account console commands until shutdown.
+ * Login server entry point: loads account and login settings, declares the login message table and checks it against the client's message definitions, opens the login database, listens for clients, and offers account console commands until shutdown.
  */
 
 #include "AccountCommands.h"
@@ -12,6 +12,7 @@
 #include "Log.h"
 #include "LogConfig.h"
 #include "LoginMessageTable.h"
+#include "LoginMgr.h"
 #include "LoginSession.h"
 #include "MessageRegistry.h"
 #include "NetworkSettings.h"
@@ -43,6 +44,7 @@ namespace
                 LOG_ERROR("server.loginserver", "Cannot load the account settings");
                 return false;
             }
+            sLoginMgr.LoadSettings(Config());
 
             MessageHandlerTable<LoginSession> const& messages = LoginMessageTable::Get();
             std::vector<std::string> messageErrors;

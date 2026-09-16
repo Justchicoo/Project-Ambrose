@@ -1,0 +1,66 @@
+/*
+ * Project Ambrose by Imjustchico
+ * Tests the Login options: defaults, a revision list with spaces and empty entries, clamped limits and durations, an unknown duplicate login policy, and enforcement refused without any allowed revision.
+ */
+
+#include "ConfigMgr.h"
+#include "LogTestDirectory.h"
+#include "LoginSettings.h"
+
+#include <gtest/gtest.h>
+
+namespace
+{
+    LoginSettings LoadFrom(std::string const& content, std::vector<std::string>& problems)
+    {
+        LogTestDirectory directory;
+        ConfigMgr config;
+        EXPECT_TRUE(config.LoadInitial(directory.Write("login.conf", content)).Succeeded());
+        problems.clear();
+        return LoginSettings::Load(config, &problems);
+    }
+}
+
+TEST(LoginSettingsTest, DefaultsApplyWithoutOptions)
+{
+    std::vector<std::string> problems;
+    LoginSettings const settings = LoadFrom("", problems);
+    EXPECT_TRUE(problems.empty());
+    EXPECT_EQ(settings, LoginSettings{});
+    EXPECT_FALSE(settings.EnforceRevision);
+    EXPECT_EQ(settings.MaxAuthAttempts, 5u);
+    EXPECT_EQ(settings.Lockout, std::chrono::seconds(900));
+    EXPECT_EQ(settings.DuplicateLogins, DuplicateLoginPolicy::KickExisting);
+    EXPECT_EQ(settings.SessionKeyLifetime, std::chrono::hours(30));
+}
+
+TEST(LoginSettingsTest, ReadsListsAndClampsEveryOption)
+{
+    std::vector<std::string> problems;
+    LoginSettings const settings = LoadFrom("Login.EnforceRevision = 1\nLogin.AllowedRevision = \" r806919.Wizard_1_610 ,, r900000.Wizard_1_620 \"\n"
+        "Login.MaxAuthAttempts = 5000\nLogin.LockoutSeconds = 0\nLogin.SessionKeyLifetime = 10\nLogin.DuplicateLoginPolicy = 0\n", problems);
+    EXPECT_TRUE(settings.EnforceRevision);
+    EXPECT_EQ(settings.AllowedRevisions, (std::vector<std::string>{ "r806919.Wizard_1_610", "r900000.Wizard_1_620" }));
+    EXPECT_TRUE(settings.AllowsRevision("r900000.Wizard_1_620"));
+    EXPECT_FALSE(settings.AllowsRevision("r806919"));
+    EXPECT_EQ(settings.MaxAuthAttempts, LoginSettings::MaxAuthAttemptsLimit);
+    EXPECT_EQ(settings.Lockout, std::chrono::seconds(1));
+    EXPECT_EQ(settings.SessionKeyLifetime, std::chrono::seconds(LoginSettings::MinSessionKeyLifetimeSeconds));
+    EXPECT_EQ(settings.DuplicateLogins, DuplicateLoginPolicy::Reject);
+    EXPECT_EQ(problems, (std::vector<std::string>{ "Login.MaxAuthAttempts = 5000 is outside 0-1000; using 1000", "Login.LockoutSeconds = 0 is outside 1-2592000; using 1",
+        "Login.SessionKeyLifetime = 10 is outside 60-2592000; using 60" }));
+
+    LoginSettings const unlimited = LoadFrom("Login.MaxAuthAttempts = 0\nLogin.DuplicateLoginPolicy = 7\n", problems);
+    EXPECT_EQ(unlimited.MaxAuthAttempts, 0u);
+    EXPECT_EQ(unlimited.DuplicateLogins, DuplicateLoginPolicy::KickExisting);
+    EXPECT_EQ(problems, (std::vector<std::string>{ "Login.DuplicateLoginPolicy = 7 is not 0 (reject) or 1 (kick the existing session); using 1" }));
+}
+
+TEST(LoginSettingsTest, EnforcementNeedsAnAllowedRevision)
+{
+    std::vector<std::string> problems;
+    LoginSettings const settings = LoadFrom("Login.EnforceRevision = 1\nLogin.AllowedRevision = \" , \"\n", problems);
+    EXPECT_FALSE(settings.EnforceRevision);
+    EXPECT_TRUE(settings.AllowedRevisions.empty());
+    EXPECT_EQ(problems, (std::vector<std::string>{ "Login.EnforceRevision = 1 with no Login.AllowedRevision would refuse every client; revisions are not enforced" }));
+}

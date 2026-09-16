@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A blocking loopback client for session tests, optionally with a small receive buffer, that reads frames with timeouts, answers the SessionOffer, sends raw bytes and waits for the server to close, plus a polling wait helper.
+ * A blocking loopback client for session tests, optionally with a small receive buffer, that reads frames with timeouts, answers the SessionOffer and keeps it for login hashes, sends raw bytes and waits for the server to close, plus a polling wait helper.
  */
 
 #ifndef AMBROSE_FAKESESSIONCLIENT_H
@@ -109,6 +109,7 @@ public:
         std::optional<SessionOffer> const offer = ControlMessages::DecodeSessionOffer(offerFrame->Payload);
         if (!offer)
             return 0;
+        _offer = offer;
         SendAccept(offer->SessionId, offer->Time);
         return offer->SessionId;
     }
@@ -124,6 +125,7 @@ public:
     }
 
     bool IsClosed() const noexcept { return _closed; }
+    std::optional<SessionOffer> const& GetOffer() const noexcept { return _offer; }
     std::size_t GetReceivedBytes() const noexcept { return _received; }
 
 private:
@@ -132,6 +134,7 @@ private:
     FrameReassembler _reassembler;
     std::array<uint8, 4096> _buffer{};
     std::size_t _received = 0;
+    std::optional<SessionOffer> _offer;
     bool _closed = false;
 };
 

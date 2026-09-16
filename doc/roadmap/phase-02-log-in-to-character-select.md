@@ -587,7 +587,7 @@ Accounts exist in MySQL and an operator can create one with a password, so authe
 
 **Acceptance**
 
-- [ ] Unit: wrong sid, wrong CK1, banned machine, locked account each give their error and no session row
+- [x] Unit: wrong sid, wrong CK1, banned machine, locked account each give their error and no session row (AuthHandlerTest over loopback, run locally against MariaDB 10.11 and MySQL 8 and in CI against MySQL 8, which also covers an unknown account, a banned address, a banned account, a disallowed revision and an oversized Rec1)
 - [ ] Real client: correct password reaches empty character select; log shows AUTHEN_RSP Error=0 and ADMIT_IND Status=1
 - [ ] Real client: wrong password shows the invalid-login dialog and allows retry
 - [ ] Banned account is refused visibly
@@ -598,13 +598,13 @@ A real client with valid credentials is authenticated and admitted to character 
 
 **Deliverables**
 
-- src/server/apps/loginserver/Handlers/AuthHandler.cpp: HandleUserAuthenV3 decrypts Rec1 with the session's offer values and parses the plaintext as 'sid username ck1' (split on spaces; exactly 3 parts; sid must equal this session's id), then checks optional revision enforcement (Login.EnforceRevision, Login.AllowedRevision), account existence, account, IP and machine bans (MachineID GID), locked accounts, and CK1
+- src/server/apps/loginserver/Handlers/AuthHandler.cpp: HandleUserAuthenV3 decrypts Rec1 with the session's offer values and parses the plaintext as 'sid username ck1' (split on spaces; exactly 3 parts; sid must equal this session's id), then checks optional revision enforcement (Login.EnforceRevision, Login.AllowedRevision), account existence, account, IP and machine bans (MachineID GID), locked accounts, and CK1. Built with the account, its lock and all three bans read in one prepared query, run asynchronously and continued on the session's network thread when the database signals the result. A banned machine or address gives MachineBanned and a banned or locked account AccountBanned, as in the reference server, but bans are checked before the account and an account ban only after the password, so neither answer reveals that an account exists. A Rec1 over 512 bytes is refused before decryption, and Login.AllowedRevision takes a comma-separated list
 - On success: generate a session key, store it in account_session, update last_login/last_ip/last_machine_id, seal the verifier again when its key id is not the active verifier key, and send MSG_USER_AUTHEN_RSP{Error=0, UserID=account id, Rec1=Rec1.Encode(sessionKey), Reason='', TimeStamp='', PayingUser=1, Flags=0, SupportID='', PublicPlayerName=''} then MSG_USER_ADMIT_IND{Status=1, PositionInQueue=0}; mark the session Authenticated
-- On failure: MSG_USER_AUTHEN_RSP{Error=<code>, Reason=<text>} and keep the socket open for a retry, closing it after N failures (config Login.MaxAuthAttempts) with an IP lockout lasting Login.LockoutSeconds, like AzerothCore's WrongPass policy
-- Duplicate login policy (config Login.DuplicateLoginPolicy): an account already marked online either rejects with Error=AuthenFailed plus MSG_SERVERMESSAGE, or kicks the old session
+- On failure: MSG_USER_AUTHEN_RSP{Error=<code>, Reason=<text>} and keep the socket open for a retry, closing it after N failures (config Login.MaxAuthAttempts) with an IP lockout lasting Login.LockoutSeconds, like AzerothCore's WrongPass policy. Built with Reason set to the error's name, guesses counted per address in memory with IPv6 counted by /64 and attempts in flight reserved against the limit, and a session closed after Login.MaxAuthAttempts failures of any kind; a database that cannot answer gives Timeout and closes the session. Login.SessionKeyLifetime sets account_session's expiry
+- Duplicate login policy (config Login.DuplicateLoginPolicy): an account already marked online either rejects with Error=AuthenFailed plus MSG_SERVERMESSAGE, or kicks the old session. Built on the login server's own live sessions, kicking the earlier session as soon as the new login's password is verified; the online column joins in once the game server marks players online in phase 4
 - Login.EnforceRevision, Login.AllowedRevision, Login.MaxAuthAttempts, Login.LockoutSeconds and Login.DuplicateLoginPolicy are live settings read on each attempt, so a change applies without a restart (registered with 4.16 when it lands)
 - MSG_USER_AUTHEN (13), MSG_USER_AUTHEN_V2 (22), MSG_WEB_AUTHEN (24) and MSG_WEB_VALIDATE (25) are answered with an AUTHEN_RSP failure and logged
-- data/sql/updates/db_login/<date>_01.sql: account_session (account_id PK, machine_id, session_key CHAR(44), created, expires)
+- data/sql/updates/db_login/<date>_01.sql: account_session (account_id PK, machine_id, session_key CHAR(44), created, expires). Built as 2026_09_16_00.sql, following the repository's numbering, with session_key_hash CHAR(44) holding the base64 SHA-256 of the key, so the table holds no usable key
 - src/server/apps/loginserver/Server/AuthResult.h: error code constants
 
 **Client messages:** MSG_USER_AUTHEN_V3, MSG_USER_AUTHEN_RSP, MSG_USER_ADMIT_IND, MSG_USER_AUTHEN, MSG_USER_AUTHEN_V2, MSG_WEB_AUTHEN, MSG_WEB_VALIDATE, MSG_SERVERMESSAGE
@@ -624,8 +624,8 @@ A real client with valid credentials is authenticated and admitted to character 
 
 **Acceptance**
 
-- [ ] Unit: a fake session with known sid, secs and ms, fed a Rec1 built by the test from 'sid user ck1', authenticates; a wrong sid in the plaintext, a wrong CK1, a banned machine id and a locked account each give the expected error code and no session row
-- [ ] Unit: changing Login.MaxAuthAttempts on a running loginserver applies to the next attempt without a restart
+- [x] Unit: a fake session with known sid, secs and ms, fed a Rec1 built by the test from 'sid user ck1', authenticates; a wrong sid in the plaintext, a wrong CK1, a banned machine id and a locked account each give the expected error code and no session row (AuthHandlerTest takes the sid, seconds and milliseconds from the SessionOffer a real LoginSession sends over loopback)
+- [x] Unit: changing Login.MaxAuthAttempts on a running loginserver applies to the next attempt without a restart (AuthHandlerTest reloads the config file between two wrong passwords, and the lower limit closes the session and locks the address out)
 - [ ] Real client (in-client login UI, no -U): the correct password moves to the character select screen (empty list for a new account) with no error dialog; the server log shows AUTHEN_V3, AUTHEN_RSP Error=0 and ADMIT_IND Status=1, matching capture lines 1-3
 - [ ] Real client: a wrong password shows the client's invalid-login dialog and allows a retry without restarting the client
 - [ ] Real client: an account banned via account_banned is refused with a visible message and never reaches character select

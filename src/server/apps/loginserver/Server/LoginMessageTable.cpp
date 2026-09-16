@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Lists every message of the login server's services once: MSG_USER_AUTHEN_V3 handled before authentication, the other LOGIN client requests with the status each will need, the server's replies refused, and the SYSTEM and EXTENDEDBASE rules every app shares.
+ * Lists every message of the login server's services once: MSG_USER_AUTHEN_V3 and the older authentication messages handled before authentication, the other LOGIN client requests with the status each will need, the server's replies refused and the ones it sends declared, and the SYSTEM and EXTENDEDBASE rules every app shares.
  */
 
 #include "LoginMessageTable.h"
@@ -18,12 +18,12 @@ namespace
         LoginRules() : MessageHandlerTable<LoginSession>("loginserver", { SystemService, ExtendedBaseService, LoginService })
         {
             Accept<&LoginSession::HandleUserAuthenV3>(SessionStatuses::Connected, MessageProcessing::InPlace, "LoginSession::HandleUserAuthenV3");
+            Accept<&LoginSession::HandleUserAuthen>(SessionStatuses::Connected, MessageProcessing::InPlace, "LoginSession::HandleUserAuthen");
+            Accept<&LoginSession::HandleUserAuthenV2>(SessionStatuses::Connected, MessageProcessing::InPlace, "LoginSession::HandleUserAuthenV2");
+            Accept<&LoginSession::HandleWebAuthen>(SessionStatuses::Connected, MessageProcessing::InPlace, "LoginSession::HandleWebAuthen");
+            Accept<&LoginSession::HandleWebValidate>(SessionStatuses::Connected, MessageProcessing::InPlace, "LoginSession::HandleWebValidate");
 
-            Pending(LoginService, "MSG_USER_AUTHEN", SessionStatuses::Connected);
-            Pending(LoginService, "MSG_USER_AUTHEN_V2", SessionStatuses::Connected);
             Pending(LoginService, "MSG_USER_VALIDATE", SessionStatuses::Connected);
-            Pending(LoginService, "MSG_WEB_AUTHEN", SessionStatuses::Connected);
-            Pending(LoginService, "MSG_WEB_VALIDATE", SessionStatuses::Connected);
             Pending(LoginService, "MSG_REQUESTCHARACTERLIST", SessionStatuses::Authenticated);
             Pending(LoginService, "MSG_REQUESTSERVERLIST", SessionStatuses::Authenticated);
             Pending(LoginService, "MSG_CREATECHARACTER", SessionStatuses::Authenticated);
@@ -48,6 +48,9 @@ namespace
             Refuse(LoginService, "MSG_DISCONNECT_LOGIN_AFK");
             Refuse(LoginService, "MSG_LOGINSERVERSHUTDOWN");
             Refuse(LoginService, "MSG_WEBCHARACTERINFO");
+
+            Sends<UserAuthenRsp>();
+            Sends<UserAdmitInd>();
 
             SystemMessages::AddRules(*this);
         }
