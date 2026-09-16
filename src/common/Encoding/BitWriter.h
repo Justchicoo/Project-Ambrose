@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Writes LSB-first bit-packed streams with byte-aligned scalars and bit-position back-patching.
+ * Writes LSB-first bit-packed streams with byte-aligned scalars appended in one step at the end of the stream, bit-position back-patching, and the finished bytes handed over without a copy.
  */
 
 #ifndef AMBROSE_BITWRITER_H
@@ -30,18 +30,17 @@ public:
         requires (std::is_integral_v<T> || std::is_floating_point_v<T>) && (!std::is_same_v<T, bool>)
     void Write(T value)
     {
-        Realign();
         uint8 bytes[sizeof(T)];
         std::memcpy(bytes, &value, sizeof(T));
         if constexpr (std::endian::native == std::endian::big)
             std::reverse(bytes, bytes + sizeof(T));
-        for (uint8 byte : bytes)
-            WriteBits(byte, 8);
+        WriteBytes(std::span<uint8 const>(bytes, sizeof(T)));
     }
 
     std::size_t GetBitPosition() const { return _bitPosition; }
     std::size_t GetBitSize() const { return _bitEnd; }
     std::span<uint8 const> GetBytes() const { return _bytes; }
+    std::vector<uint8> TakeBytes();
 
 private:
     std::vector<uint8> _bytes;

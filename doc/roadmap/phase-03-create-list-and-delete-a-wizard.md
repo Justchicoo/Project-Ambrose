@@ -209,8 +209,8 @@ Any of the ~2205 client classes can be instantiated, inspected, and edited at ru
 
 **Acceptance**
 
-- [ ] Mask filtering, Deprecated skip, DirtyEncode bit, null child, nested derived list
-- [ ] Local-gated: BadgeFilterInfoList (1256 B) and BadgeInfoList (363 B) re-encode byte-identically
+- [x] Mask filtering, Deprecated skip, DirtyEncode bit, null child, nested derived list (CompactCodecTest)
+- [x] Local-gated: BadgeFilterInfoList (1256 B) and BadgeInfoList (363 B) re-encode byte-identically (CompactCodecClientTest)
 
 ### Detailed spec from OBJ-8: Compact network codec
 
@@ -218,22 +218,23 @@ Objects inside client messages can be decoded from and encoded to the non-versio
 
 **Deliverables**
 
-- ObjectSerializer compact mode: u32 class hash (0 = null), then the class's full property list in id order with no per-property headers. A property is included only if (flags & mask) == mask and it is not Deprecated. The default mask is Transmit|AuthorityTransmit, with Public added for other-player views
-- Without CompactLength: strings and wstrings use u16 length, containers use u32 count, enums use u32 unless StringEnums is set, bool is 1 bit, nested objects are prefixed by class hash
-- DirtyEncode (flag bit 8) properties carry a 1-bit present prefix; the encoder always sets it unless a dirty set is supplied
-- A symmetric API: Decode(bytes, mask, limits) -> PropertyObject and Encode(obj, mask, flags) -> bytes
-- src/test/server/shared/ObjectProperty/CompactCodecTest.cpp
+- ObjectSerializer compact mode: u32 class hash (0 = null), then the class's full property list in id order with no per-property headers. A property is included only if (flags & mask) == mask and it is not Deprecated. The default mask is Transmit|AuthorityTransmit, with Public added for other-player views. Built in src/server/shared/ObjectProperty/ObjectSerializer.h/.cpp, with SerializerOptions::TransmitMask and PublicMask; the captures confirm the wire carries plain class hashes
+- Without CompactLength: strings and wstrings use u16 length, containers use u32 count, enums use u32 unless StringEnums is set, bool is 1 bit, nested objects are prefixed by class hash. Built with bits packed least significant first and byte-aligned values starting on the next byte, wide strings as a u16 unit count and UTF-16LE units, bit fields and s24/u24 at their width, and value types as their fields in order; StringEnums writes option names. CompactLength, SerializeFlags and Compress are refused as unsupported, because no sample verifies compact lengths and the envelope is BlobEnvelope's job, and SerializedBuffer, SimpleVert and SimpleFace are refused as having no known layout (no r806919 property of those types is transmitted)
+- DirtyEncode (flag bit 8) properties carry a 1-bit present prefix; the encoder always sets it unless a dirty set is supplied. Built with the dirty set as a SerializerOptions::IsDirty test, overridden by ForceDirtyEncode; a property marked absent decodes to its default
+- A symmetric API: Decode(bytes, mask, limits) -> PropertyObject and Encode(obj, mask, flags) -> bytes. Built as ObjectSerializer::DecodeCompact(catalog, bytes, options) and EncodeCompact(object, options), with options holding the mask, flags, limits (MaxDepth 64 under a hard ceiling of 128, MaxObjects 65536, MaxContainerCount 65536 and MaxDecodedBytes 16 MiB by default, made live settings in 3.06), whether trailing bytes are allowed, the classes a root may be and whether it may be null, and the dirty test. Each class's default object size is measured at load so the memory budget charges objects, list elements, defaults and strings before allocating them. Results carry a status, the bytes read and the property path a failure happened at. A count the remaining bytes cannot hold is refused before anything is allocated, and a child's class is checked as soon as its hash is read
+- src/test/server/shared/ObjectProperty/CompactCodecTest.cpp, plus the client-gated src/test/client/CompactCodecClientTest.cpp, which round-trips a default object of all 2197 r806919 property classes with both masks and, when AMBROSE_OBJECT_SAMPLES_DIR names a folder of captured blobs named after their class, checks every capture
 
 **Acceptance**
 
-- [ ] Unit test with synthetic classes: mask filtering, Deprecated skipping, DirtyEncode bit, null child, nested list of derived objects
-- [ ] Local-gated test (sniffer captures on the maintainer's machine, not committed): BadgeFilterInfoList (1256 bytes) and the inflated BadgeInfoList (363 bytes) decode consuming exactly all bytes, and re-encode byte-identically
+- [x] Unit test with synthetic classes: mask filtering, Deprecated skipping, DirtyEncode bit, null child, nested list of derived objects (CompactCodecTest, with golden bytes for every value layout the codec writes)
+- [x] Local-gated test (sniffer captures on the maintainer's machine, not committed): BadgeFilterInfoList (1256 bytes) and the inflated BadgeInfoList (363 bytes) decode consuming exactly all bytes, and re-encode byte-identically (CompactCodecClientTest; all 42 captures, BadgeInfoList sizes 363, 386, 400, 466 and 512 bytes, the enveloped ones unwrapped first)
 - [ ] Real client, with LOG wiring: the server encodes a WizardCharacterCreationInfo into MSG_CHARACTERINFO.CharacterInfo (LoginMessages.xml) and the character appears on the selection screen; the client's MSG_CREATECHARACTER.CreationInfo decodes to the chosen name parts, school and appearance
 
 **Risks**
 
 - The only compact samples available were produced by the reference server and accepted by the client, not captured from retail. DirtyEncode semantics are unverified because no sample exercises them
 - Whether inline (non-pointer) class properties such as WindowBubble or Point carry a class-hash prefix in compact mode is unverified for non-math classes
+- Built note: the badge captures confirm only class hashes, int, unsigned int, bool, std::string and pointer lists. Wide strings, bit fields, enums, small and 64-bit integers, floats and value types follow the reference and are pinned by golden bytes until 3.09 and 3.15-3.16 captures confirm them
 
 ## 3.06 Hostile-input hardening and fuzzing (OBJ-19)
 

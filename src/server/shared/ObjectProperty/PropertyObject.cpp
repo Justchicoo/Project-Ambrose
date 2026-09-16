@@ -129,6 +129,13 @@ PropertyObjectPtr PropertyObject::Build(TypeCatalogPtr const& catalog, ClassInfo
     return object;
 }
 
+PropertyObjectPtr PropertyObject::CreateBlank(BuildKey, TypeCatalogPtr const& catalog, ClassInfo const& type)
+{
+    PropertyObjectPtr object(new PropertyObject(catalog, type));
+    object->_values.resize(type.Properties.size());
+    return object;
+}
+
 PropertyValue PropertyObject::MakeDefault(TypeCatalogPtr const& catalog, PropertyInfo const& property)
 {
     if (property.Container != ContainerKind::Static)
@@ -271,6 +278,11 @@ PropertyObjectPtr PropertyObject::Clone() const
 bool PropertyObject::operator==(PropertyObject const& other) const
 {
     return _type == other._type && _values == other._values;
+}
+
+std::vector<PropertyValue>& PropertyObject::GetValues(BuildKey) noexcept
+{
+    return _values;
 }
 
 bool PropertyObject::Reaches(PropertyValue const& value) const noexcept

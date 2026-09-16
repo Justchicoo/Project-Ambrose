@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * An instance of any property class from the loaded type dump: values stored by property ordinal, read and written by name, hash or ordinal, with list elements and child objects edited in place, every write checked against the property's kind, container, bit width, class, catalog and ownership and taking the offered value only when it succeeds, built with the dump's defaults, deep-cloned and compared exactly, and keeping the catalog it was built from alive.
+ * An instance of any property class from the loaded type dump: values stored by property ordinal, read and written by name, hash or ordinal, with list elements and child objects edited in place, every write checked against the property's kind, container, bit width, class, catalog and ownership and taking the offered value only when it succeeds, built with the dump's defaults, deep-cloned and compared exactly, and keeping the catalog it was built from alive, with blank construction and direct value access reserved for the serializers that fill every value themselves.
  */
 
 #ifndef AMBROSE_PROPERTYOBJECT_H
@@ -29,11 +29,27 @@ enum class PropertySetResult : uint8
 class PropertyObject
 {
 public:
+    class BuildKey
+    {
+    public:
+        BuildKey(BuildKey const&) noexcept
+        {
+        }
+
+    private:
+        friend class ObjectSerializer;
+
+        BuildKey() noexcept
+        {
+        }
+    };
+
     PropertyObject(PropertyObject const&) = delete;
     PropertyObject& operator=(PropertyObject const&) = delete;
 
     static PropertyObjectPtr Create(TypeCatalogPtr catalog, ClassInfo const& type);
     static PropertyObjectPtr Create(TypeCatalogPtr catalog, std::string_view className);
+    static PropertyObjectPtr CreateBlank(BuildKey key, TypeCatalogPtr const& catalog, ClassInfo const& type);
     static PropertyValue MakeDefault(TypeCatalogPtr const& catalog, PropertyInfo const& property);
     static PropertySetResult Check(PropertyInfo const& property, PropertyValue const& value) noexcept;
     static std::string_view GetResultName(PropertySetResult result) noexcept;
@@ -56,6 +72,8 @@ public:
 
     PropertyObjectPtr Clone() const;
     bool operator==(PropertyObject const& other) const;
+
+    std::vector<PropertyValue>& GetValues(BuildKey key) noexcept;
 
 private:
     PropertyObject(TypeCatalogPtr catalog, ClassInfo const& type) noexcept;

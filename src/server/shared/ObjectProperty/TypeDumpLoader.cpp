@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Streams a type dump through a JSON SAX handler that keeps only the fields the schema needs and refuses a known field of the wrong JSON type, then validates versions, duplicates, hashes, property ids, 32-bit option values, base chains, defaults and classes that hold themselves inline, collapses pointer and SharedPointer aliases into their classes, matching unprefixed template names before inventing a class, classifies classes and property types, indexes enum options, and reports every problem with the class and property it belongs to.
+ * Streams a type dump through a JSON SAX handler that keeps only the fields the schema needs and refuses a known field of the wrong JSON type, then validates versions, duplicates, hashes, property ids, 32-bit option values, base chains, defaults and classes that hold themselves inline, measures the memory each default object takes, collapses pointer and SharedPointer aliases into their classes, matching unprefixed template names before inventing a class, classifies classes and property types, indexes enum options, and reports every problem with the class and property it belongs to.
  */
 
 #include "TypeDumpLoader.h"
 #include "PropertyDefaults.h"
 #include "PropertyEnums.h"
+#include "PropertyObject.h"
 #include "StringHash.h"
 #include "StringUtil.h"
 
@@ -772,6 +773,8 @@ TypeCatalogPtr TypeCatalogBuilder::Build(TypeDumpLoader::RawDump dump, std::stri
 
     enum class Visit : uint8 { New, Open, Done };
     std::unordered_map<ClassInfo const*, Visit> visits;
+    std::vector<ClassInfo const*> finished;
+    finished.reserve(catalog->_classes.size());
     for (std::unique_ptr<ClassInfo> const& root : catalog->_classes)
     {
         if (visits[root.get()] != Visit::New)
@@ -784,6 +787,7 @@ TypeCatalogPtr TypeCatalogBuilder::Build(TypeDumpLoader::RawDump dump, std::stri
             if (next == current->Properties.size())
             {
                 visits[current] = Visit::Done;
+                finished.push_back(current);
                 path.pop_back();
                 continue;
             }
@@ -808,6 +812,24 @@ TypeCatalogPtr TypeCatalogBuilder::Build(TypeDumpLoader::RawDump dump, std::stri
     }
     if (errors.size() != initialErrors)
         return nullptr;
+
+    for (ClassInfo const* done : finished)
+    {
+        ClassInfo& type = const_cast<ClassInfo&>(*done);
+        type.DefaultBytes = sizeof(PropertyObject);
+        for (PropertyInfo& property : type.Properties)
+        {
+            if (property.Container != ContainerKind::Static || property.Pointer)
+                property.DefaultBytes = 0;
+            else if (property.Kind == ValueKind::Object)
+                property.DefaultBytes = property.Type ? property.Type->DefaultBytes : 0;
+            else if (std::string const* const text = property.DefaultValue.GetIf<std::string>())
+                property.DefaultBytes = text->size();
+            else if (std::u16string const* const wide = property.DefaultValue.GetIf<std::u16string>())
+                property.DefaultBytes = wide->size() * sizeof(char16_t);
+            type.DefaultBytes += sizeof(PropertyValue) + property.DefaultBytes;
+        }
+    }
 
     std::size_t bytes = sizeof(TypeCatalog);
     for (std::unique_ptr<ClassInfo> const& info : catalog->_classes)

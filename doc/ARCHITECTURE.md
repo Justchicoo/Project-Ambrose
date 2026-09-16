@@ -144,7 +144,7 @@ Settled on 2026-09-13. Changing one needs the maintainer's approval and an updat
 
 The client's message definitions and type dump are never compiled into the build. At startup each app loads the message definition XML files from the user's install into a `MessageRegistry`, and the type dump into a `TypeRegistry`. Code that uses a message or class declares only the fields it needs, with their C++ types. At startup every declaration is resolved to field indices and checked against the loaded definitions, and the app refuses to start if any declaration is wrong. A reload resolves every declaration against the new definitions before it swaps them in, and keeps the active definitions if any declaration fails. Wire layout always comes from the loaded definitions, so fields a declaration omits are still encoded correctly with default values.
 
-As a result, the project builds and its unit tests run on any machine, including CI, with no client files. Unit tests use small definition fixtures written by the project. Tests that need a real install carry the CTest label `client` and run only when `AMBROSE_CLIENT_DIR` is set; tests that need the user's own type dump also carry the label `client` and run only when `AMBROSE_TYPE_DUMP_PATH` names it.
+As a result, the project builds and its unit tests run on any machine, including CI, with no client files. Unit tests use small definition fixtures written by the project. Tests that need a real install carry the CTest label `client` and run only when `AMBROSE_CLIENT_DIR` is set; tests that need the user's own type dump also carry the label `client` and run only when `AMBROSE_TYPE_DUMP_PATH` names it. The compact codec's capture check also needs `AMBROSE_OBJECT_SAMPLES_DIR`, a folder of blobs captured on the user's own machine and named after their class, which are never committed.
 
 ### Type dump and type registry
 
@@ -201,6 +201,39 @@ Settled on 2026-09-16 under the maintainer's standing direction to decide.
   - a default on a list, an object or a value type refuses the load.
 - Equality and cloning are deep and exact. Floating values compare by bit pattern, so an object holding a NaN equals its clone, and 0.0 differs from -0.0.
 - An enum value renders as its option name. A Bits value renders as an exact option name, or else as every nonzero option, in dump order, whose bits it holds and no earlier chosen option covered, joined by `|`; multi-bit options are included, and a duplicate value keeps its first name. A value with bits no option names does not render as a name, and a caller shows the number instead.
+
+### Compact ObjectProperty codec
+
+Settled on 2026-09-16 under the maintainer's standing direction to decide. The layout below reproduces every captured badge blob byte for byte, but those blobs use only class hashes, `int`, `unsigned int`, `bool`, `std::string` and lists of pointers; every other layout follows the reference implementation and is pinned by golden-bytes tests until a capture confirms it.
+
+- `ObjectSerializer::EncodeCompact` and `DecodeCompact` handle the compact format the client uses inside messages. Every object starts with its u32 class hash, 0 for null, inline objects included. Its properties follow in id order with no headers. A property is written when its flags hold every bit of the mask and it is not deprecated. `TransmitMask` is the default, and `PublicMask` adds Public for views of other players.
+- The wire layout:
+  - bits pack least significant bit first, and a byte-aligned value starts on the next whole byte;
+  - a bool is one bit, a bit field its width, and s24/u24 24 bits;
+  - integers and floats are little-endian;
+  - a string is a u16 byte length and its bytes, and a wide string is a u16 unit count and UTF-16LE units;
+  - a list is a u32 count and its elements;
+  - an enum is a u32, or its option name as a string when `StringEnums` is set;
+  - a value type is its fields in order.
+- A DirtyEncode property carries a present bit first. The encoder sets it unless `IsDirty` says the property is clean and `ForceDirtyEncode` is off. A property marked absent decodes to its default.
+- The captures carry plain class hashes. An alias hash decodes to its class and re-encodes as the plain hash.
+- What no capture has confirmed yet:
+  - whether an inline object carries a hash on the wire (the codec writes one, as the reference does);
+  - DirtyEncode, which no sample exercises;
+  - wide strings, `char`, `short`, `unsigned short`, `unsigned char`, `__int64`, gid, `float`, `double`, `wchar_t`, bit fields, s24/u24 and enums, in both forms;
+  - every value type, including Color's byte order (kept as red, green, blue, alpha), Euler, and Matrix3x3 as nine floats.
+  The character creation and list milestones exercise wide strings, bit fields, enums and small integers against the real client, and their captures confirm or correct these layouts.
+- Refused as unsupported: `CompactLength`, because no sample verifies it and the reference's own writer drops string bytes in that mode; `SerializeFlags` and `Compress`, because `BlobEnvelope` wraps blobs; and SerializedBuffer, SimpleVert and SimpleFace values, whose layout is not known.
+- A decode trusts nothing:
+  - depth, object count and list length have limits, and depth never exceeds a ceiling of 128 whatever the setting, so a decode cannot exhaust a thread's stack;
+  - every object, list element, default value and string is charged against a memory budget, 16 MiB by default, before it is allocated. Each class's default object size is measured once when the type dump loads, so a small blob naming a large class cannot grow into hundreds of megabytes;
+  - a caller can hold the root to a set of classes and require it to be present;
+  - a count the remaining bytes cannot hold, at the element's smallest size, is refused before anything is allocated;
+  - reservations are capped;
+  - a child's class must derive from its property's class and is checked as soon as its hash is read;
+  - an inline object cannot be null;
+  - trailing bytes are refused unless allowed.
+  Every failure names the property path it happened at, such as `class BadgeInfoList.m_badges[2]`. Running out of memory anyway is reported as a status rather than thrown. Decoded objects are filled directly through a key only the serializer holds, and properties the mask skips take their defaults.
 
 ### Live reload and live settings
 

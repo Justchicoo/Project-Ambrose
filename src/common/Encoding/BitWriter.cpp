@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Packs bits into bytes least significant bit first, overwriting existing bits when back-patching.
+ * Packs bits into bytes least significant bit first, appends aligned bytes at the end directly, and overwrites existing bits when back-patching.
  */
 
 #include "BitWriter.h"
 
 #include <algorithm>
 #include <stdexcept>
+#include <utility>
 
 void BitWriter::WriteBit(bool value)
 {
@@ -43,8 +44,25 @@ void BitWriter::WriteSignedBits(int64 value, uint8 count)
 void BitWriter::WriteBytes(std::span<uint8 const> bytes)
 {
     Realign();
+    if (_bitPosition == _bytes.size() * 8)
+    {
+        _bytes.insert(_bytes.end(), bytes.begin(), bytes.end());
+        _bitPosition += bytes.size() * 8;
+        _bitEnd = std::max(_bitEnd, _bitPosition);
+        return;
+    }
     for (uint8 byte : bytes)
         WriteBits(byte, 8);
+}
+
+std::vector<uint8> BitWriter::TakeBytes()
+{
+    Realign();
+    std::vector<uint8> bytes = std::move(_bytes);
+    _bytes.clear();
+    _bitPosition = 0;
+    _bitEnd = 0;
+    return bytes;
 }
 
 void BitWriter::Realign()

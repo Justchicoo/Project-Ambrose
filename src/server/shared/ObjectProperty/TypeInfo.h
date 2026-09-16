@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The schema of one client type dump: class kinds, value kinds, container kinds, per-property enum options indexed by name and value, text options, the default as the dump writes it and as the value new objects start with, the base class hint, and the class and property descriptions every ObjectProperty lookup answers from, each class knowing the catalog it belongs to.
+ * The schema of one client type dump: class kinds, value kinds, container kinds, per-property enum options indexed by name and value, text options, the default as the dump writes it and as the value new objects start with, the memory a default value and a default object take, the base class hint, and the class and property descriptions every ObjectProperty lookup answers from, each class knowing the catalog it belongs to.
  */
 
 #ifndef AMBROSE_TYPEINFO_H
@@ -10,6 +10,7 @@
 #include "PropertyValue.h"
 #include "Types.h"
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -108,6 +109,7 @@ struct PropertyInfo
     std::vector<TextOption> TextOptions;
     std::optional<std::variant<int64, std::string>> Default;
     PropertyValue DefaultValue;
+    std::size_t DefaultBytes = 0;
     std::string OptionBaseClass;
 
     bool HasFlag(PropertyFlag flag) const noexcept { return PropertyFlags::Has(Flags, flag); }
@@ -125,6 +127,7 @@ struct ClassInfo
     uint32 Hash = 0;
     ClassKind Kind = ClassKind::Opaque;
     TypeCatalog const* Owner = nullptr;
+    std::size_t DefaultBytes = 0;
     std::vector<ClassInfo const*> Bases;
     std::vector<PropertyInfo> Properties;
     std::unordered_map<uint32, uint32> PropertyByHash;

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads LSB-first bit-packed streams without throwing: an overrun sets a failed flag and yields zeros.
+ * Reads LSB-first bit-packed streams without throwing, copying byte-aligned scalars straight from the buffer: an overrun sets a failed flag and yields zeros.
  */
 
 #ifndef AMBROSE_BITREADER_H
@@ -35,8 +35,8 @@ public:
         if (!Ensure(sizeof(T) * 8))
             return T{};
         uint8 bytes[sizeof(T)];
-        for (uint8& byte : bytes)
-            byte = static_cast<uint8>(ReadBits(8));
+        std::memcpy(bytes, _data.data() + _bitPosition / 8, sizeof(T));
+        _bitPosition += sizeof(T) * 8;
         if constexpr (std::endian::native == std::endian::big)
             std::reverse(bytes, bytes + sizeof(T));
         T value;
