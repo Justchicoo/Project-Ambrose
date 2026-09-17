@@ -1,17 +1,17 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds and writes the client run folder: it reads the configuration the folder already holds, or else the install's own config.xml, or defaultconfig.xml from its Root.wad whose root element is renamed to config, and the same for preferences.xml, which falls back to an empty one, so a file the client left unreadable costs the next template and not the run; it sets only the VideoSettings keys the window comes from and empties SilentMetricsURL in both files, adding a table or key the template lacks and listing it only when the template lists its tables, and leaving everything else, VersionInfo included, as it is; config.xml and preferences.xml are written every run, because the client saves its own over them as it exits, while the stamp says which install's revision.dat and data.dat the folder holds, so those are copied again only when the install or its revision changes, the stamp is removed first and written last, and an interrupted copy is done again.
+ * Builds and writes the client run folder: it reads the configuration the folder already holds, or else the install's own config.xml, or defaultconfig.xml from its Root.wad whose root element is renamed to config, and the same for preferences.xml, which falls back to an empty one, so a file the client left unreadable costs the next template and not the run; pugixml reads the template only to refuse one that is not a client configuration, and the values are then spliced into the template's own bytes, because the r806919 client ignores a file that has been parsed and written again and falls back to its built-in defaults: it sets only the VideoSettings keys the window comes from and empties SilentMetricsURL wherever either file holds it, adding a table or key the template lacks and listing it only when the template lists its tables, and leaving every other byte, VersionInfo and the declaration included, exactly as it is; config.xml and preferences.xml are written every run, because the client saves its own over them as it exits, while the stamp says which install's revision.dat and data.dat the folder holds, so those are copied again only when the install or its revision changes, the stamp is removed first and written last, and an interrupted copy is done again.
  */
 
 #include "ClientRunFolder.h"
 
+#include "ClientConfigText.h"
 #include "ConfigMgr.h"
 
 #include <fmt/format.h>
 
 #include <pugixml.hpp>
 
-#include <sstream>
 #include <utility>
 
 namespace
@@ -19,85 +19,41 @@ namespace
     constexpr std::string_view ConfigRoot = "config";
     constexpr std::string_view DefaultConfigRoot = "defaultconfig";
     constexpr std::string_view PreferencesRoot = "preferences";
-
-    pugi::xml_node EnsureRecord(pugi::xml_node root, char const* table)
-    {
-        pugi::xml_node node = root.child(table);
-        if (!node)
-        {
-            node = root.append_child(table);
-            pugi::xml_node list = root.child("_TableList");
-            bool listed = !list;
-            for (pugi::xml_node const record : list.children("RECORD"))
-                if (std::string_view(record.child("Name").child_value()) == std::string_view(table))
-                    listed = true;
-            if (!listed)
-            {
-                pugi::xml_node name = list.append_child("RECORD").append_child("Name");
-                name.append_attribute("TYPE") = "STR";
-                name.text().set(table);
-            }
-        }
-        pugi::xml_node record = node.child("RECORD");
-        if (!record)
-            record = node.append_child("RECORD");
-        return record;
-    }
-
-    void SetValue(pugi::xml_node record, char const* key, char const* type, std::string const& value)
-    {
-        pugi::xml_node node = record.child(key);
-        if (!node)
-        {
-            node = record.append_child(key);
-            node.append_attribute("TYPE") = type;
-        }
-        node.text().set(value.c_str());
-    }
-
-    void EmptyValue(pugi::xml_node root, char const* table, char const* key)
-    {
-        for (pugi::xml_node const record : root.child(table).children("RECORD"))
-            if (pugi::xml_node node = record.child(key))
-                node.text().set("");
-    }
+    constexpr std::string_view VideoTable = "VideoSettings";
+    constexpr std::string_view GameTable = "GameSettings";
+    constexpr std::string_view MetricsKey = "SilentMetricsURL";
 }
 
 std::optional<std::string> ClientRunFolder::Generate(std::string const& templateText, std::string_view root, RunFolderOptions const& options, std::string& error)
 {
     pugi::xml_document document;
-    pugi::xml_parse_result const parsed = document.load_buffer(templateText.data(), templateText.size(), pugi::parse_default | pugi::parse_declaration);
+    pugi::xml_parse_result const parsed = document.load_buffer(templateText.data(), templateText.size(), pugi::parse_default);
     if (!parsed)
     {
         error = fmt::format("{} at offset {}", parsed.description(), parsed.offset);
         return std::nullopt;
     }
-    pugi::xml_node element = document.child(std::string(root).c_str());
-    if (!element && root == ConfigRoot)
-    {
-        element = document.child(std::string(DefaultConfigRoot).c_str());
-        if (element)
-            element.set_name(std::string(root).c_str());
-    }
-    if (!element)
+    std::string_view const held = document.document_element() ? std::string_view(document.document_element().name()) : std::string_view();
+    bool const renaming = root == ConfigRoot && held == DefaultConfigRoot;
+    if (held != root && !renaming)
     {
         error = root == ConfigRoot ? fmt::format("its root element is not <{}> or <{}>", root, DefaultConfigRoot) : fmt::format("its root element is not <{}>", root);
         return std::nullopt;
     }
-    pugi::xml_node const video = EnsureRecord(element, "VideoSettings");
-    SetValue(video, "IsFullscreen", "INT", std::to_string(options.Fullscreen));
-    SetValue(video, "Resolution", "STR", fmt::format("{}x{}", options.Width, options.Height));
-    if (options.WindowX)
-        SetValue(video, "WindowedX", "INT", std::to_string(*options.WindowX));
-    if (options.WindowY)
-        SetValue(video, "WindowedY", "INT", std::to_string(*options.WindowY));
-    EmptyValue(element, "GameSettings", "SilentMetricsURL");
-    if (root == ConfigRoot)
-        SetValue(EnsureRecord(element, "GameSettings"), "SilentMetricsURL", "STR", std::string());
 
-    std::ostringstream text;
-    document.save(text, "  ", pugi::format_default | pugi::format_no_empty_element_tags);
-    return text.str();
+    ClientConfigText text(templateText);
+    if (renaming)
+        text.RenameRoot(root);
+    text.SetKey(VideoTable, "IsFullscreen", "INT", std::to_string(options.Fullscreen));
+    text.SetKey(VideoTable, "Resolution", "STR", fmt::format("{}x{}", options.Width, options.Height));
+    if (options.WindowX)
+        text.SetKey(VideoTable, "WindowedX", "INT", std::to_string(*options.WindowX));
+    if (options.WindowY)
+        text.SetKey(VideoTable, "WindowedY", "INT", std::to_string(*options.WindowY));
+    text.EmptyKey(MetricsKey);
+    if (root == ConfigRoot)
+        text.SetKey(GameTable, MetricsKey, "STR", std::string_view());
+    return text.Text();
 }
 
 std::string ClientRunFolder::EmptyPreferences()
