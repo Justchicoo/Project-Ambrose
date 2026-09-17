@@ -26,6 +26,9 @@
 | 3.18 | Updater part 2: rehash, rename, dead refs, pending, modules (FND-18) | M | 2.06 |
 | 3.19 | CI pending SQL promotion and SQL validation (FND-19) | S | 1.04, 3.18, 2.07 |
 | 3.20 | Find client data on the user's machine and guided setup | M | 3.13, 3.14, 1.08, 2.07 |
+| 3.21 | Type data from the user's own client program | L | 3.03, 3.20, 1.13 |
+| 3.22 | Automatic first-run setup | M | 3.21 |
+| 3.23 | Keep up with KingsIsle's client revisions | M | 3.22 |
 
 ## Review notes for this phase
 
@@ -898,3 +901,87 @@ Added on 2026-09-16 at the maintainer's direction, and built before 3.15: whenev
 
 - Steam's libraryfolders.vdf format has changed before; the parser must tolerate both known layouts
 - A prompt on a terminal blocks startup until answered or timed out, so services must run without a terminal or with Setup.Prompt = 0
+
+## 3.21 Type data from the user's own client program
+
+**Goal:** Ambrose builds the type dump itself, exactly and automatically, from the user's own WizardGraphicalClient.exe for whatever revision is installed.
+
+**Size:** L. **Depends on:** 3.03, 3.20, 1.13
+
+Added on 2026-09-17 at the maintainer's direction, and built before 3.15: users should never have to find a type dump. A spike emulated the r806919 client's own type registration from the program file on disk, without launching the game or reading a running process, and reproduced the reference dump exactly. This replaces the live-process dumper that 16.11 and 16.12 planned.
+
+**Acceptance**
+
+- [ ] On the maintainer's r806919 install, typeextract writes a dump equal to the reference dump in every class name, base, property order, type, id, offset, flag, container, dynamic, singleton, pointer, hash and enum option. The only differences allowed: it also lists 5 classes and 4 properties the reference dump missed, and it keeps 30 empty enum option values as empty text where the reference dump wrote 0
+- [ ] On a second installed revision (r801440), discovery finds every entry point without per-revision addresses and the dump passes validation
+- [ ] Validation refuses to write a dump, and names what failed, when a type name does not hash to its hash, a property hash does not match its type and name, ids are out of order, a container is unknown, or the client called a Windows function the layer lacks
+- [ ] The race enum's options come from the install's Races.xml through the client's own race adder, in file order (3065 on r806919)
+- [ ] The tool only reads the install: nothing is written into the client folder and the game is never launched
+- [ ] Unit tests without a client cover the PE reader, the loader's relocations, forwarded exports and TLS, the Windows API layer, the call budget and fault reports, and discovery over synthetic code and heaps
+
+### Detailed spec
+
+**Deliverables**
+
+- src/tools/typeextract: a tool linked with Unicorn 2 (GPL-2.0, approved by the maintainer on 2026-09-17) and Zydis. It runs as its own process, so a fault or runaway emulation never takes a server down with it
+- Image reader: PE32+ sections, exports with forwarders, imports, base relocations, TLS and the exception table, whose unwind chains give each function's start
+- Emulation: WizardGraphicalClient.exe maps at its preferred base. The C and C++ runtime DLLs the install ships (ucrtbase, vcruntime140, vcruntime140_1, msvcp140 and concrt140, reached through the api-ms-win-crt forwarders) load with relocations and run their startup, so formatting and type names come from the client's own runtime; every other import is a stub. A Windows layer implements the kernel functions the runtime uses: heap, TLS and FLS, locks and events, code pages, SLists and module lookups. Every call runs under an instruction budget and must return to its sentinel, and a fault names the module and offset
+- Discovery with no per-revision addresses: the C++ initializer table from the CRT startup's _initterm call, the type map by scanning the emulated heap for map nodes whose type name hashes to their key, the Type constructor by voting over the calls before type vtable writes, the PropertyList initializer by voting over the calls after property list references, and the race adder from the RaceManager strings
+- Extraction: runs every C++ initializer, then every function that constructs a type or initializes a property list (the lazy getters), then the race adder for each race in Root.wad's Races.xml. It walks the type map, validates, and writes format v2 with the revision and the executable's SHA-256 through a temporary file
+- CLI: --client (or the install found on the machine), --out (default: types/<revision>.json in the Ambrose data folder), --compare <dump> to print every difference from another dump, exit codes 0, 1 on failure and 2 on bad usage
+- Tests: typeextract_tests over synthetic PE images, code and heaps; a client-gated test that extracts AMBROSE_CLIENT_DIR, compares the result with AMBROSE_TYPE_DUMP_PATH and validates AMBROSE_SECOND_CLIENT_DIR when set
+
+**Risks**
+
+- A future client may change the engine's struct layouts. Validation catches it, and the layout is then updated
+- A future runtime DLL may call Windows functions the layer lacks. Those calls are listed in the error so the layer can grow
+
+## 3.22 Automatic first-run setup
+
+**Goal:** A first start asks nothing: servers and tools find the install, build the type dump and extract the name tables themselves.
+
+**Size:** M. **Depends on:** 3.21
+
+Added on 2026-09-17 at the maintainer's direction: someone who runs the server for the first time only has to play.
+
+**Acceptance**
+
+- [ ] With ClientDir and TypeDumpPath empty, the game and login servers pick the install with the newest revision, save it to conf.d/client-data.conf, run typeextract when no dump exists for that revision, load the result and start, all without asking
+- [ ] The game server with empty name tables extracts them from the install and loads them without asking
+- [ ] Setup.Mode = ask restores the 3.20 questions and Setup.Mode = off does nothing; the tools follow AMBROSE_SETUP_MODE and never wait on a question unless asked to
+- [ ] The 3.20 review findings are resolved, among them: a saved value that a later conf.d file shadows is reported rather than claimed as saved, a stop signal ends a waiting question, the login server never saves ClientDir without a type dump, the Linux search budget is not spent on duplicate Steam folders, and a dump with its keys in another order is accepted
+- [ ] Real client: a fresh configuration on the maintainer's machine starts both servers with no manual setup
+
+### Detailed spec
+
+**Deliverables**
+
+- Setup.Mode (auto, ask or off; default auto) replaces Setup.Prompt. Setup.Discover and Setup.PromptTimeout stay
+- src/common/Utilities/ChildProcess.{h,cpp}: starts a program with arguments, streams its output lines to the log, and reports its exit code, with a timeout and a stop that ends the child
+- src/server/shared/ClientData/TypeDumpCache.{h,cpp}: the cached dump for an install (types/<revision>.json in the Ambrose data folder), checked against the executable's SHA-256 it records, and built by running typeextract beside the server's executable when missing or stale
+- The game server's name extraction runs automatically when the world tables are empty, then reloads the names
+- The 3.20 review findings, fixed and covered by tests
+
+## 3.23 Keep up with KingsIsle's client revisions
+
+**Goal:** Ambrose follows whatever revision the user's install has, including KingsIsle's latest, with no pinned revision.
+
+**Size:** M. **Depends on:** 3.22
+
+Added on 2026-09-17 at the maintainer's direction: the live client moves past r806919, and Ambrose must keep up.
+
+**Acceptance**
+
+- [ ] No runtime check or warning names r806919, and installs sort newest revision first
+- [ ] Extracted data is kept per revision: type dumps as types/<revision>.json and name tables tagged with the revision they came from, and each is rebuilt when the install's revision or executable changes
+- [ ] A running server notices its install's revision change, extracts in the background, and reloads message definitions, types and names live, keeping the old ones if anything fails
+- [ ] Client-gated tests take their expected counts from the installed revision rather than r806919 constants, and still pass on r806919
+
+### Detailed spec
+
+**Deliverables**
+
+- ClientInstall drops the pinned revision: candidates sort by revision number, newest first
+- A revision watch on Bin/revision.dat and the executable's size and time, which triggers the live rebuild
+- The world name tables record their revision; a start or reload against a different revision re-extracts them
+- Tests keyed by the installed revision, with r806919-only facts kept as checks that apply only when that revision is installed

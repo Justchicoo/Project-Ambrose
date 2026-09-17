@@ -485,7 +485,7 @@ Settled on 2026-09-16 at the maintainer's direction. The project is experimental
 
 - Bring your own files. Client data, models, captures and other projects' data sets, such as another project's decks, teleport or vendor data, are read at runtime from the user's own copy, the way emulator players bring their own ROMs, and an importer may read such a copy the user has. Nothing the project does not own is hosted, mirrored, redistributed or committed.
 - Bring your own license. Proprietary SDKs, tools and assets, such as Gamebryo, back optional features only for someone holding their own license, through a build option that points at their licensed copy. Nothing from them is committed, builds without them keep working, and leaked copies are never used.
-- GPL and AGPL tools may be used as separate tools. Reusing their code needs a license-compatible decision by the maintainer, and otherwise they are studied only.
+- GPL and AGPL tools and libraries may be used, as tools or linked code (settled on 2026-09-17). typeextract links Unicorn (GPL-2.0).
 - Modified client executables are never distributed. Users apply patches, as binary diffs or a hook DLL of Ambrose's own code, to their own copy locally, at their own risk. Local binary modification and runtime hooks are experimental features for the user's own copy, never the pinned development install.
 - Capturing live KingsIsle sessions, contacting KingsIsle servers, reading a running client's memory and fetching from KingsIsle's patch servers may break KingsIsle's terms and put the user's account at risk. Each is the user's own choice on their own account and machine, and its documentation states that risk plainly.
 - Security-sensitive choices are explicit settings, off by default, each documented with its risk: plain HTTP for the admin API beyond localhost, serving executables from the patchserver, discovering a public address through an external service, and a separate development reload socket. Executables from the patchserver must match a manifest signed with the operator's own key.
@@ -495,7 +495,7 @@ Settled on 2026-09-16 at the maintainer's direction. The project is experimental
 Questions decided under these rules the same day:
 
 - Client identifiers, such as locale keys, template ids, zone and location names, and internal quest and goal names, may be committed in authored SQL, and display text may not. A door destination table that holds only such identifiers may be committed, even when its rows were matched from client location names. This unblocks 6.14, 7.05 and 10.16.
-- Ambrose builds its own type dumper in 16.11, an opt-in tool that reads the user's own running client on their own machine, with the risk above stated.
+- Ambrose builds its own type dumper. Revised on 2026-09-17: typeextract (3.21) emulates the user's own client program from disk to build the dump, so it neither launches the game nor reads a running process, and servers run it automatically. No client revision is pinned: Ambrose follows the revision of the user's install (3.23).
 - An embedded Lua runtime, added through vcpkg, runs the client-shipped minigame Server.lua scripts from the user's own install in 13.11, so the scripts reload live.
 - Battlegrounds, castle magic and monster magic stay in scope, in 14.14, 14.15 and 15.17-15.20.
 

@@ -448,6 +448,8 @@ A client missing zone WADs streams them from Ambrose during play instead of bein
 
 **Goal:** Walk the client's type system.
 
+Moved on 2026-09-17 to 3.21, which builds the dump by emulating the client program on disk instead of reading a running client. The acceptance below is met there.
+
 **Size:** M. **Depends on:** 3.03
 
 **Acceptance**
@@ -476,6 +478,8 @@ Users generate their own type dump from their own client, so Ambrose does not de
 ## 16.12 Type dump v2 emission and validator (OBJ-20 part 2)
 
 **Goal:** Users generate their own dump.
+
+Moved on 2026-09-17 to 3.21, whose tool writes format v2 and validates it. The acceptance below is met there.
 
 **Size:** M. **Depends on:** 16.11, 3.01
 
