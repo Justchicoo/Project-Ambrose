@@ -12,7 +12,8 @@
       "binaryDir": "${sourceDir}/build/${presetName}",
       "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
-        "CMAKE_CONFIGURATION_TYPES": "Debug;RelWithDebInfo"
+        "CMAKE_CONFIGURATION_TYPES": "Debug;RelWithDebInfo",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/deps/vcpkg/triplets"
       }
     },
     {

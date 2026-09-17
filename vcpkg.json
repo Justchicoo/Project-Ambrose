@@ -9,7 +9,9 @@
     "libmariadb",
     "nlohmann-json",
     "pugixml",
-    "zlib"
+    "unicorn",
+    "zlib",
+    "zydis"
   ],
   "features": {
     "tests": {

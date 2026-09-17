@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Finds the user's own Wizard101 client data on their machine: an install is a folder holding Data/GameData/Root.wad whose Bin/revision.dat names its revision, found through AMBROSE_CLIENT_DIR, the installed programs named Wizard101, KingsIsle's default folders, every Steam library, Wine, Lutris and Proton prefixes and WSL drive mounts, with the pinned revision listed first; and type dumps named for a found revision beside an install, in the Ambrose data folder, the working folder or the executable's folder, or named by AMBROSE_TYPE_DUMP_PATH.
+ * Finds the user's own Wizard101 client data on their machine: an install is a folder holding Data/GameData/Root.wad whose Bin/revision.dat names its revision, found through AMBROSE_CLIENT_DIR, the installed programs named Wizard101, KingsIsle's default folders, every Steam library, Wine, Lutris and Proton prefixes and WSL drive mounts, with the pinned revision listed first; and type dumps named for a found revision beside an install, extracted by typeextract into the Ambrose data folder's types folder, in the Ambrose data folder, the working folder or the executable's folder, or named by AMBROSE_TYPE_DUMP_PATH.
  */
 
 #ifndef AMBROSE_CLIENTLOCATOR_H

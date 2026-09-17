@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests client discovery on machines the test describes: an install is a folder with Root.wad whose revision.dat names its revision; installs are found through AMBROSE_CLIENT_DIR, installed programs named Wizard101 up to two folders deep, KingsIsle's default folders and Steam libraries on Windows, and through Steam, Proton, Wine and Lutris prefixes and WSL drives elsewhere, each listed once with the pinned revision first; Steam library files parse in both layouts; a search visits a bounded number of folders; and type dumps are found beside installs, in the data folder, the working and executable folders and the environment, only when their header reads as a dump.
+ * Tests client discovery on machines the test describes: an install is a folder with Root.wad whose revision.dat names its revision; installs are found through AMBROSE_CLIENT_DIR, installed programs named Wizard101 up to two folders deep, KingsIsle's default folders and Steam libraries on Windows, and through Steam, Proton, Wine and Lutris prefixes and WSL drives elsewhere, each listed once with the pinned revision first; Steam library files parse in both layouts; a search visits a bounded number of folders; and type dumps are found beside installs, in the data folder's types folder for a found revision, in the data folder, the working and executable folders and the environment, only when their header reads as a dump.
  */
 
 #include "ClientLocator.h"
@@ -166,6 +166,8 @@ TEST(ClientLocatorTest, TypeDumpsAreFoundWhereTheirHeaderReadsAsADump)
     system.AddFile("C:/Games/Wizard101/r806919.Wizard_1_610.json", DumpHeader);
     system.AddFile("C:/Games/r806919.Wizard_1_610.json", "not a dump");
     system.AddFile("C:/Users/wiz/AppData/Local/ProjectAmbrose/mine.JSON", DumpHeader);
+    system.AddFile("C:/Users/wiz/AppData/Local/ProjectAmbrose/types/r806919.Wizard_1_610.json", DumpHeader);
+    system.AddFile("C:/Users/wiz/AppData/Local/ProjectAmbrose/types/r801440.Wizard_1_610.json", DumpHeader);
     system.AddFile("C:/Users/wiz/AppData/Local/ProjectAmbrose/notes.json", "{\"version\": 1}");
     system.AddFile("C:/Users/wiz/AppData/Local/ProjectAmbrose/readme.txt", DumpHeader);
     system.AddFile("C:/Work/r806919.Wizard_1_610.json", DumpHeader);
@@ -173,12 +175,13 @@ TEST(ClientLocatorTest, TypeDumpsAreFoundWhereTheirHeaderReadsAsADump)
 
     std::vector<ClientCandidate> const installs = ClientLocator::FindInstalls(system);
     std::vector<TypeDumpCandidate> const dumps = ClientLocator::FindTypeDumps(system, installs);
-    EXPECT_EQ(Paths(dumps), (std::vector<std::string>{ "C:/Dumps/named.json", "C:/Games/Wizard101/r806919.Wizard_1_610.json", "C:/Users/wiz/AppData/Local/ProjectAmbrose/mine.JSON",
-        "C:/Work/r806919.Wizard_1_610.json", "C:/Ambrose/bin/r806919.Wizard_1_610.json" }));
-    ASSERT_EQ(dumps.size(), 5u);
+    EXPECT_EQ(Paths(dumps), (std::vector<std::string>{ "C:/Dumps/named.json", "C:/Games/Wizard101/r806919.Wizard_1_610.json", "C:/Users/wiz/AppData/Local/ProjectAmbrose/types/r806919.Wizard_1_610.json",
+        "C:/Users/wiz/AppData/Local/ProjectAmbrose/mine.JSON", "C:/Work/r806919.Wizard_1_610.json", "C:/Ambrose/bin/r806919.Wizard_1_610.json" }));
+    ASSERT_EQ(dumps.size(), 6u);
     EXPECT_EQ(dumps[0].Source, "through AMBROSE_TYPE_DUMP_PATH");
-    EXPECT_EQ(dumps[2].Source, "in the Ambrose data folder");
-    EXPECT_EQ(dumps[3].Source, "in the working folder");
+    EXPECT_EQ(dumps[2].Source, "extracted into the Ambrose data folder");
+    EXPECT_EQ(dumps[3].Source, "in the Ambrose data folder");
+    EXPECT_EQ(dumps[4].Source, "in the working folder");
     EXPECT_EQ(dumps[1].Source, "beside the install C:/Games/Wizard101");
 
     FakeClientSystem unixLike;

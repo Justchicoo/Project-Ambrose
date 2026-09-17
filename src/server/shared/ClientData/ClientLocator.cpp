@@ -254,6 +254,9 @@ std::vector<TypeDumpCandidate> ClientLocator::FindTypeDumps(ClientSystem const& 
     }
     std::filesystem::path const data = GetDataFolder(system);
     if (!data.empty())
+        for (std::string const& revision : revisions)
+            consider(data / "types" / FromUtf8(revision + ".json"), "extracted into the Ambrose data folder");
+    if (!data.empty())
         for (std::filesystem::path const& file : system.ListFiles(data, MaxPrefixes))
             if (Ambrose::ToLower(PathText(file.extension())) == ".json")
                 consider(file, "in the Ambrose data folder");

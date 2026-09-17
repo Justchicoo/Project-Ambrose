@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds unit_tests from every test source outside the compile, client and fuzz folders, and outside the login server's folder unless its library is built, registers each test with CTest, adds the compile and client folders and the fuzz folder when fuzzers are built, and smoke-tests each server executable and the bindecode, dbimport, extractor and localetool tools.
+# Builds unit_tests from every test source outside the compile, client, fuzz and tools folders, and outside the login server's folder unless its library is built, registers each test with CTest, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable and the bindecode, dbimport, extractor, localetool and typeextract tools.
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
@@ -7,7 +7,7 @@ ambrose_collect_sources("${CMAKE_CURRENT_SOURCE_DIR}" all_test_sources)
 set(test_sources "")
 foreach(source IN LISTS all_test_sources)
     file(RELATIVE_PATH relative "${CMAKE_CURRENT_SOURCE_DIR}" "${source}")
-    if(relative MATCHES "^(compile|client|fuzz)/")
+    if(relative MATCHES "^(compile|client|fuzz|tools)/")
         continue()
     endif()
     if(relative MATCHES "^server/apps/loginserver/" AND NOT TARGET login)
@@ -37,6 +37,9 @@ gtest_discover_tests(unit_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT 120)
 
 add_subdirectory(compile)
 add_subdirectory(client)
+if(TARGET typeextract-core)
+    add_subdirectory(tools/typeextract)
+endif()
 if(AMBROSE_BUILD_FUZZERS)
     add_subdirectory(fuzz)
 endif()
@@ -64,6 +67,12 @@ if(TARGET localetool)
     add_test(NAME LocaleTool
         COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:localetool> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/localetool -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/LocaleToolTest.cmake")
     set_tests_properties(LocaleTool PROPERTIES SKIP_REGULAR_EXPRESSION "localetool test skipped")
+endif()
+
+if(TARGET typeextract)
+    add_test(NAME TypeExtract
+        COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:typeextract> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/typeextract -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/TypeExtractTest.cmake")
+    set_tests_properties(TypeExtract PROPERTIES SKIP_REGULAR_EXPRESSION "typeextract test skipped")
 endif()
 
 if(TARGET dbimport)
