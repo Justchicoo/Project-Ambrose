@@ -428,6 +428,15 @@ Settled on 2026-09-16 under the maintainer's standing direction to decide.
 - The `extractor` tool reads the tables, their text from the .lang file its section names, the disallowed name list and the creation config from the user's own install. It replaces the world database's character_name_part, character_name_disallowed, character_create_school and character_create_option tables in one transaction, so a failure changes nothing, and no extracted row is committed to the repository. `CharacterNameSet` validates the same data in the extractor before it writes and in `sCharacterNameMgr` when the rows load. The manager reads both tables in one consistent snapshot and swaps in new tables only when every row is valid, and otherwise keeps the old tables and reports each problem. It warns when the new tables leave its default locale, set from `Locale.Default`, without human names.
 - A disallowed name matches by gender, by locale id when the caller names one, and by index, where an index of 256 or more in the list matches any index. The meaning of locale id 2 and of the index 999 in r806919's list is unconfirmed.
 
+### Guided setup
+
+Settled on 2026-09-16 at the maintainer's direction: when a server or tool cannot work because client data is missing, it finds the data on the user's own machine and offers to use it. Files found there are the user's own provided files, so nothing is downloaded or committed.
+
+- `ClientLocator` finds installs, meaning folders holding `Data/GameData/Root.wad`, whose `Bin/revision.dat` names the revision. It looks in `AMBROSE_CLIENT_DIR`, installed programs named Wizard101 (up to two folders deep), KingsIsle's default folders, every Steam library, Wine, Lutris and Proton prefixes, and WSL drive mounts, and lists the pinned r806919 first. It finds type dumps named for a found revision beside an install, in the Ambrose data folder, in the working or executable folder, or through `AMBROSE_TYPE_DUMP_PATH`.
+- When `ClientDir` or `TypeDumpPath` is empty or unusable and not set by the environment or the command line, the game and login servers ask on a terminal which find to use. The answer is saved to `conf.d/client-data.conf` beside the configuration, and the configuration reloads. Without a terminal they log what they found and the setting to add. `Setup.Discover`, `Setup.Prompt` and `Setup.PromptTimeout` control this.
+- bindecode, localetool and the extractor ask the same questions for `--client` and `--type-dump`, or print the finds and the flag to pass.
+- When the world database's name tables are empty, the game server offers on a terminal to extract them from the install in-process. The client data extraction therefore lives in `shared/ClientData` and its world SQL in `database/Extraction`, so a server can run it without linking a tool.
+
 ### Database updates
 
 Update files run through the connector with multi-statement support, so `DELIMITER` is not allowed in them. The `updates` table records each file's SHA-256 hash.

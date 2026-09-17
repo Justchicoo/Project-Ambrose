@@ -1,15 +1,17 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads CharacterNames.xml with pugixml as a document of exactly one root element, taking each table's section minus its locale suffix as the .lang stem and a table without a locale in every locale that has that stem, parses each needed .lang file once, joins a value's text around comments and CDATA while refusing elements inside it, and refuses unknown elements, missing sections and keys without text; decodes the disallowed list BINd file through the name views, giving each name its list position as id; reads the creation config's plain XML, whose classes the type dump lacks, by element name, keying schools by their string id; then validates names through CharacterNameSet, requires human names and schools, and lays the rows out for the world tables in table, locale and position order. Every problem goes through one capped report with values from the files escaped.
+ * Reads CharacterNames.xml with pugixml as a document of exactly one root element, taking each table's section minus its locale suffix as the .lang stem and a table without a locale in every locale that has that stem, parses each needed .lang file once, joins a value's text around comments and CDATA while refusing elements inside it, and refuses unknown elements, missing sections and keys without text; decodes the disallowed list BINd file through the name views, giving each name its list position as id; reads the creation config's plain XML, whose classes the type dump lacks, by element name, keying schools by their string id; then validates names through CharacterNameSet, and requires human names and schools. Every problem goes through one capped report with values from the files escaped.
  */
 
 #include "CharacterNameExtractor.h"
 #include "BindFile.h"
+#include "ConfigMgr.h"
 #include "KiwadArchive.h"
 #include "LangFile.h"
 #include "NameViews.h"
 #include "StringHash.h"
 #include "StringUtil.h"
+#include "TypedView.h"
 
 #include <fmt/format.h>
 #include <pugixml.hpp>
@@ -223,6 +225,27 @@ NameExtraction CharacterNameExtractor::Extract(KiwadArchive const& archive, Type
     return extraction;
 }
 
+std::optional<NameExtraction> CharacterNameExtractor::ExtractFromInstall(std::filesystem::path const& clientDir, std::filesystem::path const& typeDump, std::string& error)
+{
+    std::filesystem::path const rootWad = clientDir / "Data" / "GameData" / "Root.wad";
+    std::unique_ptr<KiwadArchive> const archive = KiwadArchive::Open(rootWad, error);
+    if (!archive)
+    {
+        error = fmt::format("cannot open {}: {}", ConfigMgr::PathToUtf8(rootWad), error);
+        return std::nullopt;
+    }
+    TypedViewRegistry views;
+    NameViews::RegisterAll(views);
+    TypeRegistry registry(&views);
+    if (!registry.LoadFromFile(typeDump))
+    {
+        std::vector<std::string> const problems = registry.GetErrors();
+        error = fmt::format("cannot load the type dump {}{}{}", ConfigMgr::PathToUtf8(typeDump), problems.empty() ? "" : ": ", problems.empty() ? std::string() : problems.front());
+        return std::nullopt;
+    }
+    return Extract(*archive, registry.GetCatalog());
+}
+
 void CharacterNameExtractor::ReadNameTables(KiwadArchive const& archive, std::span<uint8 const> xml, NameExtraction& extraction)
 {
     std::unique_ptr<pugi::xml_document> const document = ParseXml(xml, NamesEntry, extraction);
@@ -420,35 +443,4 @@ void CharacterNameExtractor::Validate(NameExtraction& extraction)
         extraction.AddError(fmt::format("{} holds no locale with all four human name tables", NamesEntry));
     if (extraction.Schools.empty())
         extraction.AddError(fmt::format("{} offers no school", CreationConfigEntry));
-}
-
-WorldSqlScript CharacterNameExtractor::BuildScript(NameExtraction const& extraction)
-{
-    std::vector<WorldSqlScript::Row> parts;
-    parts.reserve(extraction.GetPartCount());
-    for (CharacterNameTable const& table : extraction.Tables)
-        for (std::size_t index = 0; index < table.Parts.size(); ++index)
-            parts.push_back({ table.Name, table.Locale, uint64{ index }, table.Parts[index].LocaleKey, table.Parts[index].Text });
-    std::vector<WorldSqlScript::Row> disallowed;
-    for (DisallowedName const& name : extraction.Disallowed)
-        disallowed.push_back({ uint64{ name.Id }, uint64{ name.LocaleId }, uint64{ name.Gender }, uint64{ name.First }, uint64{ name.Middle }, uint64{ name.Last } });
-    std::vector<WorldSqlScript::Row> schools;
-    for (CreationSchool const& school : extraction.Schools)
-        schools.push_back({ uint64{ school.Id }, school.Name, uint64{ school.Order } });
-    std::vector<WorldSqlScript::Row> options;
-    for (CreationOption const& option : extraction.Options)
-        options.push_back({ uint64{ option.Order }, uint64{ option.TemplateId } });
-
-    std::vector<std::string_view> const tables = GetTables();
-    WorldSqlScript script;
-    script.ReplaceTable(tables[0], { "table_name", "locale", "idx", "locale_key", "text" }, parts);
-    script.ReplaceTable(tables[1], { "id", "locale_id", "gender", "first_idx", "middle_idx", "last_idx" }, disallowed);
-    script.ReplaceTable(tables[2], { "school_id", "school_name", "sort_order" }, schools);
-    script.ReplaceTable(tables[3], { "sort_order", "template_id" }, options);
-    return script;
-}
-
-std::vector<std::string_view> CharacterNameExtractor::GetTables()
-{
-    return { "character_name_part", "character_name_disallowed", "character_create_school", "character_create_option" };
 }

@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds the database library: MariaDB Connector/C connections, query results and typed fields, pools, the updater, and the DB log appender.
+# Builds the database library: MariaDB Connector/C connections, query results and typed fields, pools, the updater, world SQL scripts of extracted client data, and the DB log appender.
 ambrose_add_library(database "${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(database

@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Login server entry point: loads account and login settings and the type dump, declares the login message table and checks it against the client's message definitions, refuses to serve clients without the type dump and both databases, opens the login and characters databases, listens for clients, and offers account console commands until shutdown, telling connected clients before it shuts down and closing the databases, which drains their callbacks, before its network threads stop.
+ * Login server entry point: runs guided setup for the install and type dump, loads account and login settings and the type dump, declares the login message table and checks it against the client's message definitions, refuses to serve clients without the type dump and both databases, opens the login and characters databases, listens for clients, and offers account console commands until shutdown, telling connected clients before it shuts down and closing the databases, which drains their callbacks, before its network threads stop.
  */
 
 #include "AccountCommands.h"
 #include "AccountMgr.h"
 #include "AppenderDB.h"
+#include "ClientSetup.h"
 #include "ConfigMgr.h"
 #include "DatabaseEnv.h"
 #include "DatabaseLoader.h"
@@ -27,6 +28,7 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -47,6 +49,17 @@ namespace
     protected:
         bool OnStart() override
         {
+            std::unique_ptr<SetupPrompt> const prompt = SetupPrompt::ForProcess(std::cout, Config().GetOption<bool>("Setup.Prompt", true, true),
+                std::chrono::seconds(Config().GetOption<uint32>("Setup.PromptTimeout", ClientSetup::DefaultTimeoutSeconds, true)));
+            LocalClientSystem const system;
+            ClientSetup::ForServer(Config(), *prompt, system, { "loginserver", true, true }, [](bool warning, std::string const& text)
+            {
+                if (warning)
+                    LOG_WARN("server.loginserver", "{}", text);
+                else
+                    LOG_INFO("server.loginserver", "{}", text);
+            });
+
             if (!sAccountMgr.LoadSettings(Config()))
             {
                 LOG_ERROR("server.loginserver", "Cannot load the account settings");

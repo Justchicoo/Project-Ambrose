@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements environment access with the wide secure CRT calls on MSVC, converting names and values between UTF-8 and UTF-16, and POSIX calls elsewhere; reads the arguments from the wide command line on Windows; sets the console code pages to UTF-8 on Windows; and finds the executable through the module path or /proc/self/exe.
+ * Implements environment access with the wide secure CRT calls on MSVC, converting names and values between UTF-8 and UTF-16, and POSIX calls elsewhere; reads the arguments from the wide command line on Windows; sets the console code pages to UTF-8 on Windows; tells whether standard input and output are both a console or terminal; and finds the executable through the module path or /proc/self/exe.
  */
 
 #include "Environment.h"
@@ -17,6 +17,8 @@
 #endif
 #include <windows.h>
 #include <shellapi.h>
+#else
+#include <unistd.h>
 #endif
 
 #ifdef _MSC_VER
@@ -92,6 +94,20 @@ void Ambrose::UseUtf8Console()
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
+#endif
+}
+
+bool Ambrose::IsInteractiveTerminal()
+{
+#ifdef _WIN32
+    DWORD mode = 0;
+    HANDLE const input = GetStdHandle(STD_INPUT_HANDLE);
+    HANDLE const output = GetStdHandle(STD_OUTPUT_HANDLE);
+    return input != nullptr && input != INVALID_HANDLE_VALUE && output != nullptr && output != INVALID_HANDLE_VALUE
+        && GetFileType(input) == FILE_TYPE_CHAR && GetConsoleMode(input, &mode) != 0
+        && GetFileType(output) == FILE_TYPE_CHAR && GetConsoleMode(output, &mode) != 0;
+#else
+    return isatty(STDIN_FILENO) == 1 && isatty(STDOUT_FILENO) == 1;
 #endif
 }
 

@@ -25,6 +25,7 @@
 | 3.17 | Character deletion (LOG-9) | S | 3.09 |
 | 3.18 | Updater part 2: rehash, rename, dead refs, pending, modules (FND-18) | M | 2.06 |
 | 3.19 | CI pending SQL promotion and SQL validation (FND-19) | S | 1.04, 3.18, 2.07 |
+| 3.20 | Find client data on the user's machine and guided setup | M | 3.13, 3.14, 1.08, 2.07 |
 
 ## Review notes for this phase
 
@@ -586,7 +587,7 @@ The server knows the valid first, middle and last name index ranges per gender, 
 
 **Deliverables**
 
-- src/tools/extractor (name module): reads Root.wad CharacterNames.xml (tables FirstName_HumanMale, FirstName_HumanFemale, MiddleName_Human, LastName_Human; the per-locale copies list the same keys, so take one), Locale/en-US/CharacterNames.lang (UTF-16 key/blank/text triplets), CharacterNamesDisallowedList.xml (a BINd ObjectProperty file, not zlib-wrapped here) and CharacterCreation/CharacterCreationConfig.xml (WizCharacterCreationConfig: the allowed schools Fire, Ice, Storm, Life, Myth, Death, Balance). Built as the extractor tool over the extraction library in src/tools/extractor, whose `names` command reads every table CharacterNames.xml holds, not only the four human ones:
+- src/tools/extractor (name module): reads Root.wad CharacterNames.xml (tables FirstName_HumanMale, FirstName_HumanFemale, MiddleName_Human, LastName_Human; the per-locale copies list the same keys, so take one), Locale/en-US/CharacterNames.lang (UTF-16 key/blank/text triplets), CharacterNamesDisallowedList.xml (a BINd ObjectProperty file, not zlib-wrapped here) and CharacterCreation/CharacterCreationConfig.xml (WizCharacterCreationConfig: the allowed schools Fire, Ice, Storm, Life, Myth, Death, Balance). Built as the extractor tool in src/tools/extractor, over code 3.20 moved to src/server/shared/ClientData and src/server/database/Extraction, whose `names` command reads every table CharacterNames.xml holds, not only the four human ones:
   - The per-locale copies do not list the same keys. de, en-US, es and fr hold 250 names in each human table, while el, it and pl hold 154 male and 144 female first names, 85 middle names and 79 last names, so every table is kept per locale.
   - A table's Section minus its -<locale> suffix names its .lang stem: CharacterNames, PetNames or AdventurePartyNames. A table without a Locale, such as the pet name tables, is kept in each locale that has its stem. r806919 gives 63 tables holding 7955 names.
   - Position 0 of MiddleName_Human and LastName_Human is empty and means no middle or last name. Keys skip retired numbers (the male table has no First_Boy_28), so a name index is a position in the table, not the number in its key.
@@ -862,3 +863,38 @@ Pending SQL from merged PRs becomes correctly numbered dated files, and CI prove
 - A bot pushing to main in a private repo needs a token and branch-protection exceptions
 - Two PRs merged the same day race for NN; the job must be serialized (concurrency group)
 - Since 2026-09-16 core-build builds only on a schedule, by label or on demand (Continuous integration in doc/ARCHITECTURE.md), so pending SQL promotion on push to main and the SQL checks on pull requests need their own workflow or jobs. They must run on every merge and pull request, and stay cheap: a Linux runner with a database container, not a full build
+
+## 3.20 Find client data on the user's machine and guided setup
+
+**Goal:** A server or tool that lacks client data finds it on the user's own machine and offers to use it.
+
+**Size:** M. **Depends on:** 3.13, 3.14, 1.08, 2.07
+
+Added on 2026-09-16 at the maintainer's direction, and built before 3.15: whenever a server or tool cannot work because client files or other local data are missing, it looks for them on the user's own PC and asks whether to use them. Files found on the user's machine are the user's own provided files, so nothing is downloaded or committed.
+
+**Acceptance**
+
+- [x] A fake install tree is found through a Steam library file, a KingsIsle default folder and the environment, validated, de-duplicated, and its revision read from Bin/revision.dat (ClientLocatorTest, which also covers installed programs, Wine, Lutris and Proton prefixes, WSL drives, both libraryfolders.vdf layouts and the folder budget)
+- [x] On a terminal, a server with an empty ClientDir lists the installs it found, and choosing one writes conf.d/client-data.conf and starts with it; a run whose input is not a terminal never waits and logs the installs and the setting to add (ClientSetupTest with scripted answers, SetupPromptTest, and the AppSmoke tests, whose piped runs must never print the question)
+- [x] bindecode, localetool and extractor without --client use an install the user confirms, and print the installs and the flag to pass when not on a terminal (ClientSetupTest for the shared flow; the Extractor CTest runs the tool without a terminal)
+- [ ] The game server with empty name tables offers to extract them from the install and loads them without a restart when accepted (built: the offer runs the in-process extraction and reloads the names; a run on a real terminal is still to be recorded)
+- [x] Real client: the maintainer's own retail install is found (ClientLocatorClientTest printed C:/ProgramData/KingsIsle Entertainment/Wizard101 (r806919.Wizard_1_610), found through the installed program Wizard101)
+
+### Detailed spec
+
+**Deliverables**
+
+- src/server/shared/ClientData/ClientInstall.{h,cpp}: inspects a folder as a Wizard101 install (Data/GameData/Root.wad and Bin/WizardGraphicalClient.exe) and reads its revision and version from Bin/revision.dat, such as r806919.Wizard_1_610. Built as ClientInstall in ClientLocator.h
+- src/server/shared/ClientData/ClientLocator.{h,cpp}: finds installs in AMBROSE_CLIENT_DIR, the Windows uninstall entries naming Wizard101, the KingsIsle default folders, every Steam library's steamapps/common/Wizard101 (the Steam path from the registry and libraryfolders.vdf), and on Linux the Steam and Proton libraries, Wine and Lutris prefixes and WSL drive mounts; the pinned revision sorts first. The registry and file system sit behind an interface so tests use fakes. Built with ClientSystem and LocalClientSystem in ClientSystem.{h,cpp}, which read both registry views under the user and the machine; a search looks two folders deep only below installed programs and visits at most 512 folders, and paths show with forward slashes
+- Type dump discovery: a revision-named dump beside the install, in the Ambrose user data folder or the working directory, checked by its header before it is offered. Built: the first bytes must open a JSON object naming version and classes, and every .json in the data folder is considered
+- src/server/shared/App/SetupPrompt.{h,cpp}: numbered choice and yes/no prompts only when input and output are terminals, with Setup.Prompt (default 1) and Setup.PromptTimeout (seconds, default 120, 0 waits); without a terminal the candidates and the exact setting are logged instead. Built also with Setup.Discover (default 1); tools read AMBROSE_SETUP_DISCOVER, AMBROSE_SETUP_PROMPT and AMBROSE_SETUP_PROMPT_TIMEOUT. Enter picks the first find, a number picks one, other text is a path, and s skips; a timeout or closed input skips every later question
+- A confirmed choice is written to conf.d/client-data.conf beside the app's configuration, holding the branding header and ClientDir and TypeDumpPath, and applied through a configuration reload. Built in src/server/shared/App/ClientSetup.{h,cpp}: the file is merged with what it held, written through a temporary file, and quoted, and keys set by the environment or the command line are never asked about
+- The extraction parsing moves to src/server/shared/ClientData and the SQL script writer to the database layer, so the game server can extract the name tables in-process and the extractor tool stays a thin front end. Built as src/server/shared/ClientData/{CharacterNameExtractor,NameViews} with ExtractFromInstall, and src/server/database/Extraction/{WorldSqlScript,CharacterNameScript}
+- Wiring: the game and login servers ask when ClientDir or TypeDumpPath is empty or invalid; the game server offers name extraction when the world tables are empty; bindecode, localetool and extractor ask when no install is named
+- An install whose revision is not the pinned r806919 is offered with a warning that its message and type data may not match
+- Tests: ClientLocatorTest over fake trees and a fake registry, SetupPromptTest with scripted input and a non-terminal run, the AppSmoke tests confirming piped runs never prompt, and a client-gated test that the maintainer's install inspects as r806919
+
+**Risks**
+
+- Steam's libraryfolders.vdf format has changed before; the parser must tolerate both known layouts
+- A prompt on a terminal blocks startup until answered or timed out, so services must run without a terminal or with Setup.Prompt = 0

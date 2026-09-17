@@ -1,10 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: loads the type dump and, when ClientDir names the user's install, the locale text of its Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, loads the character name tables when the world database is open, then runs the world update tick whose interval follows World.UpdateInterval live.
+ * Game server entry point: runs guided setup for the install and type dump, loads the type dump and, when ClientDir names the user's install, the locale text of its Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, loads the character name tables when the world database is open, offering on a terminal to extract them from the install when they are empty, then runs the world update tick whose interval follows World.UpdateInterval live.
  */
 
 #include "AppenderDB.h"
+#include "CharacterNameExtractor.h"
 #include "CharacterNameMgr.h"
+#include "CharacterNameScript.h"
+#include "ClientSetup.h"
 #include "ConfigMgr.h"
 #include "DatabaseEnv.h"
 #include "DatabaseLoader.h"
@@ -16,12 +19,15 @@
 #include "ServerApp.h"
 #include "TypeRegistry.h"
 
+#include <fmt/format.h>
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -37,6 +43,17 @@ namespace
     protected:
         bool OnStart() override
         {
+            std::unique_ptr<SetupPrompt> const prompt = SetupPrompt::ForProcess(std::cout, Config().GetOption<bool>("Setup.Prompt", true, true),
+                std::chrono::seconds(Config().GetOption<uint32>("Setup.PromptTimeout", ClientSetup::DefaultTimeoutSeconds, true)));
+            LocalClientSystem const system;
+            ClientSetup::ForServer(Config(), *prompt, system, { "gameserver", true, true }, [](bool warning, std::string const& text)
+            {
+                if (warning)
+                    LOG_WARN("server.gameserver", "{}", text);
+                else
+                    LOG_INFO("server.gameserver", "{}", text);
+            });
+
             std::vector<std::string> limitProblems;
             SerializerLimits::Apply(SerializerLimits::Load(Config(), &limitProblems));
             for (std::string const& problem : limitProblems)
@@ -91,7 +108,9 @@ namespace
                 LOG_WARN("server.gameserver", "WorldDatabaseInfo is empty, so the character name tables are not loaded");
             else
             {
-                CharacterNameLoadResult const names = sCharacterNameMgr.Load();
+                CharacterNameLoadResult names = sCharacterNameMgr.Load();
+                if (names.Loaded && names.Tables == 0 && OfferNameExtraction(*prompt))
+                    names = sCharacterNameMgr.Load();
                 if (!names.Loaded)
                 {
                     for (std::string const& problem : names.Errors)
@@ -109,6 +128,37 @@ namespace
                     LOG_WARN("server.gameserver", "Character name tables: {}", warning);
             }
             AppenderDB::Enable(Logger(), Config().GetOption<uint32>("RealmID", 1, true));
+            return true;
+        }
+
+        bool OfferNameExtraction(SetupPrompt& prompt)
+        {
+            std::string const clientDir = Config().GetOption<std::string>("ClientDir", "", true);
+            std::string const typeDump = Config().GetOption<std::string>("TypeDumpPath", "", true);
+            if (!prompt.IsInteractive() || clientDir.empty() || typeDump.empty())
+                return false;
+            if (!prompt.Confirm(fmt::format("The world database has no character name tables. Extract them now from your install in {}?", clientDir)))
+                return false;
+            std::string error;
+            std::optional<NameExtraction> const extraction = CharacterNameExtractor::ExtractFromInstall(LogConfig::Utf8Path(clientDir), LogConfig::Utf8Path(typeDump), error);
+            if (!extraction)
+            {
+                LOG_ERROR("server.gameserver", "Cannot extract the character name tables: {}", error);
+                return false;
+            }
+            if (!extraction->Ok())
+            {
+                for (std::string const& problem : extraction->Errors)
+                    LOG_ERROR("server.gameserver", "Character name extraction: {}", problem);
+                return false;
+            }
+            std::optional<MySQLConnectionInfo> const world = MySQLConnectionInfo::Parse(Config().GetOption<std::string>("WorldDatabaseInfo", "", true), &error);
+            if (!world || !CharacterNameScript::Build(*extraction).Apply(*world, error))
+            {
+                LOG_ERROR("server.gameserver", "Cannot write the character name tables to the world database: {}", error);
+                return false;
+            }
+            LOG_INFO("server.gameserver", "Extracted {} character name tables holding {} names from {}", extraction->Tables.size(), extraction->GetPartCount(), clientDir);
             return true;
         }
 

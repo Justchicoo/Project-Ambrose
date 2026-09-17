@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Extracts character creation data from the user's own Root.wad: every name table of CharacterNames.xml in each locale its section's .lang file covers, with each position's locale key and text, the disallowed names of the CharacterNamesDisallowedList.xml BINd file, and the schools and creation options of CharacterCreation/CharacterCreationConfig.xml, reporting every problem up to a cap and validating the names as the server will, and turns the result into a script that replaces the four world tables.
+ * Extracts character creation data from the user's own Root.wad: every name table of CharacterNames.xml in each locale its section's .lang file covers, with each position's locale key and text, the disallowed names of the CharacterNamesDisallowedList.xml BINd file, and the schools and creation options of CharacterCreation/CharacterCreationConfig.xml, reporting every problem up to a cap and validating the names as the server will, either from an open archive and catalog or straight from an install folder and type dump.
  */
 
 #ifndef AMBROSE_CHARACTERNAMEEXTRACTOR_H
@@ -8,9 +8,10 @@
 
 #include "CharacterNames.h"
 #include "TypeRegistry.h"
-#include "WorldSqlScript.h"
 
 #include <cstddef>
+#include <filesystem>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -65,12 +66,11 @@ public:
     CharacterNameExtractor() = delete;
 
     static NameExtraction Extract(KiwadArchive const& archive, TypeCatalogPtr const& catalog);
+    static std::optional<NameExtraction> ExtractFromInstall(std::filesystem::path const& clientDir, std::filesystem::path const& typeDump, std::string& error);
     static void ReadNameTables(KiwadArchive const& archive, std::span<uint8 const> xml, NameExtraction& extraction);
     static void ReadDisallowed(TypeCatalogPtr const& catalog, std::span<uint8 const> bind, NameExtraction& extraction);
     static void ReadCreationConfig(std::span<uint8 const> xml, NameExtraction& extraction);
     static void Validate(NameExtraction& extraction);
-    static WorldSqlScript BuildScript(NameExtraction const& extraction);
-    static std::vector<std::string_view> GetTables();
 };
 
 #endif

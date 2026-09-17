@@ -1,8 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * localetool entry point: loads the locale .lang files of the user's own Root.wad and prints the keys whose text matches, checks that a key exists and prints its text, prints every entry of one table, or lists the installed locales with their sizes and the files each had to skip; reads its arguments and environment as UTF-8, takes -- to end the options, writes UTF-8, and exits 0 on success, 1 when a key, table, match or locale is missing or cannot be loaded or the install cannot be read, and 2 on bad usage.
+ * localetool entry point: loads the locale .lang files of the user's own Root.wad and prints the keys whose text matches, checks that a key exists and prints its text, prints every entry of one table, or lists the installed locales with their sizes and the files each had to skip; reads its arguments and environment as UTF-8, offers to use an install found on the machine when none is named, takes -- to end the options, writes UTF-8, and exits 0 on success, 1 when a key, table, match or locale is missing or cannot be loaded or the install cannot be read, and 2 on bad usage.
  */
 
+#include "ClientSetup.h"
 #include "ConfigMgr.h"
 #include "Environment.h"
 #include "KiwadArchive.h"
@@ -147,6 +148,12 @@ locale cannot be loaded or the install cannot be read, 2 on bad usage.
         }
 
         std::filesystem::path wad = LogConfig::Utf8Path(arguments->Wad);
+        if (!wad.has_parent_path() && !arguments->Client)
+        {
+            LocalClientSystem const system;
+            std::unique_ptr<SetupPrompt> const prompt = ClientSetup::ToolPrompt(std::cout);
+            ClientSetup::ForTool(arguments->Client, nullptr, *prompt, system, "localetool", std::cerr);
+        }
         if (!wad.has_parent_path() && arguments->Client)
             wad = LogConfig::Utf8Path(*arguments->Client) / "Data" / "GameData" / wad;
         std::unique_ptr<KiwadArchive> archive = KiwadArchive::Open(wad, error);

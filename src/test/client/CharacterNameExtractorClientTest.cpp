@@ -4,6 +4,7 @@
  */
 
 #include "CharacterNameExtractor.h"
+#include "CharacterNameScript.h"
 #include "CharacterNameMgr.h"
 #include "DBUpdater.h"
 #include "DatabaseEnv.h"
@@ -142,7 +143,7 @@ TEST_F(CharacterNameExtractorClientTest, TheRowsFillAWorldDatabaseTheManagerLoad
 
     ASSERT_TRUE(DBUpdater::Run(*info, "world", UpdaterSettings{}));
     std::string error;
-    ASSERT_TRUE(CharacterNameExtractor::BuildScript(*s_extraction).Apply(*info, error)) << error;
+    ASSERT_TRUE(CharacterNameScript::Build(*s_extraction).Apply(*info, error)) << error;
     ASSERT_TRUE(WorldDatabase.SetConnectionInfo(info->ToConnectionString(), 1, 1));
     ASSERT_EQ(WorldDatabase.Open(), 0u);
 

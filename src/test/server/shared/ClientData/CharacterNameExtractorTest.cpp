@@ -4,6 +4,7 @@
  */
 
 #include "CharacterNameExtractor.h"
+#include "CharacterNameScript.h"
 #include "CharacterNameMgr.h"
 #include "BindFile.h"
 #include "DBUpdater.h"
@@ -212,7 +213,7 @@ TEST_F(CharacterNameExtractorTest, TheScriptReplacesTheFourTablesWithHexText)
 {
     NameExtraction const extraction = Extract();
     ASSERT_TRUE(extraction.Ok()) << extraction.Errors.front();
-    WorldSqlScript const script = CharacterNameExtractor::BuildScript(extraction);
+    WorldSqlScript const script = CharacterNameScript::Build(extraction);
     std::vector<std::string> const& statements = script.GetStatements();
     ASSERT_EQ(statements.size(), 8u);
     EXPECT_EQ(statements[0], "DELETE FROM `character_name_part`");
@@ -251,7 +252,7 @@ TEST_F(CharacterNameExtractorTest, TheScriptReplacesTheFourTablesWithHexText)
     std::ofstream(_directory.Path() / "taken.sql" / "inside", std::ios::binary) << "x";
     EXPECT_FALSE(script.WriteFile(_directory.Path() / "taken.sql", error));
     EXPECT_FALSE(std::filesystem::exists(_directory.Path() / "taken.sql.partial"));
-    EXPECT_EQ(CharacterNameExtractor::GetTables(), (std::vector<std::string_view>{ "character_name_part", "character_name_disallowed", "character_create_school", "character_create_option" }));
+    EXPECT_EQ(CharacterNameScript::GetTables(), (std::vector<std::string_view>{ "character_name_part", "character_name_disallowed", "character_create_school", "character_create_option" }));
 }
 
 TEST_F(CharacterNameExtractorTest, BrokenInputsAreReported)
@@ -357,7 +358,7 @@ TEST_F(CharacterNameExtractorTest, TheScriptAppliesToAWorldDatabaseAndLoadsInThe
 
     NameExtraction const extraction = Extract();
     ASSERT_TRUE(extraction.Ok()) << extraction.Errors.front();
-    WorldSqlScript const script = CharacterNameExtractor::BuildScript(extraction);
+    WorldSqlScript const script = CharacterNameScript::Build(extraction);
 
     MySQLConnection creator(*server);
     ASSERT_EQ(creator.Open(), 0u) << creator.GetLastErrorText();

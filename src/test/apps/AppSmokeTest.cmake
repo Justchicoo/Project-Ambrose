@@ -34,7 +34,7 @@ string(REPLACE "patchserver" "PatchServerPort" portOption "${portOption}")
 set(quietOptions --set BindIP=127.0.0.1 --set ${portOption}=0 --set ClientDir= --set Appender.Server=1,3,0 --set Appender.Errors=1,3,0 --set Appender.Stream=1,3,0 --set Appender.Console=1,3,0)
 execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} --set LoginDatabaseInfo= --set CharacterDatabaseInfo= --set WorldDatabaseInfo=
     WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE distResult OUTPUT_VARIABLE distOutput ERROR_VARIABLE distError TIMEOUT 30)
-if(NOT distResult EQUAL 0 OR NOT distOutput MATCHES "${NAME} ready" OR NOT distOutput MATCHES "${NAME} stopped")
+if(NOT distResult EQUAL 0 OR NOT distOutput MATCHES "${NAME} ready" OR NOT distOutput MATCHES "${NAME} stopped" OR distOutput MATCHES "Found on this machine:")
     message(FATAL_ERROR "${NAME} with its shipped ${NAME}.conf.dist did not report ready (${distResult}): ${distOutput}${distError}")
 endif()
 
