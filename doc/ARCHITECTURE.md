@@ -21,7 +21,7 @@ src/
   genrev/                 Generated git revision header
   common/                 Game-agnostic foundations
   server/
-    apps/                 Executables: loginserver, gameserver, patchserver
+    apps/                 Executables: loginserver, gameserver, patchserver, supervisor
     database/             Connection pools, prepared statements, updater
     shared/               Code every server uses: network, messages, ObjectProperty, archives, realms
     game/                 Game systems, one folder per subsystem
@@ -47,6 +47,7 @@ Tools depend only on `database`, `shared`, and `common`. Modules depend on `game
 | loginserver | Account authentication, character list and creation, realm selection |
 | gameserver | One realm: zones, entities, combat, quests, chat |
 | patchserver | Serves client revision files |
+| supervisor | Starts, stops, restarts and watches the other apps on its machine, and hosts the panel: the dashboard, the panel API and the event socket, with its own SQLite store. In node mode it is the agent for a remote panel |
 
 ## Methods
 
@@ -84,7 +85,7 @@ Nothing from the game client is committed. Tools in `src/tools/` read the user's
 
 ### Operations
 
-Servers stay headless so they run the same on a desktop, a Linux VPS, or in Docker. Each app writes colored logs and accepts commands on its console. An optional admin API, bound to localhost by default and protected by a token, serves health, status, live logs, audited commands, live settings, reloads, and Prometheus metrics. The web dashboard in `apps/dashboard/` and the Grafana dashboards in `apps/grafana/` are built on that API. The supervisor that starts and restarts the apps also serves the dashboard as a hosting panel in the style of Pterodactyl, with panel users and permissions, schedules, backups, updates, a file manager, resource graphs and several machines under one panel. Phase 17 of doc/ROADMAP.md plans this work.
+Servers stay headless so they run the same on a desktop, a Linux VPS, or in Docker. Each app writes colored logs and accepts commands on its console. An optional admin API, bound to localhost by default and protected by a token, serves health, status, live logs, audited commands, live settings, reloads, and Prometheus metrics. The web dashboard in `apps/dashboard/` and the Grafana dashboards in `apps/grafana/` are built on that API. The supervisor that starts and restarts the apps also serves the dashboard as a hosting panel in the style of Pterodactyl, with panel users and permissions, schedules, backups, updates, a file manager, resource graphs and several machines under one panel, and, because it manages a Wizard101 installation rather than a container, realms and zones, accounts, bans and characters, player registration and moderation, world database edits, patch revisions and an installation-wide maintenance mode. The panel has a listener of its own, which carries session cookies and passwords: it binds to localhost by default, and whether the Remote access rule below extends to it, with its certificate handling, is listed under Decisions needed in doc/ROADMAP.md. Browsers talk only to the supervisor, which relays each app's admin API under the signed-in user's permissions, so no app token reaches a browser. Nothing the panel serves carries a file from the user's client install. doc/PANEL.md describes the design, doc/PANEL-MAP.md maps the studied Pterodactyl behavior to the milestone that covers it, and phase 17 of doc/ROADMAP.md plans the work.
 
 ### Tests
 
