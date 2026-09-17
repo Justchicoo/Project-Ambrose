@@ -84,7 +84,7 @@ Nothing from the game client is committed. Tools in `src/tools/` read the user's
 
 ### Operations
 
-Servers stay headless so they run the same on a desktop, a Linux VPS, or in Docker. Each app writes colored logs and accepts commands on its console. An optional admin API, bound to localhost by default and protected by a token, serves health, status, live logs, audited commands, live settings, reloads, and Prometheus metrics. The web dashboard in `apps/dashboard/` and the Grafana dashboards in `apps/grafana/` are built on that API. Phase 17 of doc/ROADMAP.md plans this work.
+Servers stay headless so they run the same on a desktop, a Linux VPS, or in Docker. Each app writes colored logs and accepts commands on its console. An optional admin API, bound to localhost by default and protected by a token, serves health, status, live logs, audited commands, live settings, reloads, and Prometheus metrics. The web dashboard in `apps/dashboard/` and the Grafana dashboards in `apps/grafana/` are built on that API. The supervisor that starts and restarts the apps also serves the dashboard as a hosting panel in the style of Pterodactyl, with panel users and permissions, schedules, backups, updates, a file manager, resource graphs and several machines under one panel. Phase 17 of doc/ROADMAP.md plans this work.
 
 ### Tests
 
@@ -479,6 +479,9 @@ Settled on 2026-09-13 with the maintainer's direction to favor the most capable 
 | Dashboard front end | TypeScript and Svelte, built by Vite into static files the admin API can serve |
 | Process control | An Ambrose supervisor process that starts, stops, restarts, and crash-restarts every app on Windows and Linux, and can itself run under systemd or as a Windows service |
 | Remote access | The admin API listens on localhost by default. Any other address requires TLS and the token. Plain HTTP beyond the machine is an explicit opt-in setting, off by default, added on 2026-09-16 at the maintainer's direction; it still requires the token, but sends the token, commands and logs unencrypted, so anyone on the network path can read them and reuse the token |
+| Panel users | Added on 2026-09-17 at the maintainer's request for hosting panel parity. Panel users, schedules, backup records and graph history live in the supervisor's own SQLite file, so the panel works before any game database exists. Passwords are hashed with Argon2id from libsodium, two-factor sign-in uses TOTP, and permissions are roles plus per-server grants in the style of Pterodactyl sub-users |
+| Backups | Consistent logical dumps of every Ambrose database with the config, data and type dump folders, in one zstd archive with a SHA-256 manifest, stored locally or in opt-in S3-compatible storage |
+| Packaging | The supervisor installs itself as a Windows service or systemd unit, a Docker image and Compose file run the whole stack, a Pterodactyl egg runs Ambrose under an existing Pterodactyl panel, and a desktop tray app starts everything from one icon |
 
 ### Continuous integration
 

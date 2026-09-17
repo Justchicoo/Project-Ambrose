@@ -2,7 +2,7 @@
 
 # Phase 17: Operations: console, admin API, dashboard and metrics
 
-**Done when:** From a browser on a desktop or a phone, an operator sees every server's health and player counts, follows live logs, runs audited commands, edits game settings and reloads content live, restarts a crashed server, and reviews performance history in Grafana. The servers stay headless, so they run the same on a desktop, a Linux VPS, or in Docker. This track runs in parallel: 17.01 can land right after 1.20, and the rest any time after phase 2, except 17.12 and 17.13, which follow 4.16.
+**Done when:** From a browser on a desktop or a phone, an operator sees every server's health and player counts, follows live logs, runs audited commands, edits game settings and reloads content live, restarts a crashed server, and reviews performance history in Grafana. Like a game server hosting panel, it signs each operator in with their own account and permissions, runs scheduled restarts and backups, restores a backup, updates with one click and rolls back, edits files, and manages servers on several machines from one place, and a player on a desktop starts everything from one icon. The servers stay headless, so they run the same on a desktop, a Linux VPS, in Docker, or under an existing Pterodactyl panel. This track runs in parallel: 17.01 can land right after 1.20, and the rest any time after phase 2, except 17.12 and 17.13, which follow 4.16, and the milestones whose dependencies name later phases.
 
 | ID | Milestone | Size | Depends on |
 |---|---|---|---|
@@ -19,12 +19,24 @@
 | 17.11 | Terminal dashboard mode | S | 17.03, 17.04 |
 | 17.12 | Settings and reload admin API | S | 17.02, 17.05, 4.16 |
 | 17.13 | Dashboard settings editor and reload page | M | 17.06, 17.12 |
+| 17.14 | Panel users, roles, sub-users and two-factor sign-in | M | 17.08, 2.13, 1.12 |
+| 17.15 | Schedules with in-game countdowns | M | 17.05, 17.08, 17.14, 2.15 |
+| 17.16 | Backups and restore | M | 17.08, 17.14, 2.06 |
+| 17.17 | One-click updates and rollback | M | 17.16, 3.23 |
+| 17.18 | File manager | M | 17.14 |
+| 17.19 | Built-in resource graphs and alerts | M | 17.03, 17.06, 17.09 |
+| 17.20 | Client data and revisions page | S | 17.06, 3.23 |
+| 17.21 | Accounts, bans, characters and online players pages | M | 17.05, 17.14, 3.17 |
+| 17.22 | Nodes: one panel for servers on several machines | M | 17.14, 17.16 |
+| 17.23 | Operating system services, Docker image and Pterodactyl egg | M | 17.08 |
+| 17.24 | Desktop control app | M | 17.06, 17.08, 3.22, 1.21 |
 
 ## Review notes for this phase
 
 - **Origin.** Added on 2026-09-13 at the maintainer's request for a modern, intuitive way to run the servers. It also covers the roadmap review's missing work item for remote administration and health endpoints.
 - **Decisions.** Settled on 2026-09-13 under Decisions, Operations in doc/ARCHITECTURE.md: Crow for 17.02, TypeScript and Svelte with Vite for 17.06, an Ambrose supervisor for 17.08, and localhost-only access unless TLS and a token are configured. On 2026-09-16 at the maintainer's direction, plain HTTP beyond localhost became an opt-in setting, off by default (see 17.02). 17.11 picks FTXUI, which vcpkg provides.
 - **Live settings.** 17.12 and 17.13 were added on 2026-09-14 for the Live reload and live settings rule in doc/ARCHITECTURE.md. Config editing moved from 17.08 to 17.13, so edits apply live through the settings API instead of writing the `.conf` file and asking for a restart.
+- **Hosting panel parity.** 17.14-17.24 were added on 2026-09-17 at the maintainer's request to manage everything in one place the way game server hosting panels such as Pterodactyl do. The supervisor from 17.08 becomes the panel's single entry point, much as a Pterodactyl node daemon serves its panel: operators sign in to it once, and it relays each app's admin API. Work on this phase starts after 3.23 and runs alongside the gameplay phases. The choices are recorded under Decisions, Operations in doc/ARCHITECTURE.md: Argon2id from libsodium for panel passwords, TOTP for two-factor sign-in, zstd for backup archives, and the supervisor's own SQLite file for panel users, schedules and backup records, so the panel works before any game database exists.
 
 ## 17.01 Server console: colored logs and a command prompt
 
@@ -268,3 +280,224 @@
 - [ ] Editing a config value applies without a restart and survives one
 - [ ] Invalid values can't be submitted, and server refusals show their message
 - [ ] Revert restores the old value and writes a new audit row
+
+## 17.14 Panel users, roles, sub-users and two-factor sign-in
+
+**Goal:** Every operator signs in to the panel with their own account and sees and does only what their role and grants allow.
+
+**Size:** M. **Depends on:** 17.08, 2.13, 1.12
+
+**Deliverables**
+
+- Panel users stored in the supervisor's SQLite file, with passwords hashed by Argon2id from libsodium and optional TOTP two-factor sign-in with one-time recovery codes
+- On first start the supervisor creates an owner account and writes a one-time sign-in link to its console and log, usable only from the same machine, so no default password ever exists
+- Roles owner, admin, operator and viewer, plus per-server sub-user grants of single permissions such as `console.read`, `console.write`, `power.restart`, `files.write`, `backups.restore`, `schedules.edit`, `settings.edit` and `accounts.ban`, enforced on every route and WebSocket
+- Signed, expiring session cookies with CSRF protection, a sign-in rate limit per address and per user, a sessions list with sign-out everywhere, and scoped personal API keys for automation
+- The supervisor relays each app's admin API behind the signed-in user's permissions, so the browser holds no per-app tokens; the per-app tokens from 17.02 remain for scripts
+- A panel users page for creating users, assigning roles and grants, resetting two-factor, and reading each user's audit trail; every action records the panel user in the 17.05 audit log
+- Optional linking of a panel user to a game account from 2.13, so a game master's panel role can follow their security level
+
+**Acceptance**
+
+- [ ] A fresh supervisor has no default password and prints a one-time owner link that works once, only from localhost
+- [ ] A viewer can read logs but gets 403 on a command, a restart, a file write and a restore, and the dashboard hides those controls
+- [ ] A sub-user granted only `power.restart` on gameserver can restart gameserver and nothing else
+- [ ] With two-factor on, a correct password without a valid TOTP code is refused, and each recovery code works once
+- [ ] Twenty failed sign-ins for one user within a minute are rate limited, and the correct password works again once the window passes
+- [ ] Revoking a user ends their open sessions and WebSockets within one second
+
+## 17.15 Schedules with in-game countdowns
+
+**Goal:** Operators schedule restarts, backups, commands and announcements, and players get warned in game before a restart.
+
+**Size:** M. **Depends on:** 17.05, 17.08, 17.14, 2.15
+
+**Deliverables**
+
+- Schedules with cron expressions or one-time dates in a chosen time zone, each running an ordered list of tasks with offsets: announce, run a command, restart, stop, start, back up, and update once 17.17 lands
+- Restart countdowns that warn connected players at set intervals, through the 2.15 shutdown notice on the loginserver, and on the gameserver through the zone broadcast from 6.01 and GM messages from 6.04 once those exist
+- Options to skip a run when no players are online, to wait for a quiet moment up to a limit, and to retry a failed task
+- A schedules page with next run times, run now, pause, and a history of every run with each task's result and output, all audited
+
+**Acceptance**
+
+- [ ] A schedule set to restart the loginserver at a set time with a 5 minute countdown warns connected clients at 5, 1 and 0 minutes and restarts at that time
+- [ ] A daylight saving change neither skips nor doubles a schedule's run in its time zone
+- [ ] A schedule marked to skip when empty does not run while a player is online and does run once no one is
+- [ ] Restarting the supervisor keeps schedules and runs a missed one-time task once if it is still within its grace window
+
+## 17.16 Backups and restore
+
+**Goal:** Operators back up everything a realm needs and restore it with one click, with every backup verified.
+
+**Size:** M. **Depends on:** 17.08, 17.14, 2.06
+
+**Deliverables**
+
+- Backups of every Ambrose database as consistent logical dumps taken inside one transaction, plus the config, data and type dump folders, packed into one zstd-compressed archive with a SHA-256 manifest
+- Manual backups, scheduled backups through 17.15, retention by count and age, and pinned backups that retention never removes
+- Local storage by default and opt-in S3-compatible remote storage, with uploads resumed after a failure
+- Restore of the whole archive or of chosen databases or folders: the supervisor stops the affected apps, takes a safety backup, verifies every checksum before changing anything, restores, runs the updater, and starts the apps again
+- A backups page with size, duration, contents, download, restore, lock and delete, all permission checked and audited
+
+**Acceptance**
+
+- [ ] A backup taken while accounts are created and deleted through the console restores to a state where every foreign key and row count matches the moment the dump began
+- [ ] A backup archive with one flipped byte is refused at restore with the failing file named, and nothing is changed
+- [ ] Restoring a backup from before a dated SQL update brings the database back and then applies the update again
+- [ ] Retention set to keep 3 removes the oldest unpinned backup when a fourth completes
+- [ ] A restore interrupted by killing the supervisor leaves the safety backup in place, and the next start reports the incomplete restore
+
+## 17.17 One-click updates and rollback
+
+**Goal:** Operators move to a newer Ambrose build with one click, and a failed update rolls back by itself.
+
+**Size:** M. **Depends on:** 17.16, 3.23
+
+**Deliverables**
+
+- Update sources: a release channel whose packages are checked against published SHA-256 sums and signatures, and a build channel that pulls a git branch and builds it with the project's presets
+- Versioned install folders kept side by side, so an update installs next to the running build and the switch is a pointer change
+- An update run that takes a backup through 17.16, installs, runs `--check` on every app, switches, restarts through the supervisor, and waits for health; a failed check or health wait switches back, and restores the backup when the update had applied database changes
+- The last few builds kept for manual rollback, with each build's version, commit and changelog shown
+- When 3.23 reports a newer KingsIsle client revision, the panel shows it next to the Ambrose update and can rebuild client data before the restart
+
+**Acceptance**
+
+- [ ] Updating to a newer build keeps accounts and characters and shows the new version after the restart
+- [ ] A build whose gameserver fails `--check` is never switched in, and the running build keeps serving
+- [ ] A build that starts but fails its health wait is rolled back to the previous build within the configured time, and the database matches the backup
+- [ ] A release package with a wrong checksum or signature is refused before any file is written to the install folder
+
+## 17.18 File manager
+
+**Goal:** Operators browse, edit, upload and download the server's own files from the panel without shell access.
+
+**Size:** M. **Depends on:** 17.14
+
+**Deliverables**
+
+- A file browser limited to the Ambrose install, config, logs, data and backup folders, refusing path traversal, symbolic links that leave those roots, and device files
+- A text editor with syntax highlighting for `.conf`, SQL, JSON, XML and Lua, which validates `.conf` files against their settings schema before saving and keeps the previous version
+- Upload with size limits, download of files and folders as archives, extraction of uploaded archives within the roots, rename, move, copy, delete to a recoverable trash, and search by name
+- Following a growing log file live, with every write permission checked and audited with the file's hash before and after
+
+**Acceptance**
+
+- [ ] Requests for `../`, an absolute path, an encoded traversal or a symbolic link leaving the roots are refused with 403 and audited
+- [ ] Saving a `.conf` file with an out-of-range value is refused with the setting and bound named, and the file is unchanged
+- [ ] Two operators saving the same file at once get a conflict for the second save instead of a silent overwrite
+- [ ] A viewer can read and download but cannot upload, edit or delete
+
+## 17.19 Built-in resource graphs and alerts
+
+**Goal:** Operators see CPU, memory, network, disk, players and tick time over time in the panel itself, and are told when something goes wrong.
+
+**Size:** M. **Depends on:** 17.03, 17.06, 17.09
+
+**Deliverables**
+
+- The supervisor samples every app's CPU, memory, threads, open handles, network in and out, and disk use every few seconds, keeping a day at full detail in memory and 30 days downsampled on disk, with no Prometheus or Grafana needed
+- Graphs per app and per realm for those values plus sessions, players online and tick time, with ranges from 5 minutes to 30 days
+- Alert rules for a crash, a crash loop, high tick time, high memory, low disk space, a failed backup, a failed schedule and a failed update, sent to webhooks such as Discord and to email, with repeat limits
+- An alerts page with each alert's history and acknowledgement
+
+**Acceptance**
+
+- [ ] With gameserver under a synthetic load, the panel's CPU graph is within 10 percent of the operating system's own figure
+- [ ] Killing gameserver three times within a minute sends one crash-loop alert, not three separate ones
+- [ ] A 30 day graph loads in under one second with a month of samples
+- [ ] Sampling costs under 1 percent of one core
+
+## 17.20 Client data and revisions page
+
+**Goal:** Operators see which client install and type data each server uses, and rebuild it from the panel.
+
+**Size:** S. **Depends on:** 17.06, 3.23
+
+**Deliverables**
+
+- A page listing the client installs found, the revision each server uses, the type dump in use with its revision, executable hash, extractor version and build time, and the message definitions, name tables and creation config loaded
+- The revision following state from 3.23: the newest revision seen, whether data for it is built, and any build in progress with its live output
+- Buttons to rebuild client data and to switch a server to a different install or revision, each checked, audited, and applied live where 3.23 supports it
+
+**Acceptance**
+
+- [ ] After a client revision change, the page shows the new revision within a minute and the rebuild's live output while it runs
+- [ ] A failed rebuild shows the extractor's error, and the servers keep using the previous data
+
+## 17.21 Accounts, bans, characters and online players pages
+
+**Goal:** Game masters manage accounts, bans, characters and online players from the panel.
+
+**Size:** M. **Depends on:** 17.05, 17.14, 3.17
+
+**Deliverables**
+
+- An accounts page with search, create, password reset, lock and unlock, security level, email and last sign-in address, backed by AccountMgr from 2.13
+- A bans page for account and address bans with duration, reason, who and when, and unban with a reason, matching the console commands
+- A characters page per account listing characters with level, school and location, with rename, restore of a deleted character and delete as 3.17 and later phases support them
+- An online players page with realm, zone and session time, and kick, mute and teleport actions from 6.05, 6.06 and 12.07 once those exist
+- Every action goes through CommandMgr with the panel user's permissions and is audited
+
+**Acceptance**
+
+- [ ] Banning an account from the panel while its player is on character select disconnects that client with the ban message
+- [ ] An operator without `accounts.ban` cannot ban, and the attempt is audited
+- [ ] Creating an account from the panel lets a real client sign in with it
+
+## 17.22 Nodes: one panel for servers on several machines
+
+**Goal:** One panel manages loginservers, gameservers and patchservers running on several machines.
+
+**Size:** M. **Depends on:** 17.14, 17.16
+
+**Deliverables**
+
+- A node mode for the supervisor on each extra machine, joined to the panel with a one-time join token that becomes mutually authenticated TLS with pinned certificates
+- A nodes page with each node's health, resources, apps and port allocations, and the ability to place an app or realm on a node and move it with a backup and restore
+- Console, logs, files, backups, schedules, graphs and power actions work the same for apps on any node, relayed by the panel under the signed-in user's permissions
+- A node that loses the panel keeps its apps running and resyncs when the link returns
+
+**Acceptance**
+
+- [ ] A gameserver on a second machine shows in the panel, and restarting it from the panel works
+- [ ] Cutting the network between panel and node leaves the node's apps serving players, and the panel shows the node offline, then online again within 10 seconds of the link returning
+- [ ] A node presenting a certificate other than the pinned one is refused
+
+## 17.23 Operating system services, Docker image and Pterodactyl egg
+
+**Goal:** Ambrose runs as a background service, in Docker, or under an existing Pterodactyl panel with no manual setup.
+
+**Size:** M. **Depends on:** 17.08
+
+**Deliverables**
+
+- `supervisor --install-service` and `--uninstall-service`, which register the supervisor as a Windows service or a systemd unit running as a dedicated user and starting at boot
+- A multi-stage Dockerfile for a small runtime image, and a Docker Compose file with MariaDB, the supervisor and the apps, with volumes for config, data, logs and backups, and health checks
+- A Pterodactyl egg that installs and starts Ambrose, exposes its settings as startup variables, and maps the console and stop command, for hosts that already run Pterodactyl
+- Packaging docs in doc/OPERATIONS.md, with client data built on first start through 3.22 from a mounted client install
+
+**Acceptance**
+
+- [ ] After `--install-service` and a reboot, the servers are running and the panel is reachable, on Windows and on Linux
+- [ ] `docker compose up` on a clean machine with a client install mounted reaches a ready loginserver with no other steps
+- [ ] Importing the egg into a Pterodactyl panel creates a server that installs, starts, shows its console and stops cleanly
+
+## 17.24 Desktop control app
+
+**Goal:** A player hosting on their own computer starts the database, servers, panel and client from one icon.
+
+**Size:** M. **Depends on:** 17.06, 17.08, 3.22, 1.21
+
+**Deliverables**
+
+- `apps/desktop/`, an installer and tray app for Windows and Linux desktops that installs Ambrose, starts and stops the supervisor, opens the panel, and launches the client through the 1.21 launcher once the loginserver is ready
+- Database setup with no steps: it uses a MariaDB or MySQL server it finds, with credentials the user gives, or else installs a private MariaDB into the Ambrose data folder, checked against its published checksum and bound to localhost with generated credentials
+- First start runs 3.22's automatic setup and shows its progress, and the tray shows server status, players online and update notices from 17.17
+
+**Acceptance**
+
+- [ ] On a clean Windows machine with Wizard101 installed, installing the app and clicking Play reaches the login screen against the local server with no other steps
+- [ ] Quitting from the tray closes the client connection cleanly and stops the servers and the private database, and the next start keeps accounts and characters
+- [ ] A private MariaDB download with a wrong checksum is refused, and the app says what failed

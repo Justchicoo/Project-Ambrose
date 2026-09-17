@@ -57,9 +57,9 @@ First milestones:
 | 14 | [Dungeons, tutorial and PvP](roadmap/phase-14-dungeons-tutorial-and-pvp.md) | 16 | Groups enter sigil dungeons with countdowns. New wizards play the scripted tutorial, and players queue for ranked PvP, tournaments, pet derby and daily assignments. |
 | 15 | [Housing, gardening and fishing](roadmap/phase-15-housing-gardening-and-fishing.md) | 21 | Players go home, decorate, store items in attic and vaults, grow gardens, fish ponds, publish castle tours and build castle magic. |
 | 16 | [Patch server and tooling ownership](roadmap/phase-16-patch-server-and-tooling-ownership.md) | 13 | The retail client patches against Ambrose with 0 files altered, restores a deleted WAD, and streams missing zone packages. Users' type dumps come from Ambrose tooling (built in 3.21). This track can run in parallel any time after phase 2. |
-| 17 | [Operations: console, admin API, dashboard and metrics](roadmap/phase-17-operations-console-admin-api-dashboard-and-metrics.md) | 13 | From a browser on a desktop or a phone, an operator sees every server's health and player counts, follows live logs, runs audited commands, restarts a crashed server, and reviews performance history in Grafana, and edits game settings and reloads content live. Runs in parallel: 17.01 after 1.20, 17.12 and 17.13 after 4.16, the rest after phase 2. |
+| 17 | [Operations: console, admin API, dashboard and metrics](roadmap/phase-17-operations-console-admin-api-dashboard-and-metrics.md) | 24 | From a browser on a desktop or a phone, an operator sees every server's health and player counts, follows live logs, runs audited commands, restarts a crashed server, reviews performance history, and edits game settings and reloads content live. Like a Pterodactyl hosting panel, it has its own users and permissions, schedules, backups, one-click updates, a file manager and several machines under one panel, and a desktop app starts everything from one icon. Runs in parallel after 3.23: 17.01 after 1.20, 17.12 and 17.13 after 4.16, and the rest once their dependencies land. |
 
-Total: 287 milestones.
+Total: 302 milestones.
 
 ## Decisions needed
 
@@ -128,7 +128,7 @@ Settled on 2026-09-13 and recorded under Decisions in doc/ARCHITECTURE.md: runti
 - No way to test in hosted CI: the builds, type registry, extractors and real-client tests all need the user's install and dump, so regressions may only surface on the maintainer's machine.
 - ObjectProperty edge cases: the per-field envelope policy, DirtyEncode semantics, Matrix3x3 width, and CoreObject block/type pairs other than 104/2 are unverified. Getting any of them wrong crashes the client rather than failing gracefully.
 - Settings the client mirrors or simulates, such as combat constants, MSG_SETST values, and fields fixed at LOGINCOMPLETE, can desync if changed live. Each such setting must either push the change to connected clients or apply from the next duel or session, and its documentation must say which.
-- Scope: about 280 milestones, with phases 13-15 (pets, housing, PvP) holding the most poorly documented systems. Every phase stays planned. Keep the phase gates honest and take later phases in order once phase 10's playable loop exists, apart from the parallel tracks of phases 16 and 17.
+- Scope: about 300 milestones, with phases 13-15 (pets, housing, PvP) holding the most poorly documented systems. Every phase stays planned. Keep the phase gates honest and take later phases in order once phase 10's playable loop exists, apart from the parallel tracks of phases 16 and 17.
 
 ## Review findings not tied to one phase
 
