@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Questions a server or tool asks the person running it during guided setup: a numbered choice that also takes a typed path or a skip, and a yes-or-no confirmation; they are asked only on an interactive terminal, and every answer waits at most a timeout, after which the question and all later ones are skipped.
+ * Questions a server or tool asks the person running it when setup runs in ask mode: a numbered choice that also takes a typed path or a skip, and a yes-or-no confirmation; they are asked only on an interactive terminal, every answer waits at most a timeout, a timeout, closed input or a stop request skips the question and all later ones, and the prompt tells why it cannot ask.
  */
 
 #ifndef AMBROSE_SETUPPROMPT_H
@@ -10,6 +10,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <functional>
 #include <iosfwd>
 #include <memory>
 #include <optional>
@@ -25,6 +26,16 @@ public:
         Picked,
         Path,
         Skipped
+    };
+
+    enum class Status
+    {
+        Interactive,
+        Disabled,
+        NotATerminal,
+        InputClosed,
+        TimedOut,
+        Stopped
     };
 
     struct Choice
@@ -43,19 +54,26 @@ public:
 
     static std::unique_ptr<SetupPrompt> ForProcess(std::ostream& out, bool enabled, std::chrono::seconds timeout);
 
+    void SetCancellation(std::function<bool()> cancelled);
+
     bool IsInteractive() const noexcept { return _interactive && !_closed; }
+    Status GetStatus() const noexcept;
     void Say(std::string_view text);
     Choice Choose(std::string_view question, std::vector<std::string> const& options);
     bool Confirm(std::string_view question);
 
 private:
+    bool StopBeforeAsking();
+    void Close(Status status);
     std::optional<std::string> ReadAnswer();
 
     std::unique_ptr<ConsoleInput> _input;
     std::ostream& _out;
     bool _interactive;
     std::chrono::seconds _timeout;
+    std::function<bool()> _cancelled;
     bool _closed = false;
+    Status _status;
 };
 
 #endif

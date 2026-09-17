@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, stops gracefully on signals, requests or the shutdown command, ticks updates on its io loop, and runs queued console lines on a command thread that shutdown waits for.
+ * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, stops gracefully on signals, requests or the shutdown command, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, and runs queued console lines on a command thread that shutdown waits for.
  */
 
 #include "ServerApp.h"
@@ -139,28 +139,41 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
         StopNow(fmt::format("signal {}", signal));
     });
 
-    if (!OnStart())
+    _starting = true;
+    bool const started = OnStart();
+    _starting = false;
+    if (!started)
     {
-        LogLifecycle(LogLevel::Error, fmt::format("{} failed to start", _info.Name));
+        bool const stopped = _stopping.load() || _stopRequested.load();
+        if (stopped)
+            LogLifecycle(LogLevel::Info, fmt::format("{} stopped before it finished starting", _info.Name));
+        else
+            LogLifecycle(LogLevel::Error, fmt::format("{} failed to start", _info.Name));
         _work.reset();
         FinishShutdown();
-        return EXIT_FAILURE;
+        return stopped ? EXIT_SUCCESS : EXIT_FAILURE;
     }
+    bool const stoppedWhileStarting = _stopping.load();
 
     for (std::string const& name : _log.GetPendingAppenderNames())
         AMBROSE_LOG(_log, LogLevel::Warn, "server.logging", "appender {} has a type this app does not provide and stays inactive", name);
 
     _lastUpdate = std::chrono::steady_clock::now();
-    if (GetUpdateInterval().count() > 0)
-        ScheduleUpdate();
-    _ready = true;
-    LogLifecycle(LogLevel::Info, fmt::format("{} ready", _info.Name));
-    if (_stopRequested.load())
-        StopNow("a stop request");
-    else if (options.CheckOnly)
-        StopNow("--check");
+    if (stoppedWhileStarting)
+        _io.Restart();
     else
-        StartConsole();
+    {
+        if (GetUpdateInterval().count() > 0)
+            ScheduleUpdate();
+        _ready = true;
+        LogLifecycle(LogLevel::Info, fmt::format("{} ready", _info.Name));
+        if (_stopRequested.load())
+            StopNow("a stop request");
+        else if (options.CheckOnly)
+            StopNow("--check");
+        else
+            StartConsole();
+    }
     _io.Run();
 
     StopConsole();
@@ -169,6 +182,17 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
     LogLifecycle(LogLevel::Info, fmt::format("{} stopped", _info.Name));
     FinishShutdown();
     return EXIT_SUCCESS;
+}
+
+bool ServerApp::PollStopRequested()
+{
+    if (_starting.load())
+    {
+        std::unique_lock const lock(_pollMutex, std::try_to_lock);
+        if (lock.owns_lock())
+            _io.Poll();
+    }
+    return _stopping.load() || _stopRequested.load();
 }
 
 void ServerApp::RequestStop(std::string reason)

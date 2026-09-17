@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The four KI control messages (SessionOffer, KeepAlive both directions, KeepAliveRsp, SessionAccept) with byte-exact bodies, timestamps, and frame helpers.
+ * The four KI control messages (SessionOffer, KeepAlive both directions, KeepAliveRsp, SessionAccept) with byte-exact bodies, timestamps, and frame helpers, including the client KeepAlive frame the retail client sends without its trailing byte.
  */
 
 #ifndef AMBROSE_CONTROLMESSAGES_H
@@ -100,6 +100,7 @@ namespace ControlMessages
     std::optional<SessionOffer> DecodeSessionOffer(std::span<uint8 const> body);
     std::optional<SessionAccept> DecodeSessionAccept(std::span<uint8 const> body);
     std::optional<ClientKeepAlive> DecodeClientKeepAlive(std::span<uint8 const> body);
+    std::optional<ClientKeepAlive> DecodeClientKeepAlive(Frame const& frame);
     std::optional<ServerKeepAlive> DecodeServerKeepAlive(std::span<uint8 const> body);
     std::optional<KeepAliveResponse> DecodeKeepAliveResponse(std::span<uint8 const> body);
 

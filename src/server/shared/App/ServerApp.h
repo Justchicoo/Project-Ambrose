@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The lifecycle every server app shares: options, config, logging, banner, shutdown signals, an optional update tick, console commands on their own thread, and a clean exit code.
+ * The lifecycle every server app shares: options, config, logging, banner, shutdown signals that a start in progress can poll for, an optional update tick, console commands on their own thread, and a clean exit code.
  */
 
 #ifndef AMBROSE_SERVERAPP_H
@@ -67,6 +67,7 @@ protected:
     ConfigMgr& Config() noexcept { return _config; }
     Log& Logger() noexcept { return _log; }
     Ambrose::Asio::IoContext& GetIoContext() noexcept { return _io; }
+    bool PollStopRequested();
 
 private:
     void ScheduleUpdate();
@@ -100,6 +101,8 @@ private:
     std::atomic<bool> _ready{ false };
     std::atomic<bool> _stopRequested{ false };
     std::atomic<bool> _stopping{ false };
+    std::atomic<bool> _starting{ false };
+    std::mutex _pollMutex;
 };
 
 #endif

@@ -1,18 +1,18 @@
 /*
  * Project Ambrose by Imjustchico
- * Login server entry point: runs guided setup for the install and type dump, loads account and login settings and the type dump, declares the login message table and checks it against the client's message definitions, refuses to serve clients without the type dump and both databases, opens the login and characters databases, listens for clients, and offers account console commands until shutdown, telling connected clients before it shuts down and closing the databases, which drains their callbacks, before its network threads stop.
+ * Login server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile and never saving an install it has no type dump for, loads account and login settings and the type dump, declares the login message table and checks it against the client's message definitions, refuses to serve clients from an install without a type dump, naming why and where ClientDir came from, or without both databases, opens the login and characters databases, listens for clients, and offers account console commands until shutdown, telling connected clients before it shuts down and closing the databases, which drains their callbacks, before its network threads stop.
  */
 
 #include "AccountCommands.h"
 #include "AccountMgr.h"
 #include "AppenderDB.h"
+#include "ClientLocator.h"
 #include "ClientSetup.h"
 #include "ConfigMgr.h"
 #include "DatabaseEnv.h"
 #include "DatabaseLoader.h"
 #include "Environment.h"
 #include "Log.h"
-#include "LogConfig.h"
 #include "LoginMessageTable.h"
 #include "LoginMgr.h"
 #include "LoginSession.h"
@@ -23,14 +23,15 @@
 #include "ServerApp.h"
 #include "SessionContext.h"
 #include "SocketMgr.h"
+#include "StringUtil.h"
 #include "TypeRegistry.h"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
-#include <chrono>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -49,16 +50,20 @@ namespace
     protected:
         bool OnStart() override
         {
-            std::unique_ptr<SetupPrompt> const prompt = SetupPrompt::ForProcess(std::cout, Config().GetOption<bool>("Setup.Prompt", true, true),
-                std::chrono::seconds(Config().GetOption<uint32>("Setup.PromptTimeout", ClientSetup::DefaultTimeoutSeconds, true)));
             LocalClientSystem const system;
-            ClientSetup::ForServer(Config(), *prompt, system, { "loginserver", true, true }, [](bool warning, std::string const& text)
+            ClientSetup::Report const report = [](bool warning, std::string const& text)
             {
                 if (warning)
                     LOG_WARN("server.loginserver", "{}", text);
                 else
                     LOG_INFO("server.loginserver", "{}", text);
-            });
+            };
+            std::unique_ptr<SetupPrompt> const prompt = ClientSetup::ServerPrompt(std::cout, Config());
+            prompt->SetCancellation([this] { return PollStopRequested(); });
+            ClientSetupResult const setup = ClientSetup::ForServer(Config(), *prompt, system, ClientSetup::ServerTypeDumps(Config(), system, report, [this] { return PollStopRequested(); }),
+                { "loginserver", true, true, true }, report);
+            if (PollStopRequested())
+                return false;
 
             if (!sAccountMgr.LoadSettings(Config()))
             {
@@ -77,32 +82,49 @@ namespace
                 return false;
             }
 
-            std::string const clientDir = Config().GetOption<std::string>("ClientDir", "", true);
-            if (!clientDir.empty())
+            if (setup.Install)
             {
+                std::string const install = ClientLocator::PathText(setup.Install->Root);
+                std::optional<ConfigEntry> const configured = Config().Resolve(std::string(ClientSetup::ClientDirKey));
+                std::string from;
+                if (configured && ClientSetup::ConfigPath(ConfigMgr::PathFromUtf8(Ambrose::Trim(configured->Value))) == ClientSetup::ConfigPath(setup.Install->Root))
+                {
+                    if (configured->Kind == ConfigSourceKind::Environment)
+                        from = fmt::format(" (ClientDir from the environment variable {})", ClientLocator::PathText(configured->File));
+                    else if (configured->Kind == ConfigSourceKind::Override)
+                        from = " (ClientDir from the command line)";
+                    else if (!configured->File.empty())
+                        from = fmt::format(" (ClientDir in {})", ClientLocator::PathText(configured->File));
+                }
+                if (!setup.TypeDump)
+                {
+                    LOG_ERROR("server.loginserver", "The login server uses the install {}{}, so clients will be served, but it has no type dump: {}; it needs the type dump to authenticate clients and list their characters",
+                        install, from, setup.TypeDumpError);
+                    return false;
+                }
                 std::vector<std::string_view> missing;
-                for (std::string_view const option : { "TypeDumpPath", "LoginDatabaseInfo", "CharacterDatabaseInfo" })
+                for (std::string_view const option : { "LoginDatabaseInfo", "CharacterDatabaseInfo" })
                     if (Config().GetOption<std::string>(std::string(option), "", true).empty())
                         missing.push_back(option);
                 if (!missing.empty())
                 {
-                    LOG_ERROR("server.loginserver", "ClientDir is set, so clients will be served, but {} {} empty; the login server needs the type dump and both databases to authenticate clients and list their characters",
-                        fmt::join(missing, ", "), missing.size() == 1 ? "is" : "are");
+                    LOG_ERROR("server.loginserver", "The login server uses the install {}{}, so clients will be served, but {} {} empty; it needs both databases to authenticate clients and list their characters",
+                        install, from, fmt::join(missing, ", "), missing.size() == 1 ? "is" : "are");
                     return false;
                 }
             }
-            if (clientDir.empty())
-                LOG_WARN("server.loginserver", "ClientDir is not set, so client messages are logged by service and order only");
-            else if (!sMessageRegistry.LoadFromClient(LogConfig::Utf8Path(clientDir)))
+            if (!setup.Install)
+                LOG_WARN("server.loginserver", "No Wizard101 install is in use, so client messages are logged by service and order only");
+            else if (!sMessageRegistry.LoadFromClient(setup.Install->Root))
             {
-                LOG_ERROR("server.loginserver", "Cannot load the message definitions from the client in {}", clientDir);
+                LOG_ERROR("server.loginserver", "Cannot load the message definitions from the client in {}", ClientLocator::PathText(setup.Install->Root));
                 return false;
             }
             else if (!messages.Validate(*sMessageRegistry.GetCatalog(), messageErrors))
             {
                 for (std::string const& error : messageErrors)
                     LOG_ERROR("server.loginserver", "{}", error);
-                LOG_ERROR("server.loginserver", "The login message table does not match the client's message definitions in {}", clientDir);
+                LOG_ERROR("server.loginserver", "The login message table does not match the client's message definitions in {}", ClientLocator::PathText(setup.Install->Root));
                 return false;
             }
 
@@ -111,12 +133,11 @@ namespace
             for (std::string const& problem : limitProblems)
                 LOG_WARN("server.loginserver", "{}", problem);
 
-            std::string const typeDump = Config().GetOption<std::string>("TypeDumpPath", "", true);
-            if (typeDump.empty())
-                LOG_WARN("server.loginserver", "TypeDumpPath is not set, so ObjectProperty data cannot be read or written");
-            else if (!sTypeRegistry.LoadFromFile(LogConfig::Utf8Path(typeDump)))
+            if (!setup.TypeDump)
+                LOG_WARN("server.loginserver", "No type dump is in use, so ObjectProperty data cannot be read or written: {}", setup.TypeDumpError);
+            else if (!sTypeRegistry.LoadFromFile(*setup.TypeDump))
             {
-                LOG_ERROR("server.loginserver", "Cannot load the type dump {}", typeDump);
+                LOG_ERROR("server.loginserver", "Cannot load the type dump {}", ConfigMgr::PathToUtf8(*setup.TypeDump));
                 return false;
             }
 

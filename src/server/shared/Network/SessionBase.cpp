@@ -324,7 +324,7 @@ void SessionBase::HandleAccept(Frame const& frame)
 
 void SessionBase::HandleClientKeepAlive(Frame const& frame)
 {
-    std::optional<ClientKeepAlive> const keepAlive = ControlMessages::DecodeClientKeepAlive(frame.Payload);
+    std::optional<ClientKeepAlive> const keepAlive = ControlMessages::DecodeClientKeepAlive(frame);
     if (!keepAlive)
     {
         CloseForProtocol(fmt::format("KeepAlive body has {} bytes, expected {}", frame.Payload.size(), ClientKeepAlive::BodySize));

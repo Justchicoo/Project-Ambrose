@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds unit_tests from every test source outside the compile, client, fuzz and tools folders, and outside the login server's folder unless its library is built, registers each test with CTest, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable and the bindecode, dbimport, extractor, localetool and typeextract tools.
+# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, and outside the login server's folder unless its library is built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, registers each test with CTest, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable and the bindecode, dbimport, extractor, localetool and typeextract tools.
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
@@ -7,7 +7,7 @@ ambrose_collect_sources("${CMAKE_CURRENT_SOURCE_DIR}" all_test_sources)
 set(test_sources "")
 foreach(source IN LISTS all_test_sources)
     file(RELATIVE_PATH relative "${CMAKE_CURRENT_SOURCE_DIR}" "${source}")
-    if(relative MATCHES "^(compile|client|fuzz|tools)/")
+    if(relative MATCHES "^(compile|client|fuzz|helpers|tools)/")
         continue()
     endif()
     if(relative MATCHES "^server/apps/loginserver/" AND NOT TARGET login)
@@ -16,6 +16,15 @@ foreach(source IN LISTS all_test_sources)
     list(APPEND test_sources "${source}")
 endforeach()
 add_executable(unit_tests ${test_sources})
+
+add_executable(child_process_helper "${CMAKE_CURRENT_SOURCE_DIR}/helpers/ChildProcessHelper.cpp")
+target_link_libraries(child_process_helper PRIVATE ambrose-compile-options common)
+if(WIN32)
+    target_link_libraries(child_process_helper PRIVATE shell32)
+endif()
+add_dependencies(unit_tests child_process_helper)
+target_compile_definitions(unit_tests PRIVATE "AMBROSE_CHILD_PROCESS_HELPER=\"$<TARGET_FILE:child_process_helper>\"")
+target_compile_definitions(unit_tests PRIVATE "AMBROSE_CHILD_PROCESS_HELPER_DLLS=\"$<$<BOOL:${WIN32}>:$<JOIN:$<TARGET_RUNTIME_DLLS:child_process_helper>,|>>\"")
 
 target_include_directories(unit_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/mocks")
 

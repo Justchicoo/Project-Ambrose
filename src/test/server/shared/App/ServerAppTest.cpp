@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the shared app lifecycle in process: options, version, missing or broken config, ready and stop logging, --check, console commands and input, live update intervals, repeated runs, and shutdown on signals.
+ * Tests the shared app lifecycle in process: options, version, missing or broken config, ready and stop logging, --check, console commands and input, live update intervals, repeated runs, shutdown on signals, and a signal polled during start ending the run cleanly without reporting ready.
  */
 
 #include "AppOptions.h"
@@ -81,11 +81,16 @@ namespace
         bool FailStart = false;
         bool SignalDuringStop = false;
         std::function<std::unique_ptr<ConsoleInput>()> ConsoleFactory;
+        std::function<bool(TickApp&)> StartHook;
+
+        bool PollStop() { return PollStopRequested(); }
 
     protected:
         bool OnStart() override
         {
             Started = true;
+            if (StartHook)
+                return StartHook(*this);
             return !FailStart;
         }
 
@@ -391,4 +396,66 @@ TEST_F(ServerAppTest, InterruptSignalShutsDownGracefully)
     EXPECT_EQ(exitCode, EXIT_SUCCESS);
     EXPECT_TRUE(app.Stopped.load());
     EXPECT_NE(_harness.Device().Output().find("testserver shutting down after signal"), std::string::npos) << _harness.Device().Output();
+}
+
+TEST_F(ServerAppTest, ASignalPolledDuringStartEndsTheRunCleanly)
+{
+    std::filesystem::path const file = WriteConfig();
+    auto const waitForStop = [](TickApp& app)
+    {
+        std::raise(SIGINT);
+        auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (!app.PollStop() && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        return app.PollStop();
+    };
+
+    TickApp abandoned({ "testserver", "testserver.conf" }, _config, _harness.GetLog(), _out, _err);
+    abandoned.StartHook = [&waitForStop](TickApp& app)
+    {
+        EXPECT_TRUE(waitForStop(app));
+        return false;
+    };
+    EXPECT_EQ(abandoned.Run({ "testserver", "-c", ConfigMgr::PathToUtf8(file) }), EXIT_SUCCESS);
+    EXPECT_FALSE(abandoned.Stopped.load());
+    std::string output = _harness.Device().Output();
+    EXPECT_NE(output.find("testserver shutting down after signal"), std::string::npos) << output;
+    EXPECT_NE(output.find("testserver stopped before it finished starting"), std::string::npos) << output;
+    EXPECT_EQ(output.find("failed to start"), std::string::npos) << output;
+    EXPECT_EQ(output.find("testserver ready"), std::string::npos) << output;
+
+    TickApp finished({ "testserver", "testserver.conf" }, _config, _harness.GetLog(), _out, _err);
+    finished.IntervalMs = 10;
+    finished.StartHook = [&waitForStop](TickApp& app)
+    {
+        EXPECT_TRUE(waitForStop(app));
+        return true;
+    };
+    auto const startedAt = std::chrono::steady_clock::now();
+    EXPECT_EQ(finished.Run({ "testserver", "-c", ConfigMgr::PathToUtf8(file) }), EXIT_SUCCESS);
+    EXPECT_LT(std::chrono::steady_clock::now() - startedAt, std::chrono::seconds(10));
+    EXPECT_TRUE(finished.Stopped.load());
+    EXPECT_EQ(finished.Updates.load(), 0);
+    output = _harness.Device().Output();
+    EXPECT_NE(output.find("testserver stopped"), std::string::npos) << output;
+    EXPECT_EQ(output.find("testserver ready"), std::string::npos) << output;
+
+    TickApp quiet({ "testserver", "testserver.conf" }, _config, _harness.GetLog(), _out, _err);
+    quiet.StartHook = [](TickApp& app) { return !app.PollStop(); };
+    EXPECT_EQ(quiet.Run({ "testserver", "--check", "-c", ConfigMgr::PathToUtf8(file) }), EXIT_SUCCESS);
+    EXPECT_TRUE(quiet.Stopped.load());
+    output = _harness.Device().Output();
+    EXPECT_NE(output.find("testserver ready"), std::string::npos) << output;
+    EXPECT_NE(output.find("testserver shutting down after --check"), std::string::npos) << output;
+
+    TickApp selfStopping({ "testserver", "testserver.conf" }, _config, _harness.GetLog(), _out, _err);
+    selfStopping.StartHook = [](TickApp& app)
+    {
+        app.RequestStop();
+        return true;
+    };
+    EXPECT_EQ(selfStopping.Run({ "testserver", "-c", ConfigMgr::PathToUtf8(file) }), EXIT_SUCCESS);
+    output = _harness.Device().Output();
+    EXPECT_NE(output.find("testserver shutting down after a stop request"), std::string::npos) << output;
+    EXPECT_NE(output.find("testserver ready"), output.rfind("testserver ready")) << output;
 }

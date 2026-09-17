@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests control messages against hand-written byte vectors, trailing offer and accept bytes, strict keepalive sizes, timestamps, and framing.
+ * Tests control messages against hand-written byte vectors, trailing offer and accept bytes, strict keepalive sizes, a client keepalive frame without its trailing byte, timestamps, and framing.
  */
 
 #include "ControlMessages.h"
@@ -101,6 +101,27 @@ TEST(ControlMessagesTest, KeepAlivesMatchTheirVectorsAndSizes)
     EXPECT_FALSE(ControlMessages::DecodeClientKeepAlive(Bytes("3412f401030000")).has_value());
     EXPECT_FALSE(ControlMessages::DecodeServerKeepAlive(Bytes("341240e201")).has_value());
     EXPECT_FALSE(ControlMessages::DecodeKeepAliveResponse({}).has_value());
+}
+
+TEST(ControlMessagesTest, AClientKeepAliveFrameWithoutItsTrailingByteDecodes)
+{
+    FrameReassembler reassembler;
+    reassembler.Feed(Bytes("0df0" "0a00" "01" "03" "0000" "3412" "f401" "0300" "0df0" "0b00" "01" "03" "0000" "3412" "f501" "0400" "00"));
+    std::optional<Frame> const shortFrame = reassembler.Next();
+    ASSERT_TRUE(shortFrame);
+    EXPECT_EQ(ControlMessages::GetOpcode(*shortFrame), ControlOpcode::KeepAlive);
+    EXPECT_EQ(ControlMessages::DecodeClientKeepAlive(*shortFrame), (ClientKeepAlive{ 0x1234, 500, 3 }));
+    std::optional<Frame> const fullFrame = reassembler.Next();
+    ASSERT_TRUE(fullFrame);
+    EXPECT_EQ(ControlMessages::DecodeClientKeepAlive(*fullFrame), (ClientKeepAlive{ 0x1234, 501, 4 }));
+    EXPECT_FALSE(reassembler.Next());
+    EXPECT_FALSE(reassembler.HasError());
+
+    Frame tooShort;
+    tooShort.IsControl = true;
+    tooShort.Opcode = 3;
+    tooShort.Payload = Bytes("3412f401");
+    EXPECT_FALSE(ControlMessages::DecodeClientKeepAlive(tooShort).has_value());
 }
 
 TEST(ControlMessagesTest, FramesRoundTripThroughTheReassembler)

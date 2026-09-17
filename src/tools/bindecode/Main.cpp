@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * bindecode entry point: silences the log so standard output holds only what it prints, reads its arguments and environment as UTF-8 and writes UTF-8 to the console, offers to use an install or type dump found on the machine when none is named, opens a KIWAD archive of the user's own client and its type dump, then prints the named BINd entries as JSON with their decode issues on standard error, lists entry names containing a pattern, or sweeps every BINd file and reports failures, unknown classes and grouped issues; exits 0 on success, 1 when something cannot be read or decoded or throws, and 2 on bad usage, a sweep counting only files whose root class the type dump does not list as success.
+ * bindecode entry point: silences the log so standard output holds only what it prints, reads its arguments and environment as UTF-8 and writes UTF-8 to the console, opens an archive named by path before anything is searched, then when no install or type dump is named follows AMBROSE_SETUP_MODE: auto uses the newest install found, or the install holding the named archive, and the type dump built from it, ask offers the finds and a build, off prints them with the flag to pass; opens a KIWAD archive of the user's own client and its type dump, then prints the named BINd entries as JSON with their decode issues on standard error, lists entry names containing a pattern, or sweeps every BINd file and reports failures, unknown classes and grouped issues; exits 0 on success, 1 when something cannot be read or decoded or throws, and 2 on bad usage, a sweep counting only files whose root class the type dump does not list as success.
  */
 
 #include "BindSweep.h"
+#include "ClientLocator.h"
 #include "ClientSetup.h"
 #include "ConfigMgr.h"
 #include "Environment.h"
@@ -19,6 +20,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -233,26 +235,35 @@ namespace
         };
         fromEnvironment(arguments->Client, "AMBROSE_CLIENT_DIR");
         fromEnvironment(arguments->TypeDump, "AMBROSE_TYPE_DUMP_PATH");
-        bool const needsClient = !arguments->Client && !LogConfig::Utf8Path(arguments->Wad).has_parent_path();
-        if (needsClient || (!arguments->List && !arguments->TypeDump))
+        std::filesystem::path const givenWad = LogConfig::Utf8Path(arguments->Wad);
+        std::unique_ptr<KiwadArchive> archive;
+        auto const openArchive = [&arguments, &archive, &error]
+        {
+            std::filesystem::path const wadPath = ResolveWad(*arguments);
+            archive = KiwadArchive::Open(wadPath, error);
+            if (!archive)
+                std::cerr << fmt::format("bindecode: cannot open {}: {}\n", ConfigMgr::PathToUtf8(wadPath), error);
+            return archive != nullptr;
+        };
+        if (givenWad.has_parent_path() && !openArchive())
+            return Failure;
+        bool const needsClient = !arguments->Client && !givenWad.has_parent_path();
+        bool const needsDump = !arguments->List && !arguments->TypeDump;
+        if (needsClient || needsDump)
         {
             LocalClientSystem const system;
-            std::unique_ptr<SetupPrompt> const prompt = ClientSetup::ToolPrompt(std::cout);
+            SetupMode const mode = ClientSetup::ModeForTool(system, std::cerr, "bindecode");
+            std::unique_ptr<SetupPrompt> const prompt = ClientSetup::ToolPrompt(std::cout, mode);
             std::optional<std::string> client = arguments->Client;
-            if (!needsClient && !client)
-                client = std::string();
-            ClientSetup::ForTool(client, arguments->List ? nullptr : &arguments->TypeDump, *prompt, system, "bindecode", std::cerr);
+            if (!client && givenWad.has_parent_path())
+                if (std::optional<ClientInstall> const holder = ClientInstall::Inspect(system, givenWad.parent_path().parent_path().parent_path()))
+                    client = ClientSetup::ConfigPath(holder->Root);
+            ClientSetup::ForTool(mode, client, needsDump ? &arguments->TypeDump : nullptr, *prompt, system, ClientSetup::ToolTypeDumps(system, "bindecode", std::cerr), "bindecode", std::cerr);
             if (needsClient)
                 arguments->Client = client;
         }
-
-        std::filesystem::path const wadPath = ResolveWad(*arguments);
-        std::unique_ptr<KiwadArchive> const archive = KiwadArchive::Open(wadPath, error);
-        if (!archive)
-        {
-            std::cerr << fmt::format("bindecode: cannot open {}: {}\n", ConfigMgr::PathToUtf8(wadPath), error);
+        if (!archive && !openArchive())
             return Failure;
-        }
         if (arguments->List)
             return ListEntries(*arguments, *archive);
 

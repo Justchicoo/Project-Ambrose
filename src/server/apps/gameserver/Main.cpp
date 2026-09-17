@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: runs guided setup for the install and type dump, loads the type dump and, when ClientDir names the user's install, the locale text of its Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, loads the character name tables when the world database is open, offering on a terminal to extract them from the install when they are empty, then runs the world update tick whose interval follows World.UpdateInterval live.
+ * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, loads the character name tables when the world database is open and, when they are empty, extracts them from the install and reloads them, automatically in auto mode, after a yes in ask mode and never in off mode, then runs the world update tick whose interval follows World.UpdateInterval live.
  */
 
 #include "AppenderDB.h"
@@ -14,7 +14,6 @@
 #include "Environment.h"
 #include "Log.h"
 #include "LocaleStore.h"
-#include "LogConfig.h"
 #include "ObjectSerializer.h"
 #include "ServerApp.h"
 #include "TypeRegistry.h"
@@ -43,38 +42,40 @@ namespace
     protected:
         bool OnStart() override
         {
-            std::unique_ptr<SetupPrompt> const prompt = SetupPrompt::ForProcess(std::cout, Config().GetOption<bool>("Setup.Prompt", true, true),
-                std::chrono::seconds(Config().GetOption<uint32>("Setup.PromptTimeout", ClientSetup::DefaultTimeoutSeconds, true)));
             LocalClientSystem const system;
-            ClientSetup::ForServer(Config(), *prompt, system, { "gameserver", true, true }, [](bool warning, std::string const& text)
+            ClientSetup::Report const report = [](bool warning, std::string const& text)
             {
                 if (warning)
                     LOG_WARN("server.gameserver", "{}", text);
                 else
                     LOG_INFO("server.gameserver", "{}", text);
-            });
+            };
+            std::unique_ptr<SetupPrompt> const prompt = ClientSetup::ServerPrompt(std::cout, Config());
+            prompt->SetCancellation([this] { return PollStopRequested(); });
+            ClientSetupResult const setup = ClientSetup::ForServer(Config(), *prompt, system, ClientSetup::ServerTypeDumps(Config(), system, report, [this] { return PollStopRequested(); }),
+                { "gameserver", true, true, false }, report);
+            if (PollStopRequested())
+                return false;
 
             std::vector<std::string> limitProblems;
             SerializerLimits::Apply(SerializerLimits::Load(Config(), &limitProblems));
             for (std::string const& problem : limitProblems)
                 LOG_WARN("server.gameserver", "{}", problem);
 
-            std::string const typeDump = Config().GetOption<std::string>("TypeDumpPath", "", true);
-            if (typeDump.empty())
-                LOG_WARN("server.gameserver", "TypeDumpPath is not set, so ObjectProperty data cannot be read or written");
-            else if (!sTypeRegistry.LoadFromFile(LogConfig::Utf8Path(typeDump)))
+            if (!setup.TypeDump)
+                LOG_WARN("server.gameserver", "No type dump is in use, so ObjectProperty data cannot be read or written: {}", setup.TypeDumpError);
+            else if (!sTypeRegistry.LoadFromFile(*setup.TypeDump))
             {
-                LOG_ERROR("server.gameserver", "Cannot load the type dump {}", typeDump);
+                LOG_ERROR("server.gameserver", "Cannot load the type dump {}", ConfigMgr::PathToUtf8(*setup.TypeDump));
                 return false;
             }
 
-            std::string const clientDir = Config().GetOption<std::string>("ClientDir", "", true);
             std::string const locale = Config().GetOption<std::string>("Locale.Default", "en-US", true);
-            if (clientDir.empty())
-                LOG_WARN("server.gameserver", "ClientDir is not set, so locale keys cannot be resolved to text");
+            if (!setup.Install)
+                LOG_WARN("server.gameserver", "No Wizard101 install is in use, so locale keys cannot be resolved to text");
             else
             {
-                std::filesystem::path const rootWad = LogConfig::Utf8Path(clientDir) / "Data" / "GameData" / "Root.wad";
+                std::filesystem::path const rootWad = setup.Install->Root / "Data" / "GameData" / "Root.wad";
                 std::string error;
                 if (!sLocaleStore.Load(rootWad, locale, error))
                 {
@@ -109,7 +110,7 @@ namespace
             else
             {
                 CharacterNameLoadResult names = sCharacterNameMgr.Load();
-                if (names.Loaded && names.Tables == 0 && OfferNameExtraction(*prompt))
+                if (names.Loaded && names.Tables == 0 && ExtractNames(setup, *prompt))
                     names = sCharacterNameMgr.Load();
                 if (!names.Loaded)
                 {
@@ -131,16 +132,30 @@ namespace
             return true;
         }
 
-        bool OfferNameExtraction(SetupPrompt& prompt)
+        bool ExtractNames(ClientSetupResult const& setup, SetupPrompt& prompt)
         {
-            std::string const clientDir = Config().GetOption<std::string>("ClientDir", "", true);
-            std::string const typeDump = Config().GetOption<std::string>("TypeDumpPath", "", true);
-            if (!prompt.IsInteractive() || clientDir.empty() || typeDump.empty())
+            if (!setup.Install || !setup.TypeDump)
                 return false;
-            if (!prompt.Confirm(fmt::format("The world database has no character name tables. Extract them now from your install in {}?", clientDir)))
+            std::string const install = setup.Install->Describe();
+            if (setup.Mode == SetupMode::Off)
+            {
+                LOG_WARN("server.gameserver", "The world database has no character name tables, and Setup.Mode is off, so they are not extracted from {}; set Setup.Mode = auto, or run the extractor's names command", install);
                 return false;
+            }
+            if (setup.Mode == SetupMode::Ask)
+            {
+                if (!prompt.IsInteractive())
+                {
+                    LOG_WARN("server.gameserver", "The world database has no character name tables, and setup could not ask whether to extract them from {}; start the game server in a terminal, set Setup.Mode = auto, or run the extractor's names command", install);
+                    return false;
+                }
+                if (!prompt.Confirm(fmt::format("The world database has no character name tables. Extract them now from your install {}?", install)))
+                    return false;
+            }
+            else
+                LOG_INFO("server.gameserver", "The world database has no character name tables, so they are extracted from {}", install);
             std::string error;
-            std::optional<NameExtraction> const extraction = CharacterNameExtractor::ExtractFromInstall(LogConfig::Utf8Path(clientDir), LogConfig::Utf8Path(typeDump), error);
+            std::optional<NameExtraction> const extraction = CharacterNameExtractor::ExtractFromInstall(setup.Install->Root, *setup.TypeDump, error);
             if (!extraction)
             {
                 LOG_ERROR("server.gameserver", "Cannot extract the character name tables: {}", error);
@@ -158,7 +173,7 @@ namespace
                 LOG_ERROR("server.gameserver", "Cannot write the character name tables to the world database: {}", error);
                 return false;
             }
-            LOG_INFO("server.gameserver", "Extracted {} character name tables holding {} names from {}", extraction->Tables.size(), extraction->GetPartCount(), clientDir);
+            LOG_INFO("server.gameserver", "Extracted {} character name tables holding {} names from {}", extraction->Tables.size(), extraction->GetPartCount(), install);
             return true;
         }
 

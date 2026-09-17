@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a built server executable to check --version, a missing config, and --check with its shipped .conf.dist; with AMBROSE_TEST_DB the game server and the login server, with its login and characters databases, create, update, open and close uniquely named databases that are dropped afterwards, the login server runs account commands piped into its console input, and a bad login database string exits 1.
+# Runs a built server executable to check --version, a missing config, and --check with a copy of its shipped .conf.dist in the work folder, so no saved choice in the build folder's conf.d applies, where neither that run nor a run in Setup.Mode ask with ClientDir and TypeDumpPath empty and unlocked, an empty input file and a machine holding a synthetic install may print any text of a setup question to either output, the game and login servers must log that install as found with the advice for a run without a terminal, and no choice is saved; with AMBROSE_TEST_DB the game server and the login server, with its login and characters databases, create, update, open and close uniquely named databases that are dropped afterwards, the login server runs account commands piped into its console input, and a bad login database string exits 1.
 if(NOT APP OR NOT NAME OR NOT WORKDIR)
     message(FATAL_ERROR "APP, NAME and WORKDIR must be set")
 endif()
@@ -32,10 +32,37 @@ string(REPLACE "gameserver" "WorldServerPort" portOption "${portOption}")
 string(REPLACE "loginserver" "LoginServerPort" portOption "${portOption}")
 string(REPLACE "patchserver" "PatchServerPort" portOption "${portOption}")
 set(quietOptions --set BindIP=127.0.0.1 --set ${portOption}=0 --set ClientDir= --set Appender.Server=1,3,0 --set Appender.Errors=1,3,0 --set Appender.Stream=1,3,0 --set Appender.Console=1,3,0)
-execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} --set LoginDatabaseInfo= --set CharacterDatabaseInfo= --set WorldDatabaseInfo=
-    WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE distResult OUTPUT_VARIABLE distOutput ERROR_VARIABLE distError TIMEOUT 30)
-if(NOT distResult EQUAL 0 OR NOT distOutput MATCHES "${NAME} ready" OR NOT distOutput MATCHES "${NAME} stopped" OR distOutput MATCHES "Found on this machine:")
-    message(FATAL_ERROR "${NAME} with its shipped ${NAME}.conf.dist did not report ready (${distResult}): ${distOutput}${distError}")
+set(questionText "needs your own Wizard101 install, and|needs the type dump made from your install, and|[Pp]ress Enter|\\[Y/n\\]|skipping setup questions|Type a path")
+set(workConfig "${WORKDIR}/${NAME}.conf.dist")
+file(COPY_FILE "${appDir}/${NAME}.conf.dist" "${workConfig}")
+set(savedChoice "${WORKDIR}/conf.d/client-data.conf")
+file(WRITE "${WORKDIR}/no-input.txt" "")
+execute_process(COMMAND "${APP}" --check --config "${workConfig}" ${quietOptions} --set LoginDatabaseInfo= --set CharacterDatabaseInfo= --set WorldDatabaseInfo=
+    WORKING_DIRECTORY "${WORKDIR}" INPUT_FILE "${WORKDIR}/no-input.txt" RESULT_VARIABLE distResult OUTPUT_VARIABLE distOutput ERROR_VARIABLE distError TIMEOUT 30)
+if(NOT distResult EQUAL 0 OR NOT distOutput MATCHES "${NAME} ready" OR NOT distOutput MATCHES "${NAME} stopped" OR "${distOutput}${distError}" MATCHES "${questionText}")
+    message(FATAL_ERROR "${NAME} with its shipped ${NAME}.conf.dist did not report ready without asking (${distResult}): ${distOutput}${distError}")
+endif()
+
+set(machine "${WORKDIR}/machine")
+set(synthetic "${machine}/drive_c/ProgramData/KingsIsle Entertainment/Wizard101")
+file(WRITE "${synthetic}/Data/GameData/Root.wad" "not an archive")
+file(WRITE "${synthetic}/Bin/revision.dat" "r999999999.Synthetic_1_0\n")
+set(machineEnv "ProgramData=${machine}/drive_c/ProgramData" "WINEPREFIX=${machine}" "LOCALAPPDATA=${WORKDIR}/data" "XDG_DATA_HOME=${WORKDIR}/data" --unset=AMBROSE_CLIENT_DIR --unset=AMBROSE_TYPE_DUMP_PATH --unset=AMBROSE_SETUP_MODE)
+set(askOptions --set BindIP=127.0.0.1 --set ${portOption}=0 --set Setup.Mode=ask --set Setup.PromptTimeout=5 --set Appender.Server=1,3,0 --set Appender.Errors=1,3,0 --set Appender.Stream=1,3,0 --set Appender.Console=1,3,0)
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv}
+        "${APP}" --check --config "${workConfig}" ${askOptions} --set LoginDatabaseInfo= --set CharacterDatabaseInfo= --set WorldDatabaseInfo=
+    WORKING_DIRECTORY "${WORKDIR}" INPUT_FILE "${WORKDIR}/no-input.txt" RESULT_VARIABLE askResult OUTPUT_VARIABLE askOutput ERROR_VARIABLE askError TIMEOUT 60)
+if(NOT askResult EQUAL 0 OR NOT askOutput MATCHES "${NAME} ready" OR "${askOutput}${askError}" MATCHES "${questionText}")
+    message(FATAL_ERROR "${NAME} in Setup.Mode ask with piped input did not start without asking (${askResult}): ${askOutput}${askError}")
+endif()
+if((NAME STREQUAL "gameserver" OR NAME STREQUAL "loginserver")
+        AND (NOT "${askOutput}${askError}" MATCHES "ClientDir is not set, and Wizard101 was found on this machine: [^\n]*r999999999\\.Synthetic_1_0"
+            OR NOT "${askOutput}${askError}" MATCHES "Start ${NAME} in a terminal whose input and output are not redirected to choose one"))
+    message(FATAL_ERROR "${NAME} in Setup.Mode ask with piped input did not reach the setup questions with the synthetic install: ${askOutput}${askError}")
+endif()
+if(EXISTS "${savedChoice}")
+    file(READ "${savedChoice}" savedText)
+    message(FATAL_ERROR "${NAME} saved a setup choice to ${savedChoice} without being asked: ${savedText}")
 endif()
 
 if(NAME STREQUAL "loginserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AMBROSE_TEST_DB}" STREQUAL "")

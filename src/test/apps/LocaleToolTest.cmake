@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs localetool to check its usage text, that bad usage exits 2 and a missing archive exits 1, and, when AMBROSE_CLIENT_DIR names the user's own install, that find prints the key of a quest title and takes text after --, check prints a key's text and exits 1 for a missing key, dump prints a table, and locales lists every locale with the one malformed Polish file it skips; it reports itself skipped when the client checks cannot run.
+# Runs localetool to check its usage text, that bad usage exits 2 and a missing archive exits 1, that on a machine holding a synthetic install AMBROSE_SETUP_MODE=off prints the find and the flag to pass while auto uses it and says so, and, when AMBROSE_CLIENT_DIR names the user's own install, that find prints the key of a quest title and takes text after --, check prints a key's text and exits 1 for a missing key, dump prints a table, and locales lists every locale with the one malformed Polish file it skips; it reports itself skipped when the client checks cannot run.
 if(NOT APP OR NOT WORKDIR)
     message(FATAL_ERROR "APP and WORKDIR must be set")
 endif()
@@ -21,6 +21,24 @@ endforeach()
 execute_process(COMMAND "${APP}" --wad "${WORKDIR}/missing.wad" check Items_1 RESULT_VARIABLE missingResult OUTPUT_VARIABLE missingOutput ERROR_VARIABLE missingError TIMEOUT 30)
 if(NOT missingResult EQUAL 1 OR NOT missingError MATCHES "cannot open .*missing\\.wad")
     message(FATAL_ERROR "localetool with a missing archive exited ${missingResult}: ${missingOutput}${missingError}")
+endif()
+
+set(machine "${WORKDIR}/machine")
+set(synthetic "${machine}/drive_c/ProgramData/KingsIsle Entertainment/Wizard101")
+file(WRITE "${synthetic}/Data/GameData/Root.wad" "not an archive")
+file(WRITE "${synthetic}/Bin/revision.dat" "r999999999.Synthetic_1_0\n")
+set(machineEnv "ProgramData=${machine}/drive_c/ProgramData" "WINEPREFIX=${machine}" "LOCALAPPDATA=${WORKDIR}/data" "XDG_DATA_HOME=${WORKDIR}/data" --unset=AMBROSE_CLIENT_DIR --unset=AMBROSE_TYPE_DUMP_PATH --unset=AMBROSE_WORLD_DATABASE_INFO)
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} AMBROSE_SETUP_MODE=off "${APP}" check Items_1 RESULT_VARIABLE offResult OUTPUT_VARIABLE offOutput ERROR_VARIABLE offError TIMEOUT 30)
+if(NOT offResult EQUAL 1 OR NOT offError MATCHES "localetool: Wizard101 was found on this machine: [^\n]*r999999999\\.Synthetic_1_0" OR NOT offError MATCHES "Pass --client with one of them, or set AMBROSE_SETUP_MODE=auto to use the newest")
+    message(FATAL_ERROR "localetool with AMBROSE_SETUP_MODE=off did not print the install it found and the flag to pass (${offResult}): ${offOutput}${offError}")
+endif()
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} AMBROSE_SETUP_MODE=auto "${APP}" check Items_1 RESULT_VARIABLE autoResult OUTPUT_VARIABLE autoOutput ERROR_VARIABLE autoError TIMEOUT 30)
+if(NOT autoResult EQUAL 1 OR NOT autoError MATCHES "localetool: using the newest install on this machine, [^\n]*r999999999\\.Synthetic_1_0[^\n]*; pass --client to choose otherwise" OR NOT autoError MATCHES "localetool: cannot open [^\n]*Root\\.wad")
+    message(FATAL_ERROR "localetool with AMBROSE_SETUP_MODE=auto did not use the synthetic install (${autoResult}): ${autoOutput}${autoError}")
+endif()
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} AMBROSE_SETUP_MODE=sometimes "${APP}" --client "${synthetic}" check Items_1 RESULT_VARIABLE namedResult ERROR_VARIABLE namedError TIMEOUT 30)
+if(NOT namedResult EQUAL 1 OR namedError MATCHES "AMBROSE_SETUP_MODE|found on this machine|localetool: using")
+    message(FATAL_ERROR "localetool with --client searched the machine or read AMBROSE_SETUP_MODE (${namedResult}): ${namedError}")
 endif()
 
 if("$ENV{AMBROSE_CLIENT_DIR}" STREQUAL "")

@@ -27,7 +27,7 @@ TEST(TestDatabaseCleanup, DISABLED_DropNamedDatabases)
     ASSERT_EQ(connection.Open(), 0u);
     for (std::string_view const name : Ambrose::Tokenize(*names, ',', false))
     {
-        ASSERT_TRUE(name.starts_with("ambrose_smoke_") || name.starts_with("ambrose_dbimport_")) << "refusing to drop " << name;
+        ASSERT_TRUE(name.starts_with("ambrose_smoke_") || name.starts_with("ambrose_dbimport_") || name.starts_with("ambrose_extractor_")) << "refusing to drop " << name;
         EXPECT_TRUE(connection.Execute(fmt::format("DROP DATABASE IF EXISTS {}", DBUpdater::QuoteIdentifier(std::string(name))))) << name;
     }
 }

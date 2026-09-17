@@ -137,9 +137,14 @@ namespace
 
         void HandleHello(HelloMessage& message) { Hellos.push_back(message.Version + "/" + std::to_string(message.Machine)); }
         void HandleLater(LaterMessage& message) { Laters.push_back(message.Count); }
-        void HandleFails(FailsMessage&) { throw std::runtime_error("the handler broke"); }
+        void HandleFails(FailsMessage&)
+        {
+            if (HandlerBreaks)
+                throw std::runtime_error("the handler broke");
+        }
         void HandleWrongType(WrongTypeHello&) { }
 
+        bool HandlerBreaks = true;
         SessionStatus Status = SessionStatus::Connected;
         std::size_t MaxStrikes = 100;
         std::size_t QueueLimit = 100;

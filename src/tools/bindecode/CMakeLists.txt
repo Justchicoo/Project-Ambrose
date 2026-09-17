@@ -3,4 +3,4 @@
 ambrose_add_executable(bindecode "${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(bindecode PRIVATE shared)
-install(TARGETS bindecode RUNTIME DESTINATION bin)
+ambrose_install_executable(bindecode)

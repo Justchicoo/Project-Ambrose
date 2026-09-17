@@ -1,15 +1,18 @@
 /*
  * Project Ambrose by Imjustchico
- * Answers client discovery for the real machine: file system queries that never throw, bounded directory listings and reads, and on Windows the uninstall entries of both registry views under the machine and the user, and Steam's SteamPath value, all read as UTF-8.
+ * Answers client discovery for the real machine: file system queries that never throw, bounded directory listings and reads, canonical paths that fall back to the lexical form when a path cannot be resolved, and on Windows the uninstall entries of both registry views under the machine and the one shared view under the user, each listed once with environment variables in expandable values expanded, and Steam's SteamPath value, all read as UTF-8.
  */
 
 #include "ClientSystem.h"
 #include "Environment.h"
+#include "StringUtil.h"
 #include "Utf.h"
 
 #include <fstream>
 #include <iterator>
+#include <set>
 #include <system_error>
+#include <utility>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -25,6 +28,20 @@ namespace
 {
 #ifdef _WIN32
     constexpr wchar_t const* UninstallKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
+    constexpr DWORD MaxExpandedChars = 32768;
+
+    std::wstring ExpandEnvironment(std::wstring const& text)
+    {
+        DWORD const needed = ExpandEnvironmentStringsW(text.c_str(), nullptr, 0);
+        if (needed == 0 || needed > MaxExpandedChars)
+            return text;
+        std::wstring expanded(needed, L'\0');
+        DWORD const written = ExpandEnvironmentStringsW(text.c_str(), expanded.data(), needed);
+        if (written == 0 || written > needed)
+            return text;
+        expanded.resize(wcsnlen(expanded.c_str(), expanded.size()));
+        return expanded;
+    }
 
     std::optional<std::string> ReadRegistryString(HKEY root, std::wstring const& subkey, wchar_t const* value, REGSAM view)
     {
@@ -41,6 +58,8 @@ namespace
             if (RegQueryValueExW(key, value, nullptr, &type, reinterpret_cast<LPBYTE>(buffer.data()), &read) == ERROR_SUCCESS)
             {
                 buffer.resize(wcsnlen(buffer.c_str(), buffer.size()));
+                if (type == REG_EXPAND_SZ)
+                    buffer = ExpandEnvironment(buffer);
                 result = Utf::Utf16ToUtf8(std::u16string_view(reinterpret_cast<char16_t const*>(buffer.data()), buffer.size()), Utf::InvalidPolicy::ReplaceWithU_FFFD);
             }
         }
@@ -48,7 +67,7 @@ namespace
         return result;
     }
 
-    void CollectUninstallEntries(HKEY root, REGSAM view, std::vector<ClientSystem::UninstallEntry>& entries)
+    void CollectUninstallEntries(HKEY root, REGSAM view, std::vector<ClientSystem::UninstallEntry>& entries, std::set<std::pair<std::string, std::string>>& seen)
     {
         HKEY key = nullptr;
         if (RegOpenKeyExW(root, UninstallKey, 0, KEY_READ | view, &key) != ERROR_SUCCESS)
@@ -65,7 +84,9 @@ namespace
             std::wstring const subkey = std::wstring(UninstallKey) + L"\\" + std::wstring(name, length);
             std::optional<std::string> displayName = ReadRegistryString(root, subkey, L"DisplayName", view);
             std::optional<std::string> location = ReadRegistryString(root, subkey, L"InstallLocation", view);
-            if (displayName && location && !location->empty())
+            if (!displayName || !location || location->empty())
+                continue;
+            if (seen.emplace(*displayName, Ambrose::ToLower(*location)).second)
                 entries.push_back({ std::move(*displayName), std::move(*location) });
         }
         RegCloseKey(key);
@@ -141,13 +162,25 @@ std::optional<std::string> LocalClientSystem::ReadText(std::filesystem::path con
     return text;
 }
 
+std::filesystem::path LocalClientSystem::Canonical(std::filesystem::path const& path) const
+{
+    if (path.empty())
+        return path;
+    std::error_code error;
+    std::filesystem::path canonical = std::filesystem::weakly_canonical(path, error);
+    if (error || canonical.empty())
+        return path.lexically_normal();
+    return canonical;
+}
+
 std::vector<ClientSystem::UninstallEntry> LocalClientSystem::GetUninstallEntries() const
 {
     std::vector<UninstallEntry> entries;
 #ifdef _WIN32
-    for (HKEY const root : { HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE })
-        for (REGSAM const view : { KEY_WOW64_64KEY, KEY_WOW64_32KEY })
-            CollectUninstallEntries(root, view, entries);
+    std::set<std::pair<std::string, std::string>> seen;
+    CollectUninstallEntries(HKEY_CURRENT_USER, 0, entries, seen);
+    for (REGSAM const view : { KEY_WOW64_64KEY, KEY_WOW64_32KEY })
+        CollectUninstallEntries(HKEY_LOCAL_MACHINE, view, entries, seen);
 #endif
     return entries;
 }

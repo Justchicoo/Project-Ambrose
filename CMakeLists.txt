@@ -50,5 +50,6 @@ if(BUILD_TESTING)
 endif()
 
 add_subdirectory(src)
+ambrose_install_runtime_dependencies()
 
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/data/sql" DESTINATION share/ambrose/data PATTERN ".gitkeep" EXCLUDE)

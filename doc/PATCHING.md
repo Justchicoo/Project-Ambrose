@@ -36,7 +36,7 @@ This development launcher always starts `WizardGraphicalClient.exe` with `-P 0`.
 ## First handshake with the login server
 
 1. Build Ambrose, then copy `loginserver.conf.dist` next to `loginserver.exe` as `loginserver.conf`.
-2. Set `ClientDir` in it to your install, so client messages are logged by name. If you leave it empty and start the server in a terminal, it looks for your install and type dump on this machine and asks which to use.
+2. Set `ClientDir` in it to your install, so client messages are logged by name. If you leave it empty, the server uses the install with the newest revision on this machine without asking. With `TypeDumpPath` left empty, it builds that install's type dump with typeextract when the revision has no current dump, which can take a minute or two. It uses an install it found, and saves it to `conf.d/client-data.conf`, only once it has that dump. To choose the install and dump on a terminal instead, set `Setup.Mode = ask`.
 3. Start the server. Keepalives, handled client messages and decoded authentication requests log at Debug, so they appear in `Login.log` in `LogsDir` but not on the console. To see them on the console too, start it as `loginserver --set "Appender.Console=1,2,3"`.
 4. Create an account from the server console with `account create <name> <password>`.
 5. Start the client with the launcher and log in with it.

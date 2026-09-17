@@ -3,4 +3,4 @@
 ambrose_add_executable(localetool "${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(localetool PRIVATE shared)
-install(TARGETS localetool RUNTIME DESTINATION bin)
+ambrose_install_executable(localetool)

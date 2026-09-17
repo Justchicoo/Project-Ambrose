@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Helpers that build a library or executable from every source file under a folder, copy conf.dist files, and ship MariaDB client plugins beside executables.
+# Helpers that build a library or executable from every source file under a folder, copy conf.dist files, and install executables with the DLLs they load and the MariaDB client plugins beside them.
 function(ambrose_collect_include_dirs root out)
     set(dirs "${root}")
     file(GLOB_RECURSE children LIST_DIRECTORIES true "${root}/*")
@@ -46,11 +46,38 @@ function(ambrose_copy_conf_dist target)
         SOURCES ${dist_files}
         VERBATIM)
     add_dependencies(${target} ${target}-conf-dist)
-    install(TARGETS ${target} RUNTIME DESTINATION bin)
-    if(WIN32)
-        install(FILES $<TARGET_RUNTIME_DLLS:${target}> DESTINATION bin)
-    endif()
+    ambrose_install_executable(${target})
     install(FILES ${dist_files} DESTINATION etc)
+endfunction()
+
+function(ambrose_install_executable target)
+    if(WIN32)
+        install(TARGETS ${target} RUNTIME_DEPENDENCY_SET ambrose_runtime_dependencies RUNTIME DESTINATION bin)
+        set_property(GLOBAL PROPERTY AMBROSE_RUNTIME_DEPENDENCIES ON)
+    else()
+        install(TARGETS ${target} RUNTIME DESTINATION bin)
+    endif()
+endfunction()
+
+function(ambrose_install_runtime_dependencies)
+    get_property(used GLOBAL PROPERTY AMBROSE_RUNTIME_DEPENDENCIES)
+    if(NOT used)
+        return()
+    endif()
+    set(vcpkg_root "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+    get_filename_component(compiler_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    find_program(ambrose_dumpbin dumpbin HINTS "${compiler_bin}" NO_DEFAULT_PATH NO_CACHE)
+    if(NOT ambrose_dumpbin)
+        message(FATAL_ERROR "dumpbin was not found beside ${CMAKE_CXX_COMPILER}, so installs cannot find the DLLs executables load")
+    endif()
+    install(CODE "set(CMAKE_GET_RUNTIME_DEPENDENCIES_PLATFORM \"windows+pe\")
+set(CMAKE_GET_RUNTIME_DEPENDENCIES_TOOL \"dumpbin\")
+set(CMAKE_GET_RUNTIME_DEPENDENCIES_COMMAND \"${ambrose_dumpbin}\")")
+    install(RUNTIME_DEPENDENCY_SET ambrose_runtime_dependencies
+        DIRECTORIES "$<IF:$<CONFIG:Debug>,${vcpkg_root}/debug/bin,${vcpkg_root}/bin>"
+        PRE_EXCLUDE_REGEXES "^[Aa][Pp][Ii]-[Mm][Ss]-" "^[Ee][Xx][Tt]-[Mm][Ss]-"
+        POST_EXCLUDE_REGEXES ".*[Ss][Yy][Ss][Tt][Ee][Mm]32.*"
+        DESTINATION bin)
 endfunction()
 
 function(ambrose_copy_mariadb_plugins target)
@@ -72,6 +99,8 @@ function(ambrose_copy_mariadb_plugins target)
         add_custom_target(ambrose_mariadb_plugins
             COMMAND "${CMAKE_COMMAND}" -E copy_directory "$<IF:$<CONFIG:Debug>,${debug_plugins},${release_plugins}>" "${plugin_destination}"
             VERBATIM)
+        install(DIRECTORY "${debug_plugins}/" DESTINATION bin/plugins/libmariadb CONFIGURATIONS Debug)
+        install(DIRECTORY "${release_plugins}/" DESTINATION bin/plugins/libmariadb CONFIGURATIONS Release RelWithDebInfo MinSizeRel)
     endif()
     add_dependencies(${target} ambrose_mariadb_plugins)
 endfunction()

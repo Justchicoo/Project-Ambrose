@@ -73,10 +73,8 @@ target_link_libraries(typeextract-core
 
 add_executable(typeextract "${CMAKE_CURRENT_SOURCE_DIR}/Main.cpp")
 target_link_libraries(typeextract PRIVATE ambrose-compile-options typeextract-core)
-install(TARGETS typeextract RUNTIME DESTINATION bin)
-if(WIN32)
-    install(FILES $<TARGET_RUNTIME_DLLS:typeextract> DESTINATION bin)
-elseif(AMBROSE_UNICORN_LIBRARY_RELEASE MATCHES "\.so$")
+ambrose_install_executable(typeextract)
+if(NOT WIN32 AND AMBROSE_UNICORN_LIBRARY_RELEASE MATCHES "\.so$")
     set_target_properties(typeextract PROPERTIES INSTALL_RPATH "$ORIGIN")
     file(GLOB unicorn_shared_files "${AMBROSE_UNICORN_LIBRARY_RELEASE}*")
     install(FILES ${unicorn_shared_files} DESTINATION bin)

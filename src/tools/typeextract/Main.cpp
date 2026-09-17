@@ -1,8 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * typeextract entry point: reads and parses the dump named by --compare before anything else, builds the type dump of the user's own install by emulating its client program, using the install named by --client or AMBROSE_CLIENT_DIR or else the newest revision found on the machine, writes it to --out or the Ambrose data folder, asking for --out when that folder or the revision cannot name the file, compares it with the dump read earlier, and exits 0 on success, 1 when reading the comparison dump, extraction, validation, naming or writing the output fails, and 2 on bad usage.
+ * typeextract entry point: with --exit-when-input-ends first watches its input and exits 1 as soon as that input ends, which happens once the program that started it and holds the input open is gone, then reads and parses the dump named by --compare before anything else, builds the type dump of the user's own install by emulating its client program, using the install named by --client or AMBROSE_CLIENT_DIR or else the newest revision found on the machine, writes it to --out or the Ambrose data folder, asking for --out when that folder or the revision cannot name the file, compares it with the dump read earlier, and exits 0 on success, 1 when reading the comparison dump, extraction, validation, naming or writing the output fails, and 2 on bad usage.
  */
 
+#include "ChildProcess.h"
 #include "ClientLocator.h"
 #include "ClientSystem.h"
 #include "ConfigMgr.h"
@@ -40,10 +41,13 @@ Options:
   --out <file>       where to write the dump (default: types/<revision>.json in the Ambrose data folder)
   --compare <dump>   compare the result with another type dump and print every difference
   --quiet            print only errors
+  --exit-when-input-ends
+                     exit as soon as standard input ends, for a program that runs typeextract
+                     and holds its input open, so typeextract never outlives it
   --help             print this text
 
-Exit status: 0 on success, 1 when the dump to compare with cannot be read or extraction,
-validation or writing fails, 2 on bad usage.
+Exit status: 0 on success, 1 when the dump to compare with cannot be read, extraction,
+validation or writing fails, or input ends with --exit-when-input-ends, 2 on bad usage.
 )";
 
     struct Arguments
@@ -52,6 +56,7 @@ validation or writing fails, 2 on bad usage.
         std::optional<std::string> Out;
         std::optional<std::string> Compare;
         bool Quiet = false;
+        bool ExitWhenInputEnds = false;
         bool Help = false;
     };
 
@@ -65,6 +70,8 @@ validation or writing fails, 2 on bad usage.
                 parsed.Help = true;
             else if (arg == "--quiet")
                 parsed.Quiet = true;
+            else if (arg == "--exit-when-input-ends")
+                parsed.ExitWhenInputEnds = true;
             else if (arg == "--client" || arg == "--out" || arg == "--compare")
             {
                 if (index + 1 >= args.size() || args[index + 1].starts_with("--"))
@@ -136,6 +143,8 @@ validation or writing fails, 2 on bad usage.
             std::cout << Usage;
             return Success;
         }
+        if (arguments->ExitWhenInputEnds)
+            ChildProcess::ExitWhenInputEnds(Failure);
         auto say = [&](std::string const& text)
         {
             if (!arguments->Quiet)

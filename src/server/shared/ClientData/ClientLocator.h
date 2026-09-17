@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Finds the user's own Wizard101 client data on their machine: an install is a folder holding Data/GameData/Root.wad whose Bin/revision.dat names its revision, found through AMBROSE_CLIENT_DIR, the installed programs named Wizard101, KingsIsle's default folders, every Steam library, Wine, Lutris and Proton prefixes and WSL drive mounts, with the pinned revision listed first; and type dumps named for a found revision beside an install, extracted by typeextract into the Ambrose data folder's types folder, in the Ambrose data folder, the working folder or the executable's folder, or named by AMBROSE_TYPE_DUMP_PATH.
+ * Finds the user's own Wizard101 client data on their machine: an install is a folder holding Data/GameData/Root.wad whose Bin/revision.dat names its revision, noting whether Bin/WizardGraphicalClient.exe is there, found through AMBROSE_CLIENT_DIR, the installed programs named Wizard101, KingsIsle's default folders, every Steam library including Flatpak and Snap Steam, Wine, Lutris and Proton prefixes, and on WSL the Windows drives' KingsIsle, per-user and Steam folders, with one budget of folder queries for those places and the walks below installed programs and a budget of its own for the Lutris prefixes and another for the Proton prefixes, each covering every prefix one listing returns, listed newest revision first; and type dumps: the file AMBROSE_TYPE_DUMP_PATH names, a dump named for a found revision in or beside an install, in the Ambrose data folder's types folder, the working folder or the executable's folder, and any .json in the Ambrose data folder itself whose header reads as a dump; the data folder is ProjectAmbrose in LOCALAPPDATA on Windows, and elsewhere project-ambrose in XDG_DATA_HOME when that is an absolute path, or else in ~/.local/share.
  */
 
 #ifndef AMBROSE_CLIENTLOCATOR_H
 #define AMBROSE_CLIENTLOCATOR_H
 
 #include "ClientSystem.h"
+#include "Types.h"
 
 #include <cstddef>
 #include <filesystem>
@@ -21,8 +22,10 @@ struct ClientInstall
 
     std::filesystem::path Root;
     std::string Revision;
+    bool HasProgram = false;
 
     bool IsPinned() const noexcept;
+    uint64 RevisionNumber() const noexcept;
     std::string Describe() const;
 
     static std::optional<ClientInstall> Inspect(ClientSystem const& system, std::filesystem::path const& root);
@@ -43,10 +46,14 @@ struct TypeDumpCandidate
 class ClientLocator
 {
 public:
-    static constexpr std::size_t MaxFoldersVisited = 512;
+    static constexpr std::size_t MaxPlaceFolders = 512;
+    static constexpr std::size_t MaxPrefixes = 256;
+    static constexpr std::size_t FoldersPerPrefix = 4;
+    static constexpr std::size_t MaxPrefixFolders = MaxPrefixes * FoldersPerPrefix;
+    static constexpr std::size_t MaxFoldersVisited = MaxPlaceFolders + 2 * MaxPrefixFolders;
     static constexpr std::size_t MaxChildren = 64;
     static constexpr std::size_t MaxVdfBytes = 1024 * 1024;
-    static constexpr std::size_t DumpHeaderBytes = 256;
+    static constexpr std::size_t DumpHeaderBytes = 4096;
 
     ClientLocator() = delete;
 

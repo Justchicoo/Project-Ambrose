@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs bindecode to check its usage text, that bad usage exits 2 and a missing archive exits 1, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install and type dump, that it lists a crown hat, prints that hat as JSON with its template id and display name, and exits 1 for an entry that does not exist; it reports itself skipped when the client checks cannot run.
+# Runs bindecode to check its usage text, that bad usage exits 2 and a missing archive named by path exits 1 before anything is searched, that on a machine holding a synthetic install AMBROSE_SETUP_MODE=off prints the find and the flag to pass while auto uses it and reports why no type dump could be built from it, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install and type dump, that it lists a crown hat, prints that hat as JSON with its template id and display name, and exits 1 for an entry that does not exist; it reports itself skipped when the client checks cannot run.
 if(NOT APP OR NOT WORKDIR)
     message(FATAL_ERROR "APP and WORKDIR must be set")
 endif()
@@ -18,9 +18,22 @@ foreach(arguments IN ITEMS "" "--list;--sweep" "--sweep;Entry.xml" "--threads;0;
     endif()
 endforeach()
 
-execute_process(COMMAND "${APP}" --wad "${WORKDIR}/missing.wad" Entry.xml RESULT_VARIABLE missingResult OUTPUT_VARIABLE missingOutput ERROR_VARIABLE missingError TIMEOUT 30)
-if(NOT missingResult EQUAL 1 OR NOT missingError MATCHES "cannot open .*missing\.wad")
-    message(FATAL_ERROR "bindecode with a missing archive exited ${missingResult}: ${missingOutput}${missingError}")
+set(machine "${WORKDIR}/machine")
+set(synthetic "${machine}/drive_c/ProgramData/KingsIsle Entertainment/Wizard101")
+file(WRITE "${synthetic}/Data/GameData/Root.wad" "not an archive")
+file(WRITE "${synthetic}/Bin/revision.dat" "r999999999.Synthetic_1_0\n")
+set(machineEnv "ProgramData=${machine}/drive_c/ProgramData" "WINEPREFIX=${machine}" "LOCALAPPDATA=${WORKDIR}/data" "XDG_DATA_HOME=${WORKDIR}/data" --unset=AMBROSE_CLIENT_DIR --unset=AMBROSE_TYPE_DUMP_PATH --unset=AMBROSE_WORLD_DATABASE_INFO)
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} AMBROSE_SETUP_MODE=auto "${APP}" --wad "${WORKDIR}/missing.wad" Entry.xml RESULT_VARIABLE missingResult OUTPUT_VARIABLE missingOutput ERROR_VARIABLE missingError TIMEOUT 30)
+if(NOT missingResult EQUAL 1 OR NOT missingError MATCHES "cannot open .*missing\.wad" OR missingError MATCHES "found on this machine|bindecode: using|type dump")
+    message(FATAL_ERROR "bindecode with a missing archive searched the machine or exited ${missingResult}: ${missingOutput}${missingError}")
+endif()
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} AMBROSE_SETUP_MODE=off "${APP}" Entry.xml RESULT_VARIABLE offResult OUTPUT_VARIABLE offOutput ERROR_VARIABLE offError TIMEOUT 30)
+if(NOT offResult EQUAL 1 OR NOT offError MATCHES "bindecode: Wizard101 was found on this machine: [^\n]*r999999999\\.Synthetic_1_0" OR NOT offError MATCHES "Pass --client with one of them, or set AMBROSE_SETUP_MODE=auto to use the newest")
+    message(FATAL_ERROR "bindecode with AMBROSE_SETUP_MODE=off did not print the install it found and the flag to pass (${offResult}): ${offOutput}${offError}")
+endif()
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} AMBROSE_SETUP_MODE=auto "${APP}" Entry.xml RESULT_VARIABLE autoResult OUTPUT_VARIABLE autoOutput ERROR_VARIABLE autoError TIMEOUT 60)
+if(NOT autoResult EQUAL 1 OR NOT autoError MATCHES "bindecode: cannot build the type dump for [^\n]*r999999999\\.Synthetic_1_0" OR NOT autoError MATCHES "bindecode: using the newest install on this machine, [^\n]*r999999999\\.Synthetic_1_0[^\n]*; pass --client to choose otherwise")
+    message(FATAL_ERROR "bindecode with AMBROSE_SETUP_MODE=auto did not use the synthetic install and report the type dump it could not build (${autoResult}): ${autoOutput}${autoError}")
 endif()
 
 if("$ENV{AMBROSE_CLIENT_DIR}" STREQUAL "" OR "$ENV{AMBROSE_TYPE_DUMP_PATH}" STREQUAL "")

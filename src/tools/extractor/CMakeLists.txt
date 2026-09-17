@@ -4,4 +4,4 @@ ambrose_add_executable(extractor "${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(extractor PRIVATE database)
 ambrose_copy_mariadb_plugins(extractor)
-install(TARGETS extractor RUNTIME DESTINATION bin)
+ambrose_install_executable(extractor)

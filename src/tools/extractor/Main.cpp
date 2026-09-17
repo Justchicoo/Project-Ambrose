@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * extractor entry point: silences the log, reads its arguments and environment as UTF-8, refuses an option value that is itself an option, offers to use an install or type dump found on the machine when none is named, opens the user's own Root.wad and a type dump bound to the extractor's views, extracts the character names, disallowed names, schools and creation options, prints their counts and the problems found, then replaces the world tables in one transaction, writes the SQL to a file, or on a dry run writes nothing and checks the world tables of any database it was given; exits 0 on success, 1 when the install, dump, data or database fails, and 2 on bad usage.
+ * extractor entry point: silences the log, reads its arguments and environment as UTF-8, refuses an option value that is itself an option, checks the world database, --sql and --dry-run before anything is searched, then when no install or type dump is named follows AMBROSE_SETUP_MODE: auto uses the newest install found and the type dump built from it, ask offers the finds and a build, off prints them with the flag to pass; opens the user's own Root.wad and a type dump bound to the extractor's views, extracts the character names, disallowed names, schools and creation options, prints their counts and the problems found, then replaces the world tables in one transaction, writes the SQL to a file, or on a dry run writes nothing and checks the world tables of any database it was given; exits 0 on success, 1 when the install, dump, data or database fails, and 2 on bad usage.
  */
 
 #include "CharacterNameExtractor.h"
@@ -170,23 +170,6 @@ database fails, 2 on bad usage.
         FromEnvironment(arguments->Client, "AMBROSE_CLIENT_DIR");
         FromEnvironment(arguments->TypeDump, "AMBROSE_TYPE_DUMP_PATH");
         FromEnvironment(arguments->WorldDatabase, "AMBROSE_WORLD_DATABASE_INFO");
-        if (!arguments->Client || !arguments->TypeDump)
-        {
-            LocalClientSystem const system;
-            std::unique_ptr<SetupPrompt> const prompt = ClientSetup::ToolPrompt(std::cout);
-            ClientSetup::ForTool(arguments->Client, &arguments->TypeDump, *prompt, system, "extractor", std::cerr);
-        }
-
-        if (!arguments->Client)
-        {
-            std::cerr << "extractor: name your install with --client or AMBROSE_CLIENT_DIR\n";
-            return Failure;
-        }
-        if (!arguments->TypeDump)
-        {
-            std::cerr << "extractor: name the type dump with --type-dump or AMBROSE_TYPE_DUMP_PATH\n";
-            return Failure;
-        }
         std::optional<MySQLConnectionInfo> database;
         if (!arguments->SqlFile && (!arguments->DryRun || arguments->WorldDatabase))
         {
@@ -201,6 +184,24 @@ database fails, 2 on bad usage.
                 std::cerr << fmt::format("extractor: the world database connection is not usable: {}\n", error);
                 return Failure;
             }
+        }
+
+        if (!arguments->Client || !arguments->TypeDump)
+        {
+            LocalClientSystem const system;
+            SetupMode const mode = ClientSetup::ModeForTool(system, std::cerr, "extractor");
+            std::unique_ptr<SetupPrompt> const prompt = ClientSetup::ToolPrompt(std::cout, mode);
+            ClientSetup::ForTool(mode, arguments->Client, &arguments->TypeDump, *prompt, system, ClientSetup::ToolTypeDumps(system, "extractor", std::cerr), "extractor", std::cerr);
+        }
+        if (!arguments->Client)
+        {
+            std::cerr << "extractor: name your install with --client or AMBROSE_CLIENT_DIR\n";
+            return Failure;
+        }
+        if (!arguments->TypeDump)
+        {
+            std::cerr << "extractor: name the type dump with --type-dump or AMBROSE_TYPE_DUMP_PATH\n";
+            return Failure;
         }
 
         std::filesystem::path const rootWad = LogConfig::Utf8Path(*arguments->Client) / "Data" / "GameData" / "Root.wad";

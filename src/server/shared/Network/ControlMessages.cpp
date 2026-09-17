@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Encodes and decodes control message bodies with ByteBuffer, keeps unknown trailing offer and accept bytes, and wraps bodies in control frames.
+ * Encodes and decodes control message bodies with ByteBuffer, keeps unknown trailing offer and accept bytes, reads a client KeepAlive whose frame ends without the trailing byte, and wraps bodies in control frames.
  */
 
 #include "ControlMessages.h"
@@ -133,6 +133,15 @@ std::optional<ClientKeepAlive> ControlMessages::DecodeClientKeepAlive(std::span<
     message.Milliseconds = buffer.Read<uint16>();
     message.ElapsedMinutes = buffer.Read<uint16>();
     return message;
+}
+
+std::optional<ClientKeepAlive> ControlMessages::DecodeClientKeepAlive(Frame const& frame)
+{
+    if (frame.Payload.size() + FrameLayout::TrailerSize != ClientKeepAlive::BodySize)
+        return DecodeClientKeepAlive(std::span<uint8 const>(frame.Payload));
+    std::vector<uint8> body = frame.Payload;
+    body.push_back(frame.Trailer);
+    return DecodeClientKeepAlive(std::span<uint8 const>(body));
 }
 
 std::optional<ServerKeepAlive> ControlMessages::DecodeServerKeepAlive(std::span<uint8 const> body)

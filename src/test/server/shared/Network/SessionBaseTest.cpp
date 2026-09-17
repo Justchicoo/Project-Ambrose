@@ -325,6 +325,18 @@ TEST_F(SessionBaseTest, ClientKeepAliveIsAnsweredWithTheElapsedMinutes)
     EXPECT_EQ(response->ElapsedMinutes, 9);
     EXPECT_LT(response->Milliseconds, 1000);
 
+    ByteBuffer untrailed;
+    ControlMessages::WriteFrame(untrailed, ClientKeepAlive{ sessionId, 322, 10 });
+    std::vector<uint8> bytes(untrailed.GetData().begin(), untrailed.GetData().end());
+    bytes.pop_back();
+    bytes[2] = static_cast<uint8>(bytes[2] - 1);
+    client.Send(ByteBuffer(std::span<uint8 const>(bytes)));
+    std::optional<Frame> const untrailedFrame = client.ReadControl(ControlOpcode::KeepAliveRsp);
+    ASSERT_TRUE(untrailedFrame);
+    std::optional<KeepAliveResponse> const untrailedResponse = ControlMessages::DecodeKeepAliveResponse(untrailedFrame->Payload);
+    ASSERT_TRUE(untrailedResponse);
+    EXPECT_EQ(untrailedResponse->ElapsedMinutes, 10);
+
     ByteBuffer wrong;
     ControlMessages::WriteFrame(wrong, ClientKeepAlive{ static_cast<uint16>(sessionId + 1), 0, 0 });
     client.Send(wrong);

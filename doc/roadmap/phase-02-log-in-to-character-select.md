@@ -325,7 +325,7 @@ Apps open their databases and run the updater at startup, and log lines can be s
 - [x] STATUS_NEVER strikes; MaxStrikes disconnects (refused and foreign-service messages strike; LoginSessionTest closes a session at Network.MaxStrikes)
 - [x] LOGIN table has 29 entries matching _MsgOrder (LoginMessageTableClientTest against the r806919 install: 1 handled, 15 not handled yet, 13 refused)
 - [x] Coverage check fails the build on a missing id (adapted: ids load at runtime, so the check runs at startup and stops the login server, and the client test runs it against the install)
-- [ ] Real client: MSG_USER_AUTHEN_V3 reaches LoginSession::HandleUserAuthenV3
+- [x] Real client: MSG_USER_AUTHEN_V3 reaches LoginSession::HandleUserAuthenV3 (2026-09-17, retail r806919 client: 'LOGIN MSG_USER_AUTHEN_V3 (7:27) from session 4' was handled by LoginSession, which logged 'authenticated as imjustchico (id 1)')
 
 ### Detailed spec from NET-9: Message dispatch table and session states
 
@@ -353,7 +353,7 @@ Each incoming DML message is routed to exactly one Session::Handle<Message> memb
 - [x] Test: a STATUS_NEVER message increments a strike counter; Network.MaxStrikes (default 10) disconnects
 - [x] Test: a body that fails Decode is dropped, logged with the service/order name, and counts a strike
 - [x] Test: every (service, order) in MessageRegistry has an entry in each app's table, so a coverage check fails the build if an id is missing (adapted as above: at startup the table must hold exactly one rule for every message of the login server's own services, SYSTEM, EXTENDEDBASE and LOGIN, or the server stops; every other service is refused; the client test checks all 37 rules against the install)
-- [ ] Real client: LOGIN MSG_USER_AUTHEN_V3 reaches LoginSession::HandleUserAuthenV3 (a stub that logs); a crafted GAME MSG_ATTACH (5:7) from a test client to loginserver is rejected by state
+- [x] Real client: LOGIN MSG_USER_AUTHEN_V3 reaches LoginSession::HandleUserAuthenV3 (a stub that logs); a crafted GAME MSG_ATTACH (5:7) from a test client to loginserver is rejected by state (2026-09-17, retail r806919 client: handled by LoginSession, which logged 'authenticated as imjustchico (id 1)'; the crafted GAME MSG_ATTACH is refused in LoginSessionTest)
 
 **Risks**
 
@@ -383,7 +383,7 @@ A real client started with -L 127.0.0.1 12000 connects to our loginserver, compl
 
 - [x] Unit: the dispatch table holds exactly 29 entries whose ids match _MsgOrder 1..29 and whose names match LoginMessages.xml (the test reads the XML from the user's install via the DAT WAD reader and skips when no install is configured)
 - [x] Unit: a message received in the wrong state (for example MSG_REQUESTCHARACTERLIST before authentication) is dropped and logged, and the session stays open
-- [ ] Real client: WizardGraphicalClient.exe -L 127.0.0.1 12000 connects; the server log shows SessionOffer sent and SessionAccept received with a matching SessionID; the connection survives at least 2 minutes of keepalives; the client shows its login UI (no -U) or sits waiting for authentication, with no crash and no disconnect dialog
+- [x] Real client: WizardGraphicalClient.exe -L 127.0.0.1 12000 connects; the server log shows SessionOffer sent and SessionAccept received with a matching SessionID; the connection survives at least 2 minutes of keepalives; the client shows its login UI (no -U) or sits waiting for authentication, with no crash and no disconnect dialog (2026-09-17, retail r806919 client after the KeepAlive frame fix: session 4 stayed open from 11:27:43 to 11:30:28 with KeepAlive and KeepAliveRsp logged in both directions, through the login UI and character select, with no crash or disconnect dialog)
 - [ ] Real client: MSG_USER_AUTHEN_V3 (order 27) arrives, is decoded field by field (Version=W.1.610.x, Revision=r806919.Wizard_1_610, Locale, MachineID) and logged
 
 **Risks**
@@ -588,8 +588,8 @@ Accounts exist in MySQL and an operator can create one with a password, so authe
 **Acceptance**
 
 - [x] Unit: wrong sid, wrong CK1, banned machine, locked account each give their error and no session row (AuthHandlerTest over loopback, run locally against MariaDB 10.11 and MySQL 8 and in CI against MySQL 8, which also covers an unknown account, a banned address, a banned account, a disallowed revision and an oversized Rec1)
-- [ ] Real client: correct password reaches empty character select; log shows AUTHEN_RSP Error=0 and ADMIT_IND Status=1
-- [ ] Real client: wrong password shows the invalid-login dialog and allows retry
+- [x] Real client: correct password reaches empty character select; log shows AUTHEN_RSP Error=0 and ADMIT_IND Status=1 (2026-09-17, retail r806919 client from the in-client login UI: Login.log shows 'sent MSG_USER_AUTHEN_RSP Error=0 and MSG_USER_ADMIT_IND Status=1', and the client log shows 'The LoginServer has admitted the user to the game' and an empty WizardCharacterSelect scene)
+- [x] Real client: wrong password shows the invalid-login dialog and allows retry (2026-09-17, retail r806919 client: 'failed to authenticate as imjustchico: the password is wrong; sent MSG_USER_AUTHEN_RSP Error=AuthenFailed', the client showed 'Invalid username or password', and the correct password then logged in without restarting the client)
 - [ ] Banned account is refused visibly
 
 ### Detailed spec from LOG-4: Authentication: MSG_USER_AUTHEN_V3 -> MSG_USER_AUTHEN_RSP + MSG_USER_ADMIT_IND
@@ -626,8 +626,8 @@ A real client with valid credentials is authenticated and admitted to character 
 
 - [x] Unit: a fake session with known sid, secs and ms, fed a Rec1 built by the test from 'sid user ck1', authenticates; a wrong sid in the plaintext, a wrong CK1, a banned machine id and a locked account each give the expected error code and no session row (AuthHandlerTest takes the sid, seconds and milliseconds from the SessionOffer a real LoginSession sends over loopback)
 - [x] Unit: changing Login.MaxAuthAttempts on a running loginserver applies to the next attempt without a restart (AuthHandlerTest reloads the config file between two wrong passwords, and the lower limit closes the session and locks the address out)
-- [ ] Real client (in-client login UI, no -U): the correct password moves to the character select screen (empty list for a new account) with no error dialog; the server log shows AUTHEN_V3, AUTHEN_RSP Error=0 and ADMIT_IND Status=1, matching capture lines 1-3
-- [ ] Real client: a wrong password shows the client's invalid-login dialog and allows a retry without restarting the client
+- [x] Real client (in-client login UI, no -U): the correct password moves to the character select screen (empty list for a new account) with no error dialog; the server log shows AUTHEN_V3, AUTHEN_RSP Error=0 and ADMIT_IND Status=1, matching capture lines 1-3 (2026-09-17, retail r806919 client from the in-client login UI: Login.log shows 'sent MSG_USER_AUTHEN_RSP Error=0 and MSG_USER_ADMIT_IND Status=1', and the client log shows 'The LoginServer has admitted the user to the game' and an empty WizardCharacterSelect scene)
+- [x] Real client: a wrong password shows the client's invalid-login dialog and allows a retry without restarting the client (2026-09-17, retail r806919 client: 'failed to authenticate as imjustchico: the password is wrong; sent MSG_USER_AUTHEN_RSP Error=AuthenFailed', the client showed 'Invalid username or password', and the correct password then logged in without restarting the client)
 - [ ] Real client: an account banned via account_banned is refused with a visible message and never reaches character select
 - [ ] Sniffer (optional): with the proxy in front, the AUTHEN_RSP Rec1 decrypts to a 44-character base64 key
 
@@ -667,7 +667,7 @@ Idle clients at the login screen are dropped politely, and a login server shutdo
 - [x] Unit: with a fake clock, a session with no traffic for AfkTimeout seconds is closed, while one sending MSG_LOGIN_NOT_AFK every 30s is kept
 - [x] Unit: with a fake clock, lowering Login.AfkTimeout on a running loginserver closes an idle session at the new timeout
 - [ ] Real client: leave the client on character select past the timeout; it shows the client's AFK disconnect message rather than a generic connection-lost error
-- [ ] Real client: stopping the loginserver while on character select shows a server-shutdown notice
+- [x] Real client: stopping the loginserver while on character select shows a server-shutdown notice (2026-09-17, retail r806919 client on the character creation screens reached from character select: 'Sent MSG_LOGINSERVERSHUTDOWN to 1 session(s)', and the client showed 'Server has been brought down for maintenance. Please try again later!')
 
 **Risks**
 

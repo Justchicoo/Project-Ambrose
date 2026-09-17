@@ -1,11 +1,16 @@
 # Project Ambrose by Imjustchico
-# Runs the extractor to check its usage text, that bad usage, including an option given as another option's value, exits 2 and a missing install, type dump or database exits 1 with the reason, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install, that a dry run prints every locale's four human table sizes and the seven schools and refuses a bad database, --sql writes the script, and with AMBROSE_TEST_DB a world database dbimport creates is filled twice, passes a dry run's table check, and loads in the game server with every name; it reports itself skipped when the client checks cannot run.
+# Runs the extractor to check its usage text, that bad usage, including an option given as another option's value, exits 2, that a missing world database is reported before anything is searched, that a missing install, type dump or database exits 1 with the reason, that on a machine holding a synthetic install AMBROSE_SETUP_MODE=off prints the find and the flag to pass while auto uses it and reports why no type dump could be built from it, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install, that a dry run prints every locale's four human table sizes and the seven schools and refuses a bad database, --sql writes the script, and with AMBROSE_TEST_DB a world database dbimport creates is filled twice, passes a dry run's table check, and loads in the game server with every name; it reports itself skipped when the client checks cannot run.
 if(NOT APP OR NOT WORKDIR)
     message(FATAL_ERROR "APP and WORKDIR must be set")
 endif()
 file(REMOVE_RECURSE "${WORKDIR}")
 file(MAKE_DIRECTORY "${WORKDIR}")
-set(unsetAll --unset=AMBROSE_CLIENT_DIR --unset=AMBROSE_TYPE_DUMP_PATH --unset=AMBROSE_WORLD_DATABASE_INFO)
+set(unsetAll --unset=AMBROSE_CLIENT_DIR --unset=AMBROSE_TYPE_DUMP_PATH --unset=AMBROSE_WORLD_DATABASE_INFO AMBROSE_SETUP_MODE=off)
+set(machine "${WORKDIR}/machine")
+set(synthetic "${machine}/drive_c/ProgramData/KingsIsle Entertainment/Wizard101")
+file(WRITE "${synthetic}/Data/GameData/Root.wad" "not an archive")
+file(WRITE "${synthetic}/Bin/revision.dat" "r999999999.Synthetic_1_0\n")
+set(machineEnv "ProgramData=${machine}/drive_c/ProgramData" "WINEPREFIX=${machine}" "LOCALAPPDATA=${WORKDIR}/data" "XDG_DATA_HOME=${WORKDIR}/data" --unset=AMBROSE_CLIENT_DIR --unset=AMBROSE_TYPE_DUMP_PATH --unset=AMBROSE_WORLD_DATABASE_INFO)
 
 execute_process(COMMAND "${APP}" --help RESULT_VARIABLE helpResult OUTPUT_VARIABLE helpOutput ERROR_VARIABLE helpError TIMEOUT 30)
 if(NOT helpResult EQUAL 0 OR NOT helpOutput MATCHES "Usage: extractor" OR NOT helpOutput MATCHES "--world-db")
@@ -19,11 +24,25 @@ foreach(arguments IN ITEMS "" "bogus" "names;extra" "--bogus;names" "--dry-run;-
     endif()
 endforeach()
 
-execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${unsetAll} "${APP}" names RESULT_VARIABLE noClientResult ERROR_VARIABLE noClientError TIMEOUT 30)
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} AMBROSE_SETUP_MODE=auto "${APP}" names RESULT_VARIABLE firstResult ERROR_VARIABLE firstError TIMEOUT 30)
+if(NOT firstResult EQUAL 1 OR NOT firstError MATCHES "name the world database with --world-db" OR firstError MATCHES "found on this machine|extractor: using|type dump")
+    message(FATAL_ERROR "extractor without a world database searched the machine or exited ${firstResult}: ${firstError}")
+endif()
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${unsetAll} "${APP}" --dry-run names RESULT_VARIABLE noClientResult ERROR_VARIABLE noClientError TIMEOUT 30)
 if(NOT noClientResult EQUAL 1 OR NOT noClientError MATCHES "name your install with --client")
     message(FATAL_ERROR "extractor without an install exited ${noClientResult}: ${noClientError}")
 endif()
-execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${unsetAll} "${APP}" --client "${WORKDIR}" names RESULT_VARIABLE noDumpResult ERROR_VARIABLE noDumpError TIMEOUT 30)
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} AMBROSE_SETUP_MODE=off "${APP}" --dry-run names RESULT_VARIABLE offResult ERROR_VARIABLE offError TIMEOUT 30)
+if(NOT offResult EQUAL 1 OR NOT offError MATCHES "extractor: Wizard101 was found on this machine: [^\n]*r999999999\\.Synthetic_1_0" OR NOT offError MATCHES "Pass --client with one of them, or set AMBROSE_SETUP_MODE=auto to use the newest"
+        OR NOT offError MATCHES "name your install with --client")
+    message(FATAL_ERROR "extractor with AMBROSE_SETUP_MODE=off did not print the install it found and the flag to pass (${offResult}): ${offError}")
+endif()
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} AMBROSE_SETUP_MODE=auto "${APP}" --dry-run names RESULT_VARIABLE autoResult ERROR_VARIABLE autoError TIMEOUT 60)
+if(NOT autoResult EQUAL 1 OR NOT autoError MATCHES "extractor: cannot build the type dump for [^\n]*r999999999\\.Synthetic_1_0" OR NOT autoError MATCHES "extractor: using the newest install on this machine, [^\n]*r999999999\\.Synthetic_1_0[^\n]*; pass --client to choose otherwise"
+        OR NOT autoError MATCHES "name the type dump with --type-dump")
+    message(FATAL_ERROR "extractor with AMBROSE_SETUP_MODE=auto did not use the synthetic install and report the type dump it could not build (${autoResult}): ${autoError}")
+endif()
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${unsetAll} "${APP}" --client "${WORKDIR}" --dry-run names RESULT_VARIABLE noDumpResult ERROR_VARIABLE noDumpError TIMEOUT 30)
 if(NOT noDumpResult EQUAL 1 OR NOT noDumpError MATCHES "name the type dump with --type-dump")
     message(FATAL_ERROR "extractor without a type dump exited ${noDumpResult}: ${noDumpError}")
 endif()
