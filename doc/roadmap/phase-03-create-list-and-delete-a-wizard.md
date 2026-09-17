@@ -29,7 +29,8 @@
 | 3.21 | Type data from the user's own client program | L | 3.03, 3.20, 1.13 |
 | 3.22 | Automatic first-run setup | M | 3.21 |
 | 3.23 | Keep up with KingsIsle's client revisions | M | 3.22 |
-| 3.24 | Drive the retail client in tests | L | 3.22, 2.14, 1.21 |
+| 3.24 | Drive the retail client in tests | L | 3.25, 2.14 |
+| 3.25 | Ambrose client launcher | M | 3.22, 1.21 |
 
 ## Review notes for this phase
 
@@ -972,9 +973,9 @@ Added on 2026-09-17 at the maintainer's direction: someone who runs the server f
 
 **Goal:** A single command starts a server, drives the maintainer's own retail client through a scenario, and reports every message the server did not handle, with screenshots, so client behavior is checked without a person at the keyboard.
 
-**Size:** L. **Depends on:** 3.22, 2.14, 1.21
+**Size:** L. **Depends on:** 3.25, 2.14
 
-Added on 2026-09-17 at the maintainer's direction, and placed before 3.15 so every later milestone can be checked against the real client. It also answers the phase 1 review's missing work item for an automated client harness.
+Added on 2026-09-17 at the maintainer's direction, and placed before 3.15 so every later milestone can be checked against the real client. It starts the client through the 3.25 launcher instead of starting it itself. It also answers the phase 1 review's missing work item for an automated client harness.
 
 **Deliverables**
 
@@ -1014,6 +1015,44 @@ Added on 2026-09-17 at the maintainer's direction, and placed before 3.15 so eve
 
 - The driver depends on screen positions for clicks, which change with the interface scale and the window size, so scenarios pin both and prefer keyboard steps and log waits
 - A scenario that reaches the world needs the game server wired to the login server, which lands in phase 4; until then scenarios stop at character select and the creation screens
+
+## 3.25 Ambrose client launcher
+
+**Goal:** One Ambrose program starts the retail client against an Ambrose server, on any machine that has a client, without ever running KingsIsle's launcher or writing inside the install.
+
+**Size:** M. **Depends on:** 3.22, 1.21
+
+Added on 2026-09-17 at the maintainer's direction: the client must be driven by a launcher of Ambrose's own, not by a script and never by the retail launcher. It replaces the development scripts from 1.21 and is what 3.24 and the desktop app in 17.24 start the client with.
+
+**Deliverables**
+
+- `src/tools/launcher`, the `launcher` executable in C++20, linking the client discovery in `shared/ClientData`, `ChildProcess` and `ConfigMgr`, since it reuses server code
+- It finds the install the way the servers do, through `--client`, `ClientDir` in its own configuration, `AMBROSE_CLIENT_DIR` or the discovery in `ClientLocator`, and says what it would use with the flag that chooses otherwise when it cannot decide
+- A run folder of its own, `client/<revision>` in the Ambrose data folder by default, holds the working directory the client runs from: `config.xml` and `preferences.xml` written from the install's own defaults with the window mode and size asked for, `SilentMetricsURL` left empty so the client reaches nothing outside the machine, and the few files the client opens by relative name. Nothing inside the install is written and the run folder may not lie inside it; the two generated files are written again on every run, because the client saves its own over them as it exits, while the copies of `revision.dat` and `data.dat` follow a stamp of the install and its revision
+- The client always starts with `-L <host> <port>`, `-P 0`, `-A <locale>`, `-D <the install's data folder>` and `-G <log in the run folder>`, because the retail build starts KingsIsle's launcher when none of its own options are present. Startup refuses, with a named reason and a non-zero exit, when no install is found, the client program is missing, the run folder cannot be written, patching is asked for, or a host and port are missing
+- `--user ..<id> <key> [name]` and `--character <name>` pass the client's own automatic login and character options through for the 3.24 driver, and are documented as needing 5.06 and 3.16
+- Options `--config`, `--host`, `--port`, `--locale`, `--window <width>x<height>`, `--fullscreen`, `--run-dir`, `--dry-run`, `--wait`, `--tail` and `--help`. `--dry-run` prints the exact command and the run folder without starting anything. `--wait` returns the client's own exit code and ends the client if the launcher is killed, through the job object `ChildProcess` already uses. `--tail` streams the client's log lines to the console
+- `launcher.conf.dist` beside the program and `doc/config/launcher.md` documenting every option, the run folder and what is never touched
+- The development scripts `apps/launcher/run-client.ps1` and `run-client.bat` are removed, and doc/PATCHING.md, doc/TOOLS.md and doc/ARCHITECTURE.md name the program instead
+
+**Acceptance**
+
+- [x] With nothing configured on the maintainer's machine, `launcher --dry-run` finds the install and prints the command with `-L`, `-P 0`, `-A`, `-D` and `-G`, and the run folder it would use (2026-09-17 on the maintainer's machine: with no ClientDir set it reported the newest install, C:/ProgramData/KingsIsle Entertainment/Wizard101 (r806919.Wizard_1_610), found through the installed program Wizard101, the run folder it would use and the whole command with -L 127.0.0.1 12000, -P 0, -A en-US, -D the install's GameData folder with its trailing separator and -G the log in that folder, and wrote nothing)
+- [ ] `launcher` starts the retail client in a window of the size asked for against a local login server, the client reaches the login screen with no patch error, nothing inside the install is written, and a capture of the run shows no connection leaving the machine (waits for the maintainer's own client run, as doc/PATCHING.md's verification table records)
+- [x] Each refusal exits non-zero naming its cause: no install found, a missing client program, patching asked for, no host or port, and an unwritable run folder (LauncherTest.RefusesWithoutAnInstall, RefusesAFolderThatHoldsNoInstall, RefusesAnInstallWithoutTheClientProgram, RefusesPatching, RefusesAMissingHostOrPort, RefusesValuesThatMakeNoSense, RefusesAValueThatBeginsWithADashSoNoClientOptionCanBeSmuggledIn, RefusesARunFolderInsideTheInstall, RefusesARunFolderThatOnlyReachesTheInstallThroughALink, RefusesWhenTheRunFolderCannotBeNamedOrWritten and RefusesToNameTheRunFolderAfterARevisionThatIsNotAFolderName; the Launcher CTest runs the built program for each on a synthetic machine)
+- [ ] `--wait` returns the client's exit code, and killing the launcher ends the client it started (waits for the maintainer's own client run; ChildProcessTest covers the job object and StartDetached without a client)
+- [x] Unit tests cover discovery, the argument list, the generated configuration, the run folder and every refusal without a client present, and the CTest that runs the built program with `--dry-run` skips where no install exists (41 tests in unit_tests --gtest_filter=Launcher*, among them two installs with the newer one chosen and a named folder winning over it, a machine that is not Windows, and the archive fallback on a real-shaped defaultconfig.xml; the Launcher CTest passed with AMBROSE_CLIENT_DIR set and reported itself skipped without it)
+- [x] doc/config/launcher.md documents every option, and no document still names the removed scripts (only the phase 1 deliverable list, which records that 3.25 replaced and removed them)
+
+### Detailed spec
+
+**Notes**
+
+- The retail client reads `config.xml`, `preferences.xml`, `revision.dat` and `data.dat` by relative name from its working directory, so the run folder makes the window size, the locale and the empty metrics URL ours without touching the install
+- Window mode comes only from that configuration: `IsFullscreen`, `Resolution`, `WindowedX` and `WindowedY`. The retail build ignores a resolution option on the command line
+- A client that is maximized, double-clicked on its title bar or sent Alt+Enter switches itself to fullscreen, which the launcher cannot prevent and the 3.24 driver avoids
+- 16.13 later grows a player launcher that patches its own copy of the install from an Ambrose patch server; this milestone is the development and test launcher it builds on
+- The review of this milestone is resolved with regression tests: the `defaultconfig.xml` fallback, whose root element is `<defaultconfig>` and which lists no tables, so it could never build a configuration; a run folder inside the install, which could overwrite and delete the install's own files; the two generated files written on every run instead of only when a stamp changed, because the client saves its own over them, so the window asked for and the empty `SilentMetricsURL` now hold on every run; `SilentMetricsURL` emptied in `preferences.xml` too, which the client's preferences would otherwise override; a value beginning with `-`, which reached the client's own option parser; a relative `--client` reaching `-D`, which the client resolves against the run folder; absoluteness judged for the machine described rather than the host, so the tests pass on the Linux legs too; a `launcher.conf` value left blank counting as unset, as an empty environment variable does; the launcher tests folded into `unit_tests` so one filter runs them; and a machine that cannot start a Windows program named before anything is written
 
 ## 3.23 Keep up with KingsIsle's client revisions
 

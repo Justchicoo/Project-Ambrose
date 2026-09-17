@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Everything the launcher does apart from reading its arguments: it finds the user's own install the way the servers do, from the folder asked for, its own configuration, AMBROSE_CLIENT_DIR or the discovery in ClientLocator, builds the run folder beside it, and builds the command that starts the client with -L, -P 0, -A, -D and -G, because the retail build starts KingsIsle's launcher when it sees none of its own options; it adds the client's own automatic login and character options when they are asked for, refuses with a named reason when no install is found, the client program is missing, patching is asked for, a login host or port is missing or a value makes no sense, and starts the client either through a job object that ends it with the launcher or detached, so closing the launcher leaves the game running.
+ * Everything the launcher does apart from reading its arguments: it finds the user's own install the way the servers do, from the folder asked for, its own configuration, AMBROSE_CLIENT_DIR or the discovery in ClientLocator, builds the run folder beside it, and builds the command that starts the client with -L, -P 0, -A, -D and -G, because the retail build starts KingsIsle's launcher when it sees none of its own options; it adds the client's own automatic login and character options when they are asked for, refuses with a named reason when no install is found, the client program is missing, patching is asked for, a login host or port is missing, a value makes no sense or begins with '-', the run folder lies inside the install or the machine cannot start a Windows program, and starts the client either through a job object that ends it with the launcher or detached, so closing the launcher leaves the game running.
  */
 
 #ifndef AMBROSE_LAUNCHER_H
@@ -92,6 +92,7 @@ public:
     static std::string Quote(std::string_view argument);
 
     std::optional<LauncherPlan> Prepare(LauncherRequest const& request, SetupMode mode, SetupPrompt& prompt, std::string& error) const;
+    bool CanStart(std::string& error) const;
     bool WriteRunFolder(LauncherPlan const& plan, std::string& error) const;
     std::optional<int> Start(LauncherPlan const& plan, bool wait, std::function<bool()> shouldStop, std::string& error) const;
 

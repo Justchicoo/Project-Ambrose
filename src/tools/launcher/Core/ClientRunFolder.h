@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The folder an Ambrose-started client runs from, built beside the install and never inside it: config.xml and preferences.xml written from the install's own files, or from defaultconfig.xml in its Root.wad when it has no config.xml, with the window mode, size and position asked for and SilentMetricsURL emptied so the client reaches nothing outside the machine, and copies of revision.dat and data.dat, the other files the client opens by relative name. A stamp records the revision and the options the files were written for, so the folder is rebuilt when either changes and left alone when neither did.
+ * The folder an Ambrose-started client runs from, built beside the install and never inside it: config.xml and preferences.xml written every run, from the files the folder already holds so the client's own saved settings survive, or from the install's own files, or from defaultconfig.xml in its Root.wad when it has no config.xml, with the window mode, size and position asked for and SilentMetricsURL emptied so the client reaches nothing outside the machine, and copies of revision.dat and data.dat, the other files the client opens by relative name. A stamp records the install and revision those copies were made from, so they are made again when either changes and the two generated files are seeded from the install again with them.
  */
 
 #ifndef AMBROSE_CLIENTRUNFOLDER_H
@@ -38,8 +38,10 @@ struct RunFolderPlan
 {
     std::filesystem::path Folder;
     std::vector<RunFolderFile> Files;
+    std::vector<RunFolderFile> Copies;
     std::string Stamp;
     std::string ConfigSource;
+    std::string PreferencesSource;
     bool Rebuild = true;
 };
 

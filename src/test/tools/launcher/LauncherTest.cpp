@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the launcher on a described machine without starting anything: discovery finds the newest install and a named folder is used as it is, the command always carries -L, -P 0, -A, -D with a trailing separator and -G in the run folder, the automatic login and character options pass through with the client's own .. prefix, the run folder comes from the option or the Ambrose data folder, it is written once and again when the revision or the window options change, nothing outside it is written, its own configuration is read from the configuration file unless an option overrides it, and every refusal names its cause: no install found, a folder that holds none, a missing client program, patching asked for, no host or port, values that make no sense, a revision that cannot name a folder and a run folder that cannot be written.
+ * Tests the launcher on a described machine without starting anything: discovery finds the newest install of two and a named folder wins over it, a relative one is made absolute for the machine described, the command always carries -L, -P 0, -A, -D with a trailing separator and -G in the run folder, the automatic login and character options pass through with the client's own .. prefix, the run folder comes from the option or the Ambrose data folder and is named the same way on a machine that is not Windows, its configuration is written every run while the copies follow the stamp, nothing outside it is written, its own settings are read from the configuration file unless an option overrides it and a blank one means the default, and every refusal names its cause: no install found, a folder that holds none, a missing client program, patching asked for, no host or port, values that make no sense or begin with '-', a revision that cannot name a folder, a run folder inside the install or one that cannot be written, and a machine that cannot start a Windows program.
  */
 
 #include "ConfigMgr.h"
@@ -97,7 +97,7 @@ TEST(LauncherTest, TheUserIdKeepsOneClientPrefixAndTheNameIsOptional)
     EXPECT_EQ(plan->Arguments.back(), "session-key");
 }
 
-TEST(LauncherTest, WritesOnlyTheRunFolderAndLeavesItAloneUntilSomethingChanges)
+TEST(LauncherTest, WritesOnlyTheRunFolderAndRewritesItsConfigurationEveryRun)
 {
     LauncherHarness harness;
     harness.AddInstall();
@@ -117,18 +117,175 @@ TEST(LauncherTest, WritesOnlyTheRunFolderAndLeavesItAloneUntilSomethingChanges)
     EXPECT_EQ(harness.Files.Text(folder + "revision.dat"), std::string(LauncherTestData::Revision) + "\n");
 
     harness.System.AddFile(folder + "launcher.stamp", harness.Files.Text(folder + "launcher.stamp"));
+    harness.System.AddFile(folder + "config.xml", "<?xml version=\"1.0\" ?>\n<config>\n<VideoSettings>\n  <RECORD>\n    <IsFullscreen TYPE=\"INT\">1</IsFullscreen>\n  </RECORD>\n</VideoSettings>\n</config>\n");
     std::optional<LauncherPlan> const again = harness.Prepare(LauncherRequest{});
     ASSERT_TRUE(again) << harness.Error;
     EXPECT_FALSE(again->Folder.Rebuild);
     harness.Files.Written.clear();
     ASSERT_TRUE(harness.Write(*again)) << harness.Error;
-    EXPECT_TRUE(harness.Files.Written.empty());
+    EXPECT_TRUE(harness.Files.Has(folder + "config.xml"));
+    EXPECT_TRUE(harness.Files.Has(folder + "preferences.xml"));
+    EXPECT_FALSE(harness.Files.Has(folder + "revision.dat"));
+    EXPECT_FALSE(harness.Files.Has(folder + "launcher.stamp"));
+    EXPECT_NE(harness.Files.Text(folder + "config.xml").find("<IsFullscreen TYPE=\"INT\">0</IsFullscreen>"), std::string::npos) << harness.Files.Text(folder + "config.xml");
+    EXPECT_NE(harness.Files.Text(folder + "config.xml").find("<Resolution TYPE=\"STR\">1280x720</Resolution>"), std::string::npos) << harness.Files.Text(folder + "config.xml");
 
     LauncherRequest wider;
     wider.Window = "1600x900";
     std::optional<LauncherPlan> const changed = harness.Prepare(wider);
     ASSERT_TRUE(changed) << harness.Error;
-    EXPECT_TRUE(changed->Folder.Rebuild);
+    EXPECT_FALSE(changed->Folder.Rebuild);
+    harness.Files.Written.clear();
+    ASSERT_TRUE(harness.Write(*changed)) << harness.Error;
+    EXPECT_NE(harness.Files.Text(folder + "config.xml").find("<Resolution TYPE=\"STR\">1600x900</Resolution>"), std::string::npos) << harness.Files.Text(folder + "config.xml");
+
+    LauncherRequest newer;
+    newer.RunDir = LauncherTestData::RunFolder;
+    harness.System.AddFile(std::string(LauncherTestData::Install) + "/Bin/revision.dat", "r900000.Wizard_1_700\n");
+    std::optional<LauncherPlan> const rebuilt = harness.Prepare(newer);
+    ASSERT_TRUE(rebuilt) << harness.Error;
+    EXPECT_TRUE(rebuilt->Folder.Rebuild);
+}
+
+TEST(LauncherTest, RefusesARunFolderInsideTheInstall)
+{
+    for (char const* inside : { LauncherTestData::Install, "C:/ProgramData/KingsIsle Entertainment/Wizard101/Bin", "C:/ProgramData/KingsIsle Entertainment/Wizard101/Bin/../Bin/runs" })
+    {
+        LauncherHarness harness;
+        harness.AddInstall();
+        LauncherRequest request;
+        request.RunDir = inside;
+        EXPECT_FALSE(harness.Prepare(request)) << inside;
+        EXPECT_NE(harness.Error.find("cannot be inside the install"), std::string::npos) << harness.Error;
+        EXPECT_TRUE(harness.Files.Written.empty());
+        EXPECT_TRUE(harness.Files.Removed.empty());
+        EXPECT_TRUE(harness.Files.Folders.empty());
+    }
+}
+
+TEST(LauncherTest, RefusesARunFolderThatOnlyReachesTheInstallThroughALink)
+{
+    LauncherHarness harness;
+    harness.AddInstall();
+    harness.System.AddLink("C:/runs/wizard", std::string(LauncherTestData::Install) + "/Bin");
+    LauncherRequest request;
+    request.RunDir = "C:/runs/wizard";
+    EXPECT_FALSE(harness.Prepare(request));
+    EXPECT_NE(harness.Error.find("cannot be inside the install"), std::string::npos) << harness.Error;
+    EXPECT_TRUE(harness.Files.Written.empty());
+}
+
+TEST(LauncherTest, RefusesAValueThatBeginsWithADashSoNoClientOptionCanBeSmuggledIn)
+{
+    LauncherHarness harness;
+    harness.AddInstall();
+    LauncherRequest request;
+    request.Character = "-ST";
+    EXPECT_FALSE(harness.Prepare(request));
+    EXPECT_NE(harness.Error.find("character name"), std::string::npos) << harness.Error;
+    EXPECT_NE(harness.Error.find("begins with '-'"), std::string::npos) << harness.Error;
+    request.Character.reset();
+    request.Host = "-ST";
+    EXPECT_FALSE(harness.Prepare(request));
+    EXPECT_NE(harness.Error.find("login server host"), std::string::npos) << harness.Error;
+    request.Host.reset();
+    request.Locale = "-ST";
+    EXPECT_FALSE(harness.Prepare(request));
+    EXPECT_NE(harness.Error.find("locale"), std::string::npos) << harness.Error;
+    request.Locale.reset();
+    request.User = ClientLogin{ "17", "-ST", "" };
+    EXPECT_FALSE(harness.Prepare(request));
+    EXPECT_NE(harness.Error.find("user key"), std::string::npos) << harness.Error;
+    request.User = ClientLogin{ "17", "session-key", "-ST" };
+    EXPECT_FALSE(harness.Prepare(request));
+    EXPECT_NE(harness.Error.find("user name"), std::string::npos) << harness.Error;
+    request.User = ClientLogin{ "-ST", "session-key", "" };
+    EXPECT_FALSE(harness.Prepare(request));
+    EXPECT_NE(harness.Error.find("user id"), std::string::npos) << harness.Error;
+
+    LauncherRequest good;
+    good.Character = "Iridian Nightbreeze";
+    std::optional<LauncherPlan> const plan = harness.Prepare(good);
+    ASSERT_TRUE(plan) << harness.Error;
+    EXPECT_EQ(std::count(plan->Arguments.begin(), plan->Arguments.end(), "-ST"), 0);
+}
+
+TEST(LauncherTest, ARelativeInstallFolderBecomesAbsoluteBeforeItReachesTheClient)
+{
+    LauncherHarness harness;
+    for (char const* spelling : { "Wizard101", "C:/work/Wizard101" })
+    {
+        harness.System.AddInstall(spelling, LauncherTestData::Revision);
+        harness.System.AddFile(std::string(spelling) + "/Bin/config.xml", LauncherTestData::ConfigTemplate);
+    }
+    LauncherRequest request;
+    request.ClientDir = "Wizard101";
+    std::optional<LauncherPlan> const plan = harness.Prepare(request);
+    ASSERT_TRUE(plan) << harness.Error;
+    EXPECT_EQ(Generic(plan->Install.Root), "C:/work/Wizard101");
+    EXPECT_EQ(Generic(plan->Program), "C:/work/Wizard101/Bin/WizardGraphicalClient.exe");
+    EXPECT_TRUE(LauncherHarness::Argument(*plan, "-D").starts_with("C:")) << LauncherHarness::Argument(*plan, "-D");
+    EXPECT_NE(LauncherHarness::Argument(*plan, "-D").find("work"), std::string::npos) << LauncherHarness::Argument(*plan, "-D");
+}
+
+TEST(LauncherTest, AMachineThatIsNotWindowsNamesItsOwnFoldersAndCannotStartTheClient)
+{
+    LauncherHarness harness;
+    harness.System.Windows = false;
+    harness.System.Environment.clear();
+    harness.System.Environment["HOME"] = "/home/wiz";
+    harness.System.Working = "/work";
+    harness.System.Executable = "/opt/ambrose/bin";
+    harness.System.AddInstall("/home/wiz/games/Wizard101", LauncherTestData::Revision);
+    harness.System.AddFile("/home/wiz/games/Wizard101/Bin/config.xml", LauncherTestData::ConfigTemplate);
+    LauncherRequest request;
+    request.ClientDir = "/home/wiz/games/Wizard101";
+    std::optional<LauncherPlan> const plan = harness.Prepare(request);
+    ASSERT_TRUE(plan) << harness.Error;
+    EXPECT_EQ(Generic(plan->RunFolder), std::string("/home/wiz/.local/share/project-ambrose/client/") + LauncherTestData::Revision);
+    request.RunDir = "runs/wizard";
+    std::optional<LauncherPlan> const relative = harness.Prepare(request);
+    ASSERT_TRUE(relative) << harness.Error;
+    EXPECT_EQ(Generic(relative->RunFolder), "/work/runs/wizard");
+    request.RunDir = "/runs/wizard";
+    std::optional<LauncherPlan> const named = harness.Prepare(request);
+    ASSERT_TRUE(named) << harness.Error;
+    EXPECT_EQ(Generic(named->RunFolder), "/runs/wizard");
+
+    Launcher const launcher(harness.System, harness.Files, harness.Err);
+    std::string error;
+    EXPECT_FALSE(launcher.CanStart(error));
+    EXPECT_NE(error.find("not Windows"), std::string::npos) << error;
+    EXPECT_TRUE(harness.Files.Written.empty());
+}
+
+TEST(LauncherTest, AWindowsMachineCanStartTheClient)
+{
+    LauncherHarness harness;
+    Launcher const launcher(harness.System, harness.Files, harness.Err);
+    std::string error;
+    EXPECT_TRUE(launcher.CanStart(error));
+    EXPECT_TRUE(error.empty());
+}
+
+TEST(LauncherTest, DiscoveryTakesTheNewestInstallAndANamedFolderWins)
+{
+    LauncherHarness harness;
+    harness.AddInstall();
+    harness.System.AddInstall("D:/Games/Wizard101", "r999999.Wizard_1_700");
+    harness.System.AddFile("D:/Games/Wizard101/Bin/config.xml", LauncherTestData::ConfigTemplate);
+    harness.System.Uninstall.push_back({ "Wizard101", "D:/Games/Wizard101" });
+    std::optional<LauncherPlan> const newest = harness.Prepare(LauncherRequest{});
+    ASSERT_TRUE(newest) << harness.Error;
+    EXPECT_EQ(Generic(newest->Install.Root), "D:/Games/Wizard101");
+    EXPECT_EQ(newest->Install.Revision, "r999999.Wizard_1_700");
+
+    LauncherRequest request;
+    request.ClientDir = LauncherTestData::Install;
+    std::optional<LauncherPlan> const named = harness.Prepare(request);
+    ASSERT_TRUE(named) << harness.Error;
+    EXPECT_EQ(Generic(named->Install.Root), LauncherTestData::Install);
+    EXPECT_EQ(named->Install.Revision, LauncherTestData::Revision);
 }
 
 TEST(LauncherTest, TheClientsOwnLogFromAnEarlierRunIsRemoved)
@@ -292,6 +449,34 @@ TEST(LauncherTest, SettingsComeFromTheConfigurationUnlessAnOptionOverridesThem)
     EXPECT_EQ(request.Fullscreen, "1");
     EXPECT_EQ(request.Patch, "0");
     EXPECT_FALSE(request.RunDir.has_value());
+}
+
+TEST(LauncherTest, ASettingLeftBlankInTheFileMeansItsDefault)
+{
+    LogTestDirectory directory;
+    std::filesystem::path const file = directory.Path() / "launcher.conf";
+    std::ofstream(file, std::ios::binary) << "# Project Ambrose by Imjustchico\n# Settings for a launcher test.\n"
+        "ClientDir =\nLoginHost =\nLoginPort =\nLocale =\nWindow =\nFullscreen =\nWindowX =\nWindowY =\nRunDir =\nPatch =\n";
+    ConfigMgr config([](std::string const&) -> std::optional<std::string> { return std::nullopt; });
+    ASSERT_TRUE(config.LoadInitial(file).Succeeded());
+    LauncherRequest request;
+    Launcher::FromConfig(config, request);
+    EXPECT_FALSE(request.Host.has_value());
+    EXPECT_FALSE(request.Port.has_value());
+    EXPECT_FALSE(request.Locale.has_value());
+    EXPECT_FALSE(request.Window.has_value());
+    EXPECT_FALSE(request.Fullscreen.has_value());
+    EXPECT_FALSE(request.Patch.has_value());
+
+    LauncherHarness harness;
+    harness.AddInstall();
+    std::optional<LauncherPlan> const plan = harness.Prepare(request);
+    ASSERT_TRUE(plan) << harness.Error;
+    EXPECT_EQ(LauncherHarness::Argument(*plan, "-L"), "127.0.0.1");
+    EXPECT_EQ(LauncherHarness::Argument(*plan, "-L", 2), "12000");
+    EXPECT_EQ(LauncherHarness::Argument(*plan, "-A"), "en-US");
+    EXPECT_EQ(Generic(plan->RunFolder), LauncherTestData::RunFolder);
+    EXPECT_NE(plan->Folder.Files.front().Text.find("<Resolution TYPE=\"STR\">1280x720</Resolution>"), std::string::npos);
 }
 
 TEST(LauncherTest, AQuotedCommandKeepsAPathWithSpacesInOnePiece)

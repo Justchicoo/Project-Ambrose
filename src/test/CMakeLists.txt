@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, and outside the login server's folder unless its library is built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, registers each test with CTest, adds the compile and client folders, the launcher and typeextract tests when those tools are built and the fuzz folder when fuzzers are built, and smoke-tests each server executable and the bindecode, dbimport, extractor, launcher, localetool and typeextract tools.
+# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, with the launcher's own tests joining it when the launcher library is built so one executable holds them, and outside the login server's folder unless its library is built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, registers each test with CTest, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable and the bindecode, dbimport, extractor, launcher, localetool and typeextract tools.
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
@@ -41,14 +41,18 @@ if(TARGET login)
     target_link_libraries(unit_tests PRIVATE login)
 endif()
 
+if(TARGET launcher-core)
+    file(GLOB launcher_test_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tools/launcher/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/tools/launcher/*.h")
+    target_sources(unit_tests PRIVATE ${launcher_test_sources})
+    target_include_directories(unit_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tools/launcher")
+    target_link_libraries(unit_tests PRIVATE launcher-core)
+endif()
+
 ambrose_copy_mariadb_plugins(unit_tests)
 gtest_discover_tests(unit_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT 120)
 
 add_subdirectory(compile)
 add_subdirectory(client)
-if(TARGET launcher-core)
-    add_subdirectory(tools/launcher)
-endif()
 if(TARGET typeextract-core)
     add_subdirectory(tools/typeextract)
 endif()

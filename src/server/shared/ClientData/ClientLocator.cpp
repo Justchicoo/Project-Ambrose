@@ -585,3 +585,20 @@ std::string ClientLocator::PathText(std::filesystem::path const& path)
     return std::string(generic.begin(), generic.end());
 #endif
 }
+
+bool ClientLocator::IsAbsoluteFor(ClientSystem const& system, std::filesystem::path const& path)
+{
+    std::string const text = PathText(path);
+    if (!system.IsWindows())
+        return text.starts_with('/');
+    bool const drive = text.size() >= 3 && ((text[0] >= 'A' && text[0] <= 'Z') || (text[0] >= 'a' && text[0] <= 'z')) && text[1] == ':' && (text[2] == '/' || text[2] == '\\');
+    return drive || text.starts_with("//") || text.starts_with("\\\\");
+}
+
+std::filesystem::path ClientLocator::AbsoluteFor(ClientSystem const& system, std::filesystem::path const& path)
+{
+    if (path.empty() || IsAbsoluteFor(system, path))
+        return path;
+    std::filesystem::path const working = system.GetWorkingDirectory();
+    return working.empty() ? path : (working / path).lexically_normal();
+}

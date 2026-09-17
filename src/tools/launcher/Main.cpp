@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * launcher entry point: reads its arguments and environment as UTF-8, loads launcher.conf when there is one, lets every option override it, and then has the Launcher library find the user's own install, build the folder the client runs from and the command that starts the client against an Ambrose login server; --dry-run prints the folder and the command and starts nothing, --wait returns the client's own exit code and ends the client if the launcher is stopped, --tail waits and prints the client's own log lines, and without either the client is started detached so closing the launcher leaves the game running; it exits 0 on success, 1 when a refusal names its cause or the client cannot be started, and 2 on bad usage.
+ * launcher entry point: reads its arguments and environment as UTF-8, loads launcher.conf when there is one, lets every option override it, and then has the Launcher library find the user's own install, build the folder the client runs from and the command that starts the client against an Ambrose login server; a machine that cannot start a Windows program is named before anything is written, --dry-run prints the folder and the command and starts nothing, --wait returns the client's own exit code and ends the client if the launcher is stopped, --tail waits and prints the client's own log lines, and without either the client is started detached so closing the launcher leaves the game running; it exits 0 on success, 1 when a refusal names its cause or the client cannot be started, and 2 on bad usage.
  */
 
 #include "ClientSetup.h"
@@ -205,14 +205,20 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
             return Failure;
         }
         std::cout << fmt::format("launcher: install {}\n", plan->Install.Describe());
-        std::cout << fmt::format("launcher: run folder {}, {} from {}\n", ConfigMgr::PathToUtf8(plan->RunFolder),
-            plan->Folder.Rebuild ? "its configuration written" : "its configuration already current", plan->Folder.ConfigSource);
+        std::cout << fmt::format("launcher: run folder {}, its configuration from {}{}\n", ConfigMgr::PathToUtf8(plan->RunFolder), plan->Folder.ConfigSource,
+            plan->Folder.Rebuild ? ", with the install's own revision.dat and data.dat copied into it" : "");
         std::cout << fmt::format("launcher: {}\n", plan->Command());
+        std::string cannotStart;
+        bool const startable = launcher.CanStart(cannotStart);
+        if (!startable)
+            std::cerr << fmt::format("launcher: {}\n", cannotStart);
         if (arguments->DryRun)
         {
             std::cout << "launcher: nothing was started and nothing was written, because --dry-run was given\n";
             return Success;
         }
+        if (!startable)
+            return Failure;
         if (!launcher.WriteRunFolder(*plan, error))
         {
             std::cerr << fmt::format("launcher: {}\n", error);

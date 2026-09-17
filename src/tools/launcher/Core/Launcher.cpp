@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements the launcher's own work: every value is checked before the machine is searched, then the install comes from ClientSetup as it does for every tool, the client program and the run folder are settled, the run folder's files are built, and the argument list is assembled with -L, -P 0, -A, -D and -G and the automatic login and character options; a refusal names its cause and nothing is written or started, the command is shown quoted exactly as the client receives it, and starting either waits on ChildProcess, whose job object ends the client with the launcher, or starts the client detached.
+ * Implements the launcher's own work: a value its own configuration leaves blank counts as unset, every value is checked before the machine is searched and none may begin with '-', which the client would read as one of its own options, then the install comes from ClientSetup as it does for every tool and its folder is made absolute for the machine described, the client program and the run folder are settled, a run folder inside the install is refused by both its plain and its canonical path, the run folder's files are built, and the argument list is assembled with -L, -P 0, -A, -D and -G and the automatic login and character options; a refusal names its cause and nothing is written or started, a machine that cannot start a Windows program is named before anything is written, the command is shown quoted exactly as the client receives it, and starting either waits on ChildProcess, whose job object ends the client with the launcher, or starts the client detached.
  */
 
 #include "Launcher.h"
@@ -31,6 +31,11 @@ namespace
             error = fmt::format("no {} was given", what);
             return false;
         }
+        if (value.front() == '-')
+        {
+            error = fmt::format("the {} {} begins with '-', and the client would read it as one of its own options", what, Ambrose::ForLog(value));
+            return false;
+        }
         if (value.size() > Launcher::MaxValueBytes)
         {
             error = fmt::format("the {} is {} bytes long, and at most {} are allowed", what, value.size(), Launcher::MaxValueBytes);
@@ -51,6 +56,23 @@ namespace
             }
         }
         return true;
+    }
+
+    std::string FolderKey(ClientSystem const& system, std::filesystem::path const& folder)
+    {
+        std::string text = ClientLocator::PathText(folder.lexically_normal());
+        while (text.size() > 1 && text.back() == '/')
+            text.pop_back();
+        return system.IsWindows() ? Ambrose::ToLower(text) : text;
+    }
+
+    bool IsInside(ClientSystem const& system, std::filesystem::path const& folder, std::filesystem::path const& root)
+    {
+        std::string const inner = FolderKey(system, folder);
+        std::string const outer = FolderKey(system, root);
+        if (inner.empty() || outer.empty())
+            return false;
+        return inner == outer || (inner.size() > outer.size() && inner.starts_with(outer) && inner[outer.size()] == '/');
     }
 
     bool IsFolderName(std::string_view text)
@@ -128,7 +150,7 @@ void Launcher::FromConfig(ConfigMgr const& config, LauncherRequest& request)
     {
         if (value)
             return;
-        if (std::optional<ConfigEntry> const entry = config.Resolve(std::string(key)))
+        if (std::optional<ConfigEntry> const entry = config.Resolve(std::string(key)); entry && !Ambrose::Trim(entry->Value).empty())
             value = entry->Value;
     };
     take(request.ClientDir, ClientDirKey);
@@ -228,6 +250,7 @@ std::optional<LauncherPlan> Launcher::Prepare(LauncherRequest const& request, Se
         return std::nullopt;
     }
     plan.Install = *setup.Install;
+    plan.Install.Root = ClientLocator::AbsoluteFor(_system, plan.Install.Root);
     plan.Program = plan.Install.Root / "Bin" / std::string(ProgramName);
     if (!_system.IsFile(plan.Program))
     {
@@ -237,15 +260,12 @@ std::optional<LauncherPlan> Launcher::Prepare(LauncherRequest const& request, Se
 
     if (std::string_view const runDir = Given(request.RunDir, ""); !runDir.empty())
     {
-        std::filesystem::path chosen = ConfigMgr::PathFromUtf8(runDir);
-        if (chosen.is_relative())
-            chosen = _system.GetWorkingDirectory() / chosen;
-        plan.RunFolder = chosen.lexically_normal();
+        plan.RunFolder = ClientLocator::AbsoluteFor(_system, ConfigMgr::PathFromUtf8(runDir)).lexically_normal();
     }
     else
     {
         std::filesystem::path const data = ClientLocator::GetDataFolder(_system);
-        if (data.empty() || !data.is_absolute() || !IsFolderName(plan.Install.Revision))
+        if (data.empty() || !ClientLocator::IsAbsoluteFor(_system, data) || !IsFolderName(plan.Install.Revision))
         {
             std::string reason = "the Ambrose data folder cannot be found on this machine";
             if (plan.Install.Revision.empty())
@@ -256,6 +276,12 @@ std::optional<LauncherPlan> Launcher::Prepare(LauncherRequest const& request, Se
             return std::nullopt;
         }
         plan.RunFolder = data / std::string(RunFolderName) / plan.Install.Revision;
+    }
+    if (IsInside(_system, plan.RunFolder, plan.Install.Root) || IsInside(_system, _system.Canonical(plan.RunFolder), _system.Canonical(plan.Install.Root)))
+    {
+        error = fmt::format("the folder the client runs from cannot be inside the install, because nothing in the install is ever written, and {} is inside {}; name another with --run-dir",
+            ClientLocator::PathText(plan.RunFolder), ClientLocator::PathText(plan.Install.Root));
+        return std::nullopt;
     }
     plan.LogFile = plan.RunFolder / std::string(ClientRunFolder::LogName);
 
@@ -289,6 +315,14 @@ std::optional<LauncherPlan> Launcher::Prepare(LauncherRequest const& request, Se
         plan.Arguments.push_back(*request.Character);
     }
     return plan;
+}
+
+bool Launcher::CanStart(std::string& error) const
+{
+    if (_system.IsWindows())
+        return true;
+    error = fmt::format("the client is a Windows program and this machine is not Windows, so {} cannot start it and writes nothing; --dry-run prints the command it would run", ToolName);
+    return false;
 }
 
 bool Launcher::WriteRunFolder(LauncherPlan const& plan, std::string& error) const

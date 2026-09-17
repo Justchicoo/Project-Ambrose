@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs the built launcher without ever starting a client: it checks the usage text, that bad usage exits 2 and a named settings file that is missing exits 1, that a folder holding no install, patching asked for through the environment and a port of 0 each exit 1 naming the cause, that on a machine holding a synthetic install AMBROSE_SETUP_MODE=off prints the find and the flag to pass while auto uses it and names the missing client program, that an install whose archive holds no defaultconfig.xml is named, that --dry-run then prints the run folder and the whole command and writes nothing, and, when AMBROSE_CLIENT_DIR names the user's own install, that --dry-run against it prints -L, -P 0, -A, -D and -G; it reports itself skipped when that last check cannot run.
+# Runs the built launcher without ever starting a client: it checks the usage text, that bad usage exits 2 and a named settings file that is missing exits 1, that a folder holding no install, patching asked for through the environment and a port of 0 each exit 1 naming the cause, that on a machine holding a synthetic install AMBROSE_SETUP_MODE=off prints the find and the flag to pass while auto uses it and names the missing client program, that an install whose archive holds no defaultconfig.xml is named, that --dry-run then prints the run folder and the whole command and writes nothing, that a run folder inside the install and a value beginning with '-' are refused, and, when AMBROSE_CLIENT_DIR names the user's own install, that --dry-run against it prints -L, -P 0, -A, -D and -G with none of the launcher's own environment variables set; it reports itself skipped when that last check cannot run.
 if(NOT APP OR NOT WORKDIR)
     message(FATAL_ERROR "APP and WORKDIR must be set")
 endif()
@@ -35,9 +35,10 @@ set(machine "${WORKDIR}/machine")
 set(synthetic "${machine}/drive_c/ProgramData/KingsIsle Entertainment/Wizard101")
 file(WRITE "${synthetic}/Data/GameData/Root.wad" "not an archive")
 file(WRITE "${synthetic}/Bin/revision.dat" "r999999999.Synthetic_1_0\n")
-set(machineEnv "ProgramData=${machine}/drive_c/ProgramData" "WINEPREFIX=${machine}" "LOCALAPPDATA=${WORKDIR}/data" "XDG_DATA_HOME=${WORKDIR}/data"
-    --unset=AMBROSE_CLIENT_DIR --unset=AMBROSE_TYPE_DUMP_PATH --unset=AMBROSE_SETUP_MODE --unset=AMBROSE_LOGIN_HOST --unset=AMBROSE_LOGIN_PORT
+set(settingsEnv --unset=AMBROSE_TYPE_DUMP_PATH --unset=AMBROSE_SETUP_MODE --unset=AMBROSE_LOGIN_HOST --unset=AMBROSE_LOGIN_PORT
     --unset=AMBROSE_LOCALE --unset=AMBROSE_WINDOW --unset=AMBROSE_WINDOW_X --unset=AMBROSE_WINDOW_Y --unset=AMBROSE_FULLSCREEN --unset=AMBROSE_RUN_DIR --unset=AMBROSE_PATCH)
+set(machineEnv "ProgramData=${machine}/drive_c/ProgramData" "WINEPREFIX=${machine}" "LOCALAPPDATA=${WORKDIR}/data" "XDG_DATA_HOME=${WORKDIR}/data"
+    --unset=AMBROSE_CLIENT_DIR ${settingsEnv})
 
 execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} AMBROSE_SETUP_MODE=off "${APP}" --config "${settings}" --dry-run RESULT_VARIABLE offResult OUTPUT_VARIABLE offOutput ERROR_VARIABLE offError TIMEOUT 60)
 if(NOT offResult EQUAL 1 OR NOT offError MATCHES "launcher: Wizard101 was found on this machine: [^\n]*r999999999\\.Synthetic_1_0" OR NOT offError MATCHES "Pass --client with one of them")
@@ -80,11 +81,24 @@ if(EXISTS "${run}")
     message(FATAL_ERROR "launcher --dry-run wrote ${run}")
 endif()
 
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} "${APP}" --config "${settings}" --dry-run --run-dir "${synthetic}/Bin"
+    RESULT_VARIABLE insideResult OUTPUT_VARIABLE insideOutput ERROR_VARIABLE insideError TIMEOUT 60)
+if(NOT insideResult EQUAL 1 OR NOT insideError MATCHES "cannot be inside the install")
+    message(FATAL_ERROR "launcher with a run folder inside the install exited ${insideResult}: ${insideOutput}${insideError}")
+endif()
+
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} "${APP}" --config "${settings}" --dry-run --run-dir "${run}" --character -ST
+    RESULT_VARIABLE dashResult OUTPUT_VARIABLE dashOutput ERROR_VARIABLE dashError TIMEOUT 60)
+if(NOT dashResult EQUAL 1 OR NOT dashError MATCHES "character name .* begins with '-'")
+    message(FATAL_ERROR "launcher with a character name beginning with '-' exited ${dashResult}: ${dashOutput}${dashError}")
+endif()
+
 if("$ENV{AMBROSE_CLIENT_DIR}" STREQUAL "")
     message(STATUS "launcher test skipped: its client check needs AMBROSE_CLIENT_DIR")
     return()
 endif()
-execute_process(COMMAND "${APP}" --config "${settings}" --dry-run --run-dir "${WORKDIR}/own" RESULT_VARIABLE ownResult OUTPUT_VARIABLE ownOutput ERROR_VARIABLE ownError TIMEOUT 120)
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${settingsEnv} "${APP}" --config "${settings}" --dry-run --run-dir "${WORKDIR}/own"
+    RESULT_VARIABLE ownResult OUTPUT_VARIABLE ownOutput ERROR_VARIABLE ownError TIMEOUT 120)
 if(NOT ownResult EQUAL 0
     OR NOT ownOutput MATCHES "WizardGraphicalClient.exe[^\n]* -L 127\\.0\\.0\\.1 12000 -P 0 -A en-US -D [^\n]*GameData[^\n]* -G [^\n]*WizardClient\\.log"
     OR NOT ownOutput MATCHES "launcher: run folder [^\n]*own")

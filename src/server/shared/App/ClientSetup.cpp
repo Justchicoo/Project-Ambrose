@@ -156,23 +156,6 @@ namespace
         return dump;
     }
 
-    bool IsAbsoluteFor(ClientSystem const& system, std::filesystem::path const& path)
-    {
-        std::string const text = ClientLocator::PathText(path);
-        if (!system.IsWindows())
-            return text.starts_with('/');
-        bool const drive = text.size() >= 3 && ((text[0] >= 'A' && text[0] <= 'Z') || (text[0] >= 'a' && text[0] <= 'z')) && text[1] == ':' && (text[2] == '/' || text[2] == '\\');
-        return drive || text.starts_with("//") || text.starts_with("\\\\");
-    }
-
-    std::filesystem::path AbsoluteFor(ClientSystem const& system, std::filesystem::path const& path)
-    {
-        if (path.empty() || IsAbsoluteFor(system, path))
-            return path;
-        std::filesystem::path const working = system.GetWorkingDirectory();
-        return working.empty() ? path : (working / path).lexically_normal();
-    }
-
     std::optional<ClientInstall> AskInstall(SetupPrompt& prompt, ClientSystem const& system, std::vector<ClientCandidate> const& installs, std::string const& question)
     {
         std::vector<std::string> options;
@@ -631,7 +614,7 @@ ClientSetupResult ClientSetup::ForServer(ConfigMgr& config, SetupPrompt& prompt,
     std::vector<std::pair<std::string, std::string>> chosen;
     auto const keep = [&chosen, &system, &say, &app](std::string_view key, std::filesystem::path const& path)
     {
-        std::filesystem::path const absolute = AbsoluteFor(system, path);
+        std::filesystem::path const absolute = ClientLocator::AbsoluteFor(system, path);
         if (std::optional<std::string> const text = UnicodeText(absolute))
             chosen.emplace_back(key, *text);
         else
