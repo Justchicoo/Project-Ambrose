@@ -521,13 +521,13 @@ Users generate their own type dump from their own client, so Ambrose does not de
 
 ### Detailed spec: player launcher
 
-The maintainer's direction on 2026-09-14: WizardLauncher.exe patches the client from KingsIsle's servers to their latest revision, which must never happen to the pinned development install. A separate copy may be patched that way as the user's own choice, on their own account and machine: fetching from KingsIsle's patch servers may break KingsIsle's terms, and the copy then leaves the revision Ambrose supports. Development keeps starting WizardGraphicalClient.exe directly through apps/launcher (1.21), which skips the retail launcher. Players get a launcher that patches from Ambrose instead.
+The maintainer's direction on 2026-09-14: WizardLauncher.exe patches the client from KingsIsle's servers to their latest revision, which must never happen to the pinned development install. A separate copy may be patched that way as the user's own choice, on their own account and machine: fetching from KingsIsle's patch servers may break KingsIsle's terms, and the copy then leaves the revision Ambrose supports. Development keeps starting WizardGraphicalClient.exe directly through the launcher of milestone 3.25, which skips the retail launcher. Players get a launcher that patches from Ambrose instead.
 
 **Deliverables**
 
 - Static analysis of WizardLauncher.exe with Ghidra or radare2 on a copy of the file, never run against the pinned install: where it reads its patch server host and port (Bin/PatchConfig.xml, command-line arguments, the registry, or built-in addresses), every host and protocol it contacts (patch TCP service, HTTP file host, news pages, telemetry), and how it starts WizardGraphicalClient.exe and with which arguments. The findings go in doc/CLIENT.md as behavior notes, with no client code or data copied
-- If the retail launcher takes its endpoints from data it reads: an apps/launcher mode that writes the Ambrose endpoints into the player's own copy of those files at run time, refuses to start while any endpoint still names a KingsIsle host, and then starts WizardLauncher.exe. This mode does not modify client binaries
-- Otherwise: an Ambrose launcher executable in apps/launcher that runs the 16.04 and 16.05 patch protocol against the configured patch server, verifies and repairs files against the manifest with progress shown to the player, and starts WizardGraphicalClient.exe with the configured login server; settings come from launcher.conf
+- If the retail launcher takes its endpoints from data it reads: a launcher mode that writes the Ambrose endpoints into the player's own copy of those files at run time, refuses to start while any endpoint still names a KingsIsle host, and then starts WizardLauncher.exe. This mode does not modify client binaries
+- Otherwise: a patching mode of the 3.25 launcher that runs the 16.04 and 16.05 patch protocol against the configured patch server, verifies and repairs files against the manifest with progress shown to the player, and starts WizardGraphicalClient.exe with the configured login server; settings come from launcher.conf
 - Player documentation in doc/PATCHING.md for installing and running the launcher
 
 **Acceptance**

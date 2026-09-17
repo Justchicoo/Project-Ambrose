@@ -26,7 +26,7 @@ src/
     shared/               Code every server uses: network, messages, ObjectProperty, archives, realms
     game/                 Game systems, one folder per subsystem
     scripts/              Content scripts grouped by world, plus Commands and Custom
-  tools/                  Extractors that read a user's own client install, and dbimport
+  tools/                  Extractors that read a user's own client install, the client launcher, and dbimport
   test/                   Unit tests mirroring src/
 ```
 
@@ -80,7 +80,7 @@ Each app ships `<app>.conf.dist` listing every option with its default. Users co
 
 ### Client data
 
-Nothing from the game client is committed. Tools in `src/tools/` read the user's own installation and produce the files and world database rows the servers load. On a first start the servers set this up themselves: they find the installation, get its type dump from `TypeDumpCache`, which runs typeextract through `ChildProcess` when the revision has no current dump, and the game server extracts the character name tables, as Decisions, Automatic setup describes.
+Nothing from the game client is committed. Tools in `src/tools/` read the user's own installation and produce the files and world database rows the servers load. On a first start the servers set this up themselves: they find the installation, get its type dump from `TypeDumpCache`, which runs typeextract through `ChildProcess` when the revision has no current dump, and the game server extracts the character name tables, as Decisions, Automatic setup describes. The client itself is started by `launcher` in `src/tools/launcher`, never by KingsIsle's launcher, as Decisions, Client launcher describes.
 
 ### Operations
 
@@ -460,6 +460,16 @@ Settled on 2026-09-17 at the maintainer's direction: Ambrose builds the type dum
 - Field offsets live in `ClientLayout`, and r801440 and r806919 share them. On Linux, Unicorn builds as a shared library through the overlay triplet in deps/vcpkg/triplets, because its static library defines `crc32` as zlib does.
 - On r806919 the dump equals the reference dump except that it also lists 5 classes and 4 properties the reference missed, and keeps 60 empty enum option values, in 30 properties, as empty text where the reference wrote 0. An optimized build extracts it in about 15 seconds and 44 MiB of guest heap; a Debug build takes about a minute.
 - The dump goes to types/<revision>.json in the Ambrose data folder unless `--out` names a file. Its root also holds the revision, the executable's SHA-256 and the extractor's name, which the loader ignores and `TypeDumpCache` reads to tell whether a dump is current.
+
+### Client launcher
+
+Settled on 2026-09-17 at the maintainer's direction: the client is driven by a launcher of Ambrose's own, never by a script and never by the retail launcher.
+
+- `launcher` (src/tools/launcher) starts the user's own client against an Ambrose login server. Its `launcher-core` library holds the work, so tests drive discovery, the run folder, the generated configuration, the argument list and every refusal without starting a process, and `Main.cpp` is a thin front end. It replaces the development scripts of milestone 1.21, and it is what milestone 3.24's driver and the desktop app of 17.24 start the client with.
+- The install comes from `--client`, `ClientDir` in `launcher.conf`, `AMBROSE_CLIENT_DIR` or `ClientSetup::ForTool`, the same discovery the tools use, which follows `AMBROSE_SETUP_MODE` and names what it would use when it cannot decide.
+- The client runs from a folder of Ambrose's own, `client/<revision>` in the Ambrose data folder unless `--run-dir` names another, because the client reads `config.xml`, `preferences.xml`, `revision.dat` and `data.dat` by relative name from its working directory. `config.xml` and `preferences.xml` are written from the install's own files, or from `defaultconfig.xml` in its `Root.wad` when the install has no `config.xml`, with only `IsFullscreen`, `Resolution`, `WindowedX` and `WindowedY` changed and `SilentMetricsURL` emptied, so nothing outside the machine is reached and the install's own `VersionInfo` and settings stay as they are. A stamp records the revision and window options the folder was written for, so it is written again when either changes and left alone when neither did. Nothing inside the install is ever written.
+- The client always starts with `-L <host> <port>`, `-P 0`, `-A <locale>`, `-D <the install's data folder, with its trailing separator>` and `-G <log in the run folder>`, because the retail build starts `..\Wizard101.exe`, KingsIsle's own launcher, when it sees none of its own options. `--user` and `--character` pass the client's own `-U` and `-C` through, and `-ST` is never passed. Startup refuses, with a named reason and a non-zero exit, when no install is found, the client program is missing, patching is asked for, a login host or port is missing or a value makes no sense, or the run folder cannot be named or written.
+- `--wait` starts the client through `ChildProcess::Run`, whose kill-on-close job object ends the client with the launcher, and returns the client's own exit code; `--tail` waits the same way and prints the client's log lines. Without either, `ChildProcess::StartDetached` starts the client in a session of its own with no pipes, so closing the launcher leaves the game running.
 
 ### Database updates
 

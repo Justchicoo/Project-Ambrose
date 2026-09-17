@@ -6,7 +6,7 @@ The Ambrose tool suite takes the AzerothCore content toolchain and changes it in
 
 One source of truth ties the suite together: a per-table schema definition file in data/schema/world/<table>.yaml, inspired by WDE DbDefinitions and Keira field models. The same file drives the Studio editor forms and pickers, the gameserver startup and reload validator, the reload-command mapping and generated doc/world/<table>.md pages. Tables are defined as data, so adding a world table means adding one file.
 
-Current repo state (3.22): src/tools/bindecode, src/tools/dbimport, src/tools/extractor, src/tools/localetool and src/tools/typeextract are built; src/tools/{template_extractor, wad_extractor, zone_extractor} exist as empty folders. apps/{ci, codestyle, installer} exist. data/sql/base/db_world is empty. scripts/Commands is empty. ARCHITECTURE.md already sets the rules that tools depend only on database, shared and common and that GM commands reload single tables.
+Current repo state (3.25): src/tools/bindecode, src/tools/dbimport, src/tools/extractor, src/tools/launcher, src/tools/localetool and src/tools/typeextract are built; src/tools/{template_extractor, wad_extractor, zone_extractor} exist as empty folders. apps/{ci, codestyle, installer} exist. data/sql/base/db_world is empty. scripts/Commands is empty. ARCHITECTURE.md already sets the rules that tools depend only on database, shared and common and that GM commands reload single tables.
 
 Build order:
 1. **Early foundation:** codec_registry, wad_extractor, template_extractor, dbimport + codestyle-sql, the ambrose.sh dashboard, the reload framework (4.15) and its admin API (17.12).
@@ -28,6 +28,10 @@ Unverified assumptions behind some tools:
 Sources: the actools, anatomy, patchmod and renderers research results in the brief, and doc\ARCHITECTURE.md.
 
 ## Early
+
+### launcher (built in 3.25)
+
+Starts the user's own client against an Ambrose login server, on any machine that has a client, without ever running KingsIsle's launcher or writing inside the install. `launcher --help` lists its options. It finds the install the way the servers do, through `--client`, `ClientDir` in its own `launcher.conf`, `AMBROSE_CLIENT_DIR` or the discovery in `ClientLocator`, and builds a folder of its own for the client to run from, `client/<revision>` in the Ambrose data folder unless `--run-dir` names another: `config.xml` and `preferences.xml` written from the install's own files with the window mode and size asked for and `SilentMetricsURL` emptied, and copies of `revision.dat` and `data.dat`, the other files the client opens by relative name. The client always starts with `-L <host> <port>`, `-P 0`, `-A <locale>`, `-D <the install's data folder>` and `-G <log in the run folder>`, because the retail build starts KingsIsle's launcher when it sees none of its own options, and `--user` and `--character` pass the client's own automatic login and character options through for the 3.24 driver. `--dry-run` prints the run folder and the exact command and starts nothing, `--wait` returns the client's own exit code and ends the client if the launcher is stopped, and `--tail` prints the client's own log lines while it runs; without either the client is started detached. It exits 1, naming the cause, when no install is found, the client program is missing, patching is asked for, a login host or port is missing, the run folder cannot be written or the client cannot be started, and 2 on bad usage. doc/config/launcher.md documents every option. It replaces the development scripts of milestone 1.21, and milestone 16.13 grows a player launcher that patches its own copy of the install from an Ambrose patch server on top of it.
 
 ### extractor (built in 3.14)
 

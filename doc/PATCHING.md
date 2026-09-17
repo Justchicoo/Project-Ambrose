@@ -13,25 +13,20 @@ The client's own usage text (in `Bin/WizardGraphicalClient.exe` of the 1.610 ins
 | `-L <host> <port>` | Login server to connect to |
 | `-P <0\|1>` | Patching enabled (0 turns it off) |
 | `-A <locale>` | Client locale, such as `en-US` |
+| `-D <dir>` | Data root folder, `..\Data\GameData\` by default, which needs its trailing separator |
+| `-G <file>` | The client's own log file |
+| `-U ..<id> <key> [name]` | Log in without the login window, by sending MSG_USER_VALIDATE |
+| `-C <name>` | Create or select that character |
 | `-PT` | Patch client patch time |
-
-The development command is:
-
-```
-Bin\WizardGraphicalClient.exe -L 127.0.0.1 12000 -P 0
-```
-
-Run it from the install's `Bin` folder, because the client resolves its data relative to its working directory.
 
 ## The launcher
 
-`apps/launcher/run-client.ps1` (or `run-client.bat`) starts the client this way:
+`launcher`, built from `src/tools/launcher`, starts the client:
 
-1. Copy `conf/dist/launcher.conf.dist` to `conf/launcher.conf`, which git ignores.
-2. Set `ClientDir` to the folder that contains `Bin`. `LoginHost`, `LoginPort`, and `Locale` are optional.
-3. Run `apps\launcher\run-client.bat`. Add `-WhatIf` to print the command without starting the client, or `-LoginPort 12001` to override a value.
+1. Copy `launcher.conf.dist`, which the build puts beside the program, to `launcher.conf` and set `ClientDir` to the folder that holds `Bin` and `Data`. Every setting is optional: with no file at all the launcher uses the newest install it finds and a local login server on port 12000.
+2. Run `launcher`. Add `--dry-run` to print the run folder and the exact command without starting anything, `--port 12001` or `--window 1600x900` to override a setting for one run, `--wait` to keep the launcher in front of the client, and `--tail` to watch the client's own log.
 
-This development launcher always starts `WizardGraphicalClient.exe` with `-P 0`. A player launcher that patches a copy of the install from an Ambrose patchserver is planned for milestone 16.13.
+The launcher never runs KingsIsle's launcher or patcher and never writes inside the install. It always passes `-L`, `-P 0`, `-A`, `-D` and `-G`, and it starts the client from `client/<revision>` in the Ambrose data folder, where it writes `config.xml` and `preferences.xml` from the install's own files with the window asked for and `SilentMetricsURL` emptied, plus copies of `revision.dat` and `data.dat`. doc/config/launcher.md documents every option, that folder and what is never touched. The 3.24 driver starts the client through it, and a player launcher that patches a copy of the install from an Ambrose patchserver is planned for milestone 16.13.
 
 ## First handshake with the login server
 
@@ -39,7 +34,7 @@ This development launcher always starts `WizardGraphicalClient.exe` with `-P 0`.
 2. Set `ClientDir` in it to your install, so client messages are logged by name. If you leave it empty, the server uses the install with the newest revision on this machine without asking. With `TypeDumpPath` left empty, it builds that install's type dump with typeextract when the revision has no current dump, which can take a minute or two. It uses an install it found, and saves it to `conf.d/client-data.conf`, only once it has that dump. To choose the install and dump on a terminal instead, set `Setup.Mode = ask`.
 3. Start the server. Keepalives, handled client messages and decoded authentication requests log at Debug, so they appear in `Login.log` in `LogsDir` but not on the console. To see them on the console too, start it as `loginserver --set "Appender.Console=1,2,3"`.
 4. Create an account from the server console with `account create <name> <password>`.
-5. Start the client with the launcher and log in with it.
+5. Start the client with `launcher`, or `launcher --port <port>` when the server does not listen on 12000, and log in with it.
 
 A working session logs lines like these, in this order. The session id, port, timing and size vary.
 
@@ -65,8 +60,9 @@ Leave the client idle at the login stage for 5 minutes. Keepalive lines should a
 - An Ambrose patchserver serves executables only when its operator turns that on, and each one must match a manifest signed with the operator's own key. The client checks only CRC-32 of what it downloads, so patch from a server only if you trust its operator.
 - Modified client executables are never distributed. Binary patches or a hook DLL of Ambrose's own code are applied by you to your own copy locally, at your own risk, and never to the install you develop with.
 - Always pass `-L <host> <port>`. Checked in the r806919 program on 2026-09-17: with none of `-L`, `-U`, `-X`, `-T`, `-R`, `-R2`, `-CS` or `-IgnoreMissingParams`, the client starts `..\Wizard101.exe`, KingsIsle's own launcher, which is the one thing never to run against the install you develop with. The Ambrose launcher and the 3.24 driver always pass it.
-- The client fetches its configuration's `SilentMetricsURL`, a KingsIsle address, while it starts. A run that must reach nothing outside the machine, such as the 3.24 driver, starts the client from a working directory of its own whose `config.xml` leaves that value empty.
-- `-U ..<user id> <key>` makes the client send MSG_USER_VALIDATE instead of showing its login window, and `-C <name>` makes it create a character of that name by itself. Both are useful for automated runs once 5.06 and 3.16 land, and neither changes the install.
+- The client fetches its configuration's `SilentMetricsURL`, a KingsIsle address, while it starts. A run that must reach nothing outside the machine starts the client from a working directory of its own whose `config.xml` leaves that value empty, which the launcher writes and the 3.24 driver relies on.
+- The window comes only from the configuration in that working directory: `IsFullscreen`, `Resolution`, `WindowedX` and `WindowedY` in `config.xml` and `preferences.xml`. The retail build ignores a resolution on the command line, and a client that is maximized, double-clicked on its title bar or sent Alt+Enter switches itself to fullscreen.
+- `-U ..<user id> <key>` makes the client send MSG_USER_VALIDATE instead of showing its login window, and `-C <name>` makes it create a character of that name by itself. Both are useful for automated runs once 5.06 and 3.16 land, and neither changes the install; the launcher passes them on with `--user` and `--character`.
 - The install stays yours. Ambrose reads it at runtime and never copies its files into the repository.
 
 ## Verification
@@ -78,3 +74,5 @@ These checks need the maintainer's own client, so they are done by hand and reco
 | `-P 0` makes no patch connection | Listen on 127.0.0.1:12500 with any TCP listener, start the client with `-L 127.0.0.1 12000 -P 0`, and confirm the 12500 listener records no connection while the client connects to 12000 | Not yet recorded |
 | Default without `-P` | Start the client with only `-L 127.0.0.1 12000` and note whether it contacts the patch host from `Bin/PatchConfig.xml` (this 1.610 install has no `PatchConfig.xml`) | Not yet recorded |
 | No patch error dialog | With `-P 0`, the login screen appears with no "Patch failed" or GUI_PatchingFailed dialog | Not yet recorded |
+| The launcher starts the client | Run `launcher --window 1280x720` against a local login server and confirm the client reaches the login screen in a window of that size, that nothing inside the install changed, and that a capture shows no connection leaving the machine | Not yet recorded |
+| `--wait` and the job object | Run `launcher --wait`, close the client, and confirm the launcher exits with the client's code; run it again and kill the launcher, and confirm the client ends with it | Not yet recorded |

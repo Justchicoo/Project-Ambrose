@@ -954,7 +954,7 @@ Every other domain can run the retail client against loginserver/gameserver with
 **Deliverables**
 
 - doc/PATCHING.md: how to launch WizardGraphicalClient.exe with -L <host> <port> -P 0 (and optional -A <locale>) from the user's own install; warning never to run the retail launcher against a pinned install
-- apps/launcher/ (repo tooling): run-client.ps1 and run-client.bat reading the install path from conf/launcher.conf (git-ignored), copied from conf/dist/launcher.conf.dist
+- apps/launcher/ (repo tooling): run-client.ps1 and run-client.bat reading the install path from conf/launcher.conf (git-ignored), copied from conf/dist/launcher.conf.dist. Replaced in milestone 3.25 by the `launcher` program in src/tools/launcher, and removed with it
 - gameserver.conf.dist + loginserver.conf.dist option Patch.Enabled = 0 (default for dev), consumed by 16.07 (PAT-9) and applied live from the next login or zone transfer
 
 **Data sources**

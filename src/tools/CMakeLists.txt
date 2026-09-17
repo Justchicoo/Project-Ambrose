@@ -3,5 +3,6 @@
 add_subdirectory(bindecode)
 add_subdirectory(dbimport)
 add_subdirectory(extractor)
+add_subdirectory(launcher)
 add_subdirectory(localetool)
 add_subdirectory(typeextract)

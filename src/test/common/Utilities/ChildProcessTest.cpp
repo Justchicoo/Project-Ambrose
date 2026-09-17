@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests ChildProcess by running the child_process_helper program: exit codes and the lines written to standard output and error, arguments with spaces, quotes, backslashes, empty strings and UTF-8 arriving exactly, a program path holding spaces and UTF-8 and, on Windows, named without .exe, lines split at MaxLineBytes without cutting a character, CRLF, a last line with no newline, invalid UTF-8 replaced, many lines in order, closed input and the working directory, an input that ends with the parent staying open while the child runs, so a child watching it keeps running, and ending, once Run returns, a copy of the helper in a process group of its own that exits when that input ends, a child watching an input already at its end exiting at once with the code it chose, programs and arguments that cannot start, a timeout, a stop request, a child ignoring SIGTERM and a grandchild holding the output open each ending the child and its grandchild, and on POSIX the exit code still read when SIGCHLD is ignored or set to reap children itself; also checks QuoteWindowsArgument against CommandLineToArgvW.
+ * Tests ChildProcess by running the child_process_helper program: exit codes and the lines written to standard output and error, arguments with spaces, quotes, backslashes, empty strings and UTF-8 arriving exactly, a program path holding spaces and UTF-8 and, on Windows, named without .exe, lines split at MaxLineBytes without cutting a character, CRLF, a last line with no newline, invalid UTF-8 replaced, many lines in order, closed input and the working directory, an input that ends with the parent staying open while the child runs, so a child watching it keeps running, and ending, once Run returns, a copy of the helper in a process group of its own that exits when that input ends, a child watching an input already at its end exiting at once with the code it chose, programs and arguments that cannot start, a timeout, a stop request, a child ignoring SIGTERM and a grandchild holding the output open each ending the child and its grandchild, and on POSIX the exit code still read when SIGCHLD is ignored or set to reap children itself; StartDetached runs a program with no pipes and no exit code of its own, which a file that program writes shows, and reports a program that cannot start; also checks QuoteWindowsArgument against CommandLineToArgvW.
  */
 
 #include "ChildProcess.h"
@@ -507,4 +507,35 @@ TEST(ChildProcessTest, ReturnsWhenTheChildExitsWhileItsGrandchildHoldsTheOutputO
     EXPECT_LT(captured.Elapsed, ChildProcess::OutputDrainGrace + 15s);
     EXPECT_EQ(captured.Output.size(), 1u);
     ExpectGrandchildEnded(captured.Output);
+}
+
+TEST(ChildProcessTest, StartDetachedRunsAProgramWithoutWaitingForIt)
+{
+    LogTestDirectory directory;
+    std::filesystem::path const marker = directory.Path() / "started.txt";
+    std::u8string const path = marker.u8string();
+    ChildProcessOptions options;
+    options.Program = HelperPath();
+    options.Arguments = { "touch", std::string(path.begin(), path.end()) };
+    ChildProcessResult const result = ChildProcess::StartDetached(options);
+    ASSERT_TRUE(result.Started) << result.Error;
+    EXPECT_FALSE(result.ExitCode);
+    EXPECT_TRUE(result.Error.empty()) << result.Error;
+    std::chrono::steady_clock::time_point const until = std::chrono::steady_clock::now() + 15s;
+    while (!std::filesystem::exists(marker) && std::chrono::steady_clock::now() < until)
+        std::this_thread::sleep_for(50ms);
+    EXPECT_TRUE(std::filesystem::exists(marker));
+}
+
+TEST(ChildProcessTest, StartDetachedReportsAProgramThatCannotStart)
+{
+    ChildProcessOptions options;
+    options.Program = HelperPath().parent_path() / "no-such-program-here";
+    ChildProcessResult const result = ChildProcess::StartDetached(options);
+    EXPECT_FALSE(result.Started);
+    EXPECT_NE(result.Error.find("no-such-program-here"), std::string::npos) << result.Error;
+    options.Program.clear();
+    ChildProcessResult const nothing = ChildProcess::StartDetached(options);
+    EXPECT_FALSE(nothing.Started);
+    EXPECT_EQ(nothing.Error, "no program was named to run");
 }

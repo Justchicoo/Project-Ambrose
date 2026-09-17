@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, and outside the login server's folder unless its library is built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, registers each test with CTest, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable and the bindecode, dbimport, extractor, localetool and typeextract tools.
+# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, and outside the login server's folder unless its library is built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, registers each test with CTest, adds the compile and client folders, the launcher and typeextract tests when those tools are built and the fuzz folder when fuzzers are built, and smoke-tests each server executable and the bindecode, dbimport, extractor, launcher, localetool and typeextract tools.
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
@@ -46,6 +46,9 @@ gtest_discover_tests(unit_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT 120)
 
 add_subdirectory(compile)
 add_subdirectory(client)
+if(TARGET launcher-core)
+    add_subdirectory(tools/launcher)
+endif()
 if(TARGET typeextract-core)
     add_subdirectory(tools/typeextract)
 endif()
@@ -70,6 +73,12 @@ if(TARGET extractor)
     add_test(NAME Extractor
         COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:extractor> -DDBIMPORT=$<$<TARGET_EXISTS:dbimport>:$<TARGET_FILE:dbimport>> -DGAMESERVER=$<$<TARGET_EXISTS:gameserver>:$<TARGET_FILE:gameserver>> -DUNIT_TESTS=$<TARGET_FILE:unit_tests> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/extractor -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/ExtractorTest.cmake")
     set_tests_properties(Extractor PROPERTIES SKIP_REGULAR_EXPRESSION "extractor test skipped")
+endif()
+
+if(TARGET launcher)
+    add_test(NAME Launcher
+        COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:launcher> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/launcher -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/LauncherTest.cmake")
+    set_tests_properties(Launcher PROPERTIES SKIP_REGULAR_EXPRESSION "launcher test skipped")
 endif()
 
 if(TARGET localetool)

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Program the ChildProcess tests run, carrying out the commands in its arguments in order: echo and err print a line to standard output or error, exit ends with a code, sleep waits milliseconds, args prints every later argument on its own line, long prints a line of that many bytes, unfinished prints that many bytes with no newline, pad prints that many bytes and then some text as a line, lines prints that many numbered lines, hex writes bytes given in hex as a line, partial writes text with no newline, crlf ends a line with CRLF, stdin prints whether input is already at its end, input prints without waiting whether input is open, at its end or holding data, cwd prints the working directory, ignore-term ignores SIGTERM, exit-when-input-ends calls ChildProcess::ExitWhenInputEnds with a code, spawn-sleeper starts a copy of itself that sleeps for a minute and prints that copy's process id, and spawn-input-watcher starts a copy of itself in a process group of its own, sharing its input and discarding its output, that ends once that input ends or else sleeps for a minute, and prints that copy's process id.
+ * Program the ChildProcess tests run, carrying out the commands in its arguments in order: echo and err print a line to standard output or error, exit ends with a code, sleep waits milliseconds, args prints every later argument on its own line, long prints a line of that many bytes, unfinished prints that many bytes with no newline, pad prints that many bytes and then some text as a line, lines prints that many numbered lines, hex writes bytes given in hex as a line, touch writes an empty file at that path, so a run with no pipes can still be seen, partial writes text with no newline, crlf ends a line with CRLF, stdin prints whether input is already at its end, input prints without waiting whether input is open, at its end or holding data, cwd prints the working directory, ignore-term ignores SIGTERM, exit-when-input-ends calls ChildProcess::ExitWhenInputEnds with a code, spawn-sleeper starts a copy of itself that sleeps for a minute and prints that copy's process id, and spawn-input-watcher starts a copy of itself in a process group of its own, sharing its input and discarding its output, that ends once that input ends or else sleeps for a minute, and prints that copy's process id.
  */
 
 #include "ChildProcess.h"
@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -282,6 +283,16 @@ int main(int argc, char** argv)
             return 2;
         }
         std::string const value = arguments[++index];
+        if (command == "touch")
+        {
+            std::ofstream stream(std::filesystem::path(std::u8string(value.begin(), value.end())), std::ios::binary | std::ios::trunc);
+            if (!stream)
+            {
+                Write(stderr, "touch could not write " + value + "\n");
+                return 2;
+            }
+            continue;
+        }
         if (command == "echo")
         {
             Write(stdout, value + "\n");

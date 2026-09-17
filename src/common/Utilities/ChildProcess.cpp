@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements running a child process: on Windows CreateProcessW with a command line quoted by CommandLineToArgvW rules, CREATE_NO_WINDOW, only the input, which is the NUL device or the read end of an anonymous pipe whose write end stays uninheritable here, and two overlapped named pipes inherited, and a kill-on-close job object, running <path>.exe for a program path without an extension when only that file exists, refusing batch files because cmd.exe reparses their arguments, and wording system errors in UTF-8; on POSIX posix_spawn into a new process group with /dev/null or the read end of a close-on-exec pipe as input and output pipes read with poll, ending the group with SIGTERM then SIGKILL, after clearing a SIGCHLD disposition that would reap the child before its exit code is read; a program named without a folder is searched for on the PATH, and output is split into UTF-8 lines, with invalid bytes replaced, on the calling thread. ExitWhenInputEnds reads standard input on a detached thread and ends the process with no cleanup once it reaches its end or fails.
+ * Implements running a child process: on Windows CreateProcessW with a command line quoted by CommandLineToArgvW rules, CREATE_NO_WINDOW unless the program draws its own window, only the input, which is the NUL device or the read end of an anonymous pipe whose write end stays uninheritable here, and two overlapped named pipes inherited, and a kill-on-close job object, running <path>.exe for a program path without an extension when only that file exists, refusing batch files because cmd.exe reparses their arguments, and wording system errors in UTF-8; on POSIX posix_spawn into a new process group with /dev/null or the read end of a close-on-exec pipe as input and output pipes read with poll, ending the group with SIGTERM then SIGKILL, after clearing a SIGCHLD disposition that would reap the child before its exit code is read; a program named without a folder is searched for on the PATH, and output is split into UTF-8 lines, with invalid bytes replaced, on the calling thread. StartDetached shares that command building and starts a program nobody waits for: on Windows a detached process of its own group, breaking away from a job when the job allows it, and on POSIX posix_spawn into a session of its own with every standard handle on the null device. ExitWhenInputEnds reads standard input on a detached thread and ends the process with no cleanup once it reaches its end or fails.
  */
 
 #include "ChildProcess.h"
@@ -511,24 +511,32 @@ namespace
             TerminateProcess(process.Get(), 1);
     }
 
-    void RunPlatform(ChildProcessOptions const& options, std::string const& programText, ChildProcessResult& result)
+    struct WindowsCommand
+    {
+        std::filesystem::path Program;
+        std::wstring CommandBuffer;
+        std::filesystem::path WorkingDirectory;
+        bool Search = false;
+    };
+
+    bool PrepareCommand(ChildProcessOptions const& options, std::string const& programText, WindowsCommand& command, ChildProcessResult& result)
     {
         std::filesystem::path program = options.Program;
         bool const search = !program.has_parent_path();
         if (!search && !MakeAbsolute(program, "program", result))
-            return;
+            return false;
         if (!search)
             PreferExecutableExtension(program);
         if (IsBatchFile(program))
         {
             result.Error = fmt::format("{} is a batch file, and batch files are not run because cmd.exe does not keep arguments exactly as given", programText);
-            return;
+            return false;
         }
         std::optional<std::string> const programUtf8 = Utf::Utf16ToUtf8(std::u16string_view(reinterpret_cast<char16_t const*>(program.native().data()), program.native().size()), Utf::InvalidPolicy::Reject);
         if (!programUtf8)
         {
             result.Error = fmt::format("the program path {} is not valid Unicode", programText);
-            return;
+            return false;
         }
         std::string commandLine = ChildProcess::QuoteWindowsArgument(*programUtf8);
         for (std::size_t index = 0; index < options.Arguments.size(); ++index)
@@ -536,7 +544,7 @@ namespace
             if (!Utf::IsValidUtf8(options.Arguments[index]))
             {
                 result.Error = fmt::format("argument {} for {} is not valid UTF-8", index + 1, programText);
-                return;
+                return false;
             }
             commandLine.push_back(' ');
             commandLine.append(ChildProcess::QuoteWindowsArgument(options.Arguments[index]));
@@ -545,18 +553,70 @@ namespace
         if (!wideCommandLine)
         {
             result.Error = fmt::format("the command line for {} is not valid UTF-8", programText);
-            return;
+            return false;
         }
         if (wideCommandLine->size() >= MaxCommandLineCharacters)
         {
             result.Error = fmt::format("the command line for {} is {} characters long, and Windows allows at most {}", programText, wideCommandLine->size(), MaxCommandLineCharacters - 1);
-            return;
+            return false;
         }
-        std::wstring commandBuffer(reinterpret_cast<wchar_t const*>(wideCommandLine->data()), wideCommandLine->size());
-
         std::filesystem::path workingDirectory = options.WorkingDirectory;
         if (!workingDirectory.empty() && !MakeAbsolute(workingDirectory, "working directory", result))
+            return false;
+        command.Program = std::move(program);
+        command.CommandBuffer.assign(reinterpret_cast<wchar_t const*>(wideCommandLine->data()), wideCommandLine->size());
+        command.WorkingDirectory = std::move(workingDirectory);
+        command.Search = search;
+        return true;
+    }
+
+    void StartDetachedPlatform(ChildProcessOptions const& options, std::string const& programText, ChildProcessResult& result)
+    {
+        WindowsCommand command;
+        if (!PrepareCommand(options, programText, command, result))
             return;
+        STARTUPINFOW startup{};
+        startup.cb = sizeof(startup);
+        PROCESS_INFORMATION information{};
+        std::wstring commandBuffer = command.CommandBuffer;
+        BOOL const created = CreateProcessW(command.Search ? nullptr : command.Program.c_str(), commandBuffer.data(), nullptr, nullptr, FALSE,
+            CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB | DETACHED_PROCESS, nullptr,
+            command.WorkingDirectory.empty() ? nullptr : command.WorkingDirectory.c_str(), &startup, &information);
+        DWORD const createError = GetLastError();
+        if (!created && createError == ERROR_ACCESS_DENIED)
+        {
+            commandBuffer = command.CommandBuffer;
+            if (CreateProcessW(command.Search ? nullptr : command.Program.c_str(), commandBuffer.data(), nullptr, nullptr, FALSE,
+                CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS, nullptr,
+                command.WorkingDirectory.empty() ? nullptr : command.WorkingDirectory.c_str(), &startup, &information))
+            {
+                CloseHandle(information.hThread);
+                CloseHandle(information.hProcess);
+                result.Started = true;
+                return;
+            }
+            result.Error = fmt::format("{} could not be started: {}", programText, SystemMessage(GetLastError()));
+            return;
+        }
+        if (!created)
+        {
+            result.Error = fmt::format("{} could not be started: {}", programText, SystemMessage(createError));
+            return;
+        }
+        CloseHandle(information.hThread);
+        CloseHandle(information.hProcess);
+        result.Started = true;
+    }
+
+    void RunPlatform(ChildProcessOptions const& options, std::string const& programText, ChildProcessResult& result)
+    {
+        WindowsCommand command;
+        if (!PrepareCommand(options, programText, command, result))
+            return;
+        std::filesystem::path const& program = command.Program;
+        bool const search = command.Search;
+        std::wstring commandBuffer = command.CommandBuffer;
+        std::filesystem::path const& workingDirectory = command.WorkingDirectory;
 
         PipeReader output(options, false);
         PipeReader errors(options, true);
@@ -622,15 +682,16 @@ namespace
 
         STARTUPINFOEXW startup{};
         startup.StartupInfo.cb = sizeof(startup);
-        startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+        startup.StartupInfo.dwFlags = options.ShowsWindow ? STARTF_USESTDHANDLES : (STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW);
         startup.StartupInfo.wShowWindow = SW_HIDE;
         startup.StartupInfo.hStdInput = input.Get();
         startup.StartupInfo.hStdOutput = outputChild.Get();
         startup.StartupInfo.hStdError = errorChild.Get();
         startup.lpAttributeList = attributes.Get();
+        DWORD const creation = (options.ShowsWindow ? 0u : DWORD{ CREATE_NO_WINDOW }) | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT;
         PROCESS_INFORMATION information{};
         BOOL const created = CreateProcessW(search ? nullptr : program.c_str(), commandBuffer.data(), nullptr, nullptr, TRUE,
-            CREATE_NO_WINDOW | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT, nullptr, workingDirectory.empty() ? nullptr : workingDirectory.c_str(),
+            creation, nullptr, workingDirectory.empty() ? nullptr : workingDirectory.c_str(),
             &startup.StartupInfo, &information);
         DWORD const createError = GetLastError();
         input.Reset();
@@ -960,6 +1021,96 @@ namespace
         bool _abandoned = false;
     };
 
+    std::vector<char*> BuildArgv(std::filesystem::path const& program, ChildProcessOptions const& options, std::vector<std::string>& strings)
+    {
+        strings.reserve(options.Arguments.size() + 1);
+        strings.push_back(program.native());
+        strings.insert(strings.end(), options.Arguments.begin(), options.Arguments.end());
+        std::vector<char*> argv;
+        argv.reserve(strings.size() + 1);
+        for (std::string& text : strings)
+            argv.push_back(text.data());
+        argv.push_back(nullptr);
+        return argv;
+    }
+
+    void StartDetachedPlatform(ChildProcessOptions const& options, std::string const& programText, ChildProcessResult& result)
+    {
+        std::filesystem::path program = options.Program;
+        bool const search = program.native().find('/') == std::string::npos;
+        if (!search && !MakeAbsolute(program, "program", result))
+            return;
+        std::filesystem::path workingDirectory = options.WorkingDirectory;
+        if (!workingDirectory.empty() && !MakeAbsolute(workingDirectory, "working directory", result))
+            return;
+#ifndef AMBROSE_SPAWN_CHDIR
+        if (!workingDirectory.empty())
+        {
+            result.Error = fmt::format("{} could not be started because this system cannot start a program in another working directory", programText);
+            return;
+        }
+#endif
+        SpawnSetup setup;
+        if (!setup.Ready())
+        {
+            result.Error = fmt::format("{} could not be started because its spawn settings could not be prepared", programText);
+            return;
+        }
+        int setupCode = 0;
+        auto const step = [&setupCode](int code)
+        {
+            if (setupCode == 0)
+                setupCode = code;
+        };
+        step(posix_spawn_file_actions_addopen(setup.Actions(), STDIN_FILENO, "/dev/null", O_RDONLY, 0));
+        step(posix_spawn_file_actions_addopen(setup.Actions(), STDOUT_FILENO, "/dev/null", O_WRONLY, 0));
+        step(posix_spawn_file_actions_addopen(setup.Actions(), STDERR_FILENO, "/dev/null", O_WRONLY, 0));
+#ifdef AMBROSE_SPAWN_CHDIR
+        if (!workingDirectory.empty())
+            step(posix_spawn_file_actions_addchdir_np(setup.Actions(), workingDirectory.c_str()));
+#endif
+#ifdef AMBROSE_SPAWN_CLOSEFROM
+        step(posix_spawn_file_actions_addclosefrom_np(setup.Actions(), STDERR_FILENO + 1));
+#endif
+        int flags = POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF;
+#ifdef POSIX_SPAWN_SETSID
+        flags |= POSIX_SPAWN_SETSID;
+#else
+        flags |= POSIX_SPAWN_SETPGROUP;
+        step(posix_spawnattr_setpgroup(setup.Attributes(), 0));
+#endif
+#ifdef __APPLE__
+        flags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
+#endif
+        step(posix_spawnattr_setflags(setup.Attributes(), static_cast<short>(flags)));
+        sigset_t mask{};
+        sigemptyset(&mask);
+        step(posix_spawnattr_setsigmask(setup.Attributes(), &mask));
+        sigset_t defaults{};
+        sigemptyset(&defaults);
+        for (int const number : DefaultSignals)
+            sigaddset(&defaults, number);
+        step(posix_spawnattr_setsigdefault(setup.Attributes(), &defaults));
+        if (setupCode != 0)
+        {
+            result.Error = fmt::format("{} could not be started because its spawn settings could not be prepared: {}", programText, ErrnoMessage(setupCode));
+            return;
+        }
+
+        std::vector<std::string> strings;
+        std::vector<char*> argv = BuildArgv(program, options, strings);
+        pid_t id = 0;
+        int const spawned = search
+            ? posix_spawnp(&id, program.c_str(), setup.Actions(), setup.Attributes(), argv.data(), environ)
+            : posix_spawn(&id, program.c_str(), setup.Actions(), setup.Attributes(), argv.data(), environ);
+        if (spawned != 0)
+        {
+            result.Error = fmt::format("{} could not be started: {}", programText, ErrnoMessage(spawned));
+            return;
+        }
+        result.Started = true;
+    }
+
     void RunPlatform(ChildProcessOptions const& options, std::string const& programText, ChildProcessResult& result)
     {
         std::filesystem::path program = options.Program;
@@ -1053,15 +1204,7 @@ namespace
         }
 
         std::vector<std::string> strings;
-        strings.reserve(options.Arguments.size() + 1);
-        strings.push_back(program.native());
-        strings.insert(strings.end(), options.Arguments.begin(), options.Arguments.end());
-        std::vector<char*> argv;
-        argv.reserve(strings.size() + 1);
-        for (std::string& text : strings)
-            argv.push_back(text.data());
-        argv.push_back(nullptr);
-
+        std::vector<char*> argv = BuildArgv(program, options, strings);
         pid_t id = 0;
         int const spawned = search
             ? posix_spawnp(&id, program.c_str(), setup.Actions(), setup.Attributes(), argv.data(), environ)
@@ -1179,6 +1322,17 @@ ChildProcessResult ChildProcess::Run(ChildProcessOptions const& options)
     if (!result.Error.empty())
         return result;
     RunPlatform(options, programText, result);
+    return result;
+}
+
+ChildProcessResult ChildProcess::StartDetached(ChildProcessOptions const& options)
+{
+    ChildProcessResult result;
+    std::string const programText = PathText(options.Program);
+    result.Error = CheckOptions(options, programText);
+    if (!result.Error.empty())
+        return result;
+    StartDetachedPlatform(options, programText, result);
     return result;
 }
 

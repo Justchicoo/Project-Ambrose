@@ -1,6 +1,0 @@
-# Project Ambrose by Imjustchico
-# Client launcher settings; copy to conf/launcher.conf (git-ignored) and set ClientDir to your own Wizard101 install.
-ClientDir = C:\Games\Wizard101
-LoginHost = 127.0.0.1
-LoginPort = 12000
-Locale = en-US
