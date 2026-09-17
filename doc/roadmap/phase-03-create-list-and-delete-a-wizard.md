@@ -29,6 +29,7 @@
 | 3.21 | Type data from the user's own client program | L | 3.03, 3.20, 1.13 |
 | 3.22 | Automatic first-run setup | M | 3.21 |
 | 3.23 | Keep up with KingsIsle's client revisions | M | 3.22 |
+| 3.24 | Drive the retail client in tests | L | 3.22, 2.14, 1.21 |
 
 ## Review notes for this phase
 
@@ -966,6 +967,53 @@ Added on 2026-09-17 at the maintainer's direction: someone who runs the server f
 - Discovery additions in ClientLocator: Snap Steam beside the native and Flatpak Steam folders; on WSL, each Windows drive's per-user AppData/Local KingsIsle folder and the Windows Steam folder, whose libraryfolders.vdf drive paths map to /mnt. Installs note whether Bin/WizardGraphicalClient.exe is there and sort newest revision first, unknown revisions last. Steam libraries and folders compare by canonical path, so each is searched once; quoted install locations are cleaned, and Windows uninstall entries expand environment variables and are listed once
 - The tools: bindecode, localetool and extractor follow AMBROSE_SETUP_MODE, ask only in ask mode, check their arguments before searching, and save nothing. bindecode and extractor use the type dump built by the typeextract beside them and stop it on Ctrl+C or SIGTERM. bindecode opens an archive named by path first and, when the archive lies in an install, takes the dump from that install
 - The 3.20 review findings, fixed and covered by tests. Built: a saved value another file overrides is reported instead of claimed, a stop request ends a waiting question, the login server never saves ClientDir without a type dump, duplicate Steam folders and Proton prefixes no longer spend the Linux search budget, a dump header is accepted with its keys in any order, and a line arriving as a timeout fires still counts as a timeout (ClientSetupTest, SetupPromptTest, ClientLocatorTest, TypeDumpCacheTest, ChildProcessTest and ServerAppTest)
+
+## 3.24 Drive the retail client in tests
+
+**Goal:** A single command starts a server, drives the maintainer's own retail client through a scenario, and reports every message the server did not handle, with screenshots, so client behavior is checked without a person at the keyboard.
+
+**Size:** L. **Depends on:** 3.22, 2.14, 1.21
+
+Added on 2026-09-17 at the maintainer's direction, and placed before 3.15 so every later milestone can be checked against the real client. It also answers the phase 1 review's missing work item for an automated client harness.
+
+**Deliverables**
+
+- `apps/clientdriver/`, a Python driver that runs a scenario end to end: it starts a scratch login server (and later a game server) on its own ports and databases, creates its test account, launches the client, drives it, collects a report and stops everything, leaving the machine as it was
+- The client is launched from a working directory of the driver's own with copies of `config.xml` and `preferences.xml` that set a windowed client of a fixed size, and with `SilentMetricsURL` emptied so the run contacts nothing outside the machine. `-L <host> <port>` is always passed, because without it the retail client starts KingsIsle's launcher instead; `-P 0` keeps patching off, `-G` puts the client log in the run folder, `-D` names the install's data folder, and `-A` the locale. Nothing is written into the install
+- Input goes to the client's window as window messages, so the machine stays usable: text as `WM_CHAR` one character at a time, other keys as `WM_KEYDOWN` and `WM_KEYUP`, and a click as the cursor moved to the target with the button messages sent to the window. Modifier keys cannot be faked this way, which the driver documents and avoids
+- Screenshots come from `PrintWindow` with `PW_RENDERFULLCONTENT`, cropped to the client area, so they work while the window is covered; the driver never minimizes the window, because the client stops drawing when minimized
+- Every step waits on a condition with a timeout and a named failure: a line in the server log, a line in the client's log, or a check of the screenshot. No step waits a fixed time
+- Scenarios are data, not code: a list of steps with what to type, click or wait for, and what to assert. The first scenarios cover a wrong password and the client's own invalid-login dialog, a correct login to character select, and the character creation screens
+- A report per run listing every "does not handle yet" line, every server warning and error, every client `[ERRO]` and `[WARN]` line, the screenshots, and the loopback capture when tshark is installed
+- A CTest entry with the `client` label that skips with a message when the platform is not Windows or no install is configured, so machines without a client still pass
+- Nothing the client produces is committed: screenshots, logs and captures stay in the run folder
+
+**Acceptance**
+
+- [ ] One command, twice in a row from a clean state, starts the scratch server, logs in with its test account, reaches character select, writes a report and screenshots, and stops the client, the server and nothing else
+- [ ] A wrong password is detected from the client's own dialog, and the run then logs in with the correct one without restarting the client
+- [ ] Every step that cannot be satisfied fails within its timeout naming what it waited for, and the run still stops the client and the server
+- [ ] The run writes nothing inside the install, sends nothing outside the machine, and leaves no database behind
+- [ ] On a machine with no client, the CTest entry skips with a message instead of failing
+- [ ] The report lists every message the server did not handle during the run, and a screenshot exists for every step that changed the screen
+
+### Detailed spec
+
+**Client facts this milestone relies on, checked in the r806919 program**
+
+- Input arrives only as window messages: no DirectInput, no raw input, and no focus check, so posted keyboard messages work while the window is in the background. Mouse messages carry no position, because the client reads the cursor itself, so a click needs the cursor moved first. Modifiers come from `GetAsyncKeyState`, so they cannot be posted
+- Rendering is Direct3D 9, so `PrintWindow` with `PW_RENDERFULLCONTENT` is the capture that works behind other windows, and a device context copy returns black
+- Windowed size comes from `config.xml` and `preferences.xml` in the working directory (`IsFullscreen`, `Resolution`, `WindowedX`, `WindowedY`); the retail build ignores `-SR`. Maximizing, a title bar double click and Alt+Enter all switch to fullscreen
+- Without `-IgnoreMissingParams`, `-U`, `-L`, `-X`, `-T`, `-R`, `-R2` or `-CS`, the client starts `..\Wizard101.exe`, KingsIsle's launcher
+- `-U ..<user id> <key> [name]` makes the client send MSG_USER_VALIDATE with PassKey3 instead of showing the login window, so automatic login without typing waits for that message, which 5.06 handles
+- `-C <name>` runs the client's own `CreateCharacter <name>` when no character has that name, which 3.16 can use to drive creation without clicking
+- The client fetches `SilentMetricsURL` from its configuration during startup, so the driver's configuration empties it
+- Scripts exist in `Root.wad` under `Scripts/`, but the retail build cannot start one from the command line, so scenarios drive the window instead
+
+**Risks**
+
+- The driver depends on screen positions for clicks, which change with the interface scale and the window size, so scenarios pin both and prefer keyboard steps and log waits
+- A scenario that reaches the world needs the game server wired to the login server, which lands in phase 4; until then scenarios stop at character select and the creation screens
 
 ## 3.23 Keep up with KingsIsle's client revisions
 

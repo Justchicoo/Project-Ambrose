@@ -64,6 +64,9 @@ Leave the client idle at the login stage for 5 minutes. Keepalive lines should a
 - Never run the retail launcher or patcher against the install you develop with. It updates files, changes the client revision, and breaks the pinned 1.610 message and type data. A separate copy may be patched: the retail patcher contacts KingsIsle's servers, which is your own choice on your own account and machine, and the patched copy may no longer match Ambrose's pinned message and type data.
 - An Ambrose patchserver serves executables only when its operator turns that on, and each one must match a manifest signed with the operator's own key. The client checks only CRC-32 of what it downloads, so patch from a server only if you trust its operator.
 - Modified client executables are never distributed. Binary patches or a hook DLL of Ambrose's own code are applied by you to your own copy locally, at your own risk, and never to the install you develop with.
+- Always pass `-L <host> <port>`. Checked in the r806919 program on 2026-09-17: with none of `-L`, `-U`, `-X`, `-T`, `-R`, `-R2`, `-CS` or `-IgnoreMissingParams`, the client starts `..\Wizard101.exe`, KingsIsle's own launcher, which is the one thing never to run against the install you develop with. The Ambrose launcher and the 3.24 driver always pass it.
+- The client fetches its configuration's `SilentMetricsURL`, a KingsIsle address, while it starts. A run that must reach nothing outside the machine, such as the 3.24 driver, starts the client from a working directory of its own whose `config.xml` leaves that value empty.
+- `-U ..<user id> <key>` makes the client send MSG_USER_VALIDATE instead of showing its login window, and `-C <name>` makes it create a character of that name by itself. Both are useful for automated runs once 5.06 and 3.16 land, and neither changes the install.
 - The install stays yours. Ambrose reads it at runtime and never copies its files into the repository.
 
 ## Verification
