@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import ci_build
 import ci_commit_trailer
 import ci_contrib_paths
+import ci_findings
 import ci_forbidden_files
 import ci_select_legs
 import ci_usage
@@ -498,6 +499,48 @@ class ContributorPathTests(unittest.TestCase):
         self.assertEqual(ci_contrib_paths.main.__module__, "ci_contrib_paths")
         self.assertEqual(ci_contrib_paths.check([windows.replace("\\", "/")]), [])
         self.assertEqual(ci_contrib_paths.check([windows]), [windows])
+
+
+class FindingsTests(unittest.TestCase):
+    def sound(self, **changes):
+        finding = {
+            "subject": "MSG_USER_VALIDATE",
+            "area": "protocol",
+            "claim": "The client sends this message instead of showing its login window when the -U option carries a user id and a key.",
+            "revision": "r806919.Wizard_1_610",
+            "method": "capture",
+            "how_to_repeat": ["Start the client with -U and capture the login port."],
+            "evidence": ["The first frame after the session accept carries service 7, order 15."],
+            "disproof": "A run with -U where the client shows its login window and sends MSG_USER_AUTHEN instead.",
+            "confidence": "high",
+            "submitted_by": "someone",
+            "submitted_on": "2026-09-18",
+            "status": "claimed",
+        }
+        finding.update(changes)
+        return finding
+
+    def test_a_sound_finding_passes(self):
+        self.assertEqual(ci_findings.problems_for("contrib/findings/protocol/validate.json", self.sound()), [])
+
+    def test_a_missing_field_is_reported(self):
+        finding = self.sound()
+        del finding["disproof"]
+        problems = ci_findings.problems_for("contrib/findings/protocol/validate.json", finding)
+        self.assertTrue(any("missing disproof" in problem for problem in problems))
+
+    def test_a_verified_finding_must_say_who_proved_it(self):
+        problems = ci_findings.problems_for("contrib/findings/protocol/validate.json", self.sound(status="verified"))
+        self.assertTrue(any("verified_by" in problem for problem in problems))
+
+    def test_pasted_game_bytes_are_refused(self):
+        hex_run = "de ad be ef " * 24
+        problems = ci_findings.problems_for("contrib/findings/protocol/validate.json", self.sound(evidence=[hex_run]))
+        self.assertTrue(any("hex bytes" in problem for problem in problems))
+
+    def test_the_folder_must_match_the_area(self):
+        problems = ci_findings.problems_for("contrib/findings/combat/validate.json", self.sound())
+        self.assertTrue(any("names area protocol" in problem for problem in problems))
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

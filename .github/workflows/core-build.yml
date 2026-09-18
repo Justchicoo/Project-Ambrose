@@ -64,6 +64,9 @@ jobs:
       - name: Forbidden files
         if: ${{ !cancelled() }}
         run: python apps/ci/ci_forbidden_files.py
+      - name: Findings
+        if: ${{ !cancelled() }}
+        run: python apps/ci/ci_findings.py
       - name: Contributor track paths
         if: ${{ !cancelled() && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'contrib') }}
         run: python apps/ci/ci_contrib_paths.py --range ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}

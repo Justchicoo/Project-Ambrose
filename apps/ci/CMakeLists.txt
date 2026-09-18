@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Registers the CI script self-tests, the forbidden file scan and the contributor track path check with CTest when Python 3 is available.
+# Registers the CI script self-tests, the forbidden file scan, the contributor track path check and the findings check with CTest when Python 3 is available.
 find_package(Python3 COMPONENTS Interpreter)
 
 if(Python3_Interpreter_FOUND)
@@ -9,7 +9,9 @@ if(Python3_Interpreter_FOUND)
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ci_forbidden_files.py" --root "${CMAKE_SOURCE_DIR}")
     add_test(NAME ci.contrib
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ci_contrib_paths.py" --root "${CMAKE_SOURCE_DIR}" --paths contrib/notes/sample.md)
-    set_tests_properties(ci.selftest ci.forbidden ci.contrib PROPERTIES
+    add_test(NAME ci.findings
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ci_findings.py" --root "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(ci.selftest ci.forbidden ci.contrib ci.findings PROPERTIES
         LABELS "ci"
         ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
 else()
