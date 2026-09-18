@@ -522,6 +522,42 @@ axe-core is MPL-2.0 and must stay in tests. Nothing here needs a paid licence. T
 above because a scanner reading package.json alone misses both: ApexCharts publishes only "SEE LICENSE IN
 LICENSE" and is not permissive, and dygraphs reads MIT on npm and carries no assertion on its repository.
 
+## What the operations milestones added on 2026-09-18 need
+
+17.74 to 17.104 were read against the summary above, and they add no new library to this stack. What each one
+uses is already here, and arrives with the milestone that needs it:
+
+- **uPlot 1.6.32**, with 17.78's event markers and 17.79's window selection drawn as real markup positioned
+  against its scales rather than into its canvas, which is the rule doc/DESIGN.md sets for anything that
+  carries meaning and is the shape a marker has to take to be hoverable, focusable and translatable anyway.
+- **virtua 0.51.3** carries 17.80's result list exactly as it carries 17.07's console, and 17.80's volume
+  histogram is the same chart wrapper the graphs use.
+- **Bits UI 2.19.2**'s command primitive inside its dialog is 17.88's palette, which is why the palette costs
+  no new dependency; its results are permission-filtered on the server, as that milestone's first check
+  requires.
+- **anser 2.3.5** stays for captured output only. 17.76 carries a log line's value runs as typed ranges on the
+  record, so 17.07 renders them from data rather than re-lexing text in the browser, which is what keeps the
+  terminal and the panel from drifting.
+- 17.98's weekly grid is real markup on a generated ramp, not a heatmap library; the ramp itself is listed
+  under Decisions needed in doc/ROADMAP.md, and until it is settled the grid names its quietest hours in
+  words.
+- The number, unit and time formatting doc/DESIGN.md's Type rules describe is one module of ours, mirrored in
+  C++ for the terminal, because the platform's own unit list has no binary units and rendering 8,589,934,592
+  bytes as 8.59 GB when the operating system says 8 GB is a small lie that costs trust during an incident.
+
+The checks those rules need are projects in the test setup already chosen, not new tools: **@playwright/test
+1.63.0** runs the forced-colors pass, the coarse-pointer pass that proves nothing is hover-only, and the
+target-size measurement that walks each dense page under each pointer type; **Storybook 10.6.0** with
+**axe-core 4.13.0** runs the gate, now at WCAG 2.2 AA, with its own explicit tests for the three criteria axe
+cannot see, a focused row under sticky chrome, a target under its floor and an authentication field that
+refuses a paste.
+
+Two library-shaped choices these milestones raise are deliberately not settled here and are listed under
+Decisions needed in doc/ROADMAP.md: the one search engine behind 17.80, which is server side rather than front
+end, and what records 17.91's on-demand profile. One is settled outside this document: 17.83 writes crash
+dumps with the operating system's own writer rather than a crash reporting library, and THIRD-PARTY-NOTICES.md
+records why.
+
 ## Close calls, stated plainly
 
 - Vitest 4 against Vitest 5 is forced by Storybook's peer range, not chosen.

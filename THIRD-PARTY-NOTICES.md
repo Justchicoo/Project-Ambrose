@@ -45,6 +45,7 @@ Tools that never ship inside a build, such as Storybook, Vitest, Playwright, ESL
 - No Wizard101 file, asset, text or artwork. Tools read a user's own installation at run time and write nothing into it.
 - No code copied from another Wizard101 server project, and none from Pterodactyl, whose MIT-licensed source is read only as a reference for how a hosting panel behaves.
 - No proprietary SDK. A feature that needs one is built only for someone who holds their own licence, behind a build option that is off by default.
+- No crash reporting library. Settled on 2026-09-18 for 17.83: a crash dump is written with the operating system's own writer, `MiniDumpWriteDump` from the Windows debugging library that ships with the system on Windows and a small writer of our own on Linux, so nothing is added to the build for it. Crashpad is the library that would otherwise do this job, and it is recorded here as an option to revisit rather than a dependency, because building it costs more continuous integration time than this project's budget has. Nothing in that milestone's grouping, symbolization or page depends on which writer produced the dump.
 
 ## Adding a dependency
 

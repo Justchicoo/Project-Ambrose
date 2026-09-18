@@ -79,6 +79,37 @@
 | 17.71 | Admission queue control | S | 17.19, 17.31, 12.21 |
 | 17.72 | Opt-in backup archive encryption | S | 17.43, 17.47, 17.51, 17.52 |
 | 17.73 | Design system: tokens, components and the gallery | L | 1.02, 1.03 |
+| 17.74 | Console log line: columns, parts and per-part color | S | 17.01 |
+| 17.75 | Console color conventions and the color depth ladder | S | 17.74 |
+| 17.76 | Value runs inside a log message | M | 17.04, 17.74 |
+| 17.77 | Console wrapping, hanging indent and the record cap | S | 17.01, 17.74 |
+| 17.78 | Event overlays on every graph | M | 17.19, 17.25, 17.49 |
+| 17.79 | Correlate a window | S | 17.19, 17.78 |
+| 17.80 | Log search over history with facets | M | 17.04, 17.07, 17.14, 17.76 |
+| 17.81 | Synthetic login probe and end-to-end health checks | M | 17.15, 17.19, 17.67, 3.24 |
+| 17.82 | Installation health checks with fixes | M | 17.03, 17.06, 17.16, 17.47 |
+| 17.83 | Crash dumps, symbolization and grouping | M | 17.18, 17.60 |
+| 17.84 | Support bundle | S | 17.08, 17.18, 17.60 |
+| 17.85 | Alert grouping, inhibition and silences | M | 17.22, 17.67 |
+| 17.86 | Notification routing, preferences and delivery test | M | 17.38, 17.48, 17.67 |
+| 17.87 | Event-triggered automation | M | 17.15, 17.26, 17.60, 17.67 |
+| 17.88 | Command palette and keyboard-first operation | S | 17.06, 17.21, 17.48, 17.73 |
+| 17.89 | Kill switches | S | 17.12, 17.13, 17.27 |
+| 17.90 | Slow query and database health page | M | 17.08, 17.09, 17.30 |
+| 17.91 | Tick breakdown and on-demand profiles | M | 17.09, 17.19 |
+| 17.92 | Per-session network quality and the player inspector | M | 17.19, 17.21, 17.80 |
+| 17.93 | Tamper-evident audit chain and audit streaming | S | 17.14, 17.49 |
+| 17.94 | Uptime history and incident timeline | S | 17.70, 17.81 |
+| 17.95 | Character point-in-time restore and undelete | M | 17.16, 17.21, 17.51, 3.17 |
+| 17.96 | Operations calendar | S | 17.15, 17.32, 17.33, 17.64, 17.68 |
+| 17.97 | Daily operations digest | S | 17.67, 17.69, 17.86 |
+| 17.98 | Capacity forecasts and the weekly load heatmap | S | 17.19, 17.44, 17.69 |
+| 17.99 | Declarative installation file with diff and apply | M | 17.12, 17.28, 17.29, 17.36, 17.48 |
+| 17.100 | ambrosectl: one command line over the panel API | M | 17.36, 17.48, 17.99 |
+| 17.101 | Content packs: install, version and uninstall | M | 17.18, 17.34, 17.65 |
+| 17.102 | Outbound event webhooks | S | 17.26, 17.67 |
+| 17.103 | Item and currency ledger with anomaly rules | M | 17.25, 17.69, 8.08 |
+| 17.104 | Compensation grants and mass mail | M | 17.21, 17.33, 17.69, 8.08 |
 
 ## Review notes for this phase
 
@@ -89,19 +120,20 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Live settings.** 17.12 and 17.13 were added on 2026-09-14 for the Live reload and live settings rule in doc/ARCHITECTURE.md. Config editing moved from 17.08 to 17.13, so edits apply live through the settings API instead of writing the `.conf` file and asking for a restart.
 - **Hosting panel parity.** 17.14-17.24 were added on 2026-09-17 at the maintainer's request to manage everything in one place the way game server hosting panels such as Pterodactyl do. The supervisor from 17.08 becomes the panel's single entry point, much as a Pterodactyl node daemon serves its panel: operators sign in to it once, and it relays each app's admin API. The panel milestones, 17.14 and everything above it, start after 3.23 and run alongside the gameplay phases. The choices are recorded under Decisions, Operations in doc/ARCHITECTURE.md: Argon2id from libsodium for panel passwords, TOTP for two-factor sign-in, zstd for backup archives, and the supervisor's own SQLite file for panel users, schedules and backup records, so the panel works before any game database exists.
 - **Pterodactyl source.** Settled on 2026-09-17 at the maintainer's direction: Ambrose owns its panel, tailored to Wizard101, and uses the MIT-licensed Pterodactyl panel and Wings source only as a reference for behavior, with no code copied and no Wings. The Ambrose panel is not a fork: the Pterodactyl panel is PHP 8.2 with Laravel, React, Redis, a web server and a queue worker on Linux, and Wings is Go and runs only on Linux with Docker, not on Windows. A fork would break the desktop run that sets itself up with no steps, and the TypeScript with Svelte dashboard and C++ supervisor settled under Decisions, Operations. Its generic model of a container with a console also cannot reach typed Ambrose features such as live settings, reloads, accounts and client data. Instead, this phase studies its source as the reference for features and behavior: the permission names and sub-users, schedules and task chains, backups, the file manager and the console socket. Operators who already run Pterodactyl use the 17.23 egg. A maintained fork stays an opt-in idea, planned, not yet scheduled.
-- **Built first.** Settled on 2026-09-18 at the maintainer's direction: the panel's foundation comes before the rest of the game, so later systems are built into it rather than fitted to it. The order is 17.01, 17.02, 17.03, 17.04, 17.73 and 17.06 first, which need nothing that is not already built, with 17.73 before 17.06 because the panel and the launcher window are both built from it; then 4.01 and 4.02, which the game needs next anyway and which 17.05 waits on; then 17.05, 17.08, 17.09, 17.11, 17.14 and 17.46-17.50. Everything else in this phase arrives with the system it shows, under the rule in doc/ROADMAP.md that every subsystem ships with its panel surface, so the pages for realms, players, settings, world edits and client data are built by the milestones that build those systems.
-- **Order.** Ids are allocation order, not build order. Within this phase the dependency graph gives the build order, so a dependency may name a higher id: 17.15 and 17.16 wait for 17.27 and 17.46-17.48, 17.22 waits for 17.26, 17.28, 17.29, 17.32 and 17.49, 17.31 waits for 17.26, and 17.24 waits for 17.46. 17.01-17.24 keep the ids they were published with, and everything added later takes an id from 17.25 up. A check never rests on a milestone outside its own dependency closure: where one did, the dependency was added or the check was narrowed to what exists at that point.
+- **Built first.** Settled on 2026-09-18 at the maintainer's direction: the panel's foundation comes before the rest of the game, so later systems are built into it rather than fitted to it. The order is 17.01, 17.74, 17.02, 17.03, 17.04, 17.73 and 17.06 first, which need nothing that is not already built, with 17.74 immediately after 17.01 because the console line is the surface the maintainer reads on every day of the rest of this project, and 17.73 before 17.06 because the panel and the launcher window are both built from it; then 4.01 and 4.02, which the game needs next anyway and which 17.05 waits on; then 17.05, 17.08, 17.09, 17.11, 17.14 and 17.46-17.50. Everything else in this phase arrives with the system it shows, under the rule in doc/ROADMAP.md that every subsystem ships with its panel surface, so the pages for realms, players, settings, world edits and client data are built by the milestones that build those systems.
+- **Order.** Ids are allocation order, not build order. Within this phase the dependency graph gives the build order, so a dependency may name a higher id: 17.15 and 17.16 wait for 17.27 and 17.46-17.48, 17.22 waits for 17.26, 17.28, 17.29, 17.32 and 17.49, 17.31 waits for 17.26, and 17.24 waits for 17.46. 17.01-17.24 keep the ids they were published with, and everything added later takes an id from 17.25 up. Nothing added on 2026-09-18 breaks the rule the other way either: 17.85 waits for 17.22, 17.92 for 17.80, 17.94 for 17.81 and 17.100 for 17.99, all lower ids. Three pairs are built in their own order and are worth naming, since each second half is worthless without its first: 17.78 then 17.79, 17.80 then 17.92, and 17.103 then 17.104. A check never rests on a milestone outside its own dependency closure: where one did, the dependency was added or the check was narrowed to what exists at that point.
 - **Splits.** 17.14 became six milestones, 17.16 three, 17.18 five, 17.26 three and 17.27 four. Each keeps its id for its first part and the rest take ids from 17.46 up (17.46-17.50 from 17.14, 17.51 and 17.52 from 17.16, 17.53-17.56 from 17.18, 17.57 and 17.58 from 17.26, 17.59-17.61 from 17.27). Three published titles narrowed to what their milestone now holds: 17.16, 17.18 and 17.19, whose alerts moved to 17.67 so graphs no longer wait for mail settings. Two titles changed because their milestone grew instead: 17.14 now names the audit store, which the panel needs from its first milestone, and 17.50 the roles page.
-- **Sizes.** A size is read off the milestone's own content, so a label can be checked against the text: S is at most 4 deliverables and at most 5 acceptance checks, L is 8 or more deliverables or 8 or more acceptance checks, and M is everything between. Two milestones carry L on judgment instead of count, 17.24 because it installs and runs on two desktop operating systems and 17.51 because it is one operation from end to end, and the Oversized note names both with the rest. Recounting moved sizes that were already published, without touching any id: 17.01 and 17.07 to S, 17.03, 17.04 and 17.12 to M, and 17.06, 17.14, 17.15 and 17.16 to L. Of the milestones added later, 17.50 moved to M with its roles page and 17.64 to M on its count.
+- **Sizes.** A size is read off the milestone's own content, so a label can be checked against the text: S is at most 4 deliverables and at most 5 acceptance checks, L is 8 or more deliverables or 8 or more acceptance checks, and M is everything between. Two milestones carry L on judgment instead of count, 17.24 because it installs and runs on two desktop operating systems and 17.51 because it is one operation from end to end, and the Oversized note names both with the rest. Recounting moved sizes that were already published, without touching any id: 17.01 and 17.07 to S, 17.03, 17.04 and 17.12 to M, and 17.06, 17.14, 17.15 and 17.16 to L. Of the milestones added later, 17.50 moved to M with its roles page and 17.64 to M on its count. Of the thirty-one added on 2026-09-18, the thirteen marked S each carry at most 4 deliverables and at most 5 checks, and none of the eighteen marked M reaches 8 of either, so nothing new is large and the Oversized note's list of nine stands as it is. Where a 2026-09-18 deliverable was added to a milestone that already existed, it was folded into a deliverable already there wherever a new bullet would have changed that milestone's size, which is why 17.21 and 17.70 gained a clause rather than a line.
 - **Oversized.** The large milestones are the nine carrying L: 17.06 dashboard app and overview page, 17.14 panel listener and audit store, 17.15 schedules, 17.16 backups, 17.18 file roots and the path jail, 17.22 nodes, 17.24 desktop control app, 17.51 backup restore and 17.73 the design system. No other milestone in this phase is large. Split 17.73 along these lines if a focused stretch cannot finish it: the token pipeline with its generator and gates, and the component set with its gallery and tests. Split any of them again if a focused stretch cannot finish it, along these lines: 17.14 into the listener with its TLS and the sessions, limiter and audit store; 17.15 into the engine with its triggers and the tasks with their completion and countdowns; 17.16 into the dumps with their snapshot record and the archive with its verification; 17.06 into the app shell with its route table and the overview cards; 17.18 into the jail with its roots and the listing and reading page; 17.22 into the join with its heartbeat and the nodes page with placement.
 - **Gated checks.** A check that needs the maintainer's own machine, a second machine, a security key, a desktop SFTP client, a Pterodactyl install or a retail client session is marked `Dev-gated:` with what it needs, the form phase 16 already uses; a check an environment variable turns on is marked `Env-gated` with that variable, as the Tests section of doc/ARCHITECTURE.md describes. doc/ROADMAP.md's Where we are paragraph lists the phase 17 checks that wait for the maintainer.
-- **Proposals.** doc/PANEL.md proposes the choices this phase rests on, and doc/ROADMAP.md lists every one of them under Decisions needed with the milestones it blocks. All twenty-one: the scope tree with its default role bundles; whether the admin API's remote-access rule extends to the panel's own listener; the command security level cap on `console.write`; the keyring for the supervisor's sealed secrets; whether the panel's ciphers and keyed hashes stay inside the settled Botan stack or libsodium widens; the event socket protocol with its close codes; backup archive encryption as a default and whether dumps are structured rows rather than SQL text; the S3 client; the time zone data source and whether the image ships tzdata; the login-screen countdown notice; whether a node's schedules run on the node or centrally; the file editor and archive libraries with the default archive format; whether SFTP access and remote file pull are built at all, and the SSH library; the WebAuthn implementation; the QR renderer; the trash and version store locations; database credential rotation per server type; the realm and installation maintenance bypass levels; whether the panel may export world edits into a pending SQL tree; whether the panel offers player registration; and where the operator's patch signing key lives. Nothing here settles any of them, each milestone's text names the ones it rests on as proposals, and no check assumes one. Until the scope tree is settled, grants are the per-app sub-user grants already settled under Decisions, Operations, and every acceptance check here stays at app scope.
+- **Proposals.** doc/PANEL.md proposes the choices this phase rests on, and doc/ROADMAP.md lists every one of them under Decisions needed with the milestones it blocks. All twenty-five: the scope tree with its default role bundles; whether the admin API's remote-access rule extends to the panel's own listener; the command security level cap on `console.write`; the keyring for the supervisor's sealed secrets; whether the panel's ciphers and keyed hashes stay inside the settled Botan stack or libsodium widens; the event socket protocol with its close codes; backup archive encryption as a default and whether dumps are structured rows rather than SQL text; the S3 client; the time zone data source and whether the image ships tzdata; the login-screen countdown notice; whether a node's schedules run on the node or centrally; the file editor and archive libraries with the default archive format; whether SFTP access and remote file pull are built at all, and the SSH library; the WebAuthn implementation; the QR renderer; the trash and version store locations; database credential rotation per server type; the realm and installation maintenance bypass levels; whether the panel may export world edits into a pending SQL tree; whether the panel offers player registration; where the operator's patch signing key lives; the sequential ramp for a heatmap or a density grid; the one search engine behind the log, activity and chat searches; the declarative installation file's format; and what records an on-demand profile of the world tick. Nothing here settles any of them, each milestone's text names the ones it rests on as proposals, and no check assumes one. Until the scope tree is settled, grants are the per-app sub-user grants already settled under Decisions, Operations, and every acceptance check here stays at app scope.
 - **Docs.** The supervisor is a fourth executable and the panel's host. The commit that adds this file also adds it to doc/ARCHITECTURE.md's Processes table, its repository layout block and its Operations paragraph, so nothing is left to do there. What stays open is recording the panel listener's own bind and TLS rule under Decisions, Operations, which waits on the matching entry under Decisions needed in doc/ROADMAP.md; until it is recorded, 17.14's text says that rule is a proposal.
 - **Security first.** Trusted proxies and the client-address rule land with the panel listener in 17.14, and required two-factor with 17.47, not behind 17.19 and 17.35. Sign-in throttles, rate limits and audit addresses are wrong without them.
 - **One of each.** One stream layer with backlog, sequence numbers and resume (17.04), which 17.12 and 17.26 reuse; one app list (17.06); one browser socket (17.26); one audit store (17.14) with one scope that writes into it (17.49); one stored command history (17.49). No milestone builds a second copy of a subsystem. The one piece of rework is transport: the 17.06 overview and the live pages of 17.07 and 17.13 ship on the per-app streams of 17.04 and 17.12, and 17.58 moves them onto the panel socket so the dashboard ends with one socket client and one reconnect policy. What is replaced there is the transport, not the pages.
 - **Client-derived data.** Backup archives and file roots carry the type dump and extracted data built from the operator's own install, and opt-in patch components can carry client files. 17.16, 17.18, 17.43 and 17.65 follow the bring-your-own-files rule under Decisions, Experimental features: the client install root is never downloadable through the panel, and off-machine storage is the operator's own bucket with the archive's contents stated.
 - **Correction.** 17.15's deliverable said to skip a run when no players are online, while its acceptance check described a schedule that runs only when no one is online. Both are useful and opposite, so 17.44 offers both conditions by name, `skip_if_empty` and `only_when_empty`, and 17.15's checks name neither.
 - **Risk.** 2.15's real-client check showed that the client displays MSG_LOGINSERVERSHUTDOWN as the server going down, and the login server closes the connection as it sends it. A login-screen warning at 5 and 1 minutes therefore needs a notice that does not disconnect, found by capture or client reverse engineering. Until one is found, 17.15 sends only the final notice on the login server and earlier warnings go to players in the world.
+- **Operations depth.** 17.74-17.104 were added on 2026-09-18, after research against the panels and observability tools operators already run and after the maintainer judged the console this phase shipped. They fall in five bands. Reading a line: 17.74-17.77, which rework what 17.01 shipped and carry their own checks rather than editing 17.01's ticked ones. Seeing from outside: 17.81 and 17.94, because every health signal the first 73 milestones define is the server reporting on itself, and a server that is healthy by every internal figure and unreachable behind a firewall rule reads as fully green. Understanding what happened: 17.78, 17.79, 17.80, 17.83, 17.90, 17.91 and 17.92, which answer why rather than whether. Acting on the game rather than on the process: 17.89, 17.95, 17.101, 17.103 and 17.104, since nothing in the first 73 restores anything smaller than a whole database or gives a player anything. Not being told twice: 17.85, 17.86 and 17.87. The rest, 17.82, 17.84, 17.88, 17.93, 17.96, 17.97, 17.98, 17.99, 17.100 and 17.102, each remove a reason to reach for something Ambrose deliberately does not have, such as a shell. **Scheduled now:** 17.74, with 17.75, 17.76 and 17.77 behind it; 17.74 is in the Built first order immediately after 17.01. Everything else here is planned work that waits for its dependencies and its turn, and nothing else in this phase is reordered for it. Once those dependencies allow, the order worth taking is 17.81, 17.78, 17.83, 17.80, 17.82, 17.86, 17.89, 17.88 and 17.95; if the phase has to be cut, the last to schedule are 17.79, 17.96, 17.97, 17.98, 17.99, 17.100, 17.101, 17.102, 17.103 and 17.104, none of which blocks a server from running. Four ideas from the same research were deliberately not taken: statistical anomaly detection per metric, which on one machine with tens of players pages on every unusual login hour; browser push, which routes through another company's endpoints and would break the rule that nothing leaves the machine; a browser shell, which would defeat the path jail, the protected paths and the audit model in one control, and which 17.84 removes the reason to ask for; and a plugin API, which is a remote code execution surface on a panel that fronts a game database, and whose useful half 17.101 gives without running anybody's code.
 
 ## 17.01 Server console: colored logs and a command prompt
 
@@ -232,6 +264,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - A route table in which each route names the permission it needs and whether it appears in navigation, so later pages hide what the user cannot use and a direct link shows an access-denied page
 - Overview cards per app showing health, role, realm, address and port, uptime, revision, sessions, players against the realm's limit, tick time average and maximum, and badges for crash loops, restart required, pending SQL updates, client revision mismatch and open problems, with automatic reconnection and a visible stale state
 - Problem records from 17.03 shown on the card with a button that opens the page that fixes them
+- Every live figure carrying the age of the sample it came from, and a figure past its freshness budget demoted to the muted treatment doc/DESIGN.md's Live data rules set, saying how long since the last sample rather than being blanked or left looking current
 - Actions and fields the build does not report, read from `GET /api/capabilities`, hidden rather than shown failing
 - Errors shown beside the form or dialog that caused them, with each field of a 422 response marked and the response's request id shown
 - A responsive layout that works at phone width, with light and dark themes that default to the system setting, and no request to any host other than the dashboard's own
@@ -243,6 +276,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - [ ] The overview is usable at 400 pixels wide with no horizontal scrolling
 - [ ] The built dashboard served by the admin API loads with no browser console errors
 - [ ] With the type dump removed, the gameserver card shows the problem, and its button opens the client data page
+- [ ] Closing the stream leaves every card's figures readable and visibly stale within the freshness budget and one interval, with the age of the last sample named, and no card reports a stale figure as current
 - [ ] Loading the built dashboard makes no network request to any other host
 - [ ] A capability the build does not report leaves its control out of the page, and nothing in the browser holds an app token or a stored server list
 - [ ] A test over the route table fails when an entry names no permission or leaves out its navigation flag, and a direct link to a route the caller may not use shows the access-denied page
@@ -260,6 +294,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - A log viewer with level and category filters, text search with highlighted matches, pause and resume with a count of new lines, a jump-to-newest control, copy, and a tab per server; it resumes after its last sequence number when the connection returns instead of clearing
 - A command console page with output that notes commands are audited, showing each command's result lines under the command, asking before a destructive command sends its confirmation flag, and completing command names the caller's security level allows
 - Recall of the commands typed in the open page, held in memory only, so nothing here has to be replaced when 17.49 delivers the one stored history per panel user and app
+- The console row built as the four-column grid doc/DESIGN.md's Log lines and values section sets, with the level chip the only tinted part of the row, the message in its own column so a wrapped line hangs under itself, the value runs read from the record's own typed ranges once 17.76 carries them rather than lexed in the browser, and a search hit offering to mark that token everywhere it appears
 
 **Acceptance**
 
@@ -430,7 +465,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 - `ScheduleMgr` in the supervisor with no cron daemon or queue: a heap of due times on one timer, re-armed when a schedule changes or the wall clock jumps, with each run's state committed to the store before and after every task; cron parsing and next-run math in `src/common/Time/`
 - Schedules with a cron expression (five fields, names, steps and the `@daily`-style macros) or a one-time date in a chosen IANA time zone, an overlap policy and a misfire grace, each running an ordered list of tasks timed after the previous task or from the scheduled time, with offsets: announce, run a command, restart, stop, start, back up, reload, set a setting, and update once 17.17 lands
-- Parse errors returned with the field and position, refusal of expressions that never fire, and a preview of the next five runs with daylight saving notes
+- Parse errors returned with the field and position, refusal of expressions that never fire, and a preview of the next five runs with daylight saving notes, computed by a call to the server against the same code that will fire the schedule, never by a second implementation in the browser
 - Time zone data reloaded with the supervisor's reload, which recomputes every next run; a schedule whose zone the new data no longer holds is held with an error instead of firing at the wrong time. The data source where a platform's library lacks one is a proposal in doc/PANEL.md
 - A version per schedule, saves that take `If-Match`, and a stale save answered with 409 and the current version
 - Task completion that waits for the real result through 17.27's operations: a restart when the app is healthy again, a command when its output returns, a backup when it is verified; a failure policy per task of stop, continue or retry with a delay, and always-run cleanup tasks
@@ -459,7 +494,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 - Backups of named components: every Ambrose database as consistent logical dumps taken inside one read-only transaction per database server, the config, data and type dump folders, and the supervisor's store, packed into one zstd-compressed archive with a SHA-256 manifest
 - Online gameservers flush their write-behind queue and save characters through the 5.03 persistence path before the dump begins, so nobody is kicked and no character is captured mid-save
-- A snapshot record written inside each dump transaction: per table the row count and a row checksum, plus the last applied update per database, the client revision and the Ambrose version, so 17.51 can prove a restore matches the moment the dump began
+- A snapshot record written inside each dump transaction: per table the row count and a row checksum, plus the last applied update per database, the client revision and the Ambrose version, so 17.51 can prove a restore matches the moment the dump began, and a per-character read path over the archive, so one character's rows can be read out without restoring it, which 17.95 needs and which is nearly free while the format is being written
 - A status per backup (queued, dumping, archiving, verifying, succeeded, failed, interrupted, cancelled) with phase, progress, error and the storage location on the record; jobs left running by a crash are marked interrupted at the next start and their partial files removed
 - Verification that reads the finished archive back, checks every file against the manifest and the snapshot record against the dump, and only then marks the backup succeeded
 - Local storage in a folder readable only by the service user, with a free space check and a reservation before the dump starts; S3-compatible storage follows in 17.43
@@ -541,6 +576,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - Downsampling on write, so any range reads a bounded number of points, and a stretch while an app was stopped drawn as a gap rather than as zero
 - History that survives a supervisor restart, with the day's full-detail samples folded into the long series exactly once
 - A benchmark that reports the sampler's cost in microseconds per app per sample, recorded with the milestone instead of asserted as a share of a core
+- The sample shape left open for the rows 17.91 and 17.92 add, the tick breakdown per subsystem and the per-session network quality, so those milestones add series to this sampler rather than building a second one
 - Alert rules, delivery and acknowledgement are 17.67, so this milestone needs no mail settings
 
 **Acceptance**
@@ -583,7 +619,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - Email, address and MachineID hidden from users without `accounts.pii.read`
 - A bans page for account, address and machine bans with duration, reason, who and when, and unban with a reason, matching the 6.05 console commands
 - A characters page per account listing characters with level, school and location, with rename, restore of a deleted character and delete as 3.17 and later phases support them, and an edit form whose fields are those the running build reports as editable through `GET /api/capabilities`, such as gold and level once later phases make them so, each applied through its own GM command
-- An online players page with realm, zone and session time, joins and leaves arriving live, and kick, mute and teleport actions from 6.05, 12.07 and 6.06 once those exist
+- An online players page with realm, zone and session time, joins and leaves arriving live, kick, mute and teleport actions from 6.05, 12.07 and 6.06 once those exist, and the row's own slot reserved for the per-session quality chart 17.92 fills, so that milestone adds a column rather than reworking a finished table
 - Every action goes through CommandMgr with the panel user's permissions and command level, refuses to act on an account at or above the user's own security level, requires a reason for bans, locks and security level changes, and is audited, refused attempts included
 - A search in the top bar over accounts, characters and the apps the caller may see, each result checked against the caller's own permissions before it is returned and each row opening its page
 
@@ -727,10 +763,12 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - `POST /api/panel/power` answering 202 with an operation id, with each step and the result streamed as power progress and result events on the 17.26 socket and recorded in the audit log
 - Disable and enable for an app, which stops it and refuses starts while disabled, with the reason and who set it on the record
 - Pages for an app in a protected state show the state and its live progress in place of controls, while owners keep the console
+- Protected hours: a setting naming the hours when a restart, an update or a migration is refused, checked here where every power request already passes and again in the schedule path, with an owner override that needs a reason and writes an audit row
 
 **Acceptance**
 
 - [ ] A restart requested while a backup restore holds the app is refused with 409 naming the restore
+- [ ] A restart inside protected hours is refused naming the window, an owner's override with a reason goes through and is audited, and a scheduled restart inside the window is refused the same way
 - [ ] Kill during a stuck stop ends the process and records a requested exit, not a crash
 - [ ] Restarting the stack stops gameservers before the loginserver and starts the loginserver before gameservers
 - [ ] A power request answers 202 with an operation id, and its progress and final result arrive on the socket and in the audit log
@@ -1227,6 +1265,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 **Deliverables**
 
 - An `AuditScope` that records the panel user, address, subjects, result, reason and error of every action into the 17.14 audit tables, in the same transaction as the change it records, refused attempts included, so a change cannot outlive its record and no milestone keeps a log of its own
+- A chain hash column on the audit row from the day the store is written, carrying the hash of the row and of the row before it, so 17.93 has a chain to verify and stream rather than a migration to run over a store already full
 - The supervisor relays each app's admin API behind the signed-in user's permissions, holding the per-app tokens itself and passing the command security level the user's grants allow; the browser holds no app token, and the 17.02 tokens stay for scripts. The level cap is the command level proposal in doc/PANEL.md
 - One stored command history, per panel user and app, in the supervisor's store, capped per user, with sensitive arguments redacted, which replaces the in-page recall 17.07 keeps for the open page and is the only history anything stores
 - A relay timeout and an error that distinguishes an app that is stopped, one that refuses the token and one that timed out, each recorded
@@ -1319,7 +1358,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 - A text editor with syntax highlighting for `.conf`, SQL, JSON, XML and Lua, from the editor library the maintainer chooses from the proposals in doc/PANEL.md
 - `.conf` validation against the 17.12 settings schema before saving, a warning when a key is shadowed by a live setting or locked by a layer, and an offer to run `reload config` afterwards
-- Saves that require the ETag from the last read, write a temporary file and rename it over the target, and answer 409 with the current ETag and a diff when the file changed underneath
+- Saves that require the ETag from the last read, write a temporary file and rename it over the target, and answer 409 with the current ETag and a diff when the file changed underneath, the diff shown in the editor's own merge view; a settings, grant or schedule review shows a structured difference instead, never a text difference of formatted JSON, which invents noise from key order and hides which secret is which
 - A version store per root keeping previous versions with who and when, with view, diff and restore; its location and retention are a live setting and a proposal in doc/PANEL.md
 - Every save audited with the file's hash before and after, and secret values still redacted in the editor without `settings.secrets.read`
 
@@ -1450,7 +1489,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 - Pre-start checks streamed as supervisor records: the binary and its `--check`, config validity, database reachability and pending schema updates, client install and type dump (running 3.22's setup as the setup state when one is missing), free ports and free disk space
 - A failed check that ends the operation with the reason in its result rather than a silent accepted response, and a check list on the app's page with each item's last result
-- A restart choice of now or with a countdown, whose confirmation shows players in world, sessions at character select and active patch downloads
+- A restart choice of now or with a countdown, whose confirmation shows players in world, sessions at character select and active patch downloads, and says so when the time asked for falls inside 17.27's protected hours, with the override and its reason in the same place
 - A note in the confirmation when a live setting or a reload would avoid the restart, naming the setting or target
 - Every check result and every confirmed restart recorded with what the operator was shown
 
@@ -1472,7 +1511,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 - Exit classification: requested, clean but unexpected, crash with the Windows exception or POSIX signal named, out of memory, and startup failure, taken from the exit code, the signal and the app's own last lifecycle state
 - Exponential backoff from 1 second to 5 minutes, reset after 10 healthy minutes, and a crash loop after a set number of crashes in a window, which stops restarting until a manual start and badges the app
-- A crash record per crash with time, exit code or signal, classification, uptime, the last 200 log lines and any minidump path, kept per app with a retention setting
+- A crash record per crash with time, exit code or signal, classification, uptime, the last 200 log lines and the dump path, which 17.83 is what writes, symbolizes and groups; until it lands the record says no dump was written rather than carrying a path to nothing
 - A crash history on the app's page with each record's detail, and the crash and crash-loop conditions published for 17.67's alert rules
 - The supervisor's own restart of a crashed app, from 17.08, now runs through the 17.27 operation model so a crash during a protected state does not fight the operation holding the lock
 
@@ -1544,6 +1583,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - Chat search for a reported player over 12.07's chat records, bounded by time range and result count, with the lines around a match, filtering by channel, and the bound reported when it stops early
 - Mute history per account and character with who, why, how long, when it ends, and the kicks and bans the same moderator issued, plus a repeat count per subject
 - Actions taken from a report go through 17.21's checked paths for mute, kick and ban, each linked to the report it came from and each requiring a reason
+- A live chat tab beside the search, on the same socket and under the same channel filter and permission, with its own rate limit and the rule that an operator speaks as an operator and never as a player, because an incident is watched as it happens and the page and the socket already exist
 - Queue counts need `players.read`; reporter identity and chat text need the moderation permissions, and every read of chat text is audited with the subject
 
 **Acceptance**
@@ -1630,6 +1670,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 **Deliverables**
 
 - Alert rules with a threshold, duration and severity for a crash, a crash loop, high tick time, high memory, low disk space, a failed backup, a failed or permission-revoked schedule, stale online rows cleared after a crash, sign-in lockouts above a rate and credentials near expiry; the update, node and queue conditions register with 17.17, 17.22 and 17.71 when those land
+- The rule and the fired-alert record carrying a group key, a parent rule that suppresses them, a composite condition and a maintenance-window suppression flag from the day they are written, even though 17.85 is what uses them, because two fields retrofitted into a table of fired alerts is the painful version; a composite condition is also what stops the commonest false page on a small installation, high memory while a backup runs
 - Delivery to webhooks such as Discord and to email through 17.35's mail settings, with repeat limits, one notice while a condition stays true, and a failed delivery recorded and retried with backoff
 - A notification center in the dashboard with toasts for finished background work
 - An alerts page with each alert's history and acknowledgement, showing who acknowledged it and when, and a mute per rule with a reason and an end time
@@ -1699,7 +1740,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Deliverables**
 
-- A public read-only page on the panel listener at its own path, off unless `Panel.PublicStatus.Enable` is set, showing each realm's up or down state, whether the login server is accepting players, and the current or next maintenance window from 17.64
+- A public read-only page on the panel listener at its own path, off unless `Panel.PublicStatus.Enable` is set, showing each realm's up or down state, whether the login server is accepting players, and the current or next maintenance window from 17.64; once 17.94 lands the page takes its uptime figures from there rather than computing a second set of its own
 - Aggregate figures only: no player name, address, account count or app internal, with a response shaping test that proves the payload holds nothing else
 - Scheduled downtime published from a 17.15 schedule or a 17.64 window, with a short operator note, and an incident note an operator can post and clear, audited
 - Its own cache and rate limit, no cookie set and no session read, so the page cannot be used to load the panel or to probe a session
@@ -1764,9 +1805,9 @@ Added on 2026-09-18 at the maintainer's direction, who asked that every screen l
 **Deliverables**
 
 - `design/tokens.json`, the one place a design value is written, and `apps/designtokens/designtokens.py` with its tests, which generates the Tailwind theme and semantic layer as CSS, typed constants and union types as TypeScript, a constexpr header for the terminal carrying each token's truecolor, 256 and 16 values, and the tables inside doc/DESIGN.md itself, so the document cannot disagree with the code
-- A contrast gate in the generator that computes every documented text and ground pair and refuses to generate when one falls below 4.5:1, or below 3:1 for text at 24 px and above and for a focus indicator
+- A contrast gate in the generator that computes every documented text and ground pair and refuses to generate when one falls below 4.5:1, or below 3:1 for text at 24 px and above and for a focus indicator, and a second, non-text pair set at 3:1 covering every control edge against every surface it may sit on, because a gate that passes while an empty input is a 1.06:1 rectangle is worse than no gate, since it gets cited as proof
 - `packages/ui/`, the `@ambrose/ui` workspace package that both apps import: no build step, raw components exported through the `svelte` condition, with the generated tokens, the shared motion module and its duration constants, the typed host bridge, and the named icon set
-- The component set the panel and the launcher both need, grouped as doc/COMPONENTS.md lists them: foundations, controls, containers and overlays, shell and navigation, state and meaning, and data; behaviour from the primitive library, look from the tokens, and each one carrying its states, its keyboard behaviour and its label rules
+- The component set the panel and the launcher both need, grouped as doc/COMPONENTS.md lists them: foundations, controls, containers and overlays, shell and navigation, state and meaning, and data; behaviour from the primitive library, look from the tokens, and each one carrying its states, its keyboard behaviour and its label rules, with every component that renders a collection shipping four stories, loading, empty, zero results and error, since Ambrose has an unusual number of legitimately empty surfaces on its first day
 - The three fonts vendored as latin variable files with our own face rules and their licence text, so a surface loads no font from any host
 - A gallery in `packages/ui/.storybook` showing every component in every state, with a tokens page printing each token's contrast on each surface and an icons page listing the icons in use, built as static files that are never served to an operator
 - Tests in four projects: logic and tokens with no browser, every component and every story in both Chromium and WebKit with the accessibility gate, screenshots in a container off the blocking path, and the scaffolding for the end-to-end project the surfaces will use
@@ -1781,10 +1822,708 @@ Added on 2026-09-18 at the maintainer's direction, who asked that every screen l
 - [ ] A C++ test reads the generated header and a component test reads the generated stylesheet, and both fail when one token's value differs from the other's
 - [ ] A component that writes a hex colour, a Tailwind arbitrary value or an inline style carrying a colour fails the checks job, and the allow comment is the only way past it
 - [ ] Every component in `packages/ui` has at least one story, proved by a check that fails when a new component file has none
-- [ ] Every story passes the accessibility gate at WCAG 2.1 AA, and the canary story with a deliberately unlabelled control fails the run
+- [ ] Every story passes the accessibility gate at WCAG 2.2 AA, and the canary story with a deliberately unlabelled control fails the run
+- [ ] The three criteria the automated gate cannot see each have their own test and each fails when broken: a focused row under sticky chrome, a target under its floor for the pointer in use, and an authentication field that refuses a pasted value
+- [ ] Every collection component ships its loading, empty, zero-results and error stories, proved by a check that fails when one is missing
+- [ ] Lowering an edge token until a control edge falls under 3:1 against any surface it may sit on makes the generator refuse, naming the pair
 - [ ] The same component set passes in Chromium and in WebKit, and a failure in WebKit alone fails the job
 - [ ] With the network unavailable, `npm ci --offline --ignore-scripts` from the primed cache installs and both apps build, on Windows and on Linux
 - [ ] The built output makes no request to any other host, proved by a check that fails on an absolute http or https URL in the bundle
-- [ ] With reduced motion set, every duration constant is zero, no screen loses information, and a test asserts both
+- [ ] With reduced motion set, every duration constant is zero and the two things that carry information through motion render their still form, the live dot as a filled dot with the word Live and its sample's age, and the indeterminate indicator as words saying an operation is running
 - [ ] Building with the front-end CMake option off still builds the servers and prints what it left out
 - [ ] The front-end job runs on Linux only, and a failing gallery or component test fails it
+
+## 17.74 Console log line: columns, parts and per-part color
+
+**Goal:** An operator reads a console line by scanning columns, and color marks only the parts that carry meaning.
+
+**Size:** S. **Depends on:** 17.01
+
+Added on 2026-09-18 at the maintainer's direction. 17.01 shipped a console where the level's color runs the length of the message, so an INFO line is teal from end to end and a WARN line gold from end to end, and the category is not shown at all. This milestone is the rework, with its own checks: 17.01's ticked checks stay as they are and none of them changes meaning here. The layout and the tokens it uses are in doc/DESIGN.md's Log lines and values section, so the format survives outside this text.
+
+**Deliverables**
+
+- The record's parts widened to timestamp, level, thread, category, body, value, punctuation and padding, with each part taking a named role instead of each level coloring a whole line: the level word in the level's color, the body in body text, the timestamp faint and the category quiet, and the whole record dimmed at debug and trace
+- A fixed console layout when output is a terminal: a short `HH:MM:SS.mmm` time, the five-character padded level word the file already writes, and the category padded to `Console.CategoryWidth` (18 by default, 0 for inline and unpadded), so the message begins at the same column on every line, with the timestamp brightening on the first line of each new second
+- `Console.Colors` keeping its six-code form as a shorthand for the six level roles and gaining a named form for the body, value, category, timestamp and punctuation roles, with `Console.Timestamp`, `Console.CategoryWidth` and `Console.RepeatCategory`, all applying from the next line written, documented in doc/config/logging.md
+- Each app's `.conf.dist` console appender turning on the category flag, which is off today, so the column exists at all
+
+**Acceptance**
+
+- [ ] At every level the message body renders in the body color and only the level word carries the level's color, asserted on a fake console
+- [ ] Across a run of mixed categories every message starts at the same column, and a category longer than the width is shortened in the middle while the full value still reaches the file and the log stream
+- [ ] With output redirected the bytes are identical to the bytes before this milestone, full date and unpadded category included, and hold no escape sequence
+- [ ] A six-code `Console.Colors` line written before this milestone still parses and still colors the six levels as it did
+- [ ] Dev-gated: on the maintainer's own Windows console and Linux terminal, a screenful of a real login server start reads as columns with only the level words and the categories marked. Needs a terminal, so it is run by hand and recorded
+
+## 17.75 Console color conventions and the color depth ladder
+
+**Goal:** Ambrose honors the color conventions other command-line programs honor, and sends the color the terminal can actually show.
+
+**Size:** S. **Depends on:** 17.74
+
+**Deliverables**
+
+- One precedence, documented as a table in doc/config/logging.md: `--color=never|auto|always`, then `Console.Colors`, then `NO_COLOR` present and not empty, then `CLICOLOR_FORCE` or `FORCE_COLOR` set and not `0`, then `CLICOLOR` set to `0`, then whether standard output is a terminal and `TERM` is not `dumb`
+- `FORCE_COLOR`'s levels 0, 1, 2 and 3 also choosing the depth, and `TERM=dumb` turning color off on Windows as it already does on POSIX
+- A depth detected once at start and again on a configuration reload, pinned by `Console.ColorDepth = auto|16|256|truecolor`: truecolor when `COLORTERM` reports it or the environment names a terminal that carries it, 256 on a Windows console host with virtual terminal sequences because it rounds a truecolor value to its own table, 256 when `TERM` ends in `256color`, and 16 otherwise
+- The truecolor, 256 and 16 value of every role read from the one header 17.73's generator writes, so the terminal cannot drift from the panel
+
+**Acceptance**
+
+- [ ] `CLICOLOR_FORCE` set to `true`, to `yes` and to `2` each force color on, `FORCE_COLOR=0` turns it off, and `CLICOLOR=0` turns it off on a terminal, each with a unit test against a fake environment
+- [ ] `NO_COLOR` turns color off while `Console.Colors = 2` still turns it on, which is the convention that a per-instance setting overrides the variable
+- [ ] `TERM=dumb` writes no escape sequence on Windows and on Linux
+- [ ] At 16 colors the bytes are identical to the bytes this milestone started with, so nothing already shipped changes appearance
+- [ ] A test compares the generated header's value for a role with the panel stylesheet's value for the same role and fails when one is changed alone
+
+## 17.76 Value runs inside a log message
+
+**Goal:** The parts of a message that name a thing are marked by the call that wrote them, not guessed at afterwards by pattern matching in a hot path.
+
+**Size:** M. **Depends on:** 17.04, 17.74
+
+**Deliverables**
+
+- The formatted write path splitting its format string on replacement fields and formatting field by field, recording the byte range of every substituted argument on the record, with no change at any call site and no new macro
+- A silent fallback to the single formatting call whenever the walk meets something it does not handle, counted in the logging statistics so the fallback is visible rather than invisible, and the walk performed only while a consumer is attached
+- One class filter shared by every path: quoted text, a path or a file and line, an address or connection target, a hex digest, a number with a unit, and a dotted, underscored or all-capital identifier, with a bare count never a value and at most eight marked runs a line
+- Each marked run drawn in the value ramp doc/DESIGN.md sets, by its class, never in the line's level color, so a warning line is not gold from its level word to its values
+- The same classifier over already-rendered text for lines written as text and for output captured from a child process, working over a view without allocating, behind `Console.Highlight`
+- The ranges travelling on the record to the log stream as typed data, so the panel's console colors the same parts from data instead of re-reading text in a browser
+
+**Acceptance**
+
+- [ ] A line whose arguments are an address and a thread count marks the address and nothing else, and the bare count stays body text
+- [ ] A golden-file test over a corpus of real log lines reproduces the expected byte ranges exactly and fails when one range moves
+- [ ] The three formatting edge cases, doubled braces, a named argument and a dynamic width, each produce the same text as before this milestone, and any failure falls back rather than changing the line
+- [ ] A line written by a logging call and the same line captured from a child process's output mark the same runs
+- [ ] A line holding twenty numbers carries no more than eight marked runs and none of them is a bare count
+- [ ] A warning line draws its level word in the waiting color and each value run in its own class's color from the value ramp, so no line is one color from end to end
+- [ ] A log stream subscriber reconstructs exactly the runs the console drew
+
+## 17.77 Console wrapping, hanging indent and the record cap
+
+**Goal:** A long line stays readable on a narrow terminal, and a stack trace does not scroll the operator's prompt away.
+
+**Size:** S. **Depends on:** 17.01, 17.74
+
+**Deliverables**
+
+- The terminal width function moved from `src/server/shared/Console/` into `src/common/`, so the logging layer may measure display width without breaking the layering doc/ARCHITECTURE.md fixes, with the console prompt and its tests following the move
+- Wrapping inside the console appender only and on a terminal only: wrap at a word boundary, hang the continuation under the message column, never split a token that holds no space so a path or a digest stays searchable, and stop wrapping when the message column would fall below 24
+- `Console.MaxRecordLines`, 20 by default, after which a record ends with a line naming how many more are in the file, while the file, the stream and the database keep every line
+- The window width read once per record under the console writer's lock the prompt already takes, with `Console.Wrap = 0` giving the terminal's own soft wrap back
+
+**Acceptance**
+
+- [ ] At 80 columns a message wraps at a space and hangs under the message column, and a 74-character path holding no space overflows whole rather than being split
+- [ ] A name in a wide script and a combining mark wrap at the right column, measured by the width function rather than by bytes
+- [ ] The file's bytes for the same record are unchanged while the console wraps, and no inserted newline or padding byte reaches a file, the log stream or the database
+- [ ] A log line arriving while a command is half typed leaves the typed text alone when the line wraps to several rows, asserted byte for byte on a fake console
+- [ ] A 60-line record prints 20 lines and a tail naming the file, and the file holds all 60
+
+## 17.78 Event overlays on every graph
+
+**Goal:** A graph shows what happened as well as what changed, so an operator answers what was done at the moment a figure moved without opening another page.
+
+**Size:** M. **Depends on:** 17.19, 17.25, 17.49
+
+**Deliverables**
+
+- An events-in-range query over the audit store, crash records, schedule runs, backup outcomes, settings generations, reloads, restarts and maintenance windows, each returned with its time, kind, subject, actor and the page that explains it
+- Markers on every time series in the panel, as real markup positioned against the chart's scales rather than pixels drawn into the canvas, so each one can be hovered, focused and read, colored by meaning rather than by kind
+- A filter choosing which kinds are drawn, remembered per user, and a rule that groups markers closer together than a few pixels into one naming how many
+- The same events listed under the graph for the visible range, so the information exists without a pointer
+- Permission filtering inside the query, so a marker never reveals an event its viewer may not see, and no marker carries a secret value or a player's identity
+
+**Acceptance**
+
+- [ ] A settings change, a backup, a crash and a schedule run inside the visible range each appear at the right time with the audit row behind them
+- [ ] A marker is reachable by keyboard and reads its kind, time and subject to a screen reader
+- [ ] A viewer without the permission covering a kind sees neither its marker nor its row, and the graph still draws
+- [ ] Twenty events inside one pixel column become one marker naming how many
+- [ ] Turning a kind off removes it and the choice survives reopening the page
+- [ ] The marker colors come from the token file, proved by the check that forbids a raw color
+
+## 17.79 Correlate a window
+
+**Goal:** An operator selects the minutes where something went wrong and gets a short list of what else moved with it.
+
+**Size:** S. **Depends on:** 17.19, 17.78
+
+**Deliverables**
+
+- A window selection on any graph returning every other series ranked by how far its mean moved inside the window against the stretch before it, with a variance guard so a quiet noisy series cannot rank first
+- The ranking computed in the supervisor over the day it already keeps at full detail, with a minimum window and a cap on how many series are scored, so the answer is bounded work
+- The result beside the graph as a list of series with their before and after figures and the size of the change, each opening its own graph, alongside the same window's events from 17.78
+- The words that this ranks and never concludes, on the page as well as in the documentation
+
+**Acceptance**
+
+- [ ] A run where one series steps and the rest are flat ranks that series first, and a flat noisy series does not rank above it
+- [ ] A window shorter than the minimum is refused with the minimum named
+- [ ] The ranking answers inside its stated budget with the full set of series a busy installation carries
+- [ ] Selecting a window lists the audited events inside it as well as the ranked series
+- [ ] A viewer without the metrics permission cannot run it
+
+## 17.80 Log search over history with facets
+
+**Goal:** An operator finds what a session did at eight o'clock yesterday, not only what is on the screen now.
+
+**Size:** M. **Depends on:** 17.04, 17.07, 17.14, 17.76
+
+**Deliverables**
+
+- Full-text search over the logs the supervisor keeps, with a time range, a query and facet counts for app, level, category, realm, zone, request id, session id and account
+- A volume histogram above the results drawn with the same chart wrapper the graphs use, so a burst is visible before it is read
+- The context around a hit, the lines either side from the same run, and links to the player, the account and the app the line came from
+- A retention cap by days and by bytes enforced by the same sweep the activity log uses, and a refusal to write rather than to fill the volume when the space guard says no
+- One search engine serving this, the activity log's search and the chat search, so there is one and not three; which engine is a decision listed under Decisions needed in doc/ROADMAP.md
+- Every identity field behind the permission that covers it, and export through the formula-safe writer
+
+**Acceptance**
+
+- [ ] A line written an hour ago is found by its session id inside its range, and the facet counts agree with the rows listed
+- [ ] Asking for the context around a hit returns the lines either side from the same run
+- [ ] The retention cap removes the oldest rows once either limit is passed, and the page says what is kept
+- [ ] With the volume near its reserve the writer refuses and says so rather than filling the disk
+- [ ] A user without the account permission sees the line and not the account it names
+- [ ] The histogram's buckets and the result count agree for the same query
+
+## 17.81 Synthetic login probe and end-to-end health checks
+
+**Goal:** Ambrose knows whether a player can actually log in, measured from outside, not only that its own processes are running.
+
+**Size:** M. **Depends on:** 17.15, 17.19, 17.67, 3.24
+
+**Deliverables**
+
+- A scheduled probe running the client driver's own scenario against the installation's public address: connect, handshake, authenticate a probe account, fetch the realm list, select a character, enter the world, move and log out
+- Each step timed and recorded as its own series, so a slow handshake and a slow world entry are different lines
+- A probe account marked as one, left out of the analytics, refused a second concurrent use, with its credentials in the supervisor's keyring
+- Certificate and patch manifest checks on the same schedule: expiry, reachability and time to first byte
+- Every step offered to the alert rules as a condition, and the result on the overview as the one figure that says the game is reachable
+- A probe that cannot start because the driver or the account is missing reporting as unknown, never as down
+
+**Acceptance**
+
+- [ ] With the login server stopped the probe reports the connect step failing and the overview says the game is unreachable, and starting it again clears both
+- [ ] With the login server running but its port unreachable the probe fails while every internal figure stays healthy, which is the case this milestone exists for
+- [ ] Each step's time is a series on the graphs carrying the same figure the probe's own record shows
+- [ ] The probe account cannot be used by a person and does not appear in the analytics
+- [ ] A certificate inside its expiry window raises its rule once, not once per run
+- [ ] Removing the probe account makes the probe report unknown rather than failing
+
+## 17.82 Installation health checks with fixes
+
+**Goal:** One page says whether this installation is set up correctly, with a link to the page that fixes each thing that is not.
+
+**Size:** M. **Depends on:** 17.03, 17.06, 17.16, 17.47
+
+**Deliverables**
+
+- A registry of checks, each with a code, a severity, a sentence naming what is wrong and what it costs, and the route that fixes it, built on the problem codes the status API already publishes
+- The checks a self-hosted installation actually gets wrong: plain HTTP beyond loopback, no verified backup inside a window, two-factor not required, a first-run owner grant still held, disk headroom under the reservation, a client revision the servers did not load, a stale type dump, pending database updates, and a patch signing key missing or near expiry
+- A page listing findings by severity with their fixes and never a score, because a score invites gaming rather than fixing
+- Each check registrable as an alert rule, so the page and the alerts cannot disagree
+- A check whose subject has not been built reporting as unknown and naming its milestone, never as healthy
+
+**Acceptance**
+
+- [ ] Turning on plain HTTP beyond loopback shows it as wrong with the setting named and a link that opens it, and turning it off clears the finding
+- [ ] With no backup inside the window the page says so with the date of the last one, and a completed backup clears it
+- [ ] A check registered here and as an alert rule fires from the same figure, proved by a test that trips both
+- [ ] A finding whose subject is not built reads as unknown naming its milestone
+- [ ] A viewer sees only the findings whose subjects they may see
+
+## 17.83 Crash dumps, symbolization and grouping
+
+**Goal:** A crash at three in the morning leaves a stack, and the second crash of the same fault is one row with a count.
+
+**Size:** M. **Depends on:** 17.18, 17.60
+
+**Deliverables**
+
+- A crash writer in each app producing a dump at the moment of a crash, through the operating system's own writer on each platform, `MiniDumpWriteDump` on Windows and a small writer of our own on Linux, into a root the file manager already governs, with a size cap and a retention count
+- A fingerprint from the top frames, so crashes group into one record with a count, a first-seen build and a last-seen time
+- Symbolization out of band against the build's own symbols, with the build recorded so a dump from an older build is still readable
+- A crash page listing groups, each opening the stack, the log lines the crash record already keeps, and the app, realm and revision it happened on
+- The dump path the crash record already carries actually written, read and offered for download behind a step-up check, since a dump can hold memory
+- Settled on 2026-09-18: a crash reporting library such as Crashpad is not a dependency here, because its build cost does not fit the continuous integration budget; it stays an option to revisit, and the grouping, the page and the checks below do not depend on which writer produced the dump
+
+**Acceptance**
+
+- [ ] A deliberate crash in a test build writes a dump and the page shows its stack with function names
+- [ ] The same crash three times is one group with a count of three, and a different stack is a different group
+- [ ] A dump from a previous build symbolizes against that build's symbols
+- [ ] Downloading a dump needs a step-up check and writes an audit row
+- [ ] The retention count removes the oldest dumps and the space guard refuses a write rather than filling the volume
+- [ ] With dumps turned off the crash record still carries its classification and its log lines
+
+## 17.84 Support bundle
+
+**Goal:** A maintainer can debug someone else's installation from one file, without a screen share and without a shell.
+
+**Size:** S. **Depends on:** 17.08, 17.18, 17.60
+
+**Deliverables**
+
+- One archive holding versions and build commit, the effective configuration with every secret redacted by the rule file reads already use, the last lines of each app's log, crash records, system and volume figures, the installation health findings, and schedule and backup outcomes
+- A manifest inside the archive naming exactly what it holds and what it deliberately leaves out, so an operator knows what they are sending
+- Nothing from the client install and no player identity, proved by a response shaping test, in the archive format backups already use and through the same space guard
+- Its creation audited and behind its own permission
+
+**Acceptance**
+
+- [ ] The bundle holds every section its manifest names and nothing else
+- [ ] A known configuration secret and a known account verifier appear nowhere in its bytes
+- [ ] No file from the client install root is included, proved by the shaping test
+- [ ] Creating a bundle is audited with who and when, and a viewer is refused
+- [ ] With the volume near its reserve the bundle is refused rather than written
+
+## 17.85 Alert grouping, inhibition and silences
+
+**Goal:** A node going down sends one notice naming what it took with it, not fourteen.
+
+**Size:** M. **Depends on:** 17.22, 17.67
+
+**Deliverables**
+
+- Grouping in the delivery path, so alerts about the same subject arriving within a short wait become one notice naming each of them
+- Inhibition, so an alert whose parent is firing is suppressed and counted rather than sent, with the parent naming what it suppressed
+- Silences by matcher rather than only per rule: everything about a node, a realm or an app, for a window, with a reason and who set it, audited and expiring on its own
+- Suppression by maintenance window, so a planned restart does not page the operator about their own restart
+- The full history kept, so a suppressed alert is visible on the page even though it was never delivered
+
+**Acceptance**
+
+- [ ] A node going offline with two apps, two realms and a failed backup on it sends one notice naming the suppressed alerts and their count
+- [ ] A silence by matcher mutes every alert about its subject, expires on its own, and records its reason and who set it
+- [ ] An alert inside a maintenance window is suppressed and one naming the window is sent instead
+- [ ] Alerts arriving inside the group wait become one notice, and one arriving after it is its own notice
+- [ ] Every suppressed alert appears in the history, so nothing is lost, only undelivered
+- [ ] A rule with no parent and no group behaves exactly as it did before this milestone
+
+## 17.86 Notification routing, preferences and delivery test
+
+**Goal:** Each operator gets the notices that concern them, in a channel they read, and can prove the channel works before they need it.
+
+**Size:** M. **Depends on:** 17.38, 17.48, 17.67
+
+**Deliverables**
+
+- Routing by severity and by scope, so an operator receives only alerts about the apps, realms and nodes their grants cover
+- Per-user channels and preferences: the notification center, email, a templated webhook and a self-hosted push endpoint, with quiet hours and a minimum severity per channel
+- A test send per channel reporting its delivery result, with failures retried with backoff and shown on the page
+- One templated webhook body covering the services that accept an HTTP post, documented with its fields, and no third-party push service, because that would send an operator's notices off the machine
+- The payload rule enforced in one place: no secret, no player email or address, only the subject and the figure that tripped the rule
+
+**Acceptance**
+
+- [ ] An operator whose grants cover one app receives that app's alerts and not another app's
+- [ ] A test send reports success and failure honestly, and a failed delivery is retried and shown
+- [ ] Quiet hours hold a notice until they end while a critical alert still goes out
+- [ ] A webhook body carries no secret and no player identity, proved by a shaping test
+- [ ] Changing a preference applies to the next alert with no restart
+- [ ] Removing a user's grant stops their notices about that subject from the next alert
+
+## 17.87 Event-triggered automation
+
+**Goal:** The panel acts on what happens, not only on the clock.
+
+**Size:** M. **Depends on:** 17.15, 17.26, 17.60, 17.67
+
+**Deliverables**
+
+- Triggers on the events the panel already publishes: a crash, a crash loop, an exit with its classification, a failed backup, a failed reload, a queue above a threshold, a realm offline, a node offline and a client revision change
+- A trigger running the same task chain schedules already own, under the same rule, so arming one needs every permission its tasks need
+- Guards: a cooldown per trigger, a cap on runs per hour, and a refusal to arm a trigger whose own action can raise the event that fires it without a cooldown
+- A run history per trigger showing what fired it, what ran and what happened, in the record schedules already keep
+- Triggers loading live with an atomic swap, keeping the previous set when a new one fails to load
+
+**Acceptance**
+
+- [ ] A crash fires its trigger once and the cooldown holds a second crash inside the window
+- [ ] A trigger whose task the arming user may not run is refused, naming the permission
+- [ ] A trigger that restarts an app which then crashes does not loop, stopped by the cap with a record saying so
+- [ ] A trigger's run appears in the history with its cause, its tasks and its outcome
+- [ ] An invalid trigger set leaves the previous set running and reports the error
+- [ ] Disabling a trigger stops it firing without removing its history
+
+## 17.88 Command palette and keyboard-first operation
+
+**Goal:** An operator reaches any page, object or action they are allowed without knowing where it lives.
+
+**Size:** S. **Depends on:** 17.06, 17.21, 17.48, 17.73
+
+**Deliverables**
+
+- One palette over three sources, the route table, the objects the global search returns and the actions each page registers, every one filtered by permission on the server, because a palette that offers a command and then refuses it is a permissions leak
+- A shortcut registry that is both what binds the keys and what renders the shortcut sheet, so the documented shortcut and the real one cannot disagree, with no binding firing while focus is in a field or the editor
+- The sheet opened with one key, grouped by scope and filtered to what the current page and the caller's permissions allow
+- Every palette string in the locale catalogs, and every action confirmed exactly the way it is confirmed on its own page
+
+**Acceptance**
+
+- [ ] An action the caller may not run never appears, proved for a user whose grants were narrowed while the page was open
+- [ ] Every route in the route table is reachable from the palette, proved by a check that fails when a route is added without a name
+- [ ] A shortcut listed in the sheet performs the action it names, proved from the registry rather than from a fixture
+- [ ] No shortcut fires while focus is inside an input, a textarea or the editor
+- [ ] The palette is operable by keyboard alone from open to action and passes the accessibility gate
+
+## 17.89 Kill switches
+
+**Goal:** During an incident an operator turns one thing off in five seconds, and cannot forget it is off.
+
+**Size:** S. **Depends on:** 17.12, 17.13, 17.27
+
+**Deliverables**
+
+- A short curated page of named switches over settings that already exist, such as registration, trading, the bazaar, character creation, patch downloads and new logins, each with one sentence saying what it breaks
+- A confirmation naming that effect, a reason the operator must give, an audit row, and who engaged it shown beside the switch
+- A banner on the overview and on the public status page for every engaged switch, and a line in the digest while any is engaged
+- An engaged switch surviving a restart and reported by the status API, so nothing silently comes back on
+
+**Acceptance**
+
+- [ ] Engaging a switch takes effect live with no restart, and writes the same setting the settings page shows
+- [ ] A switch cannot be engaged without a reason, and the reason and operator are audited
+- [ ] The overview and the public status page both show an engaged switch
+- [ ] A restart leaves an engaged switch engaged
+- [ ] A user without the permission the underlying setting needs cannot engage it
+
+## 17.90 Slow query and database health page
+
+**Goal:** When the pool saturates, the panel says which statement did it.
+
+**Size:** M. **Depends on:** 17.08, 17.09, 17.30
+
+**Deliverables**
+
+- Timing on every statement at the layer the server already owns, kept as a top list by total time and by longest single run, per database and per generation
+- The call site recorded with each statement, so a slow query names the code that issued it
+- A page showing the top statements, the pool's waiters and longest wait, lock and deadlock counts where the driver reports them, and the pending update list the database page already shows
+- Bound parameters redacted by default, because a statement's parameters can carry a player's name or address, with the full text behind its own permission
+- Slow-statement and pool-saturation conditions offered to the alert rules, and the figures added to the graphs
+
+**Acceptance**
+
+- [ ] A deliberately slow statement appears in the top list with its total time, its longest run and its call site
+- [ ] Parameters are redacted for a user without the permission and present for one with it
+- [ ] The top list resets per generation and cannot grow without bound
+- [ ] The pool figures on the page are the figures the status API reports
+- [ ] Timing costs nothing measurable with the page closed, proved by a benchmark in the test suite
+
+## 17.91 Tick breakdown and on-demand profiles
+
+**Goal:** A slow tick says where the time went, not only that it was slow.
+
+**Size:** M. **Depends on:** 17.09, 17.19
+
+**Deliverables**
+
+- Accumulators per subsystem inside the world tick, network drain, movement, scripting and database waits to begin with and each later system as it lands, published through the metrics registry the way tick time already is
+- The breakdown drawn under the tick graph, with the subsystem that grew named in words as well as by color
+- A capture button recording a bounded profile for a stated number of seconds and offering it as a file, off by default, never leaving a listener open
+- A budget per subsystem, so the breakdown says which part went past its share rather than only which is largest
+- The breakdown offered to the alert rules, so a tick alert names a subsystem
+
+**Acceptance**
+
+- [ ] A test that makes one subsystem slow shows that subsystem growing, and the parts sum to the tick time inside a stated tolerance
+- [ ] The accumulators cost nothing measurable while nothing subscribes, proved by a benchmark
+- [ ] A capture runs for the requested seconds, produces a file, and leaves nothing listening afterwards
+- [ ] A tick alert names the subsystem that grew
+- [ ] A subsystem whose milestone has not landed reads as unavailable naming it, never as zero
+
+## 17.92 Per-session network quality and the player inspector
+
+**Goal:** When a player says the game is laggy, the panel answers with that session's own figures.
+
+**Size:** M. **Depends on:** 17.19, 17.21, 17.80
+
+**Deliverables**
+
+- Counters per session in the game and login servers: round-trip time from the protocol's own exchanges, loss where the transport reports it, jitter, bytes and messages a second, kept as a rolling window on the session
+- The figures on the online players list as a small chart per row and in full on the player's own page, with the session's history for as long as the session has lasted
+- A player page gathering the session, its realm and zone, its recent log lines joined by correlation id, its recent actions from the audit log and its open reports, each behind the permission that covers it
+- Session quality added to the graphs per realm as a distribution, so a realm-wide problem is visible without opening any player
+- Every identity field behind the permission that covers it, so a game master sees the quality without the account
+
+**Acceptance**
+
+- [ ] A session with a deliberately delayed client shows a higher round-trip time than a healthy one, measured from the server's own exchanges
+- [ ] The figures on the row and on the player page are the same figures at the same moment
+- [ ] The log lines shown for a session are that session's, joined by correlation id
+- [ ] A user without the identity permission sees the quality figures and not the account
+- [ ] A realm-wide slowdown is visible in the distribution without opening a player
+- [ ] The counters cost nothing measurable per message, proved by a benchmark
+
+## 17.93 Tamper-evident audit chain and audit streaming
+
+**Goal:** An audit row that was changed or removed can be shown to have been.
+
+**Size:** S. **Depends on:** 17.14, 17.49
+
+**Deliverables**
+
+- A hash over each audit row and the hash before it, written in the same transaction as the row on the column 17.49 already carries, so a partial edit breaks the chain
+- A verify command and a panel page that walk the chain and name the first row that does not agree
+- An optional append-only copy of every audit row to an outside collector, with a queue and backoff, so a local deletion does not remove the only copy
+- The limit written where an operator reads it: a chain on the same machine proves nothing against someone who can rewrite the whole chain, and the copy off the machine is what does the work
+
+**Acceptance**
+
+- [ ] Changing one audit row makes verify report that row and every row after it
+- [ ] Deleting a row is reported the same way
+- [ ] A row that cannot be chained is not written, because the hash and the row commit together
+- [ ] With the collector unreachable the queue holds rows and drains when it returns, and the page says how many wait
+- [ ] Verifying a large audit store completes inside its stated budget
+
+## 17.94 Uptime history and incident timeline
+
+**Goal:** A player and an operator can both see whether the game was up yesterday, and what happened when it was not.
+
+**Size:** S. **Depends on:** 17.70, 17.81
+
+**Deliverables**
+
+- Uptime percentages per realm and for the login path over a day, a month and a year, computed from the probe's own results rather than from the servers' opinion of themselves, and served as the one source 17.70's public page reads
+- A timeline of incidents with start, end, a one-sentence cause and the maintenance windows that were planned, with an operator's note where one was posted
+- The aggregate-only rule the public page already carries, with its response shaping test extended to the new fields
+- A sparkline per realm on the public page, and the same figures inside the panel for the operator
+
+**Acceptance**
+
+- [ ] A stretch where the probe failed appears as downtime with the right start and end, and the percentages follow
+- [ ] A planned maintenance window is shown as planned and not as an incident
+- [ ] The payload carries no player name, address or account figure, proved by the shaping test
+- [ ] The percentages on the public page and inside the panel are the same figures
+
+## 17.95 Character point-in-time restore and undelete
+
+**Goal:** One player's loss is repaired without rolling the whole database back on everybody else.
+
+**Size:** M. **Depends on:** 17.16, 17.21, 17.51, 3.17
+
+**Deliverables**
+
+- Reading one character's rows out of a backup archive through 17.16's per-character read path, without restoring the archive, listing what that snapshot holds for that character
+- A difference between the snapshot and the live rows, per table, shown before anything is written
+- Applying a chosen subset inside one transaction, with an audit row naming the operator, the reason, the snapshot and every table touched
+- Undelete of a character through the delete path phase 3 already owns, inside the window that delete keeps
+- The duplication guard that makes this safe: a restore invalidates the source rows in the same transaction, refuses to run twice on the same snapshot and target without an explicit override, and writes everything it creates into the ledger
+- A dry run as the default, and the whole operation behind its own permission with a step-up check
+
+**Acceptance**
+
+- [ ] Items restored from a snapshot exist exactly once, with the source rows invalidated in the same transaction
+- [ ] Running the same restore twice is refused without an override, and the override is audited naming who gave it
+- [ ] The difference shown before the write is what the write actually changes
+- [ ] A restore aimed at a character who is online is refused with the reason, or waits until they are offline, whichever this milestone settles
+- [ ] An undelete inside the window returns the character, and outside it is refused naming the window
+- [ ] A dry run changes nothing and produces the same report the real run does
+- [ ] A user without the permission, or without the step-up check, is refused and the attempt is audited
+
+## 17.96 Operations calendar
+
+**Goal:** One view of everything planned, so a double-experience weekend is not booked over a migration.
+
+**Size:** S. **Depends on:** 17.15, 17.32, 17.33, 17.64, 17.68
+
+**Deliverables**
+
+- One calendar over the four sources of planned events, schedules, timed game events, installation maintenance and realm maintenance, each carrying its own meaning color
+- A week and a month view in the operator's own time zone, naming the node's zone where it differs
+- A conflict warning where two planned things overlap in a way that matters, such as an event running across a restart
+- Each entry opening the page that owns it and nothing edited here, so each thing is still edited in one place
+
+**Acceptance**
+
+- [ ] An event from each of the four sources appears at the right time in the operator's zone
+- [ ] An event spanning a planned restart is marked as a conflict
+- [ ] Changing a schedule moves its entry without reopening the page
+- [ ] An entry the viewer may not see is not shown
+- [ ] A schedule's next run is the same time here and on the schedules page
+
+## 17.97 Daily operations digest
+
+**Goal:** An operator reads one message a day instead of watching.
+
+**Size:** S. **Depends on:** 17.67, 17.69, 17.86
+
+**Deliverables**
+
+- One daily message: peak and average players, new accounts, crashes by group, alerts raised and acknowledged, backup and schedule outcomes, disk and capacity headroom, and anything that failed
+- Sent through the routing and channels alerts already use, at a time and in a zone each operator chooses
+- The payload rules alerts carry, and a link into the panel for each line rather than the detail itself
+- A figure whose milestone has not landed named as unavailable rather than reported as zero
+
+**Acceptance**
+
+- [ ] The digest's figures are the figures the pages they come from show for the same day
+- [ ] A day with nothing to report still sends, saying so, because silence is indistinguishable from a broken digest
+- [ ] Each operator receives it at their own time in their own zone
+- [ ] A figure whose milestone has not landed is named as unavailable
+
+## 17.98 Capacity forecasts and the weekly load heatmap
+
+**Goal:** An operator is told that a volume fills in six days, and when it is safe to restart.
+
+**Size:** S. **Depends on:** 17.19, 17.44, 17.69
+
+**Deliverables**
+
+- A fit over the stored history for each volume and each growing store, reported as the date it runs out, refused when the history is too short to say
+- A rule offered to the alerts for a resource forecast to run out inside a window, so the notice comes before the disk is full rather than when it is
+- A grid of median players by hour and weekday as real markup, so it is selectable, printable and readable, taking the sequential ramp listed under Decisions needed in doc/ROADMAP.md once it is settled, with the quietest hours named in words either way
+- Those quietest hours offered to the schedule editor as the anchor for a restart, which is what makes the player-aware conditions chosen rather than guessed
+
+**Acceptance**
+
+- [ ] A volume filling at a steady rate is forecast inside a stated tolerance, and one with too little history says so rather than guessing
+- [ ] The forecast rule fires before the low-disk rule does on the same data
+- [ ] The grid's medians are the stored history's medians for the same hours
+- [ ] The grid is readable by a screen reader and prints
+- [ ] The schedule editor offers the quietest hour and the operator may ignore it
+
+## 17.99 Declarative installation file with diff and apply
+
+**Goal:** An installation can be written down, compared with what is running, and rebuilt from the file.
+
+**Size:** M. **Depends on:** 17.12, 17.28, 17.29, 17.36, 17.48
+
+**Deliverables**
+
+- One file describing apps, launch settings, ports and addresses, realms, schedules, alert rules, notification channels, file roots, and panel roles and grants, in the types the settings schema already generates; its own format is a decision listed under Decisions needed in doc/ROADMAP.md
+- An export writing the running installation into that file, with every secret a reference into the keyring and never a value
+- A difference between the file and what is running, shown before anything is written, in the review shape the settings editor already uses
+- An apply that is idempotent, refuses anything the caller's permissions do not cover, and stops at the first refusal with nothing half applied
+- Validation against the same schema the settings API serves, so a file written for another build is refused with its fields named
+
+**Acceptance**
+
+- [ ] Exporting an installation and applying that file back to it changes nothing
+- [ ] Applying a file with one changed value changes that value and nothing else, and the difference said so first
+- [ ] No secret value appears in the exported file, proved by a shaping test
+- [ ] A caller lacking a permission the file needs is refused naming it, with nothing applied
+- [ ] A file naming a field the running build does not know is refused naming the field
+- [ ] Applying the same file twice leaves the same installation and writes one audit record per real change
+
+## 17.100 ambrosectl: one command line over the panel API
+
+**Goal:** Everything the panel does can be done from a terminal, by a person or by a script.
+
+**Size:** M. **Depends on:** 17.36, 17.48, 17.99
+
+**Deliverables**
+
+- One program speaking the panel's own API with a personal API key, covering apps and power, settings, schedules, backups, files, users and grants, and the declarative file's export, difference and apply
+- Human output by default and machine output on request, with exit codes that mean something, so a script can act on a failure
+- The same permission answers the panel gets, the same audit rows, and no path that skips a confirmation the panel requires
+- Built and shipped for Windows and Linux with the rest of the release, its command documentation generated from the same route table the panel reads
+- A refusal that names the permission or the reason, and never a stack trace
+
+**Acceptance**
+
+- [ ] Every route in the route table is reachable from the command line, proved by a check that fails when a route is added without a command
+- [ ] A key without a permission is refused naming it, and the refusal is audited exactly as the panel's is
+- [ ] Machine output is stable across a release, proved by a schema test
+- [ ] A destructive command needs the same confirmation the panel needs, and refuses to run unattended without an explicit flag, which is audited
+- [ ] The generated command documentation matches the routes, proved by a check
+- [ ] The program runs on Windows and on Linux from the release artifacts
+
+## 17.101 Content packs: install, version and uninstall
+
+**Goal:** Authored content from outside the project is installed, listed and removed on a running server instead of being merged into it.
+
+**Size:** M. **Depends on:** 17.18, 17.34, 17.65
+
+**Deliverables**
+
+- A pack format: a manifest naming the pack, its version, what it touches, its checksums and its licence, with its dated database updates and its data files
+- An install running inside the same journal world edits already keep, so everything a pack did is recorded and reversible
+- An uninstall reversing what the install did, refused when a later pack or an operator's own edit depends on it, naming what depends
+- A packs page listing what is installed, its version, where it came from and what it touches, with an update to a newer version through the same journal
+- Signature verification against the operator's own trusted keys, reusing the signing work the patch server needs, with an unsigned pack allowed only on an explicit acknowledgement
+- The rule that a pack never carries a file from the game client, checked on install and stated in the format
+
+**Acceptance**
+
+- [ ] A pack installs, appears in the list with its version, and its rows are present in the world database
+- [ ] Uninstalling it removes exactly what it added and nothing an operator changed afterwards
+- [ ] A pack that depends on another is refused when its dependency is absent, naming it
+- [ ] An unsigned pack is refused unless the operator acknowledges it, and the acknowledgement is audited
+- [ ] A pack carrying a file that came from a client install is refused on install
+- [ ] Installing the same pack twice is refused, and an update to a newer version records both versions
+- [ ] A failed install leaves the database as it was
+
+## 17.102 Outbound event webhooks
+
+**Goal:** A community can build things around a server, from events the server already publishes.
+
+**Size:** S. **Depends on:** 17.26, 17.67
+
+**Deliverables**
+
+- Subscriptions with an event filter and a shared secret, delivering signed messages for the events worth broadcasting, such as the server coming back up, maintenance starting, a realm opening or closing and a revision changing
+- The retry with backoff, the delivery record and the page the alert channels already use
+- The payload rules alerts carry, with player names off by default, since naming a player needs a consent model that does not exist yet
+- A rate limit per subscription and a subscription disabled after a stated run of failures, with the operator told
+
+**Acceptance**
+
+- [ ] A subscribed event arrives signed and the signature verifies with the shared secret
+- [ ] An unsubscribed event does not arrive
+- [ ] The payload carries no secret, no player email or address, and no player name while names are off
+- [ ] A failing endpoint is retried with backoff and disabled after the stated run, with the operator told
+- [ ] A subscription is audited when created, changed and removed
+
+## 17.103 Item and currency ledger with anomaly rules
+
+**Goal:** Where an item came from is a question the server can answer.
+
+**Size:** M. **Depends on:** 17.25, 17.69, 8.08
+
+**Deliverables**
+
+- A row for every item and currency mutation carrying its source, reason, actor, character and a correlation id, written by the systems that mutate them rather than by the panel
+- A page following one item or one account's currency through its own history, and a query by source
+- Rules over it: an account gaining more than a stated amount an hour, an item whose live count exceeds what the ledger accounts for, and one account that is the sink of many trades, each reporting and never acting on its own
+- A retention cap by days and by bytes with the sweep and the space guard the log history already uses
+- Every identity field behind its permission, and exports through the formula-safe writer
+
+**Acceptance**
+
+- [ ] Every path that creates, moves or destroys an item writes a ledger row, proved by a test that fails when a new path does not
+- [ ] Following one item shows each step in order with its source and actor
+- [ ] A deliberate excess gain raises its rule, and the rule takes no action on its own
+- [ ] The count check finds a discrepancy planted in the test data
+- [ ] The retention cap removes the oldest rows and the page says what is kept
+- [ ] A user without the identity permission sees the movement and not the account
+
+## 17.104 Compensation grants and mass mail
+
+**Goal:** After a bad night the operator can give the affected players something, safely and on the record, instead of typing SQL at a live game database.
+
+**Size:** M. **Depends on:** 17.21, 17.33, 17.69, 8.08
+
+**Deliverables**
+
+- A grant taking a cohort, a thing to give and a reason, where the cohort is a query the analytics already build, such as everyone who was in a realm during a window
+- A preview with the exact recipient count and a sample of who, before anything is sent, with a dry run as the default
+- Caps and approval: a value cap per grant in the settings, a second operator's approval above a threshold, and an audit row naming both operators, the cohort, the reason and the exact count
+- Every unit created written into the ledger, so a compensation is as traceable as a drop
+- Delivery to the character directly where the game supports it, and by mail once the milestone that owns mail lands, naming that milestone until then
+- A grant that cannot run twice on the same cohort and reason without an explicit override, which is audited
+
+**Acceptance**
+
+- [ ] The preview's count is exactly the number of accounts the grant then affects
+- [ ] A dry run changes nothing and produces the report the real run produces
+- [ ] A grant above the value cap is refused, and one above the approval threshold waits for a second operator
+- [ ] Every unit granted appears in the ledger with the grant as its source
+- [ ] Running the same grant twice is refused without an override, and the override names both operators
+- [ ] A user without the permission is refused and the attempt is audited
+- [ ] While the mail milestone has not landed the page says so and offers only what exists

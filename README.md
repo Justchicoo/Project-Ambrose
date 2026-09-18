@@ -9,7 +9,7 @@ The experiment is simple: see how far AI-driven development can take a complete 
 
 Pre-alpha. The build toolchain, unit tests, style checker, and CI on Windows and Linux are in place. The servers do not talk to the game client yet.
 
-The full plan lives in [doc/ROADMAP.md](doc/ROADMAP.md): 17 phases and 355 milestones, each ending in something visible in the real client. Contributions go on the separate track in [doc/CONTRIBUTOR-TRACK.md](doc/CONTRIBUTOR-TRACK.md), which stays clear of the phases being built. Project Ambrose is MIT licensed ([LICENSE](LICENSE)), and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) lists every library it uses and what each licence asks. The look every screen follows is in [doc/DESIGN.md](doc/DESIGN.md), and the stack every screen is built with in [doc/UI-STACK.md](doc/UI-STACK.md). The tool suite is in [doc/TOOLS.md](doc/TOOLS.md) and the client strategy in [doc/CLIENT.md](doc/CLIENT.md).
+The full plan lives in [doc/ROADMAP.md](doc/ROADMAP.md): 17 phases and 386 milestones, each ending in something visible in the real client. Contributions go on the separate track in [doc/CONTRIBUTOR-TRACK.md](doc/CONTRIBUTOR-TRACK.md), which stays clear of the phases being built. Project Ambrose is MIT licensed ([LICENSE](LICENSE)), and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) lists every library it uses and what each licence asks. The look every screen follows is in [doc/DESIGN.md](doc/DESIGN.md), and the stack every screen is built with in [doc/UI-STACK.md](doc/UI-STACK.md). The tool suite is in [doc/TOOLS.md](doc/TOOLS.md) and the client strategy in [doc/CLIENT.md](doc/CLIENT.md).
 
 ## Building
 
