@@ -174,12 +174,12 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Acceptance**
 
-- [ ] `GET /api/health` without a token returns 401, and with the token returns 200 and the running revision
-- [ ] Twenty wrong tokens within one second from one address produce 429 responses
-- [ ] Setting `Admin.BindIP = 0.0.0.0` without TLS logs an error naming the option and exits 1 at startup, and on a config reload is refused while the old binding keeps serving
-- [ ] With `Admin.AllowPlainHttpRemote = 1` and no TLS, a non-loopback bind starts, still requires the token, and logs a warning naming the option. Env-gated: `AMBROSE_TEST_ADMIN_REMOTE_BIND` names the address to bind
-- [ ] Rotating the token and reloading config makes the old token return 401 and the new one 200 without a restart
-- [ ] Routing, authentication, and rate limiting are unit tested without opening sockets
+- [x] `GET /api/health` without a token returns 401, and with the token returns 200 and the running revision (AdminServerTest.ServesHealthOnLoopbackOnlyWithTheToken and AdminServerTest.AnAppServesItsOwnHealthWhileRunning)
+- [x] Twenty wrong tokens within one second from one address produce 429 responses (AdminServerTest.RateLimitsWrongTokens)
+- [x] Setting `Admin.BindIP = 0.0.0.0` without TLS logs an error naming the option and exits 1 at startup, and on a config reload is refused while the old binding keeps serving (AdminSettingsTest.RefusesAnUnsafeRemoteBind, AdminServerTest.RefusesAnUnsafeRemoteBindAtStart, AdminServerTest.AnAppRefusesToStartWithAnUnsafeAdminBind and AdminServerTest.ReloadKeepsTheOldListenerWhenTheNewBindIsUnsafe)
+- [x] With `Admin.AllowPlainHttpRemote = 1` and no TLS, a non-loopback bind starts, still requires the token, and logs a warning naming the option. Env-gated: `AMBROSE_TEST_ADMIN_REMOTE_BIND` names the address to bind (AdminServerTest.StartsBeyondThisMachineWithThePlainHttpOptIn, run with `AMBROSE_TEST_ADMIN_REMOTE_BIND=0.0.0.0`, and AdminSettingsTest.PlainHttpRemoteIsAnOptInThatWarns)
+- [x] Rotating the token and reloading config makes the old token return 401 and the new one 200 without a restart (AdminServerTest.RotatesTheTokenOnReloadWithoutRestarting and AdminServerTest.AnAppReloadsItsAdminApiFromItsOwnConfig)
+- [x] Routing, authentication, and rate limiting are unit tested without opening sockets (AdminRouterTest, AdminAuthTest, AdminTokenTest and AdminSettingsTest, 34 cases that open no socket)
 
 ## 17.03 Status API
 
