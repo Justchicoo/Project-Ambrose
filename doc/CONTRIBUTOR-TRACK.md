@@ -6,6 +6,8 @@ The phases in doc/ROADMAP.md are built in order by the maintainer's own agents, 
 
 So everything from outside lands here instead. This track holds work that helps the project finish sooner and cannot collide with a milestone: it adds files in folders no milestone builds in, it needs no change to a phase file, and it can be reviewed on its own.
 
+Read this document first, then contrib/findings/README.md and CONTRIBUTING.md. Working with an AI assistant is expected here: contrib/AI-START-HERE.md is a prompt to paste into yours, and it carries what that assistant needs to know about this repository before it writes anything.
+
 ## The rule that makes it safe
 
 A change on this track touches only these paths:
@@ -17,14 +19,14 @@ A change on this track touches only these paths:
 | `contrib/notes/` | Longer research writing that is not one claim: a survey, a walkthrough of a system, a summary of what you tried |
 | `contrib/proposals/` | A proposal for something in the phases, as a document. The maintainer folds an accepted one into the roadmap; you never edit a phase file yourself |
 | `apps/clientdriver/scenarios/` | Scenarios for the client driver, which are data, not code |
-| `data/sql/custom/db_world/` | World rows you authored yourself, such as a table of door destinations, as a dated update file |
+| `data/sql/updates/pending_db_world/` | World rows you authored yourself, such as a table of door destinations, as a dated update file that the maintainer moves into `data/sql/updates/db_world/` when it is merged |
 | `data/fuzz/` | Seed inputs for the fuzzers that already exist |
 | `doc/guides/` | Guides: running on a distribution, a graphics card, a language, a setup that needed a workaround |
 | `contrib/locale/` | Translations of Ambrose's own text, never the game's |
 
 Nothing else. Not `src/`, not `apps/` beyond the scenarios folder, not `doc/` beyond guides, not the phase files, not doc/ARCHITECTURE.md, doc/DESIGN.md, doc/PANEL.md, doc/UI-STACK.md, doc/ROADMAP.md, CMake files, CI files or the vcpkg manifest. A pull request that touches anything else is closed with a pointer to this document, because it cannot be merged without stopping a milestone in flight.
 
-`python apps/ci/ci_contrib_paths.py --range <base>..<head>` says whether a change stays inside the track, and `python apps/ci/ci_findings.py` checks that every finding carries what Ambrose needs to prove it. CI runs both on every pull request labelled `contrib`, and you can run them before you open one.
+`python apps/ci/ci_contrib_paths.py --range upstream/main...HEAD` says whether a change stays inside the track. Three dots, and the branch on the remote your pull request targets, where `upstream` is whichever of your remotes is github.com/Justchicoo/Project-Ambrose. Never your own `main`: a local `main` that is stale, or an upstream one that moved on while you worked, makes the check flag dozens of files you never touched. Before your first commit, `python apps/ci/ci_contrib_paths.py --paths <files>` checks files that are not committed yet. `python apps/ci/ci_findings.py` checks that every finding carries what Ambrose needs to prove it. CI runs the findings check on every pull request, and the path check on every pull request from a fork; on a branch in this repository the `contrib` label turns it on.
 
 ## What every change needs
 
@@ -32,7 +34,7 @@ Nothing else. Not `src/`, not `apps/` beyond the scenarios folder, not `doc/` be
 - **Say where it came from.** Your own observation of your own installation, your own capture of your own session, a public source you name, or your own reasoning. Never a file from the game client, never code from another server project, and never text from a wiki or a site without naming its licence and waiting for the maintainer to accept it.
 - **Say how it was checked.** A tool says what it was run against and what it printed. A note says how it was observed and what would disprove it. A scenario says it ran and what it asserted. SQL says the query that shows the rows are right.
 - **No game files, ever.** No archive, asset, text, image or dump from the client, and nothing generated from one that carries its content. A tool reads the user's own installation at run time; that is the line.
-- **Keep the house style.** Every file starts with the Project Ambrose branding header and a one-line brief, and carries no other comments. ASCII, LF endings. `python apps/codestyle/codestyle.py` must pass.
+- **Keep the house style.** Every file starts with the Project Ambrose branding header and a one-line brief, and carries no other comments. UTF-8 with no byte order mark, LF endings, no trailing whitespace, ending in a newline, which is what `python apps/codestyle/codestyle.py` enforces and it must pass. Text outside ASCII is fine where the content needs it, such as a translation.
 - **Name your tool in the commit.** AI tools are expected here; add the trailer CONTRIBUTING.md asks for.
 - **A tool brings its own dependencies.** Pin them inside `contrib/tools/<name>/`, and do not add anything to the repository's own manifests.
 
@@ -98,7 +100,7 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | F-38 | Data: what the type dump's opaque classes actually are, one class at a time | `contrib/findings/objects/` | Each one proven is one fewer blind spot in the codec |
 | F-39 | Patching: how the retail patcher handles concurrency, resume and a corrupted file | `contrib/findings/patching/` | Phase 16 serves patches, and the failure paths are what a server has to survive |
 | F-40 | Revisions: how to prove a change between two client revisions is real, rather than inferring it from a size | `contrib/findings/data/` | Milestone 3.23 follows revisions; F-15 asks what changed, this asks how you prove it |
-| C-01 | Door destinations for Wizard City: every doorway a player can walk through, with the zone it leads to | `data/sql/custom/db_world/` | `ResTeleport` carries no properties, so this table has to be authored. Phase 10 needs it and cannot generate it |
+| C-01 | Door destinations for Wizard City: every doorway a player can walk through, with the zone it leads to | `data/sql/updates/pending_db_world/` | `ResTeleport` carries no properties, so this table has to be authored. Phase 10 needs it and cannot generate it |
 | C-02 | A capture decoder: read a pcapng of a session against your own Ambrose server and print each message with its fields | `contrib/tools/` | Turns a capture into something readable when a message misbehaves |
 | C-03 | Scenarios for the client driver: the idle timeouts, a ban taking effect, a shutdown notice, a reconnect | `apps/clientdriver/scenarios/` | Every scenario becomes a check that runs itself from then on |
 | C-04 | A tool that diffs two revisions of an install: which archives, zones and locale files changed | `contrib/tools/` | Feeds F-15 and milestone 3.23 |
@@ -145,7 +147,7 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | C-45 | A guide to opening a server to the internet safely: firewall rules, what to expose, what never to | `doc/guides/` | The panel fronts a game database, so this guide is a security control |
 | C-46 | A guide to capturing a session without capturing anybody's credentials | `doc/guides/` | Captures are the project's main evidence and the main way somebody leaks their own password |
 | C-47 | A guide to reading a crash: what the logs hold, what a dump holds, what to send | `doc/guides/` | Turns a crash report from a screenshot into something actionable |
-| C-48 | Door destinations for a world beyond Wizard City | `data/sql/custom/db_world/` | C-01's shape, more of it: the teleport class carries no properties, so this can only be authored |
+| C-48 | Door destinations for a world beyond Wizard City | `data/sql/updates/pending_db_world/` | C-01's shape, more of it: the teleport class carries no properties, so this can only be authored |
 | C-49 | A proposal for the content pack format: manifest, versioning, install and uninstall | `contrib/proposals/` | It is what turns authored data such as C-01 and C-48 from a merged file into something an operator installs and removes |
 | C-50 | Locale catalogs for the newer pages: the command palette, the health page, the digest and the alert notices | `contrib/locale/` | C-16's shape, and translating is the fastest way to find a figure somebody formatted by hand |
 | C-51 | The machine-checkable finding block: extend `contrib/findings/README.md` and the findings checker to validate it | `contrib/tools/` and the README this track already owns | C-22 as a pull request, which is what makes a claim provable by a suite |

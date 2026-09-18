@@ -22,7 +22,8 @@ The file carries the claim, how it was found, exactly how someone else repeats t
   "how_to_repeat": [
     "Log a wizard into your own server and reach character select.",
     "Capture the loopback traffic on the login port with tshark.",
-    "Find the MSG_CHARACTERINFO frame and decode its blob with `bindecode --blob`.",
+    "Build the type dump of your own install with `typeextract --out dump.json`, and read WizardCharacterCreationInfo's properties from it.",
+    "Find the MSG_CHARACTERINFO frame and read its payload against that property list, counting the bits every property before m_nHairColor takes.",
     "Set m_nHairColor to 64 in your own server's reply and watch the client render colour 0."
   ],
   "evidence": [
@@ -36,6 +37,8 @@ The file carries the claim, how it was found, exactly how someone else repeats t
   "status": "claimed"
 }
 ```
+
+The tools decode objects, not captures. `bindecode` reads one KIWAD archive of your own install: `bindecode --client <your install> --wad Root.wad --list <pattern>` prints the entry names that contain a pattern, and `bindecode --client <your install> --wad Root.wad <entry>` prints that entry as JSON. It takes no bytes from a capture and reads nothing from standard input, so a captured payload is read against the type dump `typeextract` builds, as the steps above do.
 
 `method` is one of `capture` (your own session against your own server), `observation` (what your own client does on screen), `static` (reading your own copy of a file or program with your own tools), `experiment` (you changed something and watched the result) or `reasoning` (derived from other findings, which you name). Anything from a public source names the source and its licence, and waits for the maintainer to accept it.
 

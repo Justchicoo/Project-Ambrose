@@ -468,8 +468,9 @@ class ContributorPathTests(unittest.TestCase):
             "contrib/tools/waddiff/main.py",
             "contrib/notes/realms.md",
             "contrib/proposals/panel-search.md",
+            "contrib/findings/protocol/keepalive-body.json",
             "apps/clientdriver/scenarios/ban.json",
-            "data/sql/custom/db_world/2026_09_18_00.sql",
+            "data/sql/updates/pending_db_world/2026_09_18_00.sql",
             "data/fuzz/blob-seeds/one.bin",
             "doc/guides/arch-linux.md",
             "contrib/locale/de.json",
@@ -487,8 +488,19 @@ class ContributorPathTests(unittest.TestCase):
             ".github/workflows/core-build.yml",
             "apps/clientdriver/clientdriver/engine.py",
             "data/sql/base/db_world/updates.sql",
+            "data/sql/custom/db_world/2026_09_18_00.sql",
+            "data/sql/updates/db_world/2026_09_18_00.sql",
         ]
         self.assertEqual(ci_contrib_paths.check(paths), paths)
+
+    def test_only_the_named_contrib_folders_are_allowed(self):
+        self.assertEqual(ci_contrib_paths.check(["contrib/notes/capture-corpus.md"]), [])
+        invented = ["contrib/whatever/anything.md", "contrib/findings.json"]
+        self.assertEqual(ci_contrib_paths.check(invented), invented)
+
+    def test_the_tracks_own_signposts_are_out_of_reach(self):
+        signposts = ["contrib/README.md", "contrib/AI-START-HERE.md"]
+        self.assertEqual(ci_contrib_paths.check(signposts), signposts)
 
     def test_a_folder_that_only_looks_like_the_track_is_reported(self):
         self.assertEqual(ci_contrib_paths.check(["contributors/tool.py", "docs/guides/x.md", "data/fuzzers/x.bin"]),

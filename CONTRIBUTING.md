@@ -7,7 +7,7 @@ Project Ambrose is an AI-driven project. Contributions written with AI tools are
 
 The phases in doc/ROADMAP.md are built in order by the maintainer's own agents, one milestone at a time, so nobody else works from them: two people on the same milestone lose track of each other, and half a milestone cannot be reviewed against its own acceptance checks.
 
-Work from outside lands on the contributor track instead, described in [doc/CONTRIBUTOR-TRACK.md](doc/CONTRIBUTOR-TRACK.md). It has its own folders, its own list of open items, and a check that keeps it clear of everything a milestone touches: `python apps/ci/ci_contrib_paths.py --range main..HEAD`. Label the pull request `contrib` and CI runs that check for you.
+Work from outside lands on the contributor track instead, described in [doc/CONTRIBUTOR-TRACK.md](doc/CONTRIBUTOR-TRACK.md). It has its own folders, its own list of open items, and a check that keeps it clear of everything a milestone touches: `python apps/ci/ci_contrib_paths.py --range upstream/main...HEAD`, where `upstream` is whichever of your remotes is github.com/Justchicoo/Project-Ambrose. Three dots, and the branch on the remote your pull request targets: your own `main`, stale or moved on while you worked, makes the check flag files you never touched. Before your first commit, `python apps/ci/ci_contrib_paths.py --paths <files>` checks files that are not committed yet. CI runs that check on every pull request from a fork; on a branch in this repository, the `contrib` label turns it on.
 
 ## How to contribute
 1. Fork the repository and create a branch for your change.

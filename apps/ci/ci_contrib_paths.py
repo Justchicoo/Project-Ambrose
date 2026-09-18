@@ -1,14 +1,18 @@
 # Project Ambrose by Imjustchico
-# Checks that a change stays inside the contributor track's own folders, so outside work cannot collide with a milestone in flight.
+# Checks that a change stays inside the contributor track's own folders, exactly the ones doc/CONTRIBUTOR-TRACK.md's table names, so outside work cannot collide with a milestone in flight and a green check means a mergeable change.
 import argparse
 import os
 import subprocess
 import sys
 
 ALLOWED_PREFIXES = (
-    "contrib/",
+    "contrib/tools/",
+    "contrib/findings/",
+    "contrib/notes/",
+    "contrib/proposals/",
+    "contrib/locale/",
     "apps/clientdriver/scenarios/",
-    "data/sql/custom/db_world/",
+    "data/sql/updates/pending_db_world/",
     "data/fuzz/",
     "doc/guides/",
 )
