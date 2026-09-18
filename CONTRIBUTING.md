@@ -3,12 +3,18 @@
 
 Project Ambrose is an AI-driven project. Contributions written with AI tools are expected, not just allowed.
 
-## How to contribute
+## Where your change goes
 
+The phases in doc/ROADMAP.md are built in order by the maintainer's own agents, one milestone at a time, so nobody else works from them: two people on the same milestone lose track of each other, and half a milestone cannot be reviewed against its own acceptance checks.
+
+Work from outside lands on the contributor track instead, described in [doc/CONTRIBUTOR-TRACK.md](doc/CONTRIBUTOR-TRACK.md). It has its own folders, its own list of open items, and a check that keeps it clear of everything a milestone touches: `python apps/ci/ci_contrib_paths.py --range main..HEAD`. Label the pull request `contrib` and CI runs that check for you.
+
+## How to contribute
 1. Fork the repository and create a branch for your change.
-2. Read [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md) so your change lands in the right place.
-3. Use any AI coding tool you like to write the change.
-4. Open a pull request that explains what the change does and how it was verified.
+2. Pick an item from doc/CONTRIBUTOR-TRACK.md, or ask first if what you have in mind is not listed.
+3. Read [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md) so your change lands in the right place.
+4. Use any AI coding tool you like to write the change.
+5. Open a pull request that explains what the change does and how it was verified.
 
 ## Requirements
 

@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the forbidden file scan, the commit trailer check, the build stages, the vcpkg cache key, the usage count, and the build leg selection against fakes, a real git repository and a fake Actions API.
+# Self-tests for the forbidden file scan, the contributor track path check, the commit trailer check, the build stages, the vcpkg cache key, the usage count, and the build leg selection against fakes, a real git repository and a fake Actions API.
 import argparse
 import datetime
 import json
@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ci_build
 import ci_commit_trailer
+import ci_contrib_paths
 import ci_forbidden_files
 import ci_select_legs
 import ci_usage
@@ -458,6 +459,45 @@ class UsageTests(unittest.TestCase):
         self.assertEqual(by_event["schedule"], 43)
         self.assertEqual(by_job["build (linux-gcc)"], 9)
 
+
+
+class ContributorPathTests(unittest.TestCase):
+    def test_the_track_folders_are_allowed(self):
+        paths = [
+            "contrib/tools/waddiff/main.py",
+            "contrib/notes/realms.md",
+            "contrib/proposals/panel-search.md",
+            "apps/clientdriver/scenarios/ban.json",
+            "data/sql/custom/db_world/2026_09_18_00.sql",
+            "data/fuzz/blob-seeds/one.bin",
+            "doc/guides/arch-linux.md",
+            "contrib/locale/de.json",
+        ]
+        self.assertEqual(ci_contrib_paths.check(paths), [])
+
+    def test_everything_else_is_reported(self):
+        paths = [
+            "src/server/shared/Network/SessionBase.cpp",
+            "doc/ROADMAP.md",
+            "doc/roadmap/phase-03-create-list-and-delete-a-wizard.md",
+            "doc/ARCHITECTURE.md",
+            "vcpkg.json",
+            "CMakeLists.txt",
+            ".github/workflows/core-build.yml",
+            "apps/clientdriver/clientdriver/engine.py",
+            "data/sql/base/db_world/updates.sql",
+        ]
+        self.assertEqual(ci_contrib_paths.check(paths), paths)
+
+    def test_a_folder_that_only_looks_like_the_track_is_reported(self):
+        self.assertEqual(ci_contrib_paths.check(["contributors/tool.py", "docs/guides/x.md", "data/fuzzers/x.bin"]),
+                         ["contributors/tool.py", "docs/guides/x.md", "data/fuzzers/x.bin"])
+
+    def test_windows_separators_are_read_as_paths(self):
+        windows = r"contrib\notes\realms.md"
+        self.assertEqual(ci_contrib_paths.main.__module__, "ci_contrib_paths")
+        self.assertEqual(ci_contrib_paths.check([windows.replace("\\", "/")]), [])
+        self.assertEqual(ci_contrib_paths.check([windows]), [windows])
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)
