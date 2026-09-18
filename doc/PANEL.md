@@ -653,7 +653,7 @@ Samples push once a second only to subscribed sockets. History keeps a day at fu
 
 ### Graphs
 
-Graphs per app, realm and node show CPU, memory, network, disk, sessions, players and tick time over ranges from 5 minutes to 30 days, with a live view of at least 60 points that does not reset when an app stops. Stat blocks turn amber above 80 percent and red above 90 percent of a limit.
+Graphs per app, realm and node show CPU, memory, network, disk, sessions, players and tick time over ranges from 5 minutes to 30 days, with a live view of at least 60 points that does not reset when an app stops. Stat blocks turn gold above 80 percent and ember above 90 percent of a limit.
 
 ### Alerts
 

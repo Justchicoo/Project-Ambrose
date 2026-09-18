@@ -31,7 +31,7 @@
 | 3.23 | Keep up with KingsIsle's client revisions | M | 3.22 |
 | 3.24 | Drive the retail client in tests | L | 3.25, 2.14 |
 | 3.25 | Ambrose client launcher | M | 3.22, 1.21 |
-| 3.26 | Launcher window | L | 3.25, 1.04 |
+| 3.26 | Launcher window | L | 3.25, 1.04, 17.73 |
 | 3.27 | Launcher as its own app | M | 3.26 |
 
 ## Review notes for this phase
@@ -1061,7 +1061,7 @@ Added on 2026-09-17 at the maintainer's direction: the client must be driven by 
 
 **Goal:** The launcher is a window anyone can use: it shows the server, the client and the setup it is doing, takes an account and a password, and starts the game with one button, in the look doc/DESIGN.md sets.
 
-**Size:** L. **Depends on:** 3.25, 1.04
+**Size:** L. **Depends on:** 3.25, 1.04, 17.73
 
 Added on 2026-09-17 at the maintainer's direction, who approved the look in doc/DESIGN.md. The console launcher from 3.25 keeps working and stays what the 3.24 driver and the servers use; this milestone is the window over it.
 

@@ -11,12 +11,12 @@
 | 17.03 | Status API | M | 17.02, 1.22 |
 | 17.04 | Live log stream | M | 17.02, 1.10 |
 | 17.05 | Remote command console with audit log | M | 17.01, 17.02, 4.02 |
-| 17.06 | Dashboard app and overview page | L | 17.03 |
+| 17.06 | Dashboard app and overview page | L | 17.03, 17.73 |
 | 17.07 | Dashboard log viewer and command console pages | S | 17.04, 17.05, 17.06 |
 | 17.08 | Process control, config, and database pages | M | 17.06, 2.06 |
 | 17.09 | Metrics registry and Prometheus endpoint | S | 17.02 |
 | 17.10 | Grafana dashboards and operations guide | S | 17.09 |
-| 17.11 | Terminal dashboard mode | S | 17.03, 17.04 |
+| 17.11 | Terminal dashboard mode | S | 17.03, 17.04, 17.73 |
 | 17.12 | Settings and reload admin API | M | 17.02, 17.04, 17.05, 4.16 |
 | 17.13 | Dashboard settings editor and reload page | M | 17.06, 17.12 |
 | 17.14 | Panel listener, TLS, sessions and the audit store | L | 17.08, 1.12, 1.19 |
@@ -78,6 +78,7 @@
 | 17.70 | Public status and scheduled downtime page | S | 17.14, 17.19, 17.64 |
 | 17.71 | Admission queue control | S | 17.19, 17.31, 12.21 |
 | 17.72 | Opt-in backup archive encryption | S | 17.43, 17.47, 17.51, 17.52 |
+| 17.73 | Design system: tokens, components and the gallery | L | 1.02, 1.03 |
 
 ## Review notes for this phase
 
@@ -88,11 +89,11 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Live settings.** 17.12 and 17.13 were added on 2026-09-14 for the Live reload and live settings rule in doc/ARCHITECTURE.md. Config editing moved from 17.08 to 17.13, so edits apply live through the settings API instead of writing the `.conf` file and asking for a restart.
 - **Hosting panel parity.** 17.14-17.24 were added on 2026-09-17 at the maintainer's request to manage everything in one place the way game server hosting panels such as Pterodactyl do. The supervisor from 17.08 becomes the panel's single entry point, much as a Pterodactyl node daemon serves its panel: operators sign in to it once, and it relays each app's admin API. The panel milestones, 17.14 and everything above it, start after 3.23 and run alongside the gameplay phases. The choices are recorded under Decisions, Operations in doc/ARCHITECTURE.md: Argon2id from libsodium for panel passwords, TOTP for two-factor sign-in, zstd for backup archives, and the supervisor's own SQLite file for panel users, schedules and backup records, so the panel works before any game database exists.
 - **Pterodactyl source.** Settled on 2026-09-17 at the maintainer's direction: Ambrose owns its panel, tailored to Wizard101, and uses the MIT-licensed Pterodactyl panel and Wings source only as a reference for behavior, with no code copied and no Wings. The Ambrose panel is not a fork: the Pterodactyl panel is PHP 8.2 with Laravel, React, Redis, a web server and a queue worker on Linux, and Wings is Go and runs only on Linux with Docker, not on Windows. A fork would break the desktop run that sets itself up with no steps, and the TypeScript with Svelte dashboard and C++ supervisor settled under Decisions, Operations. Its generic model of a container with a console also cannot reach typed Ambrose features such as live settings, reloads, accounts and client data. Instead, this phase studies its source as the reference for features and behavior: the permission names and sub-users, schedules and task chains, backups, the file manager and the console socket. Operators who already run Pterodactyl use the 17.23 egg. A maintained fork stays an opt-in idea, planned, not yet scheduled.
-- **Built first.** Settled on 2026-09-18 at the maintainer's direction: the panel's foundation comes before the rest of the game, so later systems are built into it rather than fitted to it. The order is 17.01, 17.02, 17.03, 17.04 and 17.06 first, which need nothing that is not already built; then 4.01 and 4.02, which the game needs next anyway and which 17.05 waits on; then 17.05, 17.08, 17.09, 17.11, 17.14 and 17.46-17.50. Everything else in this phase arrives with the system it shows, under the rule in doc/ROADMAP.md that every subsystem ships with its panel surface, so the pages for realms, players, settings, world edits and client data are built by the milestones that build those systems.
+- **Built first.** Settled on 2026-09-18 at the maintainer's direction: the panel's foundation comes before the rest of the game, so later systems are built into it rather than fitted to it. The order is 17.01, 17.02, 17.03, 17.04, 17.73 and 17.06 first, which need nothing that is not already built, with 17.73 before 17.06 because the panel and the launcher window are both built from it; then 4.01 and 4.02, which the game needs next anyway and which 17.05 waits on; then 17.05, 17.08, 17.09, 17.11, 17.14 and 17.46-17.50. Everything else in this phase arrives with the system it shows, under the rule in doc/ROADMAP.md that every subsystem ships with its panel surface, so the pages for realms, players, settings, world edits and client data are built by the milestones that build those systems.
 - **Order.** Ids are allocation order, not build order. Within this phase the dependency graph gives the build order, so a dependency may name a higher id: 17.15 and 17.16 wait for 17.27 and 17.46-17.48, 17.22 waits for 17.26, 17.28, 17.29, 17.32 and 17.49, 17.31 waits for 17.26, and 17.24 waits for 17.46. 17.01-17.24 keep the ids they were published with, and everything added later takes an id from 17.25 up. A check never rests on a milestone outside its own dependency closure: where one did, the dependency was added or the check was narrowed to what exists at that point.
 - **Splits.** 17.14 became six milestones, 17.16 three, 17.18 five, 17.26 three and 17.27 four. Each keeps its id for its first part and the rest take ids from 17.46 up (17.46-17.50 from 17.14, 17.51 and 17.52 from 17.16, 17.53-17.56 from 17.18, 17.57 and 17.58 from 17.26, 17.59-17.61 from 17.27). Three published titles narrowed to what their milestone now holds: 17.16, 17.18 and 17.19, whose alerts moved to 17.67 so graphs no longer wait for mail settings. Two titles changed because their milestone grew instead: 17.14 now names the audit store, which the panel needs from its first milestone, and 17.50 the roles page.
 - **Sizes.** A size is read off the milestone's own content, so a label can be checked against the text: S is at most 4 deliverables and at most 5 acceptance checks, L is 8 or more deliverables or 8 or more acceptance checks, and M is everything between. Two milestones carry L on judgment instead of count, 17.24 because it installs and runs on two desktop operating systems and 17.51 because it is one operation from end to end, and the Oversized note names both with the rest. Recounting moved sizes that were already published, without touching any id: 17.01 and 17.07 to S, 17.03, 17.04 and 17.12 to M, and 17.06, 17.14, 17.15 and 17.16 to L. Of the milestones added later, 17.50 moved to M with its roles page and 17.64 to M on its count.
-- **Oversized.** The large milestones are the eight carrying L: 17.06 dashboard app and overview page, 17.14 panel listener and audit store, 17.15 schedules, 17.16 backups, 17.18 file roots and the path jail, 17.22 nodes, 17.24 desktop control app and 17.51 backup restore. No other milestone in this phase is large. Split any of them again if a focused stretch cannot finish it, along these lines: 17.14 into the listener with its TLS and the sessions, limiter and audit store; 17.15 into the engine with its triggers and the tasks with their completion and countdowns; 17.16 into the dumps with their snapshot record and the archive with its verification; 17.06 into the app shell with its route table and the overview cards; 17.18 into the jail with its roots and the listing and reading page; 17.22 into the join with its heartbeat and the nodes page with placement.
+- **Oversized.** The large milestones are the nine carrying L: 17.06 dashboard app and overview page, 17.14 panel listener and audit store, 17.15 schedules, 17.16 backups, 17.18 file roots and the path jail, 17.22 nodes, 17.24 desktop control app, 17.51 backup restore and 17.73 the design system. No other milestone in this phase is large. Split 17.73 along these lines if a focused stretch cannot finish it: the token pipeline with its generator and gates, and the component set with its gallery and tests. Split any of them again if a focused stretch cannot finish it, along these lines: 17.14 into the listener with its TLS and the sessions, limiter and audit store; 17.15 into the engine with its triggers and the tasks with their completion and countdowns; 17.16 into the dumps with their snapshot record and the archive with its verification; 17.06 into the app shell with its route table and the overview cards; 17.18 into the jail with its roots and the listing and reading page; 17.22 into the join with its heartbeat and the nodes page with placement.
 - **Gated checks.** A check that needs the maintainer's own machine, a second machine, a security key, a desktop SFTP client, a Pterodactyl install or a retail client session is marked `Dev-gated:` with what it needs, the form phase 16 already uses; a check an environment variable turns on is marked `Env-gated` with that variable, as the Tests section of doc/ARCHITECTURE.md describes. doc/ROADMAP.md's Where we are paragraph lists the phase 17 checks that wait for the maintainer.
 - **Proposals.** doc/PANEL.md proposes the choices this phase rests on, and doc/ROADMAP.md lists every one of them under Decisions needed with the milestones it blocks. All twenty-one: the scope tree with its default role bundles; whether the admin API's remote-access rule extends to the panel's own listener; the command security level cap on `console.write`; the keyring for the supervisor's sealed secrets; whether the panel's ciphers and keyed hashes stay inside the settled Botan stack or libsodium widens; the event socket protocol with its close codes; backup archive encryption as a default and whether dumps are structured rows rather than SQL text; the S3 client; the time zone data source and whether the image ships tzdata; the login-screen countdown notice; whether a node's schedules run on the node or centrally; the file editor and archive libraries with the default archive format; whether SFTP access and remote file pull are built at all, and the SSH library; the WebAuthn implementation; the QR renderer; the trash and version store locations; database credential rotation per server type; the realm and installation maintenance bypass levels; whether the panel may export world edits into a pending SQL tree; whether the panel offers player registration; and where the operator's patch signing key lives. Nothing here settles any of them, each milestone's text names the ones it rests on as proposals, and no check assumes one. Until the scope tree is settled, grants are the per-app sub-user grants already settled under Decisions, Operations, and every acceptance check here stays at app scope.
 - **Docs.** The supervisor is a fourth executable and the panel's host. The commit that adds this file also adds it to doc/ARCHITECTURE.md's Processes table, its repository layout block and its Operations paragraph, so nothing is left to do there. What stays open is recording the panel listener's own bind and TLS rule under Decisions, Operations, which waits on the matching entry under Decisions needed in doc/ROADMAP.md; until it is recorded, 17.14's text says that rule is a proposal.
@@ -222,7 +223,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Goal:** A modern web dashboard shows the health of every server at a glance, on desktop or phone.
 
-**Size:** L. **Depends on:** 17.03
+**Size:** L. **Depends on:** 17.03, 17.73
 
 **Deliverables**
 
@@ -331,7 +332,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Goal:** Operators working over SSH get live panels inside the terminal itself.
 
-**Size:** S. **Depends on:** 17.03, 17.04
+**Size:** S. **Depends on:** 17.03, 17.04, 17.73
 
 **Deliverables**
 
@@ -1751,3 +1752,39 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - [ ] A sealed archive restored without its key is refused naming the key id, and nothing is changed
 - [ ] Exporting the key needs a step-up check and writes an audit row; a viewer gets 403
 - [ ] The catalog scan lists a sealed archive from storage and marks it as needing a key it does not hold
+
+## 17.73 Design system: tokens, components and the gallery
+
+**Goal:** Every Ambrose surface is built from one set of tokens and one set of components, so the panel, the launcher window and the terminal cannot drift from doc/DESIGN.md or from each other.
+
+**Size:** L. **Depends on:** 1.02, 1.03
+
+Added on 2026-09-18 at the maintainer's direction, who asked that every screen look and feel like one product. It comes before the surfaces that use it: 17.06 builds the panel from it and 3.26 builds the launcher window from it, so neither invents its own look and nothing has to be restyled afterwards. It needs no server subsystem, only the build and its tests.
+
+**Deliverables**
+
+- `design/tokens.json`, the one place a design value is written, and `apps/designtokens/designtokens.py` with its tests, which generates the Tailwind theme and semantic layer as CSS, typed constants and union types as TypeScript, a constexpr header for the terminal carrying each token's truecolor, 256 and 16 values, and the tables inside doc/DESIGN.md itself, so the document cannot disagree with the code
+- A contrast gate in the generator that computes every documented text and ground pair and refuses to generate when one falls below 4.5:1, or below 3:1 for text at 24 px and above and for a focus indicator
+- `packages/ui/`, the `@ambrose/ui` workspace package that both apps import: no build step, raw components exported through the `svelte` condition, with the generated tokens, the shared motion module and its duration constants, the typed host bridge, and the named icon set
+- The component set the panel and the launcher both need, grouped as doc/COMPONENTS.md lists them: foundations, controls, containers and overlays, shell and navigation, state and meaning, and data; behaviour from the primitive library, look from the tokens, and each one carrying its states, its keyboard behaviour and its label rules
+- The three fonts vendored as latin variable files with our own face rules and their licence text, so a surface loads no font from any host
+- A gallery in `packages/ui/.storybook` showing every component in every state, with a tokens page printing each token's contrast on each surface and an icons page listing the icons in use, built as static files that are never served to an operator
+- Tests in four projects: logic and tokens with no browser, every component and every story in both Chromium and WebKit with the accessibility gate, screenshots in a container off the blocking path, and the scaffolding for the end-to-end project the surfaces will use
+- Repository checks in the existing checks job: the generated files regenerate identically, no raw colour, arbitrary value or inline style carrying a colour appears outside the generated token file, every component has a story, and a built bundle contains no absolute http or https URL
+- `apps/ci/ci_npm_cache.py`, which primes one npm cache for both Windows and Linux so an offline machine installs and builds, and a CMake option that skips the front-end build with a message naming what it left out
+- A front-end CI job on Linux only, path-filtered to the front-end folders and the lockfile, and doc/COMPONENTS.md with the recipe and the scaffold command an agent follows to add a component
+
+**Acceptance**
+
+- [ ] Changing one value in `design/tokens.json` and running the generator changes the CSS, the TypeScript, the C++ header and the doc/DESIGN.md table together, and `designtokens.py --check` fails when any generated file is edited by hand
+- [ ] Lowering one text token's lightness until a documented pair falls under its ratio makes the generator refuse, naming the pair and the ratio it reached
+- [ ] A C++ test reads the generated header and a component test reads the generated stylesheet, and both fail when one token's value differs from the other's
+- [ ] A component that writes a hex colour, a Tailwind arbitrary value or an inline style carrying a colour fails the checks job, and the allow comment is the only way past it
+- [ ] Every component in `packages/ui` has at least one story, proved by a check that fails when a new component file has none
+- [ ] Every story passes the accessibility gate at WCAG 2.1 AA, and the canary story with a deliberately unlabelled control fails the run
+- [ ] The same component set passes in Chromium and in WebKit, and a failure in WebKit alone fails the job
+- [ ] With the network unavailable, `npm ci --offline --ignore-scripts` from the primed cache installs and both apps build, on Windows and on Linux
+- [ ] The built output makes no request to any other host, proved by a check that fails on an absolute http or https URL in the bundle
+- [ ] With reduced motion set, every duration constant is zero, no screen loses information, and a test asserts both
+- [ ] Building with the front-end CMake option off still builds the servers and prints what it left out
+- [ ] The front-end job runs on Linux only, and a failing gallery or component test fails it
