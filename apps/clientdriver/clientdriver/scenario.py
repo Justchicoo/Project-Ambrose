@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, and refuses a step whose action, keys, screen or target the driver does not know before anything is started.
+# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, and refuses a step whose action, keys, screen or target the driver does not know, or a pattern that does not compile, before anything is started.
 import json
 import os
 import re
@@ -23,8 +23,8 @@ ACTIONS = {
     "server_command": (("command",), ("pattern", "timeout")),
 }
 COMMON_KEYS = ("action", "name")
-TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "variables", "pending_allowed",
-             "server_log_allowed", "expect", "steps")
+ALLOW_LISTS = ("pending_allowed", "dropped_allowed", "server_log_allowed", "client_log_allowed")
+TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "variables", "expect", "steps") + ALLOW_LISTS
 REQUIRES = ("client", "capture")
 SIDES = ("server", "client")
 OUTCOMES = ("pass", "failure")
@@ -64,8 +64,8 @@ class Scenario:
         self.steps = list(document.get("steps") or [])
         self.server_settings = list(document.get("server_settings") or [])
         self.variables = dict(document.get("variables") or {})
-        self.pending_allowed = list(document.get("pending_allowed") or [])
-        self.server_log_allowed = list(document.get("server_log_allowed") or [])
+        for name in ALLOW_LISTS:
+            setattr(self, name, list(document.get(name) or []))
         requires = document.get("requires") or {}
         self.needs_client = bool(requires.get("client", True))
         self.needs_capture = bool(requires.get("capture", True))
@@ -104,6 +104,15 @@ class Scenario:
         return problems
 
 
+def _check_pattern(where, what, pattern):
+    if not isinstance(pattern, str) or not pattern.strip():
+        raise Refused(f"{where}: the {what} must be a pattern, not {pattern!r}")
+    try:
+        re.compile(pattern)
+    except re.error as error:
+        raise Refused(f"{where}: the {what}, /{pattern}/, is not a pattern: {error}")
+
+
 def _check_step(path, index, step):
     where = f"{os.path.basename(path)} step {index + 1}"
     if not isinstance(step, dict):
@@ -126,6 +135,9 @@ def _check_step(path, index, step):
         raise Refused(f"{where} ({name}) needs a list of screens to wait for")
     if action == "forbid_log" and step["side"] not in SIDES:
         raise Refused(f"{where} ({name}) must forbid a line on the {' or '.join(SIDES)} side")
+    for key in ("pattern", "fail"):
+        if key in step:
+            _check_pattern(f"{where} ({name})", key, step[key])
     if action == "click" and isinstance(step.get("until"), dict):
         _check_step(path, index, dict(step["until"], name=f"{name}: the check that it took"))
 
@@ -143,6 +155,14 @@ def _check_document(path, document):
             raise Refused(f"{path} requires {key!r}, which the driver does not know")
     if document.get("expect", "pass") not in OUTCOMES:
         raise Refused(f"{path} expects {document['expect']!r}; a scenario expects {' or '.join(OUTCOMES)}")
+    for key in ALLOW_LISTS:
+        entries = document.get(key)
+        if entries is None:
+            continue
+        if not isinstance(entries, list):
+            raise Refused(f"{path}: {key} must be a list of patterns")
+        for entry in entries:
+            _check_pattern(f"{os.path.basename(path)} {key}", "entry", entry)
     named = []
     for index, step in enumerate(document.get("steps") or []):
         _check_step(path, index, step)
@@ -165,8 +185,9 @@ def resolve(path, search):
 def _merge(base, scenario):
     scenario.steps = base.steps + scenario.steps
     scenario.server_settings = base.server_settings + [value for value in scenario.server_settings if value not in base.server_settings]
-    scenario.pending_allowed = base.pending_allowed + [value for value in scenario.pending_allowed if value not in base.pending_allowed]
-    scenario.server_log_allowed = base.server_log_allowed + [value for value in scenario.server_log_allowed if value not in base.server_log_allowed]
+    for name in ALLOW_LISTS:
+        kept = getattr(base, name)
+        setattr(scenario, name, kept + [value for value in getattr(scenario, name) if value not in kept])
     scenario.variables = dict(base.variables, **scenario.variables)
     scenario.needs_client = base.needs_client or scenario.needs_client
     scenario.needs_capture = base.needs_capture or scenario.needs_capture

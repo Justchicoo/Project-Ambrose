@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Decides whether a run is possible on this machine, by asking the launcher for the install, looking for the built programs, the scratch database, the capture and the reference crops, and naming in one line everything that is missing.
+# Decides whether a run is possible on this machine, by taking the client run as asked for only when an install is named, asking the launcher which one it is, looking for the built programs, the scratch database, the capture and the reference crops that still fit the boxes they are used with, and naming in one line everything that is missing.
 import importlib.util
 import os
 import re
@@ -29,7 +29,8 @@ def ask_launcher(binaries, host, port, window, run_dir):
     program = os.path.join(binaries, paths.program("launcher"))
     command = [program, "--dry-run", "--host", host, "--port", str(port), "--window", window, "--run-dir", run_dir]
     try:
-        finished = subprocess.run(command, capture_output=True, text=True, timeout=180, creationflags=creation_flags())
+        finished = subprocess.run(command, capture_output=True, encoding="utf-8", errors="replace", timeout=180,
+                                  creationflags=creation_flags())
     except (OSError, subprocess.SubprocessError) as error:
         return None, None, f"{program} could not be run: {error}"
     for line in (finished.stdout or "").splitlines():
@@ -74,6 +75,25 @@ def reference_problems(scenario, references, folder, revision, need_crops=True):
         if absent:
             problems.append(f"the reference crops {', '.join(absent)} are not in {os.path.join(folder, references.folder_name)}; "
                             "they are client imagery, so they are never committed: rebuild them with 'drive.py capture-refs'")
+        problems.extend(crop_problems(references, folder, [name for name in wanted if name not in absent]))
+    return problems
+
+
+def crop_problems(references, folder, names):
+    from . import screens
+
+    problems = []
+    for name in names:
+        left, top, right, bottom = references.crop_of(name)
+        path = references.crop_file(folder, name)
+        try:
+            crop = screens.load_png(path)
+        except Exception as error:
+            problems.append(f"the reference crop {path} cannot be read: {error}; rebuild it with 'drive.py capture-refs'")
+            continue
+        if crop.size != (right - left, bottom - top):
+            problems.append(f"the reference crop of {name} is {crop.width}x{crop.height} and {references.path} now asks for "
+                            f"{right - left}x{bottom - top}; rebuild it with 'drive.py capture-refs'")
     return problems
 
 
@@ -98,6 +118,7 @@ def probe(scenario, references, options):
         environment["install"] = None
         environment["revision"] = None
         environment["install_reason"] = "the launcher is not built, so no install was looked for"
+    environment["install_readable"] = bool(environment["install"]) and os.path.isdir(environment["install"])
     environment["database_answers"] = database_answers(options["db_host"], options["db_port"])
     environment["tshark"] = paths.tshark()
     if options.get("capture", True) and scenario.needs_capture:
@@ -112,6 +133,9 @@ def probe(scenario, references, options):
 
 def missing(scenario, environment, options):
     gaps = []
+    if scenario.needs_client and not options.get("client"):
+        gaps.append("no client run was asked for: set AMBROSE_CLIENT_DIR to your own install, as every client-labelled "
+                    "test does, or name it with --client")
     if not environment.get("windows"):
         gaps.append(f"the retail client runs only on Windows, and this machine is {environment.get('platform')}")
     absent = environment.get("packages_missing") or []
@@ -123,6 +147,9 @@ def missing(scenario, environment, options):
         gaps.append("loginserver.conf.dist was found neither beside the programs nor in the repository")
     elif not environment.get("install"):
         gaps.append(environment.get("install_reason") or "no Wizard101 install was found")
+    elif not environment.get("install_readable"):
+        gaps.append(f"the launcher named the install {environment['install']}, which is not a folder this driver can read, "
+                    "so it could not prove that a run only read it")
     if not environment.get("database_answers"):
         gaps.append(f"no database answers on {environment.get('database')}, and the driver uses only that one")
     if options.get("capture", True) and scenario.needs_capture and not environment.get("capture"):

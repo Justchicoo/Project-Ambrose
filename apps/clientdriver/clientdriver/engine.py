@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind.
+# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind.
 import os
 import re
 import time
@@ -7,6 +7,14 @@ import time
 from . import screens
 from .errors import StepFailed
 from .scenario import fill
+
+MAX_DWELL = 0.5
+
+
+def answered(said, wanted):
+    if wanted is None:
+        return said is not None and str(said) != ""
+    return str(said) == str(wanted)
 
 
 class Engine:
@@ -36,7 +44,7 @@ class Engine:
     def execute(self, step):
         name = step.get("name", step["action"])
         started = time.monotonic()
-        record = {"step": name, "action": step["action"]}
+        record = {"step": name, "action": step["action"], "stage": "scenario"}
         self.steps.append(record)
         self.current = None
         try:
@@ -100,6 +108,8 @@ class Engine:
         picture = self.client.frame()
         self.current = picture
         taken = self.shot(name, picture)
+        if not taken:
+            raise StepFailed(f"the screenshot this step asks for could not be written: {self.notes[-1]['note']}")
         self.screenshots[-1]["step"] = step.get("name", name)
         return taken
 
@@ -156,17 +166,24 @@ class Engine:
         query = self.fill(step["query"])
         wanted = self.fill(step["expect"]) if "expect" in step else None
         deadline = time.monotonic() + step["timeout"]
-        said = None
         while True:
-            said = self.databases.value(kind, query)
-            if wanted is None or str(said) == str(wanted):
+            said, refused = self.ask(kind, query)
+            if refused is None and answered(said, wanted):
                 if step.get("record"):
                     self.notes.append({"step": step.get("name"), "query": query, "answer": str(said)})
                 return f"{kind} answered {said!r}"
             if time.monotonic() > deadline:
-                raise StepFailed(f"the {kind} database answered {said!r} where the step expects {wanted!r} "
-                                 f"within {step['timeout']}s: {query}")
+                if refused is not None:
+                    raise StepFailed(f"the {kind} database never answered within {step['timeout']}s: {query}: {refused}")
+                raise StepFailed(f"the {kind} database answered {said!r} where the step expects "
+                                 f"{'an answer' if wanted is None else repr(wanted)} within {step['timeout']}s: {query}")
             time.sleep(0.25)
+
+    def ask(self, kind, query):
+        try:
+            return self.databases.value(kind, query), None
+        except Exception as error:
+            return None, error
 
     def act_submit_login(self, step):
         user = self.fill(step.get("user", "{user}"))
@@ -202,20 +219,27 @@ class Engine:
         attempts = int(step.get("attempts", 1))
         until = step.get("until")
         name = step.get("name", target)
+        dwell = min(step.get("dwell", 0.35), MAX_DWELL)
         last = None
+        said = "nothing was pressed"
         for attempt in range(attempts):
+            if attempt:
+                time.sleep(step.get("dwell_step", 0.3) * attempt)
             if step.get("on_screen") and not self.on_screen(step["on_screen"]):
                 raise StepFailed(f"the {step['on_screen']} screen is no longer there, so {target} was not pressed")
-            self.client.click(x, y, dwell=step.get("dwell", 0.35) + step.get("dwell_step", 0.3) * attempt)
+            said, active = self.client.click(x, y, dwell=dwell)
             self.current = None
-            if not until:
-                return f"pressed {target}"
-            try:
-                self.perform(dict(until, name=f"{name}: the check that it took"))
-                return f"pressed {target}, and it took after {attempt + 1} attempt(s)"
-            except StepFailed as error:
-                last = error
-        raise StepFailed(f"{attempts} press(es) on {target} never satisfied the check: {last}")
+            if until:
+                try:
+                    self.perform(dict(until, name=f"{name}: the check that it took"))
+                    return f"pressed {target}: {said}, and it took after {attempt + 1} attempt(s)"
+                except StepFailed as error:
+                    last = error
+            elif active:
+                return f"pressed {target}: {said}"
+            else:
+                last = StepFailed("the client's window never became the active one, so its interface dropped the press")
+        raise StepFailed(f"{attempts} press(es) on {target} did not take, the last of them {said}: {last}")
 
     def on_screen(self, name):
         picture = self.client.frame()

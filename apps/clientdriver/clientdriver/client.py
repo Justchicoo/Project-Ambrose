@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Drives the user's own client: the Ambrose launcher starts it, the window is found by class and size, text and keys are posted as window messages so the machine stays usable, a press borrows the cursor and the foreground for about a second because the client's interface drops mouse messages while its window is not the active one, and frames come from the composited window surface so a covered window still reads.
+# Drives the user's own client: the Ambrose launcher starts it, the window is found by class and size, text and keys are posted as window messages so the machine stays usable, a press borrows the cursor and the foreground for about a second because the client's interface drops mouse messages while its window is not the active one and says whether it got them, and frames come from the composited window surface so a covered window still reads.
 import contextlib
 import ctypes
 import os
@@ -121,6 +121,11 @@ class Client:
         self.previous_foreground = 0
         self.frame_source = None
         self._output = None
+
+    @property
+    def pids(self):
+        launcher = self.launcher_process.pid if self.launcher_process is not None else None
+        return [pid for pid in (self.pid, launcher) if pid]
 
     def arguments(self):
         wanted = [self.launcher, "--host", self.host, "--port", str(self.port),
@@ -393,7 +398,7 @@ class Client:
             time.sleep(dwell)
             send(win32con.WM_LBUTTONUP, 0)
             time.sleep(0.2)
-        return f"pressed {x},{y} after {dwell:.2f}s with the window " + ("active" if active else "NOT active")
+        return f"{x},{y} after {dwell:.2f}s with the window " + ("active" if active else "NOT active"), active
 
     def close(self, timeout=60, force=False):
         import psutil

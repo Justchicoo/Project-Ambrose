@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds a run's report from the two logs and what the run measured: every message the server did not handle, every warning on either side, and the checks that decide whether the run is clean, then renders it as Markdown beside its JSON.
+# Builds a run's report from the two logs and what the run measured: every message the server did not handle, every warning on either side, and the checks that decide whether the run is clean, each of which fails when what it judges was never measured, then renders it as Markdown beside its JSON.
 import json
 import os
 import re
@@ -53,14 +53,19 @@ def allowed_by(patterns, line):
     return any(re.search(pattern, line) for pattern in patterns)
 
 
-def unexpected_pending(lines, allowed):
+def named_by(patterns, line):
+    return any(re.search(rf"\b{re.escape(pattern)}\b", line) for pattern in patterns)
+
+
+def unexpected_messages(lines, allowed):
     unexpected = []
     seen = set()
     for line in lines:
         name, _key = message_of(line)
         if name:
             seen.add(name)
-        if not (name and name in allowed) and not allowed_by(allowed, line):
+        excused = name in allowed if name else named_by(allowed, line)
+        if not excused:
             unexpected.append(line.strip())
     return unexpected, sorted(name for name in allowed if name not in seen)
 
@@ -80,25 +85,42 @@ def checks(facts, gathered):
     def add(what, ok, detail):
         found.append({"check": what, "ok": bool(ok), "detail": detail})
 
+    with_client = bool(facts.get("needs_client", True))
     changes = facts.get("install_changes") or {}
     changed = sum(len(names) for names in changes.values())
-    add("the install was only read", changed == 0,
-        "no file under the install was added, removed or changed" if changed == 0 else json.dumps(changes))
-    guard = facts.get("netguard") or {}
-    violations = guard.get("violations") or []
-    remotes = guard.get("remotes") or []
-    add("the client contacted only this machine", not violations,
-        f"{len(remotes)} address(es) contacted, all of them local" if not violations else json.dumps(violations))
+    read = facts.get("install_files")
+    if changed:
+        add("the install was only read", False, json.dumps(changes))
+    elif with_client and not read:
+        add("the install was only read", False,
+            f"no file under {facts.get('install') or 'the install'} was read, so nothing was compared")
+    else:
+        add("the install was only read", True, f"no file of the {read} read under the install was added, removed or changed")
+    if with_client:
+        guard = facts.get("netguard")
+        violations = (guard or {}).get("violations") or []
+        remotes = (guard or {}).get("remotes") or []
+        blind = (guard or {}).get("failed") if guard else "nothing watched the client's connections during this run"
+        add("the client contacted only this machine", bool(guard) and not violations and not blind,
+            f"{len(remotes)} address(es) contacted, all of them local" if guard and not violations and not blind
+            else json.dumps(violations) if violations else str(blind))
     pending = facts.get("pending_allowed") or []
-    unexpected, unused = unexpected_pending(gathered["server_not_handled_lines"] + gathered["server_dropped_lines"], pending)
+    unexpected, unused = unexpected_messages(gathered["server_not_handled_lines"], pending)
     add("every message the server did not handle is one the scenario expects", not unexpected,
         ("the scenario allows " + ", ".join(pending) if pending else "the server handled every message the client sent")
         + (f"; it never saw {', '.join(unused)}" if unused else "")
         if not unexpected else "; ".join(unexpected))
+    dropped, _unused = unexpected_messages(gathered["server_dropped_lines"], facts.get("dropped_allowed") or [])
+    add("the server read every message the client sent", not dropped,
+        "no message was dropped or refused" if not dropped else "; ".join(dropped))
     allowed_warnings = facts.get("server_log_allowed") or []
     loud = [line.strip() for line in gathered["server_warn_error"] if not allowed_by(allowed_warnings, line)]
     add("no server WARN, ERROR or FATAL outside the allow-list", not loud,
         f"{len(gathered['server_warn_error'])} allowed line(s)" if not loud else "; ".join(loud))
+    confused = [line.strip() for line in gathered["client_unknown_messages"]
+                if not allowed_by(facts.get("client_log_allowed") or [], line)]
+    add("the client understood every message the server sent", not confused,
+        "no line says the client read a message it does not know" if not confused else "; ".join(confused))
     add("the client opened nothing outside itself", not gathered["client_left_the_machine"],
         "no line opens an external browser" if not gathered["client_left_the_machine"] else "; ".join(line.strip() for line in gathered["client_left_the_machine"]))
     leftover = facts.get("leftover_processes") or []
@@ -107,16 +129,23 @@ def checks(facts, gathered):
     after = facts.get("databases_after")
     add("no database was left behind", not after,
         "the driver's own databases are gone" if not after else str(after))
-    without = screen_checks(facts.get("steps") or [])
+    steps = facts.get("steps") or []
+    without = screen_checks(steps)
     add("every step that changed the screen has a screenshot", not without,
         f"{len(facts.get('screenshots') or [])} screenshot(s)" if not without else ", ".join(str(name) for name in without))
-    failed = [step.get("step") for step in facts.get("steps") or [] if not step.get("ok")]
+    around = [step.get("step") for step in steps if step.get("stage") == "driver" and not step.get("ok")]
+    add("every step the driver took around the scenario passed", not around,
+        "everything the run started was started and stopped as it should be" if not around
+        else ", ".join(str(name) for name in around))
+    failed = [step.get("step") for step in steps if step.get("stage") != "driver" and not step.get("ok")]
     if facts.get("expect_failure"):
         add("the step the scenario expects to fail did fail", bool(failed),
             ", ".join(str(name) for name in failed) if failed else "every step passed, which this scenario does not expect")
     else:
-        add("every step passed", not failed,
-            "every step was satisfied within its timeout" if not failed else ", ".join(str(name) for name in failed))
+        stopped = facts.get("failed")
+        add("every step passed", not failed and not stopped,
+            "every step was satisfied within its timeout" if not failed and not stopped
+            else ", ".join(str(name) for name in failed) or str(stopped))
     return found
 
 

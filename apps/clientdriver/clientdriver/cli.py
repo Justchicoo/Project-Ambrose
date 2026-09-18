@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# The driver's command line: run a scenario, say whether a run is possible on this machine and skip with 77 when it is not, rebuild the reference crops from a live client, or list the scenarios.
+# The driver's command line: run a scenario against the install named by --client or AMBROSE_CLIENT_DIR, say whether a run is possible on this machine and skip with 77 when it is not, rebuild the reference crops from a live client, or list the scenarios.
 import argparse
 import os
 import sys
@@ -20,7 +20,7 @@ DEFAULT_DB = ("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose_driver_run")
 def add_common(parser):
     parser.add_argument("--scenario", default=DEFAULT_SCENARIO, help="scenario file, by name in apps/clientdriver/scenarios or by path")
     parser.add_argument("--binaries", help="folder holding the built loginserver and launcher")
-    parser.add_argument("--client", help="the Wizard101 install to use, as the launcher's --client")
+    parser.add_argument("--client", help="the Wizard101 install to use, as the launcher's --client; without it and without AMBROSE_CLIENT_DIR no client is driven and the run skips")
     parser.add_argument("--locale", help="client locale, as the launcher's --locale")
     parser.add_argument("--host", default=DEFAULT_HOST, help="address the login server binds and the client connects to")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="login server port")
@@ -41,7 +41,7 @@ def add_common(parser):
 def options_of(args, need_crops=True):
     return {
         "binaries": args.binaries,
-        "client": args.client,
+        "client": args.client or os.environ.get("AMBROSE_CLIENT_DIR") or None,
         "locale": args.locale,
         "host": args.host,
         "port": args.port,

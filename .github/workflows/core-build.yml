@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks style, forbidden files, and commit trailers daily, on CI file pushes, and on pull requests, then builds and tests the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by the schedule, a label, or a manual run.
+# Checks style, forbidden files, commit trailers and the self-tests of the tooling in apps daily, on CI file pushes, and on pull requests, then builds and tests the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by the schedule, a label, or a manual run.
 name: core-build
 
 on:
@@ -58,6 +58,9 @@ jobs:
       - name: CI script self-tests
         if: ${{ !cancelled() }}
         run: python apps/ci/tests/test_ci.py
+      - name: Client driver self-tests
+        if: ${{ !cancelled() }}
+        run: python apps/clientdriver/tests/test_clientdriver.py
       - name: Forbidden files
         if: ${{ !cancelled() }}
         run: python apps/ci/ci_forbidden_files.py

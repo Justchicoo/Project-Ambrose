@@ -1,14 +1,15 @@
 # Project Ambrose by Imjustchico
-# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes and variables, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario.
+# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario.
 import json
 import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from clientdriver import database, engine, install, netguard, paths, preflight, references, refscapture, report, run, scenario, screens
+from clientdriver import capture, database, engine, install, netguard, paths, preflight, references, refscapture, report, run, scenario, screens
 from clientdriver.errors import Refused, StepFailed
 from clientdriver.logtail import LogTail, read_lines
 
@@ -122,14 +123,37 @@ class LogTailTests(TemporaryFolder):
         self.assertEqual(len(tail.poll()), 1)
         self.assertTrue(tail.lines[0].endswith("loginserver ready"))
 
-    def test_a_log_that_starts_again_is_read_from_its_beginning(self):
+    def test_a_log_that_starts_again_is_read_from_its_beginning_and_keeps_what_it_read(self):
         path = self.write("Login.log", ["one", "two", "three"])
         tail = LogTail(path, interval=0.01)
         tail.poll()
         with open(path, "w", encoding="utf-8", newline="\n") as handle:
             handle.write("four\n")
         self.assertEqual(tail.poll(), ["four"])
-        self.assertEqual(tail.lines, ["four"])
+        self.assertEqual(tail.lines, ["one", "two", "three", "four"])
+
+    def test_a_log_replaced_by_a_longer_one_is_read_from_its_beginning(self):
+        path = self.write("Login.log", ["one"])
+        tail = LogTail(path, interval=0.01)
+        tail.poll()
+        os.remove(path)
+        self.write("Login.log", ["two", "three"])
+        self.assertEqual(tail.poll(), ["two", "three"])
+        self.assertEqual(tail.lines, ["one", "two", "three"])
+
+    def test_a_line_written_just_before_the_writer_died_still_satisfies_a_wait(self):
+        path = self.write("Login.log", [])
+        tail = LogTail(path, interval=0.01)
+        alive = []
+
+        def writer_is_alive():
+            self.write("Login.log", ["2026 INFO [x] Mainloop exited with return code 0"])
+            alive.append(False)
+            return False
+
+        found = tail.wait(r"Mainloop exited", 1, alive=writer_is_alive)
+        self.assertIn("Mainloop exited", found.string)
+        self.assertEqual(len(alive), 1)
 
     def test_bytes_that_are_not_utf8_do_not_stop_the_reader(self):
         path = os.path.join(self.folder, "WizardClient.log")
@@ -219,6 +243,30 @@ class ScenarioTests(TemporaryFolder):
             {"action": "click", "name": "press", "target": "press", "until": {"action": "wait_screen", "screens": ["login"]}}]})
         with self.assertRaises(Refused):
             scenario.load("bad.json", search=(os.path.join(self.folder, "scenarios"),))
+
+    def test_a_pattern_that_does_not_compile_is_refused_before_anything_starts(self):
+        self.scenario_file("allow.json", {"title": "x", "server_log_allowed": ["MSG_PHYSICS_GRAB(Force"], "steps": []})
+        with self.assertRaises(Refused) as raised:
+            scenario.load("allow.json", search=(os.path.join(self.folder, "scenarios"),))
+        self.assertIn("is not a pattern", str(raised.exception))
+        self.scenario_file("step.json", {"title": "x", "steps": [
+            {"action": "wait_server_log", "name": "ready", "pattern": "ready(", "timeout": 1}]})
+        with self.assertRaises(Refused):
+            scenario.load("step.json", search=(os.path.join(self.folder, "scenarios"),))
+        self.scenario_file("fail.json", {"title": "x", "steps": [
+            {"action": "wait_server_log", "name": "ready", "pattern": "ready", "fail": "[", "timeout": 1}]})
+        with self.assertRaises(Refused):
+            scenario.load("fail.json", search=(os.path.join(self.folder, "scenarios"),))
+
+    def test_every_allow_list_merges_with_the_one_it_includes(self):
+        self.scenario_file("base.json", {"title": "base", "pending_allowed": ["MSG_ONE"], "dropped_allowed": ["MSG_TWO"],
+                                         "client_log_allowed": ["a known client line"], "steps": []})
+        self.scenario_file("more.json", {"title": "more", "include": "base.json", "pending_allowed": ["MSG_THREE"],
+                                         "steps": []})
+        loaded = scenario.load("more.json", search=(os.path.join(self.folder, "scenarios"),))
+        self.assertEqual(loaded.pending_allowed, ["MSG_ONE", "MSG_THREE"])
+        self.assertEqual(loaded.dropped_allowed, ["MSG_TWO"])
+        self.assertEqual(loaded.client_log_allowed, ["a known client line"])
 
     def test_two_steps_with_the_same_name_are_refused(self):
         self.scenario_file("one.json", {"title": "x", "steps": [
@@ -459,15 +507,23 @@ class FakeClient:
         self.living = True
         self.frames_taken = 0
         self.on_click = None
+        self.active = True
+        self.refuses_shots = 0
+        self.arriving = []
 
     def alive(self):
         return self.living
 
     def frame(self):
         self.frames_taken += 1
+        if self.arriving:
+            self.current = self.arriving.pop(0)
         return self.current
 
     def screenshot(self, path, picture=None):
+        if self.refuses_shots:
+            self.refuses_shots -= 1
+            raise OSError("the disk is full")
         self.shots.append(os.path.basename(path))
         return picture if picture is not None else self.current
 
@@ -487,7 +543,7 @@ class FakeClient:
         self.presses.append((x, y, round(dwell, 2)))
         if self.on_click:
             self.on_click(len(self.presses))
-        return "pressed"
+        return f"{x},{y} after {dwell:.2f}s with the window " + ("active" if self.active else "NOT active"), self.active
 
 
 class FakeServer:
@@ -511,7 +567,10 @@ class FakeDatabases:
 
     def value(self, kind, query):
         self.asked.append((kind, query))
-        return self.answers.pop(0) if len(self.answers) > 1 else self.answers[0]
+        answer = self.answers.pop(0) if len(self.answers) > 1 else self.answers[0]
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
 
 
 class EngineTests(TemporaryFolder):
@@ -583,16 +642,22 @@ class EngineTests(TemporaryFolder):
         self.assertIn("listed 0 character(s)", running.notes[0]["line"])
 
     def test_a_screen_step_waits_until_the_screen_is_there(self):
-        running = self.build([{"action": "wait_screen", "name": "the login window", "screens": ["login"], "timeout": 1}],
+        running = self.build([{"action": "wait_screen", "name": "the login window", "screens": ["login"], "timeout": 2}],
                              picture=frame_of(GREEN, GREEN))
+        self.client.arriving = [frame_of(GREEN, GREEN), frame_of(RED, BLUE)]
+        running.run()
+        self.assertIn("login is on the screen", running.steps[0]["result"])
+        self.assertIn("1.0 of its pixels match", running.steps[0]["result"])
+        self.assertEqual(self.client.frames_taken, 2)
+        self.assertIs(running.current, self.client.current)
 
-        def arrive(_taken):
-            pass
-
-        self.client.on_click = arrive
+    def test_a_screen_step_that_never_sees_its_screen_says_what_the_closest_match_was(self):
+        running = self.build([{"action": "wait_screen", "name": "the login window", "screens": ["login"], "timeout": 0.1}],
+                             picture=frame_of(GREEN, GREEN))
         with self.assertRaises(StepFailed) as raised:
             running.run()
         self.assertIn("did not appear", str(raised.exception))
+        self.assertIn("fraction", str(raised.exception))
 
     def test_a_press_is_repeated_until_the_check_that_it_took_passes(self):
         running = self.build([{"action": "click", "name": "press the button that reconnects", "target": "press",
@@ -619,6 +684,31 @@ class EngineTests(TemporaryFolder):
             running.run()
         self.assertIn("2 press(es)", str(raised.exception))
         self.assertEqual(len(self.client.presses), 2)
+
+    def test_a_press_with_nothing_to_check_fails_when_the_window_never_became_active(self):
+        running = self.build([{"action": "click", "name": "take the next look", "target": "press", "attempts": 2,
+                               "dwell": 0.0, "dwell_step": 0.0}])
+        self.client.active = False
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("never became the active one", str(raised.exception))
+        self.assertIn("with the window NOT active", str(raised.exception))
+        self.assertEqual(len(self.client.presses), 2)
+        self.assertFalse(running.steps[0]["ok"])
+
+    def test_a_press_that_took_carries_what_the_window_did_into_the_report(self):
+        running = self.build([{"action": "click", "name": "take the next look", "target": "press", "attempts": 1,
+                               "dwell": 0.0, "dwell_step": 0.0}])
+        running.run()
+        self.assertIn("with the window active", running.steps[0]["result"])
+
+    def test_a_press_never_holds_the_window_longer_than_the_driver_allows(self):
+        running = self.build([{"action": "click", "name": "press the button", "target": "press", "attempts": 3,
+                               "dwell": 4.0, "dwell_step": 0.0,
+                               "until": {"action": "wait_client_log", "pattern": "nothing", "timeout": 0.02}}])
+        with self.assertRaises(StepFailed):
+            running.run()
+        self.assertEqual([dwell for _x, _y, dwell in self.client.presses], [engine.MAX_DWELL] * 3)
 
     def test_a_press_is_refused_when_its_screen_is_gone(self):
         running = self.build([{"action": "click", "name": "press the button", "target": "press",
@@ -652,6 +742,40 @@ class EngineTests(TemporaryFolder):
                              answers=["0"])
         with self.assertRaises(StepFailed) as raised:
             running.run()
+        self.assertIn("SELECT COUNT(*)", str(raised.exception))
+
+    def test_a_database_step_without_an_expectation_waits_for_an_answer(self):
+        running = self.build([{"action": "wait_db", "name": "the wizard is there", "database": "characters",
+                               "query": "SELECT id FROM characters WHERE name='Iridian'", "timeout": 1}],
+                             answers=[None, None, "7"])
+        running.run()
+        self.assertEqual(len(running.databases.asked), 3)
+        self.assertIn("'7'", running.steps[0]["result"])
+
+    def test_a_database_step_without_an_expectation_fails_when_the_row_never_appears(self):
+        running = self.build([{"action": "wait_db", "name": "the wizard is there", "database": "characters",
+                               "query": "SELECT id FROM characters WHERE name='Iridian'", "timeout": 0.05}],
+                             answers=[None])
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("WHERE name='Iridian'", str(raised.exception))
+        self.assertIn("an answer", str(raised.exception))
+
+    def test_a_database_that_refuses_one_read_is_asked_again_until_the_deadline(self):
+        running = self.build([{"action": "wait_db", "name": "no wizard yet", "database": "characters",
+                               "query": "SELECT COUNT(*) FROM characters", "expect": "0", "timeout": 1}],
+                             answers=[RuntimeError("the connection was refused"), "0"])
+        running.run()
+        self.assertTrue(running.steps[0]["ok"])
+        self.assertEqual(len(running.databases.asked), 2)
+
+    def test_a_database_that_never_answers_fails_with_the_last_error(self):
+        running = self.build([{"action": "wait_db", "name": "no wizard yet", "database": "characters",
+                               "query": "SELECT COUNT(*) FROM characters", "expect": "0", "timeout": 0.05}],
+                             answers=[RuntimeError("the connection was refused")])
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("the connection was refused", str(raised.exception))
         self.assertIn("SELECT COUNT(*)", str(raised.exception))
 
     def test_a_forbidden_line_fails_the_run_and_its_absence_passes(self):
@@ -691,6 +815,27 @@ class EngineTests(TemporaryFolder):
         self.assertEqual(self.client.shots, ["01-login-window.png"])
         self.assertEqual(running.screenshots[0]["step"], "the login window")
         self.assertEqual(running.steps[0]["screen"]["shot"], "01-login-window.png")
+
+    def test_a_shot_that_cannot_be_written_fails_its_own_step_and_renames_nothing(self):
+        running = self.build([
+            {"action": "shot", "name": "the login window", "file": "login-window"},
+            {"action": "shot", "name": "the screen after it", "file": "after"},
+        ])
+        running.execute(running.scenario.steps[0])
+        self.client.refuses_shots = 2
+        with self.assertRaises(StepFailed) as raised:
+            running.execute(running.scenario.steps[1])
+        self.assertIn("the disk is full", str(raised.exception))
+        self.assertEqual(len(running.screenshots), 1)
+        self.assertEqual(running.screenshots[0]["step"], "the login window")
+
+    def test_the_first_shot_of_a_run_failing_names_the_reason_rather_than_an_index(self):
+        running = self.build([{"action": "shot", "name": "the login window", "file": "login-window"}])
+        self.client.refuses_shots = 2
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("could not be written", str(raised.exception))
+        self.assertEqual(running.screenshots, [])
 
 
 class QuitSafelyTests(TemporaryFolder):
@@ -741,6 +886,21 @@ class QuitSafelyTests(TemporaryFolder):
         self.assertFalse(running.force_close)
         self.assertIn("can be asked to quit", said)
 
+    def test_a_client_whose_log_yields_nothing_is_ended_rather_than_asked_to_quit(self):
+        running = self.build()
+        said = running.quit_safely(self.client)
+        self.assertTrue(running.force_close)
+        self.assertIn("no line to judge it by", said)
+
+    def test_the_last_line_of_the_log_counts_even_before_the_client_ends_it(self):
+        running = self.build()
+        path = os.path.join(self.folder, "client", "WizardClient.log")
+        with open(path, "a", encoding="latin-1", newline="\n") as handle:
+            handle.write("09/17/26 15:52:29 [STAT] LoginState     LOGIN RESPONSE: Error=996708736")
+        self.assertEqual(self.client.log.poll(), [])
+        running.quit_safely(self.client)
+        self.assertTrue(running.force_close)
+
     def test_a_client_that_has_already_stopped_is_not_judged(self):
         running = self.build()
         self.wrote("LOGIN RESPONSE: Error=996708736")
@@ -764,6 +924,165 @@ class QuitSafelyTests(TemporaryFolder):
             self.assertTrue(run.holds(refused, pattern))
             self.assertFalse(run.holds(refused + admitted, pattern))
             self.assertFalse(run.holds([line for line in recorded if "Error=0" in line], pattern))
+
+
+class RunOrderTests(TemporaryFolder):
+    def parts(self, server_fails=False, window_fails=False):
+        events = self.events = []
+        logs = self.folder
+
+        class FakeCapture:
+            def __init__(self, *arguments):
+                self.note = "capturing"
+
+            def start(self):
+                events.append("the capture started")
+                return self.note
+
+            def stop(self):
+                events.append("the capture stopped")
+                return self.note
+
+            def facts(self):
+                return {"path": None, "frames": None, "note": self.note}
+
+        class FakeLoginServer:
+            def __init__(self, *arguments, **keywords):
+                self.log = LogTail(os.path.join(logs, "server", "Login.log"))
+
+            def command(self):
+                return ["loginserver.exe"]
+
+            def start(self, timeout=None):
+                events.append("the login server started")
+                if server_fails:
+                    raise StepFailed("the login server never said it was ready")
+                return "ready"
+
+            def ensure_account(self, user, password):
+                events.append("the account was made")
+                return user
+
+            def stop(self):
+                events.append("the login server stopped")
+                return "stopped"
+
+        class FakeRunClient(FakeClient):
+            def __init__(self, *arguments, **keywords):
+                super().__init__(os.path.join(logs, "client", "WizardClient.log"), frame_of(RED, BLUE))
+                self.install = "C:/Wizard101"
+                self.revision = "r806919.Wizard_1_610"
+                self.run_folder = logs
+                self.command = "WizardGraphicalClient.exe"
+                self.frame_source = None
+                self.pids = [20, 10]
+
+            def start(self, timeout=None):
+                events.append("the client started")
+                return "started"
+
+            def find_window(self, timeout=None):
+                events.append("the window was looked for")
+                if window_fails:
+                    raise StepFailed("the client window did not appear")
+                return 0x1234
+
+            def to_background(self):
+                events.append("the client went to the back")
+                return "at the bottom"
+
+            def close(self, force=False):
+                events.append("the client was closed")
+                return "closed"
+
+        class FakeGuard:
+            def __init__(self, pids, path, started=None):
+                self.known = {pid: 0.0 for pid in pids}
+                self.path = path
+
+            def start(self):
+                events.append("the guard started")
+
+            def stop(self):
+                events.append("the guard stopped")
+                return "nothing off this machine"
+
+            def record(self):
+                return {"remotes": [], "violations": [], "failed": None}
+
+        class FakeEngine:
+            def __init__(self, *arguments, **keywords):
+                self.steps = []
+                self.screenshots = []
+                self.notes = []
+
+            def run(self):
+                events.append("the scenario ran")
+                self.steps.append({"step": "a step", "ok": True, "stage": "scenario", "screen": {"changed": False}})
+
+        class FakeScratch:
+            def __init__(self, *arguments):
+                self.address = "127.0.0.1:3307"
+                self.names = {"login": "ambrose_driver_run_login"}
+
+            def drop(self):
+                events.append("the databases were dropped")
+                return "dropped"
+
+            def existing(self):
+                return []
+
+        return {"Capture": FakeCapture, "LoginServer": FakeLoginServer, "Client": FakeRunClient, "NetGuard": FakeGuard,
+                "Engine": FakeEngine, "Scratch": FakeScratch, "kill_leftovers": lambda started, known=(): [],
+                "prepare_process": lambda: None, "say": lambda message: None}
+
+    def execute(self, **behavior):
+        install_root = os.path.join(self.folder, "install")
+        self.write(os.path.join("install", "Bin", "revision.dat"), ["r806919"])
+        loaded = scenario.Scenario("test.json", {"title": "x", "steps": []})
+        described = references.References("references.json", REFERENCE_DOCUMENT)
+        options = {"runs": os.path.join(self.folder, "runs"), "host": "127.0.0.2", "port": 12100,
+                   "db_host": "127.0.0.1", "db_port": 3307, "db_user": "ambrose", "db_password": "ambrose",
+                   "db_prefix": "ambrose_driver_run", "refs": os.path.join(self.folder, "refs"),
+                   "server_timeout": 1, "client_timeout": 1, "capture": True, "background": True}
+        environment = {"binaries": self.folder, "server_defaults": "loginserver.conf.dist", "install": install_root,
+                       "revision": "r806919.Wizard_1_610", "tshark": "tshark.exe"}
+        with mock.patch.multiple(run, **self.parts(**behavior)):
+            running = run.Run(options, loaded, described, environment)
+            return running, running.execute()
+
+    def test_the_run_starts_and_stops_everything_in_the_order_it_started_it(self):
+        running, code = self.execute()
+        self.assertEqual(self.events, [
+            "the databases were dropped", "the capture started", "the login server started", "the account was made",
+            "the client started", "the guard started", "the window was looked for", "the client went to the back",
+            "the scenario ran", "the client was closed", "the login server stopped", "the capture stopped",
+            "the guard stopped", "the databases were dropped"])
+        self.assertEqual(code, 0)
+
+    def test_a_login_server_that_never_reports_itself_ready_is_still_stopped(self):
+        running, code = self.execute(server_fails=True)
+        self.assertIn("the login server stopped", self.events)
+        self.assertNotIn("the client started", self.events)
+        self.assertEqual(code, 1)
+        self.assertIn("never said it was ready", running.failed)
+
+    def test_the_guard_watches_from_before_the_window_until_after_the_client_is_gone(self):
+        running, code = self.execute(window_fails=True)
+        self.assertLess(self.events.index("the guard started"), self.events.index("the window was looked for"))
+        self.assertLess(self.events.index("the client was closed"), self.events.index("the guard stopped"))
+        self.assertEqual(code, 1)
+
+    def test_a_report_that_cannot_be_built_is_recorded_rather_than_thrown(self):
+        with mock.patch.object(run.report, "build", side_effect=ValueError("missing ), unterminated subpattern")):
+            running, code = self.execute()
+        self.assertEqual(code, 1)
+        self.assertIn("the capture stopped", self.events)
+        with open(os.path.join(running.folder, "report.json"), "r", encoding="utf-8") as handle:
+            written = json.load(handle)
+        self.assertFalse(written["clean"])
+        self.assertEqual(written["checks"][0]["check"], "the report was built")
+        self.assertIn("unterminated subpattern", written["failed"])
 
 
 class CaptureRefsTests(TemporaryFolder):
@@ -824,10 +1143,16 @@ class ReportTests(unittest.TestCase):
             "result": "ok",
             "failed": None,
             "seconds": 32.2,
-            "steps": [{"step": "the login window", "ok": True, "screen": {"changed": True, "shot": "01-login-window.png"}}],
+            "steps": [{"step": "the scratch databases", "ok": True, "stage": "driver"},
+                      {"step": "the login window", "ok": True, "stage": "scenario",
+                       "screen": {"changed": True, "shot": "01-login-window.png"}}],
             "screenshots": [{"shot": "01-login-window.png", "step": "the login window"}],
+            "needs_client": True,
+            "install": "C:/Wizard101",
+            "install_files": 38412,
             "install_changes": {"added": [], "removed": [], "changed": []},
-            "netguard": {"remotes": [{"remote": "WizardGraphicalClient.exe 127.0.0.2:12100"}], "violations": []},
+            "netguard": {"remotes": [{"remote": "WizardGraphicalClient.exe 127.0.0.2:12100"}], "violations": [],
+                         "failed": None},
             "leftover_processes": [],
             "databases_after": [],
             "pending_allowed": ["MSG_LOGINLOGCHARACTERCREATION", "MSG_CREATECHARACTER"],
@@ -846,7 +1171,48 @@ class ReportTests(unittest.TestCase):
     def test_a_clean_run_passes_every_check(self):
         built = self.clean_report()
         self.assertTrue(built["clean"], [check for check in built["checks"] if not check["ok"]])
-        self.assertEqual(len(built["checks"]), 9)
+        self.assertEqual(len(built["checks"]), 12)
+
+    def test_an_install_that_was_never_read_cannot_certify_that_it_was_only_read(self):
+        built = self.clean_report(install_files=0)
+        self.assertFalse(self.passed(built, "the install was only read"))
+        self.assertIn("nothing was compared", [check["detail"] for check in built["checks"]][0])
+
+    def test_a_run_nothing_watched_cannot_certify_where_the_client_went(self):
+        for guard in (None, {"remotes": [], "violations": [], "failed": "the guard stopped early: psutil said no"}):
+            built = self.clean_report(netguard=guard)
+            self.assertFalse(self.passed(built, "the client contacted only this machine"), guard)
+
+    def test_a_message_the_scenario_allows_does_not_excuse_the_longer_name_beside_it(self):
+        line = ("2026-09-18_07:23:18.959 INFO  [network.opcode] Session 3 sent LOGIN MSG_CREATECHARACTERINFO (7:5), "
+                "which loginserver does not handle yet")
+        recorded = fixture()["clean"]
+        built = report.build(self.facts(), recorded["server"] + [line], recorded["client"])
+        self.assertFalse(self.passed(built, "every message the server did not handle is one the scenario expects"))
+        self.assertIn("MSG_CREATECHARACTERINFO", [check["detail"] for check in built["checks"]
+                                                  if check["check"].startswith("every message")][0])
+
+    def test_a_dropped_message_is_not_excused_by_the_list_of_messages_the_server_does_not_handle_yet(self):
+        line = ("2026-09-18_07:23:18.959 WARN  [network.opcode] Dropped LOGIN MSG_CREATECHARACTER (7:4) from session 3: "
+                "truncated body")
+        recorded = fixture()["clean"]
+        built = report.build(self.facts(server_log_allowed=["spells TYPE", "has no TYPE", "truncated body"]),
+                             recorded["server"] + [line], recorded["client"])
+        self.assertFalse(self.passed(built, "the server read every message the client sent"))
+        built = report.build(self.facts(dropped_allowed=["MSG_CREATECHARACTER"],
+                                        server_log_allowed=["spells TYPE", "has no TYPE", "truncated body"]),
+                             recorded["server"] + [line], recorded["client"])
+        self.assertTrue(self.passed(built, "the server read every message the client sent"))
+
+    def test_a_client_line_about_a_message_it_does_not_know_fails_the_run(self):
+        recorded = fixture()
+        built = report.build(self.facts(pending_allowed=["MSG_DELETECHARACTER"]),
+                             recorded["dirty"]["server"], recorded["dirty"]["client"])
+        self.assertFalse(self.passed(built, "the client understood every message the server sent"))
+        allowed = report.build(self.facts(pending_allowed=["MSG_DELETECHARACTER"],
+                                          client_log_allowed=["Received an unknown message type: 481"]),
+                               recorded["dirty"]["server"], recorded["dirty"]["client"])
+        self.assertTrue(self.passed(allowed, "the client understood every message the server sent"))
 
     def test_it_counts_every_message_the_server_did_not_handle(self):
         built = self.clean_report()
@@ -890,11 +1256,35 @@ class ReportTests(unittest.TestCase):
         self.assertFalse(self.passed(built, "every step that changed the screen has a screenshot"))
 
     def test_a_scenario_that_expects_to_fail_is_clean_when_it_fails(self):
-        steps = [{"step": "a line the client will never write", "ok": False, "screen": {"changed": True, "shot": "01-fail.png"}}]
+        steps = [{"step": "a line the client will never write", "ok": False, "stage": "scenario",
+                  "screen": {"changed": True, "shot": "01-fail.png"}}]
         built = self.clean_report(expect_failure=True, result="FAILED", failed="timed out", steps=steps)
         self.assertTrue(built["clean"], [check for check in built["checks"] if not check["ok"]])
         passing = self.clean_report(expect_failure=True)
         self.assertFalse(passing["clean"])
+
+    def test_a_run_that_stopped_before_its_scenario_began_is_not_clean(self):
+        built = self.clean_report(result="FAILED", failed="the client window did not appear within 180s", steps=[],
+                                  screenshots=[])
+        self.assertFalse(self.passed(built, "every step passed"))
+        self.assertIn("did not appear", [check["detail"] for check in built["checks"]
+                                         if check["check"] == "every step passed"][0])
+
+    def test_a_teardown_that_failed_does_not_stand_in_for_the_step_a_scenario_expects_to_fail(self):
+        steps = [{"step": "the login window", "ok": True, "stage": "scenario", "screen": {"changed": False}},
+                 {"step": "stop the login server", "ok": False, "stage": "driver", "error": "it ignored the shutdown"}]
+        built = self.clean_report(expect_failure=True, steps=steps, screenshots=[])
+        self.assertFalse(self.passed(built, "the step the scenario expects to fail did fail"))
+        self.assertFalse(self.passed(built, "every step the driver took around the scenario passed"))
+        self.assertFalse(built["clean"])
+
+    def test_a_teardown_that_failed_fails_a_run_whose_every_scenario_step_passed(self):
+        steps = [{"step": "the login window", "ok": True, "stage": "scenario", "screen": {"changed": False}},
+                 {"step": "stop the guard", "ok": False, "stage": "driver", "error": "it never stopped"}]
+        built = self.clean_report(steps=steps, screenshots=[])
+        self.assertTrue(self.passed(built, "every step passed"))
+        self.assertFalse(self.passed(built, "every step the driver took around the scenario passed"))
+        self.assertFalse(built["clean"])
 
     def test_the_markdown_holds_the_checks_and_the_run(self):
         text = report.render(self.clean_report())
@@ -965,12 +1355,74 @@ class DatabaseTests(unittest.TestCase):
 
 
 class GuardTests(unittest.TestCase):
+    def rows(self):
+        return [
+            {"name": "WizardGraphicalClient.exe", "pid": 20, "ppid": 10, "create_time": 100.0},
+            {"name": "BugReporter.exe", "pid": 21, "ppid": 20, "create_time": 140.0},
+            {"name": "WizardGraphicalClient.exe", "pid": 30, "ppid": 4, "create_time": 120.0},
+            {"name": "WizardGraphicalClient.exe", "pid": 31, "ppid": 4, "create_time": 50.0},
+            {"name": "loginserver.exe", "pid": 40, "ppid": 5, "create_time": 99.0},
+            {"name": "tshark.exe", "pid": 41, "ppid": 5, "create_time": 99.0},
+            {"name": "explorer.exe", "pid": 50, "ppid": 4, "create_time": 130.0},
+        ]
+
     def test_addresses_on_this_machine_are_local_and_others_are_not(self):
         known = {"192.168.1.10", "::1"}
         for address in ("127.0.0.1", "127.0.0.2", "::1", "192.168.1.10", "::ffff:127.0.0.1", "fe80::1%eth0"):
             self.assertTrue(netguard.is_local(address, known | {"fe80::1"}), address)
         for address in ("203.0.113.5", "8.8.8.8", "::ffff:203.0.113.5"):
             self.assertFalse(netguard.is_local(address, known), address)
+
+    def test_only_a_helper_of_the_tree_the_driver_started_is_adopted(self):
+        adopted = netguard.adopted(self.rows(), 90.0, {10: 0.0, 20: 100.0})
+        self.assertEqual([row["pid"] for row in adopted], [20, 21])
+
+    def test_a_client_the_maintainer_started_during_the_run_is_left_alone(self):
+        self.assertEqual(netguard.adopted(self.rows(), 90.0, {}), [])
+        left = netguard.leftovers_among(self.rows(), 90.0, {10, 20})
+        self.assertNotIn("WizardGraphicalClient.exe pid 30", left)
+        self.assertIn("WizardGraphicalClient.exe pid 20", left)
+
+    def test_the_leftovers_are_the_driver_s_own_processes_that_are_still_running(self):
+        left = netguard.leftovers_among(self.rows(), 90.0, {5, 20})
+        self.assertEqual(left, ["BugReporter.exe pid 21", "WizardGraphicalClient.exe pid 20",
+                                "loginserver.exe pid 40", "tshark.exe pid 41"])
+
+    def test_a_process_that_was_running_before_the_run_is_not_a_leftover(self):
+        self.assertEqual(netguard.leftovers_among(self.rows(), 90.0, {31}), [])
+
+
+class LingeringProcess:
+    def __init__(self, pid=4242):
+        self.pid = pid
+
+    def poll(self):
+        return None
+
+
+class CaptureTests(TemporaryFolder):
+    def build(self):
+        taking = capture.Capture("tshark.exe", os.path.join(self.folder, "capture", "login.pcapng"), 12100)
+        self.process = LingeringProcess()
+        self.ended = []
+        taking.end = lambda: self.ended.append(taking.process) or "a kill"
+        return taking
+
+    def test_a_tshark_that_never_reports_itself_capturing_is_stopped_and_its_file_closed(self):
+        taking = self.build()
+        with mock.patch.object(capture.subprocess, "Popen", return_value=self.process):
+            said = taking.start(timeout=0.05)
+        self.assertIn("tshark did not start", said)
+        self.assertEqual(self.ended, [self.process])
+        self.assertIsNone(taking.process)
+        self.assertIsNone(taking._errors)
+        self.assertIsNone(taking.facts()["path"])
+        self.assertEqual(taking.stop(), said)
+
+    def test_a_capture_that_was_never_started_stops_without_a_word_about_tshark(self):
+        taking = capture.Capture(None, os.path.join(self.folder, "capture", "login.pcapng"), 12100)
+        self.assertIn("not installed", taking.start())
+        self.assertIn("not installed", taking.stop())
 
 
 class PreflightTests(unittest.TestCase):
@@ -986,6 +1438,7 @@ class PreflightTests(unittest.TestCase):
             "install": "C:/Wizard101",
             "revision": "r806919.Wizard_1_610",
             "install_reason": "",
+            "install_readable": True,
             "database_answers": True,
             "tshark": "C:/Program Files/Wireshark/tshark.exe",
             "capture": True,
@@ -1000,14 +1453,14 @@ class PreflightTests(unittest.TestCase):
             {"action": "wait_screen", "name": "a", "screens": ["login"], "timeout": 1}]})
 
     def test_a_machine_with_everything_can_run(self):
-        self.assertEqual(preflight.missing(self.scenario(), self.environment(), {"capture": True}), [])
+        self.assertEqual(preflight.missing(self.scenario(), self.environment(), {"capture": True, "client": "C:/Wizard101"}), [])
 
     def test_every_missing_piece_is_named(self):
         gaps = preflight.missing(self.scenario(), self.environment(
             windows=False, platform="linux", packages_missing=["pywin32"], binaries=None,
             binaries_reason="loginserver.exe and launcher.exe are not built", server_defaults=None,
             database_answers=False, capture=False, capture_reason="tshark is not installed",
-            reference_problems=["the reference crops login are not there"]), {"capture": True})
+            reference_problems=["the reference crops login are not there"]), {"capture": True, "client": "C:/Wizard101"})
         self.assertEqual(len(gaps), 7)
         self.assertIn("only on Windows", gaps[0])
         self.assertIn("pywin32", gaps[1])
@@ -1017,15 +1470,29 @@ class PreflightTests(unittest.TestCase):
         self.assertIn("tshark", gaps[5])
         self.assertIn("reference crops", gaps[6])
 
+    def test_a_run_is_skipped_until_the_machine_is_asked_for_a_client(self):
+        gaps = preflight.missing(self.scenario(), self.environment(), {"capture": True})
+        self.assertEqual(len(gaps), 1)
+        self.assertIn("AMBROSE_CLIENT_DIR", gaps[0])
+        clientless = scenario.Scenario("test.json", {"title": "x", "requires": {"client": False}, "steps": []})
+        self.assertEqual(preflight.missing(clientless, self.environment(), {"capture": True}), [])
+
+    def test_an_install_the_driver_cannot_read_is_named(self):
+        gaps = preflight.missing(self.scenario(), self.environment(install_readable=False),
+                                 {"capture": True, "client": "C:/Wizard101"})
+        self.assertEqual(len(gaps), 1)
+        self.assertIn("C:/Wizard101", gaps[0])
+        self.assertIn("only read it", gaps[0])
+
     def test_a_missing_install_is_named_once_the_programs_are_there(self):
         gaps = preflight.missing(self.scenario(), self.environment(install=None, revision=None,
                                                                   install_reason="the launcher found no Wizard101 install"),
-                                 {"capture": True})
+                                 {"capture": True, "client": "C:/Wizard101"})
         self.assertEqual(gaps, ["the launcher found no Wizard101 install"])
 
     def test_a_run_without_a_capture_does_not_need_tshark(self):
         gaps = preflight.missing(self.scenario(), self.environment(capture=False, capture_reason="tshark is not installed"),
-                                 {"capture": False})
+                                 {"capture": False, "client": "C:/Wizard101"})
         self.assertEqual(gaps, [])
 
     def test_the_references_must_belong_to_the_install_in_front_of_the_driver(self):
@@ -1042,6 +1509,22 @@ class PreflightTests(unittest.TestCase):
             problems = preflight.reference_problems(self.scenario(), described, folder, "r806919.Wizard_1_610")
             self.assertEqual(len(problems), 1)
             self.assertIn("never committed", problems[0])
+
+    def test_a_crop_that_no_longer_fits_the_box_it_is_used_with_is_a_problem(self):
+        try:
+            import PIL
+        except ImportError:
+            self.skipTest("Pillow is not installed on this machine")
+        self.assertTrue(PIL)
+        described = references.References("references.json", REFERENCE_DOCUMENT)
+        with tempfile.TemporaryDirectory(prefix="clientdriver-test-") as folder:
+            screens.save_png(screens.solid(10, 10, RED), described.crop_file(folder, "login"))
+            self.assertEqual(preflight.reference_problems(self.scenario(), described, folder, "r806919.Wizard_1_610"), [])
+            screens.save_png(screens.solid(9, 10, RED), described.crop_file(folder, "login"))
+            problems = preflight.reference_problems(self.scenario(), described, folder, "r806919.Wizard_1_610")
+            self.assertEqual(len(problems), 1)
+            self.assertIn("9x10", problems[0])
+            self.assertIn("10x10", problems[0])
 
     def test_the_packages_it_looks_for_are_the_ones_the_requirements_pin(self):
         with open(os.path.join(paths.APP, "requirements.txt"), "r", encoding="utf-8") as handle:

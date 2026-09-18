@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Registers the client driver's self-tests, which need no client, and one client-labelled test per scenario, which skips with 77 on a machine that cannot drive a client; every test carries the label driver, and only the scenarios carry client, because a CTest label filter is a regular expression and a label holding the word client would take the self-tests with it.
+# Registers the client driver's self-tests, which need no client, and one client-labelled test per scenario, which skips with 77 unless AMBROSE_CLIENT_DIR names an install and the machine can drive it, the same opt-in the client-labelled C++ tests take; every test carries the label driver, and only the scenarios carry client, because a CTest label filter is a regular expression and a label holding the word client would take the self-tests with it.
 find_package(Python3 COMPONENTS Interpreter)
 
 if(Python3_Interpreter_FOUND)

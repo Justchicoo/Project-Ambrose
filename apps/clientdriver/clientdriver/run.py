@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# One run end to end: it drops and lets the server rebuild its own databases, starts the capture, the login server and its account, snapshots the install, starts the client through the launcher behind a guard that kills it on any connection off this machine, runs the scenario, then asks the client to quit or ends it outright when its own log says quitting would reach off the machine, stops everything in the order it started it, and writes the report whether the scenario passed or failed.
+# One run end to end: it drops and lets the server rebuild its own databases, starts the capture, the login server and its account, snapshots the install, starts the client through the launcher and guards it from the moment it exists against any connection off this machine, runs the scenario, then asks the client to quit or ends it outright when its own log says quitting would reach off the machine, stops everything in the order it started it with the guard watching until last, and writes the report whether the scenario passed or failed.
 import os
 import re
 import secrets
@@ -53,12 +53,18 @@ class Run:
 
     def note(self, what, value):
         say(f"{what}: {value}")
-        self.prepared.append({"step": what, "ok": True, "result": str(value)})
+        self.prepared.append({"step": what, "ok": True, "result": str(value), "stage": "driver"})
         return value
 
     def failure(self, what, error):
         say(f"{what} failed: {error}")
-        self.prepared.append({"step": what, "ok": False, "error": str(error)})
+        self.prepared.append({"step": what, "ok": False, "error": str(error), "stage": "driver"})
+
+    def stopping(self, what, stop):
+        try:
+            self.note(what, stop())
+        except Exception as error:
+            self.failure(what, error)
 
     def execute(self):
         options = self.options
@@ -89,21 +95,20 @@ class Run:
         try:
             self.note("the scratch databases", f"{databases.address} will hold {', '.join(sorted(databases.names.values()))}")
             self.note("dropped anything left from an earlier run", databases.drop())
-            self.note("the capture", capture.start())
             self.cleanups.append(("stop the capture", capture.stop))
+            self.note("the capture", capture.start())
             before = install.snapshot(self.environment.get("install"))
             self.note("the install", f"{len(before)} file(s) under {self.environment.get('install')}")
-            self.note("the login server", server.start(timeout=options["server_timeout"]))
             self.cleanups.append(("stop the login server", server.stop))
+            self.note("the login server", server.start(timeout=options["server_timeout"]))
             self.note("the account", server.ensure_account(variables["user"], password))
             self.cleanups.append(("close the client", lambda: client.close(force=self.force_close)))
             self.note("the client", client.start(timeout=options["client_timeout"]))
+            guard = NetGuard(client.pids, os.path.join(self.folder, "netguard.json"), started=started)
+            guard.start()
             self.cleanups.append(("decide how the client is stopped", lambda: self.quit_safely(client)))
             self.note("the client window", f"{client.find_window(timeout=options['client_timeout']):#x} at "
                                            f"{self.references.window[0]}x{self.references.window[1]}")
-            guard = NetGuard(client.pid, os.path.join(self.folder, "netguard.json"), started=started)
-            guard.start()
-            self.cleanups.append(("stop the guard", guard.stop))
             if options.get("background", True):
                 self.note("the foreground", client.to_background())
             engine.run()
@@ -111,11 +116,10 @@ class Run:
             self.failed = str(error)
         finally:
             for name, stop in reversed(self.cleanups):
-                try:
-                    self.note(name, stop())
-                except Exception as error:
-                    self.failure(name, error)
-            leftovers = kill_leftovers(started)
+                self.stopping(name, stop)
+            if guard is not None:
+                self.stopping("stop the guard", guard.stop)
+            leftovers = kill_leftovers(started, guard.known if guard else ())
             if leftovers:
                 self.failure("processes left running", ", ".join(leftovers))
             after = install.snapshot(self.environment.get("install"))
@@ -145,18 +149,37 @@ class Run:
                 "screenshots": engine.screenshots,
                 "recorded_lines": engine.notes,
                 "capture": capture.facts(),
+                "needs_client": self.scenario.needs_client,
+                "install": self.environment.get("install"),
+                "install_files": len(before),
                 "install_changes": install.diff(before, after),
-                "netguard": guard.record() if guard else {"remotes": [], "violations": []},
+                "netguard": guard.record() if guard else None,
                 "leftover_processes": leftovers,
                 "databases_after": remaining,
                 "pending_allowed": self.scenario.pending_allowed,
+                "dropped_allowed": self.scenario.dropped_allowed,
                 "server_log_allowed": self.scenario.server_log_allowed,
+                "client_log_allowed": self.scenario.client_log_allowed,
             }
             facts.update(self.extra(engine))
-            written = report.build(facts, read_lines(server.log.path), read_lines(client.log.path, "latin-1"))
-            path = report.write(self.folder, written)
+            written, path = self.record(facts, server, client)
         self.summarize(written, path)
         return 0 if written["clean"] else 1
+
+    def record(self, facts, server, client):
+        try:
+            written = report.build(facts, read_lines(server.log.path), read_lines(client.log.path, "latin-1"))
+        except Exception as error:
+            self.failure("build the report", error)
+            written = dict(facts, clean=False, result="FAILED",
+                           failed=self.failed or f"the report could not be built: {error}",
+                           steps=list(facts.get("steps") or []) + self.prepared[-1:],
+                           checks=[{"check": "the report was built", "ok": False, "detail": str(error)}])
+        try:
+            return written, report.write(self.folder, written)
+        except Exception as error:
+            self.failure("write the report", error)
+            return written, f"none could be written: {error}"
 
     def make_engine(self, client, server, store, variables, databases):
         return Engine(self.scenario, client, server, store, self.shots, variables, databases)
@@ -168,8 +191,14 @@ class Run:
         if not client.alive():
             return "the client has already stopped"
         client.log.poll()
+        lines = [line for line in read_lines(client.log.path, client.log.encoding) if line.strip()] or \
+            [line for line in client.log.lines if line.strip()]
+        if not lines:
+            self.force_close = True
+            return (f"the client is ended rather than asked to quit, because {client.log.name} yielded no line to judge it "
+                    "by, and a client that cannot be judged may be one a quit would take off this machine")
         for rule in rules:
-            if holds(client.log.lines, rule):
+            if holds(lines, rule):
                 self.force_close = True
                 return f"the client is ended rather than asked to quit, because {rule['because']}"
         return "the client can be asked to quit, because nothing it has written leaves this machine on the way out"
@@ -179,10 +208,10 @@ class Run:
 
     def summarize(self, written, path):
         say("-" * 70)
-        say(f"run {self.run_id}: {written['result']} in {written['seconds']}s"
-            + (f": {written['failed']}" if written["failed"] else ""))
-        for check in written["checks"]:
+        say(f"run {self.run_id}: {written.get('result')} in {written.get('seconds')}s"
+            + (f": {written['failed']}" if written.get("failed") else ""))
+        for check in written.get("checks") or []:
             say(f"  {'pass' if check['ok'] else 'FAIL'}  {check['check']}: {check['detail']}")
-        say(f"unhandled messages: {written['unhandled_messages'] or 'none'}")
-        say(f"screenshots: {len(written['screenshots'])} in {self.shots}")
+        say(f"unhandled messages: {written.get('unhandled_messages') or 'none'}")
+        say(f"screenshots: {len(written.get('screenshots') or [])} in {self.shots}")
         say(f"report: {path}")
