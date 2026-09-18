@@ -60,6 +60,7 @@
     [data-ambrose-scroll] {
         scrollbar-color: var(--color-edge-strong) var(--color-surface-sunken);
         scrollbar-width: thin;
+        scroll-padding-block: var(--ambrose-chrome, 0px);
     }
 }
 

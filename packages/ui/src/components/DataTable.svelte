@@ -11,6 +11,7 @@
         type ColumnDef,
     } from "@tanstack/table-core";
     import { classes } from "../internal/classes";
+    import CollectionState from "./CollectionState.svelte";
     import Icon from "./Icon.svelte";
 
     const features = tableFeatures({
@@ -33,10 +34,22 @@
         columns: Column[];
         rows: Row[];
         empty?: string;
+        status?: "ready" | "loading" | "no-results" | "error";
+        noResults?: string;
+        error?: string;
         class?: string;
     };
 
-    let { caption, columns, rows, empty = "No rows", class: extra }: Props = $props();
+    let {
+        caption,
+        columns,
+        rows,
+        empty = "No rows",
+        status = "ready",
+        noResults = "Nothing matched",
+        error = "Could not be loaded",
+        class: extra,
+    }: Props = $props();
 
     const byId = $derived(new Map(columns.map((column) => [column.id, column])));
 
@@ -70,6 +83,9 @@
     }
 </script>
 
+{#if status !== "ready"}
+    <CollectionState {status} label={caption} {noResults} {error} class={extra} />
+{:else}
 <div class={classes("overflow-x-auto rounded-card border border-edge-quiet bg-surface-card", extra)}>
     <table class="w-full border-collapse text-13">
         <caption class="ambrose-label px-16 py-10 text-start">{caption}</caption>
@@ -124,3 +140,4 @@
         </tbody>
     </table>
 </div>
+{/if}

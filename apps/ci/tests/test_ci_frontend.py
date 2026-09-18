@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Project Ambrose by Imjustchico
-# Self-tests for the front-end checks and the npm cache priming: what counts as a colour a component wrote, an arbitrary value, an inline style, a component with no story and a bundle that names another host.
+# Self-tests for the front-end checks and the npm cache priming: what counts as a colour a component wrote, an arbitrary value, an inline style, a component with no story, a collection missing one of its four states and a bundle that names another host.
 import json
 import os
 import shutil
@@ -16,11 +16,17 @@ import ci_npm_cache
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 
+NEWLINE = chr(10)
+LIST_COMPONENT = NEWLINE.join(("<script lang='ts'>", "    rows: Row[];", "</script>"))
+PLAIN_COMPONENT = NEWLINE.join(("<script lang='ts'>", "    label: string;", "</script>"))
+
+
 class FakeTree(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.root, True)
         self.write("apps/ci/ci_frontend_allow.json", json.dumps({"lines": [], "urls": ["https://www.w3.org/"]}))
+        self.classify([], [])
         for name in ("cormorant-garamond", "karla", "jetbrains-mono"):
             suffix = "latin-wght-normal.woff2"
             self.write(f"packages/ui/src/fonts/{name}-{suffix}", "font")
@@ -32,6 +38,15 @@ class FakeTree(unittest.TestCase):
             handle.write(text)
         return path
 
+    def classify(self, collections, others):
+        self.write("packages/ui/collections.json", json.dumps({"collections": collections, "not-collections": others}))
+
+    def collection(self, name, states):
+        body = LIST_COMPONENT
+        self.write(f"packages/ui/src/components/{name}.svelte", body)
+        tags = NEWLINE.join(f'<Story name="{state}" tags={{["state:{state}"]}}>' for state in states)
+        self.write(f"packages/ui/src/components/{name}.stories.svelte", tags)
+
     def component(self, name, body):
         self.write(f"packages/ui/src/components/{name}.svelte", body)
         self.write(f"packages/ui/src/components/{name}.stories.svelte", "story")
@@ -41,6 +56,7 @@ class FakeTree(unittest.TestCase):
         found = ci_frontend_checks.check_source(self.root, allow)
         found += ci_frontend_checks.check_stories(self.root)
         found += ci_frontend_checks.check_fonts(self.root)
+        found += ci_frontend_checks.check_collections(self.root)
         bundle, _built = ci_frontend_checks.check_bundles(self.root, allow)
         return found + bundle
 
@@ -98,6 +114,31 @@ class StoryTests(FakeTree):
 
     def test_the_canary_needs_no_story_of_its_own(self):
         self.write("packages/ui/src/canary/Canary.stories.svelte", "<div></div>\n")
+        self.assertEqual(self.problems(), [])
+
+
+class CollectionTests(FakeTree):
+    def test_a_collection_showing_all_four_states_passes(self):
+        self.classify(["Rows"], [])
+        self.collection("Rows", ci_frontend_checks.COLLECTION_STATES)
+        self.assertEqual(self.problems(), [])
+
+    def test_a_collection_missing_one_state_fails(self):
+        self.classify(["Rows"], [])
+        self.collection("Rows", ("loading", "empty", "error"))
+        self.assertTrue(any("state:no-results" in problem for problem in self.problems()))
+
+    def test_a_list_component_in_neither_list_fails(self):
+        self.component("Loose", LIST_COMPONENT)
+        self.assertTrue(any("classified in neither list" in problem for problem in self.problems()))
+
+    def test_a_component_in_both_lists_fails(self):
+        self.classify(["Rows"], ["Rows"])
+        self.collection("Rows", ci_frontend_checks.COLLECTION_STATES)
+        self.assertTrue(any("in both lists" in problem for problem in self.problems()))
+
+    def test_a_component_that_takes_no_list_needs_no_classification(self):
+        self.component("Plain", PLAIN_COMPONENT)
         self.assertEqual(self.problems(), [])
 
 

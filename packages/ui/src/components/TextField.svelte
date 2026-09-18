@@ -15,6 +15,7 @@
         disabled?: boolean;
         readonly?: boolean;
         mono?: boolean;
+        autocomplete?: string;
         class?: string;
         oninput?: (event: Event) => void;
     };
@@ -31,6 +32,7 @@
         disabled = false,
         readonly = false,
         mono = false,
+        autocomplete,
         class: extra,
         oninput,
     }: Props = $props();
@@ -49,6 +51,7 @@
         {required}
         {disabled}
         {readonly}
+        {autocomplete}
         {oninput}
         bind:value
         aria-describedby={described}
