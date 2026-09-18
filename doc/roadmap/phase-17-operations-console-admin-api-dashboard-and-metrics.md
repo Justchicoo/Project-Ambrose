@@ -1832,8 +1832,8 @@ Added on 2026-09-18 at the maintainer's direction, who asked that every screen l
 - [ ] With the network unavailable, `npm ci --offline --ignore-scripts` from the primed cache installs and both apps build, on Windows and on Linux
 - [x] The built output makes no request to any other host, proved by a check that fails on an absolute http or https URL in the bundle (verified: `npm run build` then `python apps/ci/ci_frontend_checks.py` scans the bundle and reports no problem, and the end-to-end test `the built panel serves itself and asks no other host for anything` passes)
 - [ ] With reduced motion set, every duration constant is zero and the two things that carry information through motion render their still form, the live dot as a filled dot with the word Live and its sample's age, and the indeterminate indicator as words saying an operation is running
-- [ ] Building with the front-end CMake option off still builds the servers and prints what it left out
-- [ ] The front-end job runs on Linux only, and a failing gallery or component test fails it
+- [x] Building with the front-end CMake option off still builds the servers and prints what it left out (verified: configuring without `-DFRONTEND=ON` printed the three lines naming the panel, the launcher window's page and how to turn them on, and the servers and unit tests built from that configure)
+- [x] The front-end job runs on Linux only, and a failing gallery or component test fails it (verified: the `frontend` job added to .github/workflows/core-build.yml runs on ubuntu-latest and on no other runner, and runs the gallery build, the components in Chromium and WebKit, the end-to-end pass and the canary, each failing the job; `npm run storybook:build` and every step were run locally first)
 
 ## 17.74 Console log line: columns, parts and per-part color
 

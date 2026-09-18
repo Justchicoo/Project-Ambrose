@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on CI file pushes, and on pull requests, then builds and tests the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by the schedule, a label, or a manual run.
+# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on CI file pushes, and on pull requests, runs the gallery, the components in Chromium and WebKit, the end-to-end pass and the accessibility canary on Linux, then builds and tests the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by the schedule, a label, or a manual run.
 name: core-build
 
 on:
@@ -197,3 +197,38 @@ jobs:
           AMBROSE_TEST_DB: ${{ runner.os == 'Linux' && '127.0.0.1;3306;root;root;ambrose_test' || '' }}
           CL: ${{ runner.os == 'Windows' && '/MP' || '' }}
         run: python apps/ci/ci_build.py --configure-preset ${{ matrix.configure }} --build-preset ${{ matrix.build }} --warnings-as-errors --stage build-test
+
+  frontend:
+    name: frontend
+    needs: checks
+    if: ${{ !cancelled() && needs.checks.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install the toolchain
+        run: npm ci --no-audit --no-fund
+      - name: Install the browsers
+        run: npx playwright install --with-deps chromium webkit
+      - name: Repository rules
+        run: npm run checks
+      - name: Build the gallery
+        run: npm run storybook:build
+      - name: Build both apps
+        run: npm run build
+      - name: Components in Chromium and WebKit
+        run: npm run test
+      - name: End to end
+        run: npm run e2e
+      - name: The canary must fail
+        run: |
+          if npm run test:canary; then
+            echo "the canary story passed the accessibility gate, so the gate is not catching an unlabelled control"
+            exit 1
+          fi
+      - name: Bundle rules
+        run: python apps/ci/ci_frontend_checks.py
