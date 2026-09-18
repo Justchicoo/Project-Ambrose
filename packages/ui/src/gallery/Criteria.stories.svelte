@@ -25,6 +25,7 @@
         await expect(scroller.scrollHeight).toBeGreaterThan(scroller.clientHeight);
         scroller.scrollTop = scroller.scrollHeight;
         await frame();
+        await expect(scroller.scrollTop).toBeGreaterThan(0);
         const row = canvas.getByRole("button", { name: "Row 3" });
         row.focus();
         row.scrollIntoView({ block: "start" });
