@@ -60,12 +60,13 @@ Good first evenings: F-13, F-12, or one of the proposals.
    - Anything else goes where the track's table says, one file, with its header.
    - If my item needs a table, a screen or a convention that does not exist yet, do not invent it. Write a proposal in `contrib/proposals/` or ask in the pull request. SQL goes in `data/sql/updates/pending_db_world/`, whose README gives the naming and the door table's starter shape, and follows doc/ARCHITECTURE.md's dated `YYYY_MM_DD_NN.sql` naming.
 5. Have me commit first, because these read committed work, then run these from the repository root and fix whatever they print (`python` may be `py` on Windows):
+   git remote add upstream https://github.com/Justchicoo/Project-Ambrose.git
    git fetch upstream
    python apps/ci/ci_contrib_paths.py --range upstream/main...HEAD
    python apps/ci/ci_findings.py --paths contrib/findings/<area>/<file>.json
    python apps/codestyle/codestyle.py
    python apps/ci/ci_forbidden_files.py
-   Three dots, and the remote branch my pull request targets - never a local `main`, because a stale or moved-on `main` makes that check flag dozens of files I never touched. `upstream` is whichever of my remotes is Justchicoo/Project-Ambrose. Before I commit, `python apps/ci/ci_contrib_paths.py --paths <files>` works on uncommitted ones.
+   Three dots, and the remote branch my pull request targets - never a local `main`, because a stale or moved-on `main` makes that check flag dozens of files I never touched. A clone of my own fork has no `upstream` remote until the first line above adds it, which is why that line is there; run it once and the fetch alone after that. Before I commit, `python apps/ci/ci_contrib_paths.py --paths <files>` works on uncommitted ones.
    `ci_forbidden_files.py` refuses `.pcap`, `.pcapng`, `.wad`, `.nif`, `.kf`, `.kfm`, any file beginning `KIWAD` or `BINd`, any `.json` holding both `classes` and `version`, any `.conf`, client protocol XML, and anything over 1,000,000 bytes. C-11 fuzz seeds must respect all of that.
    If I touched a scenario, also `python apps/clientdriver/tests/test_clientdriver.py`.
    CONTRIBUTING.md asks for a build and `ctest` before every push. If my change is data or documents only, say so in the pull request and say these checks were run instead.

@@ -502,6 +502,22 @@ class ContributorPathTests(unittest.TestCase):
         signposts = ["contrib/README.md", "contrib/AI-START-HERE.md"]
         self.assertEqual(ci_contrib_paths.check(signposts), signposts)
 
+    def test_the_checker_and_the_tracks_table_name_the_same_folders(self):
+        with io.open(os.path.join(ROOT, "doc", "CONTRIBUTOR-TRACK.md"), encoding="utf-8") as handle:
+            rows = [line for line in handle.read().splitlines() if line.startswith("| `")]
+        named = {row.split("`")[1].split("<")[0] for row in rows}
+        self.assertEqual(named, set(ci_contrib_paths.ALLOWED_PREFIXES))
+
+    def test_every_open_item_lands_in_a_folder_the_checker_allows(self):
+        with io.open(os.path.join(ROOT, "doc", "CONTRIBUTOR-TRACK.md"), encoding="utf-8") as handle:
+            rows = [line for line in handle.read().splitlines() if re.match(r"^\| [FC]-\d+ \|", line)]
+        self.assertGreater(len(rows), 90)
+        for row in rows:
+            columns = row.split("|")
+            self.assertEqual(len(columns), 6, row)
+            for folder in re.findall(r"`([^`]*/[^`]*)`", columns[3]):
+                self.assertEqual(ci_contrib_paths.check([folder + "a-file"]), [], columns[1].strip())
+
     def test_a_folder_that_only_looks_like_the_track_is_reported(self):
         self.assertEqual(ci_contrib_paths.check(["contributors/tool.py", "docs/guides/x.md", "data/fuzzers/x.bin"]),
                          ["contributors/tool.py", "docs/guides/x.md", "data/fuzzers/x.bin"])

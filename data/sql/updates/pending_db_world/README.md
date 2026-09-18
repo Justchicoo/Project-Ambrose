@@ -2,7 +2,7 @@
 
 # data/sql/updates/pending_db_world
 
-World rows you authored yourself land here. doc/ARCHITECTURE.md's SQL convention sends open pull requests to `pending_db_<name>/`, and the maintainer moves the file into `data/sql/updates/db_world/` when it is merged, where the updater applies it in order and records it. Nothing waiting here touches anybody's database: `data/sql/base/db_world/updates_include.sql` lists the released and custom folders and not this one, so a file sitting here is reviewed, not run.
+World rows you authored yourself land here. doc/ARCHITECTURE.md's SQL convention sends open pull requests to `pending_db_<name>/`, and the maintainer moves the file into `data/sql/updates/db_world/` when it is merged, where the updater applies it in order and records it. A file here is not parked outside the server: `data/sql/updates/db_world/2026_01_01_00.sql` adds this folder to `updates_include` with the state `PENDING`, and the updater reads every folder that table lists. A `.sql` file sitting here is applied at the next start of a server pointed at this checkout, after the released updates and before the custom ones, and recorded as `PENDING`. That is what lets a reviewer run your rows; it also means the file must hold only what its pull request is about, because anyone who checks the branch out gets it.
 
 It does not go in `data/sql/custom/db_world/`. That folder is a machine's own local SQL, which is never upstreamed.
 
