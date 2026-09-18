@@ -11,17 +11,25 @@
 </script>
 
 <Story name="Loading" tags={["state:loading"]}>
-    <CollectionState status="loading" label="the sessions" />
+    {#snippet template()}
+        <CollectionState status="loading" label="the sessions" />
+    {/snippet}
 </Story>
 
 <Story name="Empty" tags={["state:empty"]}>
-    <CollectionState status="empty" label="the sessions" empty="No session has been opened yet" />
+    {#snippet template()}
+        <CollectionState status="empty" label="the sessions" empty="No session has been opened yet" />
+    {/snippet}
 </Story>
 
 <Story name="Nothing matched the filter" tags={["state:no-results"]}>
-    <CollectionState status="no-results" label="the sessions" noResults="No session matches that filter" />
+    {#snippet template()}
+        <CollectionState status="no-results" label="the sessions" noResults="No session matches that filter" />
+    {/snippet}
 </Story>
 
 <Story name="Could not be loaded" tags={["state:error"]}>
-    <CollectionState status="error" label="the sessions" error="The sessions could not be loaded" />
+    {#snippet template()}
+        <CollectionState status="error" label="the sessions" error="The sessions could not be loaded" />
+    {/snippet}
 </Story>

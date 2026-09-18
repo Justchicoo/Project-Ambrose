@@ -38,13 +38,19 @@
 </Story>
 
 <Story name="Still loading" tags={["state:loading"]}>
-    <DataTable caption="Sessions" columns={columns} rows={[]} status="loading" />
+    {#snippet template()}
+        <DataTable caption="Sessions" columns={columns} rows={[]} status="loading" />
+    {/snippet}
 </Story>
 
 <Story name="Nothing matched the filter" tags={["state:no-results"]}>
-    <DataTable caption="Sessions" columns={columns} rows={[]} status="no-results" noResults="No session matches that filter" />
+    {#snippet template()}
+        <DataTable caption="Sessions" columns={columns} rows={[]} status="no-results" noResults="No session matches that filter" />
+    {/snippet}
 </Story>
 
 <Story name="Could not be loaded" tags={["state:error"]}>
-    <DataTable caption="Sessions" columns={columns} rows={[]} status="error" error="The sessions could not be loaded" />
+    {#snippet template()}
+        <DataTable caption="Sessions" columns={columns} rows={[]} status="error" error="The sessions could not be loaded" />
+    {/snippet}
 </Story>

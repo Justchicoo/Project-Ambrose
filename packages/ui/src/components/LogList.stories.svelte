@@ -33,13 +33,19 @@
 </Story>
 
 <Story name="Still loading" tags={["state:loading"]}>
-    <LogList label="Server log" records={[]} status="loading" />
+    {#snippet template()}
+        <LogList label="Server log" records={[]} status="loading" />
+    {/snippet}
 </Story>
 
 <Story name="Nothing matched the filter" tags={["state:no-results"]}>
-    <LogList label="Server log" records={[]} status="no-results" noResults="No record matches that filter" />
+    {#snippet template()}
+        <LogList label="Server log" records={[]} status="no-results" noResults="No record matches that filter" />
+    {/snippet}
 </Story>
 
 <Story name="Could not be loaded" tags={["state:error"]}>
-    <LogList label="Server log" records={[]} status="error" error="The log could not be read" />
+    {#snippet template()}
+        <LogList label="Server log" records={[]} status="error" error="The log could not be read" />
+    {/snippet}
 </Story>
