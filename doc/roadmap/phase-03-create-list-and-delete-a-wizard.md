@@ -32,6 +32,7 @@
 | 3.24 | Drive the retail client in tests | L | 3.25, 2.14 |
 | 3.25 | Ambrose client launcher | M | 3.22, 1.21 |
 | 3.26 | Launcher window | L | 3.25, 1.04 |
+| 3.27 | Launcher as its own app | M | 3.26 |
 
 ## Review notes for this phase
 
@@ -1092,6 +1093,42 @@ Added on 2026-09-17 at the maintainer's direction, who approved the look in doc/
 - doc/DESIGN.md holds the tokens and the rules this window follows, and 17.06 builds the panel from the same ones; a component either lives in the shared set or in exactly one of them
 - The page never reads the user's install or the network by itself: every fact it shows comes from the launcher, which already knows how to find them
 - 17.24's desktop app is the later, larger program that also starts and watches the servers; this window is only the launcher
+
+## 3.27 Launcher as its own app
+
+**Goal:** The launcher is a program of its own, the way a published game's launcher is: installed on its own with its own icon and shortcut, holding the realms and accounts a player uses, updating itself, and working on a machine that has no Ambrose server on it at all.
+
+**Size:** M. **Depends on:** 3.26
+
+Added on 2026-09-18 at the maintainer's direction, who asked why the launcher is not its own program as it is for published games. It already is a separate program, but it is installed inside the server's folder and started from a script; this milestone gives it its own install, identity and life cycle. 16.13 later adds patching from an Ambrose patch server to this same app.
+
+**Deliverables**
+
+- A package per platform built from the repository: on Windows an installer that puts the app in the user's own programs folder with a Start menu and desktop shortcut, an icon, a version, and an uninstaller, plus a portable archive that needs no installer; elsewhere an archive with a desktop entry
+- Its own data folder, `ProjectAmbrose/Launcher` beside the other Ambrose data, holding `launcher.conf`, the realm list, its log and the folders the client runs from. The launcher no longer lives beside the server's programs, and a server install is no longer required for it to work
+- A realm list in the window: add a realm by name, host and port, edit and remove one, see which answer, and remember the one last played. Each realm remembers its account name, and a password is saved only when the player asks, through the operating system's own credential store, never in a file
+- Standalone by default: on a machine with no Ambrose server, the launcher installs, adds a realm and plays. When a local server install is found, and only then, the window also offers to start it and to open its panel
+- Self-update: an update channel named in its configuration, a manifest signed with the operator's key and a SHA-256 for every file, staged into a new version folder, swapped in, and rolled back when the new version does not start. The version is shown in the window, an update never touches the game install, and a run with no update channel configured never reaches the network
+- The identity doc/DESIGN.md sets: the icon, the window title and the taskbar entry, drawn from the same tokens as the window itself
+- Tests: unit tests over the realm list, the credential store behind a fake, and the update manifest checks (a wrong signature, a wrong hash, a missing file, an interrupted swap); a packaging test that builds the package and checks its contents; and a dev-gated install and run on the maintainer's machine
+
+**Acceptance**
+
+- [ ] Dev-gated (the maintainer's machine): installing the package adds a shortcut and an icon, the launcher opens by itself, a realm added by host and port is remembered, and Play starts the game against it
+- [ ] On a machine with no Ambrose server installed, the launcher installs, runs and plays against a remote realm; with a local server present it also offers to start it and open its panel
+- [ ] An update whose signature or hash does not match is refused and the running version keeps working; an update that fails to start rolls back to the previous version, and both are logged
+- [ ] A saved password lives in the operating system's credential store, and no configuration file holds it
+- [ ] Uninstalling removes the app and its shortcuts, removes its own data when asked, and leaves the game install and any Ambrose server install untouched
+- [ ] With no update channel configured, a whole run makes no connection except to the realm the player chose, shown by a capture
+- [ ] Unit tests cover the realm list, the update checks and the credential store through a fake, and the packaging test runs in CI
+
+### Detailed spec
+
+**Notes**
+
+- The console launcher from 3.25 stays underneath: the app is the same program with its window, so the driver in 3.24 and the servers keep using it unchanged
+- A player who only wants to play needs this app and their own copy of the game. Nothing else about Ambrose has to be installed
+- 16.13 adds patching a copy of the install from an Ambrose patch server to this app, and 17.24's desktop app remains the separate, larger program for running servers
 
 ## 3.23 Keep up with KingsIsle's client revisions
 

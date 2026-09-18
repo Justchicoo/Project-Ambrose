@@ -18,7 +18,7 @@
 | 16.10 | In-game package streaming (PAT-10 part 2) | M | 16.09, 6.14 |
 | 16.11 | Project-owned type dumper spike (OBJ-20 part 1) | M | 3.03 |
 | 16.12 | Type dump v2 emission and validator (OBJ-20 part 2) | M | 16.11, 3.01 |
-| 16.13 | Player launcher that patches from Ambrose (new) | M | 16.06, 16.08 |
+| 16.13 | Player launcher that patches from Ambrose (new) | M | 16.06, 16.08, 3.27 |
 
 ## Review notes for this phase
 
@@ -510,7 +510,9 @@ Users generate their own type dump from their own client, so Ambrose does not de
 
 **Goal:** Players start the game from a launcher that patches only from the Ambrose patch server and never reaches KingsIsle.
 
-**Size:** M. **Depends on:** 16.06, 16.08
+**Size:** M. **Depends on:** 16.06, 16.08, 3.27
+
+Patching is added to the app 3.27 packages and updates, not to a launcher of its own.
 
 **Acceptance**
 
