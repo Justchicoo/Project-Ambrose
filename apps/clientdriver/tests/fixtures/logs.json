@@ -1,0 +1,50 @@
+{
+  "about": [
+    "Log lines in the shape the login server and the retail client write them, authored for these tests.",
+    "Nothing here is copied out of a client: no display text, only the driver's own wording, the message",
+    "names the server's own message table lists, and the line shapes the report classifies."
+  ],
+  "clean": {
+    "server": [
+      "2026-09-17_15:52:15.260 INFO  [server.loginserver] An AI-built Wizard101 server: loginserver",
+      "2026-09-17_15:52:15.540 WARN  [server.loading] Messages/PhysicsBehaviorMessages.xml:113: MSG_PHYSICS_GRAB.Force spells TYPE as TPYE; using FLT",
+      "2026-09-17_15:52:15.544 WARN  [server.loading] WizardMessages.xml:1029: MSG_MINIGAMEREWARDS.GlobalID has no TYPE; treating it as GID",
+      "2026-09-17_15:52:15.544 WARN  [server.loading] WizardMessages2.xml:1854: MSG_BATTLEGROUNDQUEUEUPDATE.Kicked spells TYPE as TYP; using STR",
+      "2026-09-17_15:52:15.900 INFO  [server.loginserver] loginserver ready",
+      "2026-09-17_15:52:29.100 DEBUG [network.session] Session 3 offered",
+      "2026-09-17_15:52:29.480 INFO  [server.loginserver] Session 3 from 127.0.0.1 failed to authenticate as clientdriver: the password is wrong; sent MSG_USER_AUTHEN_RSP Error=AuthenFailed",
+      "2026-09-17_15:52:33.024 INFO  [server.loginserver] Session 3 from 127.0.0.1 authenticated as clientdriver (id 1) on machine 0000000000000001: sent MSG_USER_AUTHEN_RSP Error=0 and MSG_USER_ADMIT_IND Status=1",
+      "2026-09-17_15:52:33.056 DEBUG [server.loginserver] Session 3 listed 0 character(s) of account 1",
+      "2026-09-17_15:52:42.992 DEBUG [network.session] Session 3 keepalive from the client at 0 minutes, answered",
+      "2026-09-17_15:53:24.036 INFO  [network.opcode] Session 3 sent LOGIN MSG_LOGINLOGCHARACTERCREATION (7:28), which loginserver does not handle yet",
+      "2026-09-17_15:54:11.780 INFO  [network.opcode] Session 3 sent LOGIN MSG_CREATECHARACTER (7:4), which loginserver does not handle yet",
+      "2026-09-17_15:54:40.010 DEBUG [network.session] Session 3 closed"
+    ],
+    "client": [
+      "09/17/26 15:52:18 [STAT] GraphicalClient About to initialize graphical client.",
+      "09/17/26 15:52:24 [WARN] FontGlyphs     FontGlyphis::Cache: RequestAsset failed for Fonts/Verdana",
+      "09/17/26 15:52:28 [STAT] LoginState     Send MSG_USER_AUTHEN to Login Server",
+      "09/17/26 15:52:29 [STAT] LoginState     LOGIN RESPONSE: Error=996708736",
+      "09/17/26 15:52:29 [DBGH] GUIManager     DisplayMessageBox( msg = <the client's own text>, title = <its own title>, msg string key = GUI_InvalidNameOrPasword, title string key = GUI_ERROR )",
+      "09/17/26 15:52:30 [ERRO] Session        Session::ParseEncryption -- Bad blockLen = 0",
+      "09/17/26 15:52:31 [STAT] LoginState     AppCloseConnection() called",
+      "09/17/26 15:52:33 [STAT] LoginState     LOGIN RESPONSE: Error=0",
+      "09/17/26 15:52:33 [STAT] LoginState     The LoginServer has admitted the user",
+      "09/17/26 15:52:34 [STAT] CharacterState CHARACTER LIST",
+      "09/17/26 15:52:36 [STAT] SceneManager   WizardCharacterSelect: The scene has been loaded successfully.",
+      "09/17/26 15:54:41 [STAT] GraphicalClient Mainloop exited with return code 0"
+    ]
+  },
+  "dirty": {
+    "server": [
+      "2026-09-17_16:10:02.100 INFO  [server.loginserver] loginserver ready",
+      "2026-09-17_16:10:07.400 WARN  [server.loginserver] the character list took 4200 ms to build",
+      "2026-09-17_16:10:09.900 ERROR [server.loginserver] Session 4 could not encode a wizard, so it was sent MSG_CHARACTERLIST Error=1",
+      "2026-09-17_16:10:11.010 INFO  [network.opcode] Session 4 sent LOGIN MSG_DELETECHARACTER (7:6), which loginserver does not handle yet"
+    ],
+    "client": [
+      "09/17/26 16:10:12 [STAT] BrowserUtils   Opening page with external browser: http://example.invalid/page",
+      "09/17/26 16:10:13 [ERRO] Session        Received an unknown message type: 481"
+    ]
+  }
+}

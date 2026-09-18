@@ -1,0 +1,43 @@
+{
+  "about": [
+    "Which crop of the client's window identifies each screen, and where each press lands, both measured in",
+    "window coordinates at the size the key names. The crops themselves are pictures of the client, so they",
+    "are never committed: 'drive.py capture-refs' rebuilds them from a live client into the Ambrose data",
+    "folder, and a run refuses to judge a screen whose crop is missing or was measured on another revision.",
+    "The interface scale is whatever the install's own configuration carries, because the launcher changes",
+    "only the window mode, the window size and the metrics address; a changed scale invalidates every number",
+    "here and the crops with it.",
+    "'never_quit_after' holds the one thing this client does that reaches off the machine: what it must not",
+    "have last written in its own log when the driver asks it to quit, and what puts it right again."
+  ],
+  "key": {"revision": "r806919.Wizard_1_610", "window": "1280x720", "ui_scale": "install default"},
+  "match": {"tolerance": 32, "fraction": 0.65},
+  "screens": {
+    "login": {"crop": [535, 410, 745, 440], "shows": "the two buttons under the login window's password field"},
+    "invalid": {"crop": [585, 412, 833, 445], "shows": "the two buttons of the dialog the client shows when a login is refused"},
+    "charselect": {"crop": [270, 675, 1010, 705], "shows": "the row of buttons along the bottom of the character selection screen"},
+    "dialog_next": {"crop": [745, 683, 868, 712], "shows": "the button that moves a creation dialogue on, on the right of its bar"},
+    "dialog_back": {"crop": [537, 683, 660, 712], "shows": "the button that moves a creation dialogue back, on the left of its bar"},
+    "test_book": {"crop": [310, 592, 502, 620], "shows": "the button that skips the sorting test"},
+    "school_list": {"crop": [655, 125, 975, 160], "shows": "the heading over the list of schools"},
+    "school_chosen": {"crop": [690, 590, 930, 620], "shows": "the button that confirms the school chosen"},
+    "appearance": {"crop": [1040, 653, 1270, 683], "shows": "the button that accepts the wizard's look"},
+    "name": {"crop": [670, 683, 963, 712], "shows": "the two buttons of the naming screen"}
+  },
+  "never_quit_after": [
+    {"after": "LOGIN RESPONSE: Error=(?!0\\b)", "undone_by": "The LoginServer has admitted the user",
+     "because": "a client that has been refused a login opens a page of KingsIsle's in the machine's own browser the moment it is asked to quit, and no setting the launcher writes stops it; taking it off the dialog does not help, because the state outlasts the dialog and outlasts the login window coming back, so a client still in that state is ended instead of being asked to quit"}
+  ],
+  "targets": {
+    "login_reconnect": {"at": [771, 428], "presses": "the button of the refused-login dialog that reconnects"},
+    "charselect_new": {"at": [946, 689], "presses": "the button of the character selection screen that starts a new wizard"},
+    "dialog_next": {"at": [806, 697], "presses": "the button that moves a creation dialogue on"},
+    "test_skip": {"at": [405, 605], "presses": "the button that skips the sorting test"},
+    "school_ice": {"at": [688, 405], "presses": "the fourth school in the list"},
+    "school_ok": {"at": [892, 605], "presses": "the button that confirms the school chosen"},
+    "preset_next": {"at": [714, 625], "presses": "the arrow that takes the next ready-made look"},
+    "appearance_next": {"at": [1213, 668], "presses": "the button that accepts the wizard's look"},
+    "name_random": {"at": [730, 697], "presses": "the button that rolls a name"},
+    "name_done": {"at": [902, 697], "presses": "the button that submits the wizard"}
+  }
+}

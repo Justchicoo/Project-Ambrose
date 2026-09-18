@@ -62,6 +62,7 @@ def classify(relpath):
         ".bat": "batch",
         ".cmd": "batch",
         ".md": "markdown",
+        ".txt": "linehash",
         ".json": "exempt",
     }
     if ext in mapping:

@@ -132,6 +132,10 @@ class HashFamilyTests(CheckerTestCase):
         self.assertClean("conf/dist/env.dist", HASH_HEADER + "AMBROSE_LOGS_DIR=logs\n")
         self.assertIssue("conf/dist/env.dist", HASH_HEADER + "# AMBROSE_X=1\n", "comment", 3)
 
+    def test_requirement_lists_take_the_hash_header(self):
+        self.assertClean("apps/clientdriver/requirements.txt", HASH_HEADER + "pillow==12.1.1\n")
+        self.assertIssue("apps/clientdriver/requirements.txt", HASH_HEADER + "# pinned\npillow==12.1.1\n", "comment", 3)
+
     def test_missing_hash_header_fails(self):
         self.assertIssue("src/CMakeLists.txt", "cmake_minimum_required(VERSION 3.25)\n", "header", 1)
 

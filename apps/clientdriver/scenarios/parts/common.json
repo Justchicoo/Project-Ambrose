@@ -1,0 +1,16 @@
+{
+  "title": "The settings and allowances every scenario shares",
+  "notes": [
+    "The shipped Logger.server hides the character list line, which is written at DEBUG, so every scenario",
+    "that asserts the server answered the list raises that one logger.",
+    "The allowed server warnings are the three typos in the client's own message definition XML, which the",
+    "definition loader reports on every start."
+  ],
+  "requires": {"client": true, "capture": true},
+  "server_settings": ["Logger.server=2,Console Server Errors Stream"],
+  "server_log_allowed": [
+    "MSG_PHYSICS_GRAB\\.Force spells TYPE as TPYE",
+    "MSG_MINIGAMEREWARDS\\.GlobalID has no TYPE",
+    "MSG_BATTLEGROUNDQUEUEUPDATE\\.Kicked spells TYPE as TYP"
+  ]
+}

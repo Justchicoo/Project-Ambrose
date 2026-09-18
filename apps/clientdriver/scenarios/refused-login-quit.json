@@ -1,0 +1,26 @@
+{
+  "title": "A run that stops while the client is still refused a login ends the client instead of asking it to quit",
+  "include": "parts/common.json",
+  "notes": [
+    "This scenario is meant to fail, and it fails on the one state a client must never be asked to quit in.",
+    "A client that has been refused a login opens a page of KingsIsle's in the machine's own browser the",
+    "moment it is asked to quit. Measured on 2026-09-18: pressing the dialog away does not help, and neither",
+    "does waiting for the login window to come back, because the state outlasts both; a client admitted since",
+    "the refusal does not do it. references.json carries that as a rule over the client's own log, and this",
+    "scenario is what holds the teardown to it: the run fails, the client is ended rather than asked to quit,",
+    "and the report's line about the client opening nothing outside itself still passes."
+  ],
+  "expect": "failure",
+  "steps": [
+    {"action": "wait_client_log", "name": "the client brings its renderer up",
+     "pattern": "About to initialize graphical client\\.", "timeout": 180},
+    {"action": "wait_screen", "name": "the login window is on the screen", "screens": ["login"], "timeout": 120},
+    {"action": "submit_login", "name": "submit a wrong password", "password": "{wrongpassword}"},
+    {"action": "wait_client_log", "name": "the client is told the login failed",
+     "pattern": "LOGIN RESPONSE: Error=(-?\\d+)", "timeout": 30, "reject": "0"},
+    {"action": "wait_screen", "name": "the invalid-login dialog is on the screen", "screens": ["invalid"], "timeout": 60},
+    {"action": "shot", "name": "the screen the run stops on", "file": "invalid-login-dialog"},
+    {"action": "wait_client_log", "name": "a line the client will never write",
+     "pattern": "the wizard has reached Ravenwood", "timeout": 5}
+  ]
+}

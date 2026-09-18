@@ -20,6 +20,7 @@ cmake-build-*/
 *.wad
 *.pcap
 *.pcapng
+apps/clientdriver/refs/
 __pycache__/
 *.pyc
 CLAUDE.local.md
