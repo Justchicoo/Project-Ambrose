@@ -109,4 +109,78 @@ describe("the generated token files", () => {
         expect(css).toContain("@media (prefers-reduced-motion: reduce) {");
         expect(css).toContain('[data-motion="off"]');
     });
+    it("carries the same value in every block that declares a meaning", () => {
+        const blockOf = (marker: string): string => {
+            const at = css.indexOf(marker);
+            expect(at, marker).toBeGreaterThanOrEqual(0);
+            const open = css.indexOf("{", at);
+            let depth = 0;
+            let index = open;
+            for (; index < css.length; index += 1) {
+                if (css[index] === "{") {
+                    depth += 1;
+                } else if (css[index] === "}") {
+                    depth -= 1;
+                    if (depth === 0) {
+                        break;
+                    }
+                }
+            }
+            return css.slice(open, index);
+        };
+        const blocks: Array<[string, "dark" | "light"]> = [
+            ["@theme {", "dark"],
+            [":root {", "dark"],
+            [':root[data-theme="light"] {', "light"],
+            ["@media (prefers-color-scheme: light) {", "light"],
+        ];
+        let checked = 0;
+        for (const [marker, theme] of blocks) {
+            const body = blockOf(marker);
+            const expected: Record<string, string> = {
+                ...semanticColors[theme],
+                ...componentColors[theme],
+            };
+            for (const found of body.matchAll(/--(?:ambrose-)?color-([a-z0-9-]+):\s*([^;]+);/g)) {
+                const name = found[1];
+                if (name in expected) {
+                    const wanted = marker === "@theme {" ? `var(--ambrose-color-${name})` : expected[name];
+                    expect(found[2].trim(), `${marker} ${name} in the ${theme} theme`).toBe(wanted);
+                    checked += 1;
+                }
+            }
+        }
+        expect(checked).toBeGreaterThan(100);
+    });
+    it("gives every entry in the C++ header its theme's value", () => {
+        const arrayOf = (name: string): string => {
+            const at = header.indexOf(`${name} = {{`);
+            expect(at, name).toBeGreaterThanOrEqual(0);
+            const end = header.indexOf("}};", at);
+            expect(end, name).toBeGreaterThan(at);
+            return header.slice(at, end);
+        };
+        const arrays: Array<[string, "dark" | "light"]> = [
+            ["DarkTokens", "dark"],
+            ["LightTokens", "light"],
+            ["DarkSeries", "dark"],
+            ["LightSeries", "light"],
+        ];
+        let checked = 0;
+        for (const [arrayName, theme] of arrays) {
+            const body = arrayOf(arrayName);
+            const expected: Record<string, string> = {
+                ...semanticColors[theme],
+                ...componentColors[theme],
+            };
+            for (const found of body.matchAll(/TerminalColor\{"([a-z0-9-]+)", "(#[0-9A-Fa-f]{6})"/g)) {
+                const name = found[1];
+                if (name in expected) {
+                    expect(found[2], `${arrayName} ${name}`).toBe(expected[name]);
+                    checked += 1;
+                }
+            }
+        }
+        expect(checked).toBeGreaterThan(30);
+    });
 });
