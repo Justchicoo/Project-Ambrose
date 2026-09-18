@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps the prompt row correct under the console writer's lock, which every edit and every log line takes: erasing it before a log line, drawing it again after one, leaving a submitted line behind as scrollback, and listing completions above a fresh prompt.
+ * Keeps the prompt row correct under the console writer's lock, which every edit and every log line takes: scrolling a line too long for the window sideways so it never wraps onto a second row, erasing the row before a log line, drawing it again after one, leaving a submitted line behind as scrollback, and listing completions above a fresh prompt.
  */
 
 #include "ConsolePrompt.h"
@@ -25,11 +25,11 @@ void ConsolePrompt::Attach()
 {
     if (_attached || !_console.IsTerminal())
         return;
-    _console.SetLineHooks([this](ConsoleDevice& device) { EraseLocked(device); }, [this](ConsoleDevice& device) { DrawLocked(device, true); });
+    _console.SetLineHooks([this](ConsoleDevice& device) { EraseLocked(device); }, [this](ConsoleDevice& device) { DrawLocked(device, Draw::Cursor); });
     _console.WithLock([this](ConsoleDevice& device)
     {
         _attached = true;
-        DrawLocked(device, true);
+        DrawLocked(device, Draw::Cursor);
         device.Flush();
     });
 }
@@ -56,7 +56,7 @@ ConsolePrompt::Result ConsolePrompt::Apply(ConsoleKey const& key, std::string& l
         {
             case ConsoleLineEditor::Action::Redraw:
                 EraseLocked(device);
-                DrawLocked(device, true);
+                DrawLocked(device, Draw::Cursor);
                 device.Flush();
                 break;
             case ConsoleLineEditor::Action::Suggest:
@@ -73,14 +73,14 @@ ConsolePrompt::Result ConsolePrompt::Apply(ConsoleKey const& key, std::string& l
             case ConsoleLineEditor::Action::Submit:
                 CommitLocked(device, {});
                 line = _editor.TakeLine();
-                DrawLocked(device, true);
+                DrawLocked(device, Draw::Cursor);
                 device.Flush();
                 result = Result::Line;
                 break;
             case ConsoleLineEditor::Action::Interrupt:
                 CommitLocked(device, "^C");
                 _editor.Clear();
-                DrawLocked(device, true);
+                DrawLocked(device, Draw::Cursor);
                 device.Flush();
                 break;
             case ConsoleLineEditor::Action::Close:
@@ -91,6 +91,8 @@ ConsolePrompt::Result ConsolePrompt::Apply(ConsoleKey const& key, std::string& l
                 break;
         }
     });
+    if (result == Result::Closed)
+        Detach();
     return result;
 }
 
@@ -110,10 +112,28 @@ void ConsolePrompt::EraseLocked(ConsoleDevice& device)
     _visible = false;
 }
 
-void ConsolePrompt::DrawLocked(ConsoleDevice& device, bool cursor)
+void ConsolePrompt::DrawLocked(ConsoleDevice& device, Draw draw)
 {
     if (_visible || !_attached)
         return;
+    std::string const& line = _editor.GetLine();
+    std::size_t const prompt = ConsoleLineEditor::Columns(_text);
+    std::string_view visible(line);
+    std::size_t columns = ConsoleLineEditor::Columns(line);
+    std::size_t after = 0;
+    if (draw == Draw::Cursor)
+    {
+        after = _editor.GetColumnsAfterCursor();
+        std::size_t const width = device.GetColumns();
+        if (width != 0)
+        {
+            std::size_t const room = width > prompt + 1 ? width - prompt - 1 : 0;
+            ConsoleLineEditor::Window const window = ConsoleLineEditor::Fit(line, _editor.GetCursor(), room);
+            visible = std::string_view(line).substr(window.Start, window.End - window.Start);
+            columns = window.Columns;
+            after = window.Columns - window.CursorColumn;
+        }
+    }
     bool const color = _console.UsesColor();
     bool const ansi = device.SupportsVirtualTerminal();
     std::string output;
@@ -131,18 +151,17 @@ void ConsolePrompt::DrawLocked(ConsoleDevice& device, bool cursor)
     }
     else
         output.append(_text);
-    output.append(_editor.GetLine());
-    if (cursor)
-        output.append(_editor.GetColumnsAfterCursor(), '\b');
+    output.append(visible);
+    output.append(after, '\b');
     device.Write(output);
-    _drawn = ConsoleLineEditor::Columns(_text) + ConsoleLineEditor::Columns(_editor.GetLine());
+    _drawn = prompt + columns;
     _visible = true;
 }
 
 void ConsolePrompt::CommitLocked(ConsoleDevice& device, std::string_view suffix)
 {
     EraseLocked(device);
-    DrawLocked(device, false);
+    DrawLocked(device, Draw::Whole);
     std::string output(suffix);
     output.push_back('\n');
     device.Write(output);

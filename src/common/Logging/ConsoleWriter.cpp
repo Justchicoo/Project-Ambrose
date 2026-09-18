@@ -74,7 +74,7 @@ void ConsoleWriter::SetLineHooks(LineHook before, LineHook after)
 std::string_view ConsoleWriter::GetAnsiSequence(ConsoleColor color) noexcept
 {
     static constexpr std::array<std::string_view, 15> Sequences{
-        "\x1b[30m", "\x1b[31m", "\x1b[32m", "\x1b[33m", "\x1b[34m", "\x1b[35m", "\x1b[36m", "\x1b[37m",
+        "\x1b[30m", "\x1b[31m", "\x1b[32m", "\x1b[33m", "\x1b[34m", "\x1b[35m", "\x1b[36m", "\x1b[90m",
         "\x1b[93m", "\x1b[91m", "\x1b[92m", "\x1b[94m", "\x1b[95m", "\x1b[96m", "\x1b[97m"
     };
     std::size_t const index = static_cast<std::size_t>(color);

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A console line source for an interactive terminal: it reads single key presses instead of whole lines, edits them at a drawn prompt, and hands each finished line to the reader thread.
+ * A console line source for an interactive terminal: it reads single key presses instead of whole lines, edits them at a drawn prompt, hands each finished line to the reader thread, and takes the prompt back and the terminal out of raw mode the moment input closes.
  */
 
 #ifndef AMBROSE_TERMINALCONSOLEINPUT_H
@@ -31,6 +31,8 @@ private:
     struct State;
 
     bool ReadKeys(std::vector<ConsoleKey>& keys, std::chrono::milliseconds timeout);
+    void RestoreMode();
+    void Close();
 
     ConsolePrompt _prompt;
     ConsoleKeyDecoder _decoder;

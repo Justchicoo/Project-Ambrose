@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Writes UTF-8 to the process standard output as a Windows console, a mintty pipe, a POSIX terminal, or a redirect.
+ * Writes UTF-8 to the process standard output as a Windows console, a mintty pipe, a POSIX terminal, or a redirect, and reports how many columns the window has.
  */
 
 #include "ConsoleDevice.h"
+#include "Environment.h"
 #include "Utf.h"
 
 #include <atomic>
@@ -14,11 +15,27 @@
 #include <windows.h>
 #else
 #include <cerrno>
+#include <sys/ioctl.h>
 #include <unistd.h>
 #endif
 
 namespace
 {
+    std::size_t ColumnsFromEnvironment()
+    {
+        std::optional<std::string> const columns = Ambrose::GetEnv("COLUMNS");
+        if (!columns || columns->empty())
+            return 0;
+        std::size_t value = 0;
+        for (char const c : *columns)
+        {
+            if (c < '0' || c > '9' || value > 4096)
+                return 0;
+            value = value * 10 + static_cast<std::size_t>(c - '0');
+        }
+        return value <= 4096 ? value : 0;
+    }
+
 #ifdef _WIN32
     bool IsMinttyPipe(HANDLE handle)
     {
@@ -44,7 +61,7 @@ namespace
             FOREGROUND_BLUE,
             FOREGROUND_RED | FOREGROUND_BLUE,
             FOREGROUND_GREEN | FOREGROUND_BLUE,
-            FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
+            FOREGROUND_INTENSITY,
             FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
             FOREGROUND_RED | FOREGROUND_INTENSITY,
             FOREGROUND_GREEN | FOREGROUND_INTENSITY,
@@ -95,6 +112,17 @@ namespace
 
         bool IsTerminal() const noexcept override { return _terminal; }
         bool SupportsVirtualTerminal() const noexcept override { return _virtualTerminal; }
+
+        std::size_t GetColumns() const override
+        {
+            if (!_console)
+                return _terminal ? ColumnsFromEnvironment() : 0;
+            CONSOLE_SCREEN_BUFFER_INFO info{};
+            if (!::GetConsoleScreenBufferInfo(_handle, &info))
+                return 0;
+            int const columns = info.srWindow.Right - info.srWindow.Left + 1;
+            return columns > 0 ? static_cast<std::size_t>(columns) : 0;
+        }
 
         void Write(std::string_view utf8) override
         {
@@ -179,6 +207,16 @@ namespace
 
         bool IsTerminal() const noexcept override { return _terminal; }
         bool SupportsVirtualTerminal() const noexcept override { return _terminal; }
+
+        std::size_t GetColumns() const override
+        {
+            if (!_terminal)
+                return 0;
+            winsize size{};
+            if (::ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0 && size.ws_col != 0)
+                return size.ws_col;
+            return ColumnsFromEnvironment();
+        }
 
         void Write(std::string_view utf8) override
         {

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The state of one console input line: the text, the cursor, recalled history and command-name completion, driven by keys and independent of any terminal.
+ * The state of one console input line: the text, the cursor, recalled history, command-name completion and the display width of what is typed, driven by keys and independent of any terminal.
  */
 
 #ifndef AMBROSE_CONSOLELINEEDITOR_H
@@ -29,6 +29,14 @@ public:
         Close
     };
 
+    struct Window
+    {
+        std::size_t Start = 0;
+        std::size_t End = 0;
+        std::size_t CursorColumn = 0;
+        std::size_t Columns = 0;
+    };
+
     static constexpr std::size_t MaxLine = 4096;
     static constexpr std::size_t MaxHistory = 200;
 
@@ -44,6 +52,7 @@ public:
     std::vector<std::string> const& GetHistory() const noexcept;
 
     static std::size_t Columns(std::string_view text);
+    static Window Fit(std::string_view text, std::size_t cursor, std::size_t columns);
 
 private:
     Action Complete();

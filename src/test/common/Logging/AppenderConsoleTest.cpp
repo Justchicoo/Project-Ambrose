@@ -76,9 +76,9 @@ TEST(AppenderConsoleTest, TimestampsAndCategoriesTakeThePrefixColor)
     harness.ApplyOrFail("Appender.Console = 1,1,7\nLogger.root = 1,Console\n");
     AMBROSE_LOG(harness.GetLog(), LogLevel::Error, "server", "broken");
     std::string const output = harness.Device().Output();
-    EXPECT_EQ(output.substr(0, 5), "\x1b[37m") << output;
+    EXPECT_EQ(output.substr(0, 5), "\x1b[90m") << output;
     EXPECT_NE(output.find("\x1b[0m\x1b[91mERROR "), std::string::npos) << output;
-    EXPECT_NE(output.find("\x1b[0m\x1b[37m[server] \x1b[0m\x1b[91mbroken\x1b[0m\n"), std::string::npos) << output;
+    EXPECT_NE(output.find("\x1b[0m\x1b[90m[server] \x1b[0m\x1b[91mbroken\x1b[0m\n"), std::string::npos) << output;
 }
 
 TEST(AppenderConsoleTest, DebugAndTraceCarryNoStateColor)
@@ -88,7 +88,7 @@ TEST(AppenderConsoleTest, DebugAndTraceCarryNoStateColor)
     harness.ApplyOrFail(ConsoleBody);
     AMBROSE_LOG(harness.GetLog(), LogLevel::Debug, "server", "detail");
     AMBROSE_LOG(harness.GetLog(), LogLevel::Trace, "server", "step");
-    EXPECT_EQ(harness.Device().Output(), "\x1b[37mDEBUG detail\x1b[0m\n\x1b[37mTRACE step\x1b[0m\n");
+    EXPECT_EQ(harness.Device().Output(), "\x1b[90mDEBUG detail\x1b[0m\n\x1b[90mTRACE step\x1b[0m\n");
 }
 
 TEST(AppenderConsoleTest, MultiLineMessagesColorEveryLine)

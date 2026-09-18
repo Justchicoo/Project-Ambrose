@@ -24,8 +24,6 @@ namespace
 void ConsoleKeyDecoder::Feed(std::string_view bytes)
 {
     _pending.append(bytes);
-    if (_pending.size() > MaxPending)
-        _pending.clear();
 }
 
 bool ConsoleKeyDecoder::Next(ConsoleKey& key)
@@ -37,7 +35,12 @@ bool ConsoleKeyDecoder::Next(ConsoleKey& key)
         std::size_t used = 0;
         Step const step = Decode(key, used);
         if (step == Step::More)
+        {
+            if (_pending.size() <= MaxPending)
+                return false;
+            _pending.clear();
             return false;
+        }
         _pending.erase(0, used);
         if (step == Step::Key)
             return true;

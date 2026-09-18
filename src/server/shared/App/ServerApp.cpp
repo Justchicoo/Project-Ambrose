@@ -270,7 +270,7 @@ void ServerApp::StartConsole()
     _commandThread = std::thread([this] { RunConsoleCommands(); });
     _console = std::make_unique<ConsoleReader>(std::move(input),
         [this](std::string line) { QueueConsoleLine(std::move(line)); },
-        [this] { AMBROSE_LOG(_log, LogLevel::Debug, "commands.console", "Console input closed; the server keeps running"); });
+        [this] { AMBROSE_LOG(_log, LogLevel::Info, "commands.console", "Console input closed; the server keeps running"); });
     _console->Start();
 }
 

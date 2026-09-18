@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests that terminal bytes decode into editor keys: control characters, CSI and SS3 sequences, sequences split across reads, whole UTF-8 characters, and input that never completes.
+ * Tests that terminal bytes decode into editor keys: control characters, CSI and SS3 sequences, sequences split across reads, whole UTF-8 characters, a paste larger than the held buffer, and input that never completes.
  */
 
 #include "ConsoleKeyDecoder.h"
@@ -101,13 +101,25 @@ TEST(ConsoleKeyDecoderTest, IncompleteEscapesAndRunawayInputAreDiscarded)
     ASSERT_EQ(after.size(), 1u);
     EXPECT_EQ(after[0].Text, "x");
 
-    decoder.Feed(std::string(ConsoleKeyDecoder::MaxPending + 1, '1'));
-    ConsoleKey key;
-    EXPECT_FALSE(decoder.Next(key));
+    EXPECT_TRUE(Decode(decoder, "\x1b[" + std::string(ConsoleKeyDecoder::MaxPending, '1')).empty());
 
+    ConsoleKey key;
     decoder.Feed("q");
     ASSERT_TRUE(decoder.Next(key));
     EXPECT_EQ(key.Text, "q");
     decoder.Reset();
     EXPECT_FALSE(decoder.Next(key));
+}
+
+TEST(ConsoleKeyDecoderTest, APasteLongerThanTheHeldBufferKeepsEveryKey)
+{
+    ConsoleKeyDecoder decoder;
+    std::string const pasted = "account create wizard averyveryverylongusername averyverylongpassword\n";
+    ASSERT_GT(pasted.size(), ConsoleKeyDecoder::MaxPending);
+    std::vector<ConsoleKey> const keys = Decode(decoder, pasted);
+    ASSERT_EQ(keys.size(), pasted.size());
+    std::string typed;
+    for (ConsoleKey const& pressed : keys)
+        typed += pressed.Kind == ConsoleKeyKind::Enter ? std::string("\n") : pressed.Text;
+    EXPECT_EQ(typed, pasted);
 }

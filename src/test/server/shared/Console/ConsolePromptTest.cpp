@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the drawn prompt on a fake console: what it writes as keys arrive, how a log line erases and redraws the typed text, the line left behind when one is entered, the colors it paints, and that a stream which is not a terminal gets no prompt at all.
+ * Tests the drawn prompt on a fake console: what it writes as keys arrive, how a log line erases and redraws the typed text, the line left behind when one is entered, the sideways scroll that keeps a long line on one row, the prompt going away for good when input closes, the colors it paints, and that a stream which is not a terminal gets no prompt at all.
  */
 
 #include "ConsolePrompt.h"
@@ -62,6 +62,12 @@ namespace
         {
             std::string line;
             return _prompt->Apply(Letter(c), line);
+        }
+
+        void TypeAll(std::string_view text)
+        {
+            for (char const c : text)
+                Type(c);
         }
 
     private:
@@ -167,4 +173,47 @@ TEST(ConsolePromptTest, AStreamThatIsNotATerminalGetsNoPrompt)
     EXPECT_EQ(fixture.Taken(), "INFO  plain\n");
     fixture.Prompt().Detach();
     EXPECT_EQ(fixture.Taken(), "");
+}
+
+TEST(ConsolePromptTest, ALineWiderThanTheWindowScrollsSidewaysInsteadOfWrapping)
+{
+    PromptFixture fixture(true, true, ConsoleColorMode::Never);
+    fixture.Device().SetColumns(20);
+    fixture.Prompt().Attach();
+    fixture.TypeAll("012345678");
+    fixture.Taken();
+    fixture.Type('9');
+    EXPECT_EQ(fixture.Taken(), "\r\x1b[KAmbrose> 0123456789");
+    fixture.Type('a');
+    EXPECT_EQ(fixture.Taken(), "\r\x1b[KAmbrose> 123456789a");
+    fixture.Writer().WriteLines("INFO  a client connected\n", ConsoleColor::Default);
+    EXPECT_EQ(fixture.Taken(), "\r\x1b[KINFO  a client connected\nAmbrose> 123456789a");
+    std::string line;
+    fixture.Prompt().Apply(Press(ConsoleKeyKind::Left), line);
+    EXPECT_EQ(fixture.Taken(), "\r\x1b[KAmbrose> 0123456789");
+}
+
+TEST(ConsolePromptTest, ASubmittedLineKeepsEveryCharacterInTheScrollback)
+{
+    PromptFixture fixture(true, true, ConsoleColorMode::Never);
+    fixture.Device().SetColumns(20);
+    fixture.Prompt().Attach();
+    fixture.TypeAll("shutdown 3600 now");
+    fixture.Taken();
+    std::string line;
+    EXPECT_EQ(fixture.Prompt().Apply(Press(ConsoleKeyKind::Enter), line), ConsolePrompt::Result::Line);
+    EXPECT_EQ(line, "shutdown 3600 now");
+    EXPECT_EQ(fixture.Taken(), "\r\x1b[KAmbrose> shutdown 3600 now\nAmbrose> ");
+}
+
+TEST(ConsolePromptTest, ClosingTheInputTakesThePromptBackForGood)
+{
+    PromptFixture fixture(true, true, ConsoleColorMode::Never);
+    fixture.Prompt().Attach();
+    fixture.Taken();
+    std::string line;
+    EXPECT_EQ(fixture.Prompt().Apply(Press(ConsoleKeyKind::EndOfFile), line), ConsolePrompt::Result::Closed);
+    EXPECT_EQ(fixture.Taken(), "\r\x1b[KAmbrose> \n");
+    fixture.Writer().WriteLines("INFO  the server keeps running\n", ConsoleColor::Default);
+    EXPECT_EQ(fixture.Taken(), "INFO  the server keeps running\n");
 }

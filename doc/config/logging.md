@@ -64,9 +64,11 @@ Colors are six codes separated by spaces, in the order fatal, error, warn, info,
 | 6 | cyan | 14 | white |
 | 7 | grey | 15 | terminal default |
 
+Grey, code 7, is the quiet color: it is written as the terminal's dim grey, SGR 90, and as the console's dark grey attribute where virtual terminal sequences are not available, so it reads as quieter than the message it marks on a light background as well as a dark one.
+
 `Console.Colors` chooses when colors are used: 0 never, 1 only when standard output is a terminal, 2 always. With 1, a non-empty `NO_COLOR` environment variable turns colors off and `CLICOLOR_FORCE=1` turns them on. A change applies from the next line written, so a configuration reload needs no restart. Redirected output such as `gameserver > out.log` gets plain text, with no escape sequence of any kind. Windows consoles get virtual terminal sequences, enabled as the process starts and falling back to console text attributes on old consoles, and the console mode is restored at shutdown.
 
-Every console line, whether it comes from a logger or from a command's answer, is written through one writer, so the two never mix inside a line. When the app reads commands from a terminal, that writer also erases and redraws the `Ambrose> ` prompt around each line, so a line arriving while a command is half typed leaves the typed text on screen.
+Every console line, whether it comes from a logger or from a command's answer, is written through one writer, so the two never mix inside a line. When the app reads commands from a terminal, that writer also erases and redraws the `Ambrose> ` prompt around each line, so a line arriving while a command is half typed leaves the typed text on screen. The prompt is held to one row of the window: a command wider than the window scrolls sideways around the cursor rather than wrapping, and the whole command is written out in full when it is entered.
 
 ### File
 

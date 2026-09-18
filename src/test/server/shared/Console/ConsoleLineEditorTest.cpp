@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the typed line without a terminal: inserting and deleting whole characters and words, moving the cursor, the history around a half-written line, and command-name completion.
+ * Tests the typed line without a terminal: inserting and deleting whole characters and words, moving the cursor, the history around a half-written line, command-name completion, the display width of wide and combining characters, and the window a narrow terminal shows.
  */
 
 #include "ConsoleLineEditor.h"
@@ -211,4 +211,74 @@ TEST(ConsoleLineEditorTest, OverlongLinesAreRefused)
     EXPECT_EQ(editor.GetLine().size(), ConsoleLineEditor::MaxLine);
     EXPECT_EQ(editor.Apply(Letter("b")), ConsoleLineEditor::Action::None);
     EXPECT_EQ(editor.GetLine().size(), ConsoleLineEditor::MaxLine);
+}
+
+TEST(ConsoleLineEditorTest, WideAndCombiningCharactersCountTheColumnsTheyTake)
+{
+    EXPECT_EQ(ConsoleLineEditor::Columns("shutdown"), 8u);
+    EXPECT_EQ(ConsoleLineEditor::Columns("\xc3\xa9"), 1u);
+    EXPECT_EQ(ConsoleLineEditor::Columns("\xe6\x97\xa5"), 2u);
+    EXPECT_EQ(ConsoleLineEditor::Columns("e\xcc\x81"), 1u);
+    EXPECT_EQ(ConsoleLineEditor::Columns("\xe2\x80\x8b"), 0u);
+    EXPECT_EQ(ConsoleLineEditor::Columns("\xf0\x9f\x98\x80"), 2u);
+
+    ConsoleLineEditor editor;
+    editor.Apply(Letter("\xe6\x97\xa5"));
+    EXPECT_EQ(editor.GetColumnsAfterCursor(), 0u);
+    EXPECT_EQ(editor.Apply(Press(ConsoleKeyKind::Left)), ConsoleLineEditor::Action::Redraw);
+    EXPECT_EQ(editor.GetCursor(), 0u);
+    EXPECT_EQ(editor.GetColumnsAfterCursor(), 2u);
+}
+
+TEST(ConsoleLineEditorTest, FitKeepsTheCursorInsideTheColumnsOnOffer)
+{
+    ConsoleLineEditor::Window window = ConsoleLineEditor::Fit("abcdef", 6, 10);
+    EXPECT_EQ(window.Start, 0u);
+    EXPECT_EQ(window.End, 6u);
+    EXPECT_EQ(window.CursorColumn, 6u);
+    EXPECT_EQ(window.Columns, 6u);
+
+    window = ConsoleLineEditor::Fit("abcdefghij", 10, 4);
+    EXPECT_EQ(window.Start, 6u);
+    EXPECT_EQ(window.End, 10u);
+    EXPECT_EQ(window.CursorColumn, 4u);
+    EXPECT_EQ(window.Columns, 4u);
+
+    window = ConsoleLineEditor::Fit("abcdefghij", 0, 4);
+    EXPECT_EQ(window.Start, 0u);
+    EXPECT_EQ(window.End, 4u);
+    EXPECT_EQ(window.CursorColumn, 0u);
+    EXPECT_EQ(window.Columns, 4u);
+
+    window = ConsoleLineEditor::Fit("\xe6\x97\xa5\xe6\x97\xa5\xe6\x97\xa5", 9, 5);
+    EXPECT_EQ(window.Start, 3u);
+    EXPECT_EQ(window.End, 9u);
+    EXPECT_EQ(window.CursorColumn, 4u);
+    EXPECT_EQ(window.Columns, 4u);
+}
+
+TEST(ConsoleLineEditorTest, TabInsideAWordLeavesTheLineAlone)
+{
+    ConsoleLineEditor editor;
+    editor.SetCompleter(Commands({ "shutdown", "status" }));
+    Type(editor, "shutdown 30");
+    for (int step = 0; step < 8; ++step)
+        editor.Apply(Press(ConsoleKeyKind::Left));
+    EXPECT_EQ(editor.GetCursor(), 3u);
+    EXPECT_EQ(editor.Apply(Press(ConsoleKeyKind::Tab)), ConsoleLineEditor::Action::None);
+    EXPECT_EQ(editor.GetLine(), "shutdown 30");
+    EXPECT_EQ(editor.GetCursor(), 3u);
+}
+
+TEST(ConsoleLineEditorTest, TabAtTheEndOfAWordCompletesWithoutDoublingTheSpace)
+{
+    ConsoleLineEditor editor;
+    editor.SetCompleter(Commands({ "shutdown" }));
+    Type(editor, "shut 30");
+    for (int step = 0; step < 3; ++step)
+        editor.Apply(Press(ConsoleKeyKind::Left));
+    EXPECT_EQ(editor.GetCursor(), 4u);
+    EXPECT_EQ(editor.Apply(Press(ConsoleKeyKind::Tab)), ConsoleLineEditor::Action::Redraw);
+    EXPECT_EQ(editor.GetLine(), "shutdown 30");
+    EXPECT_EQ(editor.GetCursor(), 8u);
 }

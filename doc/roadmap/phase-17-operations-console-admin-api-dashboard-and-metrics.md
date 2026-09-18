@@ -118,11 +118,11 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Acceptance**
 
-- [ ] In a terminal, error lines render red and warning lines yellow on Windows and Linux
-- [ ] `gameserver > out.log` writes no escape sequences to the file
-- [ ] `status` prints the revision and uptime, the up arrow recalls the previous command, and `shutdown` exits 0
-- [ ] Log lines arriving while a command is half typed do not corrupt the typed text
-- [ ] With `Console.Enable = 0` the app runs with no input thread and still shuts down on Ctrl+C
+- [ ] Dev-gated: in a terminal, error lines render red and warning lines yellow on Windows and Linux. Needs the maintainer's own Windows console and Linux terminal, so it is run by hand and recorded
+- [x] `gameserver > out.log` writes no escape sequences to the file (verified; a redirected `gameserver --check` wrote 1950 bytes of INFO and ERROR lines holding no 0x1B byte)
+- [x] `status` prints the revision and uptime, the up arrow recalls the previous command, and `shutdown` exits 0 (ServerAppTest.StatusAndADelayedShutdownAnswerOnTheConsole, ConsoleLineEditorTest.HistoryRecallsPreviousLinesAndTheDraft, ConsoleKeyDecoderTest.EscapeSequencesBecomeNavigationKeys, and the loginserver AppSmoke test for the exit code)
+- [x] Log lines arriving while a command is half typed do not corrupt the typed text (ConsolePromptTest.ALogLineErasesAndRedrawsTheHalfTypedCommand and ConsolePromptTest.ALineWiderThanTheWindowScrollsSidewaysInsteadOfWrapping, byte for byte on a fake console; the prompt is held to one row so a line wider than the window scrolls sideways instead of wrapping)
+- [x] With `Console.Enable = 0` the app runs with no input thread and still shuts down on Ctrl+C (ServerAppTest.ConsoleEnableZeroStartsNoReader and ServerAppTest.InterruptSignalShutsDownGracefully)
 
 ## 17.02 Admin API listener and authentication
 

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads key presses from a Windows console handle or a POSIX terminal put in raw mode, turns them into editor keys, and keeps finished lines queued until the reader thread asks for them.
+ * Reads key presses from a Windows console handle or a POSIX terminal put in raw mode with the suspend key disabled, turns them into editor keys, keeps finished lines queued until the reader thread asks for them, and restores the terminal as soon as it closes.
  */
 
 #include "TerminalConsoleInput.h"
@@ -104,6 +104,10 @@ TerminalConsoleInput::TerminalConsoleInput(ConsoleWriter& console, std::string p
 TerminalConsoleInput::~TerminalConsoleInput()
 {
     _prompt.Detach();
+}
+
+void TerminalConsoleInput::RestoreMode()
+{
 }
 
 bool TerminalConsoleInput::IsAvailable(ConsoleWriter& console)
@@ -210,6 +214,9 @@ TerminalConsoleInput::TerminalConsoleInput(ConsoleWriter& console, std::string p
         raw.c_lflag &= static_cast<tcflag_t>(~(ICANON | ECHO));
         raw.c_cc[VMIN] = 0;
         raw.c_cc[VTIME] = 0;
+#ifdef _POSIX_VDISABLE
+        raw.c_cc[VSUSP] = _POSIX_VDISABLE;
+#endif
         _state->Raw = ::tcsetattr(STDIN_FILENO, TCSANOW, &raw) == 0;
     }
     if (!_state->Raw)
@@ -221,8 +228,15 @@ TerminalConsoleInput::TerminalConsoleInput(ConsoleWriter& console, std::string p
 TerminalConsoleInput::~TerminalConsoleInput()
 {
     _prompt.Detach();
-    if (_state->Raw)
-        ::tcsetattr(STDIN_FILENO, TCSANOW, &_state->Saved);
+    RestoreMode();
+}
+
+void TerminalConsoleInput::RestoreMode()
+{
+    if (!_state->Raw)
+        return;
+    ::tcsetattr(STDIN_FILENO, TCSANOW, &_state->Saved);
+    _state->Raw = false;
 }
 
 bool TerminalConsoleInput::IsAvailable(ConsoleWriter& console)
@@ -268,6 +282,14 @@ void TerminalConsoleInput::Interrupt()
 
 #endif
 
+void TerminalConsoleInput::Close()
+{
+    if (_closed.exchange(true))
+        return;
+    _prompt.Detach();
+    RestoreMode();
+}
+
 ConsoleInput::ReadResult TerminalConsoleInput::ReadLine(std::string& line, std::chrono::milliseconds timeout)
 {
     if (!_lines.empty())
@@ -282,7 +304,7 @@ ConsoleInput::ReadResult TerminalConsoleInput::ReadLine(std::string& line, std::
     std::vector<ConsoleKey> keys;
     if (!ReadKeys(keys, timeout))
     {
-        _closed = true;
+        Close();
         return ReadResult::Closed;
     }
     if (_interrupted.load())
@@ -299,7 +321,7 @@ ConsoleInput::ReadResult TerminalConsoleInput::ReadLine(std::string& line, std::
         }
         else if (result == ConsolePrompt::Result::Closed)
         {
-            _closed = true;
+            Close();
             break;
         }
     }

@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Applies one key at a time to the typed line: inserting and deleting whole characters and words, moving the cursor, walking the history around the line being written, and completing a command name to its longest shared spelling.
+ * Applies one key at a time to the typed line: inserting and deleting whole characters and words, moving the cursor, walking the history around the line being written, completing a command name to its longest shared spelling, and fitting the line into the columns a terminal has room for.
  */
 
 #include "ConsoleLineEditor.h"
+#include "ConsoleTextWidth.h"
 #include "StringUtil.h"
 
 #include <algorithm>
@@ -163,17 +164,41 @@ std::vector<std::string> const& ConsoleLineEditor::GetHistory() const noexcept
 
 std::size_t ConsoleLineEditor::Columns(std::string_view text)
 {
-    std::size_t columns = 0;
-    for (char const c : text)
-        if (!IsContinuation(c))
-            ++columns;
-    return columns;
+    return ConsoleTextWidth::Columns(text);
+}
+
+ConsoleLineEditor::Window ConsoleLineEditor::Fit(std::string_view text, std::size_t cursor, std::size_t columns)
+{
+    if (cursor > text.size())
+        cursor = text.size();
+    Window window;
+    window.CursorColumn = ConsoleTextWidth::Columns(text.substr(0, cursor));
+    while (window.CursorColumn > columns && window.Start < cursor)
+    {
+        std::size_t const next = ConsoleTextWidth::Next(text, window.Start);
+        window.CursorColumn -= ConsoleTextWidth::CharacterColumns(text.substr(window.Start, next - window.Start));
+        window.Start = next;
+    }
+    window.End = cursor;
+    window.Columns = window.CursorColumn;
+    while (window.End < text.size())
+    {
+        std::size_t const next = ConsoleTextWidth::Next(text, window.End);
+        std::size_t const step = ConsoleTextWidth::CharacterColumns(text.substr(window.End, next - window.End));
+        if (window.Columns + step > columns)
+            break;
+        window.Columns += step;
+        window.End = next;
+    }
+    return window;
 }
 
 ConsoleLineEditor::Action ConsoleLineEditor::Complete()
 {
     _suggestions.clear();
     if (!_completer)
+        return Action::None;
+    if (_cursor < _line.size() && !IsSeparator(_line[_cursor]))
         return Action::None;
     std::string_view const prefix = std::string_view(_line).substr(0, _cursor);
     std::vector<std::string> candidates = _completer(prefix);
@@ -195,7 +220,7 @@ ConsoleLineEditor::Action ConsoleLineEditor::Complete()
             return Action::Suggest;
         }
     }
-    else
+    else if (_cursor == _line.size())
         insert += ' ';
     if (_line.size() - _cursor + insert.size() > MaxLine)
         return Action::None;

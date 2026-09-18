@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Records console bytes, legacy color changes, and restores for console appender tests.
+ * Records console bytes, legacy color changes, restores and a settable window width for console appender tests.
  */
 
 #include "FakeConsoleDevice.h"
@@ -17,6 +17,18 @@ bool FakeConsoleDevice::IsTerminal() const noexcept
 bool FakeConsoleDevice::SupportsVirtualTerminal() const noexcept
 {
     return _virtualTerminal;
+}
+
+std::size_t FakeConsoleDevice::GetColumns() const
+{
+    std::lock_guard lock(_mutex);
+    return _columns;
+}
+
+void FakeConsoleDevice::SetColumns(std::size_t columns)
+{
+    std::lock_guard lock(_mutex);
+    _columns = columns;
 }
 
 void FakeConsoleDevice::Write(std::string_view utf8)
