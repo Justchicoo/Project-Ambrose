@@ -5,6 +5,7 @@
   "dependencies": [
     "asio",
     "botan",
+    "crow",
     "fmt",
     "libmariadb",
     "nlohmann-json",

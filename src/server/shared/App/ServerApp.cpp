@@ -1,11 +1,15 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, stops gracefully on signals, requests or the shutdown command, now or after a delay, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, and runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use.
+ * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, opens the admin API with the app's own routes already in it before the app starts and refuses to run when its binding is unsafe, stops gracefully on signals, requests or the shutdown command, now or after a delay, moves the one lifecycle state the console and the admin API both read, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, and runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use.
  */
 
 #include "ServerApp.h"
+#include "AdminServer.h"
+#include "AdminSettings.h"
 #include "AppOptions.h"
 #include "Banner.h"
+#include "ClientLocator.h"
+#include "ClientSystem.h"
 #include "ConfigMgr.h"
 #include "ConsoleInput.h"
 #include "ConsoleReader.h"
@@ -50,7 +54,7 @@ ServerApp::ServerApp(ServerAppInfo info, ConfigMgr& config, Log& log, std::ostre
             fields.emplace_back("server", _info.Name);
             fields.emplace_back("revision", GitRevision::GetFullVersion());
             fields.emplace_back("uptime", Ambrose::FormatDuration(GetUptime()));
-            fields.emplace_back("state", _stopping.load() ? "shutting down" : (_ready.load() ? "ready" : "starting"));
+            fields.emplace_back("state", std::string(LifecycleName(GetLifecycleState())));
             OnStatus(fields);
             for (auto const& [name, value] : fields)
                 reply(fmt::format("{:<10}{}", name + ':', value));
@@ -116,18 +120,85 @@ std::unique_ptr<ConsoleInput> ServerApp::CreateConsoleInput()
     return std::make_unique<StandardConsoleInput>();
 }
 
-Seconds ServerApp::GetUptime() const
+std::string ServerApp::GetRealmName() const
 {
-    if (_startedAt.time_since_epoch().count() == 0)
+    return {};
+}
+
+void ServerApp::OnAdminApiReady(AdminServer&)
+{
+}
+
+Seconds ServerApp::GetUptime() const noexcept
+{
+    std::chrono::steady_clock::time_point const started = _startedAt.load();
+    if (started == std::chrono::steady_clock::time_point())
         return Seconds(0);
-    return std::chrono::duration_cast<Seconds>(std::chrono::steady_clock::now() - _startedAt);
+    return std::chrono::duration_cast<Seconds>(std::chrono::steady_clock::now() - started);
+}
+
+std::string_view ServerApp::LifecycleName(AppLifecycle state) noexcept
+{
+    switch (state)
+    {
+        case AppLifecycle::Starting:
+            return "starting";
+        case AppLifecycle::Running:
+            return "running";
+        case AppLifecycle::Stopping:
+            return "stopping";
+        case AppLifecycle::Stopped:
+            break;
+    }
+    return "stopped";
+}
+
+bool ServerApp::StartAdminApi()
+{
+    std::vector<std::string> problems;
+    AdminSettings const settings = AdminSettings::Load(_config, _info.AdminPort, &problems);
+    for (std::string const& problem : problems)
+        AMBROSE_LOG(_log, LogLevel::Warn, "server.admin", "{}", problem);
+
+    LocalClientSystem const system;
+    _admin = std::make_unique<AdminServer>(_log, _info.Name, ClientLocator::GetDataFolder(system));
+    _admin->SetHealthSource([this]
+    {
+        AdminHealth health;
+        health.App = _info.Name;
+        health.Realm = GetRealmName();
+        health.Revision = GitRevision::GetHash();
+        health.UptimeSeconds = static_cast<uint64>(GetUptime().count());
+        health.State = LifecycleName(GetLifecycleState());
+        return health;
+    });
+
+    OnAdminApiReady(*_admin);
+
+    std::string error;
+    if (_admin->Start(settings, error))
+        return true;
+    AMBROSE_LOG(_log, LogLevel::Error, "server.admin", "{}", error);
+    _err << _info.Name << ": " << error << "\n";
+    _admin.reset();
+    return false;
+}
+
+bool ServerApp::ReloadAdminApi()
+{
+    if (!_admin)
+        return false;
+    std::vector<std::string> problems;
+    AdminSettings const settings = AdminSettings::Load(_config, _info.AdminPort, &problems);
+    for (std::string const& problem : problems)
+        AMBROSE_LOG(_log, LogLevel::Warn, "server.admin", "{}", problem);
+    return _admin->Reload(settings);
 }
 
 int ServerApp::Run(std::vector<std::string> const& arguments)
 {
-    _stopping = false;
+    _lifecycle = AppLifecycle::Stopped;
     _stopScheduled = false;
-    _startedAt = std::chrono::steady_clock::now();
     AppOptions const options = AppOptions::Parse(arguments, _info.DefaultConfigFile);
     if (!options.Error.empty())
     {
@@ -161,6 +232,8 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
         return EXIT_FAILURE;
     }
 
+    _startedAt = std::chrono::steady_clock::now();
+    _lifecycle = AppLifecycle::Starting;
     LogConfigResult const logResult = _log.LoadFromConfig(_config);
     Ambrose::Banner::Show(_info.Name, [this](std::string_view line) { LogLifecycle(LogLevel::Info, std::string(line)); });
     for (ConfigIssue const& issue : logResult.Warnings)
@@ -187,21 +260,32 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
         StopNow(fmt::format("signal {}", signal));
     });
 
+    if (!StartAdminApi())
+    {
+        LogLifecycle(LogLevel::Error, fmt::format("{} failed to start", _info.Name));
+        _work.reset();
+        FinishShutdown();
+        return EXIT_FAILURE;
+    }
+
     _starting = true;
     bool const started = OnStart();
     _starting = false;
     if (!started)
     {
-        bool const stopped = _stopping.load() || _stopRequested.load();
+        bool const stopped = IsStopping() || _stopRequested.load();
         if (stopped)
             LogLifecycle(LogLevel::Info, fmt::format("{} stopped before it finished starting", _info.Name));
         else
             LogLifecycle(LogLevel::Error, fmt::format("{} failed to start", _info.Name));
+        if (_admin)
+            _admin->Stop();
+        _admin.reset();
         _work.reset();
         FinishShutdown();
         return stopped ? EXIT_SUCCESS : EXIT_FAILURE;
     }
-    bool const stoppedWhileStarting = _stopping.load();
+    bool const stoppedWhileStarting = IsStopping();
 
     for (std::string const& name : _log.GetPendingAppenderNames())
         AMBROSE_LOG(_log, LogLevel::Warn, "server.logging", "appender {} has a type this app does not provide and stays inactive", name);
@@ -213,7 +297,7 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
     {
         if (GetUpdateInterval().count() > 0)
             ScheduleUpdate();
-        _ready = true;
+        _lifecycle = AppLifecycle::Running;
         LogLifecycle(LogLevel::Info, fmt::format("{} ready", _info.Name));
         if (_stopRequested.load())
             StopNow("a stop request");
@@ -225,7 +309,9 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
     _io.Run();
 
     StopConsole();
-    _ready = false;
+    if (_admin)
+        _admin->Stop();
+    _admin.reset();
     OnStop();
     LogLifecycle(LogLevel::Info, fmt::format("{} stopped", _info.Name));
     FinishShutdown();
@@ -240,7 +326,7 @@ bool ServerApp::PollStopRequested()
         if (lock.owns_lock())
             _io.Poll();
     }
-    return _stopping.load() || _stopRequested.load();
+    return IsStopping() || _stopRequested.load();
 }
 
 void ServerApp::RequestStop(std::string reason)
@@ -330,7 +416,7 @@ void ServerApp::RunConsoleLine(std::string const& line)
         answer.push_back('\n');
         _log.GetConsole().WriteLines(answer, ConsoleColor::Default);
     };
-    if (_stopping)
+    if (IsStopping())
     {
         AMBROSE_LOG(_log, LogLevel::Warn, "commands.console", "Console: {} did not run because {} is shutting down", described, _info.Name);
         reply(fmt::format("{} is shutting down, so '{}' did not run", _info.Name, described));
@@ -350,6 +436,7 @@ void ServerApp::RunConsoleLine(std::string const& line)
 
 void ServerApp::FinishShutdown()
 {
+    _lifecycle = AppLifecycle::Stopped;
     _log.DetachConfigWarnings();
     _log.Shutdown();
     _signals.reset();
@@ -362,7 +449,7 @@ void ServerApp::ScheduleUpdate()
     _updateTimer.expires_after(interval.count() > 0 ? interval : std::chrono::milliseconds(50));
     _updateTimer.async_wait([this](std::error_code const& error)
     {
-        if (error || _stopping)
+        if (error || IsStopping())
             return;
         auto const now = std::chrono::steady_clock::now();
         auto const diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - _lastUpdate);
@@ -401,9 +488,9 @@ bool ServerApp::CancelScheduledStop()
 
 void ServerApp::StopNow(std::string const& reason)
 {
-    if (_stopping || !_work)
+    if (IsStopping() || !_work)
         return;
-    _stopping = true;
+    _lifecycle = AppLifecycle::Stopping;
     _stopScheduled = false;
     LogLifecycle(LogLevel::Info, fmt::format("{} shutting down after {}", _info.Name, reason));
     _shutdownTimer.cancel();

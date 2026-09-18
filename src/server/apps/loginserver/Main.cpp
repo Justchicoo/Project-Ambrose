@@ -43,7 +43,7 @@ namespace
     public:
         static constexpr uint16 DefaultPort = 12000;
 
-        LoginServerApp() : ServerApp({ "loginserver", "loginserver.conf" }, sConfigMgr, sLog, std::cout, std::cerr)
+        LoginServerApp() : ServerApp({ "loginserver", "loginserver.conf", 12010 }, sConfigMgr, sLog, std::cout, std::cerr)
         {
         }
 

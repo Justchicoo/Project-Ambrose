@@ -321,7 +321,7 @@ TEST_F(ServerAppTest, StatusAndADelayedShutdownAnswerOnTheConsole)
     EXPECT_NE(out.find("server:   testserver\n"), std::string::npos) << out;
     EXPECT_NE(out.find("revision: " + GitRevision::GetFullVersion() + "\n"), std::string::npos) << out;
     EXPECT_NE(out.find("uptime:   "), std::string::npos) << out;
-    EXPECT_NE(out.find("state:    ready\n"), std::string::npos) << out;
+    EXPECT_NE(out.find("state:    running\n"), std::string::npos) << out;
     EXPECT_NE(out.find("testserver stops in 1h 0m 0s\n"), std::string::npos) << out;
     EXPECT_NE(out.find("The pending shutdown is cancelled\n"), std::string::npos) << out;
     EXPECT_NE(out.find("Usage: shutdown [seconds|cancel]\n"), std::string::npos) << out;

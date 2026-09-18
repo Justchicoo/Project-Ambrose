@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, with the launcher's own tests joining it when the launcher library is built so one executable holds them, and outside the login server's folder unless its library is built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, registers each test with CTest, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable and the bindecode, dbimport, extractor, launcher, localetool and typeextract tools.
+# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, with the launcher's own tests joining it when the launcher library is built so one executable holds them, and outside the login server's folder unless its library is built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, links the Windows security API the admin token permission checks read, registers each test with CTest, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable and the bindecode, dbimport, extractor, launcher, localetool and typeextract tools.
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
@@ -36,6 +36,10 @@ target_link_libraries(unit_tests
         globals
         nlohmann_json::nlohmann_json
         GTest::gmock)
+
+if(WIN32)
+    target_link_libraries(unit_tests PRIVATE advapi32)
+endif()
 
 if(TARGET login)
     target_link_libraries(unit_tests PRIVATE login)

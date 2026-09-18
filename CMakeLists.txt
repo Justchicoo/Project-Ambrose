@@ -36,6 +36,7 @@ include(AmbroseMacros)
 
 find_package(fmt CONFIG REQUIRED)
 find_package(asio CONFIG REQUIRED)
+find_package(Crow CONFIG REQUIRED)
 find_package(Botan 3 CONFIG REQUIRED COMPONENTS sha2_32 sha2_64 hmac system_rng twofish)
 find_package(ZLIB REQUIRED)
 find_package(pugixml CONFIG REQUIRED)

@@ -14,6 +14,6 @@
 
 int main(int argc, char** argv)
 {
-    ServerApp app({ "patchserver", "patchserver.conf" }, sConfigMgr, sLog, std::cout, std::cerr);
+    ServerApp app({ "patchserver", "patchserver.conf", 12510 }, sConfigMgr, sLog, std::cout, std::cerr);
     return app.Run(Ambrose::GetArguments(argc, argv));
 }

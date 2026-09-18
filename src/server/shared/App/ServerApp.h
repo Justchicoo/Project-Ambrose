@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The lifecycle every server app shares: options, config, logging, banner, shutdown signals that a start in progress can poll for, an optional update tick, console commands on their own thread with their replies on the log's own writer, and a clean exit code.
+ * The lifecycle every server app shares: options, config, logging, banner, the one start time and lifecycle state its console and its admin API both report, the optional admin API listener an app fills with its own routes before it opens, shutdown signals that a start in progress can poll for, an optional update tick, console commands on their own thread with their replies on the log's own writer, and a clean exit code.
  */
 
 #ifndef AMBROSE_SERVERAPP_H
@@ -10,6 +10,7 @@
 #include "Duration.h"
 #include "IoContext.h"
 #include "LogCommon.h"
+#include "Types.h"
 
 #include <asio/steady_timer.hpp>
 
@@ -22,10 +23,12 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
 
+class AdminServer;
 class ConfigMgr;
 class ConsoleInput;
 class ConsoleReader;
@@ -36,10 +39,19 @@ namespace Ambrose::Asio
     class SignalHandler;
 }
 
+enum class AppLifecycle
+{
+    Stopped,
+    Starting,
+    Running,
+    Stopping
+};
+
 struct ServerAppInfo
 {
     std::string Name;
     std::string DefaultConfigFile;
+    uint16 AdminPort = 0;
 };
 
 class ServerApp
@@ -54,11 +66,16 @@ public:
 
     int Run(std::vector<std::string> const& arguments);
     void RequestStop(std::string reason = "a stop request");
-    Seconds GetUptime() const;
+    Seconds GetUptime() const noexcept;
 
-    bool IsReady() const noexcept { return _ready.load(); }
+    bool IsReady() const noexcept { return GetLifecycleState() == AppLifecycle::Running; }
     ConsoleCommandTable& Commands() noexcept { return _commands; }
     ServerAppInfo const& GetInfo() const noexcept { return _info; }
+    AppLifecycle GetLifecycleState() const noexcept { return _lifecycle.load(); }
+    AdminServer* GetAdminApi() const noexcept { return _admin.get(); }
+    bool ReloadAdminApi();
+
+    static std::string_view LifecycleName(AppLifecycle state) noexcept;
 
 protected:
     virtual bool OnStart();
@@ -67,6 +84,8 @@ protected:
     virtual void OnStop();
     virtual void OnStatus(std::vector<std::pair<std::string, std::string>>& fields);
     virtual std::unique_ptr<ConsoleInput> CreateConsoleInput();
+    virtual std::string GetRealmName() const;
+    virtual void OnAdminApiReady(AdminServer& admin);
 
     ConfigMgr& Config() noexcept { return _config; }
     Log& Logger() noexcept { return _log; }
@@ -74,6 +93,8 @@ protected:
     bool PollStopRequested();
 
 private:
+    bool IsStopping() const noexcept { return GetLifecycleState() == AppLifecycle::Stopping; }
+    bool StartAdminApi();
     void ScheduleUpdate();
     void ScheduleStop(Seconds delay);
     bool CancelScheduledStop();
@@ -98,6 +119,7 @@ private:
     asio::steady_timer _shutdownTimer;
     std::unique_ptr<Ambrose::Asio::SignalHandler> _signals;
     ConsoleCommandTable _commands;
+    std::unique_ptr<AdminServer> _admin;
     std::unique_ptr<ConsoleReader> _console;
     std::thread _commandThread;
     std::mutex _commandMutex;
@@ -105,11 +127,10 @@ private:
     std::deque<std::string> _commandQueue;
     bool _commandStop = false;
     std::chrono::steady_clock::time_point _lastUpdate;
-    std::chrono::steady_clock::time_point _startedAt;
+    std::atomic<std::chrono::steady_clock::time_point> _startedAt{ std::chrono::steady_clock::time_point() };
+    std::atomic<AppLifecycle> _lifecycle{ AppLifecycle::Stopped };
     std::atomic<bool> _stopScheduled{ false };
-    std::atomic<bool> _ready{ false };
     std::atomic<bool> _stopRequested{ false };
-    std::atomic<bool> _stopping{ false };
     std::atomic<bool> _starting{ false };
     std::mutex _pollMutex;
 };

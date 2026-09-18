@@ -35,7 +35,7 @@ namespace
     class GameServerApp : public ServerApp
     {
     public:
-        GameServerApp() : ServerApp({ "gameserver", "gameserver.conf" }, sConfigMgr, sLog, std::cout, std::cerr)
+        GameServerApp() : ServerApp({ "gameserver", "gameserver.conf", 12343 }, sConfigMgr, sLog, std::cout, std::cerr)
         {
         }
 
