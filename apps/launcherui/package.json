@@ -1,0 +1,16 @@
+{
+  "name": "@ambrose/launcherui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Project Ambrose by Imjustchico: the launcher window's page, built from the shared design system and loaded by the operating system's own web view.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ambrose/ui": "*"
+  }
+}

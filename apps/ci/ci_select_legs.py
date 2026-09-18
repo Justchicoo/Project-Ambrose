@@ -44,7 +44,7 @@ DEFAULT_OPTION = "linux-gcc"
 LABEL_PREFIX = "ci:"
 
 SMOKE_PATHS = (".github/", "apps/ci/ci_build.py", "apps/ci/ci_vcpkg_cache.py", "vcpkg.json")
-PUSH_PATHS = (".github/**", "apps/ci/**", "vcpkg.json")
+PUSH_PATHS = (".github/**", "apps/ci/**", "apps/designtokens/**", "design/**", "vcpkg.json")
 CODE_PATHSPEC = (".", ":(exclude)doc", ":(exclude,glob)**/*.md")
 ZERO_SHA = re.compile(r"^0*$")
 

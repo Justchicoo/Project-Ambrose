@@ -25,6 +25,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/src/cmake")
 
 option(TOOLS "Build the tools in src/tools" ON)
 option(APPS_BUILD "Build the server apps" ON)
+option(FRONTEND "Build the panel and the launcher window's page, which needs Node and npm" OFF)
 option(AMBROSE_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(AMBROSE_SANITIZE_ADDRESS "Build project code with AddressSanitizer, plus UndefinedBehaviorSanitizer where supported" OFF)
 option(AMBROSE_SANITIZE_THREAD "Build project code with ThreadSanitizer (GCC or Clang only)" OFF)
@@ -33,6 +34,7 @@ option(AMBROSE_BUILD_FUZZERS "Build libFuzzer targets for decoders of untrusted 
 include(PlatformDetect)
 include(CompilerFlags)
 include(AmbroseMacros)
+include(Frontend)
 
 find_package(fmt CONFIG REQUIRED)
 find_package(asio CONFIG REQUIRED)
@@ -48,9 +50,12 @@ if(BUILD_TESTING)
     enable_testing()
     add_subdirectory(apps/codestyle)
     add_subdirectory(apps/ci)
+    add_subdirectory(apps/designtokens)
 endif()
 
 add_subdirectory(src)
+
+ambrose_frontend()
 
 if(BUILD_TESTING)
     add_subdirectory(apps/clientdriver)

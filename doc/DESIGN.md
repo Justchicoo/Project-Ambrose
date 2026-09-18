@@ -4,7 +4,7 @@
 
 Everything Ambrose shows a person uses this one look: the launcher window, the panel in phase 17, the terminal dashboard and any page a server serves. A surface never invents its own palette or type. Settled on 2026-09-17 at the maintainer's direction, to be refined as surfaces are built.
 
-The values below are generated, not typed. `design/tokens.json` is the one place a design value is written, and `apps/designtokens/designtokens.py` writes from it the tables in this document, the stylesheet every web surface loads, the typed constants the apps import and the header the terminal reads, so this document cannot disagree with the code. 17.73 builds that pipeline and the component set on top of it; 17.06 and 3.26 are built from them. The generator refuses a palette whose text and ground pair falls below the ratio the accessibility principle sets, so a contrast failure cannot be shipped.
+The values below are generated, not typed. `design/tokens.json` is the one place a design value is written, and `apps/designtokens/designtokens.py` writes from it the tables in this document, the stylesheet every web surface loads, the typed constants the apps import and the header the terminal reads, so this document cannot disagree with the code. Every table under a `###` heading here is written by that generator, and `designtokens.py --check` fails when one is edited by hand. 17.73 builds that pipeline and the component set on top of it; 17.06 and 3.26 are built from them. The generator refuses a palette whose text and ground pair falls below the ratio the accessibility principle sets, so a contrast failure cannot be shipped. `packages/ui` holds the components built on these tokens and doc/COMPONENTS.md says what each one is for.
 
 ## Principles
 
@@ -19,6 +19,10 @@ The values below are generated, not typed. `design/tokens.json` is the one place
 - **No decoration that carries no meaning.** No gradient washes, no drop shadows for their own sake, no emoji.
 
 ## Color
+
+The palette runs in three tiers. The raw values are the first tier and nothing outside this document names them.
+
+### The palette
 
 | Token | Value | Use |
 |---|---|---|
@@ -37,14 +41,61 @@ The values below are generated, not typed. `design/tokens.json` is the one place
 | `teal` | `#5FD3C4` | Healthy, done, verified |
 | `violet` | `#C77DFF` | Marks something the user owns, such as their own wizard |
 | `ember` | `#E2725B` | Errors and destructive actions |
+| `parchment` | `#F4EAD5` | The light page |
+| `parchment-raised` | `#FFFDF7` | Light raised cards and controls |
+| `parchment-sunken` | `#EADFC4` | Light inputs and log areas |
+| `parchment-chrome` | `#FBF5E7` | Light title bars and side bars |
+| `parchment-border` | `#D9CBAB` | Light quiet separators |
+| `parchment-border-strong` | `#C3AE86` | Light card and control edges |
+| `ink` | `#1B1608` | Body text on parchment |
+| `ink-muted` | `#4A3F28` | Secondary text on parchment |
+| `ink-faint` | `#5F5238` | Labels, timestamps and hints on parchment |
+| `gold-dark` | `#7A5A12` | Gold that can be read on parchment |
+| `gold-darkest` | `#6A4E0F` | The pressed edge of a gold control on parchment |
+| `teal-dark` | `#0F6F63` | Teal that can be read on parchment |
+| `violet-dark` | `#6B2FA0` | Violet that can be read on parchment |
+| `ember-dark` | `#A33A25` | Ember that can be read on parchment |
 
 The names above are the raw values. A component never names one of them: it names a meaning, and the meanings are `surface-page`, `surface-card`, `surface-sunken`, `surface-chrome`, `edge-quiet`, `edge-strong`, `edge-control`, `fg-body`, `fg-muted`, `fg-faint`, `action`, `action-pressed`, `state-healthy`, `state-waiting`, `state-wrong`, `state-unknown`, `mine`, `focus-ring` and the three value names in Log lines and values. Only the meanings reach the styling engine, and the raw palette below it is deleted from that engine, so a colour outside this document is not something a component can write. That is also what makes a second theme a remap of the meanings rather than a rewrite of every screen.
 
-A light surface inverts the ground and panels to parchment `#F4EAD5` and `#FFFDF7`, and takes a darker ramp of the same accents, because the dark ones are unreadable on parchment: `gold #7A5A12`, `teal #0F6F63`, `ember #A33A25`, `violet #6B2FA0`. Every pair clears 4.5:1 on both parchments. Settled on 2026-09-18 after the ratios were computed: the dark accents reach only 1.5 to 3.1:1 there, so a status word or a health dot in them cannot be read.
+### The meanings
 
-Text on a filled accent is the dark ground, never parchment: ground on gold is 10.26:1 and ground on ember 6.12:1, while parchment on either is under 2.6:1.
+| Token | Dark | Light | Use |
+|---|---|---|---|
+| `surface-page` | `#0B1020` | `#F4EAD5` | The page behind everything |
+| `surface-card` | `#131B31` | `#FFFDF7` | Raised cards and controls |
+| `surface-sunken` | `#0E1527` | `#EADFC4` | Inputs, log areas, anything set into the page |
+| `surface-chrome` | `#070B16` | `#FBF5E7` | Title bars, side bars, anything framing the page |
+| `edge-quiet` | `#1B2540` | `#D9CBAB` | Quiet separators |
+| `edge-strong` | `#22304F` | `#C3AE86` | Card and control edges |
+| `fg-body` | `#F2E8D5` | `#1B1608` | Body text |
+| `fg-muted` | `#A8B6D4` | `#4A3F28` | Secondary text |
+| `fg-faint` | `#8798BC` | `#5F5238` | Labels, timestamps, hints |
+| `action` | `#E4B457` | `#7A5A12` | The one action that matters |
+| `action-pressed` | `#B98A2D` | `#6A4E0F` | The pressed edge of that action |
+| `state-healthy` | `#5FD3C4` | `#0F6F63` | Healthy, done, verified |
+| `state-waiting` | `#E4B457` | `#7A5A12` | Waiting |
+| `state-wrong` | `#E2725B` | `#A33A25` | Wrong, and destructive actions |
+| `state-unknown` | `#8798BC` | `#5F5238` | Unknown |
+| `mine` | `#C77DFF` | `#6B2FA0` | Something the user owns, such as their own wizard |
+| `focus-ring` | `#E4B457` | `#7A5A12` | The 2 px ring no component overrides |
 
-A control is not identified by its border alone. `border` and `border-strong` sit near 1.2 to 1.5:1 against the grounds, which is below the 3:1 a control boundary needs, so what marks a control is its sunken fill and its label, with the border as quiet decoration. Settled on 2026-09-18, because a labelled control is not the whole panel: a control with nothing else to show it exists, such as an empty input, an empty search or filter box, the command box before anything is typed, an unchecked box, a switch in the off position or an unselected segment, draws its boundary in `edge-control`, which reads 3.59:1 on the ground, 3.24:1 on panel, 3.45:1 on sunken, 3.73:1 on chrome and 4.41:1 on parchment. One value serves both themes, because a mid-tone edge clears 3:1 against a dark ground and a parchment one alike. It is the only edge that carries that job; `border` and `border-strong` stay quiet separators at their own ratios.
+A light surface inverts the ground and panels to parchment, and takes a darker ramp of the same accents, because the dark ones are unreadable on parchment: the dark accents reach only 1.5 to 3.1:1 there, so a status word or a health dot in them cannot be read. Settled on 2026-09-18 after the ratios were computed. Every light pair clears 4.5:1 on both parchments, which the generator proves before it writes a file.
+
+A filled accent is the third tier. It keeps its bright value in both themes and takes the dark ground as its label, never parchment, because parchment on gold and on ember is far under the bar while the ground on either is far above it.
+
+### Filled accents
+
+| Token | Value | Use |
+|---|---|---|
+| `fill-action` | `#E4B457` | The primary button's ground |
+| `fill-action-pressed` | `#B98A2D` | The primary button while pressed |
+| `fill-danger` | `#E2725B` | The destructive button's ground |
+| `fill-healthy` | `#5FD3C4` | A filled healthy badge |
+| `fill-mine` | `#C77DFF` | A filled badge on something the user owns |
+| `on-fill` | `#0B1020` | The label on any filled accent, in both themes |
+
+A control is not identified by its border alone. `edge-quiet` and `edge-strong` sit near 1.2 to 1.5:1 against the grounds, which is below the 3:1 a control boundary needs, so what marks a control is its sunken fill and its label, with the border as quiet decoration. Settled on 2026-09-18, because a labelled control is not the whole panel: a control with nothing else to show it exists, such as an empty input, an empty search or filter box, the command box before anything is typed, an unchecked box, a switch in the off position or an unselected segment, draws its boundary in `edge-control`, which reads 3.59:1 on the ground, 3.24:1 on panel, 3.45:1 on sunken, 3.73:1 on chrome and 4.41:1 on parchment. One value serves both themes, because a mid-tone edge clears 3:1 against a dark ground and a parchment one alike. It is the only edge that carries that job; `edge-quiet` and `edge-strong` stay quiet separators at their own ratios.
 
 Focus is a 2 px gold ring, which clears 9.89:1 on every ground, and it is never removed. It sits 2 px clear of the control it marks, so both of its neighbours are the surface behind it rather than the control's own fill: gold on ground 9.89:1, on panel 8.92:1, on sunken 9.49:1, on chrome 10.26:1. It is drawn with an outline and an offset rather than a shadow, so it survives forced-colors mode, and it appears on keyboard focus so a pointer click does not draw it.
 
@@ -52,13 +103,32 @@ A page stacks at most three tonal layers, ground, then panel, then sunken; a fou
 
 ## Type
 
+A surface loads at most these three families and always names a fallback stack. The three are vendored as latin variable files in `packages/ui/src/fonts`, so no surface fetches a font from any host.
+
+### Families
+
 | Role | Family | Use |
 |---|---|---|
 | Display | Cormorant Garamond | Headings, the wordmark, the Play button |
 | Interface | Karla | Every other piece of text |
 | Mono | JetBrains Mono | Numbers, paths, logs, commands |
 
-Sizes step 11, 12, 13, 15, 17, 21, 26, 34, 44, 56. Labels are 11 px, uppercase, letter-spaced 0.12em, in `text-faint`. Body is 13 to 15 px. A surface loads at most these three families and always names a fallback stack.
+### Sizes
+
+| Size | Line height |
+|---|---|
+| `11px` | `16px` |
+| `12px` | `18px` |
+| `13px` | `20px` |
+| `15px` | `22px` |
+| `17px` | `24px` |
+| `21px` | `28px` |
+| `26px` | `34px` |
+| `34px` | `42px` |
+| `44px` | `52px` |
+| `56px` | `64px` |
+
+Labels are 11 px, uppercase, letter-spaced 0.12em, in `fg-faint`. Body is 13 to 15 px.
 
 - **Figures are tabular and reserve their width.** A number that changes on screen is rendered with tabular figures, and its box reserves its widest value, so nothing around it moves when it changes. JetBrains Mono is tabular already; Karla is not, so a figure in the interface face asks for it by name. A component test asserts a figure's width does not change between 0 and 1,000,000.
 - **One formatter, and binary units are written by hand.** Memory, disk and file sizes are binary with the IEC symbols, and throughput matches them with the bit and byte case correct; counts and rates go through the platform's number formatting. A percentage is 0 decimals on a gauge and 1 on a trend, and a live figure's smallest and largest fraction digits are equal so its digit count cannot change under the eye. Every figure goes through one module, mirrored in C++ for the terminal, and no component formats a number itself.
@@ -66,11 +136,10 @@ Sizes step 11, 12, 13, 15, 17, 21, 26, 34, 44, 56. Labels are 11 px, uppercase, 
 
 ## Spacing, shape and motion
 
-- Spacing steps 4, 6, 8, 10, 12, 14, 16, 20, 22, 28, 34, 40, 44.
-- Radius 6 on small controls, 8 to 10 on inputs and cards, 12 on the largest action, 999 on pills.
-- Borders are 1 px. The only shadow is the 3 px inset under a gold control. A border is a separator, never the thing that makes a control a control: `border` reads at 1.13:1 to 1.30:1 against the grounds and `border-strong` at 1.31:1 to 1.50:1, so an input is recognised by its sunken fill and its label, and the focus indicator carries the weight. `focus-ring` is 2 px of gold, which reads at 9.89:1 on the ground, and no component overrides it.
-- A control whose ground is an accent takes the dark label, not the light one: parchment on gold is 1.58:1 and on ember 2.54:1, while `chrome` on gold is 10.26:1 and `ground` on ember 6.12:1.
-- Motion is short and rare, on four durations only: 90 ms for a state that flips, 120 ms for a hover, 200 ms for a panel that opens, 320 ms for a screen that changes. Nothing bounces: no overshoot, no spring past its target, no attention-seeking movement.
+- Spacing steps 4, 6, 8, 10, 12, 14, 16, 20, 22, 28, 34, 40, 44. A density attribute on the root scales that tier and nothing else, and a coarse pointer forces the comfortable scale back on so the 44 px touch target rule can never be violated.
+- Radius 6 on small controls, 8 on inputs, 10 on cards, 12 on the largest action, 999 on pills.
+- Borders are 1 px. The only shadow is the 3 px inset under a gold control. A border is a separator, never the thing that makes a control a control: an input is recognised by its sunken fill and its label, and the focus indicator carries the weight. `focus-ring` is 2 px, and no component overrides it.
+- Motion is short and rare, on four durations only: 90 ms for a state that flips, 120 ms for a hover, 200 ms for a panel that opens, 320 ms for a screen that changes. Nothing bounces: no overshoot, no spring past its target, no attention-seeking movement. Animation touches only transform, opacity and filter.
 - Exactly two things may repeat, and only while they mean something: an indeterminate indicator while a real operation is running, and the dot that shows a live connection. Both stop when the thing they report stops. Everything else plays once.
 - Every duration becomes zero when the viewer asks for reduced motion, through the media query and through the setting the panel offers, because the media query is not reliable in every web view. Two things carry information through motion and each has a still form that the reduced-motion test renders: the live-connection dot becomes a filled dot with the word Live and the age of its sample, and the indeterminate indicator says in words that an operation is running.
 - A pressed control changes color and takes the 3 px inset at 90 ms. It never scales, shifts or transforms, and the pressed state is set from the component's own state rather than from the active selector alone, because keyboard activation differs between the two web views Ambrose ships in. Compiled CSS carrying a transform under a pressed state fails the checks job.
@@ -80,7 +149,19 @@ Sizes step 11, 12, 13, 15, 17, 21, 26, 34, 44, 56. Labels are 11 px, uppercase, 
 
 ## Charts
 
-Charts never borrow the four meaning-carrying accents for their series, because gold, teal, ember and violet already say something. A chart takes its colors from a series ramp of its own of at least seven steps, ordered so neighbours differ in lightness as well as hue, checked for the common kinds of color blindness, and readable on both grounds. Series keep their color across every chart on a page, a single-series chart uses the first step, and a threshold line or a danger band uses the meaning colors, since there it means what it says. The ramp's values are generated and gated with the tokens in 17.73.
+Charts never borrow the four meaning-carrying accents for their series, because gold, teal, ember and violet already say something. A chart takes its colors from a series ramp of its own, ordered so neighbours differ in lightness as well as hue, checked for the common kinds of color blindness, and readable on the grounds of its own theme. Series keep their color across every chart on a page, a single-series chart uses the first slot, and a threshold line or a danger band uses the meaning colors, since there it means what it says. The generator holds every slot above 3:1 on the page and on a card, and holds every pair of slots apart under normal vision and under protanopia, deuteranopia and tritanopia.
+
+### The series ramp
+
+| Slot | Dark | Light | Use |
+|---|---|---|---|
+| `series-1` | `#C9503F` | `#B45A5A` | Series one, and any single-series chart |
+| `series-2` | `#B8C24E` | `#8A7A22` | Series two |
+| `series-3` | `#79C98A` | `#2F5A22` | Series three |
+| `series-4` | `#2A8F7C` | `#2D7E9C` | Series four |
+| `series-5` | `#7D6BD6` | `#3B3AA8` | Series five |
+| `series-6` | `#A560A5` | `#6A2A86` | Series six |
+| `series-7` | `#E1A6C4` | `#8E2A5C` | Series seven |
 
 A marker drawn on a chart is real markup positioned against the chart's scales, so it can be hovered, focused, read and translated. Nothing that carries meaning is drawn into a canvas, which is the rule a stat tile's number already follows.
 

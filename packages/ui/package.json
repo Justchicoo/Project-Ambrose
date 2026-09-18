@@ -1,0 +1,55 @@
+{
+  "name": "@ambrose/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Project Ambrose by Imjustchico: the shared component set, the generated tokens, the motion rules and the host bridge every Ambrose surface imports.",
+  "license": "MIT",
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    ".": {
+      "svelte": "./src/index.ts",
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./tokens": {
+      "svelte": "./src/tokens/tokens.ts",
+      "types": "./src/tokens/tokens.ts",
+      "default": "./src/tokens/tokens.ts"
+    },
+    "./motion": {
+      "svelte": "./src/motion/motion.svelte.ts",
+      "types": "./src/motion/motion.svelte.ts",
+      "default": "./src/motion/motion.svelte.ts"
+    },
+    "./bridge": {
+      "svelte": "./src/bridge/bridge.ts",
+      "types": "./src/bridge/bridge.ts",
+      "default": "./src/bridge/bridge.ts"
+    },
+    "./icons": {
+      "svelte": "./src/icons/icons.ts",
+      "types": "./src/icons/icons.ts",
+      "default": "./src/icons/icons.ts"
+    },
+    "./styles.css": "./src/styles/app.css",
+    "./tokens.css": "./src/tokens/tokens.css",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@tanstack/svelte-table": "9.2.4",
+    "@tanstack/table-core": "9.2.4",
+    "anser": "2.3.5",
+    "bits-ui": "2.19.2",
+    "partysocket": "1.3.0",
+    "svelte-sonner": "1.2.1",
+    "uplot": "1.6.32",
+    "valibot": "1.5.0",
+    "virtua": "0.51.3"
+  },
+  "peerDependencies": {
+    "svelte": "^5.57.0"
+  }
+}

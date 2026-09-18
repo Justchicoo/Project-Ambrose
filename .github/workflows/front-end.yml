@@ -1,0 +1,115 @@
+# Project Ambrose by Imjustchico
+# Type-checks, lints, formats and tests the shared design system and both surfaces on Linux only, path-filtered to the front-end folders and the lockfile, with the accessibility gate and its canary, and with the screenshots and the end-to-end run kept off this path.
+name: front-end
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/**"
+      - "apps/dashboard/**"
+      - "apps/launcherui/**"
+      - "apps/designtokens/**"
+      - "design/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "svelte.config.js"
+      - "eslint.config.js"
+      - "vitest.config.ts"
+      - "vitest.canary.config.ts"
+      - "playwright.config.ts"
+      - ".github/workflows/front-end.yml"
+  pull_request:
+    paths:
+      - "packages/**"
+      - "apps/dashboard/**"
+      - "apps/launcherui/**"
+      - "apps/designtokens/**"
+      - "design/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "svelte.config.js"
+      - "eslint.config.js"
+      - "vitest.config.ts"
+      - "vitest.canary.config.ts"
+      - "playwright.config.ts"
+      - ".github/workflows/front-end.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: front-end-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  front-end:
+    name: front-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      STORYBOOK_DISABLE_TELEMETRY: "1"
+      DO_NOT_TRACK: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: npm ci --ignore-scripts
+      - name: Generated tokens are current
+        if: ${{ !cancelled() }}
+        run: python apps/designtokens/designtokens.py --check
+      - name: Vendored icons are current
+        if: ${{ !cancelled() }}
+        run: python apps/designtokens/icons.py --check
+      - name: Types
+        if: ${{ !cancelled() }}
+        run: npm run check
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: npm run lint
+      - name: Format
+        if: ${{ !cancelled() }}
+        run: npm run format:check
+      - name: Logic and token tests
+        if: ${{ !cancelled() }}
+        run: npm run test:logic
+      - name: Restore the browsers
+        id: browsers
+        if: ${{ !cancelled() }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-1.63.0
+      - name: Install the browsers
+        if: ${{ !cancelled() && steps.browsers.outputs.cache-hit != 'true' }}
+        run: npx playwright install --with-deps chromium webkit
+      - name: Stories in Chromium and WebKit with the accessibility gate
+        if: ${{ !cancelled() }}
+        run: npm run test:browser
+      - name: The canary story has to fail
+        if: ${{ !cancelled() }}
+        run: |
+          if npm run test:canary; then
+            echo "the canary story passed, so the accessibility gate is not running"
+            exit 1
+          fi
+          echo "the canary story failed, as it must"
+      - name: Build both surfaces
+        if: ${{ !cancelled() }}
+        run: npm run build
+      - name: Repository checks, including the bundle naming no other host
+        if: ${{ !cancelled() }}
+        run: python apps/ci/ci_frontend_checks.py
+      - name: Build the gallery
+        if: ${{ !cancelled() }}
+        run: npm run storybook:build

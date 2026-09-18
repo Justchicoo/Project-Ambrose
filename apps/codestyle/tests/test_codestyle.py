@@ -177,6 +177,91 @@ class WhitespaceTests(CheckerTestCase):
 
 
 
+class WebCodeTests(unittest.TestCase):
+    def assertClean(self, path, content):
+        self.assertEqual(check(path, content), [])
+
+    def assertIssue(self, path, content, rule, line=None):
+        issues = check(path, content)
+        self.assertTrue(issues, f"expected {rule} in {path}")
+        self.assertEqual(issues[0].rule, rule)
+        if line is not None:
+            self.assertEqual(issues[0].line, line)
+
+    def test_typescript_takes_the_block_header(self):
+        self.assertClean("packages/ui/src/one.ts", CPP_HEADER + "export const one = 1;\n")
+
+    def test_typescript_with_a_hash_header_fails(self):
+        self.assertIssue("packages/ui/src/one.ts", HASH_HEADER + "export const one = 1;\n", "header", 1)
+
+    def test_a_comment_in_typescript_fails(self):
+        self.assertIssue("packages/ui/src/one.ts", CPP_HEADER + "export const one = 1;\n// why\n", "comment", 6)
+
+    def test_a_url_in_a_template_literal_is_not_a_comment(self):
+        self.assertClean("packages/ui/src/one.ts", CPP_HEADER + "const at = `http://localhost:${port}/`;\n")
+
+    def test_a_url_in_a_plain_string_is_not_a_comment(self):
+        self.assertClean("packages/ui/src/one.ts", CPP_HEADER + 'const at = "https://www.w3.org/2000/svg";\n')
+
+    def test_a_comment_after_a_template_literal_still_fails(self):
+        self.assertIssue("packages/ui/src/one.ts", CPP_HEADER + "const at = `a${1}b`;\n/* why */\n", "comment", 6)
+
+    def test_css_takes_the_block_header(self):
+        self.assertClean("packages/ui/src/one.css", CPP_HEADER + ".one {\n    color: var(--color-fg-body);\n}\n")
+
+    def test_a_comment_in_css_fails(self):
+        self.assertIssue("packages/ui/src/one.css", CPP_HEADER + "/* why */\n.one {\n}\n", "comment", 5)
+
+
+class SvelteTests(unittest.TestCase):
+    def assertClean(self, path, content):
+        self.assertEqual(check(path, content), [])
+
+    def test_a_component_takes_the_markup_header(self):
+        self.assertClean(
+            "packages/ui/src/One.svelte",
+            MD_HEADER + '<script lang="ts">\n    let { one } = $props();\n</script>\n\n<p>{one}</p>\n',
+        )
+
+    def test_a_component_with_a_block_header_fails(self):
+        issues = check("packages/ui/src/One.svelte", CPP_HEADER + "<p>one</p>\n")
+        self.assertEqual(issues[0].rule, "header")
+
+    def test_a_comment_in_the_markup_fails(self):
+        issues = check("packages/ui/src/One.svelte", MD_HEADER + "<!-- why -->\n<p>one</p>\n")
+        self.assertEqual([issue.rule for issue in issues], ["comment"])
+        self.assertEqual(issues[0].line, 2)
+
+    def test_a_comment_in_the_script_fails(self):
+        issues = check("packages/ui/src/One.svelte", MD_HEADER + '<script lang="ts">\n    // why\n</script>\n')
+        self.assertEqual([issue.rule for issue in issues], ["comment"])
+        self.assertEqual(issues[0].line, 3)
+
+    def test_an_apostrophe_in_the_markup_is_not_a_comment(self):
+        self.assertClean("packages/ui/src/One.svelte", MD_HEADER + "<p>the operator's own machine</p>\n")
+
+    def test_a_url_in_an_attribute_is_not_a_comment(self):
+        self.assertClean("packages/ui/src/One.svelte", MD_HEADER + '<a href="https://example.test/one">one</a>\n')
+
+    def test_a_page_takes_the_markup_header(self):
+        self.assertClean("apps/dashboard/index.html", MD_HEADER + "<!doctype html>\n<html lang=\"en\">\n</html>\n")
+
+    def test_a_second_comment_in_a_page_fails(self):
+        issues = check("apps/dashboard/index.html", MD_HEADER + "<!doctype html>\n<!-- why -->\n")
+        self.assertEqual([issue.rule for issue in issues], ["comment"])
+
+
+class VendoredAssetTests(unittest.TestCase):
+    def test_a_vendored_font_is_exempt(self):
+        self.assertEqual(check("packages/ui/src/fonts/karla-latin-wght-normal.woff2", b"\x77\x4f\x46\x32"), [])
+
+    def test_a_vendored_icon_is_exempt(self):
+        self.assertEqual(check("design/icons/play.svg", '<svg viewBox="0 0 24 24"></svg>\n'), [])
+
+    def test_an_npmrc_takes_the_hash_header(self):
+        self.assertEqual(check(".npmrc", HASH_HEADER + "save-exact=true\n"), [])
+
+
 class LicenseFileTests(unittest.TestCase):
     def test_a_license_file_carries_no_branding_header(self):
         self.assertEqual(check("LICENSE", "MIT License\n\nCopyright (c) 2026 Imjustchico\n"), [])

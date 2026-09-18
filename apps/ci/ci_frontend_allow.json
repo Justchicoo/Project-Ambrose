@@ -1,0 +1,16 @@
+{
+  "$description": "Project Ambrose by Imjustchico: the only exceptions the front-end checks allow. A line here is an exception a reviewer can see, since the repository carries no comments to hold one.",
+  "lines": [],
+  "urls": [
+    "http://www.w3.org/",
+    "https://www.w3.org/",
+    "https://svelte.dev/e/",
+    "https://tailwindcss.com"
+  ],
+  "reasons": {
+    "http://www.w3.org/": "The XML namespace an inline SVG declares. Nothing is fetched from it.",
+    "https://www.w3.org/": "The same namespace in its secure spelling.",
+    "https://svelte.dev/e/": "The address Svelte prints beside a runtime error. It is a string in a message, never a request.",
+    "https://tailwindcss.com": "The address the styling engine prints beside its own error text, for the same reason."
+  }
+}

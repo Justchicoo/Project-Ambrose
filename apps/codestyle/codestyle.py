@@ -13,9 +13,12 @@ BRAND = "Project Ambrose by Imjustchico"
 
 CPP_EXTENSIONS = {".h", ".hh", ".hpp", ".c", ".cc", ".cpp", ".cxx", ".inl", ".ipp"}
 HEADER_EXTENSIONS = {".h", ".hh", ".hpp"}
-BINARY_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico"}
+WEBCODE_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".css"}
+BINARY_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".woff", ".woff2", ".ttf", ".otf", ".svg"}
 CRLF_KINDS = {"batch", "powershell"}
 HASH_KINDS = {"cmake", "shell", "powershell", "python", "yaml", "linehash", "editorconfig", "conf"}
+BLOCK_KINDS = {"cpp", "webcode"}
+MARKUP_KINDS = {"markdown", "svelte", "html"}
 
 
 @dataclass(frozen=True)
@@ -48,10 +51,16 @@ def classify(relpath):
         return "editorconfig"
     if lower.endswith(".conf.dist") or lower.endswith(".conf"):
         return "conf"
+    if lower in (".npmrc", ".nvmrc", ".prettierignore", ".eslintignore"):
+        return "linehash"
     ext = os.path.splitext(lower)[1]
     if ext in CPP_EXTENSIONS:
         return "cpp"
+    if ext in WEBCODE_EXTENSIONS:
+        return "webcode"
     mapping = {
+        ".svelte": "svelte",
+        ".html": "html",
         ".cmake": "cmake",
         ".sh": "shell",
         ".ps1": "powershell",
@@ -100,7 +109,7 @@ def check_header(kind, lines):
     def line_at(index):
         return lines[index] if index < len(lines) else None
 
-    if kind == "cpp":
+    if kind in BLOCK_KINDS:
         expected = ["/*", f" * {BRAND}", None, " */"]
         for offset, want in enumerate(expected):
             got = line_at(offset)
@@ -124,7 +133,7 @@ def check_header(kind, lines):
                     break
         return skip, issues[:1]
 
-    if kind == "markdown":
+    if kind in MARKUP_KINDS:
         match = re.fullmatch(r"<!-- " + re.escape(BRAND) + r": (.*) -->", line_at(0) or "")
         if not match:
             return (1 if (line_at(0) or "").startswith("<!--") else 0), [(1, f"expected '<!-- {BRAND}: <brief> -->'")]
@@ -457,6 +466,120 @@ def scan_markdown(text):
     return hits
 
 
+def skip_template(text, index):
+    index += 1
+    depth = 0
+    while index < len(text):
+        char = text[index]
+        if char == "\\":
+            index += 2
+            continue
+        if depth == 0 and char == "`":
+            return index + 1
+        if depth == 0 and text.startswith("${", index):
+            depth = 1
+            index += 2
+            continue
+        if depth > 0:
+            if char == "`":
+                index = skip_template(text, index)
+                continue
+            if char in "\"'":
+                index += 1
+                while index < len(text):
+                    if text[index] == "\\":
+                        index += 2
+                        continue
+                    if text[index] == char or text[index] == "\n":
+                        index += 1
+                        break
+                    index += 1
+                continue
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+        index += 1
+    return len(text)
+
+
+def scan_webcode(text):
+    hits = []
+    pieces = []
+    index = 0
+    start = 0
+    while index < len(text):
+        char = text[index]
+        if char == "\\":
+            index += 2
+            continue
+        if char in "\"'":
+            index += 1
+            while index < len(text):
+                if text[index] == "\\":
+                    index += 2
+                    continue
+                if text[index] == char or text[index] == "\n":
+                    index += 1
+                    break
+                index += 1
+            continue
+        if char == "`":
+            pieces.append((start, text[start:index]))
+            index = skip_template(text, index)
+            start = index
+            continue
+        index += 1
+    pieces.append((start, text[start:]))
+    for offset, piece in pieces:
+        line = line_number_of(text, offset) - 1
+        hits.extend(number + line for number in scan_cpp(piece))
+    return hits
+
+
+def scan_markup_comments(text):
+    hits = []
+    index = 0
+    while True:
+        index = text.find("<!--", index)
+        if index < 0:
+            return hits
+        hits.append(line_number_of(text, index))
+        end = text.find("-->", index + 4)
+        index = len(text) if end < 0 else end + 3
+
+
+def scan_svelte(text):
+    hits = []
+    cursor = 0
+    markup = []
+    lower = text.lower()
+    while cursor < len(text):
+        opening = -1
+        tag = None
+        for candidate in ("<script", "<style"):
+            found = lower.find(candidate, cursor)
+            if found >= 0 and (opening < 0 or found < opening):
+                opening, tag = found, candidate[1:]
+        if opening < 0:
+            markup.append((cursor, text[cursor:]))
+            break
+        markup.append((cursor, text[cursor:opening]))
+        body_start = text.find(">", opening)
+        if body_start < 0:
+            break
+        closing = lower.find(f"</{tag}", body_start)
+        body_end = len(text) if closing < 0 else closing
+        block = text[body_start + 1:body_end]
+        offset = line_number_of(text, body_start + 1) - 1
+        hits.extend(number + offset for number in scan_webcode(block))
+        cursor = body_end
+    for start, chunk in markup:
+        offset = line_number_of(text, start) - 1
+        hits.extend(number + offset for number in scan_markup_comments(chunk))
+    return hits
+
+
 def check_include_guard(relpath, lines, skip):
     name = relpath.rsplit("/", 1)[-1]
     if name.endswith(".in"):
@@ -508,6 +631,12 @@ def check_file(relpath, raw):
     tokenize_error = None
     if kind == "cpp":
         hits = scan_cpp(text)
+    elif kind == "webcode":
+        hits = scan_webcode(text)
+    elif kind == "svelte":
+        hits = scan_svelte(text)
+    elif kind == "html":
+        hits = scan_markup_comments(text)
     elif kind == "python":
         hits, tokenize_error = scan_python(text)
     elif kind == "cmake":

@@ -1,11 +1,11 @@
 # Project Ambrose by Imjustchico
-# Checks style, forbidden files, commit trailers, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on CI file pushes, and on pull requests, then builds and tests the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by the schedule, a label, or a manual run.
+# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on CI file pushes, and on pull requests, then builds and tests the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by the schedule, a label, or a manual run.
 name: core-build
 
 on:
   push:
     branches: [main]
-    paths: [".github/**", "apps/ci/**", "vcpkg.json"]
+    paths: [".github/**", "apps/ci/**", "apps/designtokens/**", "design/**", "vcpkg.json"]
   pull_request:
     types: [opened, synchronize, reopened, labeled]
   schedule:
@@ -61,6 +61,21 @@ jobs:
       - name: Client driver self-tests
         if: ${{ !cancelled() }}
         run: python apps/clientdriver/tests/test_clientdriver.py
+      - name: Design token self-tests
+        if: ${{ !cancelled() }}
+        run: python apps/designtokens/tests/test_designtokens.py
+      - name: Design tokens
+        if: ${{ !cancelled() }}
+        run: python apps/designtokens/designtokens.py --check
+      - name: Vendored icons
+        if: ${{ !cancelled() }}
+        run: python apps/designtokens/icons.py --check
+      - name: Front-end check self-tests
+        if: ${{ !cancelled() }}
+        run: python apps/ci/tests/test_ci_frontend.py
+      - name: Front-end checks
+        if: ${{ !cancelled() }}
+        run: python apps/ci/ci_frontend_checks.py
       - name: Forbidden files
         if: ${{ !cancelled() }}
         run: python apps/ci/ci_forbidden_files.py

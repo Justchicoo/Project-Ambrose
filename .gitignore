@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Build output, local config, and game data that must never be committed.
+# Build output, local config, the npm tree and caches, and game data that must never be committed.
 build/
 out/
 cmake-build-*/
@@ -26,3 +26,12 @@ __pycache__/
 CLAUDE.local.md
 conf/config.cmake
 conf/env
+
+node_modules/
+dist/
+storybook-static/
+playwright-report/
+test-results/
+coverage/
+*.tsbuildinfo
+.npm-cache/

@@ -18,27 +18,51 @@ Project Ambrose itself is MIT licensed, in LICENSE. It uses the libraries below.
 | Zydis and Zycore | Decoding x86 instructions in the type extractor | MIT | Keep the notice |
 | Unicorn 2 | Running the user's own client program in a sandbox to rebuild its type data | GPL-2.0-or-later | Only `typeextract` links it, and only as a shared library. That one program is therefore distributed under GPL-2.0-or-later; every other program here stays MIT. A build without the tools has no GPL code in it |
 
-## What will ship in the panel and the launcher window
+## What ships in the panel and the launcher window
 
-These are settled in doc/UI-STACK.md and arrive with milestone 17.73. Every one is permissive, and every one is vendored, so a surface loads nothing from anyone else's host.
+Installed with milestone 17.73 at the versions doc/UI-STACK.md settled. Every one is permissive, and every one is vendored, so a surface loads nothing from anyone else's host.
 
-| Library | Used for | Licence |
-|---|---|---|
-| Svelte, Vite and the Svelte plugin | The application shell every surface is built with | MIT |
-| Tailwind CSS | The token engine: the generated theme is the only palette that exists | MIT |
-| Bits UI | Keyboard and screen-reader behaviour behind our own looks | MIT |
-| shadcn-svelte | Starting points copied into the repository once and then owned, never a dependency | MIT |
-| TanStack Table | Tables that sort, filter and page | MIT |
-| virtua | Long lists that stay fast | MIT |
-| uPlot | Every chart and sparkline | MIT |
-| anser | Colouring the log lines a server sends | MIT |
-| partysocket | Reconnecting the live socket | MIT |
-| Valibot | Checking what a form sends before it leaves the page | MIT |
-| svelte-sonner | Toasts | MIT |
-| Lucide icons | The icon set, vendored and subset to what is used | ISC |
-| Cormorant Garamond, Karla and JetBrains Mono | The three typefaces, vendored as variable fonts | OFL-1.1 |
+| Library | Version | Used for | Licence | What it asks |
+|---|---|---|---|---|
+| Svelte | 5.57.0 | The application shell every surface is built with | MIT | Keep the notice |
+| Bits UI | 2.19.2 | Keyboard and screen-reader behaviour behind our own looks | MIT | Keep the notice |
+| TanStack Table core | 9.2.4 | The headless engine under our own table markup | MIT | Keep the notice |
+| TanStack Table, Svelte adapter | 9.2.4 | Binding that engine to runes | MIT | Keep the notice |
+| virtua | 0.51.3 | Long lists that stay fast, including the console | MIT | Keep the notice |
+| uPlot | 1.6.32 | Every chart and sparkline | MIT | Keep the notice |
+| anser | 2.3.5 | Reading the ANSI in a log line into text rather than markup | MIT | Keep the notice |
+| partysocket | 1.3.0 | Reconnecting the live socket | MIT | Keep the notice |
+| Valibot | 1.5.0 | Checking what a form sends before it leaves the page | MIT | Keep the notice |
+| svelte-sonner | 1.2.1 | Toasts | MIT | Keep the notice |
+| Lucide icons | 1.2.134 of the Iconify set | The icon set, vendored into `design/icons` and subset to what is used | ISC | Keep the notice |
+| Cormorant Garamond, Karla and JetBrains Mono | Fontsource 5.3.0 | The three typefaces, vendored as latin variable files | OFL-1.1 | Ship the licence text beside the fonts, which `packages/ui/src/fonts/LICENSE` does, and never sell the fonts on their own. It places nothing on Ambrose's own code |
 
-Tools that never ship inside a build, such as Storybook, Vitest, Playwright, ESLint, Prettier and the vcpkg toolchain, carry their own licences and are listed in the lockfiles rather than here.
+shadcn-svelte is not installed and never will be: it is a scaffold whose source is copied in once per component and owned from then on, under MIT.
+
+## What builds and tests the front end, and never ships
+
+These are development dependencies. None of them is served to an operator or linked into a binary.
+
+| Tool | Version | Licence | Note |
+|---|---|---|---|
+| Vite | 8.3.0 | MIT | |
+| @sveltejs/vite-plugin-svelte | 7.3.0 | MIT | |
+| Tailwind CSS and its Vite plugin | 4.3.3 | MIT | The generated theme is the only palette it can express |
+| TypeScript | 6.0.3 | Apache-2.0 | Pinned to the 6 line, which svelte-check and typescript-eslint accept |
+| svelte-check | 4.7.6 | MIT | |
+| ESLint, typescript-eslint, eslint-plugin-svelte, @eslint/js, globals | 10.10.0, 8.70.0, 3.23.0, 10.0.1, 17.12.0 | MIT | |
+| Prettier and prettier-plugin-svelte | 3.9.8, 3.4.0 | MIT | |
+| Storybook, its Svelte framework and the a11y, vitest and Svelte CSF addons | 10.6.0, 10.6.0, 10.6.0, 10.6.0, 5.1.3 | MIT | Telemetry is off in the configuration |
+| Vitest and @vitest/browser-playwright | 4.1.11 | MIT | Pinned to the 4 line, which the Storybook test addon requires |
+| Playwright and @playwright/test | 1.63.0 | Apache-2.0 | |
+| unplugin-icons | 24.0.0 | MIT | Compiles the vendored icons to inline markup at build time |
+| @iconify-json/lucide | 1.2.134 | ISC | Read once by `apps/designtokens/icons.py` to write the committed SVG files |
+| @fontsource-variable/* | 5.3.0 | OFL-1.1 | Read once to copy the latin variable files into the repository |
+| @types/node | 24.10.3 | MIT | |
+| axe-core | 4.13.0 | MPL-2.0 | File-level copyleft on its own source. It runs only in tests, and a lint rule refuses to import it from application code, so it never enters what the supervisor serves |
+| Lightning CSS | through Vite and Tailwind | MPL-2.0 | The same reasoning: it processes CSS at build time and contributes nothing to the output |
+
+The full transitive set is in `package-lock.json`. Rolldown and Lightning CSS ship a native binary per platform, which is why `apps/ci/ci_npm_cache.py` primes one cache covering every platform the lockfile names.
 
 ## Things this repository does not contain
 

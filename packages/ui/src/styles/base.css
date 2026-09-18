@@ -1,0 +1,148 @@
+/*
+ * Project Ambrose by Imjustchico
+ * The base layer every surface inherits: the page ground, the type, the focus ring no component overrides and the reduced-motion rule.
+ */
+
+@layer base {
+    *,
+    *::before,
+    *::after {
+        box-sizing: border-box;
+        border-width: 0;
+        border-style: solid;
+        border-color: var(--color-edge-quiet);
+    }
+
+    html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+
+    body {
+        margin: 0;
+        background-color: var(--color-surface-page);
+        color: var(--color-fg-body);
+        font-family: var(--font-interface);
+        font-size: var(--text-13);
+        line-height: var(--text-13--line-height);
+        font-synthesis-weight: none;
+        text-rendering: optimizeLegibility;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    p,
+    figure {
+        margin: 0;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+        font: inherit;
+        color: inherit;
+        background: none;
+    }
+
+    :focus-visible {
+        outline: var(--ambrose-size-focus-ring) solid var(--color-focus-ring);
+        outline-offset: 2px;
+    }
+
+    ::selection {
+        background-color: var(--color-action);
+        color: var(--color-on-fill);
+    }
+
+    [data-ambrose-scroll] {
+        scrollbar-color: var(--color-edge-strong) var(--color-surface-sunken);
+        scrollbar-width: thin;
+    }
+}
+
+@layer components {
+    .ambrose-label {
+        font-size: var(--text-11);
+        line-height: var(--text-11--line-height);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--color-fg-faint);
+    }
+
+    .ambrose-mono {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .ambrose-inset {
+        box-shadow: inset 0 calc(var(--ambrose-size-action-inset) * -1) 0 0 var(--color-fill-action-pressed);
+    }
+
+    .ambrose-flip,
+    .ambrose-hover,
+    .ambrose-panel,
+    .ambrose-screen {
+        transition-property: color, background-color, border-color, outline-color, box-shadow, opacity, transform, filter;
+        transition-timing-function: var(--ease-standard);
+    }
+
+    .ambrose-flip {
+        transition-duration: var(--ambrose-duration-flip);
+    }
+
+    .ambrose-hover {
+        transition-duration: var(--ambrose-duration-hover);
+    }
+
+    .ambrose-panel {
+        transition-duration: var(--ambrose-duration-panel);
+    }
+
+    .ambrose-screen {
+        transition-duration: var(--ambrose-duration-screen);
+    }
+
+    .ambrose-live {
+        animation: ambrose-live 1600ms var(--ease-standard) infinite;
+    }
+
+    .ambrose-indeterminate {
+        animation: ambrose-indeterminate 1200ms var(--ease-standard) infinite;
+    }
+}
+
+@keyframes ambrose-live {
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.45;
+    }
+}
+
+@keyframes ambrose-indeterminate {
+    0% {
+        transform: translateX(-100%);
+    }
+
+    100% {
+        transform: translateX(300%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root:not([data-motion="on"]) .ambrose-live,
+    :root:not([data-motion="on"]) .ambrose-indeterminate {
+        animation: none;
+    }
+}
+
+:root[data-motion="off"] .ambrose-live,
+:root[data-motion="off"] .ambrose-indeterminate {
+    animation: none;
+}
