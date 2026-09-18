@@ -1819,15 +1819,15 @@ Added on 2026-09-18 at the maintainer's direction, who asked that every screen l
 
 **Acceptance**
 
-- [ ] Changing one value in `design/tokens.json` and running the generator changes the CSS, the TypeScript, the C++ header and the doc/DESIGN.md table together, and `designtokens.py --check` fails when any generated file is edited by hand
-- [ ] Lowering one text token's lightness until a documented pair falls under its ratio makes the generator refuse, naming the pair and the ratio it reached
+- [x] Changing one value in `design/tokens.json` and running the generator changes the CSS, the TypeScript, the C++ header and the doc/DESIGN.md table together, and `designtokens.py --check` fails when any generated file is edited by hand (verified on 2026-09-18: adding `edge-control` and the three value tokens rewrote packages/ui/src/tokens/tokens.css, tokens.ts, src/common/Design/Tokens.h and the two doc/DESIGN.md tables in one run, and `--check` had reported doc/DESIGN.md stale before it)
+- [x] Lowering one text token's lightness until a documented pair falls under its ratio makes the generator refuse, naming the pair and the ratio it reached (verified: the first light ramp written for the value tokens was refused with `light: semantic.color.value-name (#3869AA) on semantic.color.surface-sunken (#EADFC4) reaches 4.21:1, under the 4.5:1 needed for a value highlighted inside a message, on every surface`, and no file was written)
 - [ ] A C++ test reads the generated header and a component test reads the generated stylesheet, and both fail when one token's value differs from the other's
 - [ ] A component that writes a hex colour, a Tailwind arbitrary value or an inline style carrying a colour fails the checks job, and the allow comment is the only way past it
 - [ ] Every component in `packages/ui` has at least one story, proved by a check that fails when a new component file has none
 - [ ] Every story passes the accessibility gate at WCAG 2.2 AA, and the canary story with a deliberately unlabelled control fails the run
 - [ ] The three criteria the automated gate cannot see each have their own test and each fails when broken: a focused row under sticky chrome, a target under its floor for the pointer in use, and an authentication field that refuses a pasted value
 - [ ] Every collection component ships its loading, empty, zero-results and error stories, proved by a check that fails when one is missing
-- [ ] Lowering an edge token until a control edge falls under 3:1 against any surface it may sit on makes the generator refuse, naming the pair
+- [x] Lowering an edge token until a control edge falls under 3:1 against any surface it may sit on makes the generator refuse, naming the pair (verified: `edge-control` at `#3A4A72` was refused naming both failing pairs, 2.08:1 on sunken and 2.25:1 on chrome, against the 3.0:1 the rule sets)
 - [ ] The same component set passes in Chromium and in WebKit, and a failure in WebKit alone fails the job
 - [ ] With the network unavailable, `npm ci --offline --ignore-scripts` from the primed cache installs and both apps build, on Windows and on Linux
 - [ ] The built output makes no request to any other host, proved by a check that fails on an absolute http or https URL in the bundle

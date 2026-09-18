@@ -32,7 +32,6 @@ The palette runs in three tiers. The raw values are the first tier and nothing o
 | `sunken` | `#0E1527` | Inputs, log areas, anything set into the page |
 | `border` | `#1B2540` | Quiet separators |
 | `border-strong` | `#22304F` | Card and control edges |
-| `edge-control` | `#546AA5` | The boundary of a control that has nothing else to show it exists |
 | `text` | `#F2E8D5` | Body text on the ground |
 | `text-muted` | `#A8B6D4` | Secondary text |
 | `text-faint` | `#8798BC` | Labels, timestamps, hints |
@@ -53,6 +52,13 @@ The palette runs in three tiers. The raw values are the first tier and nothing o
 | `gold-dark` | `#7A5A12` | Gold that can be read on parchment |
 | `gold-darkest` | `#6A4E0F` | The pressed edge of a gold control on parchment |
 | `teal-dark` | `#0F6F63` | Teal that can be read on parchment |
+| `edge-control` | `#546AA5` | A control with nothing else to show it exists |
+| `value-number` | `#72BCFA` | A number with a unit inside a message |
+| `value-number-dark` | `#233E5A` | A number with a unit that can be read on parchment |
+| `value-text` | `#5BA2EC` | Quoted text inside a message |
+| `value-text-dark` | `#2D5075` | Quoted text that can be read on parchment |
+| `value-name` | `#4887DC` | A path or identifier inside a message |
+| `value-name-dark` | `#376390` | A path or identifier that can be read on parchment |
 | `violet-dark` | `#6B2FA0` | Violet that can be read on parchment |
 | `ember-dark` | `#A33A25` | Ember that can be read on parchment |
 
@@ -68,6 +74,10 @@ The names above are the raw values. A component never names one of them: it name
 | `surface-chrome` | `#070B16` | `#FBF5E7` | Title bars, side bars, anything framing the page |
 | `edge-quiet` | `#1B2540` | `#D9CBAB` | Quiet separators |
 | `edge-strong` | `#22304F` | `#C3AE86` | Card and control edges |
+| `edge-control` | `#546AA5` | `#546AA5` | A control boundary when nothing else shows it exists |
+| `value-number` | `#72BCFA` | `#233E5A` | A number with a unit inside a message |
+| `value-text` | `#5BA2EC` | `#2D5075` | Quoted text inside a message |
+| `value-name` | `#4887DC` | `#376390` | A path or identifier inside a message |
 | `fg-body` | `#F2E8D5` | `#1B1608` | Body text |
 | `fg-muted` | `#A8B6D4` | `#4A3F28` | Secondary text |
 | `fg-faint` | `#8798BC` | `#5F5238` | Labels, timestamps, hints |
@@ -182,11 +192,11 @@ A value does not take the level's color. Settled on 2026-09-18: a warning line g
 
 | Token | What it marks | Dark | On ground, panel, sunken, chrome | Light | On parchment, light panel |
 |---|---|---|---|---|---|
-| `value-number` | a number with a unit, such as 184 ms or 11 MiB | `#72BCFA` | 9.28:1, 8.37:1, 8.91:1, 9.63:1 | `#00468D` | 7.77:1, 9.13:1 |
-| `value-text` | text inside quotes | `#5BA2EC` | 7.05:1, 6.37:1, 6.77:1, 7.32:1 | `#1C579D` | 6.06:1, 7.12:1 |
-| `value-name` | a path, an address, a digest or an identifier | `#4887DC` | 5.21:1, 4.70:1, 5.00:1, 5.40:1 | `#3869AA` | 4.66:1, 5.48:1 |
+| `value-number` | a number with a unit, such as 184 ms or 11 MiB | `#72BCFA` | 9.28:1, 8.37:1, 8.91:1, 9.63:1 | `#233E5A` | 9.21:1, 10.82:1 |
+| `value-text` | text inside quotes | `#5BA2EC` | 7.05:1, 6.37:1, 6.77:1, 7.32:1 | `#2D5075` | 6.99:1, 8.21:1 |
+| `value-name` | a path, an address, a digest or an identifier | `#4887DC` | 5.21:1, 4.70:1, 5.00:1, 5.40:1 | `#376390` | 5.25:1, 6.16:1 |
 
-Each entry is two values, as the accents are, because no single value clears 4.5:1 on both the ground and parchment: a color light enough for `#0B1020` is too light for `#F4EAD5`. Every value above clears 4.5:1 on every surface of its own theme. The three are one blue family stepping in lightness, not three hues, because lightness is the one difference every kind of color blindness keeps: the steps stay apart by at least 8.6 CIELAB units in the dark theme and 6.7 in the light one, under normal vision, protanopia, deuteranopia and tritanopia alike, where three hues in the room left by gold, teal, ember and violet would collapse into each other. The light theme's steps are closer because its range is narrower: a value there must stay dark enough to clear 4.5:1 on parchment. Against the four accents the ramp sits 45 or more units away in the dark theme and 37 or more in the light one, measured with normal vision. The honest limit, said out loud: under protanopia and deuteranopia a blue converges with violet, and under tritanopia with teal. That costs nothing here, because a value never carries state meaning, the level word keeps its own column and its own word, and violet marks what a person owns rather than how something is. A bare count with no unit is never a value, and no line marks more than eight runs; without those two rules a line holding twenty numbers is a rainbow, which is the failure this ramp exists to avoid.
+Each entry is two values, as the accents are, because no single value clears 4.5:1 on both the ground and parchment: a color light enough for `#0B1020` is too light for `#F4EAD5`. Every value above clears 4.5:1 on every surface of its own theme. The three are one blue family stepping in lightness, not three hues, because lightness is the one difference every kind of color blindness keeps: the steps stay apart by at least 8.6 CIELAB units in the dark theme and 8.9 in the light one, under normal vision, protanopia, deuteranopia and tritanopia alike, where three hues in the room left by gold, teal, ember and violet would collapse into each other. The light theme's range is narrower, because a value there must stay dark enough to clear 4.5:1 on the darkest parchment, the sunken one at `#EADFC4`, which is what fixes the lightest step: the generator refused the first ramp written here for reaching 4.21:1 against it. Against the four accents the ramp sits 45 or more units away in the dark theme and 37 or more in the light one, measured with normal vision. The honest limit, said out loud: under protanopia and deuteranopia a blue converges with violet, and under tritanopia with teal. That costs nothing here, because a value never carries state meaning, the level word keeps its own column and its own word, and violet marks what a person owns rather than how something is. A bare count with no unit is never a value, and no line marks more than eight runs; without those two rules a line holding twenty numbers is a rainbow, which is the failure this ramp exists to avoid.
 
 ## Live data
 

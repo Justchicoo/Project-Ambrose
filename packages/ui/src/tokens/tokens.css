@@ -24,6 +24,10 @@
     --color-surface-chrome: var(--ambrose-color-surface-chrome);
     --color-edge-quiet: var(--ambrose-color-edge-quiet);
     --color-edge-strong: var(--ambrose-color-edge-strong);
+    --color-edge-control: var(--ambrose-color-edge-control);
+    --color-value-number: var(--ambrose-color-value-number);
+    --color-value-text: var(--ambrose-color-value-text);
+    --color-value-name: var(--ambrose-color-value-name);
     --color-fg-body: var(--ambrose-color-fg-body);
     --color-fg-muted: var(--ambrose-color-fg-muted);
     --color-fg-faint: var(--ambrose-color-fg-faint);
@@ -106,6 +110,10 @@
     --ambrose-color-surface-chrome: #070B16;
     --ambrose-color-edge-quiet: #1B2540;
     --ambrose-color-edge-strong: #22304F;
+    --ambrose-color-edge-control: #546AA5;
+    --ambrose-color-value-number: #72BCFA;
+    --ambrose-color-value-text: #5BA2EC;
+    --ambrose-color-value-name: #4887DC;
     --ambrose-color-fg-body: #F2E8D5;
     --ambrose-color-fg-muted: #A8B6D4;
     --ambrose-color-fg-faint: #8798BC;
@@ -140,6 +148,10 @@
     --ambrose-color-surface-chrome: #FBF5E7;
     --ambrose-color-edge-quiet: #D9CBAB;
     --ambrose-color-edge-strong: #C3AE86;
+    --ambrose-color-edge-control: #546AA5;
+    --ambrose-color-value-number: #233E5A;
+    --ambrose-color-value-text: #2D5075;
+    --ambrose-color-value-name: #376390;
     --ambrose-color-fg-body: #1B1608;
     --ambrose-color-fg-muted: #4A3F28;
     --ambrose-color-fg-faint: #5F5238;
@@ -175,6 +187,10 @@
         --ambrose-color-surface-chrome: #FBF5E7;
         --ambrose-color-edge-quiet: #D9CBAB;
         --ambrose-color-edge-strong: #C3AE86;
+        --ambrose-color-edge-control: #546AA5;
+        --ambrose-color-value-number: #233E5A;
+        --ambrose-color-value-text: #2D5075;
+        --ambrose-color-value-name: #376390;
         --ambrose-color-fg-body: #1B1608;
         --ambrose-color-fg-muted: #4A3F28;
         --ambrose-color-fg-faint: #5F5238;
