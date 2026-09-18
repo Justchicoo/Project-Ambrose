@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * The lifecycle every server app shares: options, config, logging, banner, shutdown signals that a start in progress can poll for, an optional update tick, console commands on their own thread, and a clean exit code.
+ * The lifecycle every server app shares: options, config, logging, banner, shutdown signals that a start in progress can poll for, an optional update tick, console commands on their own thread with their replies on the log's own writer, and a clean exit code.
  */
 
 #ifndef AMBROSE_SERVERAPP_H
 #define AMBROSE_SERVERAPP_H
 
 #include "ConsoleCommandTable.h"
+#include "Duration.h"
 #include "IoContext.h"
 #include "LogCommon.h"
 
@@ -22,6 +23,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 class ConfigMgr;
@@ -52,6 +54,7 @@ public:
 
     int Run(std::vector<std::string> const& arguments);
     void RequestStop(std::string reason = "a stop request");
+    Seconds GetUptime() const;
 
     bool IsReady() const noexcept { return _ready.load(); }
     ConsoleCommandTable& Commands() noexcept { return _commands; }
@@ -62,6 +65,7 @@ protected:
     virtual void OnUpdate(std::chrono::milliseconds diff);
     virtual std::chrono::milliseconds GetUpdateInterval() const;
     virtual void OnStop();
+    virtual void OnStatus(std::vector<std::pair<std::string, std::string>>& fields);
     virtual std::unique_ptr<ConsoleInput> CreateConsoleInput();
 
     ConfigMgr& Config() noexcept { return _config; }
@@ -71,6 +75,8 @@ protected:
 
 private:
     void ScheduleUpdate();
+    void ScheduleStop(Seconds delay);
+    bool CancelScheduledStop();
     void StopNow(std::string const& reason);
     void LogLifecycle(LogLevel level, std::string const& text);
     void FinishShutdown();
@@ -89,6 +95,7 @@ private:
     Ambrose::Asio::IoContext _io;
     std::optional<Ambrose::Asio::IoContext::WorkGuard> _work;
     asio::steady_timer _updateTimer;
+    asio::steady_timer _shutdownTimer;
     std::unique_ptr<Ambrose::Asio::SignalHandler> _signals;
     ConsoleCommandTable _commands;
     std::unique_ptr<ConsoleReader> _console;
@@ -98,6 +105,8 @@ private:
     std::deque<std::string> _commandQueue;
     bool _commandStop = false;
     std::chrono::steady_clock::time_point _lastUpdate;
+    std::chrono::steady_clock::time_point _startedAt;
+    std::atomic<bool> _stopScheduled{ false };
     std::atomic<bool> _ready{ false };
     std::atomic<bool> _stopRequested{ false };
     std::atomic<bool> _stopping{ false };

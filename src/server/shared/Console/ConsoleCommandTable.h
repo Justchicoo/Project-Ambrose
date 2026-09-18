@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Console commands with multi-word names, argument hints, help text and a sensitive flag, matched case-insensitively on whole words and run with quoted-argument splitting.
+ * Console commands with multi-word names, argument hints, help text and a sensitive flag, matched case-insensitively on whole words, completed from a typed prefix and run with quoted-argument splitting.
  */
 
 #ifndef AMBROSE_CONSOLECOMMANDTABLE_H
@@ -40,6 +40,7 @@ public:
     Result Execute(std::string_view line, Reply const& reply) const;
     std::string DescribeForLog(std::string_view line) const;
     std::vector<std::string> DescribeCommands(std::string_view prefix = {}) const;
+    std::vector<std::string> CompleteNames(std::string_view prefix) const;
 
     static std::vector<std::string> Split(std::string_view line);
 

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Renders log records as prefixed text lines with escaped control characters and repaired UTF-8.
+ * Renders log records as prefixed text lines with escaped control characters and repaired UTF-8, recording the byte range each part covers when a caller colors them.
  */
 
 #include "LogMessage.h"
@@ -18,6 +18,21 @@
 
 namespace
 {
+    std::size_t AddSpan(std::vector<LogSpan>* spans, std::size_t start, std::size_t end, LogPart part)
+    {
+        if (spans && end > start)
+            spans->push_back({ start, end - start, part });
+        return end;
+    }
+
+    void ClampSpans(std::vector<LogSpan>& spans, std::size_t first, std::size_t limit)
+    {
+        while (spans.size() > first && spans.back().Offset >= limit)
+            spans.pop_back();
+        if (spans.size() > first && spans.back().Offset + spans.back().Length > limit)
+            spans.back().Length = limit - spans.back().Offset;
+    }
+
     bool IsEscapedByte(unsigned char c) noexcept
     {
         return (c < 0x20 && c != '\t') || c == 0x7F;
@@ -64,29 +79,36 @@ namespace
     }
 }
 
-void LogMessage::AppendPrefix(std::string& out, AppenderFlags flags, bool utc) const
+void LogMessage::AppendPrefix(std::string& out, AppenderFlags flags, bool utc, std::vector<LogSpan>* spans) const
 {
+    std::size_t start = out.size();
     if (HasAppenderFlag(flags, AppenderFlags::PrefixTimestamp))
     {
         out.append(LogTimestamp::FormatPrefix(Time, utc));
         out.push_back(' ');
+        start = AddSpan(spans, start, out.size(), LogPart::Timestamp);
     }
     if (HasAppenderFlag(flags, AppenderFlags::PrefixLevel))
     {
         out.append(Ambrose::Logging::GetLogLevelPaddedName(Level));
         out.push_back(' ');
+        start = AddSpan(spans, start, out.size(), LogPart::Level);
     }
     if (HasAppenderFlag(flags, AppenderFlags::PrefixThread))
+    {
         fmt::format_to(std::back_inserter(out), "T{} ", ThreadId);
+        start = AddSpan(spans, start, out.size(), LogPart::Thread);
+    }
     if (HasAppenderFlag(flags, AppenderFlags::PrefixCategory))
     {
         out.push_back('[');
         AppendSanitized(out, Category);
         out.append("] ");
+        AddSpan(spans, start, out.size(), LogPart::Category);
     }
 }
 
-void LogMessage::AppendLines(std::string& out, AppenderFlags flags, bool utc) const
+void LogMessage::AppendLines(std::string& out, AppenderFlags flags, bool utc, std::vector<LogSpan>* spans) const
 {
     std::string_view text = Text;
     if (!text.empty() && text.back() == '\n')
@@ -103,11 +125,16 @@ void LogMessage::AppendLines(std::string& out, AppenderFlags flags, bool utc) co
             line.remove_suffix(1);
 
         std::size_t const lineStart = out.size();
-        AppendPrefix(out, flags, utc);
+        std::size_t const spanStart = spans ? spans->size() : 0;
+        AppendPrefix(out, flags, utc, spans);
         while (line.empty() && out.size() > lineStart && out.back() == ' ')
             out.pop_back();
+        if (spans)
+            ClampSpans(*spans, spanStart, out.size());
+        std::size_t const textStart = out.size();
         AppendSanitized(out, line);
         out.push_back('\n');
+        AddSpan(spans, textStart, out.size(), LogPart::Text);
 
         if (end == std::string_view::npos)
             break;

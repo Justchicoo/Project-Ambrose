@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests console command matching: multi-word and case-insensitive names, the longest match, usage replies, unknown commands, group listings, quoted arguments, hidden sensitive arguments, and handlers that read the table.
+ * Tests console command matching: multi-word and case-insensitive names, the longest match, usage replies, unknown commands, group listings, quoted arguments, hidden sensitive arguments, name completion, and handlers that read the table.
  */
 
 #include "ConsoleCommandTable.h"
@@ -108,4 +108,18 @@ TEST(ConsoleCommandTableTest, HandlersMayReadAndChangeTheTable)
     EXPECT_EQ(table.Execute("help", transcript.Reply()), ConsoleCommandTable::Result::Ran);
     EXPECT_EQ(transcript.Lines, (std::vector<std::string>{ "help" }));
     EXPECT_EQ(table.Execute("later", transcript.Reply()), ConsoleCommandTable::Result::Ran);
+}
+
+TEST(ConsoleCommandTableTest, CompletionOffersTheNamesAPrefixCouldBecome)
+{
+    ConsoleCommandTable table;
+    auto const nothing = [](std::vector<std::string> const&, ConsoleCommandTable::Reply const&) { return true; };
+    ASSERT_TRUE(table.Register({ "shutdown", "", "", false, nothing }));
+    ASSERT_TRUE(table.Register({ "status", "", "", false, nothing }));
+    ASSERT_TRUE(table.Register({ "Account Create", "", "", false, nothing }));
+
+    EXPECT_EQ(table.CompleteNames(""), (std::vector<std::string>{ "account create", "shutdown", "status" }));
+    EXPECT_EQ(table.CompleteNames("s"), (std::vector<std::string>{ "shutdown", "status" }));
+    EXPECT_EQ(table.CompleteNames("  ACCOUNT C"), (std::vector<std::string>{ "account create" }));
+    EXPECT_EQ(table.CompleteNames("statuses"), std::vector<std::string>());
 }

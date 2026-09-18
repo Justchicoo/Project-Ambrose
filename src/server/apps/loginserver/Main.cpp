@@ -176,6 +176,11 @@ namespace
             return true;
         }
 
+        void OnStatus(std::vector<std::pair<std::string, std::string>>& fields) override
+        {
+            fields.emplace_back("sessions", fmt::format("{}", _sockets ? _sockets->GetConnectionCount() : 0));
+        }
+
         void OnStop() override
         {
             AccountCommands::Unregister(Commands());

@@ -1,10 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Parses durations written as numbers with s, m, h, d or w units, a bare number meaning seconds, rejecting zero, unknown units, missing numbers and overflow.
+ * Parses durations written as numbers with s, m, h, d or w units, a bare number meaning seconds, rejecting zero, unknown units, missing numbers and overflow, and prints one back as days, hours, minutes and seconds.
  */
 
 #include "Duration.h"
 #include "Types.h"
+
+#include <fmt/format.h>
 
 #include <limits>
 
@@ -53,4 +55,24 @@ std::optional<Seconds> Ambrose::ParseDuration(std::string_view text)
     if (total == 0)
         return std::nullopt;
     return Seconds(static_cast<Seconds::rep>(total));
+}
+
+std::string Ambrose::FormatDuration(Seconds duration)
+{
+    int64 remaining = duration.count() > 0 ? static_cast<int64>(duration.count()) : 0;
+    int64 const days = remaining / 86400;
+    remaining %= 86400;
+    int64 const hours = remaining / 3600;
+    remaining %= 3600;
+    int64 const minutes = remaining / 60;
+    int64 const seconds = remaining % 60;
+    std::string text;
+    if (days > 0)
+        fmt::format_to(std::back_inserter(text), "{}d ", days);
+    if (days > 0 || hours > 0)
+        fmt::format_to(std::back_inserter(text), "{}h ", hours);
+    if (days > 0 || hours > 0 || minutes > 0)
+        fmt::format_to(std::back_inserter(text), "{}m ", minutes);
+    fmt::format_to(std::back_inserter(text), "{}s", seconds);
+    return text;
 }

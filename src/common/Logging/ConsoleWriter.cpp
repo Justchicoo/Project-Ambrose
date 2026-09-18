@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Decides when to color console output and writes each line with ANSI sequences or legacy console attributes.
+ * Decides when to color console output and writes each run of text with ANSI sequences or legacy console attributes, resetting before every line break.
  */
 
 #include "ConsoleWriter.h"
@@ -42,6 +42,12 @@ bool ConsoleWriter::UsesColor() const
     return UsesColorLocked();
 }
 
+bool ConsoleWriter::IsTerminal() const
+{
+    std::lock_guard lock(_mutex);
+    return _device && !_restored && _device->IsTerminal();
+}
+
 bool ConsoleWriter::UsesColorLocked() const
 {
     if (_restored || !_device)
@@ -77,43 +83,97 @@ std::string_view ConsoleWriter::GetAnsiSequence(ConsoleColor color) noexcept
 
 void ConsoleWriter::WriteLines(std::string_view lines, ConsoleColor color)
 {
+    ConsoleSegment const segment{ lines, color };
+    WriteLines(std::span<ConsoleSegment const>(&segment, 1));
+}
+
+void ConsoleWriter::WriteLines(std::span<ConsoleSegment const> segments)
+{
     std::lock_guard lock(_mutex);
     if (!_device)
         return;
     if (_before)
         _before(*_device);
-    bool const colored = UsesColorLocked() && color != ConsoleColor::Default;
-    if (!colored)
-        _device->Write(lines);
-    else if (_device->SupportsVirtualTerminal() || !_device->IsTerminal())
-    {
-        std::string_view const sequence = GetAnsiSequence(color);
-        std::string output;
-        output.reserve(lines.size() + 16);
-        std::size_t position = 0;
-        while (position < lines.size())
-        {
-            std::size_t end = lines.find('\n', position);
-            if (end == std::string_view::npos)
-                end = lines.size();
-            output.append(sequence);
-            output.append(lines.substr(position, end - position));
-            output.append("\x1b[0m");
-            if (end < lines.size())
-                output.push_back('\n');
-            position = end + 1;
-        }
-        _device->Write(output);
-    }
-    else
-    {
-        _device->SetLegacyColor(color);
-        _device->Write(lines);
-        _device->ResetLegacyColor();
-    }
+    WriteLocked(segments);
     if (_after)
         _after(*_device);
     _device->Flush();
+}
+
+void ConsoleWriter::WriteInline(std::span<ConsoleSegment const> segments)
+{
+    std::lock_guard lock(_mutex);
+    if (!_device)
+        return;
+    WriteLocked(segments);
+    _device->Flush();
+}
+
+void ConsoleWriter::WriteLocked(std::span<ConsoleSegment const> segments)
+{
+    bool const colored = UsesColorLocked();
+    if (!colored)
+    {
+        for (ConsoleSegment const& segment : segments)
+            _device->Write(segment.Text);
+        return;
+    }
+    if (_device->SupportsVirtualTerminal() || !_device->IsTerminal())
+    {
+        std::size_t size = 16;
+        for (ConsoleSegment const& segment : segments)
+            size += segment.Text.size() + 16;
+        std::string output;
+        output.reserve(size);
+        for (ConsoleSegment const& segment : segments)
+        {
+            std::string_view remaining = segment.Text;
+            while (!remaining.empty())
+            {
+                std::size_t const end = remaining.find('\n');
+                std::string_view const piece = remaining.substr(0, end == std::string_view::npos ? remaining.size() : end);
+                if (!piece.empty() && segment.Color != ConsoleColor::Default)
+                {
+                    output.append(GetAnsiSequence(segment.Color));
+                    output.append(piece);
+                    output.append("\x1b[0m");
+                }
+                else
+                    output.append(piece);
+                if (end == std::string_view::npos)
+                    break;
+                output.push_back('\n');
+                remaining.remove_prefix(end + 1);
+            }
+        }
+        _device->Write(output);
+        return;
+    }
+    ConsoleColor current = ConsoleColor::Default;
+    bool applied = false;
+    for (ConsoleSegment const& segment : segments)
+    {
+        if (segment.Text.empty())
+            continue;
+        if (segment.Color != current)
+        {
+            if (segment.Color == ConsoleColor::Default)
+            {
+                if (applied)
+                    _device->ResetLegacyColor();
+                applied = false;
+            }
+            else
+            {
+                _device->SetLegacyColor(segment.Color);
+                applied = true;
+            }
+            current = segment.Color;
+        }
+        _device->Write(segment.Text);
+    }
+    if (applied)
+        _device->ResetLegacyColor();
 }
 
 void ConsoleWriter::WithLock(std::function<void(ConsoleDevice&)> const& action)

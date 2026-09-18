@@ -24,7 +24,7 @@ dbimport creates and updates the databases `Updates.EnableDatabases` selects, op
 | `Log.Async.Enable` | bool | `0` | `AMBROSE_LOG_ASYNC_ENABLE` | Write log lines on a dedicated thread |
 | `Log.Utc` | bool | `0` | `AMBROSE_LOG_UTC` | Timestamps and file names in UTC |
 | `Console.Colors` | uint8 | `1` | `AMBROSE_CONSOLE_COLORS` | 0 never, 1 when stdout is a terminal, 2 always |
-| `Appender.Console` | appender | `1,3,3,"1 9 3 6 5 8"` | `AMBROSE_APPENDER_CONSOLE` | Colored console output at Info with time and level |
+| `Appender.Console` | appender | `1,3,3,"1 9 3 13 7 7"` | `AMBROSE_APPENDER_CONSOLE` | Colored console output at Info with time and level |
 | `Appender.DBImport` | appender | `2,2,7,DBImport.log,w` | `AMBROSE_APPENDER_DBIMPORT` | DBImport.log in LogsDir, rewritten each run |
 | `Logger.root` | logger | `3,Console DBImport` | `AMBROSE_LOGGER_ROOT` | Everything at Info |
 | `Logger.sql` | logger | `4,Console DBImport` | `AMBROSE_LOGGER_SQL` | Database warnings and worse |

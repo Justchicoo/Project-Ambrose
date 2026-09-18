@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests colors on terminals, plain redirected output, color modes, NO_COLOR and prompt hooks.
+ * Tests colors on terminals, the quiet prefix color, plain redirected output, color modes, NO_COLOR and prompt hooks.
  */
 
 #include "AppenderConsole.h"
@@ -66,7 +66,29 @@ TEST(AppenderConsoleTest, TerminalGetsAnsiColorsPerLevel)
         "\x1b[91mERROR broken\x1b[0m\n"
         "\x1b[33mWARN  careful\x1b[0m\n"
         "\x1b[31mFATAL gone\x1b[0m\n"
-        "\x1b[36mINFO  fine\x1b[0m\n");
+        "\x1b[96mINFO  fine\x1b[0m\n");
+}
+
+TEST(AppenderConsoleTest, TimestampsAndCategoriesTakeThePrefixColor)
+{
+    ColorEnvironment environment;
+    LogTestHarness harness(true, true);
+    harness.ApplyOrFail("Appender.Console = 1,1,7\nLogger.root = 1,Console\n");
+    AMBROSE_LOG(harness.GetLog(), LogLevel::Error, "server", "broken");
+    std::string const output = harness.Device().Output();
+    EXPECT_EQ(output.substr(0, 5), "\x1b[37m") << output;
+    EXPECT_NE(output.find("\x1b[0m\x1b[91mERROR "), std::string::npos) << output;
+    EXPECT_NE(output.find("\x1b[0m\x1b[37m[server] \x1b[0m\x1b[91mbroken\x1b[0m\n"), std::string::npos) << output;
+}
+
+TEST(AppenderConsoleTest, DebugAndTraceCarryNoStateColor)
+{
+    ColorEnvironment environment;
+    LogTestHarness harness(true, true);
+    harness.ApplyOrFail(ConsoleBody);
+    AMBROSE_LOG(harness.GetLog(), LogLevel::Debug, "server", "detail");
+    AMBROSE_LOG(harness.GetLog(), LogLevel::Trace, "server", "step");
+    EXPECT_EQ(harness.Device().Output(), "\x1b[37mDEBUG detail\x1b[0m\n\x1b[37mTRACE step\x1b[0m\n");
 }
 
 TEST(AppenderConsoleTest, MultiLineMessagesColorEveryLine)

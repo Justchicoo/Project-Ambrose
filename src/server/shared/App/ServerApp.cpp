@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, stops gracefully on signals, requests or the shutdown command, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, and runs queued console lines on a command thread that shutdown waits for.
+ * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, stops gracefully on signals, requests or the shutdown command, now or after a delay, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, and runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use.
  */
 
 #include "ServerApp.h"
@@ -9,9 +9,12 @@
 #include "ConfigMgr.h"
 #include "ConsoleInput.h"
 #include "ConsoleReader.h"
+#include "ConsoleWriter.h"
 #include "GitRevision.h"
 #include "Log.h"
 #include "SignalHandler.h"
+#include "StringUtil.h"
+#include "TerminalConsoleInput.h"
 
 #include <asio/post.hpp>
 
@@ -23,7 +26,7 @@
 #include <ostream>
 
 ServerApp::ServerApp(ServerAppInfo info, ConfigMgr& config, Log& log, std::ostream& out, std::ostream& err)
-    : _info(std::move(info)), _category("server." + _info.Name), _config(config), _log(log), _out(out), _err(err), _updateTimer(_io.GetImpl())
+    : _info(std::move(info)), _category("server." + _info.Name), _config(config), _log(log), _out(out), _err(err), _updateTimer(_io.GetImpl()), _shutdownTimer(_io.GetImpl())
 {
     _commands.Register({ "help", "[command]", "list commands, or the commands starting with the given words", false,
         [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
@@ -38,13 +41,42 @@ ServerApp::ServerApp(ServerAppInfo info, ConfigMgr& config, Log& log, std::ostre
                 reply(line);
             return true;
         } });
-    _commands.Register({ "shutdown", "", "stop the server gracefully", false,
+    _commands.Register({ "status", "", "show the revision, how long this server has run and what it is doing", false,
         [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
         {
             if (!arguments.empty())
                 return false;
-            reply(fmt::format("{} is shutting down", _info.Name));
-            RequestStop("the shutdown command");
+            std::vector<std::pair<std::string, std::string>> fields;
+            fields.emplace_back("server", _info.Name);
+            fields.emplace_back("revision", GitRevision::GetFullVersion());
+            fields.emplace_back("uptime", Ambrose::FormatDuration(GetUptime()));
+            fields.emplace_back("state", _stopping.load() ? "shutting down" : (_ready.load() ? "ready" : "starting"));
+            OnStatus(fields);
+            for (auto const& [name, value] : fields)
+                reply(fmt::format("{:<10}{}", name + ':', value));
+            return true;
+        } });
+    _commands.Register({ "shutdown", "[seconds|cancel]", "stop the server gracefully, now or after a delay", false,
+        [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
+        {
+            if (arguments.size() > 1)
+                return false;
+            if (arguments.empty())
+            {
+                reply(fmt::format("{} is shutting down", _info.Name));
+                RequestStop("the shutdown command");
+                return true;
+            }
+            if (Ambrose::EqualsIgnoreCase(arguments.front(), "cancel"))
+            {
+                reply(CancelScheduledStop() ? "The pending shutdown is cancelled" : "No shutdown is pending");
+                return true;
+            }
+            std::optional<Seconds> const delay = Ambrose::ParseDuration(arguments.front());
+            if (!delay)
+                return false;
+            ScheduleStop(*delay);
+            reply(fmt::format("{} stops in {}", _info.Name, Ambrose::FormatDuration(*delay)));
             return true;
         } });
 }
@@ -72,14 +104,30 @@ void ServerApp::OnStop()
 {
 }
 
+void ServerApp::OnStatus(std::vector<std::pair<std::string, std::string>>&)
+{
+}
+
 std::unique_ptr<ConsoleInput> ServerApp::CreateConsoleInput()
 {
+    ConsoleWriter& console = _log.GetConsole();
+    if (TerminalConsoleInput::IsAvailable(console))
+        return std::make_unique<TerminalConsoleInput>(console, "Ambrose> ", [this](std::string_view prefix) { return _commands.CompleteNames(prefix); });
     return std::make_unique<StandardConsoleInput>();
+}
+
+Seconds ServerApp::GetUptime() const
+{
+    if (_startedAt.time_since_epoch().count() == 0)
+        return Seconds(0);
+    return std::chrono::duration_cast<Seconds>(std::chrono::steady_clock::now() - _startedAt);
 }
 
 int ServerApp::Run(std::vector<std::string> const& arguments)
 {
     _stopping = false;
+    _stopScheduled = false;
+    _startedAt = std::chrono::steady_clock::now();
     AppOptions const options = AppOptions::Parse(arguments, _info.DefaultConfigFile);
     if (!options.Error.empty())
     {
@@ -278,8 +326,9 @@ void ServerApp::RunConsoleLine(std::string const& line)
         return;
     auto const reply = [this](std::string_view text)
     {
-        _out << text << '\n';
-        _out.flush();
+        std::string answer(text);
+        answer.push_back('\n');
+        _log.GetConsole().WriteLines(answer, ConsoleColor::Default);
     };
     if (_stopping)
     {
@@ -324,12 +373,40 @@ void ServerApp::ScheduleUpdate()
     });
 }
 
+void ServerApp::ScheduleStop(Seconds delay)
+{
+    _stopScheduled = true;
+    asio::post(_io.GetExecutor(), [this, delay]
+    {
+        if (!_stopScheduled.load())
+            return;
+        LogLifecycle(LogLevel::Info, fmt::format("{} stops in {}", _info.Name, Ambrose::FormatDuration(delay)));
+        _shutdownTimer.expires_after(delay);
+        _shutdownTimer.async_wait([this](std::error_code const& error)
+        {
+            if (error || !_stopScheduled.exchange(false))
+                return;
+            StopNow("the shutdown command");
+        });
+    });
+}
+
+bool ServerApp::CancelScheduledStop()
+{
+    if (!_stopScheduled.exchange(false))
+        return false;
+    asio::post(_io.GetExecutor(), [this] { _shutdownTimer.cancel(); });
+    return true;
+}
+
 void ServerApp::StopNow(std::string const& reason)
 {
     if (_stopping || !_work)
         return;
     _stopping = true;
+    _stopScheduled = false;
     LogLifecycle(LogLevel::Info, fmt::format("{} shutting down after {}", _info.Name, reason));
+    _shutdownTimer.cancel();
     _updateTimer.cancel();
     if (_signals)
         _signals->Cancel();

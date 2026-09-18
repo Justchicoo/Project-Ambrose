@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Registers commands by their normalized words, picks the longest whole-word match for a line, runs its handler outside the lock, lists a command group when only its prefix is typed, and hides sensitive arguments from logs.
+ * Registers commands by their normalized words, picks the longest whole-word match for a line, runs its handler outside the lock, lists a command group when only its prefix is typed, offers the names a typed prefix could still become, and hides sensitive arguments from logs.
  */
 
 #include "ConsoleCommandTable.h"
@@ -149,6 +149,17 @@ std::string ConsoleCommandTable::DescribeForLog(std::string_view line) const
     if (entry->Definition.Sensitive)
         return words.size() > entry->Words.size() ? entry->Definition.Name + " (arguments hidden)" : entry->Definition.Name;
     return JoinWords(words, words.size());
+}
+
+std::vector<std::string> ConsoleCommandTable::CompleteNames(std::string_view prefix) const
+{
+    std::string const typed = Ambrose::ToLower(Ambrose::TrimLeft(prefix));
+    std::vector<std::string> names;
+    std::lock_guard const lock(_mutex);
+    for (Entry const& entry : _entries)
+        if (entry.Definition.Name.size() >= typed.size() && std::string_view(entry.Definition.Name).substr(0, typed.size()) == typed)
+            names.push_back(entry.Definition.Name);
+    return names;
 }
 
 std::vector<std::string> ConsoleCommandTable::DescribeCommands(std::string_view prefix) const

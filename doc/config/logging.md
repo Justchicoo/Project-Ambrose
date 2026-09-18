@@ -51,7 +51,7 @@ The prefix order is always time, level, thread, category. Flags 7 give `2026-09-
 
 ### Console
 
-Colors are six codes separated by spaces, in the order fatal, error, warn, info, debug, trace. The default is `1 9 3 6 5 8`.
+Colors are six codes separated by spaces, in the order fatal, error, warn, info, debug, trace. The default is `1 9 3 13 7 7`, which is doc/DESIGN.md's terminal line in the sixteen terminal colors: red for errors, gold for warnings, teal for a healthy line and grey for everything that is only detail. The timestamp, thread and category of a line are always grey, whatever the level's color is, so the words stand out from what marks them.
 
 | Code | Color | Code | Color |
 |---|---|---|---|
@@ -64,7 +64,9 @@ Colors are six codes separated by spaces, in the order fatal, error, warn, info,
 | 6 | cyan | 14 | white |
 | 7 | grey | 15 | terminal default |
 
-`Console.Colors` chooses when colors are used: 0 never, 1 only when standard output is a terminal, 2 always. With 1, a non-empty `NO_COLOR` environment variable turns colors off and `CLICOLOR_FORCE=1` turns them on. Redirected output such as `gameserver > out.log` gets plain text. Windows consoles get virtual terminal sequences, falling back to console text attributes on old consoles, and the console mode is restored at shutdown.
+`Console.Colors` chooses when colors are used: 0 never, 1 only when standard output is a terminal, 2 always. With 1, a non-empty `NO_COLOR` environment variable turns colors off and `CLICOLOR_FORCE=1` turns them on. A change applies from the next line written, so a configuration reload needs no restart. Redirected output such as `gameserver > out.log` gets plain text, with no escape sequence of any kind. Windows consoles get virtual terminal sequences, enabled as the process starts and falling back to console text attributes on old consoles, and the console mode is restored at shutdown.
+
+Every console line, whether it comes from a logger or from a command's answer, is written through one writer, so the two never mix inside a line. When the app reads commands from a terminal, that writer also erases and redraws the `Ambrose> ` prompt around each line, so a line arriving while a command is half typed leaves the typed text on screen.
 
 ### File
 

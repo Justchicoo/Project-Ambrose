@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Serialized colored line output with before and after hooks so a console prompt can redraw around log lines.
+ * Serialized colored output, written as runs of differently colored text, with before and after hooks so a console prompt can redraw around log lines.
  */
 
 #ifndef AMBROSE_CONSOLEWRITER_H
@@ -10,6 +10,13 @@
 
 #include <functional>
 #include <mutex>
+#include <span>
+
+struct ConsoleSegment
+{
+    std::string_view Text;
+    ConsoleColor Color = ConsoleColor::Default;
+};
 
 class ConsoleWriter
 {
@@ -26,8 +33,11 @@ public:
     void SetColorMode(ConsoleColorMode mode);
     ConsoleColorMode GetColorMode() const;
     bool UsesColor() const;
+    bool IsTerminal() const;
     void SetLineHooks(LineHook before, LineHook after);
     void WriteLines(std::string_view lines, ConsoleColor color);
+    void WriteLines(std::span<ConsoleSegment const> segments);
+    void WriteInline(std::span<ConsoleSegment const> segments);
     void WithLock(std::function<void(ConsoleDevice&)> const& action);
     void Flush();
     void Restore();
@@ -36,6 +46,7 @@ public:
 
 private:
     bool UsesColorLocked() const;
+    void WriteLocked(std::span<ConsoleSegment const> segments);
 
     mutable std::recursive_mutex _mutex;
     std::unique_ptr<ConsoleDevice> _device;

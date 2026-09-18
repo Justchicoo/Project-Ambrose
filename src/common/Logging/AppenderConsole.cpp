@@ -80,7 +80,20 @@ void AppenderConsole::WriteMessage(LogMessage const& message)
 {
     std::string lines;
     lines.reserve(message.Text.size() + 64);
-    message.AppendLines(lines, GetFlags(), _utc);
+    std::vector<LogSpan> spans;
+    message.AppendLines(lines, GetFlags(), _utc, &spans);
     std::size_t const index = static_cast<std::size_t>(message.Level);
-    _console.WriteLines(lines, index < _colors.size() ? _colors[index] : ConsoleColor::Default);
+    ConsoleColor const level = index < _colors.size() ? _colors[index] : ConsoleColor::Default;
+    std::vector<ConsoleSegment> segments;
+    segments.reserve(spans.size());
+    for (LogSpan const& span : spans)
+    {
+        ConsoleColor const color = span.Part == LogPart::Timestamp || span.Part == LogPart::Thread || span.Part == LogPart::Category ? PrefixColor : level;
+        std::string_view const text(lines.data() + span.Offset, span.Length);
+        if (!segments.empty() && segments.back().Color == color && segments.back().Text.data() + segments.back().Text.size() == text.data())
+            segments.back().Text = std::string_view(segments.back().Text.data(), segments.back().Text.size() + text.size());
+        else
+            segments.push_back({ text, color });
+    }
+    _console.WriteLines(segments);
 }

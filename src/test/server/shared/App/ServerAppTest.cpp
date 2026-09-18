@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the shared app lifecycle in process: options, version, missing or broken config, ready and stop logging, --check, console commands and input, live update intervals, repeated runs, shutdown on signals, and a signal polled during start ending the run cleanly without reporting ready.
+ * Tests the shared app lifecycle in process: options, version, missing or broken config, ready and stop logging, --check, console commands and input with their replies on the log's writer, status and delayed shutdowns, live update intervals, repeated runs, shutdown on signals, and a signal polled during start ending the run cleanly without reporting ready.
  */
 
 #include "AppOptions.h"
@@ -259,11 +259,12 @@ TEST_F(ServerAppTest, ConsoleLinesRunCommandsUntilShutdown)
     EXPECT_EQ(exitCode, EXIT_SUCCESS);
     EXPECT_GE(interrupts.load(), 1);
 
-    std::string const out = _out.str();
+    std::string const out = _harness.Device().Output();
+    EXPECT_TRUE(_out.str().empty()) << _out.str();
     EXPECT_NE(out.find("help [command] - list commands, or the commands starting with the given words\n"), std::string::npos) << out;
-    EXPECT_NE(out.find("shutdown - stop the server gracefully\n"), std::string::npos) << out;
+    EXPECT_NE(out.find("shutdown [seconds|cancel] - stop the server gracefully, now or after a delay\n"), std::string::npos) << out;
     EXPECT_NE(out.find("Unknown command 'bogus'. Type 'help' to list commands.\n"), std::string::npos) << out;
-    EXPECT_NE(out.find("Usage: shutdown\n"), std::string::npos) << out;
+    EXPECT_NE(out.find("Usage: shutdown [seconds|cancel]\n"), std::string::npos) << out;
     EXPECT_NE(out.find("testserver is shutting down\n"), std::string::npos) << out;
 
     std::string const log = _harness.Device().Output();
@@ -300,6 +301,30 @@ TEST_F(ServerAppTest, ClosedConsoleKeepsRunningAndStopInterruptsAWaitingReader)
     second.join();
     EXPECT_LT(std::chrono::steady_clock::now() - stopAt, std::chrono::seconds(5));
     EXPECT_EQ(waitingInterrupts.load(), 1);
+}
+
+TEST_F(ServerAppTest, StatusAndADelayedShutdownAnswerOnTheConsole)
+{
+    std::filesystem::path const file = WriteConfig();
+    TickApp app({ "testserver", "testserver.conf" }, _config, _harness.GetLog(), _out, _err);
+    std::atomic<int> interrupts{ 0 };
+    app.ConsoleFactory = [&interrupts]
+    {
+        return std::make_unique<ScriptedConsoleInput>(std::vector<std::string>{ "status", "shutdown 3600", "shutdown cancel", "shutdown never", "shutdown" }, false, interrupts);
+    };
+    std::thread runner([&] { app.Run({ "testserver", "-c", ConfigMgr::PathToUtf8(file) }); });
+    ScopeExit const joinOnExit([&] { if (runner.joinable()) { app.RequestStop(); runner.join(); } });
+    ASSERT_TRUE(WaitFor([&] { return app.Stopped.load(); }));
+    runner.join();
+
+    std::string const out = _harness.Device().Output();
+    EXPECT_NE(out.find("server:   testserver\n"), std::string::npos) << out;
+    EXPECT_NE(out.find("revision: " + GitRevision::GetFullVersion() + "\n"), std::string::npos) << out;
+    EXPECT_NE(out.find("uptime:   "), std::string::npos) << out;
+    EXPECT_NE(out.find("state:    ready\n"), std::string::npos) << out;
+    EXPECT_NE(out.find("testserver stops in 1h 0m 0s\n"), std::string::npos) << out;
+    EXPECT_NE(out.find("The pending shutdown is cancelled\n"), std::string::npos) << out;
+    EXPECT_NE(out.find("Usage: shutdown [seconds|cancel]\n"), std::string::npos) << out;
 }
 
 TEST_F(ServerAppTest, ConsoleEnableZeroStartsNoReader)

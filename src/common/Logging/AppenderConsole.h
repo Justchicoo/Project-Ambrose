@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Console appender type 1 that renders per-level colored lines through ConsoleWriter.
+ * Console appender type 1 that renders per-level colored lines through ConsoleWriter, with timestamps, thread ids and categories in the quiet prefix color.
  */
 
 #ifndef AMBROSE_APPENDERCONSOLE_H
@@ -17,7 +17,8 @@ class AppenderConsole : public Appender
 public:
     using ColorTable = std::array<ConsoleColor, 7>;
 
-    static constexpr ColorTable DefaultColors{ ConsoleColor::Default, ConsoleColor::Yellow, ConsoleColor::Magenta, ConsoleColor::Cyan, ConsoleColor::Brown, ConsoleColor::LightRed, ConsoleColor::Red };
+    static constexpr ColorTable DefaultColors{ ConsoleColor::Default, ConsoleColor::Grey, ConsoleColor::Grey, ConsoleColor::LightCyan, ConsoleColor::Brown, ConsoleColor::LightRed, ConsoleColor::Red };
+    static constexpr ConsoleColor PrefixColor = ConsoleColor::Grey;
     static constexpr std::size_t MaxFields = 1;
 
     AppenderConsole(AppenderDefinition const& definition, ColorTable colors, ConsoleWriter& console, bool utc);
