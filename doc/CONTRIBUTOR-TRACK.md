@@ -6,6 +6,8 @@ The phases in doc/ROADMAP.md are built in order by the maintainer's own agents, 
 
 So everything from outside lands here instead. This track holds work that helps the project finish sooner and cannot collide with a milestone: it adds files in folders no milestone builds in, it needs no change to a phase file, and it can be reviewed on its own.
 
+Ask in the Discord before you start if anything here is unclear: https://discord.gg/Dx6ACDUj6N. It is also where a finding gets discussed before it is written up.
+
 Read this document first, then contrib/findings/README.md and CONTRIBUTING.md. Working with an AI assistant is expected here: contrib/AI-START-HERE.md is a prompt to paste into yours, and it carries what that assistant needs to know about this repository before it writes anything.
 
 ## The rule that makes it safe

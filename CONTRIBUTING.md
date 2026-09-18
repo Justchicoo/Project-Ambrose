@@ -3,6 +3,8 @@
 
 Project Ambrose is an AI-driven project. Contributions written with AI tools are expected, not just allowed.
 
+Questions, half-formed ideas and anything you are unsure about belong in the Discord: https://discord.gg/Dx6ACDUj6N. Nothing there needs to be polished first.
+
 ## Where your change goes
 
 The phases in doc/ROADMAP.md are built in order by the maintainer's own agents, one milestone at a time, so nobody else works from them: two people on the same milestone lose track of each other, and half a milestone cannot be reviewed against its own acceptance checks.
