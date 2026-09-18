@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The optional admin API listener every operations feature builds on: it binds only where the remote-access rule allows, holds the route table, the bearer token and the failure limiter, serves GET /api/health, and takes the WebSocket routes later milestones register, before or after it opens.
+ * The optional admin API listener every operations feature builds on: it binds only where the remote-access rule allows, keeps a generated token in the data folder or, where the machine names none, beside the config file, holds the route table, the bearer token and the failure limiter, answers the same 401 on every path and every method without it, serves GET /api/health, and takes the WebSocket routes later milestones register, before or after it opens.
  */
 
 #ifndef AMBROSE_ADMINSERVER_H
@@ -50,7 +50,7 @@ struct AdminSocketRoute
 class AdminServer
 {
 public:
-    AdminServer(Log& log, std::string appName, std::filesystem::path dataFolder);
+    AdminServer(Log& log, std::string appName, std::filesystem::path dataFolder, std::filesystem::path configFolder = {});
     ~AdminServer();
 
     AdminServer(AdminServer const&) = delete;
@@ -79,6 +79,7 @@ private:
     Log& _log;
     std::string _appName;
     std::filesystem::path _dataFolder;
+    std::filesystem::path _configFolder;
     AdminAuth _auth;
     AdminRouter _router;
     std::function<AdminHealth()> _health;

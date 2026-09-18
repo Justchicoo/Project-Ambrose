@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the admin API listener on a loopback port the operating system picks: health needs the token, wrong tokens are rate limited, every path answers the same way without one, a reload rotates the token without a restart and keeps the old listener when the new port is taken, an unsafe remote bind is refused, WebSocket routes registered before or after the listener opens take the same token and carry frames both ways, and an app whose admin binding is unsafe exits with a failure.
+ * Tests the admin API listener on a loopback port the operating system picks: health needs the token, wrong tokens are rate limited while the right one still answers, every path answers the same way without one whatever method it carries, whatever upgrade it claims and wherever it falls on a kept-alive connection, TLS files that name a certificate nothing serves yet are warned about, a reload rotates the token without a restart and keeps the old listener when the new port is taken, an unsafe remote bind is refused, WebSocket routes registered before or after the listener opens take the same token and carry frames both ways, a machine with no data folder keeps its generated token beside the config file, an app reloads the listener from its own config, and an app whose admin binding is unsafe exits with a failure.
  */
 
 #include "AdminServer.h"
@@ -148,6 +148,88 @@ namespace
     {
         return Send(port, UpgradeRequest(path, token));
     }
+
+    class Conversation
+    {
+    public:
+        ~Conversation()
+        {
+            std::error_code code;
+            _socket.close(code);
+        }
+
+        bool Open(uint16 port)
+        {
+            std::error_code code;
+            _socket.connect(asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), port), code);
+            return !code;
+        }
+
+        HttpReply Ask(std::string const& request)
+        {
+            HttpReply reply;
+            std::error_code code;
+            asio::write(_socket, asio::buffer(request), code);
+            if (code)
+                return reply;
+
+            std::size_t headEnd = _buffer.find("\r\n\r\n");
+            std::size_t expected = 0;
+            for (;;)
+            {
+                if (headEnd != std::string::npos)
+                {
+                    expected = ContentLength(_buffer.substr(0, headEnd + 4)).value_or(0);
+                    if (_buffer.size() >= headEnd + 4 + expected)
+                        break;
+                }
+                if (!Fill())
+                    return reply;
+                headEnd = _buffer.find("\r\n\r\n");
+            }
+
+            reply.Head = _buffer.substr(0, headEnd);
+            reply.Body = _buffer.substr(headEnd + 4, expected);
+            _buffer.erase(0, headEnd + 4 + expected);
+            std::size_t const space = reply.Head.find(' ');
+            if (space != std::string::npos)
+                reply.Status = std::atoi(reply.Head.c_str() + space + 1);
+            return reply;
+        }
+
+    private:
+        bool Fill()
+        {
+            std::array<char, 2048> chunk{};
+            std::optional<std::error_code> result;
+            std::size_t read = 0;
+            asio::steady_timer timer(_context);
+            _socket.async_read_some(asio::buffer(chunk), [&](std::error_code code, std::size_t size)
+            {
+                result = code;
+                read = size;
+                timer.cancel();
+            });
+            timer.expires_after(std::chrono::seconds(10));
+            timer.async_wait([&](std::error_code code)
+            {
+                if (code == asio::error::operation_aborted)
+                    return;
+                std::error_code ignored;
+                _socket.cancel(ignored);
+            });
+            _context.restart();
+            _context.run();
+            if (!result || *result)
+                return false;
+            _buffer.append(chunk.data(), read);
+            return read != 0;
+        }
+
+        asio::io_context _context;
+        asio::ip::tcp::socket _socket{ _context };
+        std::string _buffer;
+    };
 
     class SocketClient
     {
@@ -353,7 +435,8 @@ TEST_F(AdminServerTest, RateLimitsWrongTokens)
         if (Get(server.GetPort(), "/api/health", "wrongwrongwrongwrong").Status == 429)
             ++limited;
     EXPECT_EQ(limited, 10);
-    EXPECT_EQ(Get(server.GetPort(), "/api/health", Token).Status, 429);
+    EXPECT_EQ(Get(server.GetPort(), "/api/health", Token).Status, 200);
+    EXPECT_EQ(Get(server.GetPort(), "/api/health", "wrongwrongwrongwrong").Status, 429);
 }
 
 TEST_F(AdminServerTest, RotatesTheTokenOnReloadWithoutRestarting)
@@ -715,4 +798,143 @@ TEST_F(AdminServerTest, StartsBeyondThisMachineWithThePlainHttpOptIn)
     for (std::string const& line : _harness.Store().Texts("Capture"))
         warned = warned || line.find("Admin.AllowPlainHttpRemote") != std::string::npos;
     EXPECT_TRUE(warned);
+}
+
+TEST_F(AdminServerTest, AnswersEveryPathTheSameWayWhenARequestClaimsAnUpgrade)
+{
+    AdminServer server = Make();
+    server.SetHealthSource([] { return AdminHealth{ "testserver", "", "rev", 0, "running" }; });
+    AdminSocketRoute route;
+    route.Path = "/api/socket";
+    server.AddSocket(route);
+
+    std::string error;
+    ASSERT_TRUE(server.Start(Loopback(), error)) << error;
+    uint16 const port = server.GetPort();
+
+    std::vector<std::string> const paths{ "/api/health", "/api/socket", "/api/nothing", "/static/notes.txt", "/" };
+    for (std::string const& path : paths)
+    {
+        HttpReply const options = Send(port, "OPTIONS " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nUpgrade: websocket\r\n\r\n");
+        EXPECT_EQ(options.Status, 401) << path << " " << options.Head;
+        EXPECT_EQ(options.Head.find("Allow:"), std::string::npos) << path << " " << options.Head;
+
+        HttpReply const http2 = Send(port, "GET " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close, Upgrade\r\nUpgrade: h2c\r\n\r\n");
+        EXPECT_EQ(http2.Status, 401) << path << " " << http2.Head;
+    }
+}
+
+TEST_F(AdminServerTest, AnswersEveryRequestOnAKeptAliveConnectionTheSameWay)
+{
+    AdminServer server = Make();
+    server.SetHealthSource([] { return AdminHealth{ "testserver", "", "rev", 0, "running" }; });
+    std::string error;
+    ASSERT_TRUE(server.Start(Loopback(), error)) << error;
+
+    Conversation client;
+    ASSERT_TRUE(client.Open(server.GetPort()));
+    HttpReply const first = client.Ask("GET /api/health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+    EXPECT_EQ(first.Status, 401) << first.Head;
+    HttpReply const second = client.Ask("OPTIONS /api/health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+    EXPECT_EQ(second.Status, 401) << second.Head;
+    EXPECT_EQ(second.Head.find("Allow:"), std::string::npos) << second.Head;
+    EXPECT_EQ(Get(server.GetPort(), "/api/health", Token).Status, 200);
+}
+
+TEST_F(AdminServerTest, KeepsNoSharedFailureBudgetForRequestsCrowAnswersItself)
+{
+    AdminServer server = Make();
+    server.SetHealthSource([] { return AdminHealth{ "testserver", "", "rev", 0, "running" }; });
+    std::string error;
+    ASSERT_TRUE(server.Start(Loopback(), error)) << error;
+    uint16 const port = server.GetPort();
+
+    for (int attempt = 0; attempt < 20; ++attempt)
+        EXPECT_EQ(Ask(port, "OPTIONS", "/api/health", "wrongwrongwrongwrong").Status, 401) << attempt;
+    EXPECT_EQ(Ask(port, "OPTIONS", "/api/health", Token).Status, 401);
+    EXPECT_EQ(Get(port, "/api/health", Token).Status, 200);
+}
+
+TEST_F(AdminServerTest, WarnsThatTlsFilesAreNotServedYetOnALoopbackBind)
+{
+    _harness.ApplyOrFail("Appender.Capture = 200,1,0\nLogger.root = 1,Capture\n");
+    AdminServer server = Make();
+    server.SetHealthSource([] { return AdminHealth{ "testserver", "", "rev", 0, "running" }; });
+    AdminSettings settings = Loopback();
+    settings.CertificateFile = "admin.crt";
+    settings.PrivateKeyFile = "admin.key";
+
+    std::string error;
+    ASSERT_TRUE(server.Start(settings, error)) << error;
+    EXPECT_EQ(Get(server.GetPort(), "/api/health", Token).Status, 200);
+
+    std::vector<std::string> const lines = _harness.Store().Texts("Capture");
+    std::size_t listening = lines.size();
+    std::size_t warned = lines.size();
+    for (std::size_t index = 0; index < lines.size(); ++index)
+    {
+        if (lines[index].find("is listening on") != std::string::npos)
+            listening = index;
+        if (lines[index].find("Admin.CertificateFile") != std::string::npos)
+            warned = index;
+    }
+    ASSERT_LT(listening, lines.size());
+    ASSERT_LT(warned, lines.size());
+    EXPECT_LT(listening, warned);
+}
+
+TEST_F(AdminServerTest, KeepsAGeneratedTokenBesideTheConfigWithNoDataFolder)
+{
+    AdminServer server(_harness.GetLog(), "testserver", std::filesystem::path(), _directory.Path());
+    server.SetHealthSource([] { return AdminHealth{ "testserver", "", "rev", 0, "running" }; });
+    AdminSettings settings = Loopback();
+    settings.Token.clear();
+
+    std::string error;
+    ASSERT_TRUE(server.Start(settings, error)) << error;
+    EXPECT_EQ(server.GetToken().size(), 64u);
+    EXPECT_TRUE(std::filesystem::is_regular_file(_directory.Path() / "admin" / "testserver.token"));
+    EXPECT_EQ(Get(server.GetPort(), "/api/health", server.GetToken()).Status, 200);
+}
+
+TEST_F(AdminServerTest, AnAppReloadsItsAdminApiFromItsOwnConfig)
+{
+    std::string const base = "LogsDir = logs\nAppender.Console = 1,3,0\nLogger.root = 3,Console\nConsole.Enable = 0\n"
+        "Admin.Enable = 1\nAdmin.BindIP = 127.0.0.1\n";
+    std::filesystem::path const file = _directory.Write("testserver.conf", base + "Admin.Port = 0\nAdmin.Token = 0123456789abcdef0123456789abcdef\n");
+    ConfigMgr config([](std::string const&) { return std::optional<std::string>(); });
+    std::ostringstream out;
+    std::ostringstream err;
+    ServerApp app({ "testserver", "testserver.conf", 0 }, config, _harness.GetLog(), out, err);
+
+    int exitCode = -1;
+    std::thread runner([&] { exitCode = app.Run({ "testserver", "--config", ConfigMgr::PathToUtf8(file) }); });
+
+    auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (!app.IsReady() && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    ASSERT_TRUE(app.IsReady());
+    ASSERT_NE(app.GetAdminApi(), nullptr);
+    uint16 const port = app.GetAdminApi()->GetPort();
+    ASSERT_NE(port, 0);
+    ASSERT_EQ(Get(port, "/api/health", Token).Status, 200);
+
+    _directory.Write("testserver.conf", base + "Admin.Port = 0\nAdmin.Token = fedcba9876543210fedcba9876543210\n");
+    ASSERT_TRUE(config.Reload().Succeeded());
+    ASSERT_TRUE(app.ReloadAdminApi());
+    EXPECT_EQ(app.GetAdminApi()->GetPort(), port);
+    EXPECT_EQ(Get(port, "/api/health", Token).Status, 401);
+    EXPECT_EQ(Get(port, "/api/health", OtherToken).Status, 200);
+
+    _directory.Write("testserver.conf", base + "Admin.Token = 0123456789abcdef0123456789abcdef\n");
+    ASSERT_TRUE(config.Reload().Succeeded());
+    ASSERT_TRUE(app.ReloadAdminApi());
+    EXPECT_EQ(app.GetAdminApi()->GetPort(), port);
+    EXPECT_EQ(Get(port, "/api/health", OtherToken).Status, 401);
+    EXPECT_EQ(Get(port, "/api/health", Token).Status, 200);
+
+    app.RequestStop();
+    runner.join();
+    EXPECT_EQ(exitCode, EXIT_SUCCESS);
+    EXPECT_EQ(app.GetAdminApi(), nullptr);
 }

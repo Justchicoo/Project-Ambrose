@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the Admin options from config, clamping out-of-range values and reporting each problem, and judges a bind address against the remote-access rule: anything but loopback needs TLS, which this build does not serve yet, or the plain-HTTP opt-in with no TLS files set.
+ * Reads the Admin options from config, clamping out-of-range values and reporting each problem, judges a bind address against the remote-access rule, where anything but loopback needs TLS, which this build does not serve yet, or the plain-HTTP opt-in with no TLS files set, and collects the warnings a binding the rule allows still carries: plain HTTP off this machine, and TLS files that name a certificate nothing serves yet.
  */
 
 #include "AdminSettings.h"
@@ -89,6 +89,23 @@ std::optional<std::string> AdminSettings::PlainHttpRemoteWarning() const
     if (!BindsBeyondThisMachine() || HasTls() || !AllowPlainHttpRemote)
         return std::nullopt;
     return fmt::format("Admin.AllowPlainHttpRemote = 1 serves the admin API as plain HTTP on {}: the token is still required, but it, every command and every log line cross the network unencrypted, so anyone on the path can read them and reuse the token", BindIp);
+}
+
+std::optional<std::string> AdminSettings::TlsNotServedWarning() const
+{
+    if (!HasTls())
+        return std::nullopt;
+    return fmt::format("Admin.CertificateFile and Admin.PrivateKeyFile ask for TLS, which this build does not serve yet, so the admin API on {} answers plain HTTP until milestone 17.14 settles certificate handling", BindIp);
+}
+
+std::vector<std::string> AdminSettings::Warnings() const
+{
+    std::vector<std::string> warnings;
+    if (std::optional<std::string> const remote = PlainHttpRemoteWarning())
+        warnings.push_back(*remote);
+    if (std::optional<std::string> const tls = TlsNotServedWarning())
+        warnings.push_back(*tls);
+    return warnings;
 }
 
 bool AdminSettings::ListenerEquals(AdminSettings const& other) const

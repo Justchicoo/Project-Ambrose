@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the admin API on Crow: it resolves the token, refuses a bind the remote-access rule forbids, proves no other socket holds the address before Crow takes it, answers every request from the shared table in a middleware that runs before Crow's own routing, hands a WebSocket upgrade on any path the same authentication and then the route registered for it, and on a reload rotates the token live, rebinds a changed address, or brings the old listener back when the new one cannot bind.
+ * Runs the admin API on Crow: it resolves the token, refuses a bind the remote-access rule forbids, says out loud what a bind it allows still costs, proves no other socket holds the address before Crow takes it, answers every request from the shared table in a middleware that runs before Crow's own routing, answers from the same table again after it the requests Crow replies to before a connection has an address of its own, such as OPTIONS, hands only a real WebSocket upgrade to the route registered for it under the same authentication, and on a reload rotates the token live, rebinds a changed address, or brings the old listener back when the new one cannot bind.
  */
 
 #include "AdminServer.h"
@@ -22,8 +22,10 @@
 #include <chrono>
 #include <future>
 #include <optional>
+#include <string>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -110,32 +112,35 @@ namespace
         return response;
     }
 
+    bool BecomesAWebSocket(crow::request const& request)
+    {
+        if (!request.upgrade || request.method == crow::HTTPMethod::Options)
+            return false;
+        return request.get_header_value("upgrade").find("h2") != 0;
+    }
+
     class AdminGate
     {
     public:
         struct context
         {
-            bool Answered = false;
         };
 
         void Bind(AdminRouter* router) { _router = router; }
 
-        void before_handle(crow::request& request, crow::response& response, context& gate)
+        void before_handle(crow::request& request, crow::response& response, context&)
         {
-            if (!_router || request.upgrade)
+            if (!_router || BecomesAWebSocket(request))
                 return;
             Apply(response, _router->Dispatch(ToAdminRequest(request)));
-            gate.Answered = true;
             response.end();
         }
 
-        void after_handle(crow::request& request, crow::response& response, context& gate)
+        void after_handle(crow::request& request, crow::response& response, context&)
         {
-            if (!_router || gate.Answered || request.upgrade)
+            if (!_router || !request.remote_ip_address.empty())
                 return;
-            AdminAuthResult const result = _router->Authenticate(ToAdminRequest(request));
-            if (result != AdminAuthResult::Ok)
-                Apply(response, AdminRouter::Refused(result));
+            Apply(response, _router->Dispatch(ToAdminRequest(request)));
         }
 
     private:
@@ -200,8 +205,8 @@ struct AdminServer::Listener
     uint16 Port = 0;
 };
 
-AdminServer::AdminServer(Log& log, std::string appName, std::filesystem::path dataFolder)
-    : _log(log), _appName(std::move(appName)), _dataFolder(std::move(dataFolder)), _auth(AdminSettings{}.AuthFailureBurst, AdminSettings{}.AuthFailuresPerSecond), _router(_auth)
+AdminServer::AdminServer(Log& log, std::string appName, std::filesystem::path dataFolder, std::filesystem::path configFolder)
+    : _log(log), _appName(std::move(appName)), _dataFolder(std::move(dataFolder)), _configFolder(std::move(configFolder)), _auth(AdminSettings{}.AuthFailureBurst, AdminSettings{}.AuthFailuresPerSecond), _router(_auth)
 {
     _router.SetMaxBodyBytes(AdminSettings{}.MaxRequestBytes);
     _router.Add("GET", "/api/health", [this](AdminRequest const&)
@@ -277,7 +282,7 @@ bool AdminServer::Start(AdminSettings const& settings, std::string& error)
         error = *refused;
         return false;
     }
-    AdminTokenResult const token = AdminToken::Resolve(settings, _appName, _dataFolder);
+    AdminTokenResult const token = AdminToken::Resolve(settings, _appName, _dataFolder, _configFolder);
     if (!token.Succeeded())
     {
         error = token.Error;
@@ -287,11 +292,7 @@ bool AdminServer::Start(AdminSettings const& settings, std::string& error)
         AMBROSE_LOG(_log, LogLevel::Warn, "server.admin", "{}", token.Warning);
     if (token.Generated)
         AMBROSE_LOG(_log, LogLevel::Info, "server.admin", "The admin API generated a token in {}, readable only by this user", ConfigMgr::PathToUtf8(token.File));
-    if (!Open(settings, token.Token, error))
-        return false;
-    if (std::optional<std::string> const warning = settings.PlainHttpRemoteWarning())
-        AMBROSE_LOG(_log, LogLevel::Warn, "server.admin", "{}", *warning);
-    return true;
+    return Open(settings, token.Token, error);
 }
 
 bool AdminServer::Reload(AdminSettings const& settings)
@@ -312,7 +313,7 @@ bool AdminServer::Reload(AdminSettings const& settings)
         return false;
     }
 
-    AdminTokenResult const token = AdminToken::Resolve(settings, _appName, _dataFolder);
+    AdminTokenResult const token = AdminToken::Resolve(settings, _appName, _dataFolder, _configFolder);
     if (!token.Succeeded())
     {
         AMBROSE_LOG(_log, LogLevel::Error, "server.admin", "{}; the admin API keeps its current token", token.Error);
@@ -371,8 +372,6 @@ bool AdminServer::Reload(AdminSettings const& settings)
         }
         return false;
     }
-    if (std::optional<std::string> const warning = settings.PlainHttpRemoteWarning())
-        AMBROSE_LOG(_log, LogLevel::Warn, "server.admin", "{}", *warning);
     return true;
 }
 
@@ -501,6 +500,8 @@ bool AdminServer::Open(AdminSettings const& settings, std::string const& token, 
     _active = settings;
     _active.Port = bound;
     AMBROSE_LOG(_log, LogLevel::Info, "server.admin", "The admin API is listening on http://{}:{}", _listener->BindIp, _listener->Port);
+    for (std::string const& warning : settings.Warnings())
+        AMBROSE_LOG(_log, LogLevel::Warn, "server.admin", "{}", warning);
     return true;
 }
 

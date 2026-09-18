@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests admin API routing without sockets: authentication runs before the table, an oversized body is refused before the handler, a known method and path reaches its handler, another method answers 405, an unknown path answers 404, and a handler that throws becomes a 500 problem.
+ * Tests admin API routing without sockets: authentication runs before the table, a wrong token is rate limited while the right one still answers, a request naming no caller address is refused, an oversized body is refused before the handler, a known method and path reaches its handler, another method answers 405, an unknown path answers 404, and a handler that throws becomes a 500 problem.
  */
 
 #include "AdminAuth.h"
@@ -134,7 +134,11 @@ TEST(AdminRouterTest, LimitsRepeatedFailuresFromOneAddress)
     EXPECT_EQ(refused.Status, 429);
     EXPECT_EQ(HeaderValue(refused, "Retry-After"), "1");
     EXPECT_EQ(nlohmann::json::parse(refused.Body)["error"], "too_many_requests");
-    EXPECT_EQ(router.Dispatch(Get("/api/health")).Status, 429);
+    EXPECT_EQ(router.Dispatch(Get("/api/health")).Status, 200);
+
+    AdminRequest anonymous = Get("/api/health");
+    anonymous.RemoteAddress.clear();
+    EXPECT_EQ(router.Dispatch(anonymous).Status, 401);
 }
 
 TEST(AdminRouterTest, RefusesABodyOverTheLimitAfterTheToken)

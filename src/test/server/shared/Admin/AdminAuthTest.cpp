@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests admin API authentication without sockets: the Bearer scheme, the constant-time match, live token rotation, the per-caller failure limit on a fake clock, the loopback and IPv6 prefix buckets a rotating source address cannot escape, and forgetting idle callers without clearing one that is locked out.
+ * Tests admin API authentication without sockets: the Bearer scheme, the constant-time match, live token rotation, the per-caller failure limit on a fake clock, the right token answering while its caller's budget is empty, a request with no caller address refused without a budget of its own, the loopback and IPv6 prefix buckets a rotating source address cannot escape, and forgetting idle callers without clearing one that is locked out.
  */
 
 #include "AdminAuth.h"
@@ -87,9 +87,9 @@ TEST(AdminAuthTest, LimitsFailedAttemptsPerAddress)
 
     clock.now += std::chrono::seconds(1);
     EXPECT_EQ(auth.Check("10.0.0.5", "Bearer wrongwrongwrongwrong"), AdminAuthResult::Unauthorized);
-    EXPECT_EQ(auth.Check("10.0.0.5", std::string("Bearer ") + Token), AdminAuthResult::RateLimited);
+    EXPECT_EQ(auth.Check("10.0.0.5", "Bearer wrongwrongwrongwrong"), AdminAuthResult::RateLimited);
     clock.now += std::chrono::seconds(30);
-    EXPECT_EQ(auth.Check("10.0.0.5", std::string("Bearer ") + Token), AdminAuthResult::Ok);
+    EXPECT_EQ(auth.Check("10.0.0.5", "Bearer wrongwrongwrongwrong"), AdminAuthResult::Unauthorized);
 }
 
 TEST(AdminAuthTest, SuccessSpendsNoFailureTokens)
@@ -115,11 +115,11 @@ TEST(AdminAuthTest, ForgetsAndPrunesTrackedAddresses)
     EXPECT_EQ(auth.GetTrackedAddresses(), 0u);
 
     for (std::size_t index = 0; index < AdminAuth::MaxTrackedAddresses; ++index)
-        auth.Check("10.1." + std::to_string(index / 256) + "." + std::to_string(index % 256), std::string("Bearer ") + Token);
+        auth.Check("10.1." + std::to_string(index / 256) + "." + std::to_string(index % 256), "Bearer nope");
     EXPECT_EQ(auth.GetTrackedAddresses(), AdminAuth::MaxTrackedAddresses);
 
     clock.now += AdminAuth::IdleAddressLifetime;
-    auth.Check("192.168.0.1", std::string("Bearer ") + Token);
+    auth.Check("192.168.0.1", "Bearer nope");
     EXPECT_EQ(auth.GetTrackedAddresses(), 1u);
 }
 
@@ -148,12 +148,12 @@ TEST(AdminAuthTest, CountsEveryLoopbackAddressAsOneCaller)
     EXPECT_EQ(auth.Check("127.0.0.1", "Bearer nope"), AdminAuthResult::Unauthorized);
     EXPECT_EQ(auth.Check("127.0.0.2", "Bearer nope"), AdminAuthResult::Unauthorized);
     EXPECT_EQ(auth.Check("127.9.9.9", "Bearer nope"), AdminAuthResult::RateLimited);
-    EXPECT_EQ(auth.Check("::1", std::string("Bearer ") + Token), AdminAuthResult::RateLimited);
+    EXPECT_EQ(auth.Check("::1", "Bearer nope"), AdminAuthResult::RateLimited);
     EXPECT_EQ(auth.GetTrackedAddresses(), 1u);
-    EXPECT_EQ(auth.Check("10.0.0.5", std::string("Bearer ") + Token), AdminAuthResult::Ok);
+    EXPECT_EQ(auth.Check("10.0.0.5", "Bearer nope"), AdminAuthResult::Unauthorized);
 
     auth.Forget("127.0.0.8");
-    EXPECT_EQ(auth.Check("127.0.0.1", std::string("Bearer ") + Token), AdminAuthResult::Ok);
+    EXPECT_EQ(auth.Check("127.0.0.1", "Bearer nope"), AdminAuthResult::Unauthorized);
 }
 
 TEST(AdminAuthTest, CountsAnIPv6CallerByItsPrefix)
@@ -164,21 +164,51 @@ TEST(AdminAuthTest, CountsAnIPv6CallerByItsPrefix)
 
     EXPECT_EQ(auth.Check("2001:db8::1", "Bearer nope"), AdminAuthResult::Unauthorized);
     EXPECT_EQ(auth.Check("2001:db8::2", "Bearer nope"), AdminAuthResult::Unauthorized);
-    EXPECT_EQ(auth.Check("2001:db8::3", std::string("Bearer ") + Token), AdminAuthResult::RateLimited);
-    EXPECT_EQ(auth.Check("2001:db8:0:1::1", std::string("Bearer ") + Token), AdminAuthResult::Ok);
+    EXPECT_EQ(auth.Check("2001:db8::3", "Bearer nope"), AdminAuthResult::RateLimited);
+    EXPECT_EQ(auth.Check("2001:db8:0:1::1", "Bearer nope"), AdminAuthResult::Unauthorized);
     EXPECT_EQ(auth.GetTrackedAddresses(), 2u);
 }
 
 TEST(AdminAuthTest, PruningKeepsACallerThatIsLockedOut)
 {
     FakeClock clock;
-    AdminAuth auth(1, 0.0, clock.Source());
+    AdminAuth auth(2, 0.0, clock.Source());
     auth.SetToken(Token);
     ASSERT_EQ(auth.Check("10.0.0.5", "Bearer nope"), AdminAuthResult::Unauthorized);
-    ASSERT_EQ(auth.Check("10.0.0.5", std::string("Bearer ") + Token), AdminAuthResult::RateLimited);
+    ASSERT_EQ(auth.Check("10.0.0.5", "Bearer nope"), AdminAuthResult::Unauthorized);
+    ASSERT_EQ(auth.Check("10.0.0.5", "Bearer nope"), AdminAuthResult::RateLimited);
 
     for (std::size_t index = 0; index < AdminAuth::MaxTrackedAddresses; ++index)
-        auth.Check("10.1." + std::to_string(index / 256) + "." + std::to_string(index % 256), std::string("Bearer ") + Token);
-    EXPECT_LE(auth.GetTrackedAddresses(), AdminAuth::MaxTrackedAddresses);
-    EXPECT_EQ(auth.Check("10.0.0.5", std::string("Bearer ") + Token), AdminAuthResult::RateLimited);
+        auth.Check("10.1." + std::to_string(index / 256) + "." + std::to_string(index % 256), "Bearer nope");
+    EXPECT_EQ(auth.GetTrackedAddresses(), AdminAuth::MaxTrackedAddresses);
+    EXPECT_EQ(auth.Check("10.0.0.5", "Bearer nope"), AdminAuthResult::RateLimited);
+    EXPECT_EQ(auth.Check("10.0.0.5", std::string("Bearer ") + Token), AdminAuthResult::Ok);
+}
+
+TEST(AdminAuthTest, TheRightTokenAnswersWhileTheBudgetIsEmpty)
+{
+    FakeClock clock;
+    AdminAuth auth(2, 0.0, clock.Source());
+    auth.SetToken(Token);
+
+    EXPECT_EQ(auth.Check("127.0.0.1", "Bearer nope"), AdminAuthResult::Unauthorized);
+    EXPECT_EQ(auth.Check("127.0.0.1", "Bearer nope"), AdminAuthResult::Unauthorized);
+    EXPECT_EQ(auth.Check("127.0.0.1", "Bearer nope"), AdminAuthResult::RateLimited);
+    EXPECT_EQ(auth.Check("127.0.0.1", std::string("Bearer ") + Token), AdminAuthResult::Ok);
+    EXPECT_EQ(auth.Check("::1", std::string("Bearer ") + Token), AdminAuthResult::Ok);
+    EXPECT_EQ(auth.Check("127.0.0.1", "Bearer nope"), AdminAuthResult::RateLimited);
+}
+
+TEST(AdminAuthTest, RefusesACallerWithNoAddressWithoutTouchingABudget)
+{
+    FakeClock clock;
+    AdminAuth auth(1, 0.0, clock.Source());
+    auth.SetToken(Token);
+
+    for (int attempt = 0; attempt < 50; ++attempt)
+        ASSERT_EQ(auth.Check("", std::string("Bearer ") + Token), AdminAuthResult::Unauthorized);
+    EXPECT_EQ(auth.GetTrackedAddresses(), 0u);
+    EXPECT_EQ(auth.Check("127.0.0.1", std::string("Bearer ") + Token), AdminAuthResult::Ok);
+    EXPECT_EQ(auth.Check("127.0.0.1", "Bearer nope"), AdminAuthResult::Unauthorized);
+    EXPECT_EQ(auth.Check("127.0.0.1", "Bearer nope"), AdminAuthResult::RateLimited);
 }

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the Admin options: defaults, clamped values with their problems, the remote-access rule that refuses a non-loopback bind without TLS or the plain-HTTP opt-in and names what to change when both are set, and the token that comes from config or a file the current user alone can read.
+ * Tests the Admin options: defaults, clamped values with their problems, the remote-access rule that refuses a non-loopback bind without TLS or the plain-HTTP opt-in and names what to change when both are set, the warnings a binding it allows still carries, and the token that comes from config or a file the current user alone can read, beside the config file where the machine names no data folder.
  */
 
 #include "AdminSettings.h"
@@ -351,4 +351,51 @@ TEST(AdminTokenTest, WritesAGeneratedTokenOnlyIntoAFileItCreates)
     std::filesystem::create_directories(folder / "child");
     EXPECT_FALSE(AdminToken::WriteSecretFile(folder, "0123456789abcdef0123456789abcdef", error));
     EXPECT_FALSE(error.empty());
+}
+
+TEST(AdminSettingsTest, TlsFilesOnALoopbackBindWarnThatNothingServesThemYet)
+{
+    AdminSettings settings = Loopback();
+    EXPECT_FALSE(settings.TlsNotServedWarning().has_value());
+    EXPECT_TRUE(settings.Warnings().empty());
+
+    settings.CertificateFile = "admin.crt";
+    settings.PrivateKeyFile = "admin.key";
+    ASSERT_FALSE(settings.RemoteAccessError().has_value());
+    std::optional<std::string> const warning = settings.TlsNotServedWarning();
+    ASSERT_TRUE(warning.has_value());
+    EXPECT_NE(warning->find("Admin.CertificateFile"), std::string::npos) << *warning;
+    EXPECT_NE(warning->find("Admin.PrivateKeyFile"), std::string::npos) << *warning;
+    EXPECT_NE(warning->find("17.14"), std::string::npos) << *warning;
+    EXPECT_EQ(settings.Warnings(), (std::vector<std::string>{ *warning }));
+}
+
+TEST(AdminSettingsTest, WarningsNameThePlainHttpOptInOnARemoteBind)
+{
+    AdminSettings settings = Loopback();
+    settings.BindIp = "0.0.0.0";
+    settings.AllowPlainHttpRemote = true;
+    ASSERT_FALSE(settings.RemoteAccessError().has_value());
+
+    std::vector<std::string> const warnings = settings.Warnings();
+    ASSERT_EQ(warnings.size(), 1u);
+    EXPECT_NE(warnings[0].find("Admin.AllowPlainHttpRemote"), std::string::npos) << warnings[0];
+    EXPECT_NE(warnings[0].find("0.0.0.0"), std::string::npos) << warnings[0];
+    EXPECT_NE(warnings[0].find("unencrypted"), std::string::npos) << warnings[0];
+}
+
+TEST(AdminTokenTest, KeepsAGeneratedTokenBesideTheConfigWithNoDataFolder)
+{
+    LogTestDirectory directory;
+    AdminSettings settings = Loopback();
+    settings.Token.clear();
+
+    AdminTokenResult const generated = AdminToken::Resolve(settings, "loginserver", {}, directory.Path());
+    ASSERT_TRUE(generated.Succeeded()) << generated.Error;
+    EXPECT_TRUE(generated.Generated);
+    EXPECT_EQ(generated.File, AdminToken::DefaultFile("loginserver", {}, directory.Path()));
+    EXPECT_EQ(generated.File.parent_path().parent_path(), directory.Path());
+    ASSERT_TRUE(std::filesystem::is_regular_file(generated.File));
+    EXPECT_FALSE(AdminToken::Validate(generated.Token).has_value());
+    EXPECT_EQ(AdminToken::DefaultFile("loginserver", directory.Path(), "elsewhere"), AdminToken::DefaultFile("loginserver", directory.Path()));
 }

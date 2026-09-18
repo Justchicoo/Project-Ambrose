@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Takes the admin API token from Admin.Token or its token file, generating 32 random bytes into a file it creates itself so the permissions are always the ones built here, putting those permissions back on a file that already exists, and refusing a token that is too short or holds anything but printable characters.
+ * Takes the admin API token from Admin.Token or its token file, generating 32 random bytes into a file it creates itself so the permissions are always the ones built here, keeping that file in the data folder or, where the machine names none, in the folder the config file came from, putting those permissions back on a file that already exists, and refusing a token that is too short or holds anything but printable characters.
  */
 
 #include "AdminToken.h"
@@ -216,11 +216,12 @@ std::optional<std::string> AdminToken::Validate(std::string_view token)
     return std::nullopt;
 }
 
-std::filesystem::path AdminToken::DefaultFile(std::string const& appName, std::filesystem::path const& dataFolder)
+std::filesystem::path AdminToken::DefaultFile(std::string const& appName, std::filesystem::path const& dataFolder, std::filesystem::path const& fallbackFolder)
 {
-    if (dataFolder.empty())
+    std::filesystem::path const& folder = dataFolder.empty() ? fallbackFolder : dataFolder;
+    if (folder.empty())
         return {};
-    return dataFolder / "admin" / (appName + ".token");
+    return folder / "admin" / (appName + ".token");
 }
 
 bool AdminToken::WriteSecretFile(std::filesystem::path const& file, std::string_view text, std::string& error)
@@ -250,7 +251,7 @@ bool AdminToken::SecureFile(std::filesystem::path const& file, std::string& erro
     return SecureOwnerOnly(file, error);
 }
 
-AdminTokenResult AdminToken::Resolve(AdminSettings const& settings, std::string const& appName, std::filesystem::path const& dataFolder)
+AdminTokenResult AdminToken::Resolve(AdminSettings const& settings, std::string const& appName, std::filesystem::path const& dataFolder, std::filesystem::path const& fallbackFolder)
 {
     AdminTokenResult result;
     if (!settings.Token.empty())
@@ -265,7 +266,7 @@ AdminTokenResult AdminToken::Resolve(AdminSettings const& settings, std::string 
         return result;
     }
 
-    result.File = settings.TokenFile.empty() ? DefaultFile(appName, dataFolder) : settings.TokenFile;
+    result.File = settings.TokenFile.empty() ? DefaultFile(appName, dataFolder, fallbackFolder) : settings.TokenFile;
     result.Source = "Admin.TokenFile";
     if (result.File.empty())
     {

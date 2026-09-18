@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, opens the admin API with the app's own routes already in it before the app starts and refuses to run when its binding is unsafe, stops gracefully on signals, requests or the shutdown command, now or after a delay, moves the one lifecycle state the console and the admin API both read, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, and runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use.
+ * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, opens the admin API with the app's own routes already in it before the app starts, keeping a generated token in the data folder or, where the machine names none, beside the config file, and refuses to run when its binding is unsafe, stops gracefully on signals, requests or the shutdown command, now or after a delay, moves the one lifecycle state the console and the admin API both read, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, and runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use.
  */
 
 #include "ServerApp.h"
@@ -161,7 +161,7 @@ bool ServerApp::StartAdminApi()
         AMBROSE_LOG(_log, LogLevel::Warn, "server.admin", "{}", problem);
 
     LocalClientSystem const system;
-    _admin = std::make_unique<AdminServer>(_log, _info.Name, ClientLocator::GetDataFolder(system));
+    _admin = std::make_unique<AdminServer>(_log, _info.Name, ClientLocator::GetDataFolder(system), _config.GetFilename().parent_path());
     _admin->SetHealthSource([this]
     {
         AdminHealth health;
