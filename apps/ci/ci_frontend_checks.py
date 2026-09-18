@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Project Ambrose by Imjustchico
-# Fails when front-end source writes a colour of its own, reaches for a Tailwind arbitrary value, carries a colour in an inline style, adds a component with no story, or builds a bundle that names another host.
+# Fails when front-end source writes a colour of its own, reaches for a Tailwind arbitrary value, carries a colour in an inline style, adds a component with no story, leaves a collection without the four states a reader has to be shown, or builds a bundle that names another host.
 import argparse
 import json
 import os
@@ -13,6 +13,9 @@ GENERATED = ("packages/ui/src/tokens/tokens.css", "packages/ui/src/tokens/tokens
 SKIP_FOLDERS = ("packages/ui/src/fonts", "packages/ui/src/canary")
 BUNDLES = ("apps/dashboard/dist", "apps/launcherui/dist")
 ALLOW_FILE = "apps/ci/ci_frontend_allow.json"
+COLLECTIONS_FILE = "packages/ui/collections.json"
+COLLECTION_STATES = ("loading", "empty", "no-results", "error")
+LIST_PROP = re.compile(r"^\s*[a-zA-Z]+\??:\s*(?:[A-Za-z][\w.<>, ]*\[\]|Array<)", re.M)
 SOURCE_EXTENSIONS = (".svelte", ".ts", ".css", ".html")
 
 HEX = re.compile(r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})(?![0-9a-zA-Z_-])")
@@ -141,6 +144,47 @@ def check_fonts(root):
     return problems
 
 
+
+def check_collections(root):
+    problems = []
+    path = os.path.join(root, COLLECTIONS_FILE.replace("/", os.sep))
+    if not os.path.exists(path):
+        return [f"{COLLECTIONS_FILE}: is missing; every list-shaped component is classified there"]
+    with open(path, encoding="utf-8") as handle:
+        document = json.load(handle)
+    collections = list(document.get("collections", []))
+    others = list(document.get("not-collections", []))
+    both = set(collections) & set(others)
+    for name in sorted(both):
+        problems.append(f"{COLLECTIONS_FILE}: {name} is in both lists; it is either a collection or it is not")
+    known = set(collections) | set(others)
+    folder = os.path.join(root, COMPONENT_ROOT.replace("/", os.sep), "components")
+    for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+        if not name.endswith(".svelte") or name.endswith(".stories.svelte"):
+            continue
+        component = name[: -len(".svelte")]
+        with open(os.path.join(folder, name), encoding="utf-8") as handle:
+            text = handle.read()
+        if LIST_PROP.search(text) and component not in known:
+            problems.append(
+                f"packages/ui/src/components/{name}: takes a list and is classified in neither list of {COLLECTIONS_FILE}"
+            )
+    for component in collections:
+        story = os.path.join(folder, component + ".stories.svelte")
+        if not os.path.exists(story):
+            problems.append(f"packages/ui/src/components/{component}.stories.svelte: is missing; a collection needs its states shown")
+            continue
+        with open(story, encoding="utf-8") as handle:
+            text = handle.read()
+        for state in COLLECTION_STATES:
+            if f'"state:{state}"' not in text:
+                problems.append(
+                    f"packages/ui/src/components/{component}.stories.svelte: has no story tagged state:{state}; "
+                    "a collection shows what it looks like while loading, when it holds nothing, when a filter matched nothing and when it failed"
+                )
+    return problems
+
+
 def main(argv=None):
     default_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     parser = argparse.ArgumentParser(description="Project Ambrose front-end repository checks")
@@ -150,6 +194,7 @@ def main(argv=None):
     allow = load_allow(root)
     problems = check_source(root, allow)
     problems += check_stories(root)
+    problems += check_collections(root)
     problems += check_fonts(root)
     bundle_problems, built = check_bundles(root, allow)
     problems += bundle_problems

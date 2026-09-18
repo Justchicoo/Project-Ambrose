@@ -31,8 +31,20 @@
     {/snippet}
 </Story>
 
-<Story name="Empty">
+<Story name="Empty" tags={["state:empty"]}>
     {#snippet template()}
         <DataTable caption="Servers on this machine" {columns} rows={[]} empty="No server is registered on this machine yet." />
     {/snippet}
+</Story>
+
+<Story name="Still loading" tags={["state:loading"]}>
+    <DataTable caption="Sessions" columns={columns} rows={[]} status="loading" />
+</Story>
+
+<Story name="Nothing matched the filter" tags={["state:no-results"]}>
+    <DataTable caption="Sessions" columns={columns} rows={[]} status="no-results" noResults="No session matches that filter" />
+</Story>
+
+<Story name="Could not be loaded" tags={["state:error"]}>
+    <DataTable caption="Sessions" columns={columns} rows={[]} status="error" error="The sessions could not be loaded" />
 </Story>

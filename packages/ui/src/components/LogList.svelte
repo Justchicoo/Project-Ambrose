@@ -3,6 +3,7 @@
     import anser from "anser";
     import { VList } from "virtua/svelte";
     import { classes } from "../internal/classes";
+    import CollectionState from "./CollectionState.svelte";
 
     type Level = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 
@@ -18,10 +19,25 @@
         label: string;
         records: LogRecord[];
         height?: string;
+        status?: "ready" | "loading" | "no-results" | "error";
+        empty?: string;
+        noResults?: string;
+        error?: string;
         class?: string;
     };
 
-    let { label, records, height = "20rem", class: extra }: Props = $props();
+    let {
+        label,
+        records,
+        height = "20rem",
+        status = "ready",
+        empty = "Nothing yet",
+        noResults = "Nothing matched",
+        error = "Could not be loaded",
+        class: extra,
+    }: Props = $props();
+
+    let shown = $derived(status === "ready" && records.length === 0 ? "empty" : status);
 
     const levels: Record<Level, string> = {
         trace: "text-fg-faint",
@@ -37,6 +53,9 @@
     }
 </script>
 
+{#if shown !== "ready"}
+    <CollectionState status={shown} {label} {empty} {noResults} {error} class={extra} />
+{:else}
 <div
     aria-label={label}
     role="log"
@@ -57,3 +76,4 @@
         {/snippet}
     </VList>
 </div>
+{/if}
