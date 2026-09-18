@@ -42,6 +42,8 @@ def classify(relpath):
         return "conf"
     if lower in (".gitignore", ".gitattributes", ".gitkeep"):
         return "linehash"
+    if lower in ("license", "license.txt", "notice"):
+        return "exempt"
     if lower == ".editorconfig":
         return "editorconfig"
     if lower.endswith(".conf.dist") or lower.endswith(".conf"):

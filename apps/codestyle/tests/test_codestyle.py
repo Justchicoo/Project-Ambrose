@@ -176,5 +176,14 @@ class WhitespaceTests(CheckerTestCase):
         self.assertClean("src/common/Asio/.gitkeep", "")
 
 
+
+class LicenseFileTests(unittest.TestCase):
+    def test_a_license_file_carries_no_branding_header(self):
+        self.assertEqual(check("LICENSE", "MIT License\n\nCopyright (c) 2026 Imjustchico\n"), [])
+
+    def test_an_unknown_extensionless_file_is_still_reported(self):
+        issues = check("MANIFESTO", "no rule covers this\n")
+        self.assertEqual([issue.rule for issue in issues], ["unknown-type"])
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
