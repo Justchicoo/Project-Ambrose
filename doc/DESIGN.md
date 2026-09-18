@@ -54,7 +54,7 @@ Sizes step 11, 12, 13, 15, 17, 21, 26, 34, 44, 56. Labels are 11 px, uppercase, 
 
 ## Surfaces
 
-- **Launcher window** (3.26): the ground with a 44 px chrome bar, one gold Play, the realm and client state as three cards, and the guarantee line at the foot. Its first run shows each setup step with its real numbers.
+- **Launcher window** (3.26): the ground with a 44 px chrome bar, one gold Play, the server and client state as three cards, and the guarantee line at the foot. A realm is a world shard the player picks inside the game; the launcher chooses which Ambrose server to log in to. Its first run shows each setup step with its real numbers.
 - **Panel** (phase 17): the same tokens with a 236 px side bar on the chrome, cards on the ground, monospaced logs in a sunken area, and a gold action only in the top bar.
 - **Terminal** (17.01 and 17.11): the same meanings in the 16 terminal colors, teal for healthy, gold for waiting, red for errors, grey for timestamps.
 - **Anything a server serves** reads these tokens from the panel's own stylesheet, so a page cannot drift.

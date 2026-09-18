@@ -1059,7 +1059,7 @@ Added on 2026-09-17 at the maintainer's direction: the client must be driven by 
 
 ## 3.26 Launcher window
 
-**Goal:** The launcher is a window anyone can use: it shows the realm, the client and the setup it is doing, takes an account and a password, and starts the game with one button, in the look doc/DESIGN.md sets.
+**Goal:** The launcher is a window anyone can use: it shows the server, the client and the setup it is doing, takes an account and a password, and starts the game with one button, in the look doc/DESIGN.md sets.
 
 **Size:** L. **Depends on:** 3.25, 1.04
 
@@ -1070,7 +1070,7 @@ Added on 2026-09-17 at the maintainer's direction, who approved the look in doc/
 - `apps/launcherui/`, the launcher's window built with TypeScript and Svelte through Vite, the stack settled for the dashboard, so the launcher and the panel share one set of components and one set of tokens read from doc/DESIGN.md
 - The window itself is the operating system's own web view, WebView2 on Windows and WebKitGTK elsewhere, opened by the `launcher` program with `--window-ui`; the console launcher keeps every option it has, and a machine without a web view falls back to it with a line saying so
 - The page talks to the launcher over a local channel only that window can use: it asks what the launcher found and what it would run, and it asks the launcher to run it. No logic moves into the page, so the console and the window always do the same thing
-- Screens: ready to play (realm state, client revision and window size, account and password with the account remembered, one Play button, and the guarantee line), first run (each setup step with its own numbers as it happens, from the lines the setup already logs), settings (the install, the realm, the window size, the language, the run folder, and the same guarantees), and a failure screen that names what went wrong and what to do about it
+- Screens: ready to play (server state, client revision and window size, account and password with the account remembered, one Play button, and the guarantee line), first run (each setup step with its own numbers as it happens, from the lines the setup already logs), settings (the install, the realm, the window size, the language, the run folder, and the same guarantees), and a failure screen that names what went wrong and what to do about it
 - Every state is reachable without a mouse, every control carries its label, and the window remembers its own size and position
 - The page is built into the program's own files, so the launcher serves nothing over the network and works with no internet connection: the fonts ship with it
 - Tests: unit tests over the page's own logic with a fake channel (what each state shows, what it sends, what it does with a refusal), a test that the page's requests and the console options produce the same plan, and a smoke test that opens the window off screen, reaches the ready state and closes, skipped where no web view exists
@@ -1078,8 +1078,8 @@ Added on 2026-09-17 at the maintainer's direction, who approved the look in doc/
 
 **Acceptance**
 
-- [ ] Dev-gated (the maintainer's own machine): the window opens, shows the install it found and the realm, and Play starts the client in the window size shown, with nothing written inside the install
-- [ ] The first run screen shows each step as it happens, ending with the realm open, and a step that fails names the cause and what to do
+- [ ] Dev-gated (the maintainer's own machine): the window opens, shows the install it found and the server it will join, and Play starts the client in the window size shown, with nothing written inside the install
+- [ ] The first run screen shows each step as it happens, ending with the server open, and a step that fails names the cause and what to do
 - [ ] Every screen can be used from the keyboard alone, every control has a label, and the window restores its size and position after a restart
 - [ ] The page and the console options build the same plan, proved by a test that compares them
 - [ ] The window makes no network request: a capture of the run shows traffic only to the login server
@@ -1096,7 +1096,7 @@ Added on 2026-09-17 at the maintainer's direction, who approved the look in doc/
 
 ## 3.27 Launcher as its own app
 
-**Goal:** The launcher is a program of its own, the way a published game's launcher is: installed on its own with its own icon and shortcut, holding the realms and accounts a player uses, updating itself, and working on a machine that has no Ambrose server on it at all.
+**Goal:** The launcher is a program of its own, the way a published game's launcher is: installed on its own with its own icon and shortcut, holding the servers and accounts a player uses, updating itself, and working on a machine that has no Ambrose server on it at all.
 
 **Size:** M. **Depends on:** 3.26
 
@@ -1105,29 +1105,29 @@ Added on 2026-09-18 at the maintainer's direction, who asked why the launcher is
 **Deliverables**
 
 - A package per platform built from the repository: on Windows an installer that puts the app in the user's own programs folder with a Start menu and desktop shortcut, an icon, a version, and an uninstaller, plus a portable archive that needs no installer; elsewhere an archive with a desktop entry
-- Its own data folder, `ProjectAmbrose/Launcher` beside the other Ambrose data, holding `launcher.conf`, the realm list, its log and the folders the client runs from. The launcher no longer lives beside the server's programs, and a server install is no longer required for it to work
-- A realm list in the window: add a realm by name, host and port, edit and remove one, see which answer, and remember the one last played. Each realm remembers its account name, and a password is saved only when the player asks, through the operating system's own credential store, never in a file
-- Standalone by default: on a machine with no Ambrose server, the launcher installs, adds a realm and plays. When a local server install is found, and only then, the window also offers to start it and to open its panel
+- Its own data folder, `ProjectAmbrose/Launcher` beside the other Ambrose data, holding `launcher.conf`, the server list, its log and the folders the client runs from. The launcher no longer lives beside the server's programs, and a server install is no longer required for it to work
+- A server list in the window: add an Ambrose server by name, host and port, edit and remove one, see which answer, and remember the one last played. Each server remembers its account name, and a password is saved only when the player asks, through the operating system's own credential store, never in a file
+- Standalone by default: on a machine with no Ambrose server of its own, the launcher installs, adds someone else's server and plays. When a local server install is found, and only then, the window also offers to start it and to open its panel
 - Self-update: an update channel named in its configuration, a manifest signed with the operator's key and a SHA-256 for every file, staged into a new version folder, swapped in, and rolled back when the new version does not start. The version is shown in the window, an update never touches the game install, and a run with no update channel configured never reaches the network
 - The identity doc/DESIGN.md sets: the icon, the window title and the taskbar entry, drawn from the same tokens as the window itself
-- Tests: unit tests over the realm list, the credential store behind a fake, and the update manifest checks (a wrong signature, a wrong hash, a missing file, an interrupted swap); a packaging test that builds the package and checks its contents; and a dev-gated install and run on the maintainer's machine
+- Tests: unit tests over the server list, the credential store behind a fake, and the update manifest checks (a wrong signature, a wrong hash, a missing file, an interrupted swap); a packaging test that builds the package and checks its contents; and a dev-gated install and run on the maintainer's machine
 
 **Acceptance**
 
-- [ ] Dev-gated (the maintainer's machine): installing the package adds a shortcut and an icon, the launcher opens by itself, a realm added by host and port is remembered, and Play starts the game against it
-- [ ] On a machine with no Ambrose server installed, the launcher installs, runs and plays against a remote realm; with a local server present it also offers to start it and open its panel
+- [ ] Dev-gated (the maintainer's machine): installing the package adds a shortcut and an icon, the launcher opens by itself, a server added by host and port is remembered, and Play starts the game against it
+- [ ] On a machine with no Ambrose server installed, the launcher installs, runs and plays against a server on another machine; with a local server present it also offers to start it and open its panel
 - [ ] An update whose signature or hash does not match is refused and the running version keeps working; an update that fails to start rolls back to the previous version, and both are logged
 - [ ] A saved password lives in the operating system's credential store, and no configuration file holds it
 - [ ] Uninstalling removes the app and its shortcuts, removes its own data when asked, and leaves the game install and any Ambrose server install untouched
-- [ ] With no update channel configured, a whole run makes no connection except to the realm the player chose, shown by a capture
-- [ ] Unit tests cover the realm list, the update checks and the credential store through a fake, and the packaging test runs in CI
+- [ ] With no update channel configured, a whole run makes no connection except to the server the player chose, shown by a capture
+- [ ] Unit tests cover the server list, the update checks and the credential store through a fake, and the packaging test runs in CI
 
 ### Detailed spec
 
 **Notes**
 
 - The console launcher from 3.25 stays underneath: the app is the same program with its window, so the driver in 3.24 and the servers keep using it unchanged
-- A player who only wants to play needs this app and their own copy of the game. Nothing else about Ambrose has to be installed
+- A player who only wants to play needs this app and their own copy of the game. The realms a player picks in the game itself are world shards the server's own realm registry serves in 4.03; what this app chooses is which Ambrose server to log in to. Nothing else about Ambrose has to be installed
 - 16.13 adds patching a copy of the install from an Ambrose patch server to this app, and 17.24's desktop app remains the separate, larger program for running servers
 
 ## 3.23 Keep up with KingsIsle's client revisions
