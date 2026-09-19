@@ -158,10 +158,10 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 
 ### Merged so far
 
-| Id | What landed | Who |
-|---|---|---|
-| C-04 | `contrib/tools/ambrose-install-diff`, which reports the archive, zone and locale files that differ between two installations | solanazaru-eng, in #2 |
-| C-06 | `contrib/tools/ambrose-message-watcher`, which reports every message a running server refused or did not handle | solanazaru-eng, in #1 |
+| Id | What landed | Where it lives | Who wrote it |
+|---|---|---|---|
+| C-04 | A diff between two installations, reporting the archive, zone and locale files that differ | `contrib/tools/ambrose-install-diff/` | solanazaru-eng, in #2 |
+| C-06 | A watcher reporting every message a running server refused or did not handle | `contrib/tools/ambrose-message-watcher/` | solanazaru-eng, in #1 |
 
 An item stays listed until its pull request is merged. Ask before starting something not on the list: the answer is usually yes if it lands in the paths above.
 
