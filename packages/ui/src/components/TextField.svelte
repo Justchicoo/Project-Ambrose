@@ -1,5 +1,6 @@
 <!-- Project Ambrose by Imjustchico: A labelled text input on the sunken fill, with its hint and its error tied to it by id so a screen reader reads both. -->
 <script lang="ts">
+    import type { HTMLInputAttributes } from "svelte/elements";
     import { classes } from "../internal/classes";
     import Label from "./Label.svelte";
 
@@ -15,7 +16,7 @@
         disabled?: boolean;
         readonly?: boolean;
         mono?: boolean;
-        autocomplete?: string;
+        autocomplete?: HTMLInputAttributes["autocomplete"];
         class?: string;
         oninput?: (event: Event) => void;
     };
