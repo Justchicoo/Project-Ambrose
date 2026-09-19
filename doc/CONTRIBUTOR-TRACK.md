@@ -113,7 +113,6 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | C-12 | A guide to running the server on a Linux distribution end to end, with the packages and the pitfalls | `doc/guides/` | The project is developed on Windows; someone has to walk the other path first |
 | C-13 | A guide to running the client under Wine or Proton against an Ambrose server | `doc/guides/` | Decides whether Linux players are possible at all, which no milestone answers |
 | C-14 | A guide to running everything in Docker, from nothing to a login screen | `doc/guides/` | Milestone 17.23 packages it; a walked path first makes that milestone cheap |
-| C-15 | A guide to reading Ambrose's own logs: what each category means and what a healthy start looks like | `doc/guides/` | The fastest way to make a new operator self-sufficient |
 | C-16 | Translations of Ambrose's own text into a language the client supports | `contrib/locale/` | The client ships eight locales; the panel and launcher should not be English-only |
 | C-17 | Notes on how the client picks and shows realms after login | `contrib/findings/protocol/` | Milestone 4.03 builds the realm registry and has to match this behaviour |
 | C-18 | A proposal for anything in this document that is wrong or missing | `contrib/proposals/` | The track should improve as people use it |
@@ -162,6 +161,7 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | C-04 | A diff between two installations, reporting the archive, zone and locale files that differ | `contrib/tools/ambrose-install-diff/` | solanazaru-eng, in #2 |
 | C-06 | A watcher reporting every message a running server refused or did not handle | `contrib/tools/ambrose-message-watcher/` | solanazaru-eng, in #1 |
 | C-08 | A diff between two type dumps, reporting the metadata, classes and properties that changed | `contrib/tools/ambrose-type-diff/` | solanazaru-eng, in #4 |
+| C-15 | A guide to reading Ambrose's logs, from a healthy startup to a stuck client | `doc/guides/logging.md` | solanazaru-eng, in #5 |
 
 An item stays listed until its pull request is merged. Ask before starting something not on the list: the answer is usually yes if it lands in the paths above.
 
