@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -23,13 +24,14 @@ enum class FileCategory
     Locales
 };
 
-struct FileRecord
-{
-    std::uintmax_t size = 0;
-    std::uint64_t hash = 0;
-};
+using FileMap = std::map<std::string, std::uintmax_t>;
 
-using FileMap = std::map<std::string, FileRecord>;
+struct Installation
+{
+    fs::path root;
+    std::map<FileCategory, FileMap> files;
+    std::vector<std::string> unreadable;
+};
 
 static std::string Lowercase(std::string value)
 {
@@ -73,14 +75,14 @@ static std::optional<FileCategory> Classify(fs::path const& relativePath)
     return std::nullopt;
 }
 
-static std::uint64_t HashFile(fs::path const& path)
+static std::optional<std::uint64_t> HashFile(fs::path const& path)
 {
     constexpr std::uint64_t offset = 14695981039346656037ull;
     constexpr std::uint64_t prime = 1099511628211ull;
     std::uint64_t hash = offset;
     std::ifstream input(path, std::ios::binary);
     if (!input)
-        throw std::runtime_error("Could not open file: " + path.string());
+        return std::nullopt;
 
     char buffer[8192];
     while (input.read(buffer, sizeof(buffer)) || input.gcount() > 0)
@@ -91,49 +93,53 @@ static std::uint64_t HashFile(fs::path const& path)
             hash *= prime;
         }
     }
+    if (input.bad())
+        return std::nullopt;
     return hash;
 }
 
-static std::map<FileCategory, FileMap> Scan(fs::path const& root)
+static Installation Scan(fs::path const& root)
 {
     if (!fs::exists(root) || !fs::is_directory(root))
         throw std::runtime_error("Not a directory: " + root.string());
 
-    std::map<FileCategory, FileMap> files;
-    for (fs::recursive_directory_iterator iterator(root), end; iterator != end; ++iterator)
-    {
-        if (!iterator->is_regular_file())
-            continue;
+    Installation installation;
+    installation.root = root;
 
-        fs::path const relativePath = fs::relative(iterator->path(), root);
-        FileRecord record{iterator->file_size(), HashFile(iterator->path())};
-        std::optional<FileCategory> const category = Classify(relativePath);
-        if (category)
-            files[*category][relativePath.generic_string()] = record;
-    }
-    return files;
-}
+    std::error_code code;
+    fs::recursive_directory_iterator iterator(root, fs::directory_options::skip_permission_denied, code);
+    if (code)
+        throw std::runtime_error("Could not read: " + root.string());
 
-static void PrintDifference(FileCategory category, FileMap const& oldFiles, FileMap const& newFiles)
-{
-    std::cout << '[' << CategoryName(category) << "]\n";
-    for (auto const& [path, record] : newFiles)
+    fs::recursive_directory_iterator const end;
+    while (iterator != end)
     {
-        auto const old = oldFiles.find(path);
-        if (old == oldFiles.end())
+        fs::path const path = iterator->path();
+        bool const regular = iterator->is_regular_file(code);
+        if (!code && regular)
         {
-            std::cout << "added " << path << " " << record.size << '\n';
+            fs::path const relativePath = fs::relative(path, root, code);
+            std::optional<FileCategory> const category = code ? std::nullopt : Classify(relativePath);
+            if (category)
+            {
+                std::uintmax_t const size = fs::file_size(path, code);
+                if (code)
+                    installation.unreadable.push_back(relativePath.generic_string());
+                else
+                    installation.files[*category][relativePath.generic_string()] = size;
+            }
         }
-        else if (old->second.size != record.size || old->second.hash != record.hash)
+        code.clear();
+
+        iterator.increment(code);
+        if (code)
         {
-            std::cout << "changed " << path << ' ' << old->second.size << " -> " << record.size << '\n';
+            installation.unreadable.push_back(path.generic_string());
+            code.clear();
+            break;
         }
     }
-    for (auto const& [path, record] : oldFiles)
-    {
-        if (!newFiles.contains(path))
-            std::cout << "removed " << path << " " << record.size << '\n';
-    }
+    return installation;
 }
 
 static FileMap const& GetFiles(std::map<FileCategory, FileMap> const& files, FileCategory category)
@@ -141,6 +147,44 @@ static FileMap const& GetFiles(std::map<FileCategory, FileMap> const& files, Fil
     static FileMap const empty;
     auto const iterator = files.find(category);
     return iterator == files.end() ? empty : iterator->second;
+}
+
+static void PrintDifference(FileCategory category, Installation const& oldInstall, Installation const& newInstall,
+    std::vector<std::string>& unreadable)
+{
+    FileMap const& oldFiles = GetFiles(oldInstall.files, category);
+    FileMap const& newFiles = GetFiles(newInstall.files, category);
+
+    std::cout << '[' << CategoryName(category) << "]\n";
+    for (auto const& [path, size] : newFiles)
+    {
+        auto const old = oldFiles.find(path);
+        if (old == oldFiles.end())
+        {
+            std::cout << "added " << path << ' ' << size << '\n';
+            continue;
+        }
+        if (old->second != size)
+        {
+            std::cout << "changed " << path << ' ' << old->second << " -> " << size << '\n';
+            continue;
+        }
+
+        std::optional<std::uint64_t> const oldHash = HashFile(oldInstall.root / path);
+        std::optional<std::uint64_t> const newHash = HashFile(newInstall.root / path);
+        if (!oldHash || !newHash)
+        {
+            unreadable.push_back(path);
+            continue;
+        }
+        if (*oldHash != *newHash)
+            std::cout << "changed " << path << ' ' << size << " -> " << size << " same size, contents differ\n";
+    }
+    for (auto const& [path, size] : oldFiles)
+    {
+        if (!newFiles.contains(path))
+            std::cout << "removed " << path << ' ' << size << '\n';
+    }
 }
 
 int main(int argc, char** argv)
@@ -153,10 +197,23 @@ int main(int argc, char** argv)
 
     try
     {
-        std::map<FileCategory, FileMap> const oldFiles = Scan(argv[1]);
-        std::map<FileCategory, FileMap> const newFiles = Scan(argv[2]);
+        Installation const oldInstall = Scan(argv[1]);
+        Installation const newInstall = Scan(argv[2]);
+
+        std::vector<std::string> unreadable = oldInstall.unreadable;
+        unreadable.insert(unreadable.end(), newInstall.unreadable.begin(), newInstall.unreadable.end());
+
         for (FileCategory category : {FileCategory::Archives, FileCategory::Zones, FileCategory::Locales})
-            PrintDifference(category, GetFiles(oldFiles, category), GetFiles(newFiles, category));
+            PrintDifference(category, oldInstall, newInstall, unreadable);
+
+        if (!unreadable.empty())
+        {
+            std::cout << "[unread]\n";
+            for (std::string const& path : unreadable)
+                std::cout << "could not be read " << path << '\n';
+            std::cerr << unreadable.size() << " file(s) could not be read; the report above is incomplete\n";
+            return 3;
+        }
     }
     catch (fs::filesystem_error const& error)
     {
