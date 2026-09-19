@@ -118,7 +118,6 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | C-19 | A proposal for a panel page or feature you would want as an operator, with what it shows and what it does | `contrib/proposals/` | The panel is being built now, so a good proposal lands in a real milestone quickly |
 | C-20 | A proposal for the server's own quality bar: a check, a limit or a guard you think is missing | `contrib/proposals/` | Outside eyes catch what a project stops seeing |
 | C-21 | A finding verifier: read a finding's machine-checkable block and run it against a live Ambrose server or your own install, printing pass, fail or unable to run | `contrib/tools/` | Turns a merged claim into something a suite proves instead of something somebody gets to |
-| C-22 | A proposal for what a machine-checkable finding looks like: the shapes, their fields and what a reviewer checks | `contrib/proposals/` | The format has to be settled before the verifier is worth writing, and it is a good first contribution |
 | C-23 | A capture replayer: replay a captured session against your own Ambrose server and report every message where the answer differs | `contrib/tools/` | Turns any capture into a regression test, and it is how F-17's disagreement gets settled in an afternoon |
 | C-24 | A message coverage tool: which of the message ids a running server has ever seen, sent or refused | `contrib/tools/` | Points every later phase at the messages that actually occur rather than at the full list |
 | C-25 | A message definition differ: what changed in the client's own message XML between two revisions | `contrib/tools/` | Feeds F-40 and 3.23, and it is the fastest way to know a revision is safe to follow |
@@ -162,6 +161,7 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | C-08 | A diff between two type dumps, reporting the metadata, classes and properties that changed | `contrib/tools/ambrose-type-diff/` | solanazaru-eng, in #4 |
 | C-15 | A guide to reading Ambrose's logs, from a healthy startup to a stuck client | `doc/guides/logging.md` | solanazaru-eng, in #5 |
 | C-12 | A guide to building and running Ambrose on Linux, walked end to end on Ubuntu 24.04 | `doc/guides/linux.md` | solanazaru-eng, in #6 |
+| C-22 | The shape of a machine-checkable finding, which C-21 and C-51 both build against | `contrib/proposals/machine-checkable-findings.md` | solanazaru-eng, in #7 |
 
 An item stays listed until its pull request is merged. Ask before starting something not on the list: the answer is usually yes if it lands in the paths above.
 

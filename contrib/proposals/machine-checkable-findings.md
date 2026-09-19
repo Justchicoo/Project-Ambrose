@@ -96,7 +96,9 @@ Before implementing C-21, create a fixture with one passing command, one command
 
 ## Dependencies and cost
 
-This proposal depends on the existing findings shape and `ci_findings.py`. It does not require a client, a capture, a database, or a running server. C-21 would add the verifier and its fixtures later; no phase file or core build file needs to change for either contribution.
+This proposal depends on the existing findings shape and `ci_findings.py`. It does not require a client, a capture, a database, or a running server. Two items consume this shape and should not be built against different readings of it: C-21 adds the verifier that runs a block, and C-51 adds the validator that judges a block without running it, which the maintainer folds into the findings checker. Whichever is built first settles nothing the other may contradict. No phase file or core build file needs to change for any of them.
+
+One field this proposal leaves open has to be closed before C-21 starts rather than during it: the bounded timeout needs an actual number, and a per-finding override needs an upper limit, or the first slow check will decide both by accident.
 
 ## Acceptance
 
