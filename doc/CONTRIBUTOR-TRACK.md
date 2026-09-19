@@ -107,7 +107,6 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | C-03 | Scenarios for the client driver: the idle timeouts, a ban taking effect, a shutdown notice, a reconnect | `apps/clientdriver/scenarios/` | Every scenario becomes a check that runs itself from then on |
 | C-05 | A tool that reads your own install and reports what Ambrose does not yet understand: classes missing from the type data, files no reader handles | `contrib/tools/` | Points the next milestones at the real gaps |
 | C-07 | A tool that renders a zone's objects as a map image from your own install | `contrib/tools/` | Makes a zone reviewable at a glance instead of row by row |
-| C-08 | A tool that compares two type dumps and explains what a revision changed | `contrib/tools/` | Turns a revision bump into a readable list instead of a diff of 11 MiB |
 | C-09 | A tool that checks a world database against the client's own data and reports rows that disagree | `contrib/tools/` | Keeps authored content honest as the client changes |
 | C-10 | A load generator: many fake clients against a server, reporting what it does under load | `contrib/tools/` | Nothing in the plan measures the server under load before phase 12 |
 | C-11 | Fuzz seeds: inputs that made a decoder work hard, from your own captures | `data/fuzz/` | The fuzzers exist; they are only as good as their corpus |
@@ -162,6 +161,7 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 |---|---|---|---|
 | C-04 | A diff between two installations, reporting the archive, zone and locale files that differ | `contrib/tools/ambrose-install-diff/` | solanazaru-eng, in #2 |
 | C-06 | A watcher reporting every message a running server refused or did not handle | `contrib/tools/ambrose-message-watcher/` | solanazaru-eng, in #1 |
+| C-08 | A diff between two type dumps, reporting the metadata, classes and properties that changed | `contrib/tools/ambrose-type-diff/` | solanazaru-eng, in #4 |
 
 An item stays listed until its pull request is merged. Ask before starting something not on the list: the answer is usually yes if it lands in the paths above.
 
