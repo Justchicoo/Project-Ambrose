@@ -104,7 +104,27 @@ Every commit on the branch needs a trailer naming you, such as `Co-Authored-By: 
 
 CI runs the path check on every pull request from a fork, and a maintainer approves the first run from a new contributor. Green checks do not mean my change compiles: the build legs run only when a maintainer adds a `ci:` label.
 
-Start each item on a branch of its own, taken from an up-to-date `upstream/main`. A merged pull request is squashed into one commit, so a branch that has been merged holds nothing git can apply again, and reusing it opens an empty pull request. After a merge: `git checkout main`, `git reset --hard upstream/main`, `git push --force origin main`, then branch again.
+## One branch per item, and never wait for a review
+
+Every item gets its own branch, taken from `upstream/main` and from nothing else:
+
+```
+git fetch upstream
+git switch --detach upstream/main
+git switch -c contrib/<item-id>-<short-name>
+```
+
+**Never branch from a branch that has an open pull request.** That is the mistake that turns a queue of independent contributions into a chain: the second pull request then contains the first one's changes, a review that revises the first breaks the second, and both have to be rebuilt. Branching from `upstream/main` every time keeps each one reviewable and mergeable on its own, in any order.
+
+Check it before opening the pull request. `git log --oneline upstream/main..HEAD` must show only this item's commits, and `git diff --name-only upstream/main...HEAD` only this item's files. If either shows another item's work, the branch was taken from the wrong place.
+
+**Do not wait for a review.** The moment the pull request is open, start the next item: fetch `upstream`, branch from `upstream/main` again, and carry on. Several open pull requests at once is the intended way to work here, because they are reviewed together rather than one at a time, and waiting on each one in turn is the slowest possible path through the list. Tell me which item is next and keep going.
+
+When a review does ask for a change, switch back to that item's branch, make the change, and push it. Nothing else is affected, because no other branch was built on it.
+
+Two things make an item worth doing in sequence rather than in parallel: it edits a file another open pull request of mine already edits, which on this track is rare because items land in different folders, or it depends on a shape another item is still settling. Say so if you spot either, and I will hold it back.
+
+A merged pull request is squashed into one commit, so its branch holds nothing git can apply again and reusing it opens an empty pull request. After a merge: `git checkout main`, `git reset --hard upstream/main`, `git push --force origin main`, and branch again from there.
 
 ## Keep me honest
 
