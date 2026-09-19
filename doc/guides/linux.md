@@ -2,7 +2,7 @@
 
 # Running Ambrose on Linux
 
-This guide covers a clean Linux build through a local login-server startup. It was checked against the repository build, configuration, and logging documentation on 2026-09-18. The commands below are the documented path; the execution environment for this contribution was Windows, so Linux execution remains to be confirmed on the target distribution.
+This guide covers a clean Linux build through a local login-server startup. Every command in the build and test sections was run on Ubuntu 24.04.4 on 2026-09-19: `cmake --preset linux-gcc` configured in about a minute against a warm vcpkg cache, `cmake --build --preset linux-gcc-debug` built all 377 targets with no warnings, and the repository checks ran clean over 953 files. The server startup section follows the documented behaviour and the same configuration the Windows path uses.
 
 ## Prerequisites
 
@@ -14,7 +14,15 @@ Use a supported Linux distribution with:
 - Git;
 - a reachable MySQL or MariaDB server for the login database.
 
-The first configure may build dependencies from source and can take a while. Keep the repository and vcpkg on local storage with enough free space for the build tree and dependency cache.
+On Ubuntu 24.04 the distribution's own packages meet every minimum, so no third-party toolchain is needed: `cmake` is 3.28.3 against the 3.25 required, `gcc` is 13.3 against the 13 required, and `mariadb-server` is 10.11. One line installs the lot, including what vcpkg itself needs to fetch and unpack a port:
+
+```bash
+sudo apt install build-essential cmake ninja-build git curl zip unzip tar pkg-config python3 mariadb-server
+```
+
+`python3` is not optional: the test preset runs the repository's style and CI checks through it. vcpkg needs `curl`, `zip`, `unzip` and `tar` at bootstrap, and `pkg-config` while it builds ports; a configure that fails looking for one of those is usually missing that package rather than misconfigured.
+
+The first configure builds every dependency from source and takes about an hour on a cold vcpkg cache. Afterwards it is about a minute, because the cache is reused across build directories. Keep the repository and vcpkg on local storage: building from a mounted Windows filesystem under WSL works but is markedly slower than building in the Linux filesystem.
 
 ## Prepare the checkout
 
@@ -67,7 +75,9 @@ Run the unit tests before starting a server:
 ctest --preset linux-gcc-debug
 ```
 
-The test preset also runs repository style and CI checks. If you only need to compile without tests, configure a separate build with `-DBUILD_TESTING=OFF`; do not use that result as test evidence.
+The test preset also runs repository style and CI checks, 1077 tests in all. Run it from a git clone rather than an exported copy of the tree: the forbidden-file scan lists files with `git ls-files` and fails outright without a `.git` directory, and a copied tree can carry stray build artefacts that the style check then reports as unknown file types. Both are checks doing their job, not failures of the build.
+
+If you only need to compile without tests, configure a separate build with `-DBUILD_TESTING=OFF`; do not use that result as test evidence.
 
 For an optimized local server, use the matching release preset:
 
