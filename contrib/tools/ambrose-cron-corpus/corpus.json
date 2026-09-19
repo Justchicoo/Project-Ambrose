@@ -1,0 +1,301 @@
+{
+  "item": "C-42",
+  "format": 1,
+  "description": "Cron expressions and expected next five runs for Ambrose schedule implementations.",
+  "cases": [
+    {
+      "id": "minute-step",
+      "expression": "*/15 * * * *",
+      "time_zone": "UTC",
+      "anchor_utc": "2026-09-19T00:07:00Z",
+      "expected_utc": [
+        "2026-09-19T00:15:00Z",
+        "2026-09-19T00:30:00Z",
+        "2026-09-19T00:45:00Z",
+        "2026-09-19T01:00:00Z",
+        "2026-09-19T01:15:00Z"
+      ],
+      "expected_local": [
+        "2026-09-19T00:15:00",
+        "2026-09-19T00:30:00",
+        "2026-09-19T00:45:00",
+        "2026-09-19T01:00:00",
+        "2026-09-19T01:15:00"
+      ],
+      "note": "Every fifteen minutes."
+    },
+    {
+      "id": "named-fields",
+      "expression": "30 8 * JAN,MAR MON-FRI",
+      "time_zone": "UTC",
+      "anchor_utc": "2026-01-01T00:00:00Z",
+      "expected_utc": [
+        "2026-01-02T08:30:00Z",
+        "2026-01-05T08:30:00Z",
+        "2026-01-06T08:30:00Z",
+        "2026-01-07T08:30:00Z",
+        "2026-01-08T08:30:00Z"
+      ],
+      "expected_local": [
+        "2026-01-02T08:30:00",
+        "2026-01-05T08:30:00",
+        "2026-01-06T08:30:00",
+        "2026-01-07T08:30:00",
+        "2026-01-08T08:30:00"
+      ],
+      "note": "Month and weekday names with a weekday range."
+    },
+    {
+      "id": "both-days-or",
+      "expression": "0 9 1 * 1",
+      "time_zone": "UTC",
+      "anchor_utc": "2026-06-01T09:00:00Z",
+      "expected_utc": [
+        "2026-06-08T09:00:00Z",
+        "2026-06-15T09:00:00Z",
+        "2026-06-22T09:00:00Z",
+        "2026-06-29T09:00:00Z",
+        "2026-07-01T09:00:00Z"
+      ],
+      "expected_local": [
+        "2026-06-08T09:00:00",
+        "2026-06-15T09:00:00",
+        "2026-06-22T09:00:00",
+        "2026-06-29T09:00:00",
+        "2026-07-01T09:00:00"
+      ],
+      "note": "The first and weekday fields are both restricted; a date matching either field runs."
+    },
+    {
+      "id": "sunday-zero",
+      "expression": "0 0 * * 0",
+      "time_zone": "UTC",
+      "anchor_utc": "2026-09-19T00:00:00Z",
+      "expected_utc": [
+        "2026-09-20T00:00:00Z",
+        "2026-09-27T00:00:00Z",
+        "2026-10-04T00:00:00Z",
+        "2026-10-11T00:00:00Z",
+        "2026-10-18T00:00:00Z"
+      ],
+      "expected_local": [
+        "2026-09-20T00:00:00",
+        "2026-09-27T00:00:00",
+        "2026-10-04T00:00:00",
+        "2026-10-11T00:00:00",
+        "2026-10-18T00:00:00"
+      ],
+      "note": "Sunday written as 0."
+    },
+    {
+      "id": "sunday-seven",
+      "expression": "0 0 * * 7",
+      "time_zone": "UTC",
+      "anchor_utc": "2026-09-19T00:00:00Z",
+      "expected_utc": [
+        "2026-09-20T00:00:00Z",
+        "2026-09-27T00:00:00Z",
+        "2026-10-04T00:00:00Z",
+        "2026-10-11T00:00:00Z",
+        "2026-10-18T00:00:00Z"
+      ],
+      "expected_local": [
+        "2026-09-20T00:00:00",
+        "2026-09-27T00:00:00",
+        "2026-10-04T00:00:00",
+        "2026-10-11T00:00:00",
+        "2026-10-18T00:00:00"
+      ],
+      "note": "Sunday written as 7; this has the same runs as sunday-zero."
+    },
+    {
+      "id": "hourly-macro",
+      "expression": "@hourly",
+      "time_zone": "UTC",
+      "anchor_utc": "2026-09-19T00:07:00Z",
+      "expected_utc": [
+        "2026-09-19T01:00:00Z",
+        "2026-09-19T02:00:00Z",
+        "2026-09-19T03:00:00Z",
+        "2026-09-19T04:00:00Z",
+        "2026-09-19T05:00:00Z"
+      ],
+      "expected_local": [
+        "2026-09-19T01:00:00",
+        "2026-09-19T02:00:00",
+        "2026-09-19T03:00:00",
+        "2026-09-19T04:00:00",
+        "2026-09-19T05:00:00"
+      ],
+      "note": "Hourly macro."
+    },
+    {
+      "id": "daily-macro",
+      "expression": "@daily",
+      "time_zone": "UTC",
+      "anchor_utc": "2026-09-19T00:07:00Z",
+      "expected_utc": [
+        "2026-09-20T00:00:00Z",
+        "2026-09-21T00:00:00Z",
+        "2026-09-22T00:00:00Z",
+        "2026-09-23T00:00:00Z",
+        "2026-09-24T00:00:00Z"
+      ],
+      "expected_local": [
+        "2026-09-20T00:00:00",
+        "2026-09-21T00:00:00",
+        "2026-09-22T00:00:00",
+        "2026-09-23T00:00:00",
+        "2026-09-24T00:00:00"
+      ],
+      "note": "Daily macro."
+    },
+    {
+      "id": "weekly-macro",
+      "expression": "@weekly",
+      "time_zone": "UTC",
+      "anchor_utc": "2026-09-19T00:07:00Z",
+      "expected_utc": [
+        "2026-09-20T00:00:00Z",
+        "2026-09-27T00:00:00Z",
+        "2026-10-04T00:00:00Z",
+        "2026-10-11T00:00:00Z",
+        "2026-10-18T00:00:00Z"
+      ],
+      "expected_local": [
+        "2026-09-20T00:00:00",
+        "2026-09-27T00:00:00",
+        "2026-10-04T00:00:00",
+        "2026-10-11T00:00:00",
+        "2026-10-18T00:00:00"
+      ],
+      "note": "Weekly macro, beginning Sunday at midnight."
+    },
+    {
+      "id": "monthly-macro",
+      "expression": "@monthly",
+      "time_zone": "UTC",
+      "anchor_utc": "2026-01-02T00:00:00Z",
+      "expected_utc": [
+        "2026-02-01T00:00:00Z",
+        "2026-03-01T00:00:00Z",
+        "2026-04-01T00:00:00Z",
+        "2026-05-01T00:00:00Z",
+        "2026-06-01T00:00:00Z"
+      ],
+      "expected_local": [
+        "2026-02-01T00:00:00",
+        "2026-03-01T00:00:00",
+        "2026-04-01T00:00:00",
+        "2026-05-01T00:00:00",
+        "2026-06-01T00:00:00"
+      ],
+      "note": "Monthly macro."
+    },
+    {
+      "id": "yearly-macro",
+      "expression": "@yearly",
+      "time_zone": "UTC",
+      "anchor_utc": "2026-01-02T00:00:00Z",
+      "expected_utc": [
+        "2027-01-01T00:00:00Z",
+        "2028-01-01T00:00:00Z",
+        "2029-01-01T00:00:00Z",
+        "2030-01-01T00:00:00Z",
+        "2031-01-01T00:00:00Z"
+      ],
+      "expected_local": [
+        "2027-01-01T00:00:00",
+        "2028-01-01T00:00:00",
+        "2029-01-01T00:00:00",
+        "2030-01-01T00:00:00",
+        "2031-01-01T00:00:00"
+      ],
+      "note": "Yearly macro."
+    },
+    {
+      "id": "new-york-spring-gap",
+      "expression": "30 2 * * *",
+      "time_zone": "America/New_York",
+      "anchor_utc": "2026-03-07T00:00:00Z",
+      "expected_utc": [
+        "2026-03-07T07:30:00Z",
+        "2026-03-08T07:00:00Z",
+        "2026-03-09T06:30:00Z",
+        "2026-03-10T06:30:00Z",
+        "2026-03-11T06:30:00Z"
+      ],
+      "expected_local": [
+        "2026-03-07T02:30:00",
+        "2026-03-08T03:00:00",
+        "2026-03-09T02:30:00",
+        "2026-03-10T02:30:00",
+        "2026-03-11T02:30:00"
+      ],
+      "note": "The nonexistent 02:30 during the spring gap advances to the first valid local instant."
+    },
+    {
+      "id": "new-york-fall-overlap",
+      "expression": "30 1 * * *",
+      "time_zone": "America/New_York",
+      "anchor_utc": "2026-10-31T00:00:00Z",
+      "expected_utc": [
+        "2026-10-31T05:30:00Z",
+        "2026-11-01T05:30:00Z",
+        "2026-11-02T06:30:00Z",
+        "2026-11-03T06:30:00Z",
+        "2026-11-04T06:30:00Z"
+      ],
+      "expected_local": [
+        "2026-10-31T01:30:00",
+        "2026-11-01T01:30:00",
+        "2026-11-02T01:30:00",
+        "2026-11-03T01:30:00",
+        "2026-11-04T01:30:00"
+      ],
+      "note": "The repeated 01:30 runs once at the first occurrence."
+    },
+    {
+      "id": "london-spring-gap",
+      "expression": "30 1 * * *",
+      "time_zone": "Europe/London",
+      "anchor_utc": "2026-03-28T00:00:00Z",
+      "expected_utc": [
+        "2026-03-28T01:30:00Z",
+        "2026-03-29T02:00:00Z",
+        "2026-03-30T00:30:00Z",
+        "2026-03-31T00:30:00Z",
+        "2026-04-01T00:30:00Z"
+      ],
+      "expected_local": [
+        "2026-03-28T01:30:00",
+        "2026-03-29T02:00:00",
+        "2026-03-30T01:30:00",
+        "2026-03-31T01:30:00",
+        "2026-04-01T01:30:00"
+      ],
+      "note": "The nonexistent 01:30 during the spring gap advances to 02:00."
+    },
+    {
+      "id": "lord-howe-fall-overlap",
+      "expression": "0 2 * * *",
+      "time_zone": "Australia/Lord_Howe",
+      "anchor_utc": "2026-04-04T00:00:00Z",
+      "expected_utc": [
+        "2026-04-04T15:30:00Z",
+        "2026-04-05T16:30:00Z",
+        "2026-04-06T16:30:00Z",
+        "2026-04-07T16:30:00Z",
+        "2026-04-08T16:30:00Z"
+      ],
+      "expected_local": [
+        "2026-04-05T02:00:00",
+        "2026-04-06T02:00:00",
+        "2026-04-07T02:00:00",
+        "2026-04-08T02:00:00",
+        "2026-04-09T02:00:00"
+      ],
+      "note": "The half-hour autumn transition is included; the selected time is unambiguous after the transition."
+    }
+  ]
+}
