@@ -90,9 +90,12 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-1.63.0
+      - name: Install the browser system libraries
+        if: ${{ !cancelled() }}
+        run: npx playwright install-deps chromium webkit
       - name: Install the browsers
         if: ${{ !cancelled() && steps.browsers.outputs.cache-hit != 'true' }}
-        run: npx playwright install --with-deps chromium webkit
+        run: npx playwright install chromium webkit
       - name: Stories in Chromium and WebKit with the accessibility gate
         if: ${{ !cancelled() }}
         run: npm run test:browser
