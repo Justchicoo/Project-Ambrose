@@ -8,31 +8,30 @@ C-53: define what a new operator should see and complete during the first ten mi
 
 ## Problem
 
-The project documents individual build, configuration, logging, and database steps, but a new operator still has to decide their order and how to tell whether each step succeeded. That makes a first run feel like a collection of disconnected commands, especially when the server stops at a missing local configuration or database connection.
+Less of this is manual than it looks, and the proposal below is what is left.
 
-The onboarding path should prove one small, useful outcome without promising features that are not built yet. Today that outcome is a healthy local server startup and a log that explains readiness; it is not a world, quest, combat, or panel session.
+3.22 is built: a first start finds the client installation, builds its type dump and extracts the name tables without asking. 3.20 added the guided setup behind it. A server started with no local configuration already exits naming the full path it looked for and the `.conf.dist` to copy. 5.08 is an installer. The settled direction is to remove steps, not to document them, so an onboarding path that walks five manual steps pushes against the thing it is trying to help.
+
+What a new operator actually lacks is not the steps. It is knowing what just happened on their behalf, which of the remaining decisions is theirs, and how to tell a healthy result from a quiet failure.
 
 ## Proposed first-ten-minutes path
 
-The first-run experience should present five ordered steps, each with one action, one success signal, and one recovery link:
+The onboarding surface shows what the first start did on its own, and asks only where automation genuinely cannot decide. Each thing it shows carries one success signal, one recovery link, and a retry that changes nothing silently.
 
-1. **Choose the build.** Show the supported compiler, CMake, and vcpkg prerequisites, then configure and build with the platform preset.
-   - Success: the selected server executable and its `.conf.dist` file exist beside each other.
-   - Recovery: point to the platform build section and the missing `VCPKG_ROOT` check.
-2. **Create local configuration.** Copy the matching `.conf.dist` to the ignored local `.conf` file and show the required database and listener settings.
-   - Success: the local file exists and contains the operator's own database endpoint without exposing the password in output.
-   - Recovery: point to the configuration layering and application-specific option reference.
-3. **Prepare a disposable database.** Run the existing database import path against a local development database.
-   - Success: the database exists, updates are applied, and the operator can identify the database without printing credentials.
-   - Recovery: show the database host, port, user, and database name as separate redacted fields.
-4. **Run the startup check.** Execute the application's documented `--check` mode.
-   - Success: the process reports readiness, shuts down cleanly, and exits zero.
-   - Recovery: link the first error category to the logging guide and show the exact local configuration path used.
-5. **Start and observe.** Start the server in the foreground and show where the console and file log are written.
-   - Success: the operator can find `logs/Server.log` and identify the `server.<app>`, `server.config`, `server.logging`, `network`, and `sql` categories.
-   - Recovery: explain missing appenders, database failures, and listener-port conflicts.
+1. **What was found.** The installation the first start located, the revision it reports, the type dump it built and the name tables it extracted.
+   - Success: each is named with where it was written, none of it inside the client installation.
+   - Recovery: what to do when no installation was found, and how to name one explicitly.
+2. **What still needs a decision.** Today that is the database endpoint, and nothing else: host, port, user and database as separate redacted fields.
+   - Success: the local `.conf` exists and names the operator's own endpoint, with the password never printed.
+   - Recovery: the configuration layering, so an operator can see which layer their value came from.
+3. **Whether it works.** The documented `--check` run.
+   - Success: readiness reported, a clean shutdown, exit zero.
+   - Recovery: the first error's category linked to the logging guide, and the exact configuration path that was used.
+4. **What to watch.** Where the console and file log are written, and which categories own which subsystem: `server.<app>`, `server.config`, `server.logging`, `network` and `sql`.
+   - Success: the operator can find `logs/Server.log` and read a healthy start.
+   - Recovery: missing appenders, database failures and listener-port conflicts, each named.
 
-The onboarding surface should display the current project status beside this path: a real client currently reaches character select, while world, quests, combat, pets, housing, and the operations panel are not yet available. That prevents a successful login-server check from being mistaken for a complete game-server deployment.
+The surface should display the current project status beside this: a real client reaches character select, while world, quests, combat, pets, housing and the operations panel are not yet available. That prevents a successful login-server check from being mistaken for a complete game-server deployment.
 
 ## Information the operator should see
 
@@ -62,7 +61,9 @@ The onboarding path must:
 
 ## Cheapest disproof
 
-Test the proposed sequence on a clean checkout with a deliberately missing local configuration and then with an unavailable database. If the operator cannot identify which step failed, what state was changed, and how to retry without losing the useful error, the five-step sequence is insufficient and this proposal should be revised before implementation.
+Run a first start on a clean checkout with no local configuration and watch what it already tells the operator. If it names the installation it found, what it built, the path it wanted and the file to copy, then most of this proposal is already implemented and only the database decision and the status boundary remain. Then run it with an unavailable database: if the operator cannot tell which step failed, what state changed, and how to retry without losing the error, the remaining four are still worth building.
+
+The lesson that produced this section: before writing that a project has not done something, look for whether it has. doc/ROADMAP.md's "Where we are" names 3.20, 3.22 and 5.08 in one paragraph, and the first version of this proposal was written without reading it.
 
 ## Dependencies and cost
 
