@@ -1,0 +1,227 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "id": "startup-config-loaded",
+      "line": "21:12:54.102 INFO  [server.config     ] Configuration loaded from gameserver.conf",
+      "level": "INFO",
+      "category": "server.config",
+      "search_labels": [
+        "startup",
+        "configuration"
+      ],
+      "terms": [
+        {
+          "text": "Configuration loaded",
+          "start": 40,
+          "end": 60
+        },
+        {
+          "text": "gameserver.conf",
+          "start": 66,
+          "end": 81
+        }
+      ]
+    },
+    {
+      "id": "startup-database-ready",
+      "line": "21:12:54.244 INFO  [sql.driver        ] Connection pool ready for login database",
+      "level": "INFO",
+      "category": "sql.driver",
+      "search_labels": [
+        "startup",
+        "database"
+      ],
+      "terms": [
+        {
+          "text": "Connection pool ready",
+          "start": 40,
+          "end": 61
+        },
+        {
+          "text": "login database",
+          "start": 66,
+          "end": 80
+        }
+      ]
+    },
+    {
+      "id": "startup-listener-ready",
+      "line": "21:12:54.310 INFO  [server.loginserver] Login listener ready on loopback port",
+      "level": "INFO",
+      "category": "server.loginserver",
+      "search_labels": [
+        "startup",
+        "listener"
+      ],
+      "terms": [
+        {
+          "text": "Login listener ready",
+          "start": 40,
+          "end": 60
+        },
+        {
+          "text": "loopback port",
+          "start": 64,
+          "end": 77
+        }
+      ]
+    },
+    {
+      "id": "authentication-success",
+      "line": "21:12:55.502 INFO  [server.loginserver] Session 3 authenticated as account 17",
+      "level": "INFO",
+      "category": "server.loginserver",
+      "search_labels": [
+        "authentication",
+        "session"
+      ],
+      "terms": [
+        {
+          "text": "authenticated",
+          "start": 50,
+          "end": 63
+        },
+        {
+          "text": "account 17",
+          "start": 67,
+          "end": 77
+        }
+      ]
+    },
+    {
+      "id": "authentication-refused",
+      "line": "21:12:56.011 WARN  [server.loginserver] Session 4 refused: invalid credentials",
+      "level": "WARN",
+      "category": "server.loginserver",
+      "search_labels": [
+        "authentication",
+        "refusal"
+      ],
+      "terms": [
+        {
+          "text": "refused",
+          "start": 50,
+          "end": 57
+        },
+        {
+          "text": "invalid credentials",
+          "start": 59,
+          "end": 78
+        }
+      ]
+    },
+    {
+      "id": "opcode-unhandled",
+      "line": "21:12:57.884 INFO  [network.opcode    ] Session 3 sent MSG_CREATECHARACTER, which the login server does not handle yet",
+      "level": "INFO",
+      "category": "network.opcode",
+      "search_labels": [
+        "protocol",
+        "unhandled-message",
+        "session"
+      ],
+      "terms": [
+        {
+          "text": "MSG_CREATECHARACTER",
+          "start": 55,
+          "end": 74
+        },
+        {
+          "text": "does not handle yet",
+          "start": 99,
+          "end": 118
+        }
+      ]
+    },
+    {
+      "id": "opcode-malformed",
+      "line": "21:12:58.104 WARN  [network.opcode    ] Session 3 dropped malformed message body",
+      "level": "WARN",
+      "category": "network.opcode",
+      "search_labels": [
+        "protocol",
+        "malformed-message",
+        "session"
+      ],
+      "terms": [
+        {
+          "text": "dropped",
+          "start": 50,
+          "end": 57
+        },
+        {
+          "text": "malformed message body",
+          "start": 58,
+          "end": 80
+        }
+      ]
+    },
+    {
+      "id": "database-failure",
+      "line": "21:13:02.700 ERROR [sql.driver        ] Connection pool failed: server unavailable",
+      "level": "ERROR",
+      "category": "sql.driver",
+      "search_labels": [
+        "database",
+        "failure"
+      ],
+      "terms": [
+        {
+          "text": "Connection pool failed",
+          "start": 40,
+          "end": 62
+        },
+        {
+          "text": "server unavailable",
+          "start": 64,
+          "end": 82
+        }
+      ]
+    },
+    {
+      "id": "shutdown-notice",
+      "line": "21:13:05.001 INFO  [server.gameserver ] Shutdown requested; draining sessions",
+      "level": "INFO",
+      "category": "server.gameserver",
+      "search_labels": [
+        "shutdown",
+        "session"
+      ],
+      "terms": [
+        {
+          "text": "Shutdown requested",
+          "start": 40,
+          "end": 58
+        },
+        {
+          "text": "draining sessions",
+          "start": 60,
+          "end": 77
+        }
+      ]
+    },
+    {
+      "id": "logging-write-failure",
+      "line": "21:13:06.114 ERROR [server.logging    ] Appender Server.log could not write record",
+      "level": "ERROR",
+      "category": "server.logging",
+      "search_labels": [
+        "logging",
+        "failure"
+      ],
+      "terms": [
+        {
+          "text": "Appender Server.log",
+          "start": 40,
+          "end": 59
+        },
+        {
+          "text": "could not write record",
+          "start": 60,
+          "end": 82
+        }
+      ]
+    }
+  ]
+}
