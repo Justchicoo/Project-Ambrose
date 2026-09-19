@@ -4,7 +4,11 @@
 
 Project Ambrose is built with AI tools under human direction. An AI assistant can make a contribution quickly, but it must work from the repository's rules rather than inventing missing behavior. This guide describes a repeatable workflow for one contributor-track item.
 
-## Start with the repository rules
+## Start with the prompt that already exists
+
+`contrib/AI-START-HERE.md` holds a prompt written to be pasted whole into any assistant. It already carries the document list below, the state of the project, every rule in the form its checker enforces, and what each open item needs of your machine. Paste it rather than assembling the same thing by hand, and use this guide for the part it cannot do: driving the assistant and judging what it gives back.
+
+## The repository rules it works from
 
 Before asking an AI tool to write anything, give it the relevant repository documents:
 
@@ -33,6 +37,8 @@ Tell the assistant what is actually available:
 Do not choose an item that needs a client, capture, database, or platform you do not have. A proposal can proceed with reasoning; a finding needs repeatable observation; a tool needs a runtime input and a focused output.
 
 ## Plan before writing
+
+First, before any of that: if the plan is to add something the project lacks, have the assistant look for whether it lacks it. Two proposals on this track have set out to build work that already existed, one a startup check that `src/test/apps/AppSmokeTest.cmake` had been running all along, the other a manual setup path that milestones 3.20 and 3.22 automated. `doc/ROADMAP.md`'s "Where we are" paragraph says what is done in one pass, the phase file covers the area in detail, and a guard usually exists as a CTest entry. It costs five minutes and it is the difference between a contribution that lands and one that has to be re-aimed in review.
 
 Ask the assistant to state:
 
@@ -139,7 +145,7 @@ python apps/clientdriver/tests/test_clientdriver.py
 
 Build and run the smallest relevant test command. CI build legs run only after a maintainer adds an appropriate `ci:` label, so a green path/style check does not prove that C++ compiles.
 
-Every commit in the branch range needs an AI attribution trailer, for example:
+Every commit in the branch range needs an AI attribution trailer naming what wrote it. The checker matches case-insensitively and wants only a name and an address in angle brackets, so your assistant's own trailer is fine. For example:
 
 ```text
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>

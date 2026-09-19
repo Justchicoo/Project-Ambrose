@@ -148,7 +148,6 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | C-51 | The machine-checkable finding block: extend `contrib/findings/README.md` with it and write the tool that validates it, which the maintainer folds into the findings checker | `contrib/tools/` and the README this track already owns | C-22 as a pull request, which is what makes a claim provable by a suite |
 | C-52 | A proposal for what a good finding looks like, with two worked examples, one verified and one refuted | `contrib/proposals/` | A refuted example teaches more than a verified one, and there is no example of either today |
 | C-54 | A proposal for a quality bar the server is missing: a check, a limit or a guard | `contrib/proposals/` | C-20's shape, kept open deliberately, because outside eyes catch what a project stops seeing |
-| C-55 | A guide to contributing with an AI tool: what to have it read first, what it gets wrong here, and how to check its work | `doc/guides/` | Ambrose is built this way and expects contributions built this way, and nobody has written down what actually works |
 
 ### Merged so far
 
@@ -162,6 +161,7 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | C-22 | The shape of a machine-checkable finding, which C-21 and C-51 both build against | `contrib/proposals/machine-checkable-findings.md` | solanazaru-eng, in #7 |
 | C-20 | The two assertions the login startup smoke check does not make: an occupied port, and a leg with no database | `contrib/proposals/login-startup-smoke.md` | solanazaru-eng, in #9 |
 | C-53 | What an operator is shown in their first ten minutes, given how much the first start already does | `contrib/proposals/operator-onboarding.md` | solanazaru-eng, in #10 |
+| C-55 | A guide to contributing with an AI tool: what to give it, what to require of it, and how to judge the diff | `doc/guides/ai-contributing.md` | solanazaru-eng, in #11 |
 
 An item stays listed until its pull request is merged. Ask before starting something not on the list: the answer is usually yes if it lands in the paths above.
 
