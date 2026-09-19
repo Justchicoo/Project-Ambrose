@@ -113,7 +113,7 @@ std::filesystem::path LogConfig::Utf8Path(std::string_view utf8)
 
 std::vector<std::string_view> LogConfig::GetOptionNames()
 {
-    return { "LogsDir", "Console.Colors", "Log.Async.Enable", "Log.Async.QueueSize", "Log.Async.QueueFull", "Log.Utc", "Log.PendingBuffer" };
+    return { "LogsDir", "Console.Colors", "Console.Timestamp", "Console.CategoryWidth", "Console.RepeatCategory", "Log.Async.Enable", "Log.Async.QueueSize", "Log.Async.QueueFull", "Log.Utc", "Log.PendingBuffer" };
 }
 
 std::vector<std::string> LogConfig::SplitFields(std::string_view value)
@@ -286,6 +286,37 @@ LogSettings LogConfig::Parse(std::vector<std::pair<std::string, ConfigEntry>> co
                 result.Errors.push_back(EntryIssue(entry, key, fmt::format("'{}' is not valid; use 0 never, 1 when the output is a terminal, or 2 always", value)));
             else
                 settings.ConsoleColors = static_cast<ConsoleColorMode>(*mode);
+            continue;
+        }
+        if (key == "Console.Timestamp")
+        {
+            std::string const style = Ambrose::ToLower(std::string(value));
+            if (style == "short")
+                settings.ConsoleTimestamp = LogTimestampStyle::Short;
+            else if (style == "full")
+                settings.ConsoleTimestamp = LogTimestampStyle::Full;
+            else if (style == "off")
+                settings.ConsoleTimestamp = LogTimestampStyle::Off;
+            else
+                result.Errors.push_back(EntryIssue(entry, key, fmt::format("'{}' is not valid; use short for the time alone, full for the date and time, or off", value)));
+            continue;
+        }
+        if (key == "Console.CategoryWidth")
+        {
+            std::optional<uint16> const width = Ambrose::StringTo<uint16>(value);
+            if (!width || *width > LogLayout::MaxCategoryWidth)
+                result.Errors.push_back(EntryIssue(entry, key, fmt::format("'{}' is not valid; use 0 to write the category inline and unpadded, or a width up to {}", value, LogLayout::MaxCategoryWidth)));
+            else
+                settings.ConsoleCategoryWidth = *width;
+            continue;
+        }
+        if (key == "Console.RepeatCategory")
+        {
+            std::optional<bool> const flag = ParseBool(value);
+            if (!flag)
+                result.Errors.push_back(EntryIssue(entry, key, fmt::format("'{}' is not a boolean; use 1, 0, true, false, yes or no", value)));
+            else
+                settings.ConsoleRepeatCategory = *flag;
             continue;
         }
         if (key == "Log.Async.Enable" || key == "Log.Utc")

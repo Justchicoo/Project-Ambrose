@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Parses and validates LogsDir, Log.*, Console.Colors, Appender.* and Logger.* into LogSettings with file and line issues.
+ * Parses and validates LogsDir, Log.*, Console.*, Appender.* and Logger.* into LogSettings with file and line issues.
  */
 
 #ifndef AMBROSE_LOGCONFIG_H
@@ -38,6 +38,9 @@ struct LogSettings
     bool Utc = false;
     uint32 PendingBuffer = DefaultPendingBuffer;
     ConsoleColorMode ConsoleColors = ConsoleColorMode::Auto;
+    LogTimestampStyle ConsoleTimestamp = LogTimestampStyle::Short;
+    uint16 ConsoleCategoryWidth = LogLayout::DefaultCategoryWidth;
+    bool ConsoleRepeatCategory = true;
     std::vector<AppenderDefinition> Appenders;
     std::vector<LoggerDefinition> Loggers;
 

@@ -759,7 +759,10 @@ LogConfigResult Log::ApplyLocked(LogSettings settings)
         }
     }
 
-    AppenderCreateContext const context{ settings.LogsDir, std::chrono::system_clock::now(), settings.Utc, _console, LogFileRegistry::Instance(), *_streams };
+    LogLayout layout;
+    layout.Timestamp = settings.ConsoleTimestamp;
+    layout.CategoryWidth = settings.ConsoleCategoryWidth;
+    AppenderCreateContext const context{ settings.LogsDir, std::chrono::system_clock::now(), settings.Utc, _console, LogFileRegistry::Instance(), *_streams, layout, settings.ConsoleRepeatCategory };
     std::string const sharedKey = fmt::format("\x1F{}\x1F{}", settings.Utc ? 1 : 0, ConfigMgr::PathToUtf8(settings.LogsDir));
     std::vector<std::shared_ptr<Appender>> appenders;
     std::vector<std::shared_ptr<Appender>> created;
