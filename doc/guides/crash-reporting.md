@@ -1,6 +1,6 @@
 <!-- Project Ambrose by Imjustchico: A safe workflow for collecting and reading Ambrose crash evidence. -->
 
-# Reading and reporting a crash
+# C-47: Reading and reporting a crash
 
 This guide explains what to collect when an Ambrose process exits unexpectedly, how to read the evidence in order, and what to send for investigation. It was checked against the current logging guide, application configuration references, and the repository's clean-room restrictions on 2026-09-19.
 
