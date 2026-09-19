@@ -27,7 +27,9 @@ Stop follow mode with `Ctrl+C`.
 
 ## What it was run against
 
-The focused validation used a synthetic log containing the current Ambrose message log forms. Run it against a local Ambrose server log before using its output as an investigation lead.
+The focused validation used a synthetic log containing the current Ambrose message log forms and a logging-configuration error containing the words "never accepts"; the configuration error was correctly ignored. Run it against a local Ambrose server log before using its output as an investigation lead.
+
+This contribution implements C-06 from the contributor track. It was checked against the message wording in `src/server/shared/Messages/MessageHandlerTable.h`, built with the standalone MSVC CMake project, and exercised with matching, handled, malformed-body, unknown-message, and logging-configuration lines.
 
 ## What it prints
 
@@ -49,6 +51,8 @@ MSG_CHARLIST : 1
 ```
 
 The parser recognizes the current Ambrose log forms for unknown messages, messages not handled yet, messages never accepted by an app, and messages that only the server sends. It intentionally does not classify every dropped protocol violation as an unhandled message.
+
+The server limits dropped-message logging to `Network.DroppedMessageBurst = 64` per session and `Network.DroppedMessagesPerSecond = 16`. After those limits, it stops logging further drops and adds strikes instead; `Network.MaxStrikes = 10` closes the connection by default. The counts printed by this tool are therefore a lower bound, not a complete total.
 
 ## What would disprove it
 

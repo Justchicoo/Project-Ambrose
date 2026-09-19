@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <regex>
 #include <string>
 #include <thread>
@@ -18,9 +19,9 @@ struct MessageStatistics {
     int count = 0;
 };
 
-static std::string ExtractMessageName(const std::string& line) {
+static std::optional<std::string> ExtractMessageName(const std::string& line) {
     std::regex pattern(
-        R"(Unknown message \(([^)]+)\)|sent ([A-Za-z_][A-Za-z0-9_:.-]*)|Dropped ([A-Za-z_][A-Za-z0-9_:.-]*))",
+        R"(Unknown message \(([^)]+)\)|sent ([A-Za-z_][A-Za-z0-9_:.-]*), which .*(?:does not handle yet|never accepts|only the server sends))",
         std::regex::icase);
 
     std::smatch match;
@@ -32,12 +33,12 @@ static std::string ExtractMessageName(const std::string& line) {
         }
     }
 
-    return "unknown";
+    return std::nullopt;
 }
 
 static bool IsRejectedMessage(const std::string& line) {
     static const std::regex pattern(
-        R"(Unknown message \(|does not handle yet|never accepts|only the server sends)",
+        R"(Unknown message \(|sent [A-Za-z_][A-Za-z0-9_:.-]*, which .*(?:does not handle yet|never accepts|only the server sends))",
         std::regex::icase);
     return std::regex_search(line, pattern);
 }
@@ -67,10 +68,14 @@ static bool ProcessLine(const std::string& line, std::map<std::string, int>& cou
         return false;
     }
 
-    std::string name = ExtractMessageName(line);
-    ++counts[name];
+    std::optional<std::string> const name = ExtractMessageName(line);
+    if (!name) {
+        return false;
+    }
+
+    ++counts[*name];
     if (printEvent) {
-        std::cout << name << '\n';
+        std::cout << *name << '\n';
     }
     return true;
 }
