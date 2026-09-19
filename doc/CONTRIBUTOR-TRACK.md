@@ -120,34 +120,11 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | C-23 | A capture replayer: replay a captured session against your own Ambrose server and report every message where the answer differs | `contrib/tools/` | Turns any capture into a regression test, and it is how F-17's disagreement gets settled in an afternoon |
 | C-24 | A message coverage tool: which of the message ids a running server has ever seen, sent or refused | `contrib/tools/` | Points every later phase at the messages that actually occur rather than at the full list |
 | C-25 | A message definition differ: what changed in the client's own message XML between two revisions | `contrib/tools/` | Feeds F-40 and 3.23, and it is the fastest way to know a revision is safe to follow |
-| C-26 | A client-derived byte checker: scan a pull request's data files for anything that came from a client install | `contrib/tools/` | This track's hardest rule is enforced by reading today; this makes it enforceable |
-| C-27 | A per-session quality prober: connect to your own server, measure round-trip time, jitter and timeout behaviour, and report | `contrib/tools/` | Produces exactly the falsifiable, repeatable, game-data-free numbers 17.92 needs, before 17.92 exists |
-| C-28 | A capture corpus index: which captures exist, what each one covers, and what none of them covers | `contrib/notes/` | The gaps in the corpus are invisible today, and knowing them is what stops a decode being trusted too far |
-| C-29 | A log value-class classifier: given a log line, return the byte ranges that name a thing, to the class list 17.76 publishes | `contrib/tools/` | Unusually clean contributor work: the specification is a class list, the input is real lines, the output is byte ranges, so it is pass or fail against a golden file |
-| C-30 | A labelled corpus of Ambrose log lines: which runs in each line an operator would search for | `contrib/tools/`, beside C-29 | The labelling is the judgement work, and once labelled a golden file locks it down for good |
-| C-31 | A terminal rendering report: how the console line of 17.74 renders on as many terminals as you can reach, at 16, 256 and truecolor | `contrib/notes/` | The 16-color rendering over SSH is what most operators will actually see, and nobody has looked at it on a real 16-color terminal |
-| C-32 | A standalone contrast auditor: read a token file and print every text pair and every control-edge pair with its ratio and verdict | `contrib/tools/` | It is the logic the design system's gate needs, and it can be written and proven before that milestone starts |
 | C-33 | A light-theme accent ramp with every pair computed, for any accent doc/DESIGN.md has not already settled | `contrib/proposals/` | Somebody has to do the arithmetic and the taste, and a computed proposal is worth more than an opinion |
-| C-34 | A chart series ramp of seven steps, checked for the common kinds of color blindness and readable on both grounds | `contrib/proposals/` | doc/DESIGN.md asks for one and does not have one, and the first chart built without it will invent its own |
-| C-35 | A sequential ramp for heatmaps and density grids, distinct from the four meaning accents | `contrib/proposals/` | Listed under Decisions needed, and 17.98's grid is waiting for it |
-| C-36 | A guide to running the panel under high contrast and under a screen reader, recording what breaks | `doc/guides/` | The check nobody runs and the one most likely to find something, on a product whose whole state language is color |
-| C-37 | A screen-reader transcript of the overview page, with what was confusing | `doc/guides/` | A transcript is evidence; a claim that a page is accessible is not |
-| C-38 | Client driver scenarios for the synthetic probe: connect, handshake, authenticate, realm list, character select, enter world, walk, log out | `apps/clientdriver/scenarios/` | Each becomes a check that runs itself, and together they are the probe 17.81 schedules |
-| C-39 | Client driver scenarios for the failure paths: an idle timeout, a ban taking effect, a shutdown notice, a reconnect | `apps/clientdriver/scenarios/` | Extends C-03 into the paths that only fail in production |
-| C-40 | Alert rule packs: thresholds you have actually run a server with, naming the figure, the threshold, the duration and why | `contrib/proposals/` | Default thresholds invented by somebody who has never watched the graph are how alerting gets turned off |
-| C-41 | A dashboard definition for the metrics endpoint, with the figures it assumes named | `contrib/tools/` or `doc/guides/` | Configuration rather than code, and it makes the metrics milestone useful the day it lands |
-| C-42 | A cron corpus: expressions with their expected next runs, including both day fields restricted, the macros, and daylight saving gaps and overlaps | `contrib/tools/` | The panel and the server must agree exactly, and a corpus is how that is proved rather than hoped |
 | C-43 | A load report: run the load generator against your own server and write down what happened, with the hardware named | `contrib/notes/` | Nothing in the plan measures the server under load before phase 12 |
-| C-44 | A guide to running Ambrose behind a reverse proxy with TLS, end to end | `doc/guides/` | The first thing anybody does on a real machine, and the easiest to get subtly wrong |
-| C-45 | A guide to opening a server to the internet safely: firewall rules, what to expose, what never to | `doc/guides/` | The panel fronts a game database, so this guide is a security control |
-| C-46 | A guide to capturing a session without capturing anybody's credentials | `doc/guides/` | Captures are the project's main evidence and the main way somebody leaks their own password |
-| C-47 | A guide to reading a crash: what the logs hold, what a dump holds, what to send | `doc/guides/` | Turns a crash report from a screenshot into something actionable |
 | C-48 | Door destinations for a world beyond Wizard City | `data/sql/updates/pending_db_world/` | C-01's shape, more of it: the teleport class carries no properties, so this can only be authored |
-| C-49 | A proposal for the content pack format: manifest, versioning, install and uninstall | `contrib/proposals/` | It is what turns authored data such as C-01 and C-48 from a merged file into something an operator installs and removes |
 | C-50 | Locale catalogs for the newer pages: the command palette, the health page, the digest and the alert notices | `contrib/locale/` | C-16's shape, and translating is the fastest way to find a figure somebody formatted by hand |
 | C-51 | The machine-checkable finding block: extend `contrib/findings/README.md` with it and write the tool that validates it, which the maintainer folds into the findings checker | `contrib/tools/` and the README this track already owns | C-22 as a pull request, which is what makes a claim provable by a suite |
-| C-52 | A proposal for what a good finding looks like, with two worked examples, one verified and one refuted | `contrib/proposals/` | A refuted example teaches more than a verified one, and there is no example of either today |
-| C-54 | A proposal for a quality bar the server is missing: a check, a limit or a guard | `contrib/proposals/` | C-20's shape, kept open deliberately, because outside eyes catch what a project stops seeing |
 
 ### Merged so far
 
@@ -162,6 +139,29 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | C-20 | The two assertions the login startup smoke check does not make: an occupied port, and a leg with no database | `contrib/proposals/login-startup-smoke.md` | solanazaru-eng, in #9 |
 | C-53 | What an operator is shown in their first ten minutes, given how much the first start already does | `contrib/proposals/operator-onboarding.md` | solanazaru-eng, in #10 |
 | C-55 | A guide to contributing with an AI tool: what to give it, what to require of it, and how to judge the diff | `doc/guides/ai-contributing.md` | solanazaru-eng, in #11 |
+| C-26 | A checker for machine-detectable client-derived files | `contrib/tools/ambrose-client-byte-checker/` | solanazaru-eng, in #35 |
+| C-27 | A session quality prober measuring connect time, response time and jitter | `contrib/tools/ambrose-quality-prober/` | solanazaru-eng, in #34 |
+| C-28 | An index of what a capture corpus covers and where the gaps are | `contrib/notes/capture-corpus-index.md` | solanazaru-eng, in #31 |
+| C-29 | A classifier for the value runs inside a log line | `contrib/tools/ambrose-log-value-classifier/` | solanazaru-eng, in #33 |
+| C-30 | A labelled corpus of log lines with its own validator | `contrib/tools/ambrose-log-corpus/` | solanazaru-eng, in #30 |
+| C-31 | A report on how the console renders across terminals | `contrib/notes/terminal-rendering-report.md` | solanazaru-eng, in #32 |
+| C-32 | A contrast auditor that checks every semantic pair in both themes | `contrib/tools/ambrose-contrast-auditor/` | solanazaru-eng, in #29 |
+| C-34 | An audit of the chart series ramp in both themes | `contrib/proposals/chart-series-ramp-audit.md` | solanazaru-eng, in #27 |
+| C-35 | A sequential ramp for heatmaps and density grids | `contrib/proposals/heatmap-ramp.md` | solanazaru-eng, in #26 |
+| C-36 | An accessibility guide for the dashboard | `doc/guides/accessibility-dashboard.md` | solanazaru-eng, in #25 |
+| C-37 | A screen reader transcript of the overview screen | `doc/guides/screen-reader-overview-transcript.md` | solanazaru-eng, in #28 |
+| C-38 | The executable prefix of the synthetic probe scenario | `apps/clientdriver/scenarios/` | solanazaru-eng, in #24 |
+| C-39 | Scenarios for a ban, an idle timeout, a reconnect and the shutdown notice | `apps/clientdriver/scenarios/` | solanazaru-eng, in #23 |
+| C-40 | An alert rule pack for an operator | `contrib/proposals/alert-rule-pack.md` | solanazaru-eng, in #22 |
+| C-41 | A dashboard definition with a validator | `contrib/tools/ambrose-dashboard-definition/` | solanazaru-eng, in #21 |
+| C-42 | A corpus of cron cases with local and UTC projections | `contrib/tools/ambrose-cron-corpus/` | solanazaru-eng, in #20 |
+| C-44 | A guide to a reverse proxy with TLS in front of Ambrose | `doc/guides/reverse-proxy-tls.md` | solanazaru-eng, in #19 |
+| C-45 | A guide to putting a server on the internet safely | `doc/guides/internet-safety.md` | solanazaru-eng, in #18 |
+| C-46 | A guide to capturing your own session safely | `doc/guides/safe-session-capture.md` | solanazaru-eng, in #17 |
+| C-47 | A guide to crash reporting and what to remove before sending a dump | `doc/guides/crash-reporting.md` | solanazaru-eng, in #16 |
+| C-49 | A content pack format for content that ships as data | `contrib/proposals/content-pack-format.md` | solanazaru-eng, in #15 |
+| C-52 | Worked examples of a verified and a refuted finding | `contrib/proposals/finding-examples.md` | solanazaru-eng, in #14 |
+| C-54 | A quality bar for the admin API's authentication | `contrib/proposals/admin-auth-quality-bar.md` | solanazaru-eng, in #13 |
 
 An item stays listed until its pull request is merged. Ask before starting something not on the list: the answer is usually yes if it lands in the paths above.
 
