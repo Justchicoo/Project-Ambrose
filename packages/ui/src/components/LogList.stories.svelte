@@ -26,8 +26,26 @@
     {/snippet}
 </Story>
 
-<Story name="Nothing yet">
+<Story name="Nothing yet" tags={["state:empty"]}>
     {#snippet template()}
         <LogList label="Game server console" records={[]} height="8rem" />
+    {/snippet}
+</Story>
+
+<Story name="Still loading" tags={["state:loading"]}>
+    {#snippet template()}
+        <LogList label="Server log" records={[]} status="loading" />
+    {/snippet}
+</Story>
+
+<Story name="Nothing matched the filter" tags={["state:no-results"]}>
+    {#snippet template()}
+        <LogList label="Server log" records={[]} status="no-results" noResults="No record matches that filter" />
+    {/snippet}
+</Story>
+
+<Story name="Could not be loaded" tags={["state:error"]}>
+    {#snippet template()}
+        <LogList label="Server log" records={[]} status="error" error="The log could not be read" />
     {/snippet}
 </Story>
