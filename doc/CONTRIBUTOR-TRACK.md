@@ -105,9 +105,7 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | C-01 | Door destinations for Wizard City: every doorway a player can walk through, with the zone it leads to | `data/sql/updates/pending_db_world/` | `ResTeleport` carries no properties, so this table has to be authored. Phase 10 needs it and cannot generate it |
 | C-02 | A capture decoder: read a pcapng of a session against your own Ambrose server and print each message with its fields | `contrib/tools/` | Turns a capture into something readable when a message misbehaves |
 | C-03 | Scenarios for the client driver: the idle timeouts, a ban taking effect, a shutdown notice, a reconnect | `apps/clientdriver/scenarios/` | Every scenario becomes a check that runs itself from then on |
-| C-04 | A tool that diffs two revisions of an install: which archives, zones and locale files changed | `contrib/tools/` | Feeds F-15 and milestone 3.23 |
 | C-05 | A tool that reads your own install and reports what Ambrose does not yet understand: classes missing from the type data, files no reader handles | `contrib/tools/` | Points the next milestones at the real gaps |
-| C-06 | A tool that watches a running Ambrose server and prints every message it refused or did not handle | `contrib/tools/` | Finds the holes a scenario has not covered yet |
 | C-07 | A tool that renders a zone's objects as a map image from your own install | `contrib/tools/` | Makes a zone reviewable at a glance instead of row by row |
 | C-08 | A tool that compares two type dumps and explains what a revision changed | `contrib/tools/` | Turns a revision bump into a readable list instead of a diff of 11 MiB |
 | C-09 | A tool that checks a world database against the client's own data and reports rows that disagree | `contrib/tools/` | Keeps authored content honest as the client changes |
@@ -157,6 +155,13 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | C-53 | A proposal for an operator onboarding path: what a new operator should be shown in their first ten minutes | `contrib/proposals/` | The panel is being built now, so a good proposal lands in a real milestone quickly |
 | C-54 | A proposal for a quality bar the server is missing: a check, a limit or a guard | `contrib/proposals/` | C-20's shape, kept open deliberately, because outside eyes catch what a project stops seeing |
 | C-55 | A guide to contributing with an AI tool: what to have it read first, what it gets wrong here, and how to check its work | `doc/guides/` | Ambrose is built this way and expects contributions built this way, and nobody has written down what actually works |
+
+### Merged so far
+
+| Id | What landed | Who |
+|---|---|---|
+| C-04 | `contrib/tools/ambrose-install-diff`, which reports the archive, zone and locale files that differ between two installations | solanazaru-eng, in #2 |
+| C-06 | `contrib/tools/ambrose-message-watcher`, which reports every message a running server refused or did not handle | solanazaru-eng, in #1 |
 
 An item stays listed until its pull request is merged. Ask before starting something not on the list: the answer is usually yes if it lands in the paths above.
 
