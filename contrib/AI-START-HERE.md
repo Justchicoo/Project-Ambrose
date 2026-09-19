@@ -23,6 +23,7 @@ I am contributing to Project Ambrose, a Wizard101 server written from scratch in
 - The pinned client revision is r806919 (Wizard 1.610). A finding names the revision it was found on; read mine from `Bin/revision.dat` in my own install rather than copying an example.
 - The type dump `src/tools/typeextract` writes is version 2: an object with `version`, `revision`, `executable_sha256`, `extractor`, and `classes`, itself an object keyed by class name, each class holding `name`, `bases`, `hash` and `properties`. A tool that reads a dump should refuse a version it does not know rather than report nothing.
 - A running server logs each message it refused or did not handle under the `network.opcode` category, but only up to `Network.DroppedMessageBurst = 64` in a session and `Network.DroppedMessagesPerSecond = 16`. Past that it stops logging and adds a strike instead, a refused message strikes every time, and `Network.MaxStrikes = 10` closes the connection. Probing with unknown messages runs out, and a quiet log is not proof of quiet traffic.
+- Setup is already automatic, which a proposal about setup has to start from: a first start finds the client installation, builds its type dump and extracts the name tables without asking, a server with no local configuration exits naming the full path it wanted and the `.conf.dist` to copy, and an installer is a scheduled milestone. The direction is to remove steps, so anything that documents a manual sequence should say why automation cannot cover it.
 - The console writes fixed columns on a terminal: a millisecond time, the level word padded to five, the category in a column of its own, and the message from a fixed column, with only the level word and the values inside a message carrying colour. Redirected output keeps the plain older form, full date and no escape bytes, so anything parsing a log file is unaffected.
 
 ## What already exists, so I do not start from nothing
@@ -77,12 +78,13 @@ A merged finding stays `claimed` and nothing is built on it until Ambrose re-der
 ## How I want you to work
 
 1. Ask which item id I am taking and what I already have: a client installation, a packet capture, a running Ambrose server, a build, or nothing yet. If I am unsure, recommend one that fits what I have and takes an evening.
-2. Turn it into a plan before any writing: what exactly to observe or build, what evidence would prove the claim, and what would disprove it. Put the cheapest experiment that could kill the idea first, so I do not spend a week on something wrong.
-3. Walk me through it one step at a time, waiting for what I actually see rather than assuming the result. When I paste output, read it rather than agreeing with it.
-4. Prefer the smallest thing that answers the question. A tool that reads only what it needs beats one that reads everything: classify before you hash, compare cheap fields before expensive ones, and never read a whole installation where a size comparison would do.
-5. Make a tool fail usefully. Name the file and the reason, exit non-zero, and carry on past what can be skipped rather than losing a whole report to one unreadable file. Say in its README what would make its output wrong.
-6. Write the files in the required shape, then have me run every check below and fix whatever they print.
-7. Write the pull request description: the item id, what the change is, how it was verified, and what would disprove it.
+2. **Before writing that Ambrose lacks anything, look for whether it has it.** This has been the single most common fault in contributions so far: two proposals in a row set out to add something the project had already built. Search `doc/ROADMAP.md`'s "Where we are" paragraph, which says what is done in one pass, then the phase file for the area, then grep the tests. A guard usually exists as a CTest entry: `src/test/apps/AppSmokeTest.cmake` alone already proves the servers reach readiness and shut down cleanly with disposable databases. The cheapest disproof of "nothing proves X" is to find the test that proves X, and it takes five minutes.
+3. Turn it into a plan before any writing: what exactly to observe or build, what evidence would prove the claim, and what would disprove it. Put the cheapest experiment that could kill the idea first, so I do not spend a week on something wrong.
+4. Walk me through it one step at a time, waiting for what I actually see rather than assuming the result. When I paste output, read it rather than agreeing with it.
+5. Prefer the smallest thing that answers the question. A tool that reads only what it needs beats one that reads everything: classify before you hash, compare cheap fields before expensive ones, and never read a whole installation where a size comparison would do.
+6. Make a tool fail usefully. Name the file and the reason, exit non-zero, and carry on past what can be skipped rather than losing a whole report to one unreadable file. Say in its README what would make its output wrong.
+7. Write the files in the required shape, then have me run every check below and fix whatever they print.
+8. Write the pull request description: the item id, what the change is, how it was verified, and what would disprove it.
 
 ## Before the pull request
 
