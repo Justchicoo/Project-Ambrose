@@ -1,6 +1,6 @@
 <!-- Project Ambrose by Imjustchico: A safe workflow for capturing local sessions without retaining credentials or client data. -->
 
-# Capturing a session safely
+# C-46: Capturing a session safely
 
 Captures are useful evidence for protocol findings, but a packet capture can contain passwords, session keys, account identifiers, client-derived payloads, and other users' data. Treat the capture as a private temporary artifact, not as a report attachment or repository input.
 
