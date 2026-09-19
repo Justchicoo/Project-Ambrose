@@ -50,9 +50,32 @@ Common categories include:
 | `server.config` | Configuration warnings and rejected values |
 | `server.logging` | Appender failures and dropped log records |
 | `network` | Socket lifecycle and session behavior |
+| `network.session` | One session's own life: attach, keepalive, idle and close |
+| `server.admin` | The admin API listener, its authentication and its refusals |
+| `server.threading` | Worker threads starting, stopping and failing |
+| `server.loading` | Data loaded at startup and what it cost |
+| `sql.updates` | Database update files applied, skipped or refused |
+| `sql.driver` | Connection pool and driver-level failures |
 | `network.opcode` | Client message decoding, dispatch, refused messages, and protocol violations |
 | `sql` | Database connection and update activity |
 | `sql.sql` | Query-level diagnostics when enabled |
+
+## Read the console line
+
+A console attached to a terminal lays each record out in fixed columns, so the eye scans down rather than across:
+
+```text
+21:12:54.502 INFO  [server.loginserver] Session 3 authenticated as example (id 1)
+21:12:54.884 WARN  [network.opcode   ] Session 3 sent MSG_CREATECHARACTER, which the login server does not handle yet
+```
+
+The time is `HH:MM:SS.mmm`, the level word is padded to five characters, and the category sits in a column of its own, `Console.CategoryWidth` wide and 18 by default, so every message begins at the same column whatever the category. A category longer than the column is shortened in the middle, with the whole name still written to every other appender, so never read a shortened name as the real one.
+
+Color marks the parts that carry meaning and nothing else. The level word alone takes the level's color, the message body stays body text at every level, the timestamp is faint and brightens on the first line of each new second, and the category is quiet. A debug or trace record is dimmed whole, which is how a detail line reads as a detail before you have read a word of it. A line is never tinted end to end by its level, so color inside a message means something specific rather than repeating what the level word already says.
+
+Redirected output is deliberately different and deliberately unchanged: the full date, the category unpadded, no colors and no escape bytes at all. A log piped to a file or another tool is the same bytes it has always been, so anything that parses it keeps working.
+
+`Console.Timestamp` takes `short`, `full` or `off`, `Console.CategoryWidth` takes 0 to write the category inline and unpadded, and `Console.RepeatCategory = 0` blanks the column when a line repeats the category above it. `Console.Colors` on the console appender still takes six codes in the order fatal, error, warn, info, debug, trace, and also takes named pairs such as `warn=14 body=15 category=8`, where a name is a level or one of body, value, category, timestamp, mark and punctuation.
 
 ## Understand severity
 
