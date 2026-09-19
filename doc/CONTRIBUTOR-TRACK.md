@@ -116,7 +116,6 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | C-17 | Notes on how the client picks and shows realms after login | `contrib/findings/protocol/` | Milestone 4.03 builds the realm registry and has to match this behaviour |
 | C-18 | A proposal for anything in this document that is wrong or missing | `contrib/proposals/` | The track should improve as people use it |
 | C-19 | A proposal for a panel page or feature you would want as an operator, with what it shows and what it does | `contrib/proposals/` | The panel is being built now, so a good proposal lands in a real milestone quickly |
-| C-20 | A proposal for the server's own quality bar: a check, a limit or a guard you think is missing | `contrib/proposals/` | Outside eyes catch what a project stops seeing |
 | C-21 | A finding verifier: read a finding's machine-checkable block and run it against a live Ambrose server or your own install, printing pass, fail or unable to run | `contrib/tools/` | Turns a merged claim into something a suite proves instead of something somebody gets to |
 | C-23 | A capture replayer: replay a captured session against your own Ambrose server and report every message where the answer differs | `contrib/tools/` | Turns any capture into a regression test, and it is how F-17's disagreement gets settled in an afternoon |
 | C-24 | A message coverage tool: which of the message ids a running server has ever seen, sent or refused | `contrib/tools/` | Points every later phase at the messages that actually occur rather than at the full list |

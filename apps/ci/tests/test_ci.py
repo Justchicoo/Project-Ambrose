@@ -518,6 +518,43 @@ class ContributorPathTests(unittest.TestCase):
             for folder in re.findall(r"`([^`]*/[^`]*)`", columns[3]):
                 self.assertEqual(ci_contrib_paths.check([folder + "a-file"]), [], columns[1].strip())
 
+    def track_tables(self):
+        with io.open(os.path.join(ROOT, "doc", "CONTRIBUTOR-TRACK.md"), encoding="utf-8") as handle:
+            text = handle.read()
+        marker = "### Merged so far"
+        self.assertIn(marker, text)
+        head, tail = text.split(marker, 1)
+        opened = re.findall(r"^\| ([FC]-\d+) \|", head, re.M)
+        merged = re.findall(r"^\| ([FC]-\d+) \|", tail, re.M)
+        return opened, merged
+
+    def test_a_merged_item_is_not_still_listed_as_open(self):
+        opened, merged = self.track_tables()
+        both = sorted(set(opened) & set(merged))
+        self.assertEqual(both, [], "listed as open and as merged: " + ", ".join(both))
+
+    def test_no_item_is_listed_twice(self):
+        opened, merged = self.track_tables()
+        for name, rows in (("open", opened), ("merged", merged)):
+            repeated = sorted({row for row in rows if rows.count(row) > 1})
+            self.assertEqual(repeated, [], name + " lists an item twice: " + ", ".join(repeated))
+
+    def test_the_readme_counts_the_open_items(self):
+        opened, _merged = self.track_tables()
+        with io.open(os.path.join(ROOT, "README.md"), encoding="utf-8") as handle:
+            readme = handle.read()
+        for found in re.findall(r"open%20items-(\d+)-", readme) + re.findall(r"\*\*(\d+) open items\*\*", readme):
+            self.assertEqual(int(found), len(opened), "README says " + found + " open items, the track lists " + str(len(opened)))
+
+    def test_a_merged_item_names_something_that_exists(self):
+        _opened, merged = self.track_tables()
+        self.assertGreater(len(merged), 0)
+        with io.open(os.path.join(ROOT, "doc", "CONTRIBUTOR-TRACK.md"), encoding="utf-8") as handle:
+            tail = handle.read().split("### Merged so far", 1)[1]
+        for row in [line for line in tail.splitlines() if re.match(r"^\| [FC]-\d+ \|", line)]:
+            for path in re.findall(r"`([^`]+)`", row):
+                self.assertTrue(os.path.exists(os.path.join(ROOT, path.replace("/", os.sep))), row)
+
     def test_a_folder_that_only_looks_like_the_track_is_reported(self):
         self.assertEqual(ci_contrib_paths.check(["contributors/tool.py", "docs/guides/x.md", "data/fuzzers/x.bin"]),
                          ["contributors/tool.py", "docs/guides/x.md", "data/fuzzers/x.bin"])
