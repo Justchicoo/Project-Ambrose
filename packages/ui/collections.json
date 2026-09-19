@@ -1,18 +1,5 @@
 {
   "$description": "Project Ambrose by Imjustchico: which list-shaped components show server data, so the checks can demand their loading, empty, zero-results and error stories, and which are lists of something else.",
-  "collections": [
-    "CollectionState",
-    "DataTable",
-    "LogList"
-  ],
-  "not-collections": [
-    "AppShell",
-    "Menu",
-    "Select",
-    "SideNav",
-    "Sparkline",
-    "StepList",
-    "Tabs",
-    "Toaster"
-  ]
+  "collections": ["CollectionState", "DataTable", "LogList"],
+  "not-collections": ["AppShell", "Menu", "Select", "SideNav", "Sparkline", "StepList", "Tabs", "Toaster"]
 }

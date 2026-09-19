@@ -37,7 +37,7 @@
         class: extra,
     }: Props = $props();
 
-    let shown = $derived(status === "ready" && records.length === 0 ? "empty" : status);
+    let placeholder = $derived(status === "ready" ? (records.length === 0 ? ("empty" as const) : null) : status);
 
     const levels: Record<Level, string> = {
         trace: "text-fg-faint",
@@ -53,8 +53,8 @@
     }
 </script>
 
-{#if shown !== "ready"}
-    <CollectionState status={shown} {label} {empty} {noResults} {error} class={extra} />
+{#if placeholder}
+    <CollectionState status={placeholder} {label} {empty} {noResults} {error} class={extra} />
 {:else}
 <div
     aria-label={label}
