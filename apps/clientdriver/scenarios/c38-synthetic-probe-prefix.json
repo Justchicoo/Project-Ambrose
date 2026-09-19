@@ -1,0 +1,12 @@
+{
+  "title": "C-38: synthetic probe from connection through character select",
+  "include": "login-to-charselect.json",
+  "notes": [
+    "This is the currently executable prefix of the C-38 synthetic probe: the client connects, authenticates, receives the realm and character-list responses, and reaches character select.",
+    "The current repository has no world-entry, movement, or client-logout screens or driver actions. The later probe stages must extend this file when those protocol and reference surfaces land; this scenario deliberately does not invent them.",
+    "The included scenario already asserts the wrong-password retry, the successful authentication, the character-list exchange, a keepalive, and the character-select screen."
+  ],
+  "steps": [
+    {"action": "shot", "name": "the synthetic probe endpoint at character select", "file": "c38-character-select"}
+  ]
+}
