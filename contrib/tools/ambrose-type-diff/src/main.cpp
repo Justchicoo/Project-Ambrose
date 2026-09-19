@@ -9,6 +9,7 @@
 #include <iostream>
 #include <map>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -265,6 +266,63 @@ static bool Equal(JsonValue const& left, JsonValue const& right)
     return true;
 }
 
+constexpr int SupportedVersion = 2;
+
+static std::string Describe(JsonValue const& value)
+{
+    if (auto const* text = std::get_if<std::string>(&value.Value))
+        return *text;
+    if (auto const* number = std::get_if<double>(&value.Value))
+    {
+        std::ostringstream out;
+        out << *number;
+        return out.str();
+    }
+    if (auto const* flag = std::get_if<bool>(&value.Value))
+        return *flag ? "true" : "false";
+    if (std::get_if<std::nullptr_t>(&value.Value))
+        return "null";
+    return "a value of its own";
+}
+
+static void RequireSupportedVersion(JsonValue::Object const& root, std::string const& path)
+{
+    auto const version = root.find("version");
+    auto const* number = version == root.end() ? nullptr : std::get_if<double>(&version->second.Value);
+    if (!number)
+        throw std::runtime_error(path + ": names no version, so it is not a type dump this tool can read");
+    if (static_cast<int>(*number) != SupportedVersion)
+        throw std::runtime_error(path + ": is version " + Describe(version->second) + ", and this tool reads version " + std::to_string(SupportedVersion));
+}
+
+static void ReportMetadataChange(char const* name, std::string const& oldValue, std::string const& newValue)
+{
+    if (oldValue != newValue)
+        std::cout << name << ' ' << oldValue << " -> " << newValue << '\n';
+}
+
+static void ReportPropertyChange(std::string const& key, std::string const& name, JsonValue const& oldProperty, JsonValue const& newProperty)
+{
+    auto const* oldFields = std::get_if<JsonValue::Object>(&oldProperty.Value);
+    auto const* newFields = std::get_if<JsonValue::Object>(&newProperty.Value);
+    if (!oldFields || !newFields)
+    {
+        std::cout << "property changed " << key << '.' << name << '\n';
+        return;
+    }
+    for (auto const& [field, value] : *newFields)
+    {
+        auto const previous = oldFields->find(field);
+        if (previous == oldFields->end())
+            std::cout << "property changed " << key << '.' << name << ' ' << field << " added " << Describe(value) << '\n';
+        else if (!Equal(previous->second, value))
+            std::cout << "property changed " << key << '.' << name << ' ' << field << ' ' << Describe(previous->second) << " -> " << Describe(value) << '\n';
+    }
+    for (auto const& [field, value] : *oldFields)
+        if (!newFields->contains(field))
+            std::cout << "property changed " << key << '.' << name << ' ' << field << " removed " << Describe(value) << '\n';
+}
+
 static void CompareClasses(JsonValue::Object const& oldRoot, JsonValue::Object const& newRoot)
 {
     JsonValue::Object const& oldClasses = Classes(oldRoot);
@@ -293,7 +351,7 @@ static void CompareClasses(JsonValue::Object const& oldRoot, JsonValue::Object c
                 continue;
             }
             if (!Equal(oldProperty->second, property))
-                std::cout << "property changed " << key << '.' << name << '\n';
+                ReportPropertyChange(key, name, oldProperty->second, property);
         }
         for (auto const& [name, property] : oldProperties)
             if (!newProperties.contains(name))
@@ -317,8 +375,10 @@ int main(int argc, char** argv)
         JsonValue newDocument = JsonParser(ReadFile(argv[2])).Parse();
         JsonValue::Object const& oldRoot = Object(oldDocument, "root");
         JsonValue::Object const& newRoot = Object(newDocument, "root");
-        std::cout << "revision " << String(oldRoot, "revision") << " -> " << String(newRoot, "revision") << '\n';
-        std::cout << "executable_sha256 " << String(oldRoot, "executable_sha256") << " -> " << String(newRoot, "executable_sha256") << '\n';
+        RequireSupportedVersion(oldRoot, argv[1]);
+        RequireSupportedVersion(newRoot, argv[2]);
+        ReportMetadataChange("revision", String(oldRoot, "revision"), String(newRoot, "revision"));
+        ReportMetadataChange("executable_sha256", String(oldRoot, "executable_sha256"), String(newRoot, "executable_sha256"));
         CompareClasses(oldRoot, newRoot);
     }
     catch (std::exception const& error)
