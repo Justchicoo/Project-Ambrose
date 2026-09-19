@@ -37,7 +37,10 @@ and one class from the explicit vocabulary.
 | `session` | `Session 3` | A synthetic session label and decimal id |
 | `message` | `MSG_CREATECHARACTER` | Message names with an uppercase `MSG_` prefix |
 | `account` | `account 17` | An explicit account label and decimal id |
-| `path` | `gameserver.conf` | Explicit `.conf` or `.log` file names |
+| `address` | `127.0.0.1:12000` | An IPv4 or bracketed IPv6 address with an optional port, as one value |
+| `quoted` | `"config.xml"` | Text inside double quotes, up to 120 characters |
+| `path` | `/opt/ambrose/logs/Server.log` | A path of two or more segments, or a file name ending in a known extension |
+| `measure` | `184 ms` | A number with a unit: `ms`, `us`, `ns`, `s`, `B`, `KiB`, `MiB`, `GiB` or `%` |
 | `number` | `1138` | Standalone decimal numbers not already consumed by another class |
 
 The classifier never treats an arbitrary word as an account, path, or message.
@@ -60,3 +63,5 @@ This is a lexical classifier for the current documented log shapes. It does
 not prove that a future milestone's typed log ranges use the same vocabulary;
 new classes must be added with a rule and golden case rather than inferred from
 unstructured text.
+
+An address is one span rather than four numbers, and a number without a unit is not a value. Both follow doc/DESIGN.md's rule for the values inside a log line: a bare count carries no meaning worth marking, and colouring the octets of an address separately makes the rainbow that rule exists to prevent. The golden cases cover an address with a port, a bracketed IPv6 address with a port, quoted text, a whole path and two measures, so a pattern that breaks one of them fails `--golden`.

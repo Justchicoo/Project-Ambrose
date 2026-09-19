@@ -16,7 +16,12 @@ TOKEN_PATTERNS = (
     ("session", re.compile(r"(?P<value>Session \d+)\b", re.IGNORECASE)),
     ("message", re.compile(r"(?P<value>MSG_[A-Z][A-Z0-9_]*)\b")),
     ("account", re.compile(r"(?P<value>account \d+)\b", re.IGNORECASE)),
-    ("path", re.compile(r"(?P<value>[A-Za-z0-9_.-]+\.(?:conf|log))\b")),
+    ("address", re.compile(r"(?P<value>\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?)")),
+    ("address", re.compile(r"(?P<value>\[[0-9A-Fa-f:]+\](?::\d{1,5})?)")),
+    ("quoted", re.compile(r"(?P<value>\"[^\"\n]{1,120}\")")),
+    ("path", re.compile(r"(?P<value>(?:[A-Za-z]:)?(?:[\\/][A-Za-z0-9_.-]+){2,})")),
+    ("path", re.compile(r"(?P<value>[A-Za-z0-9_.-]+\.(?:conf|log|json|xml|dist|wad|lang))\b")),
+    ("measure", re.compile(r"(?P<value>\d+(?:\.\d+)? ?(?:ms|us|ns|s|KiB|MiB|GiB|B|%))(?![A-Za-z])")),
 )
 NUMBER_PATTERN = re.compile(r"(?P<value>\b\d+\b)")
 
@@ -89,6 +94,18 @@ def golden() -> None:
         (
             "21:12:54.310 INFO  [server.loginserver] Login listener ready on port 12000",
             ["timestamp", "level", "category", "number"],
+        ),
+        (
+            "21:12:54.502 INFO  [server.loginserver] Session 3 from 127.0.0.1:12000 authenticated in 184 ms",
+            ["timestamp", "level", "category", "session", "address", "measure"],
+        ),
+        (
+            "21:12:55.006 INFO  [server.config    ] Read \"config.xml\" from /opt/ambrose/etc/gameserver.conf",
+            ["timestamp", "level", "category", "quoted", "path"],
+        ),
+        (
+            "21:12:55.410 WARN  [sql.driver       ] Pool at 87% after 2.5 s waiting on [fe80::1]:3306",
+            ["timestamp", "level", "category", "measure", "measure", "address"],
         ),
     ]
     for line, expected in cases:
