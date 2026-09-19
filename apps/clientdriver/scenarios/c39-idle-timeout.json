@@ -1,0 +1,22 @@
+{
+  "title": "C-39: an idle login session is closed by the AFK timeout",
+  "include": "parts/common.json",
+  "notes": [
+    "The short timeout is deliberate so this scenario can run without waiting for the shipped default.",
+    "The server log is the authoritative assertion; the client-facing AFK wording remains a phase acceptance check."
+  ],
+  "server_settings": ["Login.AfkTimeout=5"],
+  "steps": [
+    {"action": "wait_client_log", "name": "the client brings its renderer up",
+     "pattern": "About to initialize graphical client\\.", "timeout": 180},
+    {"action": "wait_screen", "name": "the login window is on the screen", "screens": ["login"], "timeout": 120},
+    {"action": "submit_login", "name": "submit the test account", "password": "{password}"},
+    {"action": "wait_client_log", "name": "the client sends its authentication request",
+     "pattern": "Send MSG_USER_AUTHEN to Login Server", "timeout": 30},
+    {"action": "wait_client_log", "name": "the client reaches character selection",
+     "pattern": "The LoginServer has admitted the user", "timeout": 30},
+    {"action": "wait_server_log", "name": "the login server records the idle disconnect",
+     "pattern": "Session \\d+ from \\S+ was idle for \\d+ s, reaching Login\\.AfkTimeout of 5 s; sent MSG_DISCONNECT_LOGIN_AFK Warning=\\d+ and closed the session",
+     "timeout": 30, "record": true}
+  ]
+}
