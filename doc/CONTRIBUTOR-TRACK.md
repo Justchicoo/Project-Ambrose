@@ -162,6 +162,7 @@ Each item is worth doing, needs nothing from the phases, and lands inside the tr
 | C-15 | A guide to reading Ambrose's logs, from a healthy startup to a stuck client | `doc/guides/logging.md` | solanazaru-eng, in #5 |
 | C-12 | A guide to building and running Ambrose on Linux, walked end to end on Ubuntu 24.04 | `doc/guides/linux.md` | solanazaru-eng, in #6 |
 | C-22 | The shape of a machine-checkable finding, which C-21 and C-51 both build against | `contrib/proposals/machine-checkable-findings.md` | solanazaru-eng, in #7 |
+| C-20 | The two assertions the login startup smoke check does not make: an occupied port, and a leg with no database | `contrib/proposals/login-startup-smoke.md` | solanazaru-eng, in #9 |
 
 An item stays listed until its pull request is merged. Ask before starting something not on the list: the answer is usually yes if it lands in the paths above.
 

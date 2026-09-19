@@ -8,22 +8,18 @@ C-20: add a quality-bar guard for the server's documented `--check` startup path
 
 ## Problem
 
-The configuration documentation promises that `loginserver --check` starts fully, opens and validates its databases, binds its listener, logs `ready`, shuts down gracefully, and exits zero. The current contributor checks validate paths, findings, style, and forbidden files, but they do not prove that a built login server can complete that lifecycle.
+Most of this is already guarded, and the proposal below is what is left.
 
-A compile can pass while a configuration template, database update, listener bind, or shutdown path is broken. The failure then waits for a maintainer's requested CI build or a manual operator run.
+`src/test/apps/AppSmokeTest.cmake` runs as `AppSmoke.loginserver` in the same preset that runs the server tests. It copies the shipped `loginserver.conf.dist` into a work folder, sets `BindIP=127.0.0.1` and the port to `0` so the operating system picks a free one, runs `--check` under a bounded timeout, and requires exit `0` with `loginserver ready` and `loginserver stopped` in the output. With `AMBROSE_TEST_DB` set it creates, updates, opens, closes and drops uniquely named login and character databases, and it asserts that a bad login database string exits 1.
+
+So the lifecycle is proven today: configuration loads, databases open and update, the listener binds, readiness is logged, shutdown is graceful, and nothing is left behind. Two holes remain, and both are the kind that stay quiet rather than failing loudly.
 
 ## Proposed guard
 
-Add one non-networked login-server smoke test to the build/test preset on legs that provide MySQL or MariaDB:
+Add two cases to the existing smoke check rather than a second harness.
 
-1. Create a disposable login database with a unique test name.
-2. Generate a temporary local `loginserver.conf` from the distributed configuration.
-3. Set the database connection to the disposable database and bind the login listener to `127.0.0.1` on an operating-system-selected free port.
-4. Run `loginserver --check` with a bounded timeout.
-5. Require exit code `0`, a readiness record from the `server.loginserver` category, and a graceful shutdown record.
-6. Drop the disposable database in a finally-style cleanup step, including after timeout or process failure.
-
-The test must use a unique working directory and database name for each run. It must not read a game client installation, contact KingsIsle services, or depend on a real account. It should exercise only the server's own startup and shutdown path.
+1. **A port that is already taken.** Every run today asks for port `0`, which always succeeds, so no test has ever seen the bind fail. Open a listener on a local port, point the server's own port option at it, run `--check`, and require a non-zero exit naming the port. Without this, a bind failure is a path no test walks.
+2. **A leg with no database.** Without `AMBROSE_TEST_DB` the database half of the check simply does less, and the test still passes, so a leg configured without a database looks identical to a leg where the databases were proven. Have the check report itself unavailable in that case, so a green result always means the same thing.
 
 ## Required assertions
 
@@ -47,7 +43,9 @@ The smoke test should not assert a specific log sentence beyond a stable readine
 
 ## Cheapest disproof
 
-Before implementing the CI test, run `loginserver --check` against a temporary database with an intentionally occupied port and then with an invalid database credential. If either case exits zero, or if the process leaves a live listener or database behind, this proposal is wrong until the existing `--check` contract is corrected.
+Run `loginserver --check` with its port set to one already held by another process. If it exits zero, the bind is not on the path `--check` walks and the first case above is worthless until that is corrected. Then run the existing `AppSmoke.loginserver` with and without `AMBROSE_TEST_DB`: if the two results are distinguishable without reading the log, the second case is already solved and this proposal is wrong.
+
+The lesson that produced this section: the cheapest disproof of "nothing proves X" is to look for the test that proves X. The first version of this proposal described six steps that `AppSmokeTest.cmake` had already implemented, because it was written without that search.
 
 ## Dependencies and cost
 
