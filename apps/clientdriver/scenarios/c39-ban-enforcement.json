@@ -1,0 +1,23 @@
+{
+  "title": "C-39: banning an account disconnects it and refuses the next login",
+  "include": "parts/common.json",
+  "notes": [
+    "The account is created by the run and the ban is applied through the loginserver console.",
+    "The scenario records the ban and the subsequent refusal without storing a credential or client data."
+  ],
+  "steps": [
+    {"action": "wait_client_log", "name": "the client brings its renderer up",
+     "pattern": "About to initialize graphical client\\.", "timeout": 180},
+    {"action": "wait_screen", "name": "the login window is on the screen", "screens": ["login"], "timeout": 120},
+    {"action": "submit_login", "name": "submit the test account", "password": "{password}"},
+    {"action": "wait_client_log", "name": "the client is admitted",
+     "pattern": "The LoginServer has admitted the user", "timeout": 30},
+    {"action": "server_command", "name": "ban the test account", "command": "account ban {user} 1h C-39-test",
+     "pattern": "Account {user} banned until", "timeout": 20},
+    {"action": "wait_server_log", "name": "the server closes the banned session",
+     "pattern": "banned account {user}.*closed|account {user} is banned",
+     "timeout": 30},
+    {"action": "wait_client_log", "name": "the client reports the refused session",
+     "pattern": "LOGIN RESPONSE: Error=(-?\\d+)", "timeout": 30, "record": true}
+  ]
+}
