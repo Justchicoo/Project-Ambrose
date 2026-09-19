@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One log record plus prefix rendering, the coloring spans each rendered part covers, multi-line splitting, control-character escaping and UTF-8 repair.
+ * One log record plus prefix rendering under a layout, the coloring spans each rendered part covers, multi-line splitting, control-character escaping and UTF-8 repair.
  */
 
 #ifndef AMBROSE_LOGMESSAGE_H
@@ -19,14 +19,34 @@ enum class LogPart : uint8
     Level,
     Thread,
     Category,
-    Text
+    Body,
+    Value,
+    Punctuation,
+    Padding
+};
+
+enum class LogTimestampStyle : uint8
+{
+    Full,
+    Short,
+    Off
+};
+
+struct LogLayout
+{
+    static constexpr uint16 DefaultCategoryWidth = 18;
+    static constexpr uint16 MaxCategoryWidth = 64;
+
+    LogTimestampStyle Timestamp = LogTimestampStyle::Full;
+    uint16 CategoryWidth = 0;
+    bool SuppressCategory = false;
 };
 
 struct LogSpan
 {
     std::size_t Offset = 0;
     std::size_t Length = 0;
-    LogPart Part = LogPart::Text;
+    LogPart Part = LogPart::Body;
 };
 
 struct LogMessage
@@ -40,7 +60,11 @@ struct LogMessage
     bool Nested = false;
 
     void AppendPrefix(std::string& out, AppenderFlags flags, bool utc, std::vector<LogSpan>* spans = nullptr) const;
+    void AppendPrefix(std::string& out, AppenderFlags flags, bool utc, std::vector<LogSpan>* spans, LogLayout const& layout) const;
     void AppendLines(std::string& out, AppenderFlags flags, bool utc, std::vector<LogSpan>* spans = nullptr) const;
+    void AppendLines(std::string& out, AppenderFlags flags, bool utc, std::vector<LogSpan>* spans, LogLayout const& layout) const;
+
+    static void AppendCategoryColumn(std::string& out, std::string_view category, uint16 width, std::vector<LogSpan>* spans);
 
     static void AppendSanitized(std::string& out, std::string_view line);
     static uint64 CurrentOsThreadId() noexcept;

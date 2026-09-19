@@ -7,6 +7,7 @@
 #define AMBROSE_APPENDERREGISTRY_H
 
 #include "Appender.h"
+#include "LogMessage.h"
 
 #include <chrono>
 #include <concepts>
@@ -28,6 +29,8 @@ struct AppenderCreateContext
     ConsoleWriter& Console;
     LogFileRegistry& Files;
     LogStreamHub& Streams;
+    LogLayout ConsoleLayout;
+    bool RepeatCategory = true;
 };
 
 using AppenderFactory = std::function<std::shared_ptr<Appender>(AppenderDefinition const&, AppenderCreateContext const&, LogConfigResult&)>;

@@ -1852,10 +1852,10 @@ Added on 2026-09-18 at the maintainer's direction. 17.01 shipped a console where
 
 **Acceptance**
 
-- [ ] At every level the message body renders in the body color and only the level word carries the level's color, asserted on a fake console
-- [ ] Across a run of mixed categories every message starts at the same column, and a category longer than the width is shortened in the middle while the full value still reaches the file and the log stream
-- [ ] With output redirected the bytes are identical to the bytes before this milestone, full date and unpadded category included, and hold no escape sequence
-- [ ] A six-code `Console.Colors` line written before this milestone still parses and still colors the six levels as it did
+- [x] At every level the message body renders in the body color and only the level word carries the level's color, asserted on a fake console (AppenderConsoleTest.EveryLevelLeavesTheBodyInTheBodyColor, and the per-level expectations in TerminalGetsAnsiColorsPerLevel, which now read `ESC[91mERROR ESC[0mbroken` rather than the whole line in red)
+- [x] Across a run of mixed categories every message starts at the same column, and a category longer than the width is shortened in the middle while the full value still reaches the file and the log stream (AppenderConsoleTest.EveryMessageStartsAtTheSameColumn over three categories of different lengths, and ALongCategoryIsShortenedInTheMiddleAndTheRecordKeepsItWhole, where the console shows `..` and the captured record still carries server.database.connection.pool)
+- [x] With output redirected the bytes are identical to the bytes before this milestone, full date and unpadded category included, and hold no escape sequence (AppenderConsoleTest.RedirectedOutputKeepsTheFullDateAndTheUnpaddedCategory: the full date, `[server.login]` unpadded, and no escape byte)
+- [x] A six-code `Console.Colors` line written before this milestone still parses and still colors the six levels as it did (AppenderConsoleTest.CustomColorStringApplies, unchanged in what it configures, plus NamedColorsSetTheRolesAndTheLevels and AnUnknownColorNameIsAnError for the new form)
 - [ ] Dev-gated: on the maintainer's own Windows console and Linux terminal, a screenful of a real login server start reads as columns with only the level words and the categories marked. Needs a terminal, so it is run by hand and recorded
 
 ## 17.75 Console color conventions and the color depth ladder
