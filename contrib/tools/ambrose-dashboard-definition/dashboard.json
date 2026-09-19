@@ -1,0 +1,326 @@
+{
+  "item": "C-41",
+  "format": 1,
+  "sample_interval_seconds": 1,
+  "stale_after_seconds": 5,
+  "history_ranges": [
+    {
+      "id": "5m",
+      "label": "5 minutes",
+      "seconds": 300
+    },
+    {
+      "id": "1h",
+      "label": "1 hour",
+      "seconds": 3600
+    },
+    {
+      "id": "6h",
+      "label": "6 hours",
+      "seconds": 21600
+    },
+    {
+      "id": "24h",
+      "label": "24 hours",
+      "seconds": 86400
+    },
+    {
+      "id": "7d",
+      "label": "7 days",
+      "seconds": 604800
+    },
+    {
+      "id": "30d",
+      "label": "30 days",
+      "seconds": 2592000
+    }
+  ],
+  "pages": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "permission": "metrics.read",
+      "panels": [
+        {
+          "id": "host-health",
+          "title": "Host health",
+          "scope": "node",
+          "series": [
+            "node.cpu_percent",
+            "node.memory_bytes",
+            "node.disk_free_bytes"
+          ]
+        },
+        {
+          "id": "app-health",
+          "title": "Application health",
+          "scope": "app",
+          "series": [
+            "app.cpu_percent",
+            "app.memory_bytes",
+            "app.network_in_bytes",
+            "app.network_out_bytes",
+            "app.sessions",
+            "app.tick_time_max_ms"
+          ]
+        },
+        {
+          "id": "game-state",
+          "title": "Game state",
+          "scope": "realm",
+          "series": [
+            "realm.players_online",
+            "realm.sessions_at_character_select"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "application",
+      "title": "Application",
+      "permission": "metrics.read",
+      "panels": [
+        {
+          "id": "process",
+          "title": "Process",
+          "scope": "app",
+          "series": [
+            "app.cpu_percent",
+            "app.memory_bytes",
+            "app.thread_count",
+            "app.handle_count"
+          ]
+        },
+        {
+          "id": "traffic",
+          "title": "Traffic",
+          "scope": "app",
+          "series": [
+            "app.network_in_bytes",
+            "app.network_out_bytes",
+            "app.active_downloads"
+          ]
+        },
+        {
+          "id": "operations",
+          "title": "Operations",
+          "scope": "app",
+          "series": [
+            "app.tick_time_average_ms",
+            "app.tick_time_max_ms",
+            "app.pending_sql_updates",
+            "app.settings_generation",
+            "app.last_reload_result",
+            "app.client_revision"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "realm",
+      "title": "Realm",
+      "permission": "metrics.read",
+      "panels": [
+        {
+          "id": "players",
+          "title": "Players",
+          "scope": "realm",
+          "series": [
+            "realm.players_online",
+            "realm.sessions_at_character_select"
+          ]
+        },
+        {
+          "id": "zone-players",
+          "title": "Players by zone",
+          "scope": "zone",
+          "series": [
+            "zone.players_online"
+          ]
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "id": "node.cpu_percent",
+      "label": "CPU",
+      "unit": "percent",
+      "source": "os",
+      "scope": "node",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    },
+    {
+      "id": "node.memory_bytes",
+      "label": "Memory",
+      "unit": "bytes",
+      "source": "os",
+      "scope": "node",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    },
+    {
+      "id": "node.disk_free_bytes",
+      "label": "Free disk",
+      "unit": "bytes",
+      "source": "os",
+      "scope": "node",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    },
+    {
+      "id": "app.cpu_percent",
+      "label": "CPU",
+      "unit": "percent",
+      "source": "os",
+      "scope": "app",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    },
+    {
+      "id": "app.memory_bytes",
+      "label": "Memory",
+      "unit": "bytes",
+      "source": "os",
+      "scope": "app",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    },
+    {
+      "id": "app.thread_count",
+      "label": "Threads",
+      "unit": "count",
+      "source": "os",
+      "scope": "app",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    },
+    {
+      "id": "app.handle_count",
+      "label": "Handles",
+      "unit": "count",
+      "source": "os",
+      "scope": "app",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    },
+    {
+      "id": "app.network_in_bytes",
+      "label": "Network in",
+      "unit": "bytes_per_second",
+      "source": "app_counter",
+      "scope": "app",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    },
+    {
+      "id": "app.network_out_bytes",
+      "label": "Network out",
+      "unit": "bytes_per_second",
+      "source": "app_counter",
+      "scope": "app",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    },
+    {
+      "id": "app.sessions",
+      "label": "Sessions",
+      "unit": "count",
+      "source": "stats_registry",
+      "scope": "app",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    },
+    {
+      "id": "app.tick_time_average_ms",
+      "label": "Average tick time",
+      "unit": "milliseconds",
+      "source": "stats_registry",
+      "scope": "app",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    },
+    {
+      "id": "app.tick_time_max_ms",
+      "label": "Maximum tick time",
+      "unit": "milliseconds",
+      "source": "stats_registry",
+      "scope": "app",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    },
+    {
+      "id": "app.active_downloads",
+      "label": "Active downloads",
+      "unit": "count",
+      "source": "stats_registry",
+      "scope": "app",
+      "permission": "metrics.read",
+      "availability": "milestone-16"
+    },
+    {
+      "id": "app.pending_sql_updates",
+      "label": "Pending SQL updates",
+      "unit": "count",
+      "source": "stats_registry",
+      "scope": "app",
+      "permission": "metrics.read",
+      "availability": "milestone-3.23"
+    },
+    {
+      "id": "app.settings_generation",
+      "label": "Settings generation",
+      "unit": "count",
+      "source": "stats_registry",
+      "scope": "app",
+      "permission": "metrics.read",
+      "availability": "phase-17.09"
+    },
+    {
+      "id": "app.last_reload_result",
+      "label": "Last reload result",
+      "unit": "state",
+      "source": "stats_registry",
+      "scope": "app",
+      "permission": "metrics.read",
+      "availability": "phase-17.09"
+    },
+    {
+      "id": "app.client_revision",
+      "label": "Client revision",
+      "unit": "state",
+      "source": "stats_registry",
+      "scope": "app",
+      "permission": "metrics.read",
+      "availability": "milestone-3.23"
+    },
+    {
+      "id": "realm.players_online",
+      "label": "Players online",
+      "unit": "count",
+      "source": "stats_registry",
+      "scope": "realm",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    },
+    {
+      "id": "realm.sessions_at_character_select",
+      "label": "Sessions at character select",
+      "unit": "count",
+      "source": "stats_registry",
+      "scope": "realm",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    },
+    {
+      "id": "zone.players_online",
+      "label": "Players online",
+      "unit": "count",
+      "source": "stats_registry",
+      "scope": "zone",
+      "permission": "metrics.read",
+      "availability": "phase-17.19"
+    }
+  ]
+}
