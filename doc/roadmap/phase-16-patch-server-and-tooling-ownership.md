@@ -111,9 +111,9 @@ One in-memory manifest can be emitted as both LatestFileList.xml and LatestFileL
 
 **Acceptance**
 
-- [ ] Synthetic dir gives {Base, ZoneA, ZoneB} with correct Size/CRC/HeaderSize/HeaderCRC
+- [x] Synthetic dir gives {Base, ZoneA, ZoneB} with correct Size/CRC/HeaderSize/HeaderCRC (`InstallFixture.SyntheticInstallProducesExpectedPackagesAndMetrics`)
 - [ ] Reference diff: 100% match on type 3/5 CRC/HeaderSize/HeaderCRC, all 3590 packages
-- [ ] Second run faster, identical .bin
+- [x] Second run faster, identical .bin (`InstallFixture.SecondRunUsesCacheAndKeepsBinaryIdentical`)
 
 ### Detailed spec from PAT-5: Install scanner: generate the manifest from the user's client install
 
@@ -135,9 +135,9 @@ A tool builds a patch output directory (manifest plus revision name) from the us
 
 **Acceptance**
 
-- [ ] Unit (synthetic temp dir): 2 zone WADs + Root.wad + Bin/a.dll give packages {Base, ZoneA, ZoneB} with the correct Size/CRC/HeaderSize/HeaderCRC
+- [x] Unit (synthetic temp dir): 2 zone WADs + Root.wad + Bin/a.dll give packages {Base, ZoneA, ZoneB} with the correct Size/CRC/HeaderSize/HeaderCRC (`InstallFixture.SyntheticInstallProducesExpectedPackagesAndMetrics`)
 - [ ] Env-gated diff run on r806919 with a reference list: Size, CRC, HeaderSize and HeaderCRC match 100% of type 3/5 records, and package membership matches for all 3590 tables
-- [ ] Second run finishes much faster than the first (CRC cache hit) and gives an identical .bin
+- [x] Second run finishes much faster than the first (CRC cache hit) and gives an identical .bin (`InstallFixture.SecondRunUsesCacheAndKeepsBinaryIdentical`)
 
 **Risks**
 

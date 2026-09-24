@@ -64,6 +64,13 @@ if(TARGET launcher-core)
     target_link_libraries(unit_tests PRIVATE launcher-core)
 endif()
 
+if(TARGET patchlist_generator)
+    target_sources(unit_tests PRIVATE
+        "${PROJECT_SOURCE_DIR}/src/tools/patchlist_generator/Core/PatchListGenerator.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/patchlist_generator/PatchListGeneratorTest.cpp")
+    target_include_directories(unit_tests PRIVATE "${PROJECT_SOURCE_DIR}/src/tools/patchlist_generator/Core")
+endif()
+
 ambrose_copy_mariadb_plugins(unit_tests)
 gtest_discover_tests(unit_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT 120)
 
