@@ -87,6 +87,15 @@ export const routes: Route[] = [
         view: { kind: "page", load: () => import("./pages/Metrics.svelte") },
     },
     {
+        path: "resources",
+        title: "Resources",
+        icon: ChartLineIcon,
+        permission: "status.read",
+        nav: true,
+        group: "Servers",
+        view: { kind: "page", load: () => import("./pages/Graphs.svelte") },
+    },
+    {
         path: "database",
         title: "Database",
         icon: DatabaseIcon,

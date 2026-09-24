@@ -330,6 +330,31 @@ export const RealmsAnswer = v.looseObject({
     realms: v.array(RealmRow),
 });
 
+export const GraphSubject = v.looseObject({
+    subject: v.string(),
+    series: v.optional(v.array(v.string()), []),
+});
+
+export const GraphsAnswer = v.looseObject({
+    schema: v.number(),
+    now_epoch_ms: v.optional(v.number(), 0),
+    subjects: v.optional(v.array(GraphSubject), []),
+});
+
+export const GraphRangeAnswer = v.looseObject({
+    schema: v.number(),
+    subject: v.string(),
+    series: v.string(),
+    from_epoch_ms: v.optional(v.number(), 0),
+    to_epoch_ms: v.optional(v.number(), 0),
+    at_epoch_ms: v.optional(v.array(v.number()), []),
+    values: v.optional(v.array(v.nullable(v.number())), []),
+    lowest: v.optional(v.array(v.nullable(v.number())), []),
+    highest: v.optional(v.array(v.nullable(v.number())), []),
+    points: v.optional(v.number(), 0),
+    present: v.optional(v.number(), 0),
+});
+
 export const MetricBucket = v.looseObject({
     le: v.number(),
     count: v.number(),
@@ -417,6 +442,9 @@ export type OnlinePlayer = v.InferOutput<typeof OnlinePlayer>;
 export type PlayersAnswer = v.InferOutput<typeof PlayersAnswer>;
 export type RealmRow = v.InferOutput<typeof RealmRow>;
 export type RealmsAnswer = v.InferOutput<typeof RealmsAnswer>;
+export type GraphSubject = v.InferOutput<typeof GraphSubject>;
+export type GraphsAnswer = v.InferOutput<typeof GraphsAnswer>;
+export type GraphRangeAnswer = v.InferOutput<typeof GraphRangeAnswer>;
 export type MetricBucket = v.InferOutput<typeof MetricBucket>;
 export type MetricSeries = v.InferOutput<typeof MetricSeries>;
 export type MetricFamily = v.InferOutput<typeof MetricFamily>;

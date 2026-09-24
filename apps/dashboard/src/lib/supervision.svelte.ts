@@ -14,6 +14,8 @@ import {
     OutputAnswer,
     ActivityAnswer,
     ClientAnswer,
+    GraphRangeAnswer,
+    GraphsAnswer,
     MetricsAnswer,
     PlayersAnswer,
     RealmsAnswer,
@@ -81,6 +83,21 @@ export function activityOf(app: string, signal?: AbortSignal) {
 
 export function playersOf(app: string, signal?: AbortSignal) {
     return request("GET", pathFor(app, "players"), PlayersAnswer, undefined, signal);
+}
+
+export function graphs(signal?: AbortSignal) {
+    return request("GET", "api/graphs", GraphsAnswer, undefined, signal);
+}
+
+export function graphRange(subject: string, series: string, fromEpochMs: number, toEpochMs: number, points: number, signal?: AbortSignal) {
+    const query = [
+        `subject=${encodeURIComponent(subject)}`,
+        `series=${encodeURIComponent(series)}`,
+        `from=${Math.round(fromEpochMs)}`,
+        `to=${Math.round(toEpochMs)}`,
+        `points=${Math.round(points)}`,
+    ].join("&");
+    return request("GET", `api/graphs/range?${query}`, GraphRangeAnswer, undefined, signal);
 }
 
 export function metricsOf(app: string, signal?: AbortSignal) {
