@@ -87,6 +87,19 @@ class ForbiddenFileTests(unittest.TestCase):
         self.assertForbidden("doc/big.md", big, "byte limit")
         self.assertAllowed("deps/ports/sample/big.txt", big)
 
+    def test_naming_another_wizard_project_is_forbidden(self):
+        self.assertForbidden("doc/notes.md", ("We studied " + "Im" + "light").encode(), "names another Wizard101 project")
+
+    def test_a_file_from_another_project_is_forbidden_by_its_extension(self):
+        self.assertForbidden("doc/notes.md", b"See TokenBucket.cs for the shape", "another project")
+        self.assertForbidden("doc/CLIENT.md", b"asset_fetcher.rs line 40 reads it", "another project")
+        self.assertForbidden("README.md", b"Open Ambrose.sln in Visual Studio", "another project")
+
+    def test_our_own_files_and_a_documentation_host_are_allowed(self):
+        self.assertAllowed("doc/notes.md", b"src/server/shared/Network/Frame.cpp and apps/ci/ci_build.py")
+        self.assertAllowed("THIRD-PARTY-NOTICES.md", b"Documented at https://docs.rs/serde and used under MIT.")
+        self.assertAllowed("apps/ci/ci_forbidden_files.py", b"OTHER_LANGUAGE_FILE names TokenBucket.cs in its own test")
+
     def test_documentation_mentioning_formats_is_allowed(self):
         self.assertAllowed("doc/CLIENT.md", b"<!-- Project Ambrose by Imjustchico: Notes. -->\nKIWAD archives and <_ProtocolInfo> blocks.\n")
         self.assertAllowed("vcpkg.json", b'{"name": "project-ambrose", "version-string": "0.0.0"}')

@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Fails when the tree contains client game files, captures, protocol definitions, type dumps, local config, private keys, a panel or game store, a log, or oversized files.
+# Fails when the tree contains client game files, captures, protocol definitions, type dumps, local config, private keys, a panel or game store, a log, oversized files, or text naming another Wizard101 project or one of its source files, which is permanent once it reaches a pull request.
 import argparse
 import json
 import os
@@ -26,6 +26,11 @@ FORBIDDEN_EXTENSIONS = {
 }
 PRIVATE_KEY = re.compile(rb"-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----")
 PROTOCOL_XML = re.compile(r"\s*(<\?xml[^>]*\?>\s*)?<[A-Za-z0-9_]*Messages>\s*<_ProtocolInfo>")
+OTHER_PROJECTS = re.compile("|".join(["im" + "light", "auror" + "ium", "im" + "codec", "spiral" + "db", "revive" + "101"]), re.IGNORECASE)
+OTHER_LANGUAGE_FILE = re.compile(r"(?<=[A-Za-z0-9_-])\.(?:cs|rs|csproj|sln)(?![A-Za-z0-9/])")
+TEXT_EXTENSIONS = (".md", ".txt", ".json", ".yml", ".yaml", ".py", ".cpp", ".h", ".sql", ".dist", ".conf", ".cmake", ".ts", ".svelte", ".css", ".js", ".mjs")
+SCANNED_FOR_NAMES = ("apps/ci/ci_forbidden_files.py", "apps/ci/tests/test_ci.py")
+SCANNED_BYTES = 512 * 1024
 
 
 def check_file(relpath, raw):
@@ -49,6 +54,15 @@ def check_file(relpath, raw):
         problems.append("content is BINd client data")
     if PROTOCOL_XML.match(raw[:4096].decode("utf-8", "replace")):
         problems.append("content is a client protocol definition XML; definitions load at runtime from the user's install")
+    if extension in TEXT_EXTENSIONS and relpath not in SCANNED_FOR_NAMES:
+        text = raw[:SCANNED_BYTES].decode("utf-8", "replace")
+        named = OTHER_PROJECTS.search(text)
+        if named:
+            problems.append(f"content names another Wizard101 project, '{named.group(0)}'; behaviour may be studied but nothing here names it")
+        foreign = OTHER_LANGUAGE_FILE.search(text)
+        if foreign:
+            token = text[max(0, foreign.start() - 40):foreign.end()].rsplit(None, 1)[-1]
+            problems.append(f"content names '{token}', a file from another project: this server is C++ and its tools are Python, so no .cs, .rs, .csproj or .sln path belongs in the tree")
     if extension == ".json":
         try:
             document = json.loads(raw.decode("utf-8"))
