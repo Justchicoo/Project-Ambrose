@@ -92,6 +92,7 @@ namespace
             prompt->SetCancellation([this] { return PollStopRequested(); });
             ClientSetupResult const setup = ClientSetup::ForServer(Config(), *prompt, system, ClientSetup::ServerTypeDumps(Config(), system, report, [this] { return PollStopRequested(); }),
                 { "loginserver", true, true, true }, report);
+            SetClientSetup(setup);
             if (PollStopRequested())
                 return false;
 

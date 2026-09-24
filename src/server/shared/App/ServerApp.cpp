@@ -6,6 +6,7 @@
 #include "ServerApp.h"
 #include "AdminCapabilities.h"
 #include "AdminActivityView.h"
+#include "AdminClientView.h"
 #include "AdminCommand.h"
 #include "AdminConfigView.h"
 #include "AdminRealmsView.h"
@@ -354,6 +355,11 @@ void ServerApp::SetMessageSource(std::filesystem::path clientRoot)
     _messageSource = std::move(clientRoot);
 }
 
+void ServerApp::SetClientSetup(ClientSetupResult setup)
+{
+    _clientSetup = std::move(setup);
+}
+
 void ServerApp::RegisterReloadTargets()
 {
     sReloadMgr.Register("config", [this](std::vector<std::string>& errors)
@@ -399,6 +405,7 @@ void ServerApp::RegisterStandardRoutes(AdminRouter& routes)
     AdminReloadView::Register(routes);
     AdminRealmsView::Register(routes);
     AdminActivityView::Register(routes, CommandAuditFile());
+    AdminClientView::Register(routes, [this]() -> ClientSetupResult const& { return _clientSetup; });
     AdminCommand::Register(routes, _commands, _info.Name, CommandAuditFile());
     routes.AddGuarded("POST", "/api/shutdown", "power.stop", [this](AdminRequest const& request)
     {

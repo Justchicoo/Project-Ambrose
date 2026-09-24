@@ -7,6 +7,7 @@
 #define AMBROSE_SERVERAPP_H
 
 #include "AdminStatus.h"
+#include "ClientSetup.h"
 #include "ConfigMgr.h"
 #include "ConsoleCommandTable.h"
 #include "Duration.h"
@@ -83,6 +84,7 @@ public:
     void RegisterStandardRoutes(AdminRouter& routes);
     void RegisterReloadTargets();
     void SetMessageSource(std::filesystem::path clientRoot);
+    void SetClientSetup(ClientSetupResult setup);
     std::filesystem::path CommandAuditFile() const;
 
     void SetListener(std::string address, uint16 port);
@@ -114,6 +116,7 @@ protected:
 private:
     uint64 _configSubscription = 0;
     std::filesystem::path _messageSource;
+    ClientSetupResult _clientSetup;
 
     bool IsStopping() const noexcept { return GetLifecycleState() == AppLifecycle::Stopping; }
     bool StartAdminApi();

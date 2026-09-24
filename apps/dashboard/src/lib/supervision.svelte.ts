@@ -13,6 +13,7 @@ import {
     DatabaseUpdatesAnswer,
     OutputAnswer,
     ActivityAnswer,
+    ClientAnswer,
     PlayersAnswer,
     RealmsAnswer,
     PowerAnswer,
@@ -63,6 +64,10 @@ export function runCommand(app: string, command: string, confirm = false) {
 
 export function settingsOf(app: string, signal?: AbortSignal) {
     return request("GET", pathFor(app, "settings"), SettingsAnswer, undefined, signal);
+}
+
+export function clientDataOf(app: string, signal?: AbortSignal) {
+    return request("GET", pathFor(app, "client"), ClientAnswer, undefined, signal);
 }
 
 export function realmsOf(app: string, signal?: AbortSignal) {

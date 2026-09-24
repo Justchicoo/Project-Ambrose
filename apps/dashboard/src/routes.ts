@@ -128,7 +128,7 @@ export const routes: Route[] = [
         permission: "client.read",
         nav: true,
         group: "Game",
-        view: { kind: "arrives", milestone: "17.20", preview: { kind: "page", load: () => import("./pages/ClientData.svelte") } },
+        view: { kind: "page", load: () => import("./pages/ClientData.svelte") },
     },
     {
         path: "users",

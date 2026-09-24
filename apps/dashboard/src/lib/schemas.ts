@@ -352,6 +352,33 @@ export const ActivityAnswer = v.looseObject({
     activity: v.array(ActivityRow),
 });
 
+export const ClientAnswer = v.looseObject({
+    schema: v.number(),
+    pinned_revision: v.string(),
+    install: v.looseObject({
+        found: v.boolean(),
+        root: v.optional(v.string(), ""),
+        revision: v.optional(v.string(), ""),
+        pinned: v.optional(v.boolean(), false),
+        has_program: v.optional(v.boolean(), false),
+        described: v.optional(v.string(), ""),
+    }),
+    type_dump: v.looseObject({
+        found: v.boolean(),
+        readable: v.boolean(),
+        built_now: v.optional(v.boolean(), false),
+        error: v.optional(v.string(), ""),
+        path: v.optional(v.string(), ""),
+        revision: v.optional(v.string(), ""),
+        executable_sha256: v.optional(v.string(), ""),
+        extractor: v.optional(v.string(), ""),
+        matches_install: v.optional(v.boolean(), false),
+    }),
+    messages: v.looseObject({ loaded: v.boolean(), counted: v.number() }),
+    saved: v.array(v.looseObject({ key: v.string(), value: v.string() })),
+    saved_to: v.string(),
+});
+
 export type OutputAnswer = v.InferOutput<typeof OutputAnswer>;
 export type SettingsAnswer = v.InferOutput<typeof SettingsAnswer>;
 export type DatabaseAnswer = v.InferOutput<typeof DatabaseAnswer>;
@@ -367,3 +394,4 @@ export type RealmRow = v.InferOutput<typeof RealmRow>;
 export type RealmsAnswer = v.InferOutput<typeof RealmsAnswer>;
 export type ActivityRow = v.InferOutput<typeof ActivityRow>;
 export type ActivityAnswer = v.InferOutput<typeof ActivityAnswer>;
+export type ClientAnswer = v.InferOutput<typeof ClientAnswer>;

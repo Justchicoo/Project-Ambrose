@@ -101,6 +101,7 @@ namespace
             prompt->SetCancellation([this] { return PollStopRequested(); });
             ClientSetupResult const setup = ClientSetup::ForServer(Config(), *prompt, system, ClientSetup::ServerTypeDumps(Config(), system, report, [this] { return PollStopRequested(); }),
                 { "gameserver", true, true, false }, report);
+            SetClientSetup(setup);
             if (PollStopRequested())
                 return false;
             SetClientSetup(setup.Install.has_value(), setup.TypeDump.has_value(), false, setup.TypeDumpError);
