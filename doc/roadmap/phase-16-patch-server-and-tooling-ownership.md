@@ -77,7 +77,7 @@ The server can read and write the client's binary table-list format byte for byt
 **Acceptance**
 
 - [ ] Model -> XML -> model and BIN lossless
-- [ ] Reference XML gives 3590 tables (Base 140, PatchClient 97)
+- [ ] Reference XML gives 3590 file tables beside About, so 3591 _TableList rows (Base 140, PatchClient 97)
 
 ### Detailed spec from PAT-4: LatestFileList model and XML writer/reader
 
@@ -86,7 +86,7 @@ One in-memory manifest can be emitted as both LatestFileList.xml and LatestFileL
 **Deliverables**
 
 - src/server/shared/Patch/LatestFileList.h/.cpp: Package{name, records}, FileRecord{SrcFileName, TarFileName, FileType, Size, HeaderSize, CompressedHeaderSize, CRC, HeaderCRC}, About{Version}
-- src/server/shared/Patch/LatestFileListXml.h/.cpp: writes <LatestFileList><_TableList>(RECORD Name)...</_TableList><About><RECORD><Version TYPE="UINT">1</Version></RECORD></About><Package><RECORD>...</RECORD></Package>...; reader tolerant of whitespace
+- src/server/shared/Patch/LatestFileListXml.h/.cpp: writes <LatestFileList><_TableList>(RECORD Name)...</_TableList> then one element per table whose tag is the table's own name, never a fixed tag with the name in an attribute, in the order _TableList gives, which is alphabetical and so leads with <About><RECORD><Version TYPE="UINT">1</Version></RECORD></About> before <Some-TableName><RECORD>(SrcFileName, TarFileName, FileType, Size, HeaderSize, CompressedHeaderSize, CRC, HeaderCRC)</RECORD></Some-TableName>; reader tolerant of whitespace, and the model keeps table order rather than assuming About is first or last
 - src/test/server/shared/Patch/LatestFileListXmlTest.cpp
 
 **Data sources**
@@ -97,7 +97,7 @@ One in-memory manifest can be emitted as both LatestFileList.xml and LatestFileL
 
 - [ ] Unit: model -> XML -> model and model -> BIN -> model are both lossless
 - [ ] Unit: _TableList row count equals package count + About; empty TarFileName is written as an empty STR element
-- [ ] Env-gated: parsing a developer-supplied reference XML gives 3590 tables (Base 140 records, PatchClient 97, every other table exactly 1 record 'Data/GameData/<table>.wad')
+- [ ] Env-gated: parsing a developer-supplied reference XML gives 3591 _TableList rows, About plus 3590 file tables (Base 140 records, PatchClient 97, every other table exactly 1 record 'Data/GameData/<table>.wad')
 
 **Risks**
 
