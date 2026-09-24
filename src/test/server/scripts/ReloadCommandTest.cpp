@@ -8,6 +8,7 @@
 #include "CommandCaller.h"
 #include "CommandMgr.h"
 #include "ReloadMgr.h"
+#include "WorldEditJournal.h"
 #include "ScriptMgr.h"
 
 #include <gtest/gtest.h>
@@ -107,6 +108,28 @@ TEST_F(ReloadCommandTest, ARefusalAnswersWithEveryErrorAndKeepsWhatWasServing)
     EXPECT_TRUE(AnyLineHas(lines, "the first thing wrong"));
     EXPECT_TRUE(AnyLineHas(lines, "the second thing wrong")) << "every error must be reported, not only the first";
     EXPECT_EQ(sReloadMgr.GetGeneration("config"), 1u);
+}
+
+TEST_F(ReloadCommandTest, TheJournalSaysWhenNothingHasBeenEdited)
+{
+    sWorldEditJournal.Clear();
+    EXPECT_TRUE(AnyLineHas(Run("journal"), "Nothing has been edited"));
+}
+
+TEST_F(ReloadCommandTest, TheJournalListsWhatWasEditedAndWhoDidIt)
+{
+    sWorldEditJournal.Clear();
+    sWorldEditJournal.Record("Wizard", "a command", "UPDATE `zone_template` SET `far_clip` = 1");
+    std::vector<std::string> const lines = Run("journal");
+    EXPECT_TRUE(AnyLineHas(lines, "Wizard"));
+    EXPECT_TRUE(AnyLineHas(lines, "far_clip"));
+    sWorldEditJournal.Clear();
+}
+
+TEST_F(ReloadCommandTest, ExportingAnEmptyJournalSaysWhyRatherThanWritingNothingQuietly)
+{
+    sWorldEditJournal.Clear();
+    EXPECT_TRUE(AnyLineHas(Run("journal export"), "nothing has been edited"));
 }
 
 TEST_F(ReloadCommandTest, AllAnswersForEveryTarget)

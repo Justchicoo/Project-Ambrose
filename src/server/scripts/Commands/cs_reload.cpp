@@ -7,10 +7,12 @@
 #include "ChatCommand.h"
 #include "CommandCaller.h"
 #include "ReloadMgr.h"
+#include "WorldEditJournal.h"
 #include "ScriptMgr.h"
 
 #include <fmt/format.h>
 
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -52,6 +54,33 @@ namespace
         return true;
     }
 
+    bool ExportJournal(CommandCaller& caller, std::vector<std::string> const&)
+    {
+        std::string error;
+        std::optional<std::filesystem::path> const written = sWorldEditJournal.Export("data/sql/updates/pending_db_world", error);
+        if (!written)
+        {
+            caller.Reply(error.empty() ? "The journal was not exported" : error);
+            return true;
+        }
+        caller.Reply(fmt::format("{} edit(s) written to {}", sWorldEditJournal.Count(), written->string()));
+        return true;
+    }
+
+    bool ShowJournal(CommandCaller& caller, std::vector<std::string> const&)
+    {
+        std::size_t const held = sWorldEditJournal.Count();
+        if (held == 0)
+        {
+            caller.Reply("Nothing has been edited in the world database while this server has been running");
+            return true;
+        }
+        caller.Reply(fmt::format("{} edit(s) made while this server has been running, newest last:", held));
+        for (WorldEdit const& edit : sWorldEditJournal.Entries())
+            caller.Reply(fmt::format("  {} by {} from {}: {}", WorldEditJournal::StampOf(edit.EpochMs), edit.Who, edit.Source, edit.Statement));
+        return true;
+    }
+
     class ReloadCommands : public CommandScript
     {
     public:
@@ -61,6 +90,9 @@ namespace
         {
             return {
                 { .Name = "reload", .SecurityLevel = SEC_ADMINISTRATOR, .Help = "list what can be rebuilt without a restart, or rebuild one by name, or all", .Run = Run },
+                { .Name = "journal", .SecurityLevel = SEC_ADMINISTRATOR, .Help = "what has been edited in the world database while this server has been running", .Run = ShowJournal, .Children = {
+                    { .Name = "export", .SecurityLevel = SEC_ADMINISTRATOR, .Help = "write those edits as a pending update file", .Run = ExportJournal },
+                } },
             };
         }
     };

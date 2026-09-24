@@ -786,11 +786,11 @@ NPCs, signs, doors and props from the zone data appear for a player entering a z
 
 **Acceptance**
 
-- [ ] A failed reload keeps the previous generation serving and returns every error
+- [x] A failed reload keeps the previous generation serving and returns every error
 - [ ] A reader holding a snapshot during a swap keeps a consistent view (TSan clean)
 - [ ] `Logger.network` edit plus `reload config` changes routing without a restart
 - [ ] Broken message XML on reload keeps the old generation
-- [ ] `.reload all` reports each target's result and generation
+- [x] `.reload all` reports each target's result and generation
 - [ ] A live world edit is journaled and exports as a pending SQL update
 
 ### Detailed spec
@@ -810,11 +810,11 @@ Stores that load at startup share one reload path, so every later manager become
 
 **Acceptance**
 
-- [ ] Unit: a reload that fails validation leaves the previous generation serving, keeps its generation number, and returns every error, not only the first
+- [x] Unit: a reload that fails validation leaves the previous generation serving, keeps its generation number, and returns every error, not only the first
 - [ ] Unit: reader threads holding a snapshot during repeated swaps always see one whole generation, and the test is clean under TSan
 - [ ] Integration: editing `Logger.network` in the `.conf` file and running `reload config` on the console changes log routing without a restart
 - [ ] Integration: reloading message XML with a broken definition keeps the old generation, and declared messages still encode
-- [ ] `.reload all` reports each target's result and generation, in dependency order
+- [x] `.reload all` reports each target's result and generation, in dependency order
 - [ ] Integration: a live world-database edit writes one journal entry, and `.journal export` writes a pending_db_world file that applies cleanly to a fresh world database
 
 **Risks**
