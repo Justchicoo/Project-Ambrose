@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One connection to a MariaDB or MySQL server: parses the connection string, opens and closes, prepares registered statements, runs text and prepared queries, reports the rows the last prepared statement changed, escapes, reports whether a statement is running on it, and reconnects with backoff when the server goes away.
+ * One connection to a MariaDB or MySQL server: parses the connection string, opens and closes, prepares registered statements, runs text and prepared queries, reports the rows the last prepared statement changed, escapes, reports whether a statement is running on it, times every statement it runs under the name of the pool that claimed it so one pool's work is one series and startup work is not mistaken for serving, and reconnects with backoff when the server goes away.
  */
 
 #ifndef AMBROSE_MYSQLCONNECTION_H
@@ -37,6 +37,12 @@ enum class DatabaseTls : uint8
     Required,
     RequiredVerified
 };
+
+namespace Ambrose
+{
+    class Counter;
+    class Histogram;
+}
 
 struct MySQLConnectionInfo
 {
@@ -125,6 +131,8 @@ public:
     bool IsEncrypted() const;
     uint64 GetReconnectCount() const noexcept { return _reconnects.load(std::memory_order_relaxed); }
     MySQLConnectionInfo const& GetInfo() const noexcept { return _info; }
+    void SetPoolName(std::string name);
+    std::string const& GetPoolName() const noexcept { return _pool; }
 
     bool TryLock() { return _mutex.try_lock(); }
     void Unlock() { _mutex.unlock(); }
@@ -139,6 +147,18 @@ protected:
     void PrepareStatement(uint32 index, std::string_view name, std::string_view sql, ConnectionFlags flags);
     st_mysql* GetHandle() const noexcept { return _mysql; }
     bool RunQuery(std::string_view context, std::string_view sql, st_mysql_res** result, bool readOnly);
+    void RecordQuery(std::chrono::steady_clock::time_point started) const noexcept;
+
+    struct Timed
+    {
+        explicit Timed(MySQLConnection const& connection) noexcept : Connection(connection) {}
+        ~Timed() { Connection.RecordQuery(Started); }
+        Timed(Timed const&) = delete;
+        Timed& operator=(Timed const&) = delete;
+
+        MySQLConnection const& Connection;
+        std::chrono::steady_clock::time_point Started = std::chrono::steady_clock::now();
+    };
     bool AbandonTransaction();
     bool Reconnect();
     void ClearError() noexcept;
@@ -160,6 +180,10 @@ private:
     };
 
     MySQLConnectionInfo _info;
+    std::string _pool;
+    Ambrose::Histogram* _querySeconds = nullptr;
+    Ambrose::Counter* _queries = nullptr;
+    Ambrose::Counter* _queryFailures = nullptr;
     MySQLConnectionSettings _settings;
     st_mysql* _mysql = nullptr;
     std::mutex _mutex;

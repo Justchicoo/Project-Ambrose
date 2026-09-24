@@ -6,6 +6,7 @@
 #ifndef AMBROSE_RELOADMGR_H
 #define AMBROSE_RELOADMGR_H
 
+#include "MetricRegistry.h"
 #include "Types.h"
 
 #include <functional>
@@ -61,6 +62,9 @@ private:
         uint64 Generation = 0;
         bool Ran = false;
         ReloadOutcome Last;
+        Ambrose::Counter* Reloads = nullptr;
+        Ambrose::Counter* Failures = nullptr;
+        Ambrose::Histogram* Seconds = nullptr;
     };
 
     ReloadOutcome RunLocked(Target& target);

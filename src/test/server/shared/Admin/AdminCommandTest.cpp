@@ -134,6 +134,18 @@ namespace
     }
 }
 
+TEST(AdminRequestTest, AQueryValueIsReadByNameAndAMissingOneIsEmpty)
+{
+    AdminRequest request;
+    request.QueryValues.emplace("limit", "25");
+    request.QueryValues.emplace("blank", "");
+
+    EXPECT_EQ(request.Query("limit"), "25");
+    EXPECT_TRUE(request.Query("blank").empty()) << "a value that was given empty reads as empty";
+    EXPECT_TRUE(request.Query("nothing-like-it").empty()) << "a name nobody sent reads as empty rather than throwing";
+    EXPECT_TRUE(AdminRequest{}.Query("limit").empty()) << "a request with no query at all is safe to ask";
+}
+
 TEST(AdminCommandRouteTest, ARefusalThatWantsConfirmingSaysSoInTheAnswerAndConfirmingItRuns)
 {
     LogTestDirectory directory;

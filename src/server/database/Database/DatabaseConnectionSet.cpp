@@ -27,6 +27,7 @@ uint32 DatabaseConnectionSet::OpenConnection(ConnectionFactory const& factory, M
 {
     settings.Flags = flags;
     std::unique_ptr<MySQLConnection> connection = factory(info, settings);
+    connection->SetPoolName(_poolName);
     if (uint32 const error = connection->Open())
         return error;
 

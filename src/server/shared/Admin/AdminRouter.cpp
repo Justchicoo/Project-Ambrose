@@ -427,12 +427,19 @@ AdminResponse AdminRouter::Dispatch(AdminRequest const& incoming) const
     return response;
 }
 
+bool AdminRouter::HasRoute(std::string_view path) const
+{
+    std::shared_lock const lock(_mutex);
+    return std::any_of(_routes.begin(), _routes.end(), [path](Route const& route)
+        { return route.Prefix ? path.starts_with(route.Path) : path == route.Path; });
+}
+
 AdminResponse AdminRouter::Answer(AdminRequest& request) const
 {
     if (!HostAllowed(request.Host))
         return HostRefused(request.Host);
 
-    if (!IsApiPath(request.Path))
+    if (!IsApiPath(request.Path) && !HasRoute(request.Path))
     {
         Handler files;
         {

@@ -4,6 +4,7 @@
  */
 
 #include "MySQLConnection.h"
+#include "MetricRegistry.h"
 #include "ConfigMgr.h"
 #include "Environment.h"
 #include "Log.h"
@@ -146,6 +147,26 @@ std::string MySQLConnectionInfo::ToConnectionString() const
 
 MySQLConnection::MySQLConnection(MySQLConnectionInfo info, MySQLConnectionSettings settings) : _info(std::move(info)), _settings(settings)
 {
+    SetPoolName("setup");
+}
+
+void MySQLConnection::SetPoolName(std::string name)
+{
+    _pool = std::move(name);
+    Ambrose::MetricLabels const pool{ { "pool", _pool } };
+    _querySeconds = &sMetrics.HistogramFor("ambrose_database_query_seconds", "How long a statement took on a connection", pool);
+    _queries = &sMetrics.CounterFor("ambrose_database_queries_total", "Statements run on a connection", pool);
+    _queryFailures = &sMetrics.CounterFor("ambrose_database_query_failures_total", "Statements that returned an error", pool);
+}
+
+void MySQLConnection::RecordQuery(std::chrono::steady_clock::time_point started) const noexcept
+{
+    if (!_querySeconds)
+        return;
+    _querySeconds->Observe(std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count());
+    _queries->Add();
+    if (_lastErrorCode != 0)
+        _queryFailures->Add();
 }
 
 MySQLConnection::~MySQLConnection()
@@ -346,6 +367,7 @@ bool MySQLConnection::DrainResults(std::string_view context, std::string_view sq
 bool MySQLConnection::RunQuery(std::string_view context, std::string_view sql, st_mysql_res** result, bool readOnly)
 {
     UsageGuard const usage(_activeUsers, _concurrentUses);
+    Timed const timed(*this);
     ClearError();
     if (sql.empty())
     {
@@ -669,6 +691,7 @@ PreparedQueryResult MySQLConnection::Query(PreparedStatementBase const& statemen
 bool MySQLConnection::RunStatement(PreparedStatementBase const& values, bool readOnly, PreparedQueryResult* result)
 {
     UsageGuard const usage(_activeUsers, _concurrentUses);
+    Timed const timed(*this);
     ClearError();
     if (_closed)
     {

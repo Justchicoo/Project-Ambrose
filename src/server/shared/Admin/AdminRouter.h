@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The admin API's route table and front door: every request gets a request id that its answer and any error body carry, keeping one a caller such as the supervisor sent when it has the same form, so one id names the request in both logs, a host that is no IP address, localhost or a name the operator allows is refused so a page elsewhere cannot rebind a name onto this listener, paths outside /api go to the panel's files without a token, public routes such as signing in run without one, a route may answer every path under a prefix when no exact route claims it, the longest prefix first, and every other path needs the bearer token or a browser session whose unsafe requests and socket upgrades name this listener's own origin and carry the session's CSRF token, with every answer stamped with the panel's security headers and every error handed to a log.
+ * The admin API's route table and front door: every request gets a request id that its answer and any error body carry, keeping one a caller such as the supervisor sent when it has the same form, so one id names the request in both logs, a host that is no IP address, localhost or a name the operator allows is refused so a page elsewhere cannot rebind a name onto this listener, paths outside /api that no route claims go to the panel's files without a token, so a route a scraper expects at a fixed place such as /metrics is still served and still guarded, public routes such as signing in run without one, a route may answer every path under a prefix when no exact route claims it, the longest prefix first, and every other path needs the bearer token or a browser session whose unsafe requests and socket upgrades name this listener's own origin and carry the session's CSRF token, with every answer stamped with the panel's security headers and every error handed to a log.
  */
 
 #ifndef AMBROSE_ADMINROUTER_H
@@ -13,6 +13,7 @@
 #include <atomic>
 #include <cstddef>
 #include <functional>
+#include <map>
 #include <optional>
 #include <shared_mutex>
 #include <string>
@@ -37,6 +38,13 @@ struct AdminRequest
     std::string Id;
     std::string Principal;
     std::optional<std::string> SessionCsrf;
+    std::map<std::string, std::string, std::less<>> QueryValues;
+
+    std::string_view Query(std::string_view name) const
+    {
+        auto const found = QueryValues.find(name);
+        return found == QueryValues.end() ? std::string_view() : std::string_view(found->second);
+    }
 };
 
 struct AdminResponse
@@ -120,6 +128,7 @@ public:
     std::string ExpectedOrigin(AdminRequest const& request) const;
     AdminAuthResult Authenticate(AdminRequest& request) const;
     AdminResponse Dispatch(AdminRequest const& request) const;
+    bool HasRoute(std::string_view path) const;
     void SetPermissionCheck(PermissionCheck check);
     PermissionVerdict MayI(AdminRequest const& request, std::string_view permission) const;
     bool Holds(AdminRequest const& request, std::string_view permission) const;

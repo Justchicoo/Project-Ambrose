@@ -180,6 +180,9 @@ namespace
         incoming.Origin = request.get_header_value("Origin");
         incoming.Cookie = request.get_header_value("Cookie");
         incoming.Csrf = request.get_header_value("X-CSRF-Token");
+        for (std::string const& key : request.url_params.keys())
+            if (char const* const value = request.url_params.get(key))
+                incoming.QueryValues.emplace(key, value);
         if (std::string const offered = request.get_header_value("X-Request-Id"); AdminRouter::IsRequestId(offered))
             incoming.Id = offered;
         return incoming;

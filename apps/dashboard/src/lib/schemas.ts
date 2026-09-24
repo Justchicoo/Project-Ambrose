@@ -330,6 +330,31 @@ export const RealmsAnswer = v.looseObject({
     realms: v.array(RealmRow),
 });
 
+export const MetricBucket = v.looseObject({
+    le: v.number(),
+    count: v.number(),
+});
+
+export const MetricSeries = v.looseObject({
+    labels: v.optional(v.record(v.string(), v.string()), {}),
+    value: v.optional(v.number(), 0),
+    count: v.optional(v.number(), 0),
+    sum: v.optional(v.number(), 0),
+    buckets: v.optional(v.array(MetricBucket), []),
+});
+
+export const MetricFamily = v.looseObject({
+    name: v.string(),
+    help: v.optional(v.string(), ""),
+    kind: v.optional(v.string(), "untyped"),
+    series: v.optional(v.array(MetricSeries), []),
+});
+
+export const MetricsAnswer = v.looseObject({
+    schema: v.number(),
+    metrics: v.optional(v.array(MetricFamily), []),
+});
+
 export const ActivityRow = v.looseObject({
     time: v.optional(v.string(), ""),
     epoch_ms: v.optional(v.number(), 0),
@@ -392,6 +417,10 @@ export type OnlinePlayer = v.InferOutput<typeof OnlinePlayer>;
 export type PlayersAnswer = v.InferOutput<typeof PlayersAnswer>;
 export type RealmRow = v.InferOutput<typeof RealmRow>;
 export type RealmsAnswer = v.InferOutput<typeof RealmsAnswer>;
+export type MetricBucket = v.InferOutput<typeof MetricBucket>;
+export type MetricSeries = v.InferOutput<typeof MetricSeries>;
+export type MetricFamily = v.InferOutput<typeof MetricFamily>;
+export type MetricsAnswer = v.InferOutput<typeof MetricsAnswer>;
 export type ActivityRow = v.InferOutput<typeof ActivityRow>;
 export type ActivityAnswer = v.InferOutput<typeof ActivityAnswer>;
 export type ClientAnswer = v.InferOutput<typeof ClientAnswer>;

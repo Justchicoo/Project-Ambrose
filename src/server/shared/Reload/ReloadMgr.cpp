@@ -5,10 +5,12 @@
 
 #include "ReloadMgr.h"
 #include "Log.h"
+#include "MetricRegistry.h"
 
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <chrono>
 #include <exception>
 #include <unordered_set>
 #include <utility>
@@ -29,6 +31,10 @@ bool ReloadMgr::Register(std::string name, Loader loader, std::vector<std::strin
     target.Load = std::move(loader);
     target.DependsOn = std::move(dependsOn);
     target.Last.Target = name;
+    Ambrose::MetricLabels const label{ { "target", name } };
+    target.Reloads = &sMetrics.CounterFor("ambrose_reloads_total", "Reloads asked of a target", label);
+    target.Failures = &sMetrics.CounterFor("ambrose_reload_failures_total", "Reloads that left the old contents serving", label);
+    target.Seconds = &sMetrics.HistogramFor("ambrose_reload_seconds", "How long rebuilding a target took", label);
     auto const [it, inserted] = _targets.insert_or_assign(std::move(name), std::move(target));
     (void)it;
     return inserted;
@@ -134,6 +140,7 @@ ReloadOutcome ReloadMgr::RunLocked(Target& target)
     ReloadOutcome outcome;
     outcome.Target = target.Name;
     outcome.Ok = false;
+    auto const started = std::chrono::steady_clock::now();
     try
     {
         outcome.Ok = target.Load(outcome.Errors);
@@ -155,6 +162,10 @@ ReloadOutcome ReloadMgr::RunLocked(Target& target)
     outcome.Generation = target.Generation;
     target.Ran = true;
     target.Last = outcome;
+    target.Seconds->Observe(std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count());
+    target.Reloads->Add();
+    if (!outcome.Ok)
+        target.Failures->Add();
     if (outcome.Ok)
         LOG_INFO("server.reload", "Reloaded {}, now generation {}", target.Name, target.Generation);
     else

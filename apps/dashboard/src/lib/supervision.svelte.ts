@@ -14,6 +14,7 @@ import {
     OutputAnswer,
     ActivityAnswer,
     ClientAnswer,
+    MetricsAnswer,
     PlayersAnswer,
     RealmsAnswer,
     PowerAnswer,
@@ -80,6 +81,10 @@ export function activityOf(app: string, signal?: AbortSignal) {
 
 export function playersOf(app: string, signal?: AbortSignal) {
     return request("GET", pathFor(app, "players"), PlayersAnswer, undefined, signal);
+}
+
+export function metricsOf(app: string, signal?: AbortSignal) {
+    return request("GET", pathFor(app, "metrics"), MetricsAnswer, undefined, signal);
 }
 
 export function reloadTargetsOf(app: string, signal?: AbortSignal) {

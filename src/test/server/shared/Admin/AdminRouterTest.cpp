@@ -364,3 +364,31 @@ TEST(AdminRouterTest, ARouteAnswers403WithoutItsPermissionAnd404ForAScopeTheCall
     EXPECT_EQ(unseen.Status, 404);
     EXPECT_EQ(unseen.Body.find("console.write"), std::string::npos) << "a refusal must not name what the caller would have needed";
 }
+
+TEST(AdminRouterTest, ARouteOutsideApiIsServedAndGuardedWhileEveryOtherPathGoesToTheFiles)
+{
+    AdminAuth auth(10, 1.0);
+    auth.SetToken(Token);
+    AdminRouter routes(auth);
+    routes.SetPermissionKnown([](std::string_view permission) { return permission == "status.read"; });
+    routes.SetPermissionCheck([](AdminRequest const&, std::string_view) { return PermissionVerdict::Allowed; });
+    routes.SetFiles([](AdminRequest const& request) { return AdminResponse::Json(200, "\"files:" + request.Path + "\""); });
+    routes.AddGuarded("GET", "/metrics", "status.read", [](AdminRequest const&)
+    {
+        AdminResponse answer = AdminResponse::Json(200, "ambrose_up 1");
+        answer.ContentType = "text/plain; version=0.0.4; charset=utf-8";
+        return answer;
+    });
+
+    AdminResponse const scraped = routes.Dispatch(Get("/metrics"));
+    EXPECT_EQ(scraped.Status, 200) << scraped.Body;
+    EXPECT_EQ(scraped.Body, "ambrose_up 1") << "a scraper asks at the one place it knows, so a route there must beat the file handler";
+    EXPECT_EQ(scraped.ContentType, "text/plain; version=0.0.4; charset=utf-8");
+
+    AdminResponse const anonymous = routes.Dispatch(Get("/metrics", ""));
+    EXPECT_EQ(anonymous.Status, 401) << "and it is still behind the same door as the rest of the admin API";
+
+    AdminResponse const page = routes.Dispatch(Get("/panel/index.html"));
+    EXPECT_EQ(page.Status, 200);
+    EXPECT_EQ(page.Body, "\"files:/panel/index.html\"") << "a path no route claims still goes to the panel's files";
+}

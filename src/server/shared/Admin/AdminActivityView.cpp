@@ -7,6 +7,8 @@
 #include "AdminRouter.h"
 #include "StringUtil.h"
 
+#include <fmt/format.h>
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -71,18 +73,15 @@ std::string AdminActivityView::ActivityJson(std::filesystem::path const& file, s
 
 void AdminActivityView::Register(AdminRouter& router, std::filesystem::path auditFile)
 {
-    router.AddGuarded("GET", "/api/activity", "audit.read", [file = auditFile](AdminRequest const&)
+    router.AddGuarded("GET", "/api/activity", "audit.read", [file = std::move(auditFile)](AdminRequest const& request)
     {
-        return AdminResponse::Json(200, ActivityJson(file, DefaultLimit));
-    });
-
-    router.AddGuardedPrefix("GET", "/api/activity/last/", "audit.read", [file = std::move(auditFile)](AdminRequest const& request)
-    {
-        std::string_view tail(request.Path);
-        tail.remove_prefix(std::string_view("/api/activity/last/").size());
-        std::optional<std::size_t> const asked = Ambrose::StringTo<std::size_t>(tail);
-        if (!asked || *asked == 0)
-            return AdminResponse::Invalid("Reading the record takes a whole number of rows", { { "last", "Give a whole number from 1 to 1000" } });
-        return AdminResponse::Json(200, ActivityJson(file, *asked));
+        std::string_view const asked = request.Query("limit");
+        if (asked.empty())
+            return AdminResponse::Json(200, ActivityJson(file, DefaultLimit));
+        std::optional<std::size_t> const wanted = Ambrose::StringTo<std::size_t>(asked);
+        if (!wanted || *wanted == 0 || *wanted > MaxLimit)
+            return AdminResponse::Invalid("Reading the record takes a whole number of rows",
+                { { "limit", fmt::format("Give a whole number from 1 to {}", MaxLimit) } });
+        return AdminResponse::Json(200, ActivityJson(file, *wanted));
     });
 }

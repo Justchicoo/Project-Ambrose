@@ -5,6 +5,7 @@
 
 #include "World.h"
 #include "GameSession.h"
+#include "MetricRegistry.h"
 #include "ScriptMgr.h"
 
 #include <algorithm>
@@ -67,14 +68,23 @@ void World::Update(std::chrono::milliseconds diff)
         _worldThreadKnown = true;
     }
     _ticks.fetch_add(1, std::memory_order_relaxed);
+    auto const started = std::chrono::steady_clock::now();
 
     std::vector<std::shared_ptr<GameSession>> sessions;
     {
         std::lock_guard const lock(_mutex);
         sessions = _sessions;
     }
+    std::size_t const sessionCount = sessions.size();
     for (std::shared_ptr<GameSession> const& session : sessions)
         session->DrainQueue();
 
     sScriptMgr.OnWorldUpdate(diff);
+
+    static Ambrose::Histogram& tickSeconds = sMetrics.HistogramFor("ambrose_world_tick_seconds", "How long a world tick took");
+    static Ambrose::Counter& ticks = sMetrics.CounterFor("ambrose_world_ticks_total", "World ticks run");
+    static Ambrose::Gauge& held = sMetrics.GaugeFor("ambrose_world_sessions", "Sessions the world is holding");
+    tickSeconds.Observe(std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count());
+    ticks.Add();
+    held.Set(static_cast<int64>(sessionCount));
 }

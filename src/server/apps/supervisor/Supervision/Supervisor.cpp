@@ -297,7 +297,7 @@ AdminResponse Supervisor::Answer(AdminRequest const& request)
         OutputRun const run = tail == "/output/current" ? OutputRun::Current : OutputRun::Previous;
         return AdminResponse::Json(200, OutputJson(name, run, app->Output(run, 0)));
     }
-    if (tail.starts_with("/api/"))
+    if (tail == "/metrics" || tail.starts_with("/api/"))
         return Relay(*app, request, tail);
     return AdminResponse::Problem(404, "not_found", fmt::format("The supervisor has nothing at {}", request.Path));
 }

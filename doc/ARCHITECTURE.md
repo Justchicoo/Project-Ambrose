@@ -148,6 +148,8 @@ Settled on 2026-09-13. Changing one needs the maintainer's approval and an updat
 | Database server | MySQL 8.0 or newer, or MariaDB 10.6 or newer |
 | Database client | MariaDB Connector/C, which works with both servers. Its authentication plugins ship beside each executable in `plugins/libmariadb` |
 | CPU emulation | Unicorn 2 (GPL-2.0), linked only into the typeextract tool |
+| Metrics | No library. The Prometheus text format is emitted from `src/common/Metric`, whose register holds every counter, gauge and histogram with its labels, because the format is a few lines to write and a dependency to read it would carry a collector, a register and an HTTP server this project already has. The same register answers a JSON view for the panel, so there is one set of numbers and two renderings of it |
+| Panel charts | uPlot, added when the first chart is built rather than before it. Chosen for being small and fast with many points and for tying the panel to no framework; Grafana serves the dashboards of 17.10 and needs nothing from us |
 | x86 decoding | Zydis 4 |
 
 ### Protocol and type data load at runtime

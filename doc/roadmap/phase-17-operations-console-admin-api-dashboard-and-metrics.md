@@ -354,9 +354,9 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Acceptance**
 
-- [ ] `promtool check metrics` accepts the endpoint's output
-- [ ] Handling 1000 fake messages increases that service's counter by exactly 1000
-- [ ] A microbenchmark shows a metric update costs under 50 nanoseconds on average
+- [x] `promtool check metrics` accepts the endpoint's output (promtool 3.14.0 over the 80 series a running loginserver answered on GET /metrics, exit 0; the same promtool rejects a scrape with a counter that does not end in _total, no help line or an le label on something that is not a histogram, exit 3, so a pass says something)
+- [x] Handling 1000 fake messages increases that service's counter by exactly 1000 (MessageHandlerTableTest.HandlingAThousandMessagesMovesTheServicesCounterByAThousand: a thousand messages through Dispatch move ambrose_messages_handled_total{service} by exactly 1000 and the handler histogram by 1000 observations, a refused message moves the dropped counter by one and the handled counter by none)
+- [x] A microbenchmark shows a metric update costs under 50 nanoseconds on average (MetricRegistryTest.AnUpdateIsCheapEnoughToSitInAHotPath: 2,000,000 increments in 16 ms, about 8 ns each, against a 50 ns budget)
 
 ## 17.10 Grafana dashboards and operations guide
 

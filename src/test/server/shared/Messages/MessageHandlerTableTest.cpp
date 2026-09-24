@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests message dispatch on Ambrose-authored fixtures with a fake session: handled, wrong-status, pending, refused, foreign and unknown messages, strikes, the dropped-message budget, short and truncated bodies, queued work, throwing handlers, table validation and coverage, and catalogs reloaded with new orders.
+ * Tests message dispatch on Ambrose-authored fixtures with a fake session: handled, wrong-status, pending, refused, foreign and unknown messages, strikes, the dropped-message budget, short and truncated bodies, queued work, throwing handlers, table validation and coverage, catalogs reloaded with new orders, and that the service's counter moves once per message handled and once per message dropped.
  */
 
 #include "Log.h"
 #include "LogTestConfig.h"
 #include "MessageHandlerTable.h"
+#include "MetricRegistry.h"
 #include "TestAppender.h"
 
 #include <gtest/gtest.h>
@@ -508,4 +509,38 @@ TEST_F(MessageHandlerTableTest, ARestRuleStandsForEveryMessageOfItsServiceThatNo
     _session.Status = SessionStatus::Connected;
     EXPECT_EQ(rest.Dispatch(_session, _catalog, hello), DispatchResult::Handled)
         << "a handler still runs with a rest rule present, since the rest only claims what nothing else did";
+}
+
+TEST_F(MessageHandlerTableTest, HandlingAThousandMessagesMovesTheServicesCounterByAThousand)
+{
+    CapturedLog log;
+    uint64 const handledBefore = _table.HandledCount().Value();
+    uint64 const droppedBefore = _table.DroppedCount().Value();
+    uint64 const observedBefore = _table.HandleSeconds().Count();
+
+    HelloMessage hello;
+    hello.Version = "W.1.610";
+    hello.Machine = 77;
+    for (int sent = 0; sent < 1000; ++sent)
+    {
+        DmlMessageData message = Encoded(*_catalog, hello, 1);
+        ASSERT_EQ(_table.Dispatch(_session, _catalog, message), DispatchResult::Handled);
+    }
+
+    EXPECT_EQ(_table.HandledCount().Value() - handledBefore, 1000u) << "a thousand handled messages must move the counter by exactly a thousand";
+    EXPECT_EQ(_table.DroppedCount().Value() - droppedBefore, 0u) << "none of them was dropped";
+    EXPECT_EQ(_table.HandleSeconds().Count() - observedBefore, 1000u) << "and each one must be timed";
+
+    DmlMessageData refused = Message(7, 3);
+    EXPECT_EQ(_table.Dispatch(_session, _catalog, refused), DispatchResult::Refused);
+    EXPECT_EQ(_table.DroppedCount().Value() - droppedBefore, 1u) << "a message the app never accepts is counted as dropped";
+    EXPECT_EQ(_table.HandledCount().Value() - handledBefore, 1000u) << "and it is not counted as handled";
+}
+
+TEST_F(MessageHandlerTableTest, TheServicesCountersCarryItsNameSoAScrapeCanTellServicesApart)
+{
+    _table.HandledCount().Add();
+    std::string const text = Ambrose::MetricRegistry::Expose(sMetrics.Collect());
+    EXPECT_NE(text.find("ambrose_messages_handled_total{service=\"testserver\"}"), std::string::npos) << text;
+    EXPECT_NE(text.find("# TYPE ambrose_message_handle_seconds histogram"), std::string::npos);
 }

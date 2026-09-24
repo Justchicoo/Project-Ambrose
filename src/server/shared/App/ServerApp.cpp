@@ -7,6 +7,7 @@
 #include "AdminCapabilities.h"
 #include "AdminActivityView.h"
 #include "AdminClientView.h"
+#include "AdminMetricsView.h"
 #include "AdminCommand.h"
 #include "AdminConfigView.h"
 #include "AdminRealmsView.h"
@@ -404,6 +405,7 @@ void ServerApp::RegisterStandardRoutes(AdminRouter& routes)
     AdminConfigView::Register(routes, _config, GetRestartRequiredOptions());
     AdminReloadView::Register(routes);
     AdminRealmsView::Register(routes);
+    AdminMetricsView::Register(routes);
     AdminActivityView::Register(routes, CommandAuditFile());
     AdminClientView::Register(routes, [this]() -> ClientSetupResult const& { return _clientSetup; });
     AdminCommand::Register(routes, _commands, _info.Name, CommandAuditFile());

@@ -6,6 +6,7 @@
 import type { Component } from "svelte";
 import ActivityIcon from "@lucide/svelte/icons/activity";
 import ArchiveIcon from "@lucide/svelte/icons/archive";
+import ChartLineIcon from "@lucide/svelte/icons/chart-line";
 import DatabaseIcon from "@lucide/svelte/icons/database";
 import FileTextIcon from "@lucide/svelte/icons/file-text";
 import GaugeIcon from "@lucide/svelte/icons/gauge";
@@ -75,6 +76,15 @@ export const routes: Route[] = [
         nav: true,
         group: "Servers",
         view: { kind: "page", load: () => import("./pages/Console.svelte") },
+    },
+    {
+        path: "metrics",
+        title: "Metrics",
+        icon: ChartLineIcon,
+        permission: "status.read",
+        nav: true,
+        group: "Servers",
+        view: { kind: "page", load: () => import("./pages/Metrics.svelte") },
     },
     {
         path: "database",

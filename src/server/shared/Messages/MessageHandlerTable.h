@@ -8,12 +8,14 @@
 
 #include "Frame.h"
 #include "Log.h"
+#include "MetricRegistry.h"
 #include "MessageRegistry.h"
 #include "SessionStatus.h"
 
 #include <fmt/format.h>
 
 #include <atomic>
+#include <chrono>
 #include <exception>
 #include <memory>
 #include <mutex>
@@ -103,6 +105,10 @@ public:
 
     static std::string DescribeMessage(MessageInfo const& info);
 
+    Ambrose::Counter& HandledCount() const noexcept { return *_handled; }
+    Ambrose::Counter& DroppedCount() const noexcept { return *_dropped; }
+    Ambrose::Histogram& HandleSeconds() const noexcept { return *_handleSeconds; }
+
 protected:
     MessageHandlerTableBase(std::string appName, std::vector<uint8> ownServices, QueuedMessageDrain drain);
     ~MessageHandlerTableBase() = default;
@@ -126,6 +132,9 @@ private:
     std::vector<bool (*)(MessageRegistry& registry, std::vector<std::string>& errors)> _sentDeclarations;
     mutable std::mutex _resolutionMutex;
     mutable std::atomic<std::shared_ptr<Resolution const>> _resolution;
+    Ambrose::Counter* _handled = nullptr;
+    Ambrose::Counter* _dropped = nullptr;
+    Ambrose::Histogram* _handleSeconds = nullptr;
 };
 
 namespace MessageHandlerDetail
@@ -158,8 +167,8 @@ public:
 
 private:
     DispatchResult Run(SessionT& session, MessageCatalog const& catalog, std::size_t index, uint8 serviceId, uint8 order, std::span<uint8 const> body) const;
-    static void Drop(SessionT& session, LogLevel level, std::string const& text);
-    static void Violation(SessionT& session, std::string const& text, std::string const& strike);
+    void Drop(SessionT& session, LogLevel level, std::string const& text) const;
+    void Violation(SessionT& session, std::string const& text, std::string const& strike) const;
 
     std::vector<Invoker> _invokers;
 };
@@ -194,8 +203,9 @@ void MessageHandlerTable<SessionT>::Accept(SessionStatusMask statuses, MessagePr
 }
 
 template<typename SessionT>
-void MessageHandlerTable<SessionT>::Drop(SessionT& session, LogLevel level, std::string const& text)
+void MessageHandlerTable<SessionT>::Drop(SessionT& session, LogLevel level, std::string const& text) const
 {
+    DroppedCount().Add();
     if (session.AllowDropLog())
     {
         LOG_DYNAMIC(level, LogCategory, "{}", text);
@@ -205,8 +215,9 @@ void MessageHandlerTable<SessionT>::Drop(SessionT& session, LogLevel level, std:
 }
 
 template<typename SessionT>
-void MessageHandlerTable<SessionT>::Violation(SessionT& session, std::string const& text, std::string const& strike)
+void MessageHandlerTable<SessionT>::Violation(SessionT& session, std::string const& text, std::string const& strike) const
 {
+    DroppedCount().Add();
     if (session.AllowDropLog())
         LOG_WARN(LogCategory, "{}", text);
     session.AddStrike(strike);
@@ -281,6 +292,8 @@ DispatchResult MessageHandlerTable<SessionT>::Dispatch(SessionT& session, Messag
             }
             Run(session, *catalog, index, serviceId, order, body);
         }, bytes);
+        if (!queued)
+            DroppedCount().Add();
         return queued ? DispatchResult::Queued : DispatchResult::QueueFull;
     }
     return Run(session, *catalog, index, serviceId, order, message.Body);
@@ -296,11 +309,13 @@ DispatchResult MessageHandlerTable<SessionT>::Run(SessionT& session, MessageCata
     if (!invoke)
     {
         LOG_ERROR(LogCategory, "{} has no handler for {}", GetAppName(), name);
+        DroppedCount().Add();
         return DispatchResult::HandlerFailed;
     }
 
     LOG_DEBUG(LogCategory, "{} from session {}, {} bytes", name, session.GetSessionId(), body.size());
     MessageInvokeStatus status = MessageInvokeStatus::Handled;
+    auto const started = std::chrono::steady_clock::now();
     try
     {
         status = invoke(session, catalog, body);
@@ -309,6 +324,7 @@ DispatchResult MessageHandlerTable<SessionT>::Run(SessionT& session, MessageCata
     {
         LOG_ERROR(LogCategory, "{} failed on {} from session {}: {}", rule.HandlerName, name, session.GetSessionId(), failure.what());
         session.Kick(fmt::format("{} failed on {}", rule.HandlerName, name));
+        DroppedCount().Add();
         return DispatchResult::HandlerFailed;
     }
 
@@ -316,16 +332,19 @@ DispatchResult MessageHandlerTable<SessionT>::Run(SessionT& session, MessageCata
     {
         case MessageInvokeStatus::NotDeclared:
             LOG_ERROR(LogCategory, "{} cannot decode {}: its declaration did not resolve against the loaded message definitions", GetAppName(), name);
+            DroppedCount().Add();
             return DispatchResult::HandlerFailed;
         case MessageInvokeStatus::Truncated:
             Violation(session, fmt::format("Dropped {} from session {}: its {}-byte body is shorter than the definition", name, session.GetSessionId(), body.size()), fmt::format("{} with a truncated body", name));
             return DispatchResult::DecodeFailed;
         case MessageInvokeStatus::HandledWithTrailingBytes:
             LOG_DEBUG(LogCategory, "{} from session {} carried bytes past its definition", name, session.GetSessionId());
-            return DispatchResult::Handled;
+            break;
         case MessageInvokeStatus::Handled:
             break;
     }
+    HandleSeconds().Observe(std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count());
+    HandledCount().Add();
     return DispatchResult::Handled;
 }
 

@@ -20,6 +20,10 @@ namespace
 MessageHandlerTableBase::MessageHandlerTableBase(std::string appName, std::vector<uint8> ownServices, QueuedMessageDrain drain)
     : _appName(std::move(appName)), _ownServices(std::move(ownServices)), _drain(drain)
 {
+    Ambrose::MetricLabels const service{ { "service", _appName } };
+    _handled = &sMetrics.CounterFor("ambrose_messages_handled_total", "Messages whose handler ran and returned", service);
+    _dropped = &sMetrics.CounterFor("ambrose_messages_dropped_total", "Messages dispatch refused, dropped or could not decode", service);
+    _handleSeconds = &sMetrics.HistogramFor("ambrose_message_handle_seconds", "How long a handler took", service);
 }
 
 bool MessageHandlerTableBase::IsOwnService(uint8 serviceId) const noexcept
