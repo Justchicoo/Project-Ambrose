@@ -55,6 +55,14 @@ export default defineConfig({
             },
             {
                 plugins: ambrosePlugins(),
+                test: {
+                    name: "launcher",
+                    environment: "node",
+                    include: ["apps/launcherui/src/**/*.test.ts"],
+                },
+            },
+            {
+                plugins: ambrosePlugins(),
                 resolve: { alias: panelLib },
                 test: {
                     name: "dashboard-browser",
