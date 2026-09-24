@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 58,
+    "done": 59,
     "total": 394,
-    "percent": 14.7
+    "percent": 15.0
   },
   "checks": {
-    "done": 567,
+    "done": 572,
     "total": 2392,
-    "percent": 23.7
+    "percent": 23.9
   },
   "contributor_track": {
     "merged": 71,
@@ -52,7 +52,7 @@
       "title": "The zone comes alive for one player",
       "milestones_done": 0,
       "milestones_total": 8,
-      "checks_done": 1,
+      "checks_done": 3,
       "checks_total": 56
     },
     {
@@ -146,9 +146,9 @@
     {
       "phase": 17,
       "title": "Operations console admin api dashboard and metrics",
-      "milestones_done": 10,
+      "milestones_done": 11,
       "milestones_total": 111,
-      "checks_done": 91,
+      "checks_done": 94,
       "checks_total": 637
     }
   ]
