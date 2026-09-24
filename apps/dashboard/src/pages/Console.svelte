@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The remote console, live: it lists the apps the supervisor runs, sends what is typed to the app's own command route and prints what came back, keeping each app's output and its recalled commands in memory only. A command that cannot be undone comes back refused rather than run, and typing yes sends the same command again with the confirmation the server asked for, so the confirming is a thing the operator does on purpose rather than a flag the page sets for them. A refusal is printed in the colour of something wrong with the reason the server gave, never as though it had worked, and the prompt is closed while an app is not running or a command is still out. The prompt and the power controls are there only for an operator who may use them, hidden by the same permissions the server checks, so the page never offers what would come back refused. -->
+<!-- Project Ambrose by Imjustchico: The remote console, live: it shows everything the chosen server prints as it prints it, which is what an owner watches, and interleaves the commands an operator sends and what came back in the same scrollback, so cause and effect read in the order they happened rather than in two places. What the server wrote to its error stream is coloured as such. The view follows the newest line until the operator scrolls up, and then leaves them where they are, because a console that yanks itself to the bottom while somebody is reading is a console they cannot read. It lists the apps the supervisor runs, sends what is typed to the app's own command route and prints what came back, keeping each app's output and its recalled commands in memory only. A command that cannot be undone comes back refused rather than run, and typing yes sends the same command again with the confirmation the server asked for, so the confirming is a thing the operator does on purpose rather than a flag the page sets for them. A refusal is printed in the colour of something wrong with the reason the server gave, never as though it had worked, and the prompt is closed while an app is not running or a command is still out. The prompt and the power controls are there only for an operator who may use them, hidden by the same permissions the server checks, so the page never offers what would come back refused. -->
 <script lang="ts">
     import * as Card from "$lib/components/ui/card/index.js";
     import * as Select from "$lib/components/ui/select/index.js";
@@ -21,10 +21,10 @@
     import { formatUptime } from "$lib/format.js";
     import { live } from "$lib/status.svelte.js";
     import { may } from "$lib/permission.svelte.js";
-    import { runCommand, supervised } from "$lib/supervision.svelte.js";
+    import { output as capturedOutput, runCommand, supervised } from "$lib/supervision.svelte.js";
     import type { AppEntry } from "$lib/schemas.js";
 
-    type Line = { kind: "command" | "reply" | "status" | "refused"; text: string };
+    type Line = { kind: "command" | "reply" | "status" | "refused" | "said" | "wrote"; text: string };
     type Tone = "healthy" | "waiting" | "wrong" | "unknown";
 
     const tones: Record<string, Tone> = {
@@ -68,6 +68,8 @@
 
     const outputs = $state<Record<string, Line[]>>({});
     const output = $derived(outputs[app.name] ?? []);
+    const seen: Record<string, number> = {};
+    let following = $state(true);
 
     let line = $state("");
     let recall = -1;
@@ -105,7 +107,43 @@
     }
 
     function say(name: string, lines: Line[]) {
-        outputs[name] = [...(outputs[name] ?? []), ...lines];
+        outputs[name] = [...(outputs[name] ?? []), ...lines].slice(-2000);
+    }
+
+    $effect(() => {
+        const name = app.name;
+        const beat = live.now;
+        void beat;
+        if (name === "") return;
+        const controller = new AbortController();
+        void (async () => {
+            try {
+                const answer = await capturedOutput(name, "current", controller.signal);
+                const after = seen[name] ?? 0;
+                const fresh = answer.lines.filter((one) => one.seq > after);
+                if (fresh.length > 0) {
+                    seen[name] = fresh[fresh.length - 1].seq;
+                    say(
+                        name,
+                        fresh.map((one) => ({ kind: one.stream === "err" ? "wrote" : "said", text: one.text }) as Line),
+                    );
+                }
+            } catch (problem) {
+                void problem;
+            }
+        })();
+        return () => controller.abort();
+    });
+
+    $effect(() => {
+        void output.length;
+        if (!screen || !following) return;
+        screen.scrollTop = screen.scrollHeight;
+    });
+
+    function watchScroll() {
+        if (!screen) return;
+        following = screen.scrollHeight - screen.scrollTop - screen.clientHeight < 24;
     }
 
     function asksToConfirm(body: unknown) {
@@ -217,6 +255,7 @@
         <div
             bind:this={screen}
             class="h-[52vh] overflow-y-auto bg-sidebar/60 p-4 font-mono text-sm leading-6"
+            onscroll={watchScroll}
             role="log"
             aria-label={`Output from ${app.name}`}
         >
@@ -229,11 +268,19 @@
                     <div class="pl-4 break-words whitespace-pre-wrap text-destructive">{entry.text}</div>
                 {:else if entry.kind === "status"}
                     <div class="text-xs text-muted-foreground italic">{entry.text}</div>
+                {:else if entry.kind === "said"}
+                    <div class="break-words whitespace-pre-wrap text-foreground/90">{entry.text}</div>
+                {:else if entry.kind === "wrote"}
+                    <div class="break-words whitespace-pre-wrap text-destructive">{entry.text}</div>
                 {:else}
                     <div class="pl-4 break-words whitespace-pre-wrap text-muted-foreground">{entry.text}</div>
                 {/if}
             {:else}
-                <p class="font-sans text-sm text-muted-foreground">Nothing here yet. Type a command below, like status.</p>
+                <p class="font-sans text-sm text-muted-foreground">
+                    {app.running
+                        ? `Waiting for ${app.name} to say something. Everything it prints appears here, and you can type a command below, like status.`
+                        : `${app.name} is not running, so it is saying nothing. Its last run's output is on the Servers page, and starting it brings this back to life.`}
+                </p>
             {/each}
         </div>
         {#if mayType}

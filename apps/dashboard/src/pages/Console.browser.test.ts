@@ -56,6 +56,8 @@ function runningApp(name: string): AppEntry {
 
 const sent: { method: string; path: string; body: Record<string, unknown> | undefined }[] = [];
 
+let printed: { seq: number; stream: string; text: string; epoch_ms: number | null }[] = [];
+
 function answer(body: unknown, code = 200): Response {
     return new Response(JSON.stringify(body), { status: code, headers: { "Content-Type": "application/json" } });
 }
@@ -94,6 +96,7 @@ function commandsSent() {
 
 beforeEach(() => {
     sent.length = 0;
+    printed = [];
     vi.stubGlobal("fetch", (path: string, options: RequestInit) => {
         const body = options.body ? (JSON.parse(String(options.body)) as Record<string, unknown>) : undefined;
         sent.push({ method: options.method ?? "GET", path, body });
@@ -140,6 +143,16 @@ beforeEach(() => {
                 ),
             );
         }
+        if (path.includes("/output/current")) {
+            return Promise.resolve(
+                answer({
+                    schema: 1,
+                    app: "loginserver",
+                    run: "current",
+                    lines: printed,
+                }),
+            );
+        }
         return Promise.resolve(answer({}));
     });
     session.csrf = "token";
@@ -177,5 +190,44 @@ describe("the console asking before something that cannot be undone", () => {
         expect(commands.length, "cancelling must send nothing at all").toBe(1);
         expect(commands[0]).toEqual({ command: "shutdown" });
         expect(host.textContent).toContain("left alone");
+    });
+
+    it("shows what the server printed, without anybody typing a command", async () => {
+        printed = [
+            { seq: 1, stream: "out", text: "loginserver ready", epoch_ms: Date.now() },
+            { seq: 2, stream: "out", text: "Listening on 0.0.0.0:12000", epoch_ms: Date.now() },
+        ];
+        open();
+
+        await vi.waitFor(() => {
+            flushSync();
+            expect(host.textContent ?? "").toContain("loginserver ready");
+        });
+        const text = host.textContent ?? "";
+        expect(text, "everything the server says belongs here").toContain("Listening on 0.0.0.0:12000");
+        expect(text, "the empty state is gone once the server has said something").not.toContain("Waiting for");
+    });
+
+    it("adds only what is new rather than repeating the whole run each beat", async () => {
+        printed = [{ seq: 1, stream: "out", text: "first line", epoch_ms: Date.now() }];
+        open();
+        await vi.waitFor(() => {
+            flushSync();
+            expect(host.textContent ?? "").toContain("first line");
+        });
+
+        printed = [
+            { seq: 1, stream: "out", text: "first line", epoch_ms: Date.now() },
+            { seq: 2, stream: "out", text: "second line", epoch_ms: Date.now() },
+        ];
+        live.now = Date.now() + 1000;
+        await vi.waitFor(() => {
+            flushSync();
+            expect(host.textContent ?? "").toContain("second line");
+        });
+
+        const body = host.textContent ?? "";
+        const first = body.split("first line").length - 1;
+        expect(first, "a line the console already holds must not be added again").toBe(1);
     });
 });
