@@ -33,7 +33,7 @@ namespace
 }
 
 Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path configFolder)
-    : _log(log), _dataFolder(std::move(dataFolder)), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _settings(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
+    : _log(log), _dataFolder(std::move(dataFolder)), _store(), _settings(_store), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
 {
     _listener.Routes().SetThrottle([this](AdminRequest const& request, uint32 cost) { return Throttle(request, cost); });
     _listener.SetSessionSource(&_sessions);
