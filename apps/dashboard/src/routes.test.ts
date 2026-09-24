@@ -64,7 +64,7 @@ describe("what a path shows", () => {
 
     it("leaves a route the caller may not use and every hidden route out of the side bar", () => {
         const statusOnly = new Set(["status.read"]);
-        expect(navigation(statusOnly).map((route) => route.path)).toEqual(["overview", "metrics"]);
+        expect(navigation(statusOnly).map((route) => route.path)).toEqual(["overview", "metrics", "resources"]);
         expect(navigation(everything).some((route) => route.path === "denied")).toBe(false);
         expect(navigation(everything)).toHaveLength(routes.filter((route) => route.nav).length);
     });

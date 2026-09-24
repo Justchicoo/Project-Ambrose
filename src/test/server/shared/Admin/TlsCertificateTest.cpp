@@ -75,10 +75,14 @@ TEST(TlsCertificateTest, WarnsWhileTheLastDaysRunDown)
     TlsCertificate certificate;
     std::string error;
     ASSERT_TRUE(certificate.Load(pair.Certificate, pair.Key, error)) << error;
-    std::vector<std::string> const warnings = certificate.Warnings(static_cast<int64>(std::time(nullptr)));
+    int64 const tenDaysBefore = certificate.GetInfo().NotAfter - 10 * 86400;
+    std::vector<std::string> const warnings = certificate.Warnings(tenDaysBefore);
     ASSERT_EQ(warnings.size(), 2u);
     EXPECT_NE(warnings.front().find("expires in 10 days"), std::string::npos) << warnings.front();
     EXPECT_NE(warnings.front().find("soon.crt"), std::string::npos) << warnings.front();
+
+    EXPECT_NE(certificate.Warnings(tenDaysBefore + 86399).front().find("expires in 9 days"), std::string::npos)
+        << "a day that is all but over is nine days left, not ten, because an expiry rounded the hopeful way is the one an operator cannot afford";
 }
 
 TEST(TlsCertificateTest, RefusesAKeyThatBelongsToAnotherCertificate)

@@ -3,6 +3,7 @@
  * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel and the supervisor routes on its admin API, offers apps, start, stop, restart and kill on its console, and leaves the apps running when it stops so the next start takes them back.
  */
 
+#include "AdminGraphsView.h"
 #include "AdminServer.h"
 #include "AdminStatus.h"
 #include "ChildProcess.h"
@@ -15,6 +16,8 @@
 #include "AppOptions.h"
 #include "Panel.h"
 #include "PanelUsers.h"
+#include "ResourceSampler.h"
+#include "SeriesStore.h"
 #include "ServerApp.h"
 #include "StringUtil.h"
 #include "Supervisor.h"
@@ -25,6 +28,8 @@
 #include <algorithm>
 #include <ctime>
 #include <filesystem>
+#include <chrono>
+#include <memory>
 #include <iterator>
 #include <iostream>
 #include <optional>
@@ -154,6 +159,7 @@ namespace
         void OnAdminApiReady(AdminServer& admin) override
         {
             _supervisor.Register(admin.Routes(), [this] { return BuildStatus(); });
+            AdminGraphsView::Register(admin.Routes(), [this]() -> Ambrose::SeriesStore const& { return _history; });
         }
 
         bool OnStart() override
@@ -176,7 +182,18 @@ namespace
             if (apps.empty())
                 LOG_WARN("server.supervisor", "Supervisor.Apps names no app, so the supervisor has nothing to run");
             LOG_INFO("server.supervisor", "Watching {} app(s), with their state in {} and their output in {}", apps.size(), ConfigMgr::PathToUtf8(settings.StateFile), ConfigMgr::PathToUtf8(settings.OutputFolder));
+            _historyFile = settings.HistoryFile;
+            _sampleInterval = settings.SampleInterval;
+            _saveInterval = settings.SaveInterval;
+            _sampler = std::make_unique<ResourceSampler>(_history);
+            _lastSave = std::chrono::steady_clock::now();
+            std::string historyError;
+            if (_history.Load(_historyFile, historyError))
+                LOG_INFO("server.supervisor", "Read {} series of history from {}", _history.Count(), ConfigMgr::PathToUtf8(_historyFile));
+            else
+                LOG_INFO("server.supervisor", "Starting with no history: {}", historyError);
             RegisterStandardRoutes(_panel.Routes());
+            AdminGraphsView::Register(_panel.Routes(), [this]() -> Ambrose::SeriesStore const& { return _history; });
             _supervisor.Register(_panel.Routes(), [this] { return BuildStatus(); });
             _panel.SetErrorSource([this]
             {
@@ -192,8 +209,36 @@ namespace
             return true;
         }
 
+        std::chrono::milliseconds GetUpdateInterval() const override
+        {
+            return std::chrono::duration_cast<std::chrono::milliseconds>(_sampleInterval);
+        }
+
+        void OnUpdate(std::chrono::milliseconds) override
+        {
+            if (!_sampler)
+                return;
+            int64 const now = static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count());
+            _sampler->Sample(_supervisor.Snapshots(), now);
+            if (std::chrono::steady_clock::now() - _lastSave < _saveInterval)
+                return;
+            _lastSave = std::chrono::steady_clock::now();
+            SaveHistory();
+        }
+
+        void SaveHistory()
+        {
+            if (_historyFile.empty())
+                return;
+            std::string error;
+            if (!_history.Save(_historyFile, error))
+                LOG_WARN("server.supervisor", "The history was not written to {}: {}", ConfigMgr::PathToUtf8(_historyFile), error);
+        }
+
         void OnStop() override
         {
+            SaveHistory();
             _panel.Stop();
             _supervisor.Shutdown();
             LOG_INFO("server.supervisor", "The supervisor stopped watching; the apps it runs keep running and are taken back when it starts again");
@@ -352,6 +397,12 @@ namespace
 
         Supervisor _supervisor;
         Panel _panel;
+        Ambrose::SeriesStore _history;
+        std::unique_ptr<ResourceSampler> _sampler;
+        std::filesystem::path _historyFile;
+        std::chrono::seconds _sampleInterval{ 5 };
+        std::chrono::seconds _saveInterval{ 300 };
+        std::chrono::steady_clock::time_point _lastSave{};
     };
 }
 

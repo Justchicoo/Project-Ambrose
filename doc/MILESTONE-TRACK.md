@@ -28,6 +28,7 @@ This page stays the rulebook. The board is the live view of it, and where the tw
 
 - `milestone:4.02` closes one milestone.
 - `phase:17` closes a whole phase, every milestone in it, however ready one of them looks on its own. The panel is built as one long thread of work, so a milestone taken out of the middle of it collides with something being built the same week.
+- A phase hold may carry `"except": ["17.10"]`, which opens exactly those milestones out of it. That is how a piece that collides with nothing gets handed out while the rest of the phase stays closed, and it is deliberate each time rather than a default. Only a phase hold may carry one, every id in it has to be a real milestone of that phase, and a milestone the same file also holds by name stays held, so an exception can never override a hold meant for it.
 
 A hold is not advice. `apps/ci/ci_contrib_paths.py` refuses a branch named for a held milestone and says who holds it, so a pull request for one cannot pass its checks, and the board never lists it as open. When a session finishes and moves on, the hold goes and whatever it covered becomes takeable in the next build of the board.
 
@@ -92,6 +93,7 @@ Then one of four things happens, each with one message saying which and why: it 
 
 | ID | Milestone | Size | What you need | Why it is a good one to take |
 |---|---|---|---|---|
+| 17.10 | Grafana dashboards and operations guide | S | Docker, and a build of the server to point Prometheus at. No installation of the game and no second machine | 17.09 landed, so every server answers GET /metrics in the Prometheus text exposition format behind the admin token, with tick time, each service's messages, each pool's statements and each reload target's runs already counted and labelled. What is missing is the stack that reads it: a compose file for Prometheus and Grafana, a provisioned data source, dashboards for realm health, performance and the database, and doc/OPERATIONS.md. Phase 17 is held, and this is the first milestone deliberately spared from that hold, because none of it touches the C++ being built. Both acceptance checks run on your own machine |
 | 16.03 | Install scanner manifest generator | M | A build, and a Wizard101 install for the reference check, which the maintainer will run for you if you have none | The step straight after 16.01 and 16.02, both landed, and the first milestone that turns a real installation into a manifest of its own rather than reading one. The synthetic-directory check and the one that asks for a second run to be faster and byte-identical need nothing but a build; only the comparison against all 3590 packages needs an install |
 
 ## Reserved
@@ -108,8 +110,8 @@ Everything not in the table above, including every milestone whose dependencies 
 | 3.23 | Next in the maintainer's own queue |
 | 16.11 | Overlaps the type extraction already built in 3.21 and is being rethought |
 | 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal |
-| 17.09 | Next in the maintainer's own queue |
 | 17.23 | Dev-gated on a reboot and a Pterodactyl install |
+| 17.19 | Being built now |
 | 17.35 | Held with the rest of phase 17 while the panel is built as one thread |
 | 17.49 | Held with the rest of phase 17 while the panel is built as one thread |
 | 17.47 | Being built now |
