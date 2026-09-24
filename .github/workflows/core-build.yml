@@ -92,6 +92,9 @@ jobs:
       - name: Front-end checks
         if: ${{ !cancelled() }}
         run: python apps/ci/ci_frontend_checks.py
+      - name: Dependency notices
+        if: ${{ !cancelled() }}
+        run: python apps/ci/ci_dependency_notices.py
       - name: Forbidden files
         if: ${{ !cancelled() }}
         run: python apps/ci/ci_forbidden_files.py

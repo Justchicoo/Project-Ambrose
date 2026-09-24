@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
 import ci_build
 import ci_commit_trailer
 import ci_contrib_paths
+import ci_dependency_notices
 import ci_findings
 import ci_forbidden_files
 import ci_roadmap_state
@@ -760,6 +761,34 @@ class TriageTests(unittest.TestCase):
             if prefix == "contrib/":
                 continue
             self.assertEqual(ci_contrib_paths.check([prefix + "a-file"]), [], prefix)
+
+
+class DependencyNoticeTests(unittest.TestCase):
+    def notices(self, manifest, notices):
+        folder = tempfile.mkdtemp()
+        with io.open(os.path.join(folder, "vcpkg.json"), "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps({"dependencies": manifest}))
+        with io.open(os.path.join(folder, "THIRD-PARTY-NOTICES.md"), "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(notices)
+        return folder
+
+    def test_a_dependency_nobody_wrote_down_is_refused(self):
+        folder = self.notices(["fmt", "ftxui"], "| fmt | formatting | MIT | Keep the notice |\n")
+        self.assertEqual(ci_dependency_notices.missing(folder), ["ftxui"])
+        self.assertEqual(ci_dependency_notices.main(["--root", folder]), 1)
+
+    def test_a_dependency_named_under_its_own_title_is_accepted(self):
+        folder = self.notices(["libmariadb", "sqlite3", "nlohmann-json"],
+                              "| MariaDB Connector/C | x | LGPL | y |\n| SQLite | x | blessing | y |\n| nlohmann/json | x | MIT | y |\n")
+        self.assertEqual(ci_dependency_notices.missing(folder), [])
+
+    def test_an_object_dependency_counts_by_its_name(self):
+        folder = self.notices([{"name": "openssl", "features": ["tools"]}], "nothing here\n")
+        self.assertEqual(ci_dependency_notices.missing(folder), ["openssl"])
+
+    def test_the_repository_names_every_dependency_it_builds_with(self):
+        self.assertEqual(ci_dependency_notices.missing(ROOT), [])
+        self.assertEqual(ci_dependency_notices.main(["--root", ROOT]), 0)
 
 
 class MilestoneTrackTests(unittest.TestCase):

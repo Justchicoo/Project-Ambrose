@@ -18,6 +18,7 @@ Project Ambrose itself is MIT licensed, in LICENSE. It uses the libraries below.
 | Crow | The admin API's HTTP and WebSocket listener in every app and the supervisor | BSD-3-Clause | Keep the notice |
 | OpenSSL | TLS on the panel listener, through Crow | Apache-2.0 | Keep the notice |
 | SQLite | The panel's own store: sessions, audit rows and settings | blessing | A public-domain dedication: nothing beyond keeping it with the source |
+| FTXUI | The full-screen terminal panels behind `--tui` | MIT | Keep the notice |
 | Zydis and Zycore | Decoding x86 instructions in the type extractor | MIT | Keep the notice |
 | Unicorn 2 | Running the user's own client program in a sandbox to rebuild its type data | GPL-2.0-or-later | Only `typeextract` links it, and only as a shared library. That one program is therefore distributed under GPL-2.0-or-later; every other program here stays MIT. A build without the tools has no GPL code in it |
 
