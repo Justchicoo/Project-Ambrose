@@ -127,7 +127,9 @@ TEST(SeriesStoreTest, ReadingTheSameFileTwiceLeavesTheHistoryExactlyOnce)
         EXPECT_EQ(once[at].Present, twice[at].Present);
         EXPECT_EQ(once[at].Samples, twice[at].Samples) << "a day folded in twice would double every count it holds";
         if (once[at].Present)
+        {
             EXPECT_DOUBLE_EQ(once[at].Mean, twice[at].Mean);
+        }
     }
 }
 
