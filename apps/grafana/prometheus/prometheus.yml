@@ -8,5 +8,5 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets:
-          - "${AMBROSE_METRICS_TARGET:-host.docker.internal:8080}"
+          - "host.docker.internal:8080"
     bearer_token_file: /etc/prometheus/secrets/metrics_token

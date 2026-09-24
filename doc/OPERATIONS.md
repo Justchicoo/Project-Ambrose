@@ -20,8 +20,12 @@ From `apps/grafana`, create an untracked `.env`:
 
 ```dotenv
 GRAFANA_ADMIN_PASSWORD=choose-a-local-password
-AMBROSE_METRICS_TARGET=host.docker.internal:8080
 ```
+
+Prometheus reads its target literally from
+`apps/grafana/prometheus/prometheus.yml`; change `host.docker.internal:8080`
+there before starting the stack when the gameserver listens somewhere else.
+Prometheus does not expand environment variables in that file.
 
 Put the token accepted by the gameserver in
 `apps/grafana/secrets/metrics_token` (this path is ignored and must remain
@@ -39,7 +43,7 @@ within 30 seconds. The Prometheus UI at `http://127.0.0.1:9090/targets`
 shows authentication and network errors without exposing the token.
 
 For a gameserver listening on another host, use a private routed address in
-`AMBROSE_METRICS_TARGET`; do not publish Grafana or Prometheus to all
+`prometheus/prometheus.yml`; do not publish Grafana or Prometheus to all
 interfaces. The stack is deliberately not a public monitoring service.
 
 ## Safe remote access
