@@ -813,6 +813,16 @@ class MilestoneTrackTests(unittest.TestCase):
         self.assertIsNone(ci_contrib_paths.held_by("4.04", kept))
         self.assertIsNone(ci_contrib_paths.held_by("1.06", []))
 
+    def test_a_phase_hold_that_spares_a_milestone_lets_its_branch_through(self):
+        kept = [{"scope": "phase:17", "who": "the panel session", "except": ["17.10"]}]
+        self.assertIsNone(ci_contrib_paths.held_by("17.10", kept))
+        self.assertEqual(ci_contrib_paths.held_by("17.11", kept)["who"], "the panel session")
+        held = [{"scope": "phase:17", "who": "the panel session", "except": ["17.10"]},
+                {"scope": "milestone:17.10", "who": "somebody else"}]
+        self.assertEqual(ci_contrib_paths.held_by("17.10", held)["who"], "somebody else")
+        self.assertIsNone(ci_contrib_paths.held_by("17.10", [{"scope": "phase:17", "who": "me", "except": ["17.10"]}]))
+        self.assertIsNotNone(ci_contrib_paths.held_by("17.10", [{"scope": "phase:17", "who": "me", "except": "17.10"}]))
+
     def test_the_real_holds_stop_the_real_branches(self):
         kept = ci_contrib_paths.holds(ROOT)
         self.assertTrue(kept)

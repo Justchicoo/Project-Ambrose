@@ -100,7 +100,10 @@ def held_by(milestone, kept):
     phase = milestone.split(".")[0]
     for entry in kept:
         scope = str(entry.get("scope", ""))
-        if scope == "milestone:" + milestone or scope == "phase:" + phase:
+        if scope == "milestone:" + milestone:
+            return entry
+        spared = entry.get("except", [])
+        if scope == "phase:" + phase and milestone not in (spared if isinstance(spared, list) else []):
             return entry
     return None
 

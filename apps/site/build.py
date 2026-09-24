@@ -38,13 +38,14 @@ CLAIM_TITLE = re.compile(r"(\d+\.\d+)")
 OPEN_ROW = re.compile(r"^\| *([\d.,  ]+?) *\| *(.+?) *\| *(.+?) *\| *(.+?) *\| *(.+?) *\|$")
 SIMPLE_ROW = re.compile(r"^\| *([\d.,  ]+?) *\| *(.+?) *\|")
 SCOPE = re.compile(r"^(phase:\d+|milestone:\d+\.\d+)$")
+MILESTONE_ID = re.compile(r"^\d+\.\d+$")
 
 STATUS_ORDER = ("landed", "building", "held", "open", "waiting", "reserved")
 
 HOW_TO_USE = [
     "This file is the live state of the project. Read it before claiming anything, and read it again before you push.",
     "Take a milestone only where status is 'open'. Anything 'held' is being built by the maintainer's own sessions, anything 'building' is somebody else's, and anything 'waiting' has a dependency that is not finished.",
-    "A hold can cover a whole phase. If phase 17 is held, every milestone in it is held, whatever its own row says.",
+    "A hold can cover a whole phase. If phase 17 is held, every milestone in it is held, whatever its own row says, unless that hold names it under except, which is how one milestone is opened out of a held phase.",
     "Claim by opening a draft pull request from a branch named milestone/<id>-<short-name>, which is also what lets CI accept a change under src/. The board picks that up by itself.",
     "A milestone is finished only when every acceptance check in its phase file is ticked with the evidence that proved it. A check you cannot run stays unticked and is named in the pull request.",
     "A milestone carrying next_after is waiting on exactly that one milestone, so it is what to line up next rather than what to start. A hold carrying needs_review has not moved in weeks: ask in the Discord rather than assuming it is still held.",
@@ -123,15 +124,30 @@ def holds(root, known=None):
             raise HoldError(f"{HOLDS} holds {scope}, which is no milestone in the roadmap")
         if not entry.get("who"):
             raise HoldError(f"{HOLDS} holds {scope} without saying who holds it")
+        spared = entry.get("except", [])
+        if not isinstance(spared, list) or any(not isinstance(one, str) for one in spared):
+            raise HoldError(f"{HOLDS} holds {scope} with an 'except' that is not a list of milestone ids")
+        if spared and not scope.startswith("phase:"):
+            raise HoldError(f"{HOLDS} holds {scope} with an 'except', which only a phase hold can carry")
+        for one in spared:
+            if not MILESTONE_ID.match(one):
+                raise HoldError(f"{HOLDS} holds {scope} excepting '{one}', which is no milestone id")
+            if int(one.split(".")[0]) != int(scope.split(":", 1)[1]):
+                raise HoldError(f"{HOLDS} holds {scope} excepting {one}, which is not in that phase")
+            if known is not None and one not in known:
+                raise HoldError(f"{HOLDS} holds {scope} excepting {one}, which is no milestone in the roadmap")
         kept.append({"scope": scope, "who": entry["who"],
-                     "what": entry.get("what", ""), "since": entry.get("since", "")})
+                     "what": entry.get("what", ""), "since": entry.get("since", ""),
+                     "except": sorted(set(spared))})
     return kept
 
 
 def hold_for(identifier, kept):
     phase = identifier.split(".")[0]
     for entry in kept:
-        if entry["scope"] == "milestone:" + identifier or entry["scope"] == "phase:" + phase:
+        if entry["scope"] == "milestone:" + identifier:
+            return entry
+        if entry["scope"] == "phase:" + phase and identifier not in entry.get("except", ()):
             return entry
     return None
 

@@ -28,6 +28,7 @@ This page stays the rulebook. The board is the live view of it, and where the tw
 
 - `milestone:4.02` closes one milestone.
 - `phase:17` closes a whole phase, every milestone in it, however ready one of them looks on its own. The panel is built as one long thread of work, so a milestone taken out of the middle of it collides with something being built the same week.
+- A phase hold may carry `"except": ["17.10"]`, which opens exactly those milestones out of it. That is how a piece that collides with nothing gets handed out while the rest of the phase stays closed, and it is deliberate each time rather than a default. Only a phase hold may carry one, every id in it has to be a real milestone of that phase, and a milestone the same file also holds by name stays held, so an exception can never override a hold meant for it.
 
 A hold is not advice. `apps/ci/ci_contrib_paths.py` refuses a branch named for a held milestone and says who holds it, so a pull request for one cannot pass its checks, and the board never lists it as open. When a session finishes and moves on, the hold goes and whatever it covered becomes takeable in the next build of the board.
 

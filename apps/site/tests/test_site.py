@@ -63,7 +63,9 @@ class BoardTests(unittest.TestCase):
             if not entry["scope"].startswith("phase:"):
                 continue
             phase = int(entry["scope"].split(":")[1])
-            inside = [row for row in built["milestones"] if row["phase"] == phase and row["status"] != "landed"]
+            spared = entry.get("except", [])
+            inside = [row for row in built["milestones"]
+                      if row["phase"] == phase and row["status"] != "landed" and row["id"] not in spared]
             self.assertTrue(inside)
             for row in inside:
                 self.assertEqual(row["status"], "held", row["id"])
@@ -169,6 +171,33 @@ class HoldTests(unittest.TestCase):
         folder = self.hold({"holds": [{"scope": "milestone:99.99", "who": "me"}]})
         with self.assertRaises(build.HoldError):
             build.holds(folder, known={"4.04": {}})
+
+    def test_a_phase_hold_can_spare_one_milestone(self):
+        folder = self.hold({"holds": [{"scope": "phase:17", "who": "me", "what": "the panel", "except": ["17.10"]}]})
+        kept = build.holds(folder)
+        self.assertEqual(kept[0]["except"], ["17.10"])
+        self.assertIsNone(build.hold_for("17.10", kept))
+        self.assertIsNotNone(build.hold_for("17.11", kept))
+
+    def test_a_spared_milestone_is_still_held_when_it_is_held_by_name(self):
+        folder = self.hold({"holds": [{"scope": "phase:17", "who": "me", "except": ["17.10"]},
+                                      {"scope": "milestone:17.10", "who": "me"}]})
+        kept = build.holds(folder)
+        self.assertIsNotNone(build.hold_for("17.10", kept))
+
+    def test_an_except_that_makes_no_sense_is_refused(self):
+        for document in ({"scope": "milestone:4.04", "who": "me", "except": ["4.05"]},
+                         {"scope": "phase:17", "who": "me", "except": ["4.04"]},
+                         {"scope": "phase:17", "who": "me", "except": ["seventeen"]},
+                         {"scope": "phase:17", "who": "me", "except": "17.10"}):
+            folder = self.hold({"holds": [document]})
+            with self.assertRaises(build.HoldError, msg=json.dumps(document)):
+                build.holds(folder)
+
+    def test_an_except_naming_no_milestone_in_the_roadmap_is_refused(self):
+        folder = self.hold({"holds": [{"scope": "phase:17", "who": "me", "except": ["17.99"]}]})
+        with self.assertRaises(build.HoldError):
+            build.holds(folder, known={"17.10": {}})
 
     def test_broken_json_is_refused_rather_than_read_as_no_holds(self):
         folder = tempfile.mkdtemp()
