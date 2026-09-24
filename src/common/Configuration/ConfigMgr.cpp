@@ -380,6 +380,7 @@ ConfigLoadResult ConfigMgr::Reload()
 {
     std::lock_guard loadLock(_loadMutex);
     State next;
+    std::map<std::string, ConfigEntry> before;
     {
         std::shared_lock lock(_stateMutex);
         if (!_loaded)
@@ -387,12 +388,71 @@ ConfigLoadResult ConfigMgr::Reload()
         next.File = _state.File;
         next.Arguments = _state.Arguments;
         next.Overrides = _state.Overrides;
+        before = _state.Values;
     }
     std::filesystem::path const file = next.File;
+    std::map<std::string, ConfigEntry> after;
     ConfigLoadResult result = Build(file, next);
-    if (result.Succeeded())
-        Commit(std::move(next));
+    if (!result.Succeeded())
+        return result;
+    after = next.Values;
+    Commit(std::move(next));
+    Announce(ChangedKeys(before, after));
     return result;
+}
+
+std::vector<std::string> ConfigMgr::ChangedKeys(std::map<std::string, ConfigEntry> const& before, std::map<std::string, ConfigEntry> const& after)
+{
+    std::vector<std::string> changed;
+    for (auto const& [key, entry] : after)
+    {
+        auto const was = before.find(key);
+        if (was == before.end() || was->second.Value != entry.Value)
+            changed.push_back(key);
+    }
+    for (auto const& [key, entry] : before)
+        if (!after.contains(key))
+            changed.push_back(key);
+    std::sort(changed.begin(), changed.end());
+    changed.erase(std::unique(changed.begin(), changed.end()), changed.end());
+    return changed;
+}
+
+uint64 ConfigMgr::SubscribeToChanges(ChangeHandler handler)
+{
+    if (!handler)
+        return 0;
+    std::lock_guard const lock(_subscriberMutex);
+    uint64 const token = _nextSubscriber++;
+    _subscribers.emplace_back(token, std::move(handler));
+    return token;
+}
+
+void ConfigMgr::UnsubscribeFromChanges(uint64 token)
+{
+    std::lock_guard const lock(_subscriberMutex);
+    std::erase_if(_subscribers, [token](auto const& entry) { return entry.first == token; });
+}
+
+void ConfigMgr::Announce(std::vector<std::string> const& changed) const
+{
+    std::vector<ChangeHandler> handlers;
+    {
+        std::lock_guard const lock(_subscriberMutex);
+        handlers.reserve(_subscribers.size());
+        for (auto const& [token, handler] : _subscribers)
+            handlers.push_back(handler);
+    }
+    for (ChangeHandler const& handler : handlers)
+    {
+        try
+        {
+            handler(changed);
+        }
+        catch (...)
+        {
+        }
+    }
 }
 
 std::string ConfigMgr::GetOption(std::string const& name, char const* defaultValue, bool quiet) const

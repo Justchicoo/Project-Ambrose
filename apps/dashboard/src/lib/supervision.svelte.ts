@@ -13,6 +13,8 @@ import {
     DatabaseUpdatesAnswer,
     OutputAnswer,
     PowerAnswer,
+    ReloadAnswer,
+    ReloadRunAnswer,
     SettingsAnswer,
     type AppEntry,
 } from "./schemas";
@@ -58,6 +60,14 @@ export function runCommand(app: string, command: string, confirm = false) {
 
 export function settingsOf(app: string, signal?: AbortSignal) {
     return request("GET", pathFor(app, "settings"), SettingsAnswer, undefined, signal);
+}
+
+export function reloadTargetsOf(app: string, signal?: AbortSignal) {
+    return request("GET", pathFor(app, "reload"), ReloadAnswer, undefined, signal);
+}
+
+export function runReload(app: string, target: string) {
+    return request("POST", pathFor(app, `reload/${encodeURIComponent(target)}`), ReloadRunAnswer);
 }
 
 export function databasesOf(app: string, signal?: AbortSignal) {

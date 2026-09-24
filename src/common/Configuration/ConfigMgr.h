@@ -92,6 +92,10 @@ public:
     ConfigLoadResult LoadInitial(std::filesystem::path const& file, std::vector<std::string> arguments = {}, std::vector<std::pair<std::string, std::string>> overrides = {});
     ConfigLoadResult Reload();
 
+    using ChangeHandler = std::function<void(std::vector<std::string> const&)>;
+    uint64 SubscribeToChanges(ChangeHandler handler);
+    void UnsubscribeFromChanges(uint64 token);
+
     template<ConfigOptionType T>
     T GetOption(std::string const& name, T const& defaultValue, bool quiet = false) const
     {
@@ -147,6 +151,8 @@ private:
     };
 
     static ConfigLoadResult Build(std::filesystem::path const& file, State& state);
+    static std::vector<std::string> ChangedKeys(std::map<std::string, ConfigEntry> const& before, std::map<std::string, ConfigEntry> const& after);
+    void Announce(std::vector<std::string> const& changed) const;
     void Commit(State next);
     void WarnOnce(std::string const& key, std::string const& message) const;
 
@@ -158,6 +164,9 @@ private:
 
     mutable std::recursive_mutex _warningMutex;
     mutable std::set<std::string> _warnedKeys;
+    mutable std::mutex _subscriberMutex;
+    std::vector<std::pair<uint64, ChangeHandler>> _subscribers;
+    uint64 _nextSubscriber = 1;
     mutable std::vector<std::string> _pendingWarnings;
     WarningSink _warningSink;
 };

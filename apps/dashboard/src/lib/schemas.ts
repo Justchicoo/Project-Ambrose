@@ -263,9 +263,31 @@ export type Status = v.InferOutput<typeof Status>;
 export type Capabilities = v.InferOutput<typeof Capabilities>;
 export type Supervision = v.InferOutput<typeof Supervision>;
 export type AppExit = v.InferOutput<typeof AppExit>;
+export const ReloadTarget = v.looseObject({
+    target: v.string(),
+    generation: v.number(),
+    ran: v.boolean(),
+    ok: v.boolean(),
+    errors: v.array(v.string()),
+});
+
+export const ReloadAnswer = v.looseObject({
+    schema: v.number(),
+    targets: v.array(ReloadTarget),
+});
+
+export const ReloadRunAnswer = v.looseObject({
+    schema: v.number(),
+    ok: v.boolean(),
+    targets: v.array(ReloadTarget),
+});
+
 export type OutputAnswer = v.InferOutput<typeof OutputAnswer>;
 export type SettingsAnswer = v.InferOutput<typeof SettingsAnswer>;
 export type DatabaseAnswer = v.InferOutput<typeof DatabaseAnswer>;
 export type DatabaseUpdatesAnswer = v.InferOutput<typeof DatabaseUpdatesAnswer>;
 export type DatabaseApplyAnswer = v.InferOutput<typeof DatabaseApplyAnswer>;
 export type PendingUpdate = v.InferOutput<typeof PendingUpdate>;
+export type ReloadTarget = v.InferOutput<typeof ReloadTarget>;
+export type ReloadAnswer = v.InferOutput<typeof ReloadAnswer>;
+export type ReloadRunAnswer = v.InferOutput<typeof ReloadRunAnswer>;

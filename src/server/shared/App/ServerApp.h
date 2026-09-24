@@ -80,6 +80,7 @@ public:
     AdminServer* GetAdminApi() const noexcept { return _admin.get(); }
     bool ReloadAdminApi();
     void RegisterStandardRoutes(AdminRouter& routes);
+    void RegisterReloadTargets();
     std::filesystem::path CommandAuditFile() const;
 
     void SetListener(std::string address, uint16 port);
@@ -101,6 +102,7 @@ protected:
     virtual std::string GetRealmName() const;
     virtual void OnAdminApiReady(AdminServer& admin);
     virtual std::vector<RestartRequiredOption> GetRestartRequiredOptions() const;
+    virtual void OnConfigChanged(std::vector<std::string> const& changed);
 
     ConfigMgr& Config() noexcept { return _config; }
     Log& Logger() noexcept { return _log; }
@@ -108,6 +110,8 @@ protected:
     bool PollStopRequested();
 
 private:
+    uint64 _configSubscription = 0;
+
     bool IsStopping() const noexcept { return GetLifecycleState() == AppLifecycle::Stopping; }
     bool StartAdminApi();
     void ScheduleUpdate();

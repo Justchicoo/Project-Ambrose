@@ -9,6 +9,7 @@ import ArchiveIcon from "@lucide/svelte/icons/archive";
 import DatabaseIcon from "@lucide/svelte/icons/database";
 import FileTextIcon from "@lucide/svelte/icons/file-text";
 import GaugeIcon from "@lucide/svelte/icons/gauge";
+import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import GlobeIcon from "@lucide/svelte/icons/globe";
 import HardDriveIcon from "@lucide/svelte/icons/hard-drive";
 import LockIcon from "@lucide/svelte/icons/lock";
@@ -64,7 +65,7 @@ export const routes: Route[] = [
         permission: "logs.read",
         nav: true,
         group: "Servers",
-        view: { kind: "arrives", milestone: "17.07", preview: { kind: "page", load: () => import("./pages/Logs.svelte") } },
+        view: { kind: "page", load: () => import("./pages/Logs.svelte") },
     },
     {
         path: "console",
@@ -73,7 +74,7 @@ export const routes: Route[] = [
         permission: "commands.run",
         nav: true,
         group: "Servers",
-        view: { kind: "arrives", milestone: "17.07", preview: { kind: "page", load: () => import("./pages/Console.svelte") } },
+        view: { kind: "page", load: () => import("./pages/Console.svelte") },
     },
     {
         path: "database",
@@ -146,6 +147,15 @@ export const routes: Route[] = [
         nav: true,
         group: "Panel",
         view: { kind: "page", load: () => import("./pages/Settings.svelte") },
+    },
+    {
+        path: "reload",
+        title: "Reload",
+        icon: RefreshCwIcon,
+        permission: "reload.read",
+        nav: true,
+        group: "Panel",
+        view: { kind: "page", load: () => import("./pages/Reload.svelte") },
     },
     {
         path: "activity",

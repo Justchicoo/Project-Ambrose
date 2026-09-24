@@ -7,6 +7,7 @@
 #include "AdminCapabilities.h"
 #include "AdminCommand.h"
 #include "AdminConfigView.h"
+#include "AdminReloadView.h"
 #include "AdminServer.h"
 #include "ListenerSettings.h"
 #include "AppOptions.h"
@@ -20,6 +21,7 @@
 #include "GitRevision.h"
 #include "Log.h"
 #include "LogStream.h"
+#include "ReloadMgr.h"
 #include "SignalHandler.h"
 #include "StringUtil.h"
 #include "TerminalConsoleInput.h"
@@ -270,7 +272,9 @@ bool ServerApp::StartAdminApi()
         return health;
     });
     sAdminCapabilities.RegisterStandardProblems();
-    sAdminCapabilities.AddReloadTarget("admin");
+    RegisterReloadTargets();
+    for (std::string const& target : sReloadMgr.GetOrderedTargets())
+        sAdminCapabilities.AddReloadTarget(target);
     RegisterStandardRoutes(_admin->Routes());
     _logStream = std::make_unique<LogStreamService>(_log.GetStreamHub());
     _logStream->Start();
@@ -303,10 +307,44 @@ std::filesystem::path ServerApp::CommandAuditFile() const
     return folder / "audit" / (_info.Name + "-commands.jsonl");
 }
 
+void ServerApp::OnConfigChanged(std::vector<std::string> const& changed)
+{
+    (void)changed;
+}
+
+void ServerApp::RegisterReloadTargets()
+{
+    sReloadMgr.Register("config", [this](std::vector<std::string>& errors)
+    {
+        ConfigLoadResult const result = _config.Reload();
+        for (ConfigIssue const& issue : result.Errors)
+            errors.push_back(issue.ToString());
+        return result.Succeeded();
+    });
+
+    _configSubscription = _config.SubscribeToChanges([this](std::vector<std::string> const& changed)
+    {
+        if (changed.empty())
+            return;
+        bool touchesLogging = false;
+        for (std::string const& key : changed)
+            if (key.starts_with("Logger.") || key.starts_with("Appender."))
+            {
+                touchesLogging = true;
+                break;
+            }
+        if (touchesLogging)
+            _log.LoadFromConfig(_config);
+        AMBROSE_LOG(_log, LogLevel::Info, "server.reload", "{} setting(s) changed, the first of them {}", changed.size(), changed.front());
+        OnConfigChanged(changed);
+    });
+}
+
 void ServerApp::RegisterStandardRoutes(AdminRouter& routes)
 {
     AdminStatus::Register(routes, [this] { return BuildStatus(); });
     AdminConfigView::Register(routes, _config, GetRestartRequiredOptions());
+    AdminReloadView::Register(routes);
     AdminCommand::Register(routes, _commands, _info.Name, CommandAuditFile());
     routes.AddGuarded("POST", "/api/shutdown", "power.stop", [this](AdminRequest const& request)
     {
