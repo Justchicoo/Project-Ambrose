@@ -24,6 +24,7 @@
 #include "LoginShutdown.h"
 #include "MessageRegistry.h"
 #include "NetworkSettings.h"
+#include "OnlinePlayersView.h"
 #include "ObjectSerializer.h"
 #include "ServerApp.h"
 #include "SessionContext.h"
@@ -67,6 +68,7 @@ namespace
         void OnAdminApiReady(AdminServer& admin) override
         {
             _databaseView.Register(admin.Routes());
+            OnlinePlayersView::Register(admin.Routes());
         }
 
         std::vector<RestartRequiredOption> GetRestartRequiredOptions() const override

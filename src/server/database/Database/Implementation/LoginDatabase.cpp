@@ -41,7 +41,8 @@ void LoginDatabaseConnection::DoPrepareStatements()
     PrepareStatement(LOGIN_INS_LOGIN_KEY, "LOGIN_INS_LOGIN_KEY", "INSERT INTO `login_key` (`key`, `account_id`, `character_guid`, `realm_id`, `machine_id`, `created`, `expires`, `used`) VALUES (?, ?, ?, ?, ?, ?, ?, 0)", ConnectionFlags::Both);
     PrepareStatement(LOGIN_UPD_CONSUME_LOGIN_KEY, "LOGIN_UPD_CONSUME_LOGIN_KEY", "UPDATE `login_key` SET `used` = 1 WHERE `key` = ? AND `used` = 0 AND `expires` > ? AND `account_id` = ? AND `character_guid` = ? AND `realm_id` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_LOGIN_KEY, "LOGIN_SEL_LOGIN_KEY", "SELECT `account_id`, `character_guid`, `realm_id`, `expires`, `used` FROM `login_key` WHERE `key` = ?", ConnectionFlags::Both);
-    PrepareStatement(LOGIN_INS_REALM_ONLINE_CHARACTER, "LOGIN_INS_REALM_ONLINE_CHARACTER", "REPLACE INTO `realm_online_character` (`realm_id`, `character_guid`, `account_id`) VALUES (?, ?, ?)", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_INS_REALM_ONLINE_CHARACTER, "LOGIN_INS_REALM_ONLINE_CHARACTER", "REPLACE INTO `realm_online_character` (`realm_id`, `character_guid`, `account_id`, `since`) VALUES (?, ?, ?, ?)", ConnectionFlags::Both);
     PrepareStatement(LOGIN_UPD_ACCOUNT_ONLINE, "LOGIN_UPD_ACCOUNT_ONLINE", "UPDATE `account` SET `online` = ? WHERE `id` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_DEL_REALM_ONLINE_CHARACTER, "LOGIN_DEL_REALM_ONLINE_CHARACTER", "DELETE FROM `realm_online_character` WHERE `character_guid` = ?", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_SEL_ONLINE_PLAYERS, "LOGIN_SEL_ONLINE_PLAYERS", "SELECT o.`character_guid`, o.`account_id`, o.`realm_id`, o.`since`, a.`username`, r.`name` FROM `realm_online_character` o LEFT JOIN `account` a ON a.`id` = o.`account_id` LEFT JOIN `realmlist` r ON r.`id` = o.`realm_id` ORDER BY o.`since` DESC, o.`character_guid`", ConnectionFlags::Both);
 }

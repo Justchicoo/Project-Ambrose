@@ -283,6 +283,27 @@ export const ReloadRunAnswer = v.looseObject({
     targets: v.array(ReloadTarget),
 });
 
+export const OnlinePlayer = v.looseObject({
+    character_guid: v.number(),
+    account_id: v.number(),
+    realm_id: v.number(),
+    account: v.string(),
+    realm: v.string(),
+    name: v.string(),
+    zone: v.string(),
+    level: v.number(),
+    school_id: v.number(),
+    found: v.boolean(),
+    since_epoch_seconds: v.number(),
+    seconds: v.number(),
+});
+
+export const PlayersAnswer = v.looseObject({
+    schema: v.number(),
+    counted: v.number(),
+    players: v.array(OnlinePlayer),
+});
+
 export type OutputAnswer = v.InferOutput<typeof OutputAnswer>;
 export type SettingsAnswer = v.InferOutput<typeof SettingsAnswer>;
 export type DatabaseAnswer = v.InferOutput<typeof DatabaseAnswer>;
@@ -292,3 +313,5 @@ export type PendingUpdate = v.InferOutput<typeof PendingUpdate>;
 export type ReloadTarget = v.InferOutput<typeof ReloadTarget>;
 export type ReloadAnswer = v.InferOutput<typeof ReloadAnswer>;
 export type ReloadRunAnswer = v.InferOutput<typeof ReloadRunAnswer>;
+export type OnlinePlayer = v.InferOutput<typeof OnlinePlayer>;
+export type PlayersAnswer = v.InferOutput<typeof PlayersAnswer>;

@@ -12,6 +12,7 @@ import {
     DatabaseApplyAnswer,
     DatabaseUpdatesAnswer,
     OutputAnswer,
+    PlayersAnswer,
     PowerAnswer,
     ReloadAnswer,
     ReloadRunAnswer,
@@ -60,6 +61,10 @@ export function runCommand(app: string, command: string, confirm = false) {
 
 export function settingsOf(app: string, signal?: AbortSignal) {
     return request("GET", pathFor(app, "settings"), SettingsAnswer, undefined, signal);
+}
+
+export function playersOf(app: string, signal?: AbortSignal) {
+    return request("GET", pathFor(app, "players"), PlayersAnswer, undefined, signal);
 }
 
 export function reloadTargetsOf(app: string, signal?: AbortSignal) {

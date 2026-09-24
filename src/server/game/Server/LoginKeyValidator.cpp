@@ -7,6 +7,7 @@
 #include "DatabaseEnv.h"
 #include "Log.h"
 
+#include <chrono>
 #include <utility>
 
 namespace
@@ -160,6 +161,7 @@ void LoginKeyValidator::MarkOnline(LoginKeyClaim const& claim)
     statement->SetData(0, claim.RealmId);
     statement->SetData(1, claim.CharacterId);
     statement->SetData(2, claim.AccountId);
+    statement->SetData(3, static_cast<uint64>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count()));
     LoginDatabase.Execute(std::move(statement));
 }
 
