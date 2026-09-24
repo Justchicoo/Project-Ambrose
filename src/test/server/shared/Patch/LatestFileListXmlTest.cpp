@@ -102,6 +102,20 @@ TEST(LatestFileListXmlTest, EmptyTarFileNameIsWrittenAndReadBack)
     EXPECT_EQ(decoded.Packages[0].Records[0].TarFileName, "");
 }
 
+TEST(LatestFileListXmlTest, XmlPreservesExplicitTableOrder)
+{
+    LatestFileList file = MakeLatestFileList();
+    file.TableOrder = { "About", "Base", "PatchClient" };
+
+    std::string const xml = LatestFileListXml::Write(file);
+    EXPECT_LT(xml.find("<About>"), xml.find("<Base>"));
+    EXPECT_LT(xml.find("<Base>"), xml.find("<PatchClient>"));
+
+    LatestFileList const decoded = LatestFileListXml::Read(xml);
+    EXPECT_EQ(decoded.TableList(), file.TableOrder);
+    EXPECT_EQ(decoded.Packages.size(), file.Packages.size());
+}
+
 TEST(LatestFileListXmlTest, ReferenceXmlHasExpectedTableCountsWhenConfigured)
 {
     char const* const path = std::getenv("AMBROSE_REFERENCE_LATEST_FILE_LIST_XML");
