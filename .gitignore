@@ -38,5 +38,3 @@ coverage/
 *.tsbuildinfo
 .npm-cache/
 /site/
-apps/grafana/.env
-apps/grafana/secrets/
