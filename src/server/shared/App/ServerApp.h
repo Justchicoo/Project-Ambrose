@@ -7,6 +7,7 @@
 #define AMBROSE_SERVERAPP_H
 
 #include "AdminStatus.h"
+#include "TerminalDashboard.h"
 #include "ClientSetup.h"
 #include "ConfigMgr.h"
 #include "ConsoleCommandTable.h"
@@ -129,6 +130,7 @@ private:
     void StartConsole();
     void StopConsole();
     void QueueConsoleLine(std::string line);
+    TerminalPanels BuildPanels() const;
     void RunConsoleCommands();
     void RunConsoleLine(std::string const& line);
 
@@ -148,6 +150,10 @@ private:
     std::unique_ptr<AdminServer> _admin;
     std::unique_ptr<LogStreamService> _logStream;
     std::unique_ptr<ConsoleReader> _console;
+    bool _tuiAsked = false;
+    bool _dashboard = false;
+    std::thread _dashboardThread;
+    std::function<void()> _dashboardExit;
     std::thread _commandThread;
     std::mutex _commandMutex;
     std::condition_variable _commandWake;

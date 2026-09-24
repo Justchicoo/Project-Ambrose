@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Parses -c/--config, -v/--version, -h/--help, --check, and --set Key=Value by hand, trimming and unquoting values, and reports the first unusable argument.
+ * Parses -c/--config, -v/--version, -h/--help, --check, --tui, and --set Key=Value by hand, trimming and unquoting values, and reports the first unusable argument.
  */
 
 #include "AppOptions.h"
@@ -39,6 +39,8 @@ AppOptions AppOptions::Parse(std::vector<std::string> const& arguments, std::str
             options.ShowHelp = true;
         else if (argument == "--check")
             options.CheckOnly = true;
+        else if (argument == "--tui")
+            options.Tui = true;
         else if (argument == "-c" || name == "--config")
         {
             std::string value;
@@ -80,6 +82,7 @@ std::string AppOptions::Usage(std::string_view appName, std::string_view default
         "  -c, --config <file>   configuration file (default {1})\n"
         "  --set <Key=Value>     override one option, may repeat\n"
         "  --check               start, report ready, then shut down cleanly\n"
+        "  --tui                 draw the dashboard in the terminal instead of a scrolling console\n"
         "  -v, --version         print the version and exit\n"
         "  -h, --help            print this help and exit\n",
         appName, defaultConfigFile);

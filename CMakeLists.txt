@@ -44,6 +44,7 @@ find_package(Botan 3 CONFIG REQUIRED COMPONENTS sha2_32 sha2_64 hmac system_rng 
 find_package(ZLIB REQUIRED)
 find_package(pugixml CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(ftxui CONFIG REQUIRED)
 find_package(unofficial-libmariadb CONFIG REQUIRED)
 find_package(unofficial-sqlite3 CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)

@@ -386,8 +386,8 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Acceptance**
 
-- [ ] Resizing the terminal lays the panels out again, and `q` or Ctrl+C exits with code 0
-- [ ] Without a terminal, `--tui` logs a warning and falls back to the normal console
+- [x] Resizing the terminal lays the panels out again, and `q` or Ctrl+C exits with code 0 (TerminalDashboardTest.ATerminalThatChangedShapeIsLaidOutAgainAndQLeavesWithNothingWrong drives the whole loop against a terminal the test supplies: the size changes from 80 by 24 to 132 by 43 between key presses, and the first and last paintings are measured at those sizes, so laying out again is read rather than assumed; q returns 0, and Ctrl+C is judged the same way by TheKeysThatLeaveAreJudgedTheSameWhereverTheyCameFrom. The layout and the key rule are the ones the real terminal uses, since RunInTerminal composes the same element and judges through the same function, so what is tested is what runs. Not driven against a real terminal emulator, which is what a resize by hand would add)
+- [x] Without a terminal, `--tui` logs a warning and falls back to the normal console (verified on a real server on 2026-09-24: loginserver run with --tui and its output redirected to a file printed `--tui draws panels that need a terminal, and this output is not one, so the ordinary console is used instead` and went on to `loginserver ready`, serving normally; TerminalDashboardTest.WithoutATerminalTheDashboardIsDeclinedAndSaysWhy holds all four cases, including that asking for nothing warns about nothing, since a warning nobody asked for is noise)
 
 ## 17.12 Settings and reload admin API
 

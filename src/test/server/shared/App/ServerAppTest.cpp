@@ -150,14 +150,16 @@ TEST(AppOptionsTest, ParsesEveryOptionForm)
     EXPECT_EQ(defaults.ConfigFile, "app.conf");
     EXPECT_FALSE(defaults.ShowVersion);
     EXPECT_FALSE(defaults.CheckOnly);
+    EXPECT_FALSE(defaults.Tui) << "the dashboard is asked for, never assumed";
     EXPECT_TRUE(defaults.Error.empty());
 
-    AppOptions const full = AppOptions::Parse({ "app", "-c", "a.conf", "--set", "Network.Threads=4", "--set=Log.Utc = 1", "-v", "--help", "--check" }, "app.conf");
+    AppOptions const full = AppOptions::Parse({ "app", "-c", "a.conf", "--set", "Network.Threads=4", "--set=Log.Utc = 1", "-v", "--help", "--check", "--tui" }, "app.conf");
     EXPECT_TRUE(full.Error.empty()) << full.Error;
     EXPECT_EQ(full.ConfigFile, "a.conf");
     EXPECT_TRUE(full.ShowVersion);
     EXPECT_TRUE(full.ShowHelp);
     EXPECT_TRUE(full.CheckOnly);
+    EXPECT_TRUE(full.Tui);
     ASSERT_EQ(full.Overrides.size(), 2u);
     EXPECT_EQ(full.Overrides[0], (std::pair<std::string, std::string>{ "Network.Threads", "4" }));
     EXPECT_EQ(full.Overrides[1], (std::pair<std::string, std::string>{ "Log.Utc", "1" }));

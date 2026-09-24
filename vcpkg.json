@@ -7,6 +7,7 @@
     "botan",
     "crow",
     "fmt",
+    "ftxui",
     "libmariadb",
     "nlohmann-json",
     "openssl",

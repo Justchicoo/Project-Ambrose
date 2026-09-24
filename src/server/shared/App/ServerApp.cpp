@@ -22,6 +22,7 @@
 #include "ConsoleInput.h"
 #include "ConsoleReader.h"
 #include "ConsoleWriter.h"
+#include "TerminalDashboard.h"
 #include "GitRevision.h"
 #include "Log.h"
 #include "LogStream.h"
@@ -477,6 +478,7 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
     _stopScheduled = false;
     AppOptions const options = AppOptions::Parse(arguments, _info.DefaultConfigFile);
     _checkOnly = options.CheckOnly;
+    _tuiAsked = options.Tui;
     if (!options.Error.empty())
     {
         _err << _info.Name << ": " << options.Error << "\n" << AppOptions::Usage(_info.Name, _info.DefaultConfigFile);
@@ -631,10 +633,49 @@ void ServerApp::LogLifecycle(LogLevel level, std::string const& text)
         _log.Write(_category, level, "{}", text);
 }
 
+TerminalPanels ServerApp::BuildPanels() const
+{
+    AdminStatusSnapshot const status = BuildStatus();
+    TerminalPanels panels;
+    panels.App = status.App.Name;
+    panels.Role = status.App.Role;
+    panels.Revision = status.App.Revision;
+    panels.State = status.State;
+    uint64 const seconds = status.UptimeSeconds;
+    panels.Uptime = fmt::format("{}h {}m {}s", seconds / 3600, (seconds / 60) % 60, seconds % 60);
+    if (status.Sessions)
+        panels.Figures.emplace_back("sessions", std::to_string(*status.Sessions));
+    for (auto const& [name, value] : status.Stats)
+    {
+        std::string written;
+        std::visit([&written](auto const& held)
+        {
+            using Held = std::decay_t<decltype(held)>;
+            if constexpr (std::is_same_v<Held, std::string>)
+                written = held;
+            else if constexpr (std::is_same_v<Held, bool>)
+                written = held ? "yes" : "no";
+            else
+                written = fmt::format("{}", held);
+        }, value);
+        panels.Figures.emplace_back(name, written);
+    }
+    for (AdminProblem const& problem : status.Problems)
+        panels.Problems.push_back(problem.Subject.empty() ? problem.Message : problem.Subject + ": " + problem.Message);
+    for (std::shared_ptr<LogMessage const> const& line : _log.GetStreamHub().GetBacklog())
+        if (line)
+            panels.Logs.push_back(line->Text);
+    return panels;
+}
+
 void ServerApp::StartConsole()
 {
     if (!_config.GetOption<bool>("Console.Enable", true, true))
         return;
+    std::string dashboardWarning;
+    _dashboard = TerminalDashboard::Offer(_tuiAsked, _log.GetConsole().IsTerminal(), dashboardWarning);
+    if (!dashboardWarning.empty())
+        AMBROSE_LOG(_log, LogLevel::Warn, "commands.console", "{}", dashboardWarning);
     std::unique_ptr<ConsoleInput> input = CreateConsoleInput();
     if (!input)
         return;
@@ -644,6 +685,21 @@ void ServerApp::StartConsole()
         _commandQueue.clear();
     }
     _commandThread = std::thread([this] { RunConsoleCommands(); });
+    if (_dashboard)
+    {
+        _dashboardThread = std::thread([this]
+        {
+            TerminalDashboard::RunInTerminal([this] { return BuildPanels(); },
+                [this](std::string const& line) { QueueConsoleLine(line); },
+                [this](std::function<void()> exit)
+                {
+                    std::lock_guard const lock(_commandMutex);
+                    _dashboardExit = std::move(exit);
+                });
+            RequestStop("the terminal dashboard was closed");
+        });
+        return;
+    }
     _console = std::make_unique<ConsoleReader>(std::move(input),
         [this](std::string line) { QueueConsoleLine(std::move(line)); },
         [this] { AMBROSE_LOG(_log, LogLevel::Info, "commands.console", "Console input closed; the server keeps running"); });
@@ -662,6 +718,16 @@ void ServerApp::StopConsole()
     _commandWake.notify_all();
     if (_commandThread.joinable())
         _commandThread.join();
+    std::function<void()> leave;
+    {
+        std::lock_guard const lock(_commandMutex);
+        leave = std::move(_dashboardExit);
+        _dashboardExit = nullptr;
+    }
+    if (leave)
+        leave();
+    if (_dashboardThread.joinable())
+        _dashboardThread.join();
 }
 
 void ServerApp::QueueConsoleLine(std::string line)

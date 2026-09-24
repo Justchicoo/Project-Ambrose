@@ -10,7 +10,10 @@ target_link_libraries(shared
         pugixml::pugixml
         nlohmann_json::nlohmann_json
         OpenSSL::SSL
-        OpenSSL::Crypto)
+        OpenSSL::Crypto
+        ftxui::dom
+        ftxui::screen
+        ftxui::component)
 
 target_compile_definitions(shared PRIVATE CROW_ENABLE_LOGGING CROW_DISABLE_STATIC_DIR CROW_ENABLE_SSL "AMBROSE_SOURCE_DIRECTORY=\"${PROJECT_SOURCE_DIR}\"")
 

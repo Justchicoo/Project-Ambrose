@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Command-line options every server app accepts: config file, version, help, and repeatable setting overrides.
+ * Command-line options every server app accepts: config file, version, help, the terminal dashboard, and repeatable setting overrides.
  */
 
 #ifndef AMBROSE_APPOPTIONS_H
@@ -17,6 +17,7 @@ struct AppOptions
     bool ShowVersion = false;
     bool ShowHelp = false;
     bool CheckOnly = false;
+    bool Tui = false;
     std::vector<std::pair<std::string, std::string>> Overrides;
     std::string Error;
 
