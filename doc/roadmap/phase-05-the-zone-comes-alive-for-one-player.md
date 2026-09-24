@@ -321,7 +321,7 @@ Server start does not re-parse the 13.8 MB JSON dump each time, and a revision m
 **Acceptance**
 
 - [ ] Clean Ubuntu and Windows reach 'ready' on all 3 apps
-- [ ] `conf` twice never overwrites an edited .conf
+- [x] `conf` twice never overwrites an edited .conf (`apps/installer/tests/test_installer.py`, which builds a prefix of templates, runs conf, edits a .conf and runs conf again, against both scripts)
 
 ### Detailed spec from FND-22: apps/installer: one-command build, config copy and DB setup
 
@@ -336,7 +336,7 @@ A new contributor goes from clone to running servers with one script on Windows 
 **Acceptance**
 
 - [ ] On a clean Ubuntu VM and a clean Windows machine, following doc/INSTALL.md with the installer yields running loginserver, gameserver and patchserver that log 'ready'
-- [ ] Running `conf` twice never overwrites an edited .conf
+- [x] Running `conf` twice never overwrites an edited .conf (`apps/installer/tests/test_installer.py`, which builds a prefix of templates, runs conf, edits a .conf and runs conf again, against both scripts)
 - [ ] Real client: n/a (first visible behavior arrives with NET/LOG)
 
 **Risks**

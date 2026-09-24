@@ -62,6 +62,9 @@ jobs:
       - name: Client driver self-tests
         if: ${{ !cancelled() }}
         run: python apps/clientdriver/tests/test_clientdriver.py
+      - name: Installer self-tests
+        if: ${{ !cancelled() }}
+        run: python apps/installer/tests/test_installer.py
       - name: Design token self-tests
         if: ${{ !cancelled() }}
         run: python apps/designtokens/tests/test_designtokens.py

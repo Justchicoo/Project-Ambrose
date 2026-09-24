@@ -93,7 +93,6 @@ Then one of four things happens, each with one message saying which and why: it 
 | ID | Milestone | Size | What you need | Why it is a good one to take |
 |---|---|---|---|---|
 | 1.21 | Patch-free dev path documented | S | A build. The three checks that watch a real client need a Wizard101 install you own | The rest of the project already runs the client with no contact with KingsIsle's patch hosts; this is what writes that down and ships it. doc/PATCHING.md, the run-client scripts under apps/launcher and the Patch.Enabled option can all be built and tested without a client, and the three client checks stay unticked, which is a complete delivery here rather than a half one |
-| 5.08 | Installer | S | A clean Ubuntu or Windows machine and a database | One script from clone to three running servers, which is the first thing every new contributor meets and the part nobody has written. Neither check needs the maintainer's machine: a clean box proves the first and the second is pure logic about not overwriting an edited .conf. Build it under apps/installer and stay out of .github/ and apps/ci/, which the path check refuses |
 
 ## Reserved
 
@@ -123,6 +122,7 @@ A row that says **before the reset** came from a pull request that was on the re
 
 | ID | Who | Sent as | What is left |
 |---|---|---|---|
+| 5.08 | MeruneFleuruwu | [#4](https://github.com/Justchicoo/Project-Ambrose/pull/4) | The scripts, env.dist and doc/INSTALL.md are delivered and the conf check is earned, verified by running both of them. Left: the check that a clean Ubuntu and a clean Windows machine reach 'ready' on all three apps, which needs those machines. The maintainer added the self-tests and fixed a relative install prefix that resolved against the working directory |
 | 4.08 | MeruneFleuruwu | before the reset | Every zone decodes and the rows carry real positions and display keys. Left: the writer skips an object it cannot read without a word, so WC_Hub writes 177 rows for 183 objects and WC_Ravenwood 93 for 97, and spawn data is not extracted, so HalloweenSpawner1 and its requirement are absent |
 | 4.04 | MeruneFleuruwu | before the reset | Its own work is landed and eight checks are ticked. The two left are not its own: the handoff integration belongs to 4.05, which has since landed and may already earn it, and the last needs a real client session. That session closes three at once, this check, 4.05's and 4.06's, since all three want what a real client sends after Play, so they are run together rather than one at a time |
 | 5.07 | MeruneFleuruwu | before the reset | The cache is built, wired into the login server and measured at a third of the JSON path's time on the pinned install, and a truncated, bit-flipped or random cache is refused by name. Left: a client-gated comparison of every class, property and enum table, and a measurement showing a load under 200 ms |
