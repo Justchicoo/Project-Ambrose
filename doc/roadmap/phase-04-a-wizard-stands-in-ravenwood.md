@@ -787,7 +787,7 @@ NPCs, signs, doors and props from the zone data appear for a player entering a z
 **Acceptance**
 
 - [x] A failed reload keeps the previous generation serving and returns every error
-- [ ] A reader holding a snapshot during a swap keeps a consistent view (TSan clean)
+- [x] A reader holding a snapshot during a swap keeps a consistent view (TSan clean)
 - [ ] `Logger.network` edit plus `reload config` changes routing without a restart
 - [ ] Broken message XML on reload keeps the old generation
 - [x] `.reload all` reports each target's result and generation
@@ -811,7 +811,7 @@ Stores that load at startup share one reload path, so every later manager become
 **Acceptance**
 
 - [x] Unit: a reload that fails validation leaves the previous generation serving, keeps its generation number, and returns every error, not only the first
-- [ ] Unit: reader threads holding a snapshot during repeated swaps always see one whole generation, and the test is clean under TSan
+- [x] Unit: reader threads holding a snapshot during repeated swaps always see one whole generation, and the test is clean under TSan
 - [ ] Integration: editing `Logger.network` in the `.conf` file and running `reload config` on the console changes log routing without a restart
 - [ ] Integration: reloading message XML with a broken definition keeps the old generation, and declared messages still encode
 - [x] `.reload all` reports each target's result and generation, in dependency order
