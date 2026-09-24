@@ -92,7 +92,6 @@ Then one of four things happens, each with one message saying which and why: it 
 
 | ID | Milestone | Size | What you need | Why it is a good one to take |
 |---|---|---|---|---|
-| 17.10 | Grafana dashboards and operations guide | S | Docker, and a build of the server to point Prometheus at. No installation of the game and no second machine | 17.09 landed, so every server now answers GET /metrics in the Prometheus text exposition format behind the admin token, with tick time, each service's messages, each pool's statements and each reload target's runs already counted and labelled. What is missing is the stack that reads it: a compose file for Prometheus and Grafana, a provisioned data source, dashboards for realm health, performance and the database, and doc/OPERATIONS.md. Both acceptance checks run on your own machine |
 | 16.03 | Install scanner manifest generator | M | A build, and a Wizard101 install for the reference check, which the maintainer will run for you if you have none | The step straight after 16.01 and 16.02, both landed, and the first milestone that turns a real installation into a manifest of its own rather than reading one. The synthetic-directory check and the one that asks for a second run to be faster and byte-identical need nothing but a build; only the comparison against all 3590 packages needs an install |
 
 ## Reserved
@@ -111,6 +110,7 @@ Everything not in the table above, including every milestone whose dependencies 
 | 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal |
 | 17.23 | Dev-gated on a reboot and a Pterodactyl install |
 | 17.19 | Being built now |
+| 17.10 | Ready and nothing in it collides with what is being built, but phase 17 is held as a whole and a hold cannot yet name an exception. It is opened the moment one can |
 | 17.35 | Held with the rest of phase 17 while the panel is built as one thread |
 | 17.49 | Held with the rest of phase 17 while the panel is built as one thread |
 | 17.47 | Being built now |
