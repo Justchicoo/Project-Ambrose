@@ -728,6 +728,7 @@ void ServerApp::FinishShutdown()
     _log.DetachConfigWarnings();
     _log.Shutdown();
     _signals.reset();
+    _reloadSignal.reset();
     _stopRequested = false;
 }
 
@@ -794,5 +795,7 @@ void ServerApp::StopNow(std::string const& reason)
     _updateTimer.cancel();
     if (_signals)
         _signals->Cancel();
+    if (_reloadSignal)
+        _reloadSignal->Cancel();
     _work.reset();
 }
