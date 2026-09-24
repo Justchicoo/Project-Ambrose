@@ -134,9 +134,7 @@ class OpeningsTests(unittest.TestCase):
         saved = os.environ.copy()
         os.environ.update(environment)
         try:
-            rows = [{"ids": ["17.10"], "title": "Grafana dashboards", "size": "M", "needs": "Docker"}]
-            with mock.patch.object(openings, "table", return_value=rows):
-                return openings.main(["--webhook-env", "AMBROSE_TEST_WEBHOOK", "--state", state])
+            return openings.main(["--webhook-env", "AMBROSE_TEST_WEBHOOK", "--state", state])
         finally:
             os.environ.clear()
             os.environ.update(saved)
