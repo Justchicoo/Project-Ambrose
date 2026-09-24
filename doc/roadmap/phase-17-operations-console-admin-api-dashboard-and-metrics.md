@@ -308,10 +308,10 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 **Acceptance**
 
 - [ ] Filtering to errors hides lower levels immediately, and pausing stops scrolling while counting new lines
-- [ ] Running `status` shows the same output as the local console
-- [ ] Dropping the connection for 10 seconds while logging continues shows the missed lines, or a gap marker, after reconnecting, without clearing the view
+- [x] Running `status` shows the same output as the local console (run against a supervisor with a loginserver and a gameserver on 2026-09-24: the panel returned the same five lines, server, revision, uptime, state and sessions, that the app's own command route prints)
+- [x] Dropping the connection for 10 seconds while logging continues shows the missed lines, or a gap marker, after reconnecting, without clearing the view (every log request aborted for 11 seconds while the server kept logging: the view held its 117 rows rather than clearing and reached 125 after reconnecting)
 - [ ] Sending `shutdown` asks for confirmation first, and cancelling sends nothing
-- [ ] Reloading the page clears the recall list and stores nothing in the browser
+- [x] Reloading the page clears the recall list and stores nothing in the browser (recall walked back through help then status, a reload left it empty, and localStorage, sessionStorage and readable cookies were all empty)
 
 ## 17.08 Process control, config, and database pages
 
