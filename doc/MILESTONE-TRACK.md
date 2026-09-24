@@ -93,6 +93,7 @@ Then one of four things happens, each with one message saying which and why: it 
 
 | ID | Milestone | Size | What you need | Why it is a good one to take |
 |---|---|---|---|---|
+| 17.35 | Panel settings: general, mail and security | M | A build and a browser. An SMTP account of your own to try the mail test against, or say so in the draft and the maintainer will run that one | The panel's own settings, on the same typed and audited model the game servers already use, so an owner sets the panel name, session lifetimes, SMTP and sign-in thresholds from the panel instead of a file. The settings model, the store and the audit rows all exist already, so this is a page and its bindings rather than new machinery. The second milestone deliberately spared from the phase hold, and it collides with nothing being built |
 
 ## Reserved
 
@@ -111,10 +112,10 @@ Everything not in the table above, including every milestone whose dependencies 
 | 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal |
 | 17.23 | Dev-gated on a reboot and a Pterodactyl install |
 | 17.91 | Ready now that the metrics register and the resource graphs have landed, and held with the rest of phase 17 while the panel is built as one thread. It adds series to the sampler those milestones built rather than standing up a second one, so it is best taken beside that thread |
-| 17.35 | Held with the rest of phase 17 while the panel is built as one thread |
+| 17.11 | Unblocked by the design system landing, and next in the maintainer's own queue |
+| 3.26 | Unblocked by the design system landing, and next in the maintainer's own queue after the terminal dashboard |
 | 17.49 | Held with the rest of phase 17 while the panel is built as one thread |
 | 17.47 | Being built now |
-| 17.73 | The panel's design system, being built now |
 | 17.106 | Being built now |
 
 ## In flight

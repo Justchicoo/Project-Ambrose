@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The three accessibility criteria no automated gate can judge, each as a test that fails when the rule is broken. -->
+<!-- Project Ambrose by Imjustchico: The three accessibility criteria no automated gate can judge, each as a test that fails when the rule is broken. The first focuses a row that starts just above the fold, so the browser has to scroll it to the top edge and the container's scroll padding is what decides whether the sticky chrome covers it; it asserts the chrome is really stuck first, because a sticky element with no offset scrolls away and every assertion after it would pass for the wrong reason. The second measures each target's box against the floor for the pointer in use, 24 pixels on a fine one and 44 on a coarse. The third dispatches a cancelable paste and asks only whether anything cancelled it, since a test that sets the value itself and reads it back proves nothing. -->
 <script module lang="ts">
     import { defineMeta } from "@storybook/addon-svelte-csf";
     import { expect } from "storybook/test";
@@ -23,16 +23,24 @@
         const chrome = canvas.getByTestId("criteria-chrome");
         const frame = () => new Promise((settle) => requestAnimationFrame(() => requestAnimationFrame(settle)));
         await expect(scroller.scrollHeight).toBeGreaterThan(scroller.clientHeight);
-        scroller.scrollTop = scroller.scrollHeight;
+
+        const row = canvas.getByRole("button", { name: "Row 12" });
+        scroller.scrollTop = row.offsetTop + 4;
         await frame();
         await expect(scroller.scrollTop).toBeGreaterThan(0);
-        const row = canvas.getByRole("button", { name: "Row 3" });
+        await expect(row.getBoundingClientRect().top).toBeLessThan(scroller.getBoundingClientRect().top);
+
         row.focus();
-        row.scrollIntoView({ block: "start" });
         await frame();
+        await expect(document.activeElement).toBe(row);
+
         const focused = row.getBoundingClientRect();
         const bar = chrome.getBoundingClientRect();
         await expect(bar.height).toBeGreaterThan(0);
+        await expect(focused.height).toBeGreaterThan(0);
+        await expect(getComputedStyle(chrome).position).toBe("sticky");
+        await expect(getComputedStyle(chrome).top).toBe("0px");
+        await expect(bar.top - scroller.getBoundingClientRect().top).toBeLessThanOrEqual(2);
         await expect(focused.top).toBeGreaterThanOrEqual(bar.bottom - 0.5);
     }}
 >
@@ -45,7 +53,7 @@
         >
             <div
                 data-testid="criteria-chrome"
-                style="height: 40px"
+                style="height: 40px; top: 0"
                 class="sticky top-0 z-10 flex items-center bg-surface-chrome px-12 text-13 text-fg-body"
             >
                 Sessions
@@ -86,15 +94,16 @@
         const field = canvas.getByLabelText("Password") as HTMLInputElement;
         await expect(field.type).toBe("password");
         await expect(field.autocomplete).toBe("current-password");
+        await expect(field.readOnly).toBe(false);
+        await expect(field.disabled).toBe(false);
+
         const clipboard = new DataTransfer();
         clipboard.setData("text/plain", "a-long-passphrase-from-a-manager");
         const paste = new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true, cancelable: true });
         field.focus();
         const delivered = field.dispatchEvent(paste);
         await expect(delivered).toBe(true);
-        field.value = clipboard.getData("text/plain");
-        field.dispatchEvent(new Event("input", { bubbles: true }));
-        await expect(field.value).toBe("a-long-passphrase-from-a-manager");
+        await expect(paste.defaultPrevented).toBe(false);
     }}
 >
     {#snippet template()}

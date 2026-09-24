@@ -121,4 +121,23 @@ describe("the sign-in page", () => {
         expect(session.state).toBe("signed-in");
         expect(session.app).toBe("gameserver");
     });
+
+    it("lets a password manager fill and paste into every field it asks a secret in", async () => {
+        open();
+        const secrets = Array.from(host.querySelectorAll<HTMLInputElement>("input"));
+        expect(secrets.length, "the form asks for something").toBeGreaterThan(0);
+
+        for (const field of secrets) {
+            expect(field.autocomplete, `${field.id} names no autofill purpose`).not.toBe("");
+            expect(field.autocomplete, `${field.id} tells a password manager to stay away`).not.toBe("off");
+            expect(field.readOnly, `${field.id} cannot be typed into`).toBe(false);
+
+            const clipboard = new DataTransfer();
+            clipboard.setData("text/plain", "a-secret-from-a-manager");
+            const paste = new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true, cancelable: true });
+            field.focus();
+            expect(field.dispatchEvent(paste), `${field.id} refuses a pasted value`).toBe(true);
+            expect(paste.defaultPrevented, `${field.id} cancels a paste`).toBe(false);
+        }
+    });
 });

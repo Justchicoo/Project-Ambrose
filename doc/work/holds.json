@@ -7,7 +7,8 @@
       "what": "the operations panel, built milestone by milestone, with every later subsystem fitted into it",
       "since": "2026-09-18",
       "except": [
-        "17.10"
+        "17.10",
+        "17.35"
       ]
     },
     {

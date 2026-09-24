@@ -130,7 +130,7 @@
                         <Input
                             id="sign-in-token"
                             type="password"
-                            autocomplete="off"
+                            autocomplete={claiming ? "one-time-code" : "current-password"}
                             spellcheck="false"
                             bind:value={token}
                             aria-invalid={fields.token !== undefined}
