@@ -307,7 +307,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Acceptance**
 
-- [ ] Filtering to errors hides lower levels immediately, and pausing stops scrolling while counting new lines
+- [x] Filtering to errors hides lower levels immediately, and pausing stops scrolling while counting new lines (run on 2026-09-24 against a live panel: turning the other levels off left exactly the 3 warn rows of 51, and pausing froze the view at 51 rows while the control read "13 new")
 - [x] Running `status` shows the same output as the local console (run against a supervisor with a loginserver and a gameserver on 2026-09-24: the panel returned the same five lines, server, revision, uptime, state and sessions, that the app's own command route prints)
 - [x] Dropping the connection for 10 seconds while logging continues shows the missed lines, or a gap marker, after reconnecting, without clearing the view (every log request aborted for 11 seconds while the server kept logging: the view held its 117 rows rather than clearing and reached 125 after reconnecting)
 - [ ] Sending `shutdown` asks for confirmation first, and cancelling sends nothing
