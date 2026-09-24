@@ -374,6 +374,11 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 - [ ] `docker compose up` next to a running gameserver shows live graphs within 30 seconds
 - [ ] Every provisioned dashboard loads with no missing panel errors
 
+This milestone's Docker acceptance checks remain unticked for the implementation
+pull request because Docker is not installed in the validation environment.
+The stack is provisioned for a maintainer-run check with a real gameserver and
+the local metrics token.
+
 ## 17.11 Terminal dashboard mode
 
 **Goal:** Operators working over SSH get live panels inside the terminal itself.

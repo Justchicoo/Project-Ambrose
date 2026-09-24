@@ -1,0 +1,18 @@
+{
+  "_comment": "Project Ambrose by Imjustchico: Shows database query throughput, failures, and latency by pool.",
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {"datasource": {"type": "prometheus", "uid": "ambrose-prometheus"}, "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}, "id": 1, "title": "Queries", "type": "timeseries", "targets": [{"expr": "sum by (pool) (rate(ambrose_database_queries_total[5m]))", "legendFormat": "{{pool}}"}]},
+    {"datasource": {"type": "prometheus", "uid": "ambrose-prometheus"}, "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "id": 2, "title": "Query failures", "type": "timeseries", "targets": [{"expr": "sum by (pool) (rate(ambrose_database_query_failures_total[5m]))", "legendFormat": "{{pool}}"}]},
+    {"datasource": {"type": "prometheus", "uid": "ambrose-prometheus"}, "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}, "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}, "id": 3, "title": "Query latency p95", "type": "timeseries", "targets": [{"expr": "histogram_quantile(0.95, sum by (pool, le) (rate(ambrose_database_query_seconds_bucket[5m])))", "legendFormat": "{{pool}} p95"}]}
+  ],
+  "schemaVersion": 39,
+  "tags": ["ambrose", "database"],
+  "templating": {"list": []},
+  "time": {"from": "now-30m", "to": "now"},
+  "title": "Ambrose Database Health",
+  "uid": "ambrose-database-health",
+  "version": 1
+}
