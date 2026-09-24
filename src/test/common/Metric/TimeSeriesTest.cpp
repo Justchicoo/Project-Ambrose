@@ -1,12 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks what a history promises: a sample lands in the bucket its time belongs to, a bucket nothing was written into is absent rather than zero so a stopped app leaves a gap, one sample reaches every resolution as it is written rather than waiting for a sweep, a slot the ring has wrapped past reads as absent rather than as a stale value under a new bucket, a sample older than the ring can hold is refused rather than written over a newer point, the lowest and highest survive being folded down so a spike is still visible in a month-long view, and any range asked for comes back within the number of points the caller will take.
+ * Checks what a history promises: a sample lands in the bucket its time belongs to, a bucket nothing was written into is absent rather than zero so a stopped app leaves a gap, one sample reaches every resolution as it is written rather than waiting for a sweep, a slot the ring has wrapped past reads as absent rather than as a stale value under a new bucket, a sample older than the ring can hold is refused rather than written over a newer point, the lowest and highest survive being folded down so a spike is still visible in a month-long view, any range asked for comes back within the number of points the caller will take, and a month of samples reads back in milliseconds rather than in the second an operator would notice.
  */
 
 #include "TimeSeries.h"
 
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <iostream>
 #include <vector>
 
 namespace
@@ -155,4 +157,40 @@ TEST(TimeSeriesTest, AGroupedRangeKeepsTheExtremesOfWhatItGrouped)
         if (point.Present)
             highest = std::max(highest, point.Highest);
     EXPECT_DOUBLE_EQ(highest, 500.0) << "grouping for the screen must not hide the spike";
+}
+
+TEST(TimeSeriesTest, AMonthOfSamplesReadsBackWellInsideASecond)
+{
+    TimeSeries series;
+    int64 const now = 60LL * Day;
+    int64 const start = now - 30 * Day;
+    for (int64 at = start; at <= now; at += Minute)
+    {
+        series.Add(at, 40.0 + static_cast<double>((at / Minute) % 20));
+    }
+
+    auto const started = std::chrono::steady_clock::now();
+    std::vector<SeriesPoint> const points = series.Between(start, now, 720);
+    auto const took = std::chrono::steady_clock::now() - started;
+
+    double const milliseconds = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(took).count()) / 1000.0;
+    std::cout << "[ HISTORY  ] a month of samples read back in " << milliseconds << " ms as " << points.size() << " point(s)" << std::endl;
+
+    EXPECT_LE(points.size(), 720u) << "a month must be drawn with the points the caller asked for";
+    EXPECT_LT(milliseconds, 1000.0) << "reading a month took " << milliseconds << " ms, which is longer than an operator will wait";
+
+    int64 first = 0;
+    int64 last = 0;
+    for (SeriesPoint const& point : points)
+    {
+        if (!point.Present)
+            continue;
+        if (first == 0)
+            first = point.AtMilliseconds;
+        last = point.AtMilliseconds;
+    }
+    ASSERT_NE(first, 0) << "the month must actually be in there";
+    EXPECT_GT(last - first, 29 * Day) << "the points must span the month rather than its last resolution's worth of it";
+    EXPECT_GT(PresentIn(points), points.size() * 9 / 10)
+        << "and nearly every point must carry a reading, however the resolutions happen to divide the range";
 }

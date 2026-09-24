@@ -16,6 +16,7 @@
 #include "AppOptions.h"
 #include "Panel.h"
 #include "PanelUsers.h"
+#include "PublishedSampler.h"
 #include "ResourceSampler.h"
 #include "SeriesStore.h"
 #include "ServerApp.h"
@@ -186,6 +187,8 @@ namespace
             _sampleInterval = settings.SampleInterval;
             _saveInterval = settings.SaveInterval;
             _sampler = std::make_unique<ResourceSampler>(_history);
+            _published = std::make_unique<PublishedSampler>(_history, [this](std::string const& app)
+                { return _supervisor.AskApp(app, "/api/metrics", PublishedTimeout); });
             _lastSave = std::chrono::steady_clock::now();
             std::string historyError;
             if (_history.Load(_historyFile, historyError))
@@ -220,7 +223,10 @@ namespace
                 return;
             int64 const now = static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count());
-            _sampler->Sample(_supervisor.Snapshots(), now);
+            std::vector<AppSnapshot> const apps = _supervisor.Snapshots();
+            _sampler->Sample(apps, now);
+            if (_published)
+                _published->Sample(apps, now);
             if (std::chrono::steady_clock::now() - _lastSave < _saveInterval)
                 return;
             _lastSave = std::chrono::steady_clock::now();
@@ -395,10 +401,13 @@ namespace
                 } });
         }
 
+        static constexpr std::chrono::milliseconds PublishedTimeout{ 1500 };
+
         Supervisor _supervisor;
         Panel _panel;
         Ambrose::SeriesStore _history;
         std::unique_ptr<ResourceSampler> _sampler;
+        std::unique_ptr<PublishedSampler> _published;
         std::filesystem::path _historyFile;
         std::chrono::seconds _sampleInterval{ 5 };
         std::chrono::seconds _saveInterval{ 300 };

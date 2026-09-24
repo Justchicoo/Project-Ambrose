@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The history of one number over time, kept at more than one resolution so that asking for five minutes and asking for thirty days both read a bounded number of points. A sample is folded into every resolution as it arrives rather than by sweeping the fine one later, because a supervisor that was stopped when the sweep was due would otherwise lose the coarse point entirely. Each resolution is a ring of buckets that remembers which bucket it holds, so a slot the ring has wrapped past reads as absent rather than as an old value in a new place. A bucket nothing was written into is absent and not zero, because an app that was stopped drew no samples and a zero would read as an app that was running and idle, which is the opposite of what happened. A bucket carries the mean, the lowest and the highest of what went into it, so a spike between two reads is still visible after it has been folded down.
+ * The history of one number over time, kept at more than one resolution so that asking for five minutes and asking for thirty days both read a bounded number of points. A sample is folded into every resolution as it arrives rather than by sweeping the fine one later, because a supervisor that was stopped when the sweep was due would otherwise lose the coarse point entirely. Each resolution is a ring of buckets that remembers which bucket it holds, so a slot the ring has wrapped past reads as absent rather than as an old value in a new place. A bucket nothing was written into is absent and not zero, because an app that was stopped drew no samples and a zero would read as an app that was running and idle, which is the opposite of what happened. A bucket carries the mean, the lowest and the highest of what went into it, so a spike between two reads is still visible after it has been folded down. Each resolution is kept only as far back as a reader can ask for at that resolution: a range is answered with a bounded number of points, so a day at five-second detail would be seventeen thousand points that nothing will ever request, and keeping it would cost a hundred times what the resolutions that can be read cost.
  */
 
 #ifndef AMBROSE_TIMESERIES_H
@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Ambrose
@@ -84,8 +85,8 @@ namespace Ambrose
         explicit TimeSeries(std::vector<SeriesResolution> const& resolutions);
 
         void Add(int64 atMilliseconds, double value);
-        std::vector<SeriesBucket> ExportCoarsest() const;
-        void RestoreCoarsest(std::vector<SeriesBucket> const& buckets);
+        std::vector<std::pair<int64, std::vector<SeriesBucket>>> Export() const;
+        void Restore(std::vector<std::pair<int64, std::vector<SeriesBucket>>> const& tiers);
         std::vector<SeriesPoint> Between(int64 fromMilliseconds, int64 toMilliseconds, std::size_t mostPoints) const;
 
         std::vector<SeriesTier> const& Tiers() const noexcept { return _tiers; }

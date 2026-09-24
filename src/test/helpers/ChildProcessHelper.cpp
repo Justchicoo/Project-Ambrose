@@ -305,6 +305,45 @@ int main(int argc, char** argv)
             Write(stdout, stopSignal != 0 ? "stopped by signal\n" : "stopped by shutdown\n");
             return 0;
         }
+        if (command == "burn" && index + 2 < arguments.size())
+        {
+            std::optional<long long> const share = Number(arguments[index + 1]);
+            std::optional<long long> const forMilliseconds = Number(arguments[index + 2]);
+            if (!share || !forMilliseconds || *share < 0 || *share > 100)
+            {
+                Write(stderr, "burn needs a share of one core from 0 to 100 and how long to keep it up\n");
+                return 2;
+            }
+            Write(stdout, "burning\n");
+            auto const began = std::chrono::steady_clock::now();
+            auto const until = began + std::chrono::milliseconds(*forMilliseconds);
+            double const wanted = static_cast<double>(*share) / 100.0;
+            std::chrono::nanoseconds busy{ 0 };
+            volatile unsigned long long sink = 0;
+            while (std::chrono::steady_clock::now() < until)
+            {
+                auto const at = std::chrono::steady_clock::now();
+                std::chrono::nanoseconds const gone = at - began;
+                double const held = gone.count() > 0 ? static_cast<double>(busy.count()) / static_cast<double>(gone.count()) : 0.0;
+                if (held < wanted)
+                {
+                    auto const spinUntil = at + std::chrono::milliseconds(2);
+                    while (std::chrono::steady_clock::now() < spinUntil)
+                    {
+                        for (int turn = 0; turn < 2000; ++turn)
+                            sink = sink + static_cast<unsigned long long>(turn);
+                    }
+                    busy += std::chrono::steady_clock::now() - at;
+                }
+                else
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                }
+            }
+            std::chrono::nanoseconds const gone = std::chrono::steady_clock::now() - began;
+            Write(stdout, "burnt " + std::to_string(gone.count() > 0 ? busy.count() * 100 / gone.count() : 0) + "\n");
+            return 0;
+        }
         if (command == "spawn-sleeper" || command == "spawn-input-watcher")
         {
             bool const watcher = command == "spawn-input-watcher";

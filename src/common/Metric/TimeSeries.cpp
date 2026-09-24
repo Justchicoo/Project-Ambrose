@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Folds a sample into every resolution as it arrives and reads a range back from the finest resolution that still covers it. A sample older than a ring can hold is refused rather than written into a slot that belongs to a newer bucket, since the ring is indexed by bucket and an out-of-range write would silently corrupt the point already there. Reading picks the finest resolution whose oldest bucket is still old enough to answer the whole range and that actually holds something in it, so a short range keeps its detail, a long one is not assembled from points that were dropped days ago, and a short range asked for just after a restart is answered from the coarse resolution that was saved rather than from the fine one that only lives in memory and is therefore empty, and if even the coarsest resolution holds more buckets than the caller will take, adjacent buckets are grouped until it does, keeping the lowest and highest across the group rather than the mean of the means alone.
+ * Folds a sample into every resolution as it arrives and reads a range back from the finest resolution that still covers it. A sample older than a ring can hold is refused rather than written into a slot that belongs to a newer bucket, since the ring is indexed by bucket and an out-of-range write would silently corrupt the point already there. Each resolution reaches back only as far as a reader can ask for at that resolution, since a range comes back as a bounded number of points and nothing can request a day of five-second samples. Reading picks the finest resolution whose oldest bucket is still old enough to answer the whole range and that actually holds something in it, so a short range keeps its detail, a long one is not assembled from points that were dropped days ago, and a short range asked for just after a restart is answered from the coarse resolution that was saved rather than from the fine one that only lives in memory and is therefore empty, and if even the coarsest resolution holds more buckets than the caller will take, adjacent buckets are grouped until it does, keeping the lowest and highest across the group rather than the mean of the means alone.
  */
 
 #include "TimeSeries.h"
@@ -136,8 +136,9 @@ namespace Ambrose
     std::vector<SeriesResolution> const& TimeSeries::DefaultResolutions()
     {
         static std::vector<SeriesResolution> const resolutions{
-            { 5000, 17280 },
-            { 60000, 43200 },
+            { 5000, 720 },
+            { 60000, 1440 },
+            { 900000, 2880 },
         };
         return resolutions;
     }
@@ -165,15 +166,28 @@ namespace Ambrose
         return _tiers.empty() ? 0 : _tiers.back().BucketMilliseconds();
     }
 
-    std::vector<SeriesBucket> TimeSeries::ExportCoarsest() const
+    std::vector<std::pair<int64, std::vector<SeriesBucket>>> TimeSeries::Export() const
     {
-        return _tiers.empty() ? std::vector<SeriesBucket>{} : _tiers.back().Export();
+        std::vector<std::pair<int64, std::vector<SeriesBucket>>> tiers;
+        tiers.reserve(_tiers.size());
+        for (SeriesTier const& tier : _tiers)
+            tiers.emplace_back(tier.BucketMilliseconds(), tier.Export());
+        return tiers;
     }
 
-    void TimeSeries::RestoreCoarsest(std::vector<SeriesBucket> const& buckets)
+    void TimeSeries::Restore(std::vector<std::pair<int64, std::vector<SeriesBucket>>> const& tiers)
     {
-        if (!_tiers.empty())
-            _tiers.back().Restore(buckets);
+        for (auto const& [bucketMilliseconds, buckets] : tiers)
+        {
+            for (SeriesTier& tier : _tiers)
+            {
+                if (tier.BucketMilliseconds() == bucketMilliseconds)
+                {
+                    tier.Restore(buckets);
+                    break;
+                }
+            }
+        }
     }
 
     void TimeSeries::Add(int64 atMilliseconds, double value)

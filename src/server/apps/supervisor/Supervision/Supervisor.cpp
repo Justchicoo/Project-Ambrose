@@ -379,6 +379,23 @@ std::vector<std::pair<std::string, std::string>> Supervisor::CollectErrorReports
     return reports;
 }
 
+std::optional<std::string> Supervisor::AskApp(std::string_view name, std::string_view path, std::chrono::milliseconds timeout) const
+{
+    std::shared_lock<std::shared_mutex> const lock(_mutex);
+    ManagedApp* const app = Find(name);
+    if (!app)
+        return std::nullopt;
+    if (!app->Snapshot().ProcessId)
+        return std::nullopt;
+    std::optional<AdminClient> const admin = app->GetAdminClient();
+    if (!admin)
+        return std::nullopt;
+    AdminClientResponse const answer = admin->Send({ "GET", std::string(path), std::string(), "application/json", std::string() }, timeout);
+    if (!answer.Answered || answer.Status != 200)
+        return std::nullopt;
+    return answer.Body;
+}
+
 AdminResponse Supervisor::Relay(ManagedApp& app, AdminRequest const& request, std::string_view path)
 {
     std::string const& name = app.GetDefinition().Name;

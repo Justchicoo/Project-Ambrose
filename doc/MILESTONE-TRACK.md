@@ -110,7 +110,7 @@ Everything not in the table above, including every milestone whose dependencies 
 | 16.11 | Overlaps the type extraction already built in 3.21 and is being rethought |
 | 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal |
 | 17.23 | Dev-gated on a reboot and a Pterodactyl install |
-| 17.19 | Being built now |
+| 17.91 | Ready now that the metrics register and the resource graphs have landed, and held with the rest of phase 17 while the panel is built as one thread. It adds series to the sampler those milestones built rather than standing up a second one, so it is best taken beside that thread |
 | 17.35 | Held with the rest of phase 17 while the panel is built as one thread |
 | 17.49 | Held with the rest of phase 17 while the panel is built as one thread |
 | 17.47 | Being built now |

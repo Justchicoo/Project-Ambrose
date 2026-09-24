@@ -1,13 +1,19 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks what the sampler promises: the first reading of a process writes everything but the processor share, because a share needs two readings, the second works the share out against the time that actually passed rather than the time a round was meant to take, an app with no process is skipped so its graph carries a gap rather than zeroes, an app that stops and starts again is measured against its new process rather than against a total that belongs to the old one, every app is written under its own name, and a round costs few enough microseconds per app to sit on a timer beside twenty of them.
+ * Checks what the sampler promises: the first reading of a process writes everything but the processor share, because a share needs two readings, the second works the share out against the time that actually passed rather than the time a round was meant to take, an app with no process is skipped so its graph carries a gap rather than zeroes, an app that stops and starts again is measured against its new process rather than against a total that belongs to the old one, every app is written under its own name, a round costs few enough microseconds per app to sit on a timer beside twenty of them, the series a graph would draw for a process holding half a core agrees within ten points with what that process measured on its own clock, and an app that stops leaves a gap at the end of its own graph while the app beside it goes on being written.
  */
 
+#include "ChildProcess.h"
+#include "LogTestConfig.h"
 #include "ResourceSampler.h"
 
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <optional>
+#include <thread>
 #include <string>
 #include <vector>
 
@@ -183,4 +189,94 @@ TEST(ResourceSamplerTest, ARoundIsCheapEnoughToSitOnATimerBesideTwentyApps)
               << " microseconds for a round of " << apps.size() << " apps" << std::endl;
     EXPECT_LT(perRound, 1000.0) << "a round of twenty apps costs " << perRound
                                 << " microseconds, which is more than a millisecond of work per round";
+}
+
+TEST(ResourceSamplerTest, TheSeriesTheGraphDrawsMatchesAProcessUnderLoad)
+{
+    LogTestDirectory directory;
+    std::filesystem::path const output = directory.Path() / "burn.txt";
+
+    ChildLaunchOptions options;
+    options.Program = std::filesystem::path(AMBROSE_CHILD_PROCESS_HELPER);
+    options.Arguments = { "burn", "50", "7000" };
+    options.OutputFile = output;
+
+    std::string error;
+    ChildProcessHandle child = ChildProcessHandle::Launch(options, error);
+    ASSERT_TRUE(static_cast<bool>(child)) << error;
+
+    AppSnapshot app;
+    app.Name = "gameserver";
+    app.ProcessId = child.GetIdentity().Id;
+    app.State = AppState::Running;
+
+    SeriesStore store;
+    ResourceSampler sampler(store);
+
+    auto const now = [] {
+        return static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count());
+    };
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    sampler.Sample({ app }, now());
+    std::this_thread::sleep_for(std::chrono::milliseconds(6000));
+    sampler.Sample({ app }, now());
+
+    ASSERT_TRUE(child.WaitForExit(std::chrono::milliseconds(10000)));
+    std::ifstream reading(output);
+    std::string line;
+    std::optional<double> held;
+    while (std::getline(reading, line))
+    {
+        if (line.rfind("burnt ", 0) == 0)
+            held = std::strtod(line.c_str() + 6, nullptr);
+    }
+    ASSERT_TRUE(held.has_value());
+
+    std::vector<SeriesPoint> const points = store.Between("gameserver", ResourceSampler::CpuSeries, now() - 120000, now(), 200);
+    double drawn = -1.0;
+    for (auto at = points.rbegin(); at != points.rend(); ++at)
+    {
+        if (at->Present)
+        {
+            drawn = at->Mean;
+            break;
+        }
+    }
+    ASSERT_GE(drawn, 0.0) << "the processor series must hold a reading for the app that was running";
+    std::cout << "[ GRAPHCPU ] the process held " << *held << "% of one core and the series the graph draws says " << drawn << "%"
+              << std::endl;
+
+    EXPECT_GT(drawn, *held - 10.0) << "the graph would show " << drawn << "% where the process held " << *held << "%";
+    EXPECT_LT(drawn, *held + 10.0) << "the graph would show " << drawn << "% where the process held " << *held << "%";
+}
+
+TEST(ResourceSamplerTest, AStoppedAppLeavesAGapWhileTheOthersKeepBeingWritten)
+{
+    SeriesStore store;
+    bool gameRunning = true;
+    ResourceSampler sampler(store, [&gameRunning](uint32 pid) {
+        if (pid == 20 && !gameRunning)
+            return std::optional<ProcessSnapshot>();
+        return std::optional<ProcessSnapshot>(Used(pid * 1000, pid * 4096));
+    });
+
+    std::vector<AppSnapshot> const both{ Running("loginserver", 10), Running("gameserver", 20) };
+    std::vector<AppSnapshot> const oneGone{ Running("loginserver", 10), Stopped("gameserver") };
+
+    sampler.Sample(both, 0);
+    sampler.Sample(both, 5000);
+    gameRunning = false;
+    sampler.Sample(oneGone, 10000);
+    sampler.Sample(oneGone, 15000);
+    sampler.Sample(oneGone, 20000);
+
+    std::vector<SeriesPoint> const game = store.Between("gameserver", ResourceSampler::MemorySeries, 0, 20000, 100);
+    std::vector<SeriesPoint> const login = store.Between("loginserver", ResourceSampler::MemorySeries, 0, 20000, 100);
+
+    ASSERT_EQ(game.size(), login.size());
+    EXPECT_FALSE(game.back().Present) << "the app that stopped must leave a gap at the end of its graph";
+    EXPECT_TRUE(login.back().Present) << "and the live view must go on updating for the app that did not";
+    EXPECT_GT(PresentIn(login), PresentIn(game)) << "the running app has more readings than the stopped one";
 }

@@ -592,11 +592,11 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Acceptance**
 
-- [ ] With gameserver under a synthetic load, the panel's CPU graph is within 10 percent of the operating system's own figure
-- [ ] A 30 day graph loads in under one second with a month of samples
-- [ ] Stopping an app leaves a gap in its graph, and the live view keeps updating for the other apps
-- [ ] Restarting the supervisor keeps the history, and a day's samples appear in the long series once, not twice
-- [ ] The benchmark reports microseconds per app per sample, and sampling 20 apps stays under one millisecond of work per round
+- [x] With gameserver under a synthetic load, the panel's CPU graph is within 10 percent of the operating system's own figure (ResourceSamplerTest.TheSeriesTheGraphDrawsMatchesAProcessUnderLoad: a process is told to hold half of one core and holds it by measuring itself, the sampler reads it through the same ProcessInfo the supervisor uses and writes the same series the panel draws, and that series reads 52.4 percent where the process measured 50 on its own clock, which is two independent measurements of one thing rather than a number compared against itself; ProcessInfoTest.TheShareReportedMatchesWhatTheProcessActuallyHeld holds the reader to the same band on its own, five runs landing between 46 and 53 against 49 to 50 held. The load is a synthetic process rather than a gameserver under players, which is what a real client session would add)
+- [x] A 30 day graph loads in under one second with a month of samples (TimeSeriesTest.AMonthOfSamplesReadsBackWellInsideASecond: 43201 minute samples written and the whole month read back as 709 points in 2.6 ms against the second an operator would notice)
+- [x] Stopping an app leaves a gap in its graph, and the live view keeps updating for the other apps (ResourceSamplerTest.AStoppedAppLeavesAGapWhileTheOthersKeepBeingWritten: two apps sampled together, one stops, its graph ends in a point that is absent rather than zero while the other goes on being written and holds more readings; TimeSeriesTest.ABucketNothingWasWrittenIntoIsAbsentRatherThanZero holds the store to the same rule, and Graphs.browser.test.ts shows the panel saying a series holds three readings of four rather than drawing it as complete)
+- [x] Restarting the supervisor keeps the history, and a day's samples appear in the long series once, not twice (SeriesStoreTest.AHistoryComesBackAfterARestart and ReadingTheSameFileTwiceLeavesTheHistoryExactlyOnce: the second reads the same file twice and compares every point's sample count, which would double if a day were folded in again, and it asserts the history is not empty first so it cannot pass by comparing two nothings)
+- [x] The benchmark reports microseconds per app per sample, and sampling 20 apps stays under one millisecond of work per round (ResourceSamplerTest.ARoundIsCheapEnoughToSitOnATimerBesideTwentyApps prints the figure: 21.0 microseconds per app per sample and 420 microseconds for a round of twenty on Windows, 12.8 and 256 on Linux, both Debug builds)
 
 ## 17.20 Client data and revisions page
 

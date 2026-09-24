@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads and writes the store's own format: a magic and a version, then each series with the subject and name it is known by, the resolution its buckets are at, and the buckets themselves. Numbers are written little-endian by hand rather than by copying the structures, so a file written on one machine reads on another and a field added later does not move what is already there. A file whose magic, version or lengths do not agree is refused whole and named, because half a history read as if it were all of it would show a gap that never happened. Saving goes to a temporary beside the real file and is moved into place, since a history is worth more than the newest few samples and a torn file is worth nothing.
+ * Reads and writes the store's own format: a magic and a version, then each series with the subject and name it is known by, and each of its resolutions with the size of its buckets and the buckets themselves. Numbers are written little-endian by hand rather than by copying the structures, so a file written on one machine reads on another and a field added later does not move what is already there. A file whose magic, version or lengths do not agree is refused whole and named, because half a history read as if it were all of it would show a gap that never happened. Saving goes to a temporary beside the real file and is moved into place, since a history is worth more than the newest few samples and a torn file is worth nothing.
  */
 
 #include "SeriesStore.h"
@@ -154,16 +154,20 @@ namespace Ambrose
             {
                 PutText(out, name.Subject);
                 PutText(out, name.Series);
-                PutUnsigned(out, static_cast<uint64>(series.CoarsestBucketMilliseconds()), 8);
-                std::vector<SeriesBucket> const buckets = series.ExportCoarsest();
-                PutUnsigned(out, buckets.size(), 4);
-                for (SeriesBucket const& bucket : buckets)
+                std::vector<std::pair<int64, std::vector<SeriesBucket>>> const tiers = series.Export();
+                PutUnsigned(out, tiers.size(), 4);
+                for (auto const& [bucketMilliseconds, buckets] : tiers)
                 {
-                    PutUnsigned(out, static_cast<uint64>(bucket.Bucket), 8);
-                    PutDouble(out, bucket.Sum);
-                    PutDouble(out, bucket.Lowest);
-                    PutDouble(out, bucket.Highest);
-                    PutUnsigned(out, bucket.Samples, 4);
+                    PutUnsigned(out, static_cast<uint64>(bucketMilliseconds), 8);
+                    PutUnsigned(out, buckets.size(), 4);
+                    for (SeriesBucket const& bucket : buckets)
+                    {
+                        PutUnsigned(out, static_cast<uint64>(bucket.Bucket), 8);
+                        PutDouble(out, bucket.Sum);
+                        PutDouble(out, bucket.Lowest);
+                        PutDouble(out, bucket.Highest);
+                        PutUnsigned(out, bucket.Samples, 4);
+                    }
                 }
             }
         }
@@ -238,41 +242,52 @@ namespace Ambrose
             return false;
         }
 
-        std::map<SeriesName, std::vector<SeriesBucket>> read;
+        std::map<SeriesName, std::vector<std::pair<int64, std::vector<SeriesBucket>>>> read;
         for (uint64 at = 0; at < count; ++at)
         {
             SeriesName name;
-            uint64 bucketMilliseconds = 0;
-            uint64 buckets = 0;
-            if (!TakeText(left, name.Subject) || !TakeText(left, name.Series)
-                || !TakeUnsigned(left, bucketMilliseconds, 8) || !TakeUnsigned(left, buckets, 4))
+            uint64 tiers = 0;
+            if (!TakeText(left, name.Subject) || !TakeText(left, name.Series) || !TakeUnsigned(left, tiers, 4))
             {
                 error = "the history ends in the middle of a series";
                 return false;
             }
-            std::vector<SeriesBucket> held;
-            held.reserve(static_cast<std::size_t>(std::min<uint64>(buckets, 1u << 20)));
-            for (uint64 index = 0; index < buckets; ++index)
+            std::vector<std::pair<int64, std::vector<SeriesBucket>>> held;
+            held.reserve(static_cast<std::size_t>(std::min<uint64>(tiers, 64)));
+            for (uint64 tier = 0; tier < tiers; ++tier)
             {
-                SeriesBucket bucket;
-                uint64 at2 = 0;
-                uint64 samples = 0;
-                if (!TakeUnsigned(left, at2, 8) || !TakeDouble(left, bucket.Sum) || !TakeDouble(left, bucket.Lowest)
-                    || !TakeDouble(left, bucket.Highest) || !TakeUnsigned(left, samples, 4))
+                uint64 bucketMilliseconds = 0;
+                uint64 buckets = 0;
+                if (!TakeUnsigned(left, bucketMilliseconds, 8) || !TakeUnsigned(left, buckets, 4))
                 {
-                    error = "the history ends in the middle of a bucket";
+                    error = "the history ends in the middle of a resolution";
                     return false;
                 }
-                bucket.Bucket = static_cast<int64>(at2);
-                bucket.Samples = static_cast<uint32>(samples);
-                held.push_back(bucket);
+                std::vector<SeriesBucket> inTier;
+                inTier.reserve(static_cast<std::size_t>(std::min<uint64>(buckets, 1u << 20)));
+                for (uint64 index = 0; index < buckets; ++index)
+                {
+                    SeriesBucket bucket;
+                    uint64 at2 = 0;
+                    uint64 samples = 0;
+                    if (!TakeUnsigned(left, at2, 8) || !TakeDouble(left, bucket.Sum) || !TakeDouble(left, bucket.Lowest)
+                        || !TakeDouble(left, bucket.Highest) || !TakeUnsigned(left, samples, 4))
+                    {
+                        error = "the history ends in the middle of a bucket";
+                        return false;
+                    }
+                    bucket.Bucket = static_cast<int64>(at2);
+                    bucket.Samples = static_cast<uint32>(samples);
+                    inTier.push_back(bucket);
+                }
+                held.emplace_back(static_cast<int64>(bucketMilliseconds), std::move(inTier));
             }
             read.emplace(std::move(name), std::move(held));
         }
 
         std::lock_guard const lock(_mutex);
-        for (auto const& [name, buckets] : read)
-            TakeLocked(name.Subject, name.Series).RestoreCoarsest(buckets);
+        for (auto const& [name, tiers] : read)
+            TakeLocked(name.Subject, name.Series).Restore(tiers);
         return true;
     }
 }
