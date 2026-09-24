@@ -76,7 +76,7 @@ The server can read and write the client's binary table-list format byte for byt
 
 **Acceptance**
 
-- [ ] Model -> XML -> model and BIN lossless
+- [x] Model -> XML -> model and BIN lossless (`LatestFileListXmlTest.ModelXmlAndBinaryRoundTrip`)
 - [ ] Reference XML gives 3590 tables (Base 140, PatchClient 97)
 
 ### Detailed spec from PAT-4: LatestFileList model and XML writer/reader
@@ -95,8 +95,8 @@ One in-memory manifest can be emitted as both LatestFileList.xml and LatestFileL
 
 **Acceptance**
 
-- [ ] Unit: model -> XML -> model and model -> BIN -> model are both lossless
-- [ ] Unit: _TableList row count equals package count + About; empty TarFileName is written as an empty STR element
+- [x] Unit: model -> XML -> model and model -> BIN -> model are both lossless (`LatestFileListXmlTest.ModelXmlAndBinaryRoundTrip`)
+- [x] Unit: _TableList row count equals package count + About; empty TarFileName is written as an empty STR element (`LatestFileListXmlTest.ModelXmlAndBinaryRoundTrip`, `LatestFileListXmlTest.EmptyTarFileNameIsWrittenAndReadBack`)
 - [ ] Env-gated: parsing a developer-supplied reference XML gives 3590 tables (Base 140 records, PatchClient 97, every other table exactly 1 record 'Data/GameData/<table>.wad')
 
 **Risks**
