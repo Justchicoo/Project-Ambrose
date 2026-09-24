@@ -134,6 +134,37 @@ namespace
     }
 }
 
+TEST(AdminCommandRouteTest, ARefusalThatWantsConfirmingSaysSoInTheAnswerAndConfirmingItRuns)
+{
+    LogTestDirectory directory;
+    std::filesystem::path const audit = directory.Path() / "audit" / "commands.jsonl";
+    ConsoleCommandTable table;
+    Fill(table);
+    AdminAuth auth(10, 1.0);
+    auth.SetToken(Token);
+    AdminRouter router(auth);
+    AdminCommand::Register(router, table, "gameserver", audit);
+
+    AdminResponse const asked = router.Dispatch(Post(R"({"command":"shutdown"})"));
+    EXPECT_EQ(asked.Status, 409) << asked.Body;
+    nlohmann::json const refusal = nlohmann::json::parse(asked.Body, nullptr, false);
+    ASSERT_TRUE(refusal.is_object()) << asked.Body;
+    ASSERT_TRUE(refusal.contains("needs_confirm")) << "the page cannot tell this refusal from any other without it: " << asked.Body;
+    EXPECT_TRUE(refusal["needs_confirm"].get<bool>());
+    EXPECT_FALSE(refusal["success"].get<bool>());
+
+    AdminResponse const unknown = router.Dispatch(Post(R"({"command":"nonsense"})"));
+    nlohmann::json const other = nlohmann::json::parse(unknown.Body, nullptr, false);
+    ASSERT_TRUE(other.is_object()) << unknown.Body;
+    EXPECT_FALSE(other["needs_confirm"].get<bool>()) << "a command that does not exist is not one waiting to be confirmed";
+
+    AdminResponse const confirmed = router.Dispatch(Post(R"({"command":"shutdown","confirm":true})"));
+    EXPECT_EQ(confirmed.Status, 200) << confirmed.Body;
+    nlohmann::json const ran = nlohmann::json::parse(confirmed.Body, nullptr, false);
+    ASSERT_TRUE(ran.is_object()) << confirmed.Body;
+    EXPECT_TRUE(ran["success"].get<bool>()) << "confirming must actually run it";
+}
+
 TEST(AdminCommandRouteTest, ARunIsAnsweredAndWrittenDownAndASecretIsInNeither)
 {
     LogTestDirectory directory;
