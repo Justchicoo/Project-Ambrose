@@ -863,12 +863,26 @@ class MilestoneTrackTests(unittest.TestCase):
         ready, _blocked = ready_report.state(ROOT)
         everything = ready_report.milestones(ROOT)
         opened = [row["id"] for row in ready if row["status"] == "open"]
-        self.assertGreater(len(opened), 0)
+        if not opened:
+            reserved = self.listed("Reserved")
+            for row in ready:
+                if row["status"] == "reserved" and not row["done"]:
+                    self.assertIn(row["id"], reserved,
+                                  "nothing is open and " + row["id"] + " is ready and reserved without a reason in the table")
         for identifier in re.findall(r"^\| ([\d., ]+) \|", self.section("Open now"), re.M):
             for one in re.findall(r"\d+\.\d+", identifier):
                 self.assertIn(one, everything, one + " is opened by the track but is not a milestone")
                 self.assertTrue(one in opened or everything[one]["done"],
                                 one + " is opened by the track but its dependencies are not built")
+
+    def test_an_empty_open_list_is_allowed_only_when_every_ready_milestone_is_accounted_for(self):
+        ready, _blocked = ready_report.state(ROOT)
+        reserved = self.listed("Reserved")
+        unexplained = [row["id"] for row in ready
+                       if row["status"] == "reserved" and not row["done"] and row["id"] not in reserved]
+        opened = [row["id"] for row in ready if row["status"] == "open"]
+        self.assertTrue(opened or not unexplained,
+                        "nothing is open and these are ready with no reason given: " + ", ".join(sorted(unexplained)))
 
     def test_a_milestone_is_not_open_and_reserved_at_once(self):
         tables = {name: self.listed(name) for name in ("Open now", "Reserved", "In flight", "Landed")}

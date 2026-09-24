@@ -93,7 +93,6 @@ Then one of four things happens, each with one message saying which and why: it 
 
 | ID | Milestone | Size | What you need | Why it is a good one to take |
 |---|---|---|---|---|
-| 17.10 | Grafana dashboards and operations guide | S | Docker, and a build of the server to point Prometheus at. No installation of the game and no second machine | 17.09 landed, so every server answers GET /metrics in the Prometheus text exposition format behind the admin token, with tick time, each service's messages, each pool's statements and each reload target's runs already counted and labelled. What is missing is the stack that reads it: a compose file for Prometheus and Grafana, a provisioned data source, dashboards for realm health, performance and the database, and doc/OPERATIONS.md. Phase 17 is held, and this is the first milestone deliberately spared from that hold, because none of it touches the C++ being built. Both acceptance checks run on your own machine |
 
 ## Reserved
 
@@ -107,6 +106,7 @@ Everything not in the table above, including every milestone whose dependencies 
 | 3.28 | Deriving the offsets is judged against the two pinned installs, which only the maintainer has |
 | 3.12 | Its remaining checks wait for 6.10 and for a real client session |
 | 3.23 | Next in the maintainer's own queue |
+| 4.02 | Held by the panel session, which needs it for the panel's roles. It is built and passes every automated check; its one real-client check waits on another milestone rather than on anybody's time |
 | 16.11 | Overlaps the type extraction already built in 3.21 and is being rethought |
 | 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal |
 | 17.23 | Dev-gated on a reboot and a Pterodactyl install |
@@ -123,6 +123,7 @@ A row that says **before the reset** came from a pull request that was on the re
 
 | ID | Who | Sent as | What is left |
 |---|---|---|---|
+| 17.10 | MeruneFleuruwu | [#7](https://github.com/Justchicoo/Project-Ambrose/pull/7) | Taken as a draft the same day it opened, the first milestone spared out of the phase 17 hold. Both checks run on the contributor's own machine, so nothing here waits on the maintainer |
 | 16.03 | MeruneFleuruwu | [#6](https://github.com/Justchicoo/Project-Ambrose/pull/6) | The scanner is delivered and four checks are earned, two of them re-run by the maintainer on a real install rather than only in a fixture. Size, CRC, HeaderSize and HeaderCRC are right for 3589 of 3589 type 3 and 5 records, and a cached run is 194 seconds down to 1 with a byte-identical .bin. Left: package membership, 3820 of 3825, because `Windows/PatchClient/` is not matched and the manifest files scan themselves in; and four fields no check names, `TarFileName`, `CompressedHeaderSize`, the 40 type 5 WADs and the header fields on plain files |
 | 1.21 | MeruneFleuruwu | [#5](https://github.com/Justchicoo/Project-Ambrose/pull/5) | doc/PATCHING.md now matches what is built and the deliverable line names src/tools/launcher. Left: all three acceptance checks, which watch a real client, one listener seeing no patch connection, one recording what the client does with no `-P`, and one seeing no 'Patch failed' dialog |
 | 5.08 | MeruneFleuruwu | [#4](https://github.com/Justchicoo/Project-Ambrose/pull/4) | The scripts, env.dist and doc/INSTALL.md are delivered and the conf check is earned, verified by running both of them. Left: the check that a clean Ubuntu and a clean Windows machine reach 'ready' on all three apps, which needs those machines. The maintainer added the self-tests and fixed a relative install prefix that resolved against the working directory |
