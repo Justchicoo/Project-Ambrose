@@ -77,10 +77,11 @@ Split by who wrote the code underneath, not by how many are left. A pull request
 
 ## Our own checks have been wrong
 
-Both were found by a contributor doing the right thing, which is the only way this kind of defect surfaces.
+Each was found by a contributor doing the right thing, which is the only way this kind of defect surfaces.
 
 - `apps/progress/ready.py` leaves out a milestone that is finished, so the moment a contributor ticked the last box of one the track opened, two checks called it a milestone that does not exist. They now ask whether it exists at all and accept it as takeable or already finished. Fixed as b1cbbd0.
 - The trailer check demanded an AI attribution trailer on a commit a bot wrote, which Dependabot's first grouped update failed within a minute. A bot-authored commit names its tool in the author field, so it is exempt by author, never by anything the message claims.
+- The progress card check failed every milestone pull request that ticked a check. The card is generated from the phase files, so ticking a box makes it stale, and `doc/progress/` is a reserved path the contributor is refused if they try to regenerate it: the rules asked for the tick and then failed them for it, with nothing they could do. The step now runs everywhere except a pull request from a fork, carrying `contrib`, or on a `milestone/` branch, which is exactly the set of authors who cannot rebuild it, and the card is still checked on every push to main. Found on 16.02, the first such pull request to reach the step.
 
 When a check fails a contributor for doing the right thing, fix the check the same sitting and say so in the message. A checker that punishes correct work teaches people to work around it.
 

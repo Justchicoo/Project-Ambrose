@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on CI file pushes, and on pull requests, then builds and tests the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a push that touches the code, the data the tests read or the build definition, by the schedule, a label, or a manual run.
+# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the generated progress card except on a pull request whose author is not allowed to regenerate it, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on CI file pushes, and on pull requests, then builds and tests the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a push that touches the code, the data the tests read or the build definition, by the schedule, a label, or a manual run.
 name: core-build
 
 on:
@@ -38,6 +38,7 @@ jobs:
       actions: read
     env:
       PYTHONDONTWRITEBYTECODE: "1"
+      OUTSIDE_PULL_REQUEST: ${{ github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || contains(github.event.pull_request.labels.*.name, 'contrib') || startsWith(github.head_ref, 'milestone/')) }}
     outputs:
       build: ${{ steps.select.outputs.build }}
       matrix: ${{ steps.select.outputs.matrix }}
@@ -74,7 +75,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: python apps/progress/tests/test_progress.py
       - name: Progress card
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && env.OUTSIDE_PULL_REQUEST != 'true' }}
         run: python apps/progress/progress.py --check
       - name: Work board self-tests
         if: ${{ !cancelled() }}

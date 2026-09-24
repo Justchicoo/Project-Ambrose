@@ -425,6 +425,16 @@ class WorkflowDriftTests(unittest.TestCase):
         self.assertIn("--stage build-test", self.workflow)
         self.assertEqual(self.workflow.count("--setup-vcpkg"), 1)
 
+    def test_a_generated_file_a_contributor_cannot_rebuild_is_not_checked_against_them(self):
+        guard = "OUTSIDE_PULL_REQUEST"
+        self.assertIn("doc/progress/", ci_contrib_paths.RESERVED_PREFIXES)
+        declared = self.workflow.split(guard + ":", 1)[1].splitlines()[0]
+        for clause in ("head.repo.full_name != github.repository", "'contrib'", "startsWith(github.head_ref, 'milestone/')"):
+            self.assertIn(clause, declared, clause)
+        step = self.workflow.split("- name: Progress card", 1)[1].split("- name: ", 1)[0]
+        self.assertIn(guard + " != 'true'", step)
+        self.assertIn("apps/progress/progress.py --check", step)
+
     def test_every_leg_names_existing_presets(self):
         configure = {preset["name"]: preset for preset in self.presets["configurePresets"]}
         build = {preset["name"]: preset for preset in self.presets["buildPresets"]}
