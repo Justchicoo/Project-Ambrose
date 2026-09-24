@@ -425,6 +425,22 @@ class WorkflowDriftTests(unittest.TestCase):
         self.assertIn("--stage build-test", self.workflow)
         self.assertEqual(self.workflow.count("--setup-vcpkg"), 1)
 
+    def test_a_push_with_no_build_input_still_builds_code_that_was_never_compiled(self):
+        now = at("2026-10-01T00:00:00Z")
+        docs = ["doc/ROADMAP.md"]
+        behind = FakeGit(docs, {"codeaaa": True})
+        result = ci_select_legs.plan("push", {}, now, behind, ci_select_legs.KnownBuilds({"linux-gcc": "codeaaa"}))
+        self.assertEqual(result["legs"], ["linux-gcc"])
+        self.assertIn("code has changed since its last build", " ".join(result["reasons"]))
+        level = FakeGit(docs, {"codeaaa": False})
+        self.assertEqual(ci_select_legs.plan("push", {}, now, level, ci_select_legs.KnownBuilds({"linux-gcc": "codeaaa"}))["legs"], [])
+        unknown = FakeGit(docs, {"codeaaa": True})
+        self.assertEqual(ci_select_legs.plan("push", {}, now, unknown, ci_select_legs.KnownBuilds({}))["legs"], [])
+        unreadable = FakeGit(docs, {"codeaaa": True})
+        refused = ci_select_legs.plan("push", {}, now, unreadable, FailingActions())
+        self.assertEqual(refused["legs"], [])
+        self.assertIn("earlier builds could not be read", " ".join(refused["warnings"]))
+
     def test_a_generated_file_a_contributor_cannot_rebuild_is_not_checked_against_them(self):
         guard = "OUTSIDE_PULL_REQUEST"
         self.assertIn("doc/progress/", ci_contrib_paths.RESERVED_PREFIXES)
