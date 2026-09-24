@@ -164,8 +164,18 @@ std::vector<uint8> LatestFileList::WriteBinary() const
 {
     BinaryTableFile file;
     file.Tables.push_back(BuildTableList(TableList()));
-    file.Tables.push_back(BuildAboutTable(About.Version));
-    for (Package const& package : Packages)
-        file.Tables.push_back(BuildPackageTable(package));
+    for (std::string const& name : TableList())
+    {
+        if (name == "About")
+        {
+            file.Tables.push_back(BuildAboutTable(About.Version));
+            continue;
+        }
+
+        auto const package = std::find_if(Packages.begin(), Packages.end(), [&name](Package const& candidate) { return candidate.Name == name; });
+        if (package == Packages.end())
+            throw std::invalid_argument("LatestFileList table order names a missing package");
+        file.Tables.push_back(BuildPackageTable(*package));
+    }
     return file.Write();
 }

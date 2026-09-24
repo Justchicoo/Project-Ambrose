@@ -119,12 +119,6 @@ std::string LatestFileListXml::Write(LatestFileList const& list)
         SetText(field, name);
     }
 
-    pugi::xml_node about = root.append_child("About");
-    pugi::xml_node aboutRecord = about.append_child("RECORD");
-    pugi::xml_node version = aboutRecord.append_child("Version");
-    version.append_attribute("TYPE") = "UINT";
-    version.text().set(list.About.Version);
-
     for (std::string const& name : list.TableList())
     {
         if (name == "About")

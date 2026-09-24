@@ -70,6 +70,7 @@ TEST(LatestFileListXmlTest, ModelXmlAndBinaryRoundTrip)
 
     std::string const xml = LatestFileListXml::Write(source);
     EXPECT_NE(xml.find("<Base>"), std::string::npos);
+    EXPECT_EQ(xml.find("<About>"), xml.rfind("<About>"));
     LatestFileList const parsed = LatestFileListXml::Read(xml);
     ExpectEqual(source, parsed);
 
@@ -114,6 +115,12 @@ TEST(LatestFileListXmlTest, XmlPreservesExplicitTableOrder)
     LatestFileList const decoded = LatestFileListXml::Read(xml);
     EXPECT_EQ(decoded.TableList(), file.TableOrder);
     EXPECT_EQ(decoded.Packages.size(), file.Packages.size());
+
+    BinaryTableFile const binary = BinaryTableFile::Read(file.WriteBinary());
+    ASSERT_EQ(binary.Tables.size(), 4u);
+    EXPECT_EQ(binary.Tables[1].Name, "About");
+    EXPECT_EQ(binary.Tables[2].Name, "Base");
+    EXPECT_EQ(binary.Tables[3].Name, "PatchClient");
 }
 
 TEST(LatestFileListXmlTest, ReferenceXmlHasExpectedTableCountsWhenConfigured)
