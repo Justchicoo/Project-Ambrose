@@ -5,8 +5,10 @@
 
 #include "ServerApp.h"
 #include "AdminCapabilities.h"
+#include "AdminActivityView.h"
 #include "AdminCommand.h"
 #include "AdminConfigView.h"
+#include "AdminRealmsView.h"
 #include "AdminReloadView.h"
 #include "AdminServer.h"
 #include "ListenerSettings.h"
@@ -395,6 +397,8 @@ void ServerApp::RegisterStandardRoutes(AdminRouter& routes)
     AdminStatus::Register(routes, [this] { return BuildStatus(); });
     AdminConfigView::Register(routes, _config, GetRestartRequiredOptions());
     AdminReloadView::Register(routes);
+    AdminRealmsView::Register(routes);
+    AdminActivityView::Register(routes, CommandAuditFile());
     AdminCommand::Register(routes, _commands, _info.Name, CommandAuditFile());
     routes.AddGuarded("POST", "/api/shutdown", "power.stop", [this](AdminRequest const& request)
     {

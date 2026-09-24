@@ -101,7 +101,7 @@ export const routes: Route[] = [
         permission: "realms.read",
         nav: true,
         group: "Game",
-        view: { kind: "arrives", milestone: "17.31", preview: list },
+        view: { kind: "page", load: () => import("./pages/Realms.svelte") },
     },
     {
         path: "players",
@@ -164,7 +164,7 @@ export const routes: Route[] = [
         permission: "audit.read",
         nav: true,
         group: "Panel",
-        view: { kind: "arrives", milestone: "17.25", preview: list },
+        view: { kind: "page", load: () => import("./pages/Activity.svelte") },
     },
     { path: "denied", title: "Access denied", icon: LockIcon, permission: "none", nav: false, group: "Panel", view: { kind: "denied" } },
 ];

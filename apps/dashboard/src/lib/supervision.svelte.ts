@@ -12,7 +12,9 @@ import {
     DatabaseApplyAnswer,
     DatabaseUpdatesAnswer,
     OutputAnswer,
+    ActivityAnswer,
     PlayersAnswer,
+    RealmsAnswer,
     PowerAnswer,
     ReloadAnswer,
     ReloadRunAnswer,
@@ -61,6 +63,14 @@ export function runCommand(app: string, command: string, confirm = false) {
 
 export function settingsOf(app: string, signal?: AbortSignal) {
     return request("GET", pathFor(app, "settings"), SettingsAnswer, undefined, signal);
+}
+
+export function realmsOf(app: string, signal?: AbortSignal) {
+    return request("GET", pathFor(app, "realms"), RealmsAnswer, undefined, signal);
+}
+
+export function activityOf(app: string, signal?: AbortSignal) {
+    return request("GET", pathFor(app, "activity"), ActivityAnswer, undefined, signal);
 }
 
 export function playersOf(app: string, signal?: AbortSignal) {

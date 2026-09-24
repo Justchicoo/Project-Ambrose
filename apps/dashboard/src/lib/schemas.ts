@@ -304,6 +304,54 @@ export const PlayersAnswer = v.looseObject({
     players: v.array(OnlinePlayer),
 });
 
+export const RealmRow = v.looseObject({
+    id: v.number(),
+    name: v.string(),
+    address: v.string(),
+    local_address: v.string(),
+    port: v.number(),
+    flags: v.number(),
+    population: v.number(),
+    player_limit: v.number(),
+    full: v.boolean(),
+    marked_offline: v.boolean(),
+    online: v.boolean(),
+    last_heartbeat_epoch_seconds: v.number(),
+    heartbeat_age_seconds: v.number(),
+});
+
+export const RealmsAnswer = v.looseObject({
+    schema: v.number(),
+    counted: v.number(),
+    online: v.number(),
+    players: v.number(),
+    heartbeat_seconds: v.number(),
+    offline_after_intervals: v.number(),
+    realms: v.array(RealmRow),
+});
+
+export const ActivityRow = v.looseObject({
+    time: v.optional(v.string(), ""),
+    epoch_ms: v.optional(v.number(), 0),
+    app: v.optional(v.string(), ""),
+    who: v.optional(v.string(), ""),
+    address: v.optional(v.string(), ""),
+    command: v.optional(v.string(), ""),
+    level: v.optional(v.number(), 0),
+    confirmed: v.optional(v.boolean(), false),
+    ran: v.optional(v.boolean(), false),
+    refused: v.optional(v.boolean(), false),
+    reason: v.optional(v.string(), ""),
+});
+
+export const ActivityAnswer = v.looseObject({
+    schema: v.number(),
+    kept: v.boolean(),
+    written: v.number(),
+    unreadable: v.number(),
+    activity: v.array(ActivityRow),
+});
+
 export type OutputAnswer = v.InferOutput<typeof OutputAnswer>;
 export type SettingsAnswer = v.InferOutput<typeof SettingsAnswer>;
 export type DatabaseAnswer = v.InferOutput<typeof DatabaseAnswer>;
@@ -315,3 +363,7 @@ export type ReloadAnswer = v.InferOutput<typeof ReloadAnswer>;
 export type ReloadRunAnswer = v.InferOutput<typeof ReloadRunAnswer>;
 export type OnlinePlayer = v.InferOutput<typeof OnlinePlayer>;
 export type PlayersAnswer = v.InferOutput<typeof PlayersAnswer>;
+export type RealmRow = v.InferOutput<typeof RealmRow>;
+export type RealmsAnswer = v.InferOutput<typeof RealmsAnswer>;
+export type ActivityRow = v.InferOutput<typeof ActivityRow>;
+export type ActivityAnswer = v.InferOutput<typeof ActivityAnswer>;
