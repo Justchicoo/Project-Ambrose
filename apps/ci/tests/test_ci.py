@@ -174,12 +174,17 @@ class SelectLegsTests(unittest.TestCase):
         with self.assertRaises(ci_select_legs.SelectionError):
             ci_select_legs.plan("workflow_dispatch", {"legs": "everything"}, at("2026-10-01T00:00:00Z"), git)
 
-    def test_pushes_build_linux_gcc_only_for_build_inputs(self):
+    def test_pushes_build_linux_gcc_for_code_data_and_build_inputs(self):
         now = at("2026-10-01T00:00:00Z")
         self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit([".github/workflows/core-build.yml"]))["legs"], ["linux-gcc"])
         self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["vcpkg.json", "doc/ROADMAP.md"]))["legs"], ["linux-gcc"])
         self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["apps/ci/ci_select_legs.py"]))["legs"], [])
         self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(None))["legs"], ["linux-gcc"])
+        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["src/test/server/shared/ReloadTest.cpp"]))["legs"], ["linux-gcc"])
+        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["data/sql/updates/db_login/2026_09_24_00.sql"]))["legs"], ["linux-gcc"])
+        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["CMakeLists.txt"]))["legs"], ["linux-gcc"])
+        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["cmake/Ambrose.cmake"]))["legs"], ["linux-gcc"])
+        self.assertEqual(ci_select_legs.plan("push", {}, now, FakeGit(["doc/PANEL.md", "README.md"]))["legs"], [])
 
     def test_pull_requests_build_labeled_legs_from_the_merge_base(self):
         now = at("2026-10-01T00:00:00Z")
@@ -409,8 +414,8 @@ class WorkflowDriftTests(unittest.TestCase):
         self.assertEqual(tuple(self.list_after("options")), ci_select_legs.OPTIONS)
         paths = tuple(self.list_after("paths"))
         self.assertEqual(paths, ci_select_legs.PUSH_PATHS)
-        for smoke in ci_select_legs.SMOKE_PATHS:
-            self.assertTrue(any(smoke.startswith(path[:-2]) if path.endswith("/**") else smoke == path for path in paths), smoke)
+        for entry in ci_select_legs.SMOKE_PATHS + ci_select_legs.BUILD_PATHS:
+            self.assertTrue(any(entry.startswith(path[:-2]) if path.endswith("/**") else entry == path for path in paths), entry)
         self.assertIn(f"github.event.schedule == '{ci_select_legs.SUNDAY_CRON}'", self.workflow)
         self.assertIn(f"github.event.schedule == '{ci_select_legs.WEDNESDAY_CRON}'", self.workflow)
         self.assertTrue(os.path.isfile(os.path.join(ROOT, ".github", "workflows", ci_select_legs.WORKFLOW_FILE)))

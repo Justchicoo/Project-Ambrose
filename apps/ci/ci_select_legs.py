@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Picks the core-build legs for a push, pull request, schedule slot, or manual run, building the Linux GCC leg for a milestone branch without waiting for a label, building a scheduled leg only when code changed since the commit it last built, and says whether the Windows cache needs a keepalive restore.
+# Picks the core-build legs for a push, pull request, schedule slot, or manual run, building the Linux GCC leg for a push that touches the code, the data the tests read or the build definition and for a milestone branch without waiting for a label, building a scheduled leg only when code changed since the commit it last built, and says whether the Windows cache needs a keepalive restore.
 import argparse
 import datetime
 import json
@@ -45,7 +45,8 @@ LABEL_PREFIX = "ci:"
 MILESTONE_PREFIX = "milestone/"
 
 SMOKE_PATHS = (".github/", "apps/ci/ci_build.py", "apps/ci/ci_vcpkg_cache.py", "vcpkg.json")
-PUSH_PATHS = (".github/**", "apps/ci/**", "apps/designtokens/**", "apps/progress/**", "apps/site/**", "design/**", "doc/ROADMAP.md", "doc/roadmap/**", "doc/work/**", "vcpkg.json")
+BUILD_PATHS = ("CMakeLists.txt", "CMakePresets.json", "cmake/", "data/", "src/")
+PUSH_PATHS = (".github/**", "CMakeLists.txt", "CMakePresets.json", "apps/ci/**", "apps/designtokens/**", "apps/progress/**", "apps/site/**", "cmake/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/roadmap/**", "doc/work/**", "src/**", "vcpkg.json")
 CODE_PATHSPEC = (".", ":(exclude)doc", ":(exclude,glob)**/*.md")
 ZERO_SHA = re.compile(r"^0*$")
 
@@ -75,12 +76,16 @@ def ordered(legs):
     return [leg for leg in LEGS if leg in chosen]
 
 
+def touches(paths, entries):
+    return any(path.startswith(entry) if entry.endswith("/") else path == entry for path in paths for entry in entries)
+
+
 def touches_smoke_paths(paths):
-    return any(path.startswith(entry) if entry.endswith("/") else path == entry for path in paths for entry in SMOKE_PATHS)
+    return touches(paths, SMOKE_PATHS)
 
 
 def legs_for_paths(paths):
-    return ["linux-gcc"] if touches_smoke_paths(paths) else []
+    return ["linux-gcc"] if touches(paths, SMOKE_PATHS + BUILD_PATHS) else []
 
 
 def legs_for_labels(labels_json, warnings):
@@ -219,7 +224,7 @@ def plan(event, inputs, now, git, actions=None):
             reasons.append("linux-gcc: selected (the pushed range could not be diffed)")
         else:
             legs = legs_for_paths(paths)
-            reasons.append("linux-gcc: selected (the push touches the workflow, the build script, the cache script or vcpkg.json)" if legs else "no legs: the push touches no build input")
+            reasons.append("linux-gcc: selected (the push touches the code, the data the tests read, the build definition, the workflow, the build script, the cache script or vcpkg.json)" if legs else "no legs: the push touches no build input")
     elif event == "pull_request":
         legs = legs_for_labels(inputs.get("labels"), warnings)
         reasons.extend(f"{leg}: selected (pull request label)" for leg in ordered(legs))

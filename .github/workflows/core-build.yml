@@ -1,11 +1,11 @@
 # Project Ambrose by Imjustchico
-# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on CI file pushes, and on pull requests, then builds and tests the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by the schedule, a label, or a manual run.
+# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on CI file pushes, and on pull requests, then builds and tests the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by a push that touches the code, the data the tests read or the build definition, by the schedule, a label, or a manual run.
 name: core-build
 
 on:
   push:
     branches: [main]
-    paths: [".github/**", "apps/ci/**", "apps/designtokens/**", "apps/progress/**", "apps/site/**", "design/**", "doc/ROADMAP.md", "doc/roadmap/**", "doc/work/**", "vcpkg.json"]
+    paths: [".github/**", "CMakeLists.txt", "CMakePresets.json", "apps/ci/**", "apps/designtokens/**", "apps/progress/**", "apps/site/**", "cmake/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/roadmap/**", "doc/work/**", "src/**", "vcpkg.json"]
   pull_request:
     types: [opened, synchronize, reopened, labeled]
   schedule:
