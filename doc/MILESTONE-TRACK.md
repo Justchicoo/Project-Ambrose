@@ -67,7 +67,7 @@ Everything under `src/`, `data/sql/updates/`, `apps/` and `doc/` except the list
 python apps/ci/ci_contrib_paths.py --range upstream/main...HEAD --branch milestone/<id>-<short-name>
 ```
 
-It refuses another phase's file, so a change that needs one is a change of scope, and it refuses these, which the maintainer keeps so that concurrent work never collides in them: `.github/`, `apps/ci/`, `apps/codestyle/`, `apps/progress/`, `doc/progress/`, `packages/ui/src/tokens/`, `README.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `LICENSE`, `THIRD-PARTY-NOTICES.md`, `CMakePresets.json`, `vcpkg.json`, `.gitignore`, `doc/ROADMAP.md`, `doc/ARCHITECTURE.md`, `doc/REVIEWING.md`, `doc/CONTRIBUTOR-TRACK.md`, `doc/MILESTONE-TRACK.md`, `contrib/README.md`, `contrib/AI-START-HERE.md` and `contrib/AI-MILESTONES-HERE.md`.
+It refuses another phase's file, so a change that needs one is a change of scope, and it refuses these, which the maintainer keeps so that concurrent work never collides in them: `.github/`, `apps/ci/`, `apps/codestyle/`, `apps/progress/`, `doc/progress/`, `doc/work/`, `packages/ui/src/tokens/`, `README.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `LICENSE`, `THIRD-PARTY-NOTICES.md`, `CMakePresets.json`, `vcpkg.json`, `.gitignore`, `doc/ROADMAP.md`, `doc/ARCHITECTURE.md`, `doc/REVIEWING.md`, `doc/CONTRIBUTOR-TRACK.md`, `doc/MILESTONE-TRACK.md`, `contrib/README.md`, `contrib/AI-START-HERE.md` and `contrib/AI-MILESTONES-HERE.md`.
 
 `doc/ROADMAP.md`'s "Where we are" and the progress card are written by the maintainer when the milestone lands, from the boxes you ticked. A new dependency in `vcpkg.json` is a proposal in the pull request, not a commit.
 
@@ -112,7 +112,6 @@ Everything not in the table above, including every milestone whose dependencies 
 | 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal |
 | 17.23 | Dev-gated on a reboot and a Pterodactyl install |
 | 17.91 | Ready now that the metrics register and the resource graphs have landed, and held with the rest of phase 17 while the panel is built as one thread. It adds series to the sampler those milestones built rather than standing up a second one, so it is best taken beside that thread |
-| 17.11 | Unblocked by the design system landing, and next in the maintainer's own queue |
 | 3.26 | Unblocked by the design system landing, and next in the maintainer's own queue after the terminal dashboard |
 | 17.49 | Held with the rest of phase 17 while the panel is built as one thread |
 | 17.47 | Being built now |

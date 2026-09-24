@@ -831,6 +831,13 @@ class MilestoneTrackTests(unittest.TestCase):
         self.assertIsNone(ci_contrib_paths.held_by("17.10", [{"scope": "phase:17", "who": "me", "except": ["17.10"]}]))
         self.assertIsNotNone(ci_contrib_paths.held_by("17.10", [{"scope": "phase:17", "who": "me", "except": "17.10"}]))
 
+    def test_a_milestone_branch_cannot_edit_the_file_that_holds_it(self):
+        self.assertIn("doc/work/", ci_contrib_paths.RESERVED_PREFIXES)
+        refused = ci_contrib_paths.check_milestone(["doc/work/holds.json"], "17.35")
+        self.assertEqual([path for path, _reason in refused], ["doc/work/holds.json"])
+        self.assertEqual(ci_contrib_paths.main(
+            ["--root", ROOT, "--paths", "doc/work/holds.json", "--branch", "milestone/17.35-panel-settings"]), 1)
+
     def test_the_real_holds_stop_the_real_branches(self):
         kept = ci_contrib_paths.holds(ROOT)
         self.assertTrue(kept)

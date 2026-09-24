@@ -36,6 +36,7 @@ RESERVED_PREFIXES = (
     "apps/codestyle/",
     "apps/progress/",
     "doc/progress/",
+    "doc/work/",
     "packages/ui/src/tokens/",
 )
 
