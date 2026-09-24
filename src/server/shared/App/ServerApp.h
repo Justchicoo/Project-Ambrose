@@ -140,6 +140,7 @@ private:
     asio::steady_timer _updateTimer;
     asio::steady_timer _shutdownTimer;
     std::unique_ptr<Ambrose::Asio::SignalHandler> _signals;
+    std::unique_ptr<Ambrose::Asio::SignalHandler> _reloadSignal;
     ConsoleCommandTable _commands;
     std::unique_ptr<AdminServer> _admin;
     std::unique_ptr<LogStreamService> _logStream;
