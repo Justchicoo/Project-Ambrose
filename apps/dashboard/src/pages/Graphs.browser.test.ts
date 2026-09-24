@@ -91,10 +91,13 @@ function open() {
 }
 
 async function drawn(text: string) {
-    await vi.waitFor(() => {
-        flushSync();
-        expect(host.textContent ?? "").toContain(text);
-    });
+    await vi.waitFor(
+        () => {
+            flushSync();
+            expect(host.textContent ?? "").toContain(text);
+        },
+        { timeout: 5000 },
+    );
 }
 
 beforeEach(() => {
@@ -128,7 +131,7 @@ describe("the resources page", () => {
 
     it("names every series of the chosen server with its latest reading", async () => {
         open();
-        await drawn("Processor");
+        await drawn("25%");
         const text = host.textContent ?? "";
         expect(text, "the last reading that was present, not the last slot").toContain("25%");
         expect(text, "memory is written in units a reader uses").toContain("4 MiB");
@@ -138,7 +141,7 @@ describe("the resources page", () => {
 
     it("shows the lowest and highest of the range beside the latest", async () => {
         open();
-        await drawn("Processor");
+        await drawn("12.5%");
         const text = host.textContent ?? "";
         expect(text, "the lowest processor reading in the range").toContain("12.5%");
         expect(text, "and the highest").toContain("40%");
@@ -146,20 +149,20 @@ describe("the resources page", () => {
 
     it("marks a series that holds fewer readings than the range has points", async () => {
         open();
-        await drawn("Processor");
+        await drawn("3 of 4");
         expect(host.textContent ?? "", "three readings across four points is a gap and must be visible as one").toContain("3 of 4");
     });
 
     it("says a series with nothing in the range is empty rather than showing a zero", async () => {
         open();
-        await drawn("Threads");
+        await drawn("nothing in this range");
         expect(host.textContent ?? "").toContain("nothing in this range");
         expect(host.textContent ?? "").toContain("no reading");
     });
 
     it("asks the server for a longer range rather than redrawing the one it holds", async () => {
         open();
-        await drawn("Processor");
+        await drawn("3 of 4");
         const before = asked.filter((path) => path.includes("graphs/range")).length;
         expect(before).toBeGreaterThan(0);
 

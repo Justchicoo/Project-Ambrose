@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: What every app has cost the machine over time, read from the supervisor's own history rather than from each app, because the supervisor goes on watching while an app is stopped and a stopped app is exactly what a graph has to be able to show. One app is chosen at a time and one range from five minutes to thirty days, and the server decides which resolution answers it, so a month reads no more points than an hour does. A stretch nothing was recorded in is a gap and is said to be one, never a zero, since a zero would read as an app that was running and doing nothing. Every series is shown as its latest reading with the lowest and highest of the range beside it, because a canvas is not something a screen reader can read and the numbers are the part that must always be there. -->
+<!-- Project Ambrose by Imjustchico: What every app has cost the machine over time, read from the supervisor's own history rather than from each app, because the supervisor goes on watching while an app is stopped and a stopped app is exactly what a graph has to be able to show. One app is chosen at a time and one range from five minutes to thirty days, and the server decides which resolution answers it, so a month reads no more points than an hour does. Every series of that app is asked for at once rather than one after another, because asking in turn makes the page take as long as its slowest series multiplied by how many it has, which grows every time a milestone adds one. A stretch nothing was recorded in is a gap and is said to be one, never a zero, since a zero would read as an app that was running and doing nothing. Every series is shown as its latest reading with the lowest and highest of the range beside it, because a canvas is not something a screen reader can read and the numbers are the part that must always be there. -->
 <script lang="ts">
     import { TimeSeries } from "@ambrose/ui";
     import * as Card from "$lib/components/ui/card/index.js";
@@ -61,16 +61,21 @@
         void (async () => {
             const to = Date.now();
             const from = to - window.milliseconds;
-            const read: Record<string, GraphRangeAnswer> = {};
-            for (const name of here.series) {
+            const asked = here.series.map(async (name) => {
                 try {
-                    read[name] = await graphRange(here.subject, name, from, to, window.points, controller.signal);
+                    return [name, await graphRange(here.subject, name, from, to, window.points, controller.signal)] as const;
                 } catch (problem) {
-                    if (controller.signal.aborted) return;
                     void problem;
+                    return null;
                 }
+            });
+            const answers = await Promise.all(asked);
+            if (controller.signal.aborted) return;
+            const read: Record<string, GraphRangeAnswer> = {};
+            for (const answer of answers) {
+                if (answer) read[answer[0]] = answer[1];
             }
-            if (!controller.signal.aborted) ranges = read;
+            ranges = read;
         })();
         return () => controller.abort();
     });
