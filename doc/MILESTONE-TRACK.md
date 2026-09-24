@@ -92,7 +92,7 @@ Then one of four things happens, each with one message saying which and why: it 
 
 | ID | Milestone | Size | What you need | Why it is a good one to take |
 |---|---|---|---|---|
-| 1.21 | Patch-free dev path documented | S | A build. The three checks that watch a real client need a Wizard101 install you own | The rest of the project already runs the client with no contact with KingsIsle's patch hosts; this is what writes that down and ships it. doc/PATCHING.md, the run-client scripts under apps/launcher and the Patch.Enabled option can all be built and tested without a client, and the three client checks stay unticked, which is a complete delivery here rather than a half one |
+| 16.03 | Install scanner manifest generator | M | A build, and a Wizard101 install for the reference check, which the maintainer will run for you if you have none | The step straight after 16.01 and 16.02, both landed, and the first milestone that turns a real installation into a manifest of its own rather than reading one. The synthetic-directory check and the one that asks for a second run to be faster and byte-identical need nothing but a build; only the comparison against all 3590 packages needs an install |
 
 ## Reserved
 
@@ -122,6 +122,7 @@ A row that says **before the reset** came from a pull request that was on the re
 
 | ID | Who | Sent as | What is left |
 |---|---|---|---|
+| 1.21 | MeruneFleuruwu | [#5](https://github.com/Justchicoo/Project-Ambrose/pull/5) | doc/PATCHING.md now matches what is built and the deliverable line names src/tools/launcher. Left: all three acceptance checks, which watch a real client, one listener seeing no patch connection, one recording what the client does with no `-P`, and one seeing no 'Patch failed' dialog |
 | 5.08 | MeruneFleuruwu | [#4](https://github.com/Justchicoo/Project-Ambrose/pull/4) | The scripts, env.dist and doc/INSTALL.md are delivered and the conf check is earned, verified by running both of them. Left: the check that a clean Ubuntu and a clean Windows machine reach 'ready' on all three apps, which needs those machines. The maintainer added the self-tests and fixed a relative install prefix that resolved against the working directory |
 | 4.08 | MeruneFleuruwu | before the reset | Every zone decodes and the rows carry real positions and display keys. Left: the writer skips an object it cannot read without a word, so WC_Hub writes 177 rows for 183 objects and WC_Ravenwood 93 for 97, and spawn data is not extracted, so HalloweenSpawner1 and its requirement are absent |
 | 4.04 | MeruneFleuruwu | before the reset | Its own work is landed and eight checks are ticked. The two left are not its own: the handoff integration belongs to 4.05, which has since landed and may already earn it, and the last needs a real client session. That session closes three at once, this check, 4.05's and 4.06's, since all three want what a real client sends after Play, so they are run together rather than one at a time |

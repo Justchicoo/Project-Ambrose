@@ -2,7 +2,7 @@
 
 # Running the client without patching
 
-Every development milestone runs the retail client against a local Ambrose login server with patching turned off. No patch server is needed, and the client never contacts KingsIsle.
+Every development milestone runs the retail client against a local Ambrose login server with patching explicitly turned off. No patch server is needed for that path, and the client does not contact KingsIsle for patching.
 
 ## Launch flags
 
@@ -18,6 +18,12 @@ The client's own usage text (in `Bin/WizardGraphicalClient.exe` of the 1.610 ins
 | `-U ..<id> <key> [name]` | Log in without the login window, by sending MSG_USER_VALIDATE |
 | `-C <name>` | Create or select that character |
 | `-PT` | Patch client patch time |
+
+Always include `-P 0` during development. The launcher does this for every
+run and refuses a configuration that asks for patching. The behavior of the
+retail client when `-P` is omitted has not been established against the pinned
+install, so omitting it is not a supported development path and may contact
+the host named by that install's `PatchConfig.xml`.
 
 ## The launcher
 
