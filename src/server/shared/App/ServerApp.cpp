@@ -21,6 +21,7 @@
 #include "GitRevision.h"
 #include "Log.h"
 #include "LogStream.h"
+#include "MessageRegistry.h"
 #include "ReloadMgr.h"
 #include "SignalHandler.h"
 #include "StringUtil.h"
@@ -312,6 +313,11 @@ void ServerApp::OnConfigChanged(std::vector<std::string> const& changed)
     (void)changed;
 }
 
+void ServerApp::SetMessageSource(std::filesystem::path clientRoot)
+{
+    _messageSource = std::move(clientRoot);
+}
+
 void ServerApp::RegisterReloadTargets()
 {
     sReloadMgr.Register("config", [this](std::vector<std::string>& errors)
@@ -321,6 +327,16 @@ void ServerApp::RegisterReloadTargets()
             errors.push_back(issue.ToString());
         return result.Succeeded();
     });
+
+    if (!_messageSource.empty())
+        sReloadMgr.Register("messages", [this](std::vector<std::string>& errors)
+        {
+            if (sMessageRegistry.LoadFromClient(_messageSource))
+                return true;
+            for (MessageIssue const& issue : sMessageRegistry.GetErrors())
+                errors.push_back(issue.ToString());
+            return false;
+        });
 
     _configSubscription = _config.SubscribeToChanges([this](std::vector<std::string> const& changed)
     {

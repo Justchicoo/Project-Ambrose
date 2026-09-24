@@ -152,6 +152,8 @@ namespace
                 LOG_ERROR("server.gameserver", "The game message table does not match the client's message definitions in {}", ClientLocator::PathText(setup.Install->Root));
                 return false;
             }
+            else
+                SetMessageSource(setup.Install->Root);
 
             std::string const locale = Config().GetOption<std::string>("Locale.Default", "en-US", true);
             if (!setup.Install)

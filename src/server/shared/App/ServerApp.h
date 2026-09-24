@@ -20,6 +20,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <deque>
+#include <filesystem>
 #include <iosfwd>
 #include <memory>
 #include <mutex>
@@ -81,6 +82,7 @@ public:
     bool ReloadAdminApi();
     void RegisterStandardRoutes(AdminRouter& routes);
     void RegisterReloadTargets();
+    void SetMessageSource(std::filesystem::path clientRoot);
     std::filesystem::path CommandAuditFile() const;
 
     void SetListener(std::string address, uint16 port);
@@ -111,6 +113,7 @@ protected:
 
 private:
     uint64 _configSubscription = 0;
+    std::filesystem::path _messageSource;
 
     bool IsStopping() const noexcept { return GetLifecycleState() == AppLifecycle::Stopping; }
     bool StartAdminApi();

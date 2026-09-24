@@ -155,6 +155,8 @@ namespace
                 LOG_ERROR("server.loginserver", "The login message table does not match the client's message definitions in {}", ClientLocator::PathText(setup.Install->Root));
                 return false;
             }
+            else
+                SetMessageSource(setup.Install->Root);
 
             std::vector<std::string> limitProblems;
             SerializerLimits::Apply(SerializerLimits::Load(Config(), &limitProblems));
