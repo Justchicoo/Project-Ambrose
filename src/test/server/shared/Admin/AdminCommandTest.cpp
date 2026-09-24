@@ -62,10 +62,16 @@ TEST(AdminCommandTest, SomethingThatCannotBeUndoneWaitsForAConfirmation)
     EXPECT_FALSE(refused.Ran);
     EXPECT_TRUE(refused.Refused);
     EXPECT_NE(refused.Reason.find("confirm"), std::string::npos) << refused.Reason;
+    EXPECT_TRUE(refused.NeedsConfirm) << "a caller must be able to tell this refusal from one that asking again will not fix";
     EXPECT_TRUE(refused.Lines.empty()) << "nothing ran, so nothing was said";
+
+    AdminCommandOutcome const unknown = AdminCommand::RunThroughTable(table, "nonsense", AdminCommand::ConsoleLevel, false);
+    EXPECT_TRUE(unknown.Refused);
+    EXPECT_FALSE(unknown.NeedsConfirm) << "a command that does not exist is not one waiting to be confirmed";
 
     AdminCommandOutcome const confirmed = AdminCommand::RunThroughTable(table, "shutdown", AdminCommand::ConsoleLevel, true);
     EXPECT_TRUE(confirmed.Ran);
+    EXPECT_FALSE(confirmed.NeedsConfirm);
 }
 
 TEST(AdminCommandTest, BelowTheConsoleLevelThereIsNoSuchCommand)

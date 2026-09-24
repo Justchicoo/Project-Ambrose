@@ -13,14 +13,16 @@ export class ApiError extends Error {
     readonly code: string;
     readonly requestId: string;
     readonly fields: Fields;
+    readonly body: unknown;
 
-    constructor(status: number, code: string, message: string, requestId: string, fields: Fields = {}) {
+    constructor(status: number, code: string, message: string, requestId: string, fields: Fields = {}, body: unknown = null) {
         super(message);
         this.name = "ApiError";
         this.status = status;
         this.code = code;
         this.requestId = requestId;
         this.fields = fields;
+        this.body = body;
     }
 }
 
@@ -60,13 +62,18 @@ function readJson(text: string): unknown {
 export function readProblem(status: number, body: unknown, headerId: string): ApiError {
     const record = body !== null && typeof body === "object" ? (body as Record<string, unknown>) : {};
     const code = typeof record.error === "string" ? record.error : `http_${status}`;
-    const message = typeof record.message === "string" ? record.message : `The server answered ${status}`;
+    const message =
+        typeof record.message === "string"
+            ? record.message
+            : typeof record.reason === "string" && record.reason !== ""
+              ? record.reason
+              : `The server answered ${status}`;
     const requestId = typeof record.request_id === "string" ? record.request_id : headerId;
     const fields: Fields = {};
     if (record.fields !== null && typeof record.fields === "object")
         for (const [field, problem] of Object.entries(record.fields as Record<string, unknown>))
             if (typeof problem === "string") fields[field] = problem;
-    return new ApiError(status, code, message, requestId, fields);
+    return new ApiError(status, code, message, requestId, fields, body);
 }
 
 export async function request<Schema extends v.GenericSchema>(

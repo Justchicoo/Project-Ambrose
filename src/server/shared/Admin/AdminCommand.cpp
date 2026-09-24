@@ -65,6 +65,7 @@ AdminCommandOutcome AdminCommand::RunThroughTable(ConsoleCommandTable const& tab
     if (IsDestructive(line) && !confirmed)
     {
         outcome.Refused = true;
+        outcome.NeedsConfirm = true;
         outcome.Reason = "this command changes something that cannot be undone, so it needs confirm";
         return outcome;
     }
@@ -162,6 +163,7 @@ void AdminCommand::Register(AdminRouter& router, Runner runner, ConsoleCommandTa
         answer["command"] = written;
         answer["success"] = outcome.Ran;
         answer["refused"] = outcome.Refused;
+        answer["needs_confirm"] = outcome.NeedsConfirm;
         answer["reason"] = outcome.Reason;
         answer["request_id"] = request.Id;
         answer["lines"] = outcome.Lines;

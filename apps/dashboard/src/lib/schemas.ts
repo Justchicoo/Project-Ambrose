@@ -112,6 +112,7 @@ export const CommandAnswer = v.looseObject({
     command: v.string(),
     success: v.boolean(),
     refused: v.boolean(),
+    needs_confirm: v.optional(v.boolean(), false),
     reason: v.string(),
     request_id: v.string(),
     lines: v.array(v.string()),

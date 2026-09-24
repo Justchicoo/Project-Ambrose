@@ -108,12 +108,16 @@
         outputs[name] = [...(outputs[name] ?? []), ...lines];
     }
 
+    function asksToConfirm(body: unknown) {
+        return body !== null && typeof body === "object" && (body as Record<string, unknown>).needs_confirm === true;
+    }
+
     async function run(command: string, confirm: boolean) {
         const name = app.name;
         sending = true;
         try {
             const answer = await runCommand(name, command, confirm);
-            awaiting = "";
+            awaiting = answer.needs_confirm ? command : "";
             if (answer.lines.length > 0)
                 say(
                     name,
@@ -123,7 +127,8 @@
         } catch (failure) {
             const problem = failure instanceof ApiError ? failure.message : String(failure);
             say(name, [{ kind: "refused", text: problem }]);
-            awaiting = "";
+            awaiting = failure instanceof ApiError && asksToConfirm(failure.body) ? command : "";
+            if (awaiting !== "") say(name, [{ kind: "refused", text: "Type yes to run it, or anything else to leave it alone" }]);
         } finally {
             sending = false;
         }
@@ -134,12 +139,17 @@
         const command = line.trim();
         if (command === "" || sending) return;
         const name = app.name;
-        if (awaiting !== "" && (command === "yes" || command === "confirm")) {
+        if (awaiting !== "") {
             const held = awaiting;
             say(name, [{ kind: "command", text: command }]);
             line = "";
             recall = -1;
-            void run(held, true);
+            awaiting = "";
+            if (command === "yes" || command === "confirm") {
+                void run(held, true);
+                return;
+            }
+            say(name, [{ kind: "refused", text: `${held} was left alone` }]);
             return;
         }
         say(name, [{ kind: "command", text: command }]);

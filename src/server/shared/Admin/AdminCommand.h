@@ -21,6 +21,7 @@ struct AdminCommandOutcome
 {
     bool Ran = false;
     bool Refused = false;
+    bool NeedsConfirm = false;
     std::string Reason;
     std::vector<std::string> Lines;
 };
