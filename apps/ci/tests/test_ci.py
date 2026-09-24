@@ -772,6 +772,14 @@ class MilestoneTrackTests(unittest.TestCase):
     def section(self, name):
         return self.track().split("## " + name, 1)[1].split("\n## ", 1)[0]
 
+    def listed(self, name):
+        found = set()
+        for line in self.section(name).splitlines():
+            row = re.match(r"^\| *([\d. ,]+?) *\|", line)
+            if row:
+                found.update(re.findall(r"\d+\.\d+", row.group(1)))
+        return found
+
     def test_a_branch_named_for_a_milestone_is_recognised(self):
         self.assertEqual(ci_contrib_paths.milestone_of("milestone/4.04-world-wire-math"), "4.04")
         self.assertEqual(ci_contrib_paths.milestone_of("milestone/17.106"), "17.106")
@@ -863,8 +871,7 @@ class MilestoneTrackTests(unittest.TestCase):
                                 one + " is opened by the track but its dependencies are not built")
 
     def test_a_milestone_is_not_open_and_reserved_at_once(self):
-        tables = {name: set(re.findall(r"\d+\.\d+", self.section(name)))
-                  for name in ("Open now", "Reserved", "In flight", "Landed")}
+        tables = {name: self.listed(name) for name in ("Open now", "Reserved", "In flight", "Landed")}
         for name, other in (("Open now", "Reserved"), ("Open now", "In flight"), ("Reserved", "In flight")):
             both = sorted(tables[name] & tables[other])
             self.assertEqual(both, [], ", ".join(both) + " is listed under " + name + " and " + other)
@@ -873,10 +880,19 @@ class MilestoneTrackTests(unittest.TestCase):
         ready, _blocked = ready_report.state(ROOT)
         everything = ready_report.milestones(ROOT)
         opened = {row["id"] for row in ready if row["status"] == "open"}
-        named = set(re.findall(r"\d+\.\d+", self.section("Open now")))
+        named = self.listed("Open now")
         self.assertEqual(opened, {one for one in named if not everything[one]["done"]})
         for row in ready:
             self.assertIn(row["status"], ("open", "reserved", "claimed", "landed"), row["id"])
+
+    def test_a_reason_that_mentions_another_milestone_is_not_read_as_listing_it(self):
+        table = "| 1.21 | a thing | S | a build | ready now that 3.02 and 4.08 have landed |"
+        row = re.match(r"^\| *([\d. ,]+?) *\|", table)
+        self.assertEqual(set(re.findall(r"\d+\.\d+", row.group(1))), {"1.21"})
+        for name in ("Open now", "Reserved", "In flight", "Landed"):
+            for identifier in self.listed(name):
+                self.assertRegex(self.section(name), r"(?m)^\| *[\d. ,]*" + re.escape(identifier),
+                                 identifier + " is counted in " + name + " but is not in a first column there")
 
     def test_every_ready_milestone_names_a_phase_file_that_holds_it(self):
         ready, _blocked = ready_report.state(ROOT)
