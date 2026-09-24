@@ -54,7 +54,7 @@ A ticked check quotes what proved it, in brackets, the way the ones already tick
 
 The name of the test that runs it, the tool run and what it printed, or the screen and what it showed. Evidence names nothing personal: a real account, address, path or machine name is written `<account>`, `<address>` and so on. A check with no evidence in brackets is not ticked, and a check ticked by a test that does not exist is the one thing that ends a review immediately.
 
-**A check you cannot run stays unticked.** Some are labelled Dev-gated, Client-gated or Real client, and need an installation, a second machine or hardware you may not have. Leave those boxes empty, say in the pull request exactly which ones and why, and send the rest. The work merges, the milestone stays open, and the row moves to **In flight** with what is left written next to it. That is an honest, welcome outcome. Ticking a box you did not run is not.
+**A check you cannot run stays unticked.** Some are labelled Dev-gated, Client-gated or Real client, and need an installation, a second machine or hardware you may not have. Leave those boxes empty, say in the pull request exactly which ones and why, and send the rest. Better still, say so in the draft while you are still building and ask: the maintainer can often run a gated check against their own install there and then, and on 16.02 that is what showed a whole XML shape was wrong on work that was otherwise sound. The work merges, the milestone stays open, and the row moves to **In flight** with what is left written next to it. That is an honest, welcome outcome. Ticking a box you did not run is not.
 
 **Build what the milestone says, not around it.** The deliverables list under the detailed spec names the files to write, the tables to add and the client messages involved. If one of them is wrong or impossible, say so in the pull request and propose the change. Do not quietly build something else: the acceptance checks are written against those deliverables and a review reads them together.
 
@@ -92,7 +92,8 @@ Then one of four things happens, each with one message saying which and why: it 
 
 | ID | Milestone | Size | What you need | Why it is a good one to take |
 |---|---|---|---|---|
-| 16.02 | LatestFileList model and XML | S | A build; the gated check needs a reference XML you obtained yourself | The natural step after 16.01, which is landed: the same table list as a model that round-trips through both XML and the binary form, with the exact counts named, 3590 tables, 140 records in Base and 97 in PatchClient |
+| 1.21 | Patch-free dev path documented | S | A build. The three checks that watch a real client need a Wizard101 install you own | The rest of the project already runs the client with no contact with KingsIsle's patch hosts; this is what writes that down and ships it. doc/PATCHING.md, the run-client scripts under apps/launcher and the Patch.Enabled option can all be built and tested without a client, and the three client checks stay unticked, which is a complete delivery here rather than a half one |
+| 5.08 | Installer | S | A clean Ubuntu or Windows machine and a database | One script from clone to three running servers, which is the first thing every new contributor meets and the part nobody has written. Neither check needs the maintainer's machine: a clean box proves the first and the second is pure logic about not overwriting an edited .conf. Build it under apps/installer and stay out of .github/ and apps/ci/, which the path check refuses |
 
 ## Reserved
 
@@ -101,24 +102,28 @@ Everything not in the table above, including every milestone whose dependencies 
 | ID | Why |
 |---|---|
 | 1.18 | Answered against the maintainer's own capture of a session |
-| 1.21 | Run against the maintainer's own client and launcher |
+| 3.02 | Built but for one check, which waits on a real client being sent MSG_BADGES, which NET and WIZ have not built yet |
+| 3.20 | Built but for one check, which has to be run on a real terminal against a real install |
+| 3.28 | Deriving the offsets is judged against the two pinned installs, which only the maintainer has |
 | 3.12 | Its remaining checks wait for 6.10 and for a real client session |
 | 3.23 | Next in the maintainer's own queue |
-| 5.08 | The installer touches packaging and CI, which are the maintainer's |
 | 16.11 | Overlaps the type extraction already built in 3.21 and is being rethought |
 | 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal |
 | 17.09 | Next in the maintainer's own queue |
 | 17.23 | Dev-gated on a reboot and a Pterodactyl install |
+| 17.35 | Held with the rest of phase 17 while the panel is built as one thread |
+| 17.49 | Held with the rest of phase 17 while the panel is built as one thread |
 | 17.47 | Being built now |
 | 17.73 | The panel's design system, being built now |
 | 17.106 | Being built now |
 
 ## In flight
 
-The pull requests these rows came from were on the repository before it was recreated, so their numbers point at nothing now and the links are gone. The work is in the tree either way, and the earlier pull requests are archived off the repository.
+A row that says **before the reset** came from a pull request that was on the repository before it was recreated, so its number points at nothing now and the link is gone. That work is in the tree either way, and those pull requests are archived off the repository. Rows with a number are live.
 
 | ID | Who | Sent as | What is left |
 |---|---|---|---|
+| 16.02 | MeruneFleuruwu | [#3](https://github.com/Justchicoo/Project-Ambrose/pull/3) | The model and the binary side are sound, and they build on 16.01 rather than parsing the format a second time. The XML shape came from a deliverable line of ours that was wrong: a real manifest gives each table its own tag rather than a fixed one with the name in an attribute, About sorts first in _TableList rather than last, and the counts are 3591 rows, About plus 3590 file tables. The phase file was corrected on 2026-09-24 and the branch is being reworked against it |
 | 4.08 | MeruneFleuruwu | before the reset | Every zone decodes and the rows carry real positions and display keys. Left: the writer skips an object it cannot read without a word, so WC_Hub writes 177 rows for 183 objects and WC_Ravenwood 93 for 97, and spawn data is not extracted, so HalloweenSpawner1 and its requirement are absent |
 | 4.04 | MeruneFleuruwu | before the reset | Its own work is landed and eight checks are ticked. The two left are not its own: the handoff integration belongs to 4.05, which has since landed and may already earn it, and the last needs a real client session. That session closes three at once, this check, 4.05's and 4.06's, since all three want what a real client sends after Play, so they are run together rather than one at a time |
 | 5.07 | MeruneFleuruwu | before the reset | The cache is built, wired into the login server and measured at a third of the JSON path's time on the pinned install, and a truncated, bit-flipped or random cache is refused by name. Left: a client-gated comparison of every class, property and enum table, and a measurement showing a load under 200 ms |

@@ -50,7 +50,7 @@ The card is generated from the roadmap itself by `apps/progress/progress.py`, so
 
 [doc/ROADMAP.md](doc/ROADMAP.md)'s **Where we are** says exactly which milestones are done, and the [work board](https://justchicoo.github.io/Project-Ambrose/) says what is being built right now and by whom. The plan runs in **17 phases**, each milestone ending in something visible in the real client or the panel.
 
-Outside contributors finished five of those milestones in a single day on 2026-09-23, and four more are part built. What the board shows is generated from the roadmap and the open pull requests every time either changes, so it says what is true rather than what was true.
+Outside contributors have finished five of those milestones, four of them in a single day on 2026-09-23, and have seven more part built. What the board shows is generated from the roadmap and the open pull requests every time either changes, so it says what is true rather than what was true.
 
 ## Building
 

@@ -176,6 +176,12 @@ Every one of these came from real work on this repository, most of it from pull 
 
 If I can only build on one platform, say so and let the leg tell us, but expect this class of thing rather than being surprised by it.
 
+**A deliverable that sketches a file's shape is a sketch, not the file.** 16.02's deliverable line showed `<Package><RECORD>...</RECORD></Package>`, which reads as a literal tag and was meant as a placeholder for "the table element". A real manifest gives every table its own tag, named after the table, and sorts About first. The work was built exactly as written, and the reader could not parse a single real file. That one was our fault and the line is fixed, but the lesson holds for the next one.
+
+- Before writing a reader or a writer for any format, find one real example and check the shape against it. If the milestone carries an env-gated check that names real numbers, a real example exists and somebody can look at it.
+- If you have no way to get one, do not guess. Say so in the draft's description and ask in the Discord. The maintainer can usually run a gated check against their own install while you are still building, and would far rather answer in a minute than watch you build the wrong thing all evening.
+- Say which parts of the shape you could not verify. "I implemented the deliverable line literally and could not check it against a real file" is the sentence that would have saved this one.
+
 **A database migration has to parse on MySQL as well as on MariaDB.** doc/ARCHITECTURE.md supports MySQL 8.0 and newer and MariaDB 10.6 and newer, and the Linux leg runs the database tests against the runner's MySQL. Writing a migration against whichever server happens to be installed is how a file that works perfectly in front of you fails everywhere else, and the failure does not name itself: `DBUpdater::Run` returns false and every database test in the suite goes red on an assertion that has nothing to do with the milestone.
 
 - `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` are accepted by both. `ADD COLUMN IF NOT EXISTS`, `DROP COLUMN IF EXISTS` and the index equivalents are MariaDB only, and MySQL answers `[1064] You have an error in your SQL syntax`. Anything conditional goes through `information_schema.COLUMNS` with `PREPARE` and `EXECUTE`, which both servers run.
@@ -201,6 +207,7 @@ It is reviewed by running, never by reading, and by somebody who assumes the tes
 - The central claim is broken on purpose to see whether a test notices. One codec had a flag byte flipped by one bit; all three of its tests failed, which is why it merged.
 - If the milestone is about something being faster, smaller or quieter, it is measured against what it replaces, on real input. One cache was correct, well tested, and loaded twice as slowly as the file it replaced.
 - If the milestone adds a behaviour, that behaviour is switched off to see whether anything notices. One encoder's whole ordering feature turned out never to change a byte on any input it was tested against.
+- A gated check you could not run is run for you where the reviewer can, against their own install, and what it said comes back in the review. That is a service, not a trap: on 16.02 it is what showed the XML shape was wrong, in a minute, on work that was otherwise sound. Ask for it while you are still building rather than waiting for the review.
 - Malformed input is fed to anything that parses: truncated, bit-flipped, and random bytes. Each should be refused by name rather than crashing.
 
 None of that is adversarial for its own sake. A test that cannot fail is worse than no test, because it makes the next change look safe.
