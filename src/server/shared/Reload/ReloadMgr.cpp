@@ -6,6 +6,8 @@
 #include "ReloadMgr.h"
 #include "Log.h"
 
+#include <fmt/format.h>
+
 #include <algorithm>
 #include <exception>
 #include <unordered_set>
@@ -188,4 +190,42 @@ std::vector<ReloadOutcome> ReloadMgr::ReloadAll()
         outcomes.push_back(RunLocked(it->second));
     }
     return outcomes;
+}
+
+std::vector<std::string> ReloadMgr::Describe(ReloadOutcome const& outcome)
+{
+    std::vector<std::string> lines;
+    if (outcome.Ok)
+    {
+        lines.push_back(fmt::format("{} is now generation {}", outcome.Target, outcome.Generation));
+        return lines;
+    }
+    lines.push_back(fmt::format("{} was not reloaded and generation {} goes on serving", outcome.Target, outcome.Generation));
+    for (std::string const& error : outcome.Errors)
+        lines.push_back(fmt::format("  {}", error));
+    return lines;
+}
+
+std::vector<std::string> ReloadMgr::DescribeTargets() const
+{
+    std::lock_guard const lock(_mutex);
+    std::vector<std::string> const ordered = OrderLocked();
+    std::vector<std::string> lines;
+    if (ordered.empty())
+    {
+        lines.emplace_back("This app has nothing registered that can be reloaded on its own");
+        return lines;
+    }
+    lines.push_back(fmt::format("{} target(s), in the order they are reloaded:", ordered.size()));
+    for (std::string const& name : ordered)
+    {
+        auto const it = _targets.find(name);
+        if (it == _targets.end())
+            continue;
+        if (!it->second.Ran)
+            lines.push_back(fmt::format("  {} at generation {}, not reloaded since this app started", name, it->second.Generation));
+        else
+            lines.push_back(fmt::format("  {} at generation {}, last attempt {}", name, it->second.Generation, it->second.Last.Ok ? "held" : "kept the one before"));
+    }
+    return lines;
 }

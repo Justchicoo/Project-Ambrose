@@ -17,63 +17,38 @@
 
 namespace
 {
-    void Report(CommandCaller& caller, ReloadOutcome const& outcome)
+    void Say(CommandCaller& caller, std::vector<std::string> const& lines)
     {
-        if (outcome.Ok)
-        {
-            caller.Reply(fmt::format("{} is now generation {}", outcome.Target, outcome.Generation));
-            return;
-        }
-        caller.Reply(fmt::format("{} was not reloaded and generation {} goes on serving", outcome.Target, outcome.Generation));
-        for (std::string const& error : outcome.Errors)
-            caller.Reply(fmt::format("  {}", error));
-    }
-
-    bool List(CommandCaller& caller)
-    {
-        std::vector<std::string> const targets = sReloadMgr.GetOrderedTargets();
-        if (targets.empty())
-        {
-            caller.Reply("This app has nothing registered that can be reloaded on its own");
-            return true;
-        }
-        caller.Reply(fmt::format("{} target(s), in the order they are reloaded:", targets.size()));
-        for (std::string const& target : targets)
-        {
-            std::optional<ReloadOutcome> const last = sReloadMgr.GetLastOutcome(target);
-            if (!last)
-                caller.Reply(fmt::format("  {} at generation {}, not reloaded since this app started", target, sReloadMgr.GetGeneration(target)));
-            else
-                caller.Reply(fmt::format("  {} at generation {}, last attempt {}", target, last->Generation, last->Ok ? "held" : "kept the one before"));
-        }
-        return true;
+        for (std::string const& line : lines)
+            caller.Reply(line);
     }
 
     bool Run(CommandCaller& caller, std::vector<std::string> const& arguments)
     {
         if (arguments.empty())
-            return List(caller);
+        {
+            Say(caller, sReloadMgr.DescribeTargets());
+            return true;
+        }
 
         std::string const& name = arguments.front();
         if (name == "all")
         {
             std::vector<ReloadOutcome> const outcomes = sReloadMgr.ReloadAll();
             if (outcomes.empty())
-            {
-                caller.Reply("This app has nothing registered that can be reloaded on its own");
-                return true;
-            }
+                Say(caller, sReloadMgr.DescribeTargets());
             for (ReloadOutcome const& outcome : outcomes)
-                Report(caller, outcome);
+                Say(caller, ReloadMgr::Describe(outcome));
             return true;
         }
 
         if (!sReloadMgr.IsRegistered(name))
         {
             caller.Reply(fmt::format("Nothing is registered by the name {} on this app", name));
-            return List(caller);
+            Say(caller, sReloadMgr.DescribeTargets());
+            return true;
         }
-        Report(caller, sReloadMgr.Reload(name));
+        Say(caller, ReloadMgr::Describe(sReloadMgr.Reload(name)));
         return true;
     }
 

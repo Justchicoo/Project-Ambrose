@@ -47,6 +47,9 @@ public:
     ReloadOutcome Reload(std::string_view name);
     std::vector<ReloadOutcome> ReloadAll();
 
+    static std::vector<std::string> Describe(ReloadOutcome const& outcome);
+    std::vector<std::string> DescribeTargets() const;
+
 private:
     ReloadMgr() = default;
 

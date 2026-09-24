@@ -81,53 +81,32 @@ ServerApp::ServerApp(ServerAppInfo info, ConfigMgr& config, Log& log, std::ostre
         {
             if (arguments.size() > 1)
                 return false;
-            auto say = [&reply](ReloadOutcome const& outcome)
+            auto say = [&reply](std::vector<std::string> const& lines)
             {
-                if (outcome.Ok)
-                {
-                    reply(fmt::format("{} is now generation {}", outcome.Target, outcome.Generation));
-                    return;
-                }
-                reply(fmt::format("{} was not reloaded and generation {} goes on serving", outcome.Target, outcome.Generation));
-                for (std::string const& error : outcome.Errors)
-                    reply(fmt::format("  {}", error));
+                for (std::string const& line : lines)
+                    reply(line);
             };
-            std::vector<std::string> const targets = sReloadMgr.GetOrderedTargets();
             if (arguments.empty())
             {
-                if (targets.empty())
-                {
-                    reply("This app has nothing registered that can be reloaded on its own");
-                    return true;
-                }
-                reply(fmt::format("{} target(s), in the order they are reloaded:", targets.size()));
-                for (std::string const& target : targets)
-                {
-                    std::optional<ReloadOutcome> const last = sReloadMgr.GetLastOutcome(target);
-                    if (!last)
-                        reply(fmt::format("  {} at generation {}, not reloaded since this app started", target, sReloadMgr.GetGeneration(target)));
-                    else
-                        reply(fmt::format("  {} at generation {}, last attempt {}", target, last->Generation, last->Ok ? "held" : "kept the one before"));
-                }
+                say(sReloadMgr.DescribeTargets());
                 return true;
             }
             if (arguments.front() == "all")
             {
-                if (targets.empty())
-                {
-                    reply("This app has nothing registered that can be reloaded on its own");
-                    return true;
-                }
-                for (ReloadOutcome const& outcome : sReloadMgr.ReloadAll())
-                    say(outcome);
+                std::vector<ReloadOutcome> const outcomes = sReloadMgr.ReloadAll();
+                if (outcomes.empty())
+                    say(sReloadMgr.DescribeTargets());
+                for (ReloadOutcome const& outcome : outcomes)
+                    say(ReloadMgr::Describe(outcome));
                 return true;
             }
             if (!sReloadMgr.IsRegistered(arguments.front()))
             {
                 reply(fmt::format("Nothing is registered by the name {} on this app", arguments.front()));
+                say(sReloadMgr.DescribeTargets());
                 return true;
             }
-            say(sReloadMgr.Reload(arguments.front()));
+            say(ReloadMgr::Describe(sReloadMgr.Reload(arguments.front())));
             return true;
         } });
     _commands.Register({ "shutdown", "[seconds|cancel]", "stop the server gracefully, now or after a delay", false,
