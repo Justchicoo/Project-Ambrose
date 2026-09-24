@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "app": "loginserver",
+  "role": "loginserver",
+  "realm": "Ambrose",
+  "revision": "r806919.Wizard_1_610",
+  "state": "running",
+  "uptime": 38,
+  "memory": {
+    "resident_bytes": 52428800
+  },
+  "threads": 6,
+  "sessions": 1,
+  "tick": null,
+  "stats": {
+    "sessions": 1
+  },
+  "problems": []
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@ambrose/dashboard",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Project Ambrose by Imjustchico: the panel the supervisor serves, built from the shared design system.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ambrose/ui": "*",
+    "@internationalized/date": "3.12.4",
+    "@lucide/svelte": "1.47.0",
+    "bits-ui": "2.19.2",
+    "clsx": "2.1.1",
+    "svelte-sonner": "1.2.1",
+    "tailwind-merge": "3.7.0",
+    "tailwind-variants": "3.3.1",
+    "tw-animate-css": "1.4.0",
+    "valibot": "1.5.0"
+  }
+}

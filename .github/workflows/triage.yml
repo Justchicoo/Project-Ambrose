@@ -1,0 +1,40 @@
+# Project Ambrose by Imjustchico
+# Labels an arriving pull request with the track it belongs to and greets a first-time contributor once, running only this repository's own code against the pull request's metadata, never the contributor's.
+name: triage
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+
+concurrency:
+  group: triage-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  label:
+    name: label
+    if: ${{ github.repository == 'Justchicoo/Project-Ambrose' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Sort the pull request
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+        run: python apps/ci/ci_triage.py

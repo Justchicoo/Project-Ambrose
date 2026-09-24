@@ -1,0 +1,25 @@
+# Project Ambrose by Imjustchico
+# Builds one compile-check target and asserts success, or failure at the expected source line.
+set(build_command "${CMAKE_COMMAND}" --build "${BUILD_DIR}" --config "${CONFIG}" --target "${TARGET}")
+if(GENERATOR MATCHES "^Visual Studio")
+    list(APPEND build_command -- -nodeReuse:false)
+endif()
+execute_process(COMMAND ${build_command} RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors)
+string(APPEND output "\n${errors}")
+
+if(EXPECT STREQUAL "success")
+    if(NOT result EQUAL 0)
+        message(FATAL_ERROR "the control ${TARGET} failed to build:\n${output}")
+    endif()
+    return()
+endif()
+
+if(result EQUAL 0)
+    message(FATAL_ERROR "${TARGET} compiled, but it must be rejected:\n${output}")
+endif()
+if(output MATCHES "ninja: error: unknown target|No rule to make target|MSB1009|MSB4057")
+    message(FATAL_ERROR "${TARGET} was not found, so nothing was rejected:\n${output}")
+endif()
+if(NOT output MATCHES "LogFormatCheck\\.cpp[:(]${LINE}[:,)]")
+    message(FATAL_ERROR "expected a compile error at LogFormatCheck.cpp:${LINE}:\n${output}")
+endif()

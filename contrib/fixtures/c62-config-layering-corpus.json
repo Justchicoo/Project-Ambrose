@@ -1,0 +1,292 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "c62-0001",
+      "description": "shipped default is used when no later layer defines the key",
+      "defaults": {
+        "Limit": "dist"
+      },
+      "module_defaults": [],
+      "config": {},
+      "module_config": [],
+      "environment": [],
+      "overrides": {},
+      "expected": {
+        "Limit": "dist"
+      }
+    },
+    {
+      "id": "c62-0002",
+      "description": "sorted module defaults override the shipped default",
+      "defaults": {
+        "Limit": "dist"
+      },
+      "module_defaults": [
+        {
+          "file": "20-pets.conf.dist",
+          "values": {
+            "Limit": "pets"
+          }
+        },
+        {
+          "file": "10-world.conf.dist",
+          "values": {
+            "Limit": "world"
+          }
+        }
+      ],
+      "config": {},
+      "module_config": [],
+      "environment": [],
+      "overrides": {},
+      "expected": {
+        "Limit": "pets"
+      }
+    },
+    {
+      "id": "c62-0003",
+      "description": "local config overrides module defaults",
+      "defaults": {
+        "Limit": "dist"
+      },
+      "module_defaults": [
+        {
+          "file": "pets.conf.dist",
+          "values": {
+            "Limit": "module-default"
+          }
+        }
+      ],
+      "config": {
+        "Limit": "local"
+      },
+      "module_config": [],
+      "environment": [],
+      "overrides": {},
+      "expected": {
+        "Limit": "local"
+      }
+    },
+    {
+      "id": "c62-0004",
+      "description": "sorted module config overrides local config",
+      "defaults": {
+        "Limit": "dist"
+      },
+      "module_defaults": [],
+      "config": {
+        "Limit": "local"
+      },
+      "module_config": [
+        {
+          "file": "20-pets.conf",
+          "values": {
+            "Limit": "pets"
+          }
+        },
+        {
+          "file": "10-world.conf",
+          "values": {
+            "Limit": "world"
+          }
+        }
+      ],
+      "environment": [],
+      "overrides": {},
+      "expected": {
+        "Limit": "pets"
+      }
+    },
+    {
+      "id": "c62-0005",
+      "description": "environment values override every file layer",
+      "defaults": {
+        "Limit": "dist"
+      },
+      "module_defaults": [
+        {
+          "file": "pets.conf.dist",
+          "values": {
+            "Limit": "module-default"
+          }
+        }
+      ],
+      "config": {
+        "Limit": "local"
+      },
+      "module_config": [
+        {
+          "file": "pets.conf",
+          "values": {
+            "Limit": "module"
+          }
+        }
+      ],
+      "environment": [
+        {
+          "name": "AMBROSE_LIMIT",
+          "key": "Limit",
+          "value": "environment"
+        }
+      ],
+      "overrides": {},
+      "expected": {
+        "Limit": "environment"
+      }
+    },
+    {
+      "id": "c62-0006",
+      "description": "command-line overrides take precedence over environment and files",
+      "defaults": {
+        "Limit": "dist"
+      },
+      "module_defaults": [
+        {
+          "file": "pets.conf.dist",
+          "values": {
+            "Limit": "module-default"
+          }
+        }
+      ],
+      "config": {
+        "Limit": "local"
+      },
+      "module_config": [
+        {
+          "file": "pets.conf",
+          "values": {
+            "Limit": "module"
+          }
+        }
+      ],
+      "environment": [
+        {
+          "name": "AMBROSE_LIMIT",
+          "key": "Limit",
+          "value": "environment"
+        }
+      ],
+      "overrides": {
+        "Limit": "command-line"
+      },
+      "expected": {
+        "Limit": "command-line"
+      }
+    },
+    {
+      "id": "c62-0007",
+      "description": "multiple keys retain the winning layer independently",
+      "defaults": {
+        "Port": "12000",
+        "Bind": "0.0.0.0",
+        "Logs": "logs"
+      },
+      "module_defaults": [
+        {
+          "file": "10-world.conf.dist",
+          "values": {
+            "Port": "12001"
+          }
+        },
+        {
+          "file": "20-pets.conf.dist",
+          "values": {
+            "Bind": "127.0.0.1"
+          }
+        }
+      ],
+      "config": {
+        "Port": "13000",
+        "Logs": "server-logs"
+      },
+      "module_config": [
+        {
+          "file": "10-world.conf",
+          "values": {
+            "Port": "13001"
+          }
+        }
+      ],
+      "environment": [
+        {
+          "name": "AMBROSE_BIND",
+          "key": "Bind",
+          "value": "192.0.2.10"
+        }
+      ],
+      "overrides": {
+        "Logs": "override-logs"
+      },
+      "expected": {
+        "Port": "13001",
+        "Bind": "192.0.2.10",
+        "Logs": "override-logs"
+      }
+    },
+    {
+      "id": "c62-0008",
+      "description": "a dotted key's environment name folds each dot into one underscore",
+      "defaults": {
+        "Admin.BindIP": "127.0.0.1"
+      },
+      "module_defaults": [],
+      "config": {},
+      "module_config": [],
+      "environment": [
+        {
+          "name": "AMBROSE_ADMIN_BIND_IP",
+          "key": "Admin.BindIP",
+          "value": "10.0.0.2"
+        }
+      ],
+      "overrides": {},
+      "expected": {
+        "Admin.BindIP": "10.0.0.2"
+      }
+    },
+    {
+      "id": "c62-0009",
+      "description": "a run of capitals stays together and splits before a following word",
+      "defaults": {
+        "Login.AllowedRevision": "r806919"
+      },
+      "module_defaults": [],
+      "config": {},
+      "module_config": [],
+      "environment": [
+        {
+          "name": "AMBROSE_LOGIN_ALLOWED_REVISION",
+          "key": "Login.AllowedRevision",
+          "value": "r801440"
+        }
+      ],
+      "overrides": {},
+      "expected": {
+        "Login.AllowedRevision": "r801440"
+      }
+    },
+    {
+      "id": "c62-0010",
+      "description": "an environment name that is not the one ConfigMgr derives is ignored",
+      "defaults": {
+        "Admin.Port": "12000"
+      },
+      "module_defaults": [],
+      "config": {},
+      "module_config": [],
+      "environment": [
+        {
+          "name": "AMBROSE_ADMINPORT",
+          "key": "Admin.Port",
+          "value": "19999",
+          "applies": false
+        }
+      ],
+      "overrides": {},
+      "expected": {
+        "Admin.Port": "12000"
+      }
+    }
+  ]
+}

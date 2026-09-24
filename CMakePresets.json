@@ -1,0 +1,258 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_CONFIGURATION_TYPES": "Debug;RelWithDebInfo",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/deps/vcpkg/triplets",
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/deps/vcpkg/ports"
+      }
+    },
+    {
+      "name": "windows-msvc-x64",
+      "displayName": "Windows MSVC x64 (newest installed Visual Studio)",
+      "inherits": "base",
+      "architecture": "x64",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "linux-gcc",
+      "displayName": "Linux GCC",
+      "inherits": "base",
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "g++"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "linux-clang",
+      "displayName": "Linux Clang",
+      "inherits": "base",
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "clang++"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "linux-gcc-asan",
+      "displayName": "Linux GCC with AddressSanitizer and UBSan",
+      "inherits": "linux-gcc",
+      "cacheVariables": {
+        "AMBROSE_SANITIZE_ADDRESS": "ON"
+      }
+    },
+    {
+      "name": "linux-clang-tsan",
+      "displayName": "Linux Clang with ThreadSanitizer",
+      "inherits": "linux-clang",
+      "cacheVariables": {
+        "AMBROSE_SANITIZE_THREAD": "ON"
+      }
+    },
+    {
+      "name": "linux-clang-fuzz",
+      "displayName": "Linux Clang with libFuzzer, AddressSanitizer and UBSan",
+      "inherits": "linux-clang",
+      "cacheVariables": {
+        "AMBROSE_SANITIZE_ADDRESS": "ON",
+        "AMBROSE_BUILD_FUZZERS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-debug",
+      "configurePreset": "windows-msvc-x64",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-release",
+      "configurePreset": "windows-msvc-x64",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "linux-gcc-debug",
+      "configurePreset": "linux-gcc",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-gcc-release",
+      "configurePreset": "linux-gcc",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "linux-clang-debug",
+      "configurePreset": "linux-clang",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-clang-release",
+      "configurePreset": "linux-clang",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "linux-gcc-asan",
+      "configurePreset": "linux-gcc-asan",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-clang-tsan",
+      "configurePreset": "linux-clang-tsan",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-clang-fuzz",
+      "configurePreset": "linux-clang-fuzz",
+      "configuration": "Debug"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-debug",
+      "configurePreset": "windows-msvc-x64",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "timeout": 600
+      }
+    },
+    {
+      "name": "windows-release",
+      "configurePreset": "windows-msvc-x64",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "timeout": 600
+      }
+    },
+    {
+      "name": "linux-gcc-debug",
+      "configurePreset": "linux-gcc",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "timeout": 600
+      }
+    },
+    {
+      "name": "linux-gcc-release",
+      "configurePreset": "linux-gcc",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "timeout": 600
+      }
+    },
+    {
+      "name": "linux-clang-debug",
+      "configurePreset": "linux-clang",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "timeout": 600
+      }
+    },
+    {
+      "name": "linux-clang-release",
+      "configurePreset": "linux-clang",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "timeout": 600
+      }
+    },
+    {
+      "name": "linux-gcc-asan",
+      "configurePreset": "linux-gcc-asan",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "timeout": 600
+      },
+      "environment": {
+        "ASAN_OPTIONS": "detect_leaks=1:abort_on_error=1",
+        "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1"
+      }
+    },
+    {
+      "name": "linux-clang-tsan",
+      "configurePreset": "linux-clang-tsan",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "timeout": 600
+      },
+      "environment": {
+        "TSAN_OPTIONS": "halt_on_error=1:abort_on_error=1:second_deadlock_stack=1"
+      }
+    },
+    {
+      "name": "linux-clang-fuzz",
+      "configurePreset": "linux-clang-fuzz",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "include": {
+          "label": "fuzz"
+        }
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "timeout": 1200
+      },
+      "environment": {
+        "ASAN_OPTIONS": "detect_leaks=1:abort_on_error=1",
+        "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1"
+      }
+    }
+  ]
+}

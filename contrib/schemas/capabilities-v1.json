@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ambrose.invalid/schema/capabilities-v1.json",
+  "title": "Project Ambrose capabilities v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "reload_targets", "schedule_actions", "announcement_channels", "problem_codes"],
+  "properties": {
+    "schema": { "type": "integer", "minimum": 1 },
+    "reload_targets": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "schedule_actions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "announcement_channels": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "problem_codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "description"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

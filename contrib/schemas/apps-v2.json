@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ambrose.invalid/schema/apps-v2.json",
+  "title": "Project Ambrose apps list v2",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "name",
+      "role",
+      "realm",
+      "address",
+      "port",
+      "revision"
+    ],
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "role": {
+        "type": "string",
+        "minLength": 1
+      },
+      "realm": {
+        "type": "string"
+      },
+      "address": {
+        "type": "string"
+      },
+      "port": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "revision": {
+        "type": "string",
+        "minLength": 1
+      },
+      "state": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

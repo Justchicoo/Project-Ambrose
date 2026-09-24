@@ -1,0 +1,28 @@
+{
+  "app": "gameserver",
+  "memory": {
+    "resident_bytes": 26148864
+  },
+  "problems": [
+    {
+      "code": "install_missing",
+      "message": "No client installation was found",
+      "subject": "client"
+    }
+  ],
+  "realm": "",
+  "revision": "ba79e90",
+  "role": "gameserver",
+  "schema": 1,
+  "sessions": null,
+  "state": "running",
+  "stats": {},
+  "threads": 19,
+  "tick": {
+    "average_ms": 0.0986,
+    "max_ms": 0.1728,
+    "samples": 10,
+    "window_seconds": 60
+  },
+  "uptime": 1
+}

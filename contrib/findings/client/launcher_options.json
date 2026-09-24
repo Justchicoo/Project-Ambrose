@@ -1,0 +1,32 @@
+{
+  "subject": "launcher_options",
+  "area": "client",
+  "claim": "On client revision r806919.Wizard_1_610, Ambrose's launcher applies its tested launch options through the client's command line and isolated run-folder configuration, while leaving the retail install unchanged.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "experiment",
+  "how_to_repeat": [
+    "Run the Ambrose launcher built from the repository against the user's own Wizard101 install at revision r806919.Wizard_1_610.",
+    "Use --dry-run with --locale es-MX and observe that the client command contains -A es-MX.",
+    "Use --dry-run with --host 192.0.2.50 --port 54321 and observe that the client command contains -L 192.0.2.50 54321 and -P 0.",
+    "Run with a configuration containing Window = 1600x900, then inspect the run-folder config.xml and observe Resolution = 1600x900 and IsFullscreen = 0.",
+    "Run with WindowX = 100 and WindowY = 200, then inspect the run-folder config.xml and observe WindowedX = 100 and WindowedY = 200.",
+    "Run with --run-dir C:\\Ambrose\\TestRun --dry-run and observe that the selected run folder and WizardClient.log path move to C:\\Ambrose\\TestRun.",
+    "Run with --wait, close the client normally, and observe that the launcher reports the client's exit code.",
+    "Record SHA-256 hashes of all files in the retail install before and after a launcher run, then compare the sorted hash listings and verify that they are identical."
+  ],
+  "evidence": [
+    "The launcher --dry-run output for --locale es-MX passed -A es-MX to WizardGraphicalClient.exe.",
+    "The launcher --dry-run output for --host 192.0.2.50 --port 54321 passed -L 192.0.2.50 54321 and kept -P 0.",
+    "A run using Window = 1600x900 produced Resolution = 1600x900 and IsFullscreen = 0 in the run-folder config.xml.",
+    "A run using WindowX = 100 and WindowY = 200 produced WindowedX = 100 and WindowedY = 200 in the run-folder config.xml.",
+    "The --run-dir C:\\Ambrose\\TestRun dry-run selected that directory as the run folder and placed WizardClient.log there.",
+    "The --wait run started the client and reported 'the client exited with 0' after the client was closed.",
+    "The SHA-256 file-hash listings of the retail install before and after the launcher run were identical, with 16795 lines in each listing and no differences reported by Compare-Object.",
+    "The launcher help states that the KingsIsle launcher and patcher are never run and that nothing inside the install is written."
+  ],
+  "disproof": "A repeatable run on revision r806919.Wizard_1_610 that changes a file in the retail install, or demonstrates that a tested launch option is not applied to the client command line or isolated run-folder configuration.",
+  "confidence": "high",
+  "submitted_by": "lRayZ24",
+  "submitted_on": "2026-09-19",
+  "status": "claimed"
+}

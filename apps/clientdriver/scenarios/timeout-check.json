@@ -1,0 +1,19 @@
+{
+  "title": "A step nothing can satisfy: the failure names what it waited for and the run still stops everything",
+  "include": "parts/common.json",
+  "notes": [
+    "This scenario is meant to fail. It proves the failure contract: the message names the pattern and the",
+    "file, a screenshot of the failing step is taken, and the client, the server, the guard, the capture and",
+    "the scratch databases are all still stopped and dropped."
+  ],
+  "expect": "failure",
+  "steps": [
+    {"action": "wait_client_log", "name": "the client brings its renderer up",
+     "pattern": "About to initialize graphical client\\.", "timeout": 180},
+    {"action": "wait_screen", "name": "the login window is on the screen", "screens": ["login"], "timeout": 120},
+    {"action": "shot", "name": "the login window", "file": "login-window"},
+    {"action": "wait_client_log", "name": "a line the client will never write",
+     "pattern": "the wizard has reached Ravenwood", "timeout": 5},
+    {"action": "shot", "name": "a step that is never reached", "file": "never-reached"}
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "entries": [
+    { "id": "c61-0001", "input": "90", "accepted": true, "seconds": 90 },
+    { "id": "c61-0002", "input": "45s", "accepted": true, "seconds": 45 },
+    { "id": "c61-0003", "input": "30m", "accepted": true, "seconds": 1800 },
+    { "id": "c61-0004", "input": "12H", "accepted": true, "seconds": 43200 },
+    { "id": "c61-0005", "input": "7d", "accepted": true, "seconds": 604800 },
+    { "id": "c61-0006", "input": "2w", "accepted": true, "seconds": 1209600 },
+    { "id": "c61-0007", "input": "1d12h30m5", "accepted": true, "seconds": 131405 },
+    { "id": "c61-0008", "input": "perm", "accepted": true, "special": "permanent", "seconds": 0 },
+    { "id": "c61-0009", "input": "permanent", "accepted": true, "special": "permanent", "seconds": 0 },
+    { "id": "c61-0010", "input": "0", "accepted": false },
+    { "id": "c61-0011", "input": "0d", "accepted": false },
+    { "id": "c61-0012", "input": "d", "accepted": false },
+    { "id": "c61-0013", "input": "5x", "accepted": false },
+    { "id": "c61-0014", "input": "1.5h", "accepted": false },
+    { "id": "c61-0015", "input": "-1d", "accepted": false },
+    { "id": "c61-0016", "input": "12 h", "accepted": false },
+    { "id": "c61-0017", "input": "h12", "accepted": false },
+    { "id": "c61-0018", "input": "99999999999999999999", "accepted": false },
+    { "id": "c61-0019", "input": "9223372036854775807w", "accepted": false },
+    { "id": "c61-0020", "input": "", "accepted": false }
+  ]
+}

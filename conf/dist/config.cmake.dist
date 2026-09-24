@@ -1,0 +1,8 @@
+# Project Ambrose by Imjustchico
+# Local build defaults template: copy to conf/config.cmake; values given with -D on the command line still win.
+set(BUILD_TESTING ON CACHE BOOL "Build the unit tests")
+set(TOOLS ON CACHE BOOL "Build the tools in src/tools")
+set(APPS_BUILD ON CACHE BOOL "Build the server apps")
+set(AMBROSE_WARNINGS_AS_ERRORS OFF CACHE BOOL "Treat compiler warnings as errors")
+set(AMBROSE_SANITIZE_ADDRESS OFF CACHE BOOL "Build project code with sanitizers")
+set(AMBROSE_SANITIZE_THREAD OFF CACHE BOOL "Build project code with ThreadSanitizer")

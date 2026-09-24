@@ -1,0 +1,34 @@
+{
+  "announcement_channels": [],
+  "problem_codes": [
+    {
+      "code": "database_unreachable",
+      "description": "A database the app needs cannot be reached"
+    },
+    {
+      "code": "install_missing",
+      "description": "No client installation was found, so nothing that reads the client's own data can run"
+    },
+    {
+      "code": "revision_not_allowed",
+      "description": "The client's revision is not one Login.AllowedRevision lists"
+    },
+    {
+      "code": "schema_update_pending",
+      "description": "A database update is waiting to be applied"
+    },
+    {
+      "code": "type_dump_missing",
+      "description": "No type dump is in use, so ObjectProperty data cannot be read or written"
+    },
+    {
+      "code": "type_dump_stale",
+      "description": "The type dump was built from a different client program than the one installed"
+    }
+  ],
+  "reload_targets": [
+    "admin"
+  ],
+  "schedule_actions": [],
+  "schema": 1
+}

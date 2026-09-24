@@ -1,0 +1,27 @@
+{
+  "name": "project-ambrose",
+  "version-string": "0.0.0",
+  "builtin-baseline": "433546791c157e8a861d77fe58b4d95916179cc9",
+  "dependencies": [
+    "asio",
+    "botan",
+    "crow",
+    "fmt",
+    "libmariadb",
+    "nlohmann-json",
+    "openssl",
+    "pugixml",
+    "sqlite3",
+    "unicorn",
+    "zlib",
+    "zydis"
+  ],
+  "features": {
+    "tests": {
+      "description": "Dependencies of the unit test executable",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
+}

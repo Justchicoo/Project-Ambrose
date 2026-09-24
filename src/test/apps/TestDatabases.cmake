@@ -1,0 +1,42 @@
+# Project Ambrose by Imjustchico
+# Shared by the app test scripts: builds uniquely named AMBROSE_TEST_DB connection strings, remembers each database, and drops them through unit_tests before passing or failing.
+set(AMBROSE_CREATED_TEST_DATABASES)
+string(RANDOM LENGTH 8 ALPHABET "0123456789abcdef" AMBROSE_TEST_DATABASE_SUFFIX)
+
+function(ambrose_test_database_info prefix out)
+    set(parts "$ENV{AMBROSE_TEST_DB}")
+    list(LENGTH parts partCount)
+    if(partCount LESS 5)
+        message(FATAL_ERROR "AMBROSE_TEST_DB needs host;port;user;password;database")
+    endif()
+    set(name "${prefix}_${AMBROSE_TEST_DATABASE_SUFFIX}")
+    list(REMOVE_AT parts 4)
+    list(INSERT parts 4 "${name}")
+    list(JOIN parts ";" joined)
+    set(created ${AMBROSE_CREATED_TEST_DATABASES})
+    list(APPEND created "${name}")
+    set(AMBROSE_CREATED_TEST_DATABASES ${created} PARENT_SCOPE)
+    set(${out} "${joined}" PARENT_SCOPE)
+endfunction()
+
+function(ambrose_drop_test_databases)
+    if(NOT AMBROSE_CREATED_TEST_DATABASES)
+        return()
+    endif()
+    if(NOT UNIT_TESTS OR NOT EXISTS "${UNIT_TESTS}")
+        message(WARNING "UNIT_TESTS is not set, so test databases stay: ${AMBROSE_CREATED_TEST_DATABASES}")
+        return()
+    endif()
+    list(JOIN AMBROSE_CREATED_TEST_DATABASES "," names)
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env "AMBROSE_DROP_DATABASES=${names}"
+            "${UNIT_TESTS}" --gtest_also_run_disabled_tests --gtest_filter=TestDatabaseCleanup.DISABLED_DropNamedDatabases
+        RESULT_VARIABLE dropResult OUTPUT_VARIABLE dropOutput ERROR_VARIABLE dropError TIMEOUT 60)
+    if(NOT dropResult EQUAL 0)
+        message(WARNING "Could not drop test databases ${names} (${dropResult}): ${dropOutput}${dropError}")
+    endif()
+endfunction()
+
+macro(ambrose_test_fail)
+    ambrose_drop_test_databases()
+    message(FATAL_ERROR ${ARGN})
+endmacro()

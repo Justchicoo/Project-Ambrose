@@ -1,0 +1,20 @@
+{
+  "subject": "Example finding, kept as the shape to copy",
+  "area": "protocol",
+  "claim": "This file is an example of the shape a finding takes, so a contributor can copy it; it asserts nothing about the game and is never cited.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "reasoning",
+  "how_to_repeat": [
+    "Copy this file to contrib/findings/<area>/<subject>.json and replace every field with your own.",
+    "Run python apps/ci/ci_findings.py --paths contrib/findings/<area>/<your file>.json before opening a pull request."
+  ],
+  "evidence": [
+    "contrib/findings/README.md describes each field and what it is for.",
+    "apps/ci/ci_findings.py is the check this file passes."
+  ],
+  "disproof": "The check refuses this file, which would mean the example and the checker disagree.",
+  "confidence": "high",
+  "submitted_by": "Project Ambrose",
+  "submitted_on": "2026-09-18",
+  "status": "claimed"
+}

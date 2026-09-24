@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "holds": [
+    {
+      "scope": "phase:17",
+      "who": "the maintainer's panel session",
+      "what": "the operations panel, built milestone by milestone, with every later subsystem fitted into it",
+      "since": "2026-09-18"
+    },
+    {
+      "scope": "milestone:4.02",
+      "who": "the maintainer's panel session",
+      "what": "CommandMgr and security levels, which open 17.05 and the panel's roles straight after",
+      "since": "2026-09-22"
+    },
+    {
+      "scope": "milestone:3.23",
+      "who": "the maintainer's own machine",
+      "what": "keeping up with KingsIsle's client revisions, which needs the pinned installation",
+      "since": "2026-09-22"
+    }
+  ]
+}

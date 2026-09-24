@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "parser": "FrameReassembler",
+  "long_length": "body-only",
+  "seeds": [
+    {
+      "file": "bad-magic.bin",
+      "result": "bad magic"
+    },
+    {
+      "file": "truncated-prefix.bin",
+      "result": "incomplete"
+    },
+    {
+      "file": "short-length-underflow.bin",
+      "result": "bad length"
+    },
+    {
+      "file": "invalid-control-flag.bin",
+      "result": "bad control flag"
+    },
+    {
+      "file": "dml-length-overrun.bin",
+      "result": "bad DML length"
+    },
+    {
+      "file": "long-length-overflow.bin",
+      "result": "too large"
+    },
+    {
+      "file": "long-header-underflow.bin",
+      "result": "valid control",
+      "note": "a declared body length of zero is a whole control frame under the body-only rule; it is a bad length only under FrameLimits::LongLength HeaderAndBody"
+    },
+    {
+      "file": "valid-control-minimal.bin",
+      "result": "valid control"
+    },
+    {
+      "file": "valid-dml-minimal.bin",
+      "result": "valid DML"
+    }
+  ]
+}

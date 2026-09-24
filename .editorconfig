@@ -1,0 +1,23 @@
+# Project Ambrose by Imjustchico
+# Editor formatting rules shared by every contributor.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.bat]
+end_of_line = crlf
+
+[*.ps1]
+end_of_line = crlf

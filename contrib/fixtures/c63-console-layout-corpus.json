@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "layout": {
+    "timestamp": "12:34:56.789",
+    "category_width": 18,
+    "repeat_category": true
+  },
+  "cases": [
+    {
+      "id": "c63-0001",
+      "description": "a category wider than the terminal column is shortened in the middle",
+      "level": "info",
+      "category": "server.loginserver.authentication",
+      "message": "session accepted",
+      "expected_lines": [
+        "12:34:56.789 INFO  [server.l..tication] session accepted"
+      ]
+    },
+    {
+      "id": "c63-0002",
+      "description": "each line of a multi-line message receives the complete prefix",
+      "level": "warn",
+      "category": "network.opcode",
+      "message": "first line\nsecond line",
+      "expected_lines": [
+        "12:34:56.789 WARN  [network.opcode    ] first line",
+        "12:34:56.789 WARN  [network.opcode    ] second line"
+      ]
+    },
+    {
+      "id": "c63-0003",
+      "description": "a value at the very end of the message remains the final bytes",
+      "level": "error",
+      "category": "server.config",
+      "message": "invalid value: 65535",
+      "expected_lines": [
+        "12:34:56.789 ERROR [server.config     ] invalid value: 65535"
+      ],
+      "expected_suffix": "65535"
+    },
+    {
+      "id": "c63-0004",
+      "description": "a record with no category still renders a stable category column",
+      "level": "debug",
+      "category": "",
+      "message": "worker idle",
+      "expected_lines": [
+        "12:34:56.789 DEBUG [                  ] worker idle"
+      ]
+    },
+    {
+      "id": "c63-0005",
+      "description": "an empty physical line keeps the prefix but drops trailing padding",
+      "level": "trace",
+      "category": "server.world",
+      "message": "before\n\nafter",
+      "expected_lines": [
+        "12:34:56.789 TRACE [server.world      ] before",
+        "12:34:56.789 TRACE [server.world      ]",
+        "12:34:56.789 TRACE [server.world      ] after"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+# Project Ambrose by Imjustchico
+# Keeps one Discord message listing the milestones open to outside help: when a push to main changes the milestone track it edits that message in place rather than posting another, and remembers its id on the openings-state branch, falling back to the id committed on main, doing nothing at all when the repository has no webhook secret.
+name: openings
+
+on:
+  push:
+    branches: [main]
+    paths: ["doc/MILESTONE-TRACK.md"]
+  workflow_dispatch:
+
+concurrency:
+  group: openings
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  announce:
+    name: announce
+    if: ${{ github.repository == 'Justchicoo/Project-Ambrose' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Look for the webhook
+        id: webhook
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_PROGRESS_WEBHOOK }}
+        run: |
+          if [ -n "$WEBHOOK" ]; then
+            echo "present=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=no" >> "$GITHUB_OUTPUT"
+            echo "No DISCORD_PROGRESS_WEBHOOK secret, so there is nothing to update." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Read the remembered message
+        if: steps.webhook.outputs.present == 'yes'
+        run: |
+          if git fetch origin openings-state:openings-state 2>/dev/null; then
+            git show openings-state:discord-openings.json > remembered.json 2>/dev/null || rm -f remembered.json
+          fi
+          if [ ! -s remembered.json ] && [ -s doc/progress/discord-openings.json ]; then
+            cp doc/progress/discord-openings.json remembered.json
+            echo "the state branch had nothing, taking the message id committed on main"
+          fi
+          test -s remembered.json && echo "the message to edit is remembered" || echo "no message remembered yet, one will be posted"
+      - name: Update the Discord message
+        if: steps.webhook.outputs.present == 'yes'
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_PROGRESS_WEBHOOK }}
+        run: python apps/progress/openings.py --webhook-env WEBHOOK --state remembered.json
+      - name: Remember the message
+        if: steps.webhook.outputs.present == 'yes'
+        run: |
+          test -s remembered.json || exit 0
+          python -c "import json,sys; sys.exit(0 if json.load(open('remembered.json')).get('message_id') else 1)"
+          rm -rf state && mkdir state && cp remembered.json state/discord-openings.json
+          cd state
+          git init -q -b openings-state
+          git add discord-openings.json
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Openings: the Discord message this repository keeps updating"
+          git push -q --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" openings-state

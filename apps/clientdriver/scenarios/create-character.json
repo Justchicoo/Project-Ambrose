@@ -1,0 +1,59 @@
+{
+  "title": "Log in, walk the character creation screens and submit a wizard the server does not create yet",
+  "include": "login-to-charselect.json",
+  "notes": [
+    "It continues from the character selection screen, and its point is the messages the login server does",
+    "not handle yet: the submit sends MSG_CREATECHARACTER, which its message table still lists as pending,",
+    "so the client waits for an answer that never comes and the session stays up on its keepalives.",
+    "Fifteen presses make this the least steady of the scenarios.",
+    "The wizard is never created, so the run ends on the naming screen with the client admitted and asked to",
+    "quit in its own way."
+  ],
+  "pending_allowed": ["MSG_LOGINLOGCHARACTERCREATION", "MSG_CREATECHARACTER"],
+  "steps": [
+    {"action": "click", "name": "press the button that starts a new wizard", "target": "charselect_new", "attempts": 5,
+     "on_screen": "charselect",
+     "until": {"action": "wait_screen", "screens": ["dialog_next"], "timeout": 20}},
+    {"action": "shot", "name": "the first creation screen", "file": "creation-introduction"},
+
+    {"action": "click", "name": "press through the introduction", "target": "dialog_next",
+     "attempts": 30, "dwell": 0.4, "dwell_step": 0,
+     "until": {"action": "wait_screen", "screens": ["test_book"], "timeout": 1.5}},
+    {"action": "shot", "name": "the sorting test", "file": "sorting-test"},
+
+    {"action": "click", "name": "skip the sorting test", "target": "test_skip", "attempts": 5,
+     "until": {"action": "wait_screen", "screens": ["school_list"], "timeout": 15}},
+    {"action": "shot", "name": "the list of schools", "file": "school-list"},
+    {"action": "click", "name": "choose a school", "target": "school_ice", "attempts": 5,
+     "until": {"action": "wait_screen", "screens": ["school_chosen"], "timeout": 15}},
+    {"action": "shot", "name": "the school chosen", "file": "school-chosen"},
+    {"action": "click", "name": "confirm the school", "target": "school_ok", "attempts": 5,
+     "until": {"action": "wait_screen", "screens": ["dialog_back"], "timeout": 25}},
+
+    {"action": "click", "name": "press through the appearance dialogue", "target": "dialog_next",
+     "attempts": 10, "dwell": 0.4, "dwell_step": 0,
+     "until": {"action": "wait_screen", "screens": ["appearance"], "timeout": 3}},
+    {"action": "click", "name": "take the next look", "target": "preset_next", "attempts": 1},
+    {"action": "shot", "name": "the wizard's appearance", "file": "appearance"},
+    {"action": "click", "name": "accept the look", "target": "appearance_next", "attempts": 5,
+     "until": {"action": "wait_screen", "screens": ["dialog_back"], "timeout": 25}},
+
+    {"action": "click", "name": "press through the naming dialogue", "target": "dialog_next",
+     "attempts": 10, "dwell": 0.4, "dwell_step": 0,
+     "until": {"action": "wait_screen", "screens": ["name"], "timeout": 3}},
+    {"action": "click", "name": "roll a name", "target": "name_random", "attempts": 3,
+     "until": {"action": "wait_client_log", "pattern": "FirstTableName \\S+, size=\\d+", "timeout": 5}},
+    {"action": "shot", "name": "the name rolled", "file": "name-rolled"},
+
+    {"action": "click", "name": "submit the wizard", "target": "name_done", "attempts": 5,
+     "until": {"action": "wait_server_log",
+               "pattern": "sent (LOGIN MSG_CREATECHARACTER \\(\\d+:\\d+\\)), which \\S+ does not handle yet",
+               "timeout": 10, "record": true}},
+    {"action": "shot", "name": "the screen after the submit", "file": "after-the-submit"},
+    {"action": "wait_server_log", "name": "the session survives the message the server does not handle",
+     "pattern": "keepalive from the client", "timeout": 60},
+    {"action": "wait_db", "name": "no wizard was written", "database": "characters",
+     "query": "SELECT COUNT(*) FROM characters", "expect": "0", "timeout": 5},
+    {"action": "shot", "name": "the client still waiting for an answer", "file": "still-waiting"}
+  ]
+}

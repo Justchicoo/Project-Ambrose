@@ -1,0 +1,26 @@
+# Project Ambrose by Imjustchico
+# The form for an idea or a change to the plan: the problem it solves, whether Ambrose already has it, and the smallest version worth building.
+name: Proposal
+description: An idea for Ambrose, or a change to the roadmap or the contributor track.
+labels: ["proposal"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What an operator, a player or a contributor cannot do today.
+    validations:
+      required: true
+  - type: textarea
+    id: existing
+    attributes:
+      label: What Ambrose already has
+      description: What you found in doc/ROADMAP.md's "Where we are", the phase file for the area, and the tests. Two proposals so far asked for things that already existed.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: The smallest version worth building
+    validations:
+      required: true

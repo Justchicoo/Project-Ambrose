@@ -1,0 +1,81 @@
+# Project Ambrose by Imjustchico
+# Publishes the work board to GitHub Pages: it reads the roadmap, the tracks, the holds and a snapshot of the open pull requests and claims, then deploys the page and the state file a contributor's assistant reads, refreshing whenever a claim opens or closes, whenever the plan changes, and at least once a day.
+name: site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "doc/roadmap/**"
+      - "doc/MILESTONE-TRACK.md"
+      - "doc/CONTRIBUTOR-TRACK.md"
+      - "doc/work/**"
+      - "doc/progress/progress.json"
+      - "apps/site/**"
+      - "apps/progress/ready.py"
+      - "packages/ui/src/tokens/variables.css"
+      - ".github/workflows/site.yml"
+  pull_request_target:
+    types: [opened, reopened, closed, ready_for_review, converted_to_draft, synchronize]
+  issues:
+    types: [opened, reopened, closed, labeled, unlabeled, edited]
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: publish
+    if: ${{ github.repository == 'Justchicoo/Project-Ambrose' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Read what is claimed right now
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
+            --json number,title,headRefName,isDraft,author,url,createdAt,updatedAt > pulls.json || echo "[]" > pulls.json
+          gh issue list --repo "$GITHUB_REPOSITORY" --state open --label milestone-track --limit 100 \
+            --json number,title,author,url,createdAt,updatedAt > issues.json || echo "[]" > issues.json
+          python -c "import json; json.dump({'pulls': json.load(open('pulls.json')), 'issues': json.load(open('issues.json'))}, open('github.json','w'))"
+          python -c "import json; snapshot=json.load(open('github.json')); print(len(snapshot['pulls']), 'open pull request(s),', len(snapshot['issues']), 'claim(s)')"
+      - name: Build the board
+        run: python apps/site/build.py --github github.json --out site
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Render the card the Discord message links to
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.63.0
+          npx playwright install --with-deps chromium
+          node apps/progress/render.mjs doc/progress/progress.svg site/progress.png
+          ls -l site/progress.png
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@v4

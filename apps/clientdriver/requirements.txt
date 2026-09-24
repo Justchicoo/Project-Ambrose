@@ -1,0 +1,8 @@
+# Project Ambrose by Imjustchico
+# The Python packages the client driver needs on the machine that drives the client, pinned to the versions it was checked with; its unit tests need none of them.
+pillow==12.3.0
+psutil==7.2.2
+PyMySQL==1.2.0
+numpy==2.3.0
+pywin32==311; sys_platform == "win32"
+windows-capture==2.0.1; sys_platform == "win32"

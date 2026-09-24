@@ -1,0 +1,220 @@
+# Project Ambrose by Imjustchico
+# Checks style, the design tokens and the front-end repository rules, forbidden files, commit trailers, the contributor track's paths on every pull request from a fork or carrying the contrib label, and the self-tests of the tooling in apps daily, on CI file pushes, and on pull requests, then builds and tests the Windows MSVC, Linux GCC, Clang, ASan and UBSan, TSan, and libFuzzer legs chosen by the schedule, a label, or a manual run.
+name: core-build
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/**", "apps/ci/**", "apps/designtokens/**", "apps/progress/**", "apps/site/**", "design/**", "doc/ROADMAP.md", "doc/roadmap/**", "doc/work/**", "vcpkg.json"]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    - cron: "17 6 * * 0"
+    - cron: "17 6 * * 3"
+    - cron: "17 6 * * 1,2,4,5,6"
+  workflow_dispatch:
+    inputs:
+      legs:
+        description: "Legs to build and test"
+        type: choice
+        default: linux-gcc
+        options: [none, linux-gcc, linux-clang, linux-gcc-asan, linux-clang-tsan, linux-clang-fuzz, windows-msvc-x64, weekly, linux, all]
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || startsWith(github.event.label.name, 'ci:')) && format('core-build-pr-{0}', github.event.pull_request.number) || github.event_name == 'pull_request' && format('core-build-label-{0}', github.run_id) || format('core-build-{0}-{1}-{2}', github.event_name, github.ref, github.event_name == 'push' && github.sha || inputs.legs) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: checks
+    if: github.event_name != 'pull_request' || github.event.action != 'labeled' || startsWith(github.event.label.name, 'ci:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    outputs:
+      build: ${{ steps.select.outputs.build }}
+      matrix: ${{ steps.select.outputs.matrix }}
+      windows_keepalive: ${{ steps.select.outputs.windows_keepalive }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Codestyle self-tests
+        if: ${{ !cancelled() }}
+        run: python apps/codestyle/tests/test_codestyle.py
+      - name: Codestyle
+        if: ${{ !cancelled() }}
+        run: python apps/codestyle/codestyle.py
+      - name: CI script self-tests
+        if: ${{ !cancelled() }}
+        run: python apps/ci/tests/test_ci.py
+      - name: Client driver self-tests
+        if: ${{ !cancelled() }}
+        run: python apps/clientdriver/tests/test_clientdriver.py
+      - name: Design token self-tests
+        if: ${{ !cancelled() }}
+        run: python apps/designtokens/tests/test_designtokens.py
+      - name: Design tokens
+        if: ${{ !cancelled() }}
+        run: python apps/designtokens/designtokens.py --check
+      - name: Vendored icons
+        if: ${{ !cancelled() }}
+        run: python apps/designtokens/icons.py --check
+      - name: Progress announcer self-tests
+        if: ${{ !cancelled() }}
+        run: python apps/progress/tests/test_progress.py
+      - name: Progress card
+        if: ${{ !cancelled() }}
+        run: python apps/progress/progress.py --check
+      - name: Work board self-tests
+        if: ${{ !cancelled() }}
+        run: python apps/site/tests/test_site.py
+      - name: Work board
+        if: ${{ !cancelled() }}
+        run: python apps/site/build.py --check
+      - name: Front-end check self-tests
+        if: ${{ !cancelled() }}
+        run: python apps/ci/tests/test_ci_frontend.py
+      - name: Front-end checks
+        if: ${{ !cancelled() }}
+        run: python apps/ci/ci_frontend_checks.py
+      - name: Forbidden files
+        if: ${{ !cancelled() }}
+        run: python apps/ci/ci_forbidden_files.py
+      - name: Findings
+        if: ${{ !cancelled() }}
+        run: python apps/ci/ci_findings.py
+      - name: Contributor track paths
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || contains(github.event.pull_request.labels.*.name, 'contrib')) }}
+        env:
+          PR_BRANCH: ${{ github.head_ref }}
+        run: python apps/ci/ci_contrib_paths.py --range ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} --branch "$PR_BRANCH"
+      - name: Roadmap summary
+        if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push') }}
+        env:
+          PR_BRANCH: ${{ github.head_ref }}
+          CHECK_RANGE: ${{ github.event_name == 'pull_request' && format('{0}...{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
+        run: python apps/ci/ci_roadmap_state.py --range "$CHECK_RANGE" --branch "$PR_BRANCH"
+      - name: Commit trailers
+        if: ${{ !cancelled() }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: python apps/ci/ci_commit_trailer.py --from-github-env
+      - name: Select build legs
+        id: select
+        if: ${{ !cancelled() }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          DISPATCH_LEGS: ${{ inputs.legs }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          PR_BRANCH: ${{ github.head_ref }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python apps/ci/ci_select_legs.py --from-github-env
+      - name: Refresh Linux vcpkg binary cache
+        if: ${{ !cancelled() && github.event_name == 'schedule' }}
+        timeout-minutes: 3
+        continue-on-error: true
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: vcpkg-${{ runner.os }}-
+          restore-keys: vcpkg-${{ runner.os }}-
+
+  windows-cache:
+    name: windows-cache
+    needs: checks
+    if: ${{ !cancelled() && github.event_name == 'schedule' && (github.event.schedule == '17 6 * * 0' || github.event.schedule == '17 6 * * 3') && (needs.checks.outputs.windows_keepalive == 'true' || needs.checks.outputs.build == '' || vars.AMBROSE_CI_BUILDS == 'off') }}
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Refresh Windows vcpkg binary cache
+        timeout-minutes: 3
+        continue-on-error: true
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: vcpkg-${{ runner.os }}-
+          restore-keys: vcpkg-${{ runner.os }}-
+
+  build:
+    name: build (${{ matrix.configure }})
+    needs: checks
+    if: ${{ !cancelled() && needs.checks.outputs.build == 'true' && (github.event_name == 'schedule' || needs.checks.result == 'success') && (github.event_name == 'workflow_dispatch' || vars.AMBROSE_CI_BUILDS != 'off') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.job_timeout }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.checks.outputs.matrix) }}
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Ninja and Clang
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang
+      - name: Lower mmap randomization for ThreadSanitizer
+        if: matrix.configure == 'linux-clang-tsan'
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: Start MySQL for database tests
+        if: runner.os == 'Linux'
+        timeout-minutes: 3
+        run: |
+          sudo systemctl start mysql.service
+          mysql -h127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS ambrose_test"
+      - name: Restore vcpkg binary cache
+        id: vcpkg-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: vcpkg-${{ runner.os }}-
+          restore-keys: vcpkg-${{ runner.os }}-
+      - name: Install dependencies and configure
+        id: configure
+        timeout-minutes: ${{ matrix.configure_timeout }}
+        env:
+          VCPKG_BINARY_SOURCES: clear;files,${{ runner.temp }}/vcpkg-binary-cache,readwrite
+        run: python apps/ci/ci_build.py --setup-vcpkg "${{ runner.temp }}/vcpkg" --configure-preset ${{ matrix.configure }} --build-preset ${{ matrix.build }} --warnings-as-errors --stage configure
+      - name: Name vcpkg binary cache
+        id: vcpkg-key
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: python apps/ci/ci_vcpkg_cache.py --cache-dir "${{ runner.temp }}/vcpkg-binary-cache" --status "build/${{ matrix.configure }}/vcpkg_installed/vcpkg/status" --prefix "vcpkg-${{ runner.os }}-" --github-output
+      - name: Save vcpkg binary cache
+        if: ${{ !cancelled() && steps.vcpkg-key.outputs.key != '' && steps.vcpkg-key.outputs.key != steps.vcpkg-restore.outputs.cache-matched-key }}
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: ${{ steps.vcpkg-key.outputs.key }}
+      - name: Build and test
+        if: ${{ !cancelled() && steps.configure.outcome == 'success' }}
+        timeout-minutes: ${{ matrix.build_timeout }}
+        env:
+          VCPKG_ROOT: ${{ runner.temp }}/vcpkg
+          VCPKG_BINARY_SOURCES: clear;files,${{ runner.temp }}/vcpkg-binary-cache,readwrite
+          AMBROSE_TEST_DB: ${{ runner.os == 'Linux' && '127.0.0.1;3306;root;root;ambrose_test' || '' }}
+          CL: ${{ runner.os == 'Windows' && '/MP' || '' }}
+        run: python apps/ci/ci_build.py --configure-preset ${{ matrix.configure }} --build-preset ${{ matrix.build }} --warnings-as-errors --stage build-test

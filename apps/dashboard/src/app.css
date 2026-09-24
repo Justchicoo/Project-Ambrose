@@ -1,0 +1,130 @@
+/*
+ * Project Ambrose by Imjustchico
+ * The panel's stylesheet: Tailwind with its own scales for the shadcn-svelte components, their animations, the vendored faces, the state hooks the components are written against mapped onto the attributes Bits UI sets, and shadcn's theme variables plus the log value ramp pointed at the Ambrose palette so every colour still comes from design/tokens.json.
+ */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@ambrose/ui/fonts.css";
+@import "@ambrose/ui/variables.css";
+
+@source "./";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@custom-variant data-open (&:where([data-state="open"], [data-open]:not([data-open="false"])));
+@custom-variant data-closed (&:where([data-state="closed"], [data-closed]:not([data-closed="false"])));
+@custom-variant data-checked (&:where([data-state="checked"], [data-checked]:not([data-checked="false"])));
+@custom-variant data-unchecked (&:where([data-state="unchecked"], [data-unchecked]:not([data-unchecked="false"])));
+@custom-variant data-active (&:where([data-state="active"], [data-active]:not([data-active="false"])));
+@custom-variant data-horizontal (&:where([data-orientation="horizontal"]));
+@custom-variant data-vertical (&:where([data-orientation="vertical"]));
+@custom-variant data-disabled (&:where([data-disabled]:not([data-disabled="false"])));
+@custom-variant data-inset (&:where([data-inset]:not([data-inset="false"])));
+@custom-variant data-highlighted (&:where([data-highlighted]:not([data-highlighted="false"])));
+@custom-variant data-placeholder (&:where([data-placeholder]:not([data-placeholder="false"])));
+
+:root {
+    --radius: 0.625rem;
+    --background: var(--ambrose-color-surface-page);
+    --foreground: var(--ambrose-color-fg-body);
+    --card: var(--ambrose-color-surface-card);
+    --card-foreground: var(--ambrose-color-fg-body);
+    --popover: var(--ambrose-color-surface-card);
+    --popover-foreground: var(--ambrose-color-fg-body);
+    --primary: var(--ambrose-color-fill-action);
+    --primary-foreground: var(--ambrose-color-on-fill);
+    --secondary: var(--ambrose-color-surface-sunken);
+    --secondary-foreground: var(--ambrose-color-fg-body);
+    --muted: var(--ambrose-color-surface-sunken);
+    --muted-foreground: var(--ambrose-color-fg-muted);
+    --faint: var(--ambrose-color-fg-faint);
+    --accent: var(--ambrose-color-surface-sunken);
+    --accent-foreground: var(--ambrose-color-fg-body);
+    --destructive: var(--ambrose-color-state-wrong);
+    --healthy: var(--ambrose-color-state-healthy);
+    --waiting: var(--ambrose-color-state-waiting);
+    --unknown: var(--ambrose-color-state-unknown);
+    --mine: var(--ambrose-color-mine);
+    --value-number: var(--ambrose-color-value-number);
+    --value-text: var(--ambrose-color-value-text);
+    --value-name: var(--ambrose-color-value-name);
+    --value-address: var(--ambrose-color-value-address);
+    --value-setting: var(--ambrose-color-value-setting);
+    --border: var(--ambrose-color-edge-quiet);
+    --input: var(--ambrose-color-edge-strong);
+    --ring: var(--ambrose-color-focus-ring);
+    --chart-1: var(--ambrose-color-series-1);
+    --chart-2: var(--ambrose-color-series-2);
+    --chart-3: var(--ambrose-color-series-3);
+    --chart-4: var(--ambrose-color-series-4);
+    --chart-5: var(--ambrose-color-series-5);
+    --sidebar: var(--ambrose-color-surface-chrome);
+    --sidebar-foreground: var(--ambrose-color-fg-body);
+    --sidebar-primary: var(--ambrose-color-fill-action);
+    --sidebar-primary-foreground: var(--ambrose-color-on-fill);
+    --sidebar-accent: var(--ambrose-color-surface-card);
+    --sidebar-accent-foreground: var(--ambrose-color-fg-body);
+    --sidebar-border: var(--ambrose-color-edge-quiet);
+    --sidebar-ring: var(--ambrose-color-focus-ring);
+}
+
+@theme inline {
+    --font-sans: var(--ambrose-font-interface);
+    --font-serif: var(--ambrose-font-display);
+    --font-mono: var(--ambrose-font-mono);
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-faint: var(--faint);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-healthy: var(--healthy);
+    --color-waiting: var(--waiting);
+    --color-unknown: var(--unknown);
+    --color-mine: var(--mine);
+    --color-value-number: var(--value-number);
+    --color-value-text: var(--value-text);
+    --color-value-name: var(--value-name);
+    --color-value-address: var(--value-address);
+    --color-value-setting: var(--value-setting);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+
+    body {
+        @apply bg-background font-sans text-foreground antialiased;
+    }
+}

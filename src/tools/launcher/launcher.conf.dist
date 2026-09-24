@@ -1,0 +1,12 @@
+# Project Ambrose by Imjustchico
+# Every launcher option with its default; copy this file to launcher.conf, which git ignores, and edit that. doc/config/launcher.md explains each one.
+ClientDir =
+LoginHost = 127.0.0.1
+LoginPort = 12000
+Locale = en-US
+Window = 1280x720
+Fullscreen = 0
+WindowX =
+WindowY =
+RunDir =
+Patch = 0

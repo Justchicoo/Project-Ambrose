@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "name": "Project Ambrose standard problem codes",
+  "problems": [
+    {
+      "code": "install_missing",
+      "subject": "client",
+      "severity": "critical",
+      "message": "No client installation was found",
+      "operator_action": "Open the client data page, point the app at a valid installation, and verify the revision in use.",
+      "fix_route": "client"
+    },
+    {
+      "code": "type_dump_missing",
+      "subject": "type dump",
+      "severity": "warning",
+      "message": "No type dump is in use",
+      "operator_action": "Build or load a type dump for the installed client revision before the app starts reading object properties.",
+      "fix_route": "client"
+    },
+    {
+      "code": "type_dump_stale",
+      "subject": "type dump",
+      "severity": "warning",
+      "message": "The type dump does not match the installed client program",
+      "operator_action": "Rebuild the type dump for the current client revision and redeploy it before the app keeps serving data.",
+      "fix_route": "client"
+    },
+    {
+      "code": "database_unreachable",
+      "subject": "database",
+      "severity": "critical",
+      "message": "A database the app needs cannot be reached",
+      "operator_action": "Check the database host, credentials, and connectivity, then restart or reload the affected app once the service is reachable.",
+      "fix_route": "settings"
+    },
+    {
+      "code": "schema_update_pending",
+      "subject": "database",
+      "severity": "warning",
+      "message": "A database update is waiting to be applied",
+      "operator_action": "Apply the pending SQL updates for the affected server and confirm the schema version before the app accepts traffic.",
+      "fix_route": "servers"
+    },
+    {
+      "code": "revision_not_allowed",
+      "subject": "client",
+      "severity": "warning",
+      "message": "The client's revision is not one Login.AllowedRevision lists",
+      "operator_action": "Switch the app to an allowed client revision or update the allowed-revision list so the service can keep serving.",
+      "fix_route": "client"
+    }
+  ]
+}

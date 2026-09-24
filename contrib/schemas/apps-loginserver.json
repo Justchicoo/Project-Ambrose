@@ -1,0 +1,10 @@
+[
+  {
+    "name": "loginserver",
+    "role": "loginserver",
+    "realm": "Ambrose",
+    "address": "127.0.0.1",
+    "port": 12001,
+    "revision": "r806919.Wizard_1_610"
+  }
+]

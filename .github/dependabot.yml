@@ -1,0 +1,41 @@
+# Project Ambrose by Imjustchico
+# Keeps the workflow actions and the front-end workspace current without flooding the review queue: one grouped pull request a month for each, none for a major version, which is a decision rather than an update.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 2
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "Actions"
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: monthly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 2
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "Front end"
+    groups:
+      front-end:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

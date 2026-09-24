@@ -1,0 +1,21 @@
+# Project Ambrose by Imjustchico
+# What the formatter leaves alone: generated files, build output, vendored assets and everything the C++ side owns.
+node_modules/
+dist/
+storybook-static/
+build/
+.npm-cache/
+packages/ui/src/tokens/tokens.css
+packages/ui/src/tokens/tokens.ts
+packages/ui/src/tokens/variables.css
+packages/ui/src/icons/icons.ts
+packages/ui/src/fonts/
+design/icons/
+/src/
+/doc/
+/data/
+/conf/
+/deps/
+/modules/
+/contrib/
+package-lock.json

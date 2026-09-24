@@ -1,0 +1,57 @@
+{
+  "$description": "Project Ambrose by Imjustchico: the only exceptions the front-end checks allow. A line here is an exception a reviewer can see, since the repository carries no comments to hold one.",
+  "lines": [
+    {
+      "path": "apps/dashboard/src/lib/components/ui/dialog/dialog-content.svelte",
+      "contains": "max-w-[calc(100%_-_2rem)]",
+      "reason": "A dialog keeps a 1rem gutter on each side of a narrow screen; the width is the viewport less two spacing steps, which no single size step expresses."
+    },
+    {
+      "path": "apps/dashboard/src/lib/components/ui/sidebar/sidebar.svelte",
+      "contains": "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_(--spacing(4)))]",
+      "reason": "The collapsed sidebar is its icon width token plus one spacing step, computed from both tokens."
+    },
+    {
+      "path": "apps/dashboard/src/lib/components/ui/sidebar/sidebar.svelte",
+      "contains": "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_(--spacing(4))_+_2px)]",
+      "reason": "The floating and inset collapsed sidebar adds its two border pixels to the same computed width."
+    },
+    {
+      "path": "apps/dashboard/src/lib/components/ui/switch/switch.svelte",
+      "contains": "translate-x-[calc(100%_-_2px)]",
+      "reason": "The switch thumb travels its own width less its two-pixel inset, which depends on the thumb's size, not on a scale step."
+    },
+    {
+      "path": "apps/dashboard/src/lib/components/ui/tabs/tabs-trigger.svelte",
+      "contains": "h-[calc(100%_-_1px)]",
+      "reason": "A tab is one pixel shorter than its list so the list's border shows beneath it."
+    },
+    {
+      "path": "apps/dashboard/src/lib/components/ui/tooltip/tooltip-content.svelte",
+      "contains": "translate-y-[calc(-50%_-_2px)]",
+      "reason": "The tooltip's arrow sits half its own height plus two pixels outside the bubble, a position computed from its size."
+    },
+    {
+      "path": "apps/dashboard/src/pages/Console.svelte",
+      "contains": "h-[52vh]",
+      "reason": "The console fills about half the viewport's height whatever the screen; no size step is a share of the viewport."
+    },
+    {
+      "path": "apps/dashboard/src/pages/Logs.svelte",
+      "contains": "h-[60vh]",
+      "reason": "The log list fills most of the viewport's height whatever the screen; no size step is a share of the viewport."
+    }
+  ],
+  "urls": [
+    "http://www.w3.org/",
+    "https://www.w3.org/",
+    "https://svelte.dev/e/",
+    "https://tailwindcss.com"
+  ],
+  "reasons": {
+    "http://www.w3.org/": "The XML namespace an inline SVG declares. Nothing is fetched from it.",
+    "https://www.w3.org/": "The same namespace in its secure spelling.",
+    "https://svelte.dev/e/": "The address Svelte prints beside a runtime error. It is a string in a message, never a request.",
+    "https://tailwindcss.com": "The address the styling engine prints beside its own error text, for the same reason."
+  }
+}

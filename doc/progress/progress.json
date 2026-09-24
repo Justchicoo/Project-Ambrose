@@ -1,0 +1,155 @@
+{
+  "schema": 1,
+  "milestones": {
+    "done": 55,
+    "total": 394,
+    "percent": 14.0
+  },
+  "checks": {
+    "done": 542,
+    "total": 2392,
+    "percent": 22.7
+  },
+  "contributor_track": {
+    "merged": 71,
+    "open": 59
+  },
+  "phases": [
+    {
+      "phase": 1,
+      "title": "Foundations to first handshake",
+      "milestones_done": 18,
+      "milestones_total": 22,
+      "checks_done": 183,
+      "checks_total": 197
+    },
+    {
+      "phase": 2,
+      "title": "Log in to character select",
+      "milestones_done": 11,
+      "milestones_total": 15,
+      "checks_done": 112,
+      "checks_total": 119
+    },
+    {
+      "phase": 3,
+      "title": "Create list and delete a wizard",
+      "milestones_done": 14,
+      "milestones_total": 28,
+      "checks_done": 115,
+      "checks_total": 178
+    },
+    {
+      "phase": 4,
+      "title": "A wizard stands in ravenwood",
+      "milestones_done": 2,
+      "milestones_total": 16,
+      "checks_done": 35,
+      "checks_total": 132
+    },
+    {
+      "phase": 5,
+      "title": "The zone comes alive for one player",
+      "milestones_done": 0,
+      "milestones_total": 8,
+      "checks_done": 1,
+      "checks_total": 56
+    },
+    {
+      "phase": 6,
+      "title": "Other players are visible",
+      "milestones_done": 0,
+      "milestones_total": 18,
+      "checks_done": 2,
+      "checks_total": 139
+    },
+    {
+      "phase": 7,
+      "title": "An npc offers a quest",
+      "milestones_done": 0,
+      "milestones_total": 13,
+      "checks_done": 0,
+      "checks_total": 84
+    },
+    {
+      "phase": 8,
+      "title": "The wizard grows vitals xp spells backpack and gear",
+      "milestones_done": 0,
+      "milestones_total": 14,
+      "checks_done": 2,
+      "checks_total": 97
+    },
+    {
+      "phase": 9,
+      "title": "A duel completes",
+      "milestones_done": 0,
+      "milestones_total": 12,
+      "checks_done": 0,
+      "checks_total": 84
+    },
+    {
+      "phase": 10,
+      "title": "Play the wizard city opening quests",
+      "milestones_done": 0,
+      "milestones_total": 18,
+      "checks_done": 0,
+      "checks_total": 113
+    },
+    {
+      "phase": 11,
+      "title": "Real combat",
+      "milestones_done": 0,
+      "milestones_total": 25,
+      "checks_done": 0,
+      "checks_total": 130
+    },
+    {
+      "phase": 12,
+      "title": "Social wizards instances and realms",
+      "milestones_done": 0,
+      "milestones_total": 23,
+      "checks_done": 0,
+      "checks_total": 138
+    },
+    {
+      "phase": 13,
+      "title": "Pets cantrips crafting and minigames",
+      "milestones_done": 0,
+      "milestones_total": 21,
+      "checks_done": 0,
+      "checks_total": 85
+    },
+    {
+      "phase": 14,
+      "title": "Dungeons tutorial and pvp",
+      "milestones_done": 0,
+      "milestones_total": 16,
+      "checks_done": 0,
+      "checks_total": 55
+    },
+    {
+      "phase": 15,
+      "title": "Housing gardening and fishing",
+      "milestones_done": 0,
+      "milestones_total": 21,
+      "checks_done": 0,
+      "checks_total": 68
+    },
+    {
+      "phase": 16,
+      "title": "Patch server and tooling ownership",
+      "milestones_done": 1,
+      "milestones_total": 13,
+      "checks_done": 6,
+      "checks_total": 80
+    },
+    {
+      "phase": 17,
+      "title": "Operations console admin api dashboard and metrics",
+      "milestones_done": 9,
+      "milestones_total": 111,
+      "checks_done": 86,
+      "checks_total": 637
+    }
+  ]
+}

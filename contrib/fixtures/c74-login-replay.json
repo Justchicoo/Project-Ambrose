@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "name": "login-success",
+  "source": "Ambrose-authored message-definition fixture; no client capture",
+  "sequence": [
+    {
+      "name": "auth-request",
+      "direction": "client-to-server",
+      "message": "MSG_USER_AUTHEN_V3",
+      "service": 7,
+      "order": 27,
+      "fields": {
+        "fixture": "empty-body-request"
+      }
+    },
+    {
+      "name": "auth-response",
+      "direction": "server-to-client",
+      "message": "MSG_USER_AUTHEN_RSP",
+      "service": 7,
+      "order": 14,
+      "fields": {
+        "Error": 0
+        ,"UserID": 0
+        ,"Rec1": ""
+        ,"Reason": ""
+        ,"TimeStamp": ""
+        ,"PayingUser": 0
+        ,"Flags": 0
+        ,"SupportID": ""
+        ,"PublicPlayerName": ""
+      }
+    },
+    {
+      "name": "admit-indication",
+      "direction": "server-to-client",
+      "message": "MSG_USER_ADMIT_IND",
+      "service": 7,
+      "order": 20,
+      "fields": {
+        "Status": 1
+      }
+    },
+    {
+      "name": "character-list-end",
+      "direction": "server-to-client",
+      "message": "MSG_CHARACTERLIST",
+      "service": 7,
+      "order": 4,
+      "fields": {
+        "Error": 0
+      }
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "auth-response",
+      "request_hex": "0df0090000000000071b040000",
+      "expected_response_hex": "0df0270000000000070e220000000000000000000000000000000000000000000000000000000000000000",
+      "response_bytes": 43
+    },
+    {
+      "name": "admit-indication",
+      "request_hex": "0df0090000000000071b040000",
+      "expected_response_hex": "0df011000000000007140c00010000000000000000",
+      "response_bytes": 21
+    },
+    {
+      "name": "character-list-end",
+      "request_hex": "0df00900000000000708040000",
+      "expected_response_hex": "0df00d0000000000070408000000000000",
+      "response_bytes": 17
+    }
+  ]
+}

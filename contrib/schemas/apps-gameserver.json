@@ -1,0 +1,10 @@
+[
+  {
+    "address": "",
+    "name": "gameserver",
+    "port": 0,
+    "realm": "",
+    "revision": "ba79e90",
+    "role": "gameserver"
+  }
+]

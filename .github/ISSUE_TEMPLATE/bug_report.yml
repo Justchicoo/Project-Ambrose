@@ -1,0 +1,46 @@
+# Project Ambrose by Imjustchico
+# The form for a bug: which part broke, what was expected and what happened, the build, and the log lines, with a reminder to strip secrets.
+name: Bug report
+description: Something in a server, the launcher, the panel or a tool does not work as documented.
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: part
+    attributes:
+      label: Which part
+      options:
+        - Login server
+        - Game server
+        - Patch server
+        - Launcher
+        - Panel or admin API
+        - A tool in apps or contrib
+        - Build or CI
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened, and how to make it happen again
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Commit or build
+      description: The commit you built, and Windows or Linux.
+      placeholder: 573f769, Windows
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines
+      description: Remove passwords, tokens and database connection strings before pasting.
+      render: text

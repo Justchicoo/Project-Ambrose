@@ -1,0 +1,12 @@
+/*
+ * Project Ambrose by Imjustchico
+ * The one stylesheet a surface loads: the engine, the generated tokens, the vendored faces and the base layer, in that order, with the shared components named as a source so a surface built from another folder still gets every class they use.
+ */
+
+@import "tailwindcss";
+@import "../tokens/tokens.css";
+@import "../fonts/fonts.css";
+@import "./base.css";
+
+@source "../components";
+@source "../gallery";

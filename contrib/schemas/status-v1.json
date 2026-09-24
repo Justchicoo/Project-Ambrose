@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ambrose.invalid/schema/status-v1.json",
+  "title": "Project Ambrose status response v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema",
+    "app",
+    "role",
+    "realm",
+    "revision",
+    "state",
+    "uptime",
+    "memory",
+    "threads",
+    "sessions",
+    "tick",
+    "stats",
+    "problems"
+  ],
+  "properties": {
+    "schema": { "type": "integer", "minimum": 1 },
+    "app": { "type": "string", "minLength": 1 },
+    "role": { "type": "string", "minLength": 1 },
+    "realm": { "type": "string" },
+    "revision": { "type": "string" },
+    "state": { "type": "string", "minLength": 1 },
+    "uptime": { "type": "integer", "minimum": 0 },
+    "memory": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["resident_bytes"],
+      "properties": {
+        "resident_bytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "threads": { "type": ["integer", "null"], "minimum": 0 },
+    "sessions": { "type": ["integer", "null"], "minimum": 0 },
+    "tick": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["average_ms", "max_ms", "samples", "window_seconds"],
+      "properties": {
+        "average_ms": { "type": "number", "minimum": 0 },
+        "max_ms": { "type": "number", "minimum": 0 },
+        "samples": { "type": "integer", "minimum": 0 },
+        "window_seconds": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "stats": { "type": "object" },
+    "problems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message", "subject"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "message": { "type": "string", "minLength": 1 },
+          "subject": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

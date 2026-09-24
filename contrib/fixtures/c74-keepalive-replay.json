@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "name": "keepalive-exchange",
+  "source": "Ambrose-authored control-message fixture; no client capture",
+  "sequence": [
+    {
+      "name": "client-keepalive",
+      "direction": "client-to-server",
+      "message": "CLIENT_KEEPALIVE",
+      "opcode": 3,
+      "fields": {
+        "SessionId": 4660,
+        "Milliseconds": 500,
+        "Sequence": 3
+      }
+    },
+    {
+      "name": "server-keepalive-response",
+      "direction": "server-to-client",
+      "message": "KEEPALIVE_RESPONSE",
+      "opcode": 4,
+      "fields": {
+        "SessionId": 4660,
+        "Milliseconds": 999,
+        "Sequence": 3
+      }
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "keepalive-response",
+      "request_hex": "0df00b00010300003412f401030000",
+      "expected_response_hex": "0df00b00010400003412e703030000",
+      "response_bytes": 15
+    }
+  ]
+}

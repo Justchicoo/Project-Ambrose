@@ -1,0 +1,170 @@
+/*
+ * Project Ambrose by Imjustchico
+ * Generated from design/tokens.json: the semantic colours, sizes, durations and font families as plain custom properties with the light remap, and no Tailwind theme, for a surface that keeps Tailwind's own scales.
+ */
+
+:root {
+    color-scheme: dark;
+    --ambrose-color-surface-page: #0B1020;
+    --ambrose-color-surface-card: #131B31;
+    --ambrose-color-surface-sunken: #0E1527;
+    --ambrose-color-surface-chrome: #070B16;
+    --ambrose-color-edge-quiet: #1B2540;
+    --ambrose-color-edge-strong: #22304F;
+    --ambrose-color-edge-control: #546AA5;
+    --ambrose-color-value-number: #D1988F;
+    --ambrose-color-value-text: #B4A5FB;
+    --ambrose-color-value-name: #8EE4A1;
+    --ambrose-color-value-address: #28BDFA;
+    --ambrose-color-value-setting: #E07AAE;
+    --ambrose-color-fg-body: #F2E8D5;
+    --ambrose-color-fg-muted: #A8B6D4;
+    --ambrose-color-fg-faint: #8798BC;
+    --ambrose-color-action: #E4B457;
+    --ambrose-color-action-pressed: #B98A2D;
+    --ambrose-color-state-healthy: #5FD3C4;
+    --ambrose-color-state-waiting: #E4B457;
+    --ambrose-color-state-wrong: #E2725B;
+    --ambrose-color-state-unknown: #8798BC;
+    --ambrose-color-mine: #C77DFF;
+    --ambrose-color-focus-ring: #E4B457;
+    --ambrose-color-fill-action: #E4B457;
+    --ambrose-color-fill-action-pressed: #B98A2D;
+    --ambrose-color-fill-danger: #E2725B;
+    --ambrose-color-fill-healthy: #5FD3C4;
+    --ambrose-color-fill-mine: #C77DFF;
+    --ambrose-color-on-fill: #0B1020;
+    --ambrose-color-series-1: #C9503F;
+    --ambrose-color-series-2: #B8C24E;
+    --ambrose-color-series-3: #79C98A;
+    --ambrose-color-series-4: #2A8F7C;
+    --ambrose-color-series-5: #7D6BD6;
+    --ambrose-color-series-6: #A560A5;
+    --ambrose-color-series-7: #E1A6C4;
+}
+
+:root[data-theme="light"] {
+    color-scheme: light;
+    --ambrose-color-surface-page: #F4EAD5;
+    --ambrose-color-surface-card: #FFFDF7;
+    --ambrose-color-surface-sunken: #EADFC4;
+    --ambrose-color-surface-chrome: #FBF5E7;
+    --ambrose-color-edge-quiet: #D9CBAB;
+    --ambrose-color-edge-strong: #C3AE86;
+    --ambrose-color-edge-control: #546AA5;
+    --ambrose-color-value-number: #521915;
+    --ambrose-color-value-text: #172075;
+    --ambrose-color-value-name: #043415;
+    --ambrose-color-value-address: #00435C;
+    --ambrose-color-value-setting: #5B013A;
+    --ambrose-color-fg-body: #1B1608;
+    --ambrose-color-fg-muted: #4A3F28;
+    --ambrose-color-fg-faint: #5F5238;
+    --ambrose-color-action: #7A5A12;
+    --ambrose-color-action-pressed: #6A4E0F;
+    --ambrose-color-state-healthy: #0F6F63;
+    --ambrose-color-state-waiting: #7A5A12;
+    --ambrose-color-state-wrong: #A33A25;
+    --ambrose-color-state-unknown: #5F5238;
+    --ambrose-color-mine: #6B2FA0;
+    --ambrose-color-focus-ring: #7A5A12;
+    --ambrose-color-fill-action: #E4B457;
+    --ambrose-color-fill-action-pressed: #B98A2D;
+    --ambrose-color-fill-danger: #E2725B;
+    --ambrose-color-fill-healthy: #5FD3C4;
+    --ambrose-color-fill-mine: #C77DFF;
+    --ambrose-color-on-fill: #0B1020;
+    --ambrose-color-series-1: #B45A5A;
+    --ambrose-color-series-2: #8A7A22;
+    --ambrose-color-series-3: #2F5A22;
+    --ambrose-color-series-4: #2D7E9C;
+    --ambrose-color-series-5: #3B3AA8;
+    --ambrose-color-series-6: #6A2A86;
+    --ambrose-color-series-7: #8E2A5C;
+}
+
+@media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+        color-scheme: light;
+        --ambrose-color-surface-page: #F4EAD5;
+        --ambrose-color-surface-card: #FFFDF7;
+        --ambrose-color-surface-sunken: #EADFC4;
+        --ambrose-color-surface-chrome: #FBF5E7;
+        --ambrose-color-edge-quiet: #D9CBAB;
+        --ambrose-color-edge-strong: #C3AE86;
+        --ambrose-color-edge-control: #546AA5;
+        --ambrose-color-value-number: #521915;
+        --ambrose-color-value-text: #172075;
+        --ambrose-color-value-name: #043415;
+        --ambrose-color-value-address: #00435C;
+        --ambrose-color-value-setting: #5B013A;
+        --ambrose-color-fg-body: #1B1608;
+        --ambrose-color-fg-muted: #4A3F28;
+        --ambrose-color-fg-faint: #5F5238;
+        --ambrose-color-action: #7A5A12;
+        --ambrose-color-action-pressed: #6A4E0F;
+        --ambrose-color-state-healthy: #0F6F63;
+        --ambrose-color-state-waiting: #7A5A12;
+        --ambrose-color-state-wrong: #A33A25;
+        --ambrose-color-state-unknown: #5F5238;
+        --ambrose-color-mine: #6B2FA0;
+        --ambrose-color-focus-ring: #7A5A12;
+        --ambrose-color-fill-action: #E4B457;
+        --ambrose-color-fill-action-pressed: #B98A2D;
+        --ambrose-color-fill-danger: #E2725B;
+        --ambrose-color-fill-healthy: #5FD3C4;
+        --ambrose-color-fill-mine: #C77DFF;
+        --ambrose-color-on-fill: #0B1020;
+        --ambrose-color-series-1: #B45A5A;
+        --ambrose-color-series-2: #8A7A22;
+        --ambrose-color-series-3: #2F5A22;
+        --ambrose-color-series-4: #2D7E9C;
+        --ambrose-color-series-5: #3B3AA8;
+        --ambrose-color-series-6: #6A2A86;
+        --ambrose-color-series-7: #8E2A5C;
+    }
+}
+
+:root {
+    --ambrose-density: 1;
+    --ambrose-size-chrome-bar: 44px;
+    --ambrose-size-side-bar: 236px;
+    --ambrose-size-touch-target: 44px;
+    --ambrose-size-dialog: 520px;
+    --ambrose-size-focus-ring: 2px;
+    --ambrose-size-border: 1px;
+    --ambrose-size-action-inset: 3px;
+    --ambrose-duration-flip: 90ms;
+    --ambrose-duration-hover: 120ms;
+    --ambrose-duration-panel: 200ms;
+    --ambrose-duration-screen: 320ms;
+    --ambrose-font-display: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+    --ambrose-font-interface: Karla, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --ambrose-font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
+}
+
+:root[data-density="compact"] {
+    --ambrose-density: 0.85;
+}
+
+@media (pointer: coarse) {
+    :root, :root[data-density] {
+        --ambrose-density: 1;
+    }
+}
+
+:root[data-motion="off"] {
+    --ambrose-duration-flip: 0ms;
+    --ambrose-duration-hover: 0ms;
+    --ambrose-duration-panel: 0ms;
+    --ambrose-duration-screen: 0ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root:not([data-motion="on"]) {
+        --ambrose-duration-flip: 0ms;
+        --ambrose-duration-hover: 0ms;
+        --ambrose-duration-panel: 0ms;
+        --ambrose-duration-screen: 0ms;
+    }
+}

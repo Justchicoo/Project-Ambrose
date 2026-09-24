@@ -1,0 +1,24 @@
+{
+  "title": "C-39: a refused login can reconnect and retry",
+  "include": "parts/common.json",
+  "notes": [
+    "The first password is deliberately wrong; the reconnect button must return to login before the good password is sent.",
+    "This keeps reconnect behavior separate from the broader login-to-character-select happy path."
+  ],
+  "steps": [
+    {"action": "wait_client_log", "name": "the client brings its renderer up",
+     "pattern": "About to initialize graphical client\\.", "timeout": 180},
+    {"action": "wait_screen", "name": "the login window is on the screen", "screens": ["login"], "timeout": 120},
+    {"action": "submit_login", "name": "submit a wrong password", "password": "{wrongpassword}"},
+    {"action": "wait_client_log", "name": "the client is told the login failed",
+     "pattern": "LOGIN RESPONSE: Error=(-?\\d+)", "timeout": 30, "reject": "0"},
+    {"action": "wait_screen", "name": "the invalid-login dialog is on the screen", "screens": ["invalid"], "timeout": 60},
+    {"action": "click", "name": "press the reconnect button", "target": "login_reconnect", "attempts": 8,
+     "dwell": 0.4, "on_screen": "invalid",
+     "until": {"action": "wait_client_log", "pattern": "AppCloseConnection\\(\\) called", "timeout": 8}},
+    {"action": "wait_screen", "name": "the login window is back", "screens": ["login"], "timeout": 120},
+    {"action": "submit_login", "name": "submit the right password", "password": "{password}"},
+    {"action": "wait_client_log", "name": "the client is admitted after reconnecting",
+     "pattern": "The LoginServer has admitted the user", "timeout": 30, "record": true}
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client", "unplugin-icons/types/svelte"],
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": false,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@ambrose/ui": ["./packages/ui/src/index.ts"],
+      "@ambrose/ui/tokens": ["./packages/ui/src/tokens/tokens.ts"],
+      "@ambrose/ui/motion": ["./packages/ui/src/motion/motion.svelte.ts"],
+      "@ambrose/ui/bridge": ["./packages/ui/src/bridge/bridge.ts"],
+      "@ambrose/ui/icons": ["./packages/ui/src/icons/icons.ts"],
+      "$lib": ["./apps/dashboard/src/lib"],
+      "$lib/*": ["./apps/dashboard/src/lib/*"]
+    }
+  },
+  "include": [
+    "packages/**/*.ts",
+    "packages/**/*.svelte",
+    "apps/dashboard/**/*.ts",
+    "apps/dashboard/**/*.svelte",
+    "apps/launcherui/**/*.ts",
+    "apps/launcherui/**/*.svelte",
+    "*.ts",
+    "*.js"
+  ],
+  "exclude": ["node_modules", "**/dist", "storybook-static"]
+}

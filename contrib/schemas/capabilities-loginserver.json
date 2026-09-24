@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "reload_targets": ["config"],
+  "schedule_actions": ["restart"],
+  "announcement_channels": ["admins"],
+  "problem_codes": [
+    { "code": "database_unreachable", "description": "The login database cannot be reached." },
+    { "code": "schema_update_pending", "description": "Pending SQL updates need to be applied." }
+  ]
+}

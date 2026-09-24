@@ -1,0 +1,6 @@
+# Project Ambrose by Imjustchico
+# Default settings for zone_extractor; command-line options override these values.
+GameDataPath =
+TypeDumpPath =
+OutputPath =
+OutputMode = sql

@@ -1,0 +1,45 @@
+# Project Ambrose by Imjustchico
+# The form for claiming a roadmap milestone from the milestone track: which one, what the contributor can build and run it on, and which of its acceptance checks they already know they cannot run.
+name: Claim a milestone
+description: Hold one of the roadmap milestones that are open to outside help, before you start building it.
+title: "Claim: "
+labels: ["milestone-track"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        doc/MILESTONE-TRACK.md lists the milestones open to outside help and says what finishing one means. A milestone not in its "Open now" table is reserved, and a pull request for one is closed, so check the table first. `python apps/progress/ready.py --open` prints the same list from a clone.
+
+        Opening a draft pull request holds a milestone just as well as this form, and sooner.
+  - type: input
+    id: milestone
+    attributes:
+      label: Which milestone
+      description: Its id and title, as doc/MILESTONE-TRACK.md writes them.
+      placeholder: 4.04 World wire math and LocationString
+    validations:
+      required: true
+  - type: checkboxes
+    id: have
+    attributes:
+      label: What you have
+      description: What a milestone needs is in its row. Say what you can actually run, and nothing you cannot.
+      options:
+        - label: A working build of the project, on Windows or on Linux
+        - label: Your own client installation at the pinned revision
+        - label: A MySQL or MariaDB the tests can reach
+        - label: A second machine, a virtual machine or a phone, for a check that needs one
+  - type: textarea
+    id: gated
+    attributes:
+      label: Checks you already know you cannot run
+      description: Read your milestone's acceptance list. Anything marked Dev-gated, Client-gated or Real client that needs something you do not have, name it here. Saying so now costs nothing and decides nothing against you.
+    validations:
+      required: false
+  - type: input
+    id: when
+    attributes:
+      label: When you expect to open a draft pull request
+      description: A claim with no push for two weeks goes back to the open table, with whatever you pushed left in place.
+    validations:
+      required: false
