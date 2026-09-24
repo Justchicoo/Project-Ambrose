@@ -76,8 +76,8 @@ The server can read and write the client's binary table-list format byte for byt
 
 **Acceptance**
 
-- [ ] Model -> XML -> model and BIN lossless
-- [ ] Reference XML gives 3590 file tables beside About, so 3591 _TableList rows (Base 140, PatchClient 97)
+- [x] Model -> XML -> model and BIN lossless (`LatestFileListXmlTest.ModelXmlAndBinaryRoundTrip`)
+- [x] Reference XML gives 3590 file tables beside About, so 3591 _TableList rows (Base 140, PatchClient 97) (`LatestFileListXmlTest.ReferenceXmlHasExpectedTableCountsWhenConfigured`, run with AMBROSE_REFERENCE_LATEST_FILE_LIST_XML naming an r806919 LatestFileList.xml the developer obtained themselves: 3591 rows, 3590 file tables, Base 140, PatchClient 97)
 
 ### Detailed spec from PAT-4: LatestFileList model and XML writer/reader
 
@@ -95,9 +95,9 @@ One in-memory manifest can be emitted as both LatestFileList.xml and LatestFileL
 
 **Acceptance**
 
-- [ ] Unit: model -> XML -> model and model -> BIN -> model are both lossless
-- [ ] Unit: _TableList row count equals package count + About; empty TarFileName is written as an empty STR element
-- [ ] Env-gated: parsing a developer-supplied reference XML gives 3591 _TableList rows, About plus 3590 file tables (Base 140 records, PatchClient 97, every other table exactly 1 record 'Data/GameData/<table>.wad')
+- [x] Unit: model -> XML -> model and model -> BIN -> model are both lossless (`LatestFileListXmlTest.ModelXmlAndBinaryRoundTrip`)
+- [x] Unit: _TableList row count equals package count + About; empty TarFileName is written as an empty STR element (`LatestFileListXmlTest.ModelXmlAndBinaryRoundTrip`, `LatestFileListXmlTest.EmptyTarFileNameIsWrittenAndReadBack`)
+- [x] Env-gated: parsing a developer-supplied reference XML gives 3591 _TableList rows, About plus 3590 file tables (Base 140 records, PatchClient 97, every other table exactly 1 record 'Data/GameData/<table>.wad') (`LatestFileListXmlTest.ReferenceXmlHasExpectedTableCountsWhenConfigured`, run with AMBROSE_REFERENCE_LATEST_FILE_LIST_XML naming an r806919 LatestFileList.xml the developer obtained themselves: 3591 rows, 3590 file tables, Base 140, PatchClient 97)
 
 **Risks**
 

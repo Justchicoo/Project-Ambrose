@@ -123,7 +123,6 @@ A row that says **before the reset** came from a pull request that was on the re
 
 | ID | Who | Sent as | What is left |
 |---|---|---|---|
-| 16.02 | MeruneFleuruwu | [#3](https://github.com/Justchicoo/Project-Ambrose/pull/3) | The model and the binary side are sound, and they build on 16.01 rather than parsing the format a second time. The XML shape came from a deliverable line of ours that was wrong: a real manifest gives each table its own tag rather than a fixed one with the name in an attribute, About sorts first in _TableList rather than last, and the counts are 3591 rows, About plus 3590 file tables. The phase file was corrected on 2026-09-24 and the branch is being reworked against it |
 | 4.08 | MeruneFleuruwu | before the reset | Every zone decodes and the rows carry real positions and display keys. Left: the writer skips an object it cannot read without a word, so WC_Hub writes 177 rows for 183 objects and WC_Ravenwood 93 for 97, and spawn data is not extracted, so HalloweenSpawner1 and its requirement are absent |
 | 4.04 | MeruneFleuruwu | before the reset | Its own work is landed and eight checks are ticked. The two left are not its own: the handoff integration belongs to 4.05, which has since landed and may already earn it, and the last needs a real client session. That session closes three at once, this check, 4.05's and 4.06's, since all three want what a real client sends after Play, so they are run together rather than one at a time |
 | 5.07 | MeruneFleuruwu | before the reset | The cache is built, wired into the login server and measured at a third of the JSON path's time on the pinned install, and a truncated, bit-flipped or random cache is refused by name. Left: a client-gated comparison of every class, property and enum table, and a measurement showing a load under 200 ms |
@@ -135,6 +134,7 @@ A row that says **before the reset** came from a pull request that was on the re
 
 | ID | Who | Sent as | What landed |
 |---|---|---|---|
+| 16.02 | MeruneFleuruwu | [#3](https://github.com/Justchicoo/Project-Ambrose/pull/3) | One manifest read and written as both the client's XML and its binary form, keeping the table order the file declares. All five checks earned, including the env-gated one, which the maintainer ran against a reference XML: 3591 tables, Base 140, PatchClient 97 |
 | 1.12 | MeruneFleuruwu | before the reset | The client's CRC variant proved against the pinned install's own archives, the synthetic header measurement, and a sweep that opens every GameData archive and reads every stored entry |
 | 16.01 | MeruneFleuruwu | before the reset | The client's binary table list read and written byte for byte, proven against a reference list of exactly the size the check names, with all six checks earned |
 | 1.06, 1.07, 1.08 | MeruneFleuruwu | before the reset | The last check of all three was stale: the locale round-trip it asks for is covered by a client-gated test that passes on the pinned install |
