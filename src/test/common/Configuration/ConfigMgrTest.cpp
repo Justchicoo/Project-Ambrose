@@ -13,6 +13,7 @@
 #include <fstream>
 #include <map>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -143,6 +144,99 @@ TEST(ConfigMgrTest, WorldServerPortComesFromFileDefaultOrEnvironment)
     environment.Values["AMBROSE_WORLD_SERVER_PORT"] = "14000";
     EXPECT_EQ(config.GetOption<uint32>("WorldServerPort", 12000), 14000u);
     EXPECT_EQ(config.Resolve("WorldServerPort")->Kind, ConfigSourceKind::Environment);
+}
+
+TEST(ConfigMgrTest, AReloadTellsSubscribersWhichKeysChanged)
+{
+    TempDirectory directory;
+    FakeEnvironment environment;
+    std::filesystem::path const file = directory.Write("gameserver.conf", Header + "Logger.network = Info\nWorldServerPort = 12000\n");
+    ConfigMgr config(environment.Lookup());
+    ASSERT_TRUE(config.LoadInitial(file).Succeeded());
+
+    std::vector<std::vector<std::string>> heard;
+    uint64 const token = config.SubscribeToChanges([&heard](std::vector<std::string> const& changed) { heard.push_back(changed); });
+    EXPECT_NE(token, 0u);
+
+    directory.Write("gameserver.conf", Header + "Logger.network = Debug\nWorldServerPort = 12000\n");
+    ASSERT_TRUE(config.Reload().Succeeded());
+
+    ASSERT_EQ(heard.size(), 1u) << "a reload that changed something must tell its subscribers once";
+    EXPECT_EQ(heard.front(), (std::vector<std::string>{ "Logger.network" })) << "only the key that changed is named";
+    EXPECT_EQ(config.GetOption<std::string>("Logger.network", "Info"), "Debug") << "the new value is the one being served";
+}
+
+TEST(ConfigMgrTest, AReloadThatChangedNothingSaysNothing)
+{
+    TempDirectory directory;
+    FakeEnvironment environment;
+    std::string const text = Header + "Logger.network = Info\n";
+    std::filesystem::path const file = directory.Write("gameserver.conf", text);
+    ConfigMgr config(environment.Lookup());
+    ASSERT_TRUE(config.LoadInitial(file).Succeeded());
+
+    std::vector<std::vector<std::string>> heard;
+    config.SubscribeToChanges([&heard](std::vector<std::string> const& changed) { heard.push_back(changed); });
+
+    directory.Write("gameserver.conf", text);
+    ASSERT_TRUE(config.Reload().Succeeded());
+
+    ASSERT_EQ(heard.size(), 1u);
+    EXPECT_TRUE(heard.front().empty()) << "a reload of the same file names no changed key";
+}
+
+TEST(ConfigMgrTest, AKeyAddedOrRemovedCountsAsAChange)
+{
+    TempDirectory directory;
+    FakeEnvironment environment;
+    std::filesystem::path const file = directory.Write("gameserver.conf", Header + "Logger.network = Info\n");
+    ConfigMgr config(environment.Lookup());
+    ASSERT_TRUE(config.LoadInitial(file).Succeeded());
+
+    std::vector<std::string> last;
+    config.SubscribeToChanges([&last](std::vector<std::string> const& changed) { last = changed; });
+
+    directory.Write("gameserver.conf", Header + "Logger.network = Info\nLogger.sql = Warn\n");
+    ASSERT_TRUE(config.Reload().Succeeded());
+    EXPECT_EQ(last, (std::vector<std::string>{ "Logger.sql" })) << "a key that appeared is a change";
+
+    directory.Write("gameserver.conf", Header + "Logger.network = Info\n");
+    ASSERT_TRUE(config.Reload().Succeeded());
+    EXPECT_EQ(last, (std::vector<std::string>{ "Logger.sql" })) << "a key that went away is a change too";
+}
+
+TEST(ConfigMgrTest, ASubscriberThatLeavesIsNotCalledAgain)
+{
+    TempDirectory directory;
+    FakeEnvironment environment;
+    std::filesystem::path const file = directory.Write("gameserver.conf", Header + "Logger.network = Info\n");
+    ConfigMgr config(environment.Lookup());
+    ASSERT_TRUE(config.LoadInitial(file).Succeeded());
+
+    int called = 0;
+    uint64 const token = config.SubscribeToChanges([&called](std::vector<std::string> const&) { ++called; });
+    config.UnsubscribeFromChanges(token);
+
+    directory.Write("gameserver.conf", Header + "Logger.network = Debug\n");
+    ASSERT_TRUE(config.Reload().Succeeded());
+    EXPECT_EQ(called, 0) << "a subscriber that unsubscribed must not be called";
+}
+
+TEST(ConfigMgrTest, ASubscriberThatThrowsDoesNotStopTheOthers)
+{
+    TempDirectory directory;
+    FakeEnvironment environment;
+    std::filesystem::path const file = directory.Write("gameserver.conf", Header + "Logger.network = Info\n");
+    ConfigMgr config(environment.Lookup());
+    ASSERT_TRUE(config.LoadInitial(file).Succeeded());
+
+    bool reached = false;
+    config.SubscribeToChanges([](std::vector<std::string> const&) { throw std::runtime_error("this subscriber is broken"); });
+    config.SubscribeToChanges([&reached](std::vector<std::string> const&) { reached = true; });
+
+    directory.Write("gameserver.conf", Header + "Logger.network = Debug\n");
+    EXPECT_TRUE(config.Reload().Succeeded());
+    EXPECT_TRUE(reached) << "one broken subscriber must not keep the rest from being told";
 }
 
 TEST(ConfigMgrTest, RealProcessEnvironmentOverridesTheFile)
