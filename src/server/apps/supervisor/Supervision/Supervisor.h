@@ -32,6 +32,9 @@ struct SupervisorSettings
     static constexpr uint64 MaxOutputBytesLimit = 1024ull * 1024 * 1024;
 
     std::filesystem::path StateFile;
+    std::filesystem::path HistoryFile;
+    std::chrono::seconds SampleInterval{ 5 };
+    std::chrono::seconds SaveInterval{ 300 };
     std::filesystem::path OutputFolder;
     uint64 MaxOutputBytes = OutputLog::DefaultMaxFileBytes;
     std::filesystem::path DataFolder;

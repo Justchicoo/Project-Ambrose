@@ -93,7 +93,16 @@ SupervisorSettings SupervisorSettings::Load(ConfigMgr const& config, std::filesy
     settings.WorkingFolder = std::move(workingFolder);
     std::filesystem::path const home = (settings.DataFolder.empty() ? config.GetFilename().parent_path() : settings.DataFolder) / "supervisor";
     settings.StateFile = ConfiguredPath(config, "Supervisor.StateFile", home / "state.json", settings.WorkingFolder);
+    settings.HistoryFile = ConfiguredPath(config, "Supervisor.HistoryFile", home / "history.bin", settings.WorkingFolder);
     settings.OutputFolder = ConfiguredPath(config, "Supervisor.OutputDir", home / "output", settings.WorkingFolder);
+    int64 const sampleSeconds = config.GetOption<int64>("Supervisor.SampleSeconds", 5, true);
+    settings.SampleInterval = std::chrono::seconds(std::clamp<int64>(sampleSeconds, 1, 300));
+    if (settings.SampleInterval.count() != sampleSeconds)
+        problems.push_back(fmt::format("Supervisor.SampleSeconds is {}, outside 1 to 300; using {}", sampleSeconds, settings.SampleInterval.count()));
+    int64 const saveSeconds = config.GetOption<int64>("Supervisor.HistorySaveSeconds", 300, true);
+    settings.SaveInterval = std::chrono::seconds(std::clamp<int64>(saveSeconds, 10, 3600));
+    if (settings.SaveInterval.count() != saveSeconds)
+        problems.push_back(fmt::format("Supervisor.HistorySaveSeconds is {}, outside 10 to 3600; using {}", saveSeconds, settings.SaveInterval.count()));
     uint64 const bytes = config.GetOption<uint64>("Supervisor.OutputMaxBytes", OutputLog::DefaultMaxFileBytes, true);
     settings.MaxOutputBytes = std::clamp<uint64>(bytes, OutputLog::MinMaxFileBytes, MaxOutputBytesLimit);
     if (settings.MaxOutputBytes != bytes)
