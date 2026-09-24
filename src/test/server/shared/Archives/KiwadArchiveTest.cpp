@@ -55,6 +55,22 @@ TEST(KiwadArchiveTest, OpensFindsAndReadsEntries)
         EXPECT_TRUE(archive->VerifyCrc(entry)) << entry.Name;
 }
 
+TEST(KiwadArchiveTest, StoredBytesUseClientCrcVariant)
+{
+    LogTestDirectory directory;
+    std::vector<uint8> const archiveBytes = KiwadBuilder(2, 0x2A).Add("stored.bin", "stored bytes", false).Add("compressed.bin", std::string(512, 'c'), true).Build();
+    std::string error;
+    std::unique_ptr<KiwadArchive> const archive = KiwadArchive::Open(WriteArchive(directory, "Crc.wad", archiveBytes), error);
+    ASSERT_NE(archive, nullptr) << error;
+    for (KiwadEntry const& entry : archive->GetEntries())
+    {
+        KiwadReadResult const stored = archive->ReadStored(entry);
+        ASSERT_TRUE(stored.Succeeded()) << entry.Name << ": " << stored.Error;
+        EXPECT_EQ(entry.Crc, Crc32::ComputeClient(stored.Data)) << entry.Name;
+        EXPECT_NE(entry.Crc, Crc32::ComputeStandard(stored.Data)) << entry.Name;
+    }
+}
+
 TEST(KiwadArchiveTest, SizeLimitAndCorruptDataAreReported)
 {
     LogTestDirectory directory;

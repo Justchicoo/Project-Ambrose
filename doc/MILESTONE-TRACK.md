@@ -92,7 +92,6 @@ Then one of four things happens, each with one message saying which and why: it 
 
 | ID | Milestone | Size | What you need | Why it is a good one to take |
 |---|---|---|---|---|
-| 1.12 | Crypto basics: the CRC32 the client uses | S | Your own client installation | Three checks left and the code is already there: prove which CRC32 variant the client's archives use by checking a stored entry against its bytes, add the synthetic archive unit test, and sweep every archive in your own install |
 | 16.02 | LatestFileList model and XML | S | A build; the gated check needs a reference XML you obtained yourself | The natural step after 16.01, which is landed: the same table list as a model that round-trips through both XML and the binary form, with the exact counts named, 3590 tables, 140 records in Base and 97 in PatchClient |
 
 ## Reserved
@@ -131,5 +130,6 @@ The pull requests these rows came from were on the repository before it was recr
 
 | ID | Who | Sent as | What landed |
 |---|---|---|---|
+| 1.12 | MeruneFleuruwu | before the reset | The client's CRC variant proved against the pinned install's own archives, the synthetic header measurement, and a sweep that opens every GameData archive and reads every stored entry |
 | 16.01 | MeruneFleuruwu | before the reset | The client's binary table list read and written byte for byte, proven against a reference list of exactly the size the check names, with all six checks earned |
 | 1.06, 1.07, 1.08 | MeruneFleuruwu | before the reset | The last check of all three was stale: the locale round-trip it asks for is covered by a client-gated test that passes on the pinned install |
