@@ -5,7 +5,7 @@ name: core-build
 on:
   push:
     branches: [main]
-    paths: [".github/**", "CMakeLists.txt", "CMakePresets.json", "apps/ci/**", "apps/designtokens/**", "apps/progress/**", "apps/site/**", "cmake/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/roadmap/**", "doc/work/**", "src/**", "vcpkg.json"]
+    paths: [".github/**", "CMakeLists.txt", "CMakePresets.json", "apps/ci/**", "apps/designtokens/**", "apps/progress/**", "apps/site/**", "cmake/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/progress/**", "doc/roadmap/**", "doc/work/**", "src/**", "vcpkg.json"]
   pull_request:
     types: [opened, synchronize, reopened, labeled]
   schedule:
