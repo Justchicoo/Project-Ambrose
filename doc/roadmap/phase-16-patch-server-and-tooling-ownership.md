@@ -111,9 +111,9 @@ One in-memory manifest can be emitted as both LatestFileList.xml and LatestFileL
 
 **Acceptance**
 
-- [ ] Synthetic dir gives {Base, ZoneA, ZoneB} with correct Size/CRC/HeaderSize/HeaderCRC
+- [x] Synthetic dir gives {Base, ZoneA, ZoneB} with correct Size/CRC/HeaderSize/HeaderCRC (`InstallFixture.SyntheticInstallProducesExpectedPackagesAndMetrics`)
 - [ ] Reference diff: 100% match on type 3/5 CRC/HeaderSize/HeaderCRC, all 3590 packages
-- [ ] Second run faster, identical .bin
+- [x] Second run faster, identical .bin (`InstallFixture.SecondRunUsesCacheAndKeepsBinaryIdentical`)
 
 ### Detailed spec from PAT-5: Install scanner: generate the manifest from the user's client install
 
@@ -135,15 +135,17 @@ A tool builds a patch output directory (manifest plus revision name) from the us
 
 **Acceptance**
 
-- [ ] Unit (synthetic temp dir): 2 zone WADs + Root.wad + Bin/a.dll give packages {Base, ZoneA, ZoneB} with the correct Size/CRC/HeaderSize/HeaderCRC
+- [x] Unit (synthetic temp dir): 2 zone WADs + Root.wad + Bin/a.dll give packages {Base, ZoneA, ZoneB} with the correct Size/CRC/HeaderSize/HeaderCRC (`InstallFixture.SyntheticInstallProducesExpectedPackagesAndMetrics`)
 - [ ] Env-gated diff run on r806919 with a reference list: Size, CRC, HeaderSize and HeaderCRC match 100% of type 3/5 records, and package membership matches for all 3590 tables
-- [ ] Second run finishes much faster than the first (CRC cache hit) and gives an identical .bin
+- [x] Second run finishes much faster than the first (CRC cache hit) and gives an identical .bin (`InstallFixture.SecondRunUsesCacheAndKeepsBinaryIdentical`)
 
 **Risks**
 
 - CompressedHeaderSize could not be reproduced with Python zlib at any level (only about 8 of 400 WADs matched), so it may not be derivable offline
 - FileType 5 vs 3 is not name-derivable (Ahmarra-WorldData is 3 while GUI-WorldData is 5)
 - Type-4 files carry HeaderSize == zlib(level 6) size + 12 (checked on 4 DLLs), which suggests a compressed download variant this tool must also produce
+
+**Review notes from the r806919 diff run on 2026-09-24.** The scanner reproduces Size, CRC, HeaderSize and HeaderCRC for 3589 of 3589 type 3 and type 5 records, which is the hard half of the reference check and is earned. The check is not, because package membership is 3820 of 3825: the launcher files under `Windows/PatchClient/` land in Base, since the rule matches `PatchClient/` only, and `LatestFileList.bin` and `LatestFileList.xml` are scanned into Base rather than left out of the manifest they are. Four further differences are outside every check and have to be right before 16.04 and 16.05 serve this file: `TarFileName` is written as a copy of `SrcFileName` on all 3820 records where the client leaves it empty unless a rule maps it, `CompressedHeaderSize` is never computed and is 0 on all 3589, 40 WADs the client marks type 5 are written as type 3, and plain files carry a whole-file `HeaderSize` and `HeaderCRC` where the client writes 0. The tool's own `--reference` mode compares a subset of the fields, so it reported 283 differences where 3820 records differ in something.
 
 ## 16.04 patchserver TCP service 8 (PAT-6)
 

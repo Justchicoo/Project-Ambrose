@@ -6,9 +6,9 @@
     "percent": 15.0
   },
   "checks": {
-    "done": 572,
+    "done": 576,
     "total": 2392,
-    "percent": 23.9
+    "percent": 24.1
   },
   "contributor_track": {
     "merged": 71,
@@ -140,7 +140,7 @@
       "title": "Patch server and tooling ownership",
       "milestones_done": 2,
       "milestones_total": 13,
-      "checks_done": 11,
+      "checks_done": 15,
       "checks_total": 80
     },
     {
