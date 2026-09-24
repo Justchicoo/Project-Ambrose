@@ -58,6 +58,19 @@ doc/MILESTONE-TRACK.md is the contributor's side of this. A milestone pull reque
 - **Deliverables are binding, and a missing one is partial delivery.** A tool that runs but ships without the schema or the config template its milestone names is merged with the milestone left open and the gap written into the track, not held back whole.
 - **Fix small things on main rather than sending them back.** One ampersand, a structure's defaults, a warn-once that a cast to void silenced, a file read twice per pass. Each costs a round trip to ask for and a minute to do, and the contributor stays the author.
 
+## Running the servers to verify something
+
+A check that names a page or a command is run against a real server, and two things about that have already gone wrong.
+
+- **Every artifact has to come from the same commit.** The C++ binaries, the libraries they link, and `apps/dashboard/dist` are built separately and none of them rebuilds the others, so a rebuilt page against an old server looks exactly like a defect in the page. A server prints its revision as it starts, and that line against `git log -1` is the whole check. One console confirmation was reported broken twice before that line was read.
+- **Stop only what this session started.** Every instance shares an image name, so stopping by name stops the maintainer's too. On this machine the maintainer keeps a supervisor serving the panel from the main tree, reachable from their phone, while a review runs from its own worktree. Scope the stop by path:
+
+```
+powershell -NoProfile -Command "Get-Process | Where-Object { $_.Path -like 'K:\Ambrose-review\*' } | Stop-Process -Force"
+```
+
+A relink fails with `LNK1168` while a running supervisor holds the executables, and it fails quietly enough that the old binaries keep serving. Ask the session that owns the standing instance to stop it rather than reaching for the image name.
+
 ## When to hand a review to the other session
 
 Split by who wrote the code underneath, not by how many are left. A pull request against the database updater, the object codec, the type registry or the panel is reviewed faster and better by the session that built them, and a reviewer guessing at somebody else's subsystem is how a plausible change gets merged. Send it with the failure already triaged, say what the checks do, and say which milestones are in the board's way. Ask them to finish what they are mid-way through first: a half-built subsystem is worse than a review that waits an hour.
