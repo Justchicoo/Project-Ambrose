@@ -92,7 +92,7 @@
                         <Table.Head>Target</Table.Head>
                         <Table.Head>Generation</Table.Head>
                         <Table.Head>Last attempt</Table.Head>
-                        <Table.Head class="w-[1%]"></Table.Head>
+                        <Table.Head class="text-right">Reload</Table.Head>
                     </Table.Row>
                 </Table.Header>
                 <Table.Body>
@@ -114,7 +114,7 @@
                                     </ul>
                                 {/if}
                             </Table.Cell>
-                            <Table.Cell>
+                            <Table.Cell class="text-right">
                                 <Button variant="outline" size="sm" disabled={running !== ""} onclick={() => reload(target.target)}>
                                     {running === target.target ? "Reloading" : "Reload"}
                                 </Button>
