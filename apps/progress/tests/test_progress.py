@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import urllib.error
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -148,6 +149,13 @@ class OpeningsTests(unittest.TestCase):
         self.assertIn("justchicoo.github.io/Project-Ambrose", described)
         self.assertIn("AI-MILESTONES-HERE.md", described)
         self.assertTrue(payload["embeds"][0]["fields"])
+
+    def test_it_counts_one_milestone_in_the_singular(self):
+        for count, expected in ((0, "0 milestones from the roadmap are open"), (1, "1 milestone from the roadmap is open"), (2, "2 milestones from the roadmap are open")):
+            with self.subTest(count=count):
+                rows = [{"ids": [f"1.{one}"], "title": "One", "size": "S", "needs": "A build"} for one in range(count)]
+                with mock.patch.object(openings, "table", return_value=rows):
+                    self.assertIn(expected, openings.embed(ROOT)["embeds"][0]["description"])
 
 
 if __name__ == "__main__":

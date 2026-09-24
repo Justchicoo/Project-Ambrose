@@ -1,11 +1,11 @@
 # Project Ambrose by Imjustchico
-# Keeps one Discord message listing the milestones open to outside help: when a push to main changes the milestone track it edits that message in place rather than posting another, and remembers its id on the openings-state branch, falling back to the id committed on main, doing nothing at all when the repository has no webhook secret.
+# Keeps one Discord message listing the milestones open to outside help: when a push to main changes the milestone track or the phase files the counts are read from it edits that message in place rather than posting another, and remembers its id on the openings-state branch, falling back to the id committed on main, doing nothing at all when the repository has no webhook secret.
 name: openings
 
 on:
   push:
     branches: [main]
-    paths: ["doc/MILESTONE-TRACK.md"]
+    paths: ["doc/MILESTONE-TRACK.md", "doc/roadmap/**"]
   workflow_dispatch:
 
 concurrency:
