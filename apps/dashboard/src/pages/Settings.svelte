@@ -75,17 +75,26 @@
     {/snippet}
 </PageHeader>
 
-{#if failure}<p class="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{failure}</p>{/if}
-{#if notice}<p class="rounded-md border border-healthy/30 bg-healthy/5 p-3 text-sm text-healthy" role="status">{notice}</p>{/if}
+{#if failure}
+    <p class="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{failure}</p>
+{/if}
+{#if notice}
+    <p class="rounded-md border border-healthy/30 bg-healthy/5 p-3 text-sm text-healthy" role="status">{notice}</p>
+{/if}
 
 <Tabs.Root value="general">
     <Tabs.List>
-        {#each groups as group (group.id)}<Tabs.Trigger value={group.id}>{group.label}</Tabs.Trigger>{/each}
+        {#each groups as group (group.id)}
+            <Tabs.Trigger value={group.id}>{group.label}</Tabs.Trigger>
+        {/each}
     </Tabs.List>
     {#each groups as group (group.id)}
         <Tabs.Content value={group.id} class="mt-4 space-y-4">
             <Card.Root class="shadow-xs">
-                <Card.Header><Card.Title>{group.label}</Card.Title><Card.Description>{group.description}</Card.Description></Card.Header>
+                <Card.Header>
+                    <Card.Title>{group.label}</Card.Title>
+                    <Card.Description>{group.description}</Card.Description>
+                </Card.Header>
                 <Card.Content class="grid gap-5 md:grid-cols-2">
                     {#each shown(group.id) as setting (setting.key)}
                         <div class="space-y-2">
@@ -106,12 +115,16 @@
                                     <StatusBadge tone="unknown">Locked · {setting.layer}</StatusBadge>
                                 {/if}
                             </div>
-                            {#if setting.secret}<p class="text-xs text-muted-foreground">Stored secret is never returned. Leave blank to keep it.</p>{/if}
+                            {#if setting.secret}
+                                <p class="text-xs text-muted-foreground">Stored secret is never returned. Leave blank to keep it.</p>
+                            {/if}
                         </div>
                     {/each}
                 </Card.Content>
                 {#if group.id === "mail"}
-                    <Card.Footer><Button variant="outline" onclick={() => void sendTest()}><MailIcon />Send test to me</Button></Card.Footer>
+                    <Card.Footer>
+                        <Button variant="outline" onclick={() => void sendTest()}><MailIcon />Send test to me</Button>
+                    </Card.Footer>
                 {/if}
             </Card.Root>
         </Tabs.Content>
