@@ -75,7 +75,7 @@ describe("the panel settings page", () => {
 
     it("masks secrets and sends the edited values as one batch", async () => {
         await vi.waitFor(() => expect(host.textContent).toContain("Mail.Password"));
-        expect(host.textContent).toContain("Unchanged");
+        expect(host.querySelector('input[placeholder="Unchanged"]')).not.toBeNull();
         const save = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Save changes"));
         expect(save).not.toBeUndefined();
         save?.click();
