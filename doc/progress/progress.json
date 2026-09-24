@@ -6,9 +6,9 @@
     "percent": 14.5
   },
   "checks": {
-    "done": 560,
+    "done": 562,
     "total": 2392,
-    "percent": 23.4
+    "percent": 23.5
   },
   "contributor_track": {
     "merged": 71,
@@ -44,7 +44,7 @@
       "title": "A wizard stands in ravenwood",
       "milestones_done": 2,
       "milestones_total": 16,
-      "checks_done": 45,
+      "checks_done": 47,
       "checks_total": 132
     },
     {
