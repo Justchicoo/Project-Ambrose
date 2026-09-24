@@ -254,6 +254,19 @@ QueryCallback DatabaseWorkerPoolBase::AsyncQueryStatement(std::unique_ptr<Prepar
     return QueryCallback(std::move(result));
 }
 
+CountedCallback DatabaseWorkerPoolBase::AsyncCountedStatement(std::unique_ptr<PreparedStatementBase> statement, SQLOperation::CompletionHandler onCompleted)
+{
+    bool const valid = CheckStatement(statement.get(), false, "AsyncCounted");
+    auto task = std::make_unique<CountedStatementTask>(std::move(statement));
+    task->SetCompletionHandler(std::move(onCompleted));
+    std::future<std::optional<uint64>> result = task->GetFuture();
+    if (valid)
+        Enqueue(std::move(task));
+    else
+        task->Cancel();
+    return CountedCallback(std::move(result));
+}
+
 SQLQueryHolderCallback DatabaseWorkerPoolBase::DelayQueryHolderBase(std::shared_ptr<SQLQueryHolderBase> holder, SQLOperation::CompletionHandler onCompleted)
 {
     auto task = std::make_unique<QueryHolderTask>(holder);

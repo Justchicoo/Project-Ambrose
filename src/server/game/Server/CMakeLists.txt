@@ -1,7 +1,8 @@
 # Project Ambrose by Imjustchico
-# Builds the server library: the game's own session, which the world owns and drains on its thread.
+# Builds the server library: the game's own session, which the world owns and drains on its thread, and the judge that spends a handoff key before that session is let in.
 ambrose_add_library(gameserver-sessions "${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(gameserver-sessions
     PUBLIC
-        shared)
+        shared
+        database)

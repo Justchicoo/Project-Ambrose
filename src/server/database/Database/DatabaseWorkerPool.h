@@ -6,6 +6,7 @@
 #ifndef AMBROSE_DATABASEWORKERPOOL_H
 #define AMBROSE_DATABASEWORKERPOOL_H
 
+#include "CountedCallback.h"
 #include "DatabaseConnectionSet.h"
 #include "PreparedStatement.h"
 #include "QueryCallback.h"
@@ -69,6 +70,7 @@ protected:
     QueryCallback AsyncQueryStatement(std::unique_ptr<PreparedStatementBase> statement, SQLOperation::CompletionHandler onCompleted = {});
     bool DirectExecuteStatement(PreparedStatementBase const* statement);
     std::optional<uint64> DirectExecuteCountedStatement(PreparedStatementBase const* statement);
+    CountedCallback AsyncCountedStatement(std::unique_ptr<PreparedStatementBase> statement, SQLOperation::CompletionHandler onCompleted = {});
     PreparedQueryResult QueryStatement(PreparedStatementBase const* statement, bool* failed = nullptr);
     bool QuerySnapshotStatements(std::span<PreparedStatementBase const* const> statements, std::vector<PreparedQueryResult>& results);
     SQLQueryHolderCallback DelayQueryHolderBase(std::shared_ptr<SQLQueryHolderBase> holder, SQLOperation::CompletionHandler onCompleted = {});
@@ -132,6 +134,7 @@ public:
     QueryCallback AsyncQuery(std::unique_ptr<Statement> statement, SQLOperation::CompletionHandler onCompleted = {}) { return AsyncQueryStatement(std::move(statement), std::move(onCompleted)); }
     bool DirectExecute(Statement const& statement) { return DirectExecuteStatement(&statement); }
     std::optional<uint64> DirectExecuteCounted(Statement const& statement) { return DirectExecuteCountedStatement(&statement); }
+    CountedCallback AsyncCounted(std::unique_ptr<Statement> statement, SQLOperation::CompletionHandler onCompleted = {}) { return AsyncCountedStatement(std::move(statement), std::move(onCompleted)); }
     PreparedQueryResult Query(Statement const& statement) { return QueryStatement(&statement); }
     bool TryQuery(Statement const& statement, PreparedQueryResult& result)
     {

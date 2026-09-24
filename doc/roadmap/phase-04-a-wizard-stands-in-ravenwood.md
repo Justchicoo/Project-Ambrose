@@ -323,8 +323,8 @@ The client disconnects from the loginserver after MSG_CHARACTERSELECTED and reco
 
 **Acceptance**
 
-- [ ] A valid key passes once; replayed, expired, other CharID and other realm keys fail
-- [ ] Random LoginKey gets MSG_ATTACHFAILED and close
+- [x] A valid key passes once; replayed, expired, other CharID and other realm keys fail
+- [x] Random LoginKey gets MSG_ATTACHFAILED and close
 
 ### Detailed spec from LOG-12: Gameserver login key validation on MSG_ATTACH
 
@@ -352,9 +352,9 @@ The gameserver accepts a client only with a valid, unexpired, single-use key iss
 
 **Acceptance**
 
-- [ ] Unit: a valid key passes once; replaying the same key, an expired key, a key for another CharID and a key for another realm each fail
+- [x] Unit: a valid key passes once; replaying the same key, an expired key, a key for another CharID and a key for another realm each fail
 - [ ] Real client: select a character and the gameserver log shows the key accepted, after which WLD's LOGINCOMPLETE flow runs
-- [ ] Negative: a hand-crafted attach with a random LoginKey (from a test client) gets MSG_ATTACHFAILED, and the socket closes
+- [x] Negative: a hand-crafted attach with a random LoginKey (from a test client) gets MSG_ATTACHFAILED, and the socket closes
 
 **Risks**
 

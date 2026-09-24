@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives the whole handoff over loopback with AMBROSE_TEST_DB set, which is the one thing neither half proves alone: a client signs in to a login server, picks its wizard, is told a gameserver to go to with a key, closes that connection as a real client does, connects to the game server on its own port, handshakes into a session the game server offers of its own, whose id comes from that server's own pool and may repeat the login server's, and sends MSG_ATTACH carrying the key it was given, which the game server dispatches while the session is only Connected. Checks that the key, account and wizard that arrive are the ones the login server issued, and that the login session is gone rather than waiting on a client that has left.
+ * Drives the whole handoff over loopback with AMBROSE_TEST_DB set, which is the one thing neither half proves alone: a client signs in to a login server, picks its wizard, is told a gameserver to go to with a key, closes that connection as a real client does, connects to the game server on its own port, handshakes into a session the game server offers of its own, whose id comes from that server's own pool and may repeat the login server's, and sends MSG_ATTACH carrying the key it was given, which the game server dispatches while the session is only Connected. Checks that the key, account and wizard that arrive are the ones the login server issued, that the key is spent so the client is let in, and that the login session is gone rather than waiting on a client that has left, and separately that an attach carrying a key nobody issued is answered with MSG_ATTACHFAILED and the connection closed behind it.
  */
 
 #include "AccountMgr.h"
@@ -122,6 +122,7 @@ namespace
             ASSERT_EQ(CharacterRepository::Create(wizard), CharacterOpResult::Ok);
 
             _game = std::make_unique<GameListener>();
+            GameSession::SetRealmId(HandoffRealmId);
 
             RealmPolicy policy;
             policy.HeartbeatSeconds = 30;
@@ -233,4 +234,37 @@ TEST_F(HandoffTest, AClientSignsInPicksAWizardLeavesAndAttachesToTheGameServerIt
     EXPECT_EQ(gameSession->GetAccountId(), _accountId);
     EXPECT_EQ(gameSession->GetCharacterId(), HandoffWizard);
     EXPECT_EQ(gameSession->GetUnhandledMessageCount(), 0u);
+}
+
+TEST_F(HandoffTest, AnAttachCarryingAKeyNobodyIssuedIsRefusedAndTheSocketIsClosed)
+{
+    FakeSessionClient game(_game->GetPort());
+    uint16 const gameSessionId = game.Handshake();
+    ASSERT_NE(gameSessionId, 0);
+    std::shared_ptr<GameSession> gameSession;
+    ASSERT_TRUE(WaitForCondition([&] { gameSession = _game->Find(gameSessionId); return gameSession != nullptr; }));
+
+    GameMessages::Attach attach;
+    attach.LoginKey = "bm90IGEga2V5IHRoZSBsb2dpbiBzZXJ2ZXIgZXZlciBoYW5kZWQgb3V0";
+    attach.UserId = _accountId;
+    attach.CharId = HandoffWizard;
+    attach.ZoneName = "WizardCity/WC_Ravenwood";
+    attach.Location = "-32,-552,-28,6.350083";
+
+    ByteBuffer body;
+    sMessageRegistry.Encode(attach, body);
+    MessageInfo const& info = sMessageRegistry.GetCatalog()->GetInfo<GameMessages::Attach>();
+    ByteBuffer frame;
+    FrameWriter::WriteDml(frame, info.Protocol->ServiceId, static_cast<uint8>(info.Definition->Order), body.GetData());
+    game.Send(frame);
+
+    std::optional<DmlMessageData> const reply = ReadNextDml(game);
+    ASSERT_TRUE(reply) << "a client presenting an invented key must be told so rather than ignored";
+    MessageInfo const& refusal = sMessageRegistry.GetCatalog()->GetInfo<GameMessages::AttachFailed>();
+    EXPECT_EQ(reply->ServiceId, refusal.Protocol->ServiceId);
+    EXPECT_EQ(reply->Order, refusal.Definition->Order);
+
+    EXPECT_TRUE(game.WaitForClose()) << "the game server must close a connection it refused";
+    EXPECT_FALSE(gameSession->IsAttached());
+    EXPECT_EQ(gameSession->GetAccountId(), 0u) << "an invented key must not name an account on the session";
 }

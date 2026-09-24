@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives the handoff a client makes over loopback: a game server listening on its own port offers a session, and a client that has just been told where to go connects, handshakes and sends MSG_ATTACH, which is dispatched while the session is only Connected, because a client that has not attached has nothing else it may say. Checks that the attach carries the key, account and wizard through to the session, that a game message with no rule is counted rather than acted on, and that the table refuses MSG_ATTACHFAILED arriving from a client while declaring it as one the server sends.
+ * Drives the handoff a client makes over loopback: a game server listening on its own port offers a session, and a client that has just been told where to go connects, handshakes and sends MSG_ATTACH, which is dispatched while the session is only Connected, because a client that has not attached has nothing else it may say. Checks that the attach is answered rather than counted as a message with no rule, that a server with no login database behind it refuses the key and says so with MSG_ATTACHFAILED instead of believing the account and wizard the client named for itself, and that a game message with no rule is counted rather than acted on.
  */
 
 #include "FakeSessionClient.h"
@@ -16,6 +16,7 @@
 
 #include <chrono>
 #include <memory>
+#include <optional>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -92,7 +93,7 @@ namespace
     }
 }
 
-TEST(GameAttachTest, AClientThatHasJustBeenSentHereAttachesWhileOnlyConnected)
+TEST(GameAttachTest, AnAttachIsTakenWhileOnlyConnectedAndIsRefusedWhenNoKeyCanBeSpent)
 {
     GameServerHarness server;
     uint16 sessionId = 0;
@@ -109,9 +110,16 @@ TEST(GameAttachTest, AClientThatHasJustBeenSentHereAttachesWhileOnlyConnected)
     attach.Location = "-32,-552,-28,6.350083";
     Send(*client, attach);
 
-    ASSERT_TRUE(WaitForCondition([&] { return session->GetAccountId() == attach.UserId; })) << "MSG_ATTACH was not dispatched while the session was Connected";
-    EXPECT_EQ(session->GetCharacterId(), attach.CharId);
+    std::optional<DmlMessageData> const reply = ReadNextDml(*client);
+    ASSERT_TRUE(reply) << "MSG_ATTACH was not dispatched while the session was Connected";
+    MessageInfo const& refusal = sMessageRegistry.GetCatalog()->GetInfo<GameMessages::AttachFailed>();
+    EXPECT_EQ(reply->ServiceId, refusal.Protocol->ServiceId);
+    EXPECT_EQ(reply->Order, refusal.Definition->Order) << "a client whose key no login database can vouch for is told so";
+
     EXPECT_EQ(session->GetUnhandledMessageCount(), 0u) << "a message the table answers is not counted as one it could not";
+    EXPECT_FALSE(session->IsAttached());
+    EXPECT_EQ(session->GetAccountId(), 0u) << "the server does not take the client's word for whose account it is";
+    EXPECT_EQ(session->GetCharacterId(), 0u) << "nor for which wizard it is";
 }
 
 TEST(GameAttachTest, AGameMessageWithNoRuleIsCountedRatherThanActedOn)

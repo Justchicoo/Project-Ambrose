@@ -6,6 +6,7 @@
 #ifndef AMBROSE_ASYNCCALLBACKPROCESSOR_H
 #define AMBROSE_ASYNCCALLBACKPROCESSOR_H
 
+#include "CountedCallback.h"
 #include "Log.h"
 #include "QueryCallback.h"
 #include "QueryHolder.h"
@@ -88,6 +89,7 @@ private:
 };
 
 using QueryCallbackProcessor = AsyncCallbackProcessor<QueryCallback>;
+using CountedCallbackProcessor = AsyncCallbackProcessor<CountedCallback>;
 using TransactionCallbackProcessor = AsyncCallbackProcessor<TransactionCallback>;
 using QueryHolderCallbackProcessor = AsyncCallbackProcessor<SQLQueryHolderCallback>;
 

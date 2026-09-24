@@ -100,3 +100,32 @@ void PreparedStatementTask::Cancel()
     _result.set_value(nullptr);
     NotifyCompleted();
 }
+
+CountedStatementTask::CountedStatementTask(std::unique_ptr<PreparedStatementBase> statement) : _statement(std::move(statement))
+{
+}
+
+void CountedStatementTask::Execute(MySQLConnection& connection)
+{
+    try
+    {
+        std::optional<uint64> affected;
+        if (!_statement)
+            LOG_ERROR("sql.sql", "A queued counted statement was empty and did not run");
+        else if (connection.Execute(*_statement))
+            affected = connection.GetLastAffectedRows();
+        _result.set_value(affected);
+    }
+    catch (...)
+    {
+        LOG_ERROR("sql.sql", "Queued counted statement {} threw an exception on {}", _statement ? _statement->GetIndex() : 0, connection.GetInfo().ToLogString());
+        _result.set_exception(std::current_exception());
+    }
+    NotifyCompleted();
+}
+
+void CountedStatementTask::Cancel()
+{
+    _result.set_value(std::nullopt);
+    NotifyCompleted();
+}

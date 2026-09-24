@@ -205,7 +205,9 @@ namespace
                 for (std::string const& warning : names.Warnings)
                     LOG_WARN("server.gameserver", "Character name tables: {}", warning);
             }
-            AppenderDB::Enable(Logger(), Config().GetOption<uint32>("RealmID", 1, true));
+            uint32 const realmId = Config().GetOption<uint32>("RealmID", 1, true);
+            AppenderDB::Enable(Logger(), realmId);
+            GameSession::SetRealmId(realmId);
             sScriptMgr.LoadScripts(&AddScripts);
             sScriptMgr.OnConfigLoad(false);
             LoadCommands();

@@ -32,22 +32,7 @@ namespace LoginTesting
 
     inline std::optional<DmlMessageData> ReadDml(FakeSessionClient& client, std::chrono::milliseconds timeout = std::chrono::seconds(20))
     {
-        auto const deadline = std::chrono::steady_clock::now() + timeout;
-        while (true)
-        {
-            auto const now = std::chrono::steady_clock::now();
-            if (now >= deadline)
-                return std::nullopt;
-            std::optional<Frame> frame = client.ReadFrame(std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now));
-            if (!frame)
-                return std::nullopt;
-            if (frame->IsControl)
-                continue;
-            std::vector<DmlMessageData> messages;
-            if (FrameLayout::SplitDmlMessages(frame->Payload, messages) != FrameError::None || messages.size() != 1)
-                return std::nullopt;
-            return messages.front();
-        }
+        return ReadNextDml(client, timeout);
     }
 
     template<DeclaredMessage T>

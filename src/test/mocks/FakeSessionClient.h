@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A blocking loopback client for session tests, optionally with a small receive buffer, that reads frames with timeouts, answers the SessionOffer and keeps it for login hashes, sends raw bytes and waits for the server to close, plus a polling wait helper.
+ * A blocking loopback client for session tests, optionally with a small receive buffer, that reads frames with timeouts, answers the SessionOffer and keeps it for login hashes, sends raw bytes and waits for the server to close, plus a polling wait helper and a read that skips control frames to hand back the one message a frame carried.
  */
 
 #ifndef AMBROSE_FAKESESSIONCLIENT_H
@@ -18,6 +18,7 @@
 #include <chrono>
 #include <functional>
 #include <optional>
+#include <vector>
 
 bool WaitForCondition(std::function<bool()> const& condition, std::chrono::milliseconds timeout = std::chrono::seconds(30));
 
@@ -137,5 +138,25 @@ private:
     std::optional<SessionOffer> _offer;
     bool _closed = false;
 };
+
+inline std::optional<DmlMessageData> ReadNextDml(FakeSessionClient& client, std::chrono::milliseconds timeout = std::chrono::seconds(20))
+{
+    auto const deadline = std::chrono::steady_clock::now() + timeout;
+    while (true)
+    {
+        auto const now = std::chrono::steady_clock::now();
+        if (now >= deadline)
+            return std::nullopt;
+        std::optional<Frame> frame = client.ReadFrame(std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now));
+        if (!frame)
+            return std::nullopt;
+        if (frame->IsControl)
+            continue;
+        std::vector<DmlMessageData> messages;
+        if (FrameLayout::SplitDmlMessages(frame->Payload, messages) != FrameError::None || messages.size() != 1)
+            return std::nullopt;
+        return messages.front();
+    }
+}
 
 #endif
