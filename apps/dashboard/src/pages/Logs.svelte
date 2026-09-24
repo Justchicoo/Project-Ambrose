@@ -52,6 +52,7 @@
     let wrap = $state(false);
     let opened = $state<number | null>(null);
     let unseen = $state(0);
+    let held = $state<LogRecord[]>([]);
     let atBottom = true;
     let viewport = $state<HTMLDivElement | null>(null);
 
@@ -61,6 +62,7 @@
         !hidden.includes(record.category) &&
         (needle === "" || `${record.category} ${record.message}`.toLowerCase().includes(needle));
     const shown = $derived(records.filter(passes));
+    const waiting = $derived(held.filter(passes).length);
     const counts = $derived(Object.fromEntries(order.map((level) => [level, records.filter((record) => record.level === level).length])));
     const categories = $derived([...new Set(records.map((record) => record.category))].sort());
 
@@ -98,6 +100,14 @@
         });
     }
 
+    function resume() {
+        if (held.length > 0) {
+            records = [...records, ...held].slice(-2000);
+            held = [];
+        }
+        live = true;
+    }
+
     function toNewest() {
         atBottom = true;
         unseen = 0;
@@ -133,6 +143,7 @@
     $effect(() => {
         const name = focus.app;
         records = [];
+        held = [];
         after = 0;
         unseen = 0;
         trouble = "";
@@ -142,7 +153,6 @@
     });
 
     $effect(() => {
-        if (!live) return;
         const name = focus.app;
         let stopped = false;
         const controller = new AbortController();
@@ -154,22 +164,26 @@
                 const answer = await logsAfter(name, after, controller.signal);
                 if (stopped) return;
                 trouble = "";
-                if (answer.dropped)
-                    records = [
-                        ...records,
-                        {
-                            sequence: answer.dropped.from,
-                            time: "",
-                            epoch_ms: 0,
-                            level: "warn",
-                            category: "logs",
-                            message: `${answer.dropped.count} line(s) were written faster than this page could read them and are gone`,
-                        } as LogRecord,
-                    ];
+                if (answer.dropped) {
+                    const gap = {
+                        sequence: answer.dropped.from,
+                        time: "",
+                        epoch_ms: 0,
+                        level: "warn",
+                        category: "logs",
+                        message: `${answer.dropped.count} line(s) were written faster than this page could read them and are gone`,
+                    } as LogRecord;
+                    if (live) records = [...records, gap];
+                    else held = [...held, gap];
+                }
                 if (answer.records.length > 0) {
                     after = answer.records[answer.records.length - 1].sequence;
-                    records = [...records, ...answer.records].slice(-2000);
-                    if (!atBottom) unseen += answer.records.filter(passes).length;
+                    if (!live) {
+                        held = [...held, ...answer.records].slice(-2000);
+                    } else {
+                        records = [...records, ...answer.records].slice(-2000);
+                        if (!atBottom) unseen += answer.records.filter(passes).length;
+                    }
                 }
             } catch (failure) {
                 if (!stopped) trouble = failure instanceof Error ? failure.message : String(failure);
@@ -194,8 +208,8 @@
             <StatusBadge tone="healthy" pulse>Following live</StatusBadge>
             <Button variant="outline" size="sm" onclick={() => (live = false)}><PauseIcon />Pause</Button>
         {:else}
-            <StatusBadge tone="waiting">Paused</StatusBadge>
-            <Button variant="outline" size="sm" onclick={() => (live = true)}><PlayIcon />Resume</Button>
+            <StatusBadge tone="waiting">Paused{waiting > 0 ? `, ${waiting} new` : ""}</StatusBadge>
+            <Button variant="outline" size="sm" onclick={resume}><PlayIcon />Resume</Button>
         {/if}
     {/snippet}
 </PageHeader>
