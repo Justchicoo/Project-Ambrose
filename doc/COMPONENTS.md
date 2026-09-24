@@ -111,10 +111,13 @@ If a behaviour exists nowhere above, a single Zag.js machine may be pulled for t
 
 ## The gates
 
+`npm run verify` runs the five that block a push, in order: `check`, `lint`, `format:check`, `checks` and `test:logic`. Run that rather than picking from the table, because `check` and `checks` are one letter apart and are different gates: the first is types, the second is this project's own rules about colours, arbitrary values and stories. Running four of the five and assuming that was the set is how an arbitrary Tailwind width reached main.
+
 | Command | What it proves |
 |---|---|
 | `python apps/designtokens/designtokens.py --check` | The stylesheet, the TypeScript, the C++ header and the tables in doc/DESIGN.md still match `design/tokens.json` |
 | `python apps/designtokens/icons.py --check` | Every vendored icon still matches `design/icons.json` |
+| `npm run verify` | The five gates below that block a push, in one command |
 | `npm run checks` | No raw colour, no arbitrary value, no inline style carrying a colour, every component has a story, the fonts match their packages, and the built bundle names no other host |
 | `npm run check` | Types, across every app and the shared package |
 | `npm run lint` and `npm run format:check` | The linter, including the Svelte accessibility rules, and the formatter |

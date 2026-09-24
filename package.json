@@ -27,6 +27,7 @@
     "storybook": "storybook dev --port 6006 --no-open --config-dir packages/ui/.storybook",
     "storybook:build": "storybook build --config-dir packages/ui/.storybook --output-dir storybook-static",
     "checks": "python apps/ci/ci_frontend_checks.py",
+    "verify": "npm run check && npm run lint && npm run format:check && npm run checks && npm run test:logic",
     "icons": "python apps/designtokens/icons.py",
     "cache": "python apps/ci/ci_npm_cache.py"
   },
