@@ -6,6 +6,8 @@ Project Ambrose is built with AI tools under human direction. An AI assistant ca
 
 ## Start with the prompt that already exists
 
+There are two prompts, one per track. `contrib/AI-START-HERE.md` is for the contributor track, which adds files in folders no milestone touches, and everything below describes that track. `contrib/AI-MILESTONES-HERE.md` is for a roadmap milestone, where the work lands in `src/` and is judged against that milestone's own acceptance checks, and its rules differ: the board at https://justchicoo.github.io/Project-Ambrose/ says which milestones are open, and the branch has to be named `milestone/<id>-<short-name>`.
+
 `contrib/AI-START-HERE.md` holds a prompt written to be pasted whole into any assistant. It already carries the document list below, the state of the project, every rule in the form its checker enforces, and what each open item needs of your machine. Paste it rather than assembling the same thing by hand, and use this guide for the part it cannot do: driving the assistant and judging what it gives back.
 
 ## The repository rules it works from
@@ -65,7 +67,7 @@ The contribution may add or edit only under these prefixes:
 - `data/fuzz/`
 - `doc/guides/`
 
-Keep one thing per pull request. Do not edit `src/`, roadmap or phase files, CI files, repository manifests, or architecture documents.
+Keep one thing per pull request. On this track, do not edit `src/`, roadmap or phase files, CI files, repository manifests, or architecture documents; a milestone branch may edit the source tree and its own phase file, which is the difference between the two tracks.
 
 Never commit client files, extracted assets, type dumps, protocol XML, captures, archive contents, encoded bytes, or anything generated from a client installation. A runtime tool may read the user's own installation, but it must not write inside that installation or store its contents in the repository.
 
