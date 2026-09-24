@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 60,
+    "done": 61,
     "total": 394,
-    "percent": 15.2
+    "percent": 15.5
   },
   "checks": {
-    "done": 581,
+    "done": 582,
     "total": 2392,
     "percent": 24.3
   },
@@ -146,9 +146,9 @@
     {
       "phase": 17,
       "title": "Operations console admin api dashboard and metrics",
-      "milestones_done": 12,
+      "milestones_done": 13,
       "milestones_total": 111,
-      "checks_done": 99,
+      "checks_done": 100,
       "checks_total": 637
     }
   ]
