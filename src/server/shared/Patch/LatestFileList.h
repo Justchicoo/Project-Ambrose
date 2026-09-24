@@ -46,6 +46,7 @@ public:
 
     About About;
     std::vector<Package> Packages;
+    std::vector<std::string> TableOrder;
 };
 
 #endif

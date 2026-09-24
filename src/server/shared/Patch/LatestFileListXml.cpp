@@ -7,6 +7,8 @@
 
 #include <pugixml.hpp>
 
+#include <algorithm>
+#include <charconv>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -40,7 +42,11 @@ namespace
         std::string const content = Value(node);
         if (content.empty())
             return 0;
-        return static_cast<uint32>(std::stoul(content));
+        uint32 value = 0;
+        auto const result = std::from_chars(content.data(), content.data() + content.size(), value);
+        if (result.ec != std::errc() || result.ptr != content.data() + content.size())
+            throw std::invalid_argument("LatestFileList XML contains an invalid UINT value");
+        return value;
     }
 
     void AddValue(pugi::xml_node record, std::string const& name, std::string const& value)
@@ -86,17 +92,15 @@ namespace
     void ReadPackage(pugi::xml_node packageNode, LatestFileList& list)
     {
         LatestFileList::Package package;
-        if (pugi::xml_attribute const name = packageNode.attribute("Name"); name)
-            package.Name = name.value();
+        package.Name = packageNode.name();
         for (pugi::xml_node child = packageNode.first_child(); child; child = child.next_sibling())
         {
-            if (std::string(child.name()) == "Name" && package.Name.empty())
-                package.Name = Value(child);
-            else if (std::string(child.name()) == "RECORD")
+            if (std::string(child.name()) == "RECORD")
                 package.Records.push_back(ReadRecord(child));
         }
-        if (!package.Name.empty())
-            list.Packages.push_back(std::move(package));
+        if (package.Name.empty())
+            throw std::invalid_argument("LatestFileList XML contains a table without a name");
+        list.Packages.push_back(std::move(package));
     }
 
 }
@@ -121,11 +125,21 @@ std::string LatestFileListXml::Write(LatestFileList const& list)
     version.append_attribute("TYPE") = "UINT";
     version.text().set(list.About.Version);
 
-    for (LatestFileList::Package const& package : list.Packages)
+    for (std::string const& name : list.TableList())
     {
-        pugi::xml_node packageNode = root.append_child("Package");
-        packageNode.append_attribute("Name") = package.Name.c_str();
-        for (LatestFileList::FileRecord const& record : package.Records)
+        if (name == "About")
+        {
+            pugi::xml_node aboutNode = root.append_child("About");
+            pugi::xml_node aboutRecord = aboutNode.append_child("RECORD");
+            AddValue(aboutRecord, "Version", list.About.Version);
+            continue;
+        }
+
+        auto const package = std::find_if(list.Packages.begin(), list.Packages.end(), [&name](LatestFileList::Package const& candidate) { return candidate.Name == name; });
+        if (package == list.Packages.end())
+            throw std::invalid_argument("LatestFileList table order names a missing package");
+        pugi::xml_node packageNode = root.append_child(name.c_str());
+        for (LatestFileList::FileRecord const& record : package->Records)
         {
             pugi::xml_node entry = packageNode.append_child("RECORD");
             AddValue(entry, "SrcFileName", record.SrcFileName);
@@ -161,6 +175,8 @@ LatestFileList LatestFileListXml::Read(std::string_view xml)
 
     for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling())
     {
+        if (node.type() != pugi::node_element)
+            continue;
         if (std::string(node.name()) == "_TableList")
         {
             for (pugi::xml_node recordNode = node.first_child(); recordNode; recordNode = recordNode.next_sibling())
@@ -187,14 +203,18 @@ LatestFileList LatestFileListXml::Read(std::string_view xml)
                 }
             }
         }
-        else if (std::string(node.name()) == "Package")
+        else
         {
             ReadPackage(node, list);
         }
     }
 
-    if (!tableNames.empty() && tableNames != list.TableList())
-        throw std::invalid_argument("LatestFileList XML table list does not match its tables");
+    if (!tableNames.empty())
+    {
+        list.TableOrder = tableNames;
+        if (tableNames != list.TableList())
+            throw std::invalid_argument("LatestFileList XML table list does not match its tables");
+    }
 
     return list;
 }

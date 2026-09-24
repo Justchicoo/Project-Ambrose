@@ -102,6 +102,9 @@ namespace
 
 std::vector<std::string> LatestFileList::TableList() const
 {
+    if (!TableOrder.empty())
+        return TableOrder;
+
     std::vector<std::string> names;
     names.reserve(Packages.size() + 1);
     for (Package const& package : Packages)
@@ -117,7 +120,15 @@ LatestFileList LatestFileList::ReadBinary(std::span<uint8 const> bytes)
     for (BinaryTableFile::Table const& table : decoded.Tables)
     {
         if (table.Name == "_TableList")
+        {
+            for (BinaryTableFile::Record const& record : table.Records)
+            {
+                if (record.empty())
+                    throw std::invalid_argument("LatestFileList binary table list contains an empty record");
+                manifest.TableOrder.push_back(std::get<std::string>(record.front()));
+            }
             continue;
+        }
         if (table.Name == "About")
         {
             if (!table.Records.empty())

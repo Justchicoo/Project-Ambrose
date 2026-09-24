@@ -69,10 +69,17 @@ TEST(LatestFileListXmlTest, ModelXmlAndBinaryRoundTrip)
     LatestFileList const source = MakeLatestFileList();
 
     std::string const xml = LatestFileListXml::Write(source);
+    EXPECT_NE(xml.find("<Base>"), std::string::npos);
     LatestFileList const parsed = LatestFileListXml::Read(xml);
     ExpectEqual(source, parsed);
 
     std::vector<uint8> const binary = source.WriteBinary();
+    BinaryTableFile const binaryManifest = BinaryTableFile::Read(binary);
+    ASSERT_FALSE(binaryManifest.Tables.empty());
+    ASSERT_EQ(binaryManifest.Tables.front().Name, "_TableList");
+    ASSERT_EQ(binaryManifest.Tables.front().Records.size(), source.TableList().size());
+    for (std::size_t index = 0; index < source.TableList().size(); ++index)
+        EXPECT_EQ(std::get<std::string>(binaryManifest.Tables.front().Records[index].front()), source.TableList()[index]);
     LatestFileList const decoded = LatestFileList::ReadBinary(binary);
     ExpectEqual(source, decoded);
     EXPECT_EQ(decoded.WriteBinary(), binary);
@@ -106,8 +113,8 @@ TEST(LatestFileListXmlTest, ReferenceXmlHasExpectedTableCountsWhenConfigured)
     std::string const xml((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
     LatestFileList const list = LatestFileListXml::Read(xml);
 
-    ASSERT_EQ(list.TableList().size(), 3590u);
-    ASSERT_EQ(list.Packages.size(), 3589u);
+    ASSERT_EQ(list.TableList().size(), 3591u);
+    ASSERT_EQ(list.Packages.size(), 3590u);
     auto const base = std::find_if(list.Packages.begin(), list.Packages.end(), [](LatestFileList::Package const& package) { return package.Name == "Base"; });
     auto const patchClient = std::find_if(list.Packages.begin(), list.Packages.end(), [](LatestFileList::Package const& package) { return package.Name == "PatchClient"; });
     ASSERT_NE(base, list.Packages.end());
