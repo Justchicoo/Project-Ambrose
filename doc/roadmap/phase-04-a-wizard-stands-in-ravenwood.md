@@ -304,7 +304,7 @@ The client disconnects from the loginserver after MSG_CHARACTERSELECTED and reco
 
 **Acceptance**
 
-- [x] Integration test: a fake client completes login handshake -> CHARACTERSELECTED -> disconnect -> game handshake -> MSG_ATTACH is dispatched in STATUS_CONNECTED (HandoffTest.AClientSignsInPicksAWizardLeavesAndAttachesToTheGameServerItWasSentTo, which stands up both servers and carries the key the login server issued through to the game session, with GameAttachTest.AClientThatHasJustBeenSentHereAttachesWhileOnlyConnected holding the status the attach is taken in and .AGameMessageWithNoRuleIsCountedRatherThanActedOn holding what happens to anything else)
+- [x] Integration test: a fake client completes login handshake -> CHARACTERSELECTED -> disconnect -> game handshake -> MSG_ATTACH is dispatched in STATUS_CONNECTED (HandoffTest.AClientSignsInPicksAWizardLeavesAndAttachesToTheGameServerItWasSentTo, which stands up both servers and carries the key the login server issued through to the game session, with GameAttachTest.AnAttachIsTakenWhileOnlyConnectedAndIsRefusedWhenNoKeyCanBeSpent holding the status the attach is taken in and .AGameMessageWithNoRuleIsCountedRatherThanActedOn holding what happens to anything else)
 - [ ] Real client: after picking a character, the server log shows the login socket closed by the client, a new game session id offered and accepted, and MSG_ATTACH received. The client moves past character select to its loading screen, with no 'connection lost' dialog
 - [ ] A MSG_ATTACH with a bad key produces MSG_ATTACHFAILED and the client returns to an error or the login screen
 
