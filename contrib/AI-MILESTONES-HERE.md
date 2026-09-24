@@ -166,7 +166,7 @@ Three build traps on Windows, each of which has cost somebody an hour here:
 
 ## What has actually gone wrong here, so we do not repeat it
 
-Every one of these came from real pull requests on this track. None of them was carelessness, and each cost a round trip.
+Every one of these came from real work on this repository, most of it from pull requests on this track. None of them was carelessness, and each cost a round trip.
 
 **The Linux leg fails on warnings MSVC never mentions.** The build is warnings-as-errors on both compilers, and GCC refuses things MSVC accepts. Three that have already bitten:
 
@@ -175,6 +175,11 @@ Every one of these came from real pull requests on this track. None of them was 
 - A macro whose expansion contains a top-level comma, used inside another macro. GCC says so plainly. MSVC accepts it and builds code that reads off the end of itself, which surfaces later as a crash in a test that passed for weeks. Braces do not protect commas from the preprocessor, only parentheses do. If Windows crashes where Linux compiles, and anything near the logging macros changed, suspect the macro before the build system.
 
 If I can only build on one platform, say so and let the leg tell us, but expect this class of thing rather than being surprised by it.
+
+**A database migration has to parse on MySQL as well as on MariaDB.** doc/ARCHITECTURE.md supports MySQL 8.0 and newer and MariaDB 10.6 and newer, and the Linux leg runs the database tests against the runner's MySQL. Writing a migration against whichever server happens to be installed is how a file that works perfectly in front of you fails everywhere else, and the failure does not name itself: `DBUpdater::Run` returns false and every database test in the suite goes red on an assertion that has nothing to do with the milestone.
+
+- `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` are accepted by both. `ADD COLUMN IF NOT EXISTS`, `DROP COLUMN IF EXISTS` and the index equivalents are MariaDB only, and MySQL answers `[1064] You have an error in your SQL syntax`. Anything conditional goes through `information_schema.COLUMNS` with `PREPARE` and `EXECUTE`, which both servers run.
+- Never change a file under `data/sql/updates` that has already been applied unless the new content does nothing on a database that already has the change. The updater records each file's hash, so an edit makes it a changed file: with `Updates.Redundancy` on it is applied a second time, and with it off the server refuses to start at all. One edit of a released migration stopped three servers a minute after it was pushed.
 
 **Every acceptance check the work earns gets ticked, in the same pull request.** Seven pull requests in one night ticked nothing at all, which reads as a milestone half-built even when the code is complete, and makes a reviewer guess what was claimed. Three rules fall out of it:
 
