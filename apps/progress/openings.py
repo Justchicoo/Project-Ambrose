@@ -55,10 +55,6 @@ def embed(root):
         name = f'{", ".join(row["ids"])}  {row["title"]}'
         value = f'{row["size"]} · {left} check{"s" if left != 1 else ""} to earn · needs {row["needs"][0].lower() + row["needs"][1:]}'
         fields.append({"name": name[:256], "value": value[:1024], "inline": False})
-    if not fields:
-        fields.append({"name": "Nothing is open right now",
-                       "value": "The live board has no unclaimed milestone. Check again after the maintainer opens the next item.",
-                       "inline": False})
     count = sum(len(row["ids"]) for row in rows)
     return {
         "username": "Project Ambrose",
@@ -86,6 +82,9 @@ def main(argv=None):
     root = os.path.abspath(args.root)
 
     payload = embed(root)
+    if not payload["embeds"][0]["fields"]:
+        print("no milestone is open, so nothing is posted")
+        return 0
     url = os.environ.get(args.webhook_env, "").strip()
     if args.dry_run or not url:
         print(json.dumps(payload, indent=2))
