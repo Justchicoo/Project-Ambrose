@@ -180,6 +180,23 @@ export const SettingsAnswer = v.looseObject({
     ),
 });
 
+export const PanelSettingsAnswer = v.looseObject({
+    schema: v.number(),
+    settings: v.array(
+        v.looseObject({
+            key: v.string(),
+            group: v.picklist(["general", "mail", "security"]),
+            value: v.string(),
+            default: v.string(),
+            secret: v.boolean(),
+            locked: v.boolean(),
+            layer: v.string(),
+            minimum: v.number(),
+            maximum: v.number(),
+        }),
+    ),
+});
+
 export const DatabaseAnswer = v.looseObject({
     schema: v.number(),
     databases: v.array(

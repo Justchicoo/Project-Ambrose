@@ -23,6 +23,7 @@ import {
     ReloadAnswer,
     ReloadRunAnswer,
     SettingsAnswer,
+    PanelSettingsAnswer,
     type AppEntry,
 } from "./schemas";
 
@@ -67,6 +68,18 @@ export function runCommand(app: string, command: string, confirm = false) {
 
 export function settingsOf(app: string, signal?: AbortSignal) {
     return request("GET", pathFor(app, "settings"), SettingsAnswer, undefined, signal);
+}
+
+export function panelSettings(signal?: AbortSignal) {
+    return request("GET", "api/panel/settings", PanelSettingsAnswer, undefined, signal);
+}
+
+export function updatePanelSettings(values: Record<string, string>) {
+    return request("PATCH", "api/panel/settings", PanelSettingsAnswer, { values });
+}
+
+export function testPanelMail() {
+    return request("POST", "api/panel/settings/mail-test", null);
 }
 
 export function clientDataOf(app: string, signal?: AbortSignal) {

@@ -162,7 +162,7 @@ export const routes: Route[] = [
         path: "settings",
         title: "Settings",
         icon: SettingsIcon,
-        permission: "settings.read",
+        permission: "panel.settings",
         nav: true,
         group: "Panel",
         view: { kind: "page", load: () => import("./pages/Settings.svelte") },
