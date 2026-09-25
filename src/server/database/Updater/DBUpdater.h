@@ -25,9 +25,9 @@ public:
     static UpdateSummary ApplyDataOnly(MySQLConnectionInfo const& info, std::string_view folderName, UpdaterSettings const& settings, MySQLConnectionSettings const& connectionSettings = {});
     static bool ApplyScript(MySQLConnectionInfo const& info, MySQLConnectionSettings const& connectionSettings, std::string_view fileLabel, std::string_view contents, std::string* failure = nullptr, bool inTransaction = false);
     static std::string QuoteIdentifier(std::string_view identifier);
+    static std::filesystem::path SourceDirectoryFor(UpdaterSettings const& settings);
 
 private:
-    static std::filesystem::path SourceDirectoryFor(UpdaterSettings const& settings);
     static bool OpenBookkeeping(MySQLConnection& connection, MySQLConnectionInfo const& info, std::string& error);
     static bool Populate(MySQLConnection& bookkeeping, MySQLConnectionInfo const& info, MySQLConnectionSettings const& connectionSettings, std::filesystem::path const& baseDirectory);
 };

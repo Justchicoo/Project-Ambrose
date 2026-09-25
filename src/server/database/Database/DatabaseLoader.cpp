@@ -63,18 +63,23 @@ void DatabaseLoader::ApplyPingInterval() const
         entry.Pool->SetKeepAliveInterval(std::chrono::minutes(minutes));
 }
 
-UpdaterSettings DatabaseLoader::ReadUpdaterSettings() const
+UpdaterSettings DatabaseLoader::ReadUpdaterSettings(ConfigMgr const& config)
 {
     UpdaterSettings settings;
-    settings.AutoSetup = _config.GetOption<bool>("Updates.AutoSetup", true, true);
-    std::string const source = _config.GetOption<std::string>("Updates.SourcePath", "", true);
+    settings.AutoSetup = config.GetOption<bool>("Updates.AutoSetup", true, true);
+    std::string const source = config.GetOption<std::string>("Updates.SourcePath", "", true);
     if (!source.empty())
         settings.SourceDirectory = ConfigMgr::PathFromUtf8(source);
-    settings.Redundancy = _config.GetOption<bool>("Updates.Redundancy", false, true);
-    settings.AllowRehash = _config.GetOption<bool>("Updates.AllowRehash", false, true);
-    settings.CleanDeadRefMaxCount = _config.GetOption<int32>("Updates.CleanDeadRefMaxCount", 3, true);
-    settings.AllowPending = _config.GetOption<bool>("Updates.AllowPending", false, true);
+    settings.Redundancy = config.GetOption<bool>("Updates.Redundancy", false, true);
+    settings.AllowRehash = config.GetOption<bool>("Updates.AllowRehash", false, true);
+    settings.CleanDeadRefMaxCount = config.GetOption<int32>("Updates.CleanDeadRefMaxCount", 3, true);
+    settings.AllowPending = config.GetOption<bool>("Updates.AllowPending", false, true);
     return settings;
+}
+
+std::filesystem::path DatabaseLoader::PendingUpdatesFolder(ConfigMgr const& config, std::string_view updateFolder)
+{
+    return DBUpdater::SourceDirectoryFor(ReadUpdaterSettings(config)) / "data" / "sql" / "updates" / fmt::format("pending_db_{}", updateFolder);
 }
 
 bool DatabaseLoader::UpdatesEnabled(Entry const& entry) const
@@ -91,7 +96,7 @@ bool DatabaseLoader::RunUpdater(Entry const& entry, std::string const& info) con
         LOG_ERROR("sql.driver", "{}DatabaseInfo is not a valid connection string: {}", entry.Name, error);
         return false;
     }
-    if (DBUpdater::Run(*parsed, entry.UpdateFolder, ReadUpdaterSettings()))
+    if (DBUpdater::Run(*parsed, entry.UpdateFolder, ReadUpdaterSettings(_config)))
         return true;
     LOG_ERROR("sql.updates", "Could not update the {} database; fix the error above or clear bit {} of Updates.EnableDatabases", entry.Pool->GetName(), entry.UpdateFlag);
     return false;
@@ -299,7 +304,7 @@ DatabaseUpdates DatabaseLoader::InspectUpdates(std::string_view name) const
         result.Error = fmt::format("{}DatabaseInfo is not a valid connection string: {}", key, error);
         return result;
     }
-    result.Listed = DBUpdater::Inspect(*parsed, ReadUpdaterSettings(), result.Report, result.Error);
+    result.Listed = DBUpdater::Inspect(*parsed, ReadUpdaterSettings(_config), result.Report, result.Error);
     return result;
 }
 
@@ -342,7 +347,7 @@ DatabaseApplyResult DatabaseLoader::ApplyDataUpdates(std::string_view name)
     }
     std::string error;
     if (std::optional<MySQLConnectionInfo> const parsed = MySQLConnectionInfo::Parse(info, &error))
-        result.Summary = DBUpdater::ApplyDataOnly(*parsed, folder, ReadUpdaterSettings());
+        result.Summary = DBUpdater::ApplyDataOnly(*parsed, folder, ReadUpdaterSettings(_config));
     else
     {
         result.Refusal = DatabaseApplyRefusal::BadConnection;

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps the edits and writes them out: the newest are kept when the journal is full, because what a server was told to do a moment ago matters more than what it was told at the start of a long run, and the export is named the way every other update file is named, counting within the day so two exports on one day do not collide. The file carries the statements in the order they were made, each under a line saying who made it and when, so a reviewer reads what happened rather than a list of SQL with no account of itself.
+ * Keeps the edits and writes them out: the newest are kept when the journal is full, because what a server was told to do a moment ago matters more than what it was told at the start of a long run, and the export is named the way every other update file is named, counting within the day so two exports on one day do not collide. The file carries the statements in the order they were made, each under a line saying who made it and when, so a reviewer reads what happened rather than a list of SQL with no account of itself; a line break or other control character in who made an edit or where it came from is written as a space, because that line is an SQL comment and must end where the file says, not let text after the break run as a statement.
  */
 
 #include "WorldEditJournal.h"
@@ -22,6 +22,13 @@ namespace
     int64 NowMilliseconds()
     {
         return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    }
+
+    std::string OneLine(std::string_view text)
+    {
+        std::string line(text);
+        std::replace_if(line.begin(), line.end(), [](char c) { return static_cast<unsigned char>(c) < 0x20 || c == 0x7F; }, ' ');
+        return line;
     }
 }
 
@@ -90,7 +97,7 @@ std::string WorldEditJournal::Render(std::vector<WorldEdit> const& edits)
     text += fmt::format("-- {} world edit(s) made while a server was running, exported from its journal.\n", edits.size());
     for (WorldEdit const& edit : edits)
     {
-        text += fmt::format("-- {} by {} from {}\n", StampOf(edit.EpochMs), edit.Who, edit.Source);
+        text += fmt::format("-- {} by {} from {}\n", StampOf(edit.EpochMs), OneLine(edit.Who), OneLine(edit.Source));
         std::string statement = std::string(Ambrose::Trim(edit.Statement));
         if (!statement.empty() && statement.back() != ';')
             statement += ';';

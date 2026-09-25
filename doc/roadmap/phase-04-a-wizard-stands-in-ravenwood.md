@@ -768,9 +768,9 @@ Only this part of WLD-8 is 4.14's; its static zone objects are 5.02's, with thei
 - [x] A failed reload keeps the previous generation serving and returns every error
 - [x] A reader holding a snapshot during a swap keeps a consistent view (TSan clean)
 - [x] `Logger.network` edit plus `reload config` changes routing without a restart
-- [ ] Broken message XML on reload keeps the old generation
+- [x] Broken message XML on reload keeps the old generation
 - [x] `.reload all` reports each target's result and generation
-- [ ] A live world edit is journaled and exports as a pending SQL update
+- [x] A live world edit is journaled and exports as a pending SQL update
 
 ### Detailed spec
 
@@ -784,7 +784,7 @@ Stores that load at startup share one reload path, so every later manager become
 - The message registry and configuration register as the targets `messages` and `config`
 - src/server/scripts/Commands/cs_reload.cpp: `.reload config`, `.reload messages`, `.reload <target>` and `.reload all`, at ADMINISTRATOR level
 - Console `reload <target>` on every app, and SIGHUP on Linux, which runs `reload config`
-- src/server/shared/Reload/WorldEditJournal.{h,cpp}: every live world-database edit from a GM command or the admin API is journaled with time, account, source and statement, and `.journal export` writes the journal as a pending update file in data/sql/updates/pending_db_world/
+- src/server/shared/Reload/WorldEditJournal.{h,cpp}: every live world-database edit from a GM command or the admin API is journaled with time, account, source and statement, and `.journal export` writes the journal as a pending update file in data/sql/updates/pending_db_world/. Built with src/server/database/Database/WorldEdits.{h,cpp}, the one path such an edit takes, which journals an edit only once the world database has taken it; the export goes to the pending folder the updater reads, under Updates.SourcePath or the folder the build came from, and a line break in who made an edit or where it came from cannot leave its comment line
 - src/test/server/shared/Reload/ReloadableStoreTest.cpp, ReloadMgrTest.cpp, WorldEditJournalTest.cpp
 
 **Acceptance**
@@ -792,9 +792,9 @@ Stores that load at startup share one reload path, so every later manager become
 - [x] Unit: a reload that fails validation leaves the previous generation serving, keeps its generation number, and returns every error, not only the first
 - [x] Unit: reader threads holding a snapshot during repeated swaps always see one whole generation, and the test is clean under TSan
 - [x] Integration: editing `Logger.network` in the `.conf` file and running `reload config` on the console changes log routing without a restart
-- [ ] Integration: reloading message XML with a broken definition keeps the old generation, and declared messages still encode
+- [x] Integration: reloading message XML with a broken definition keeps the old generation, and declared messages still encode. `MessageReloadTest.ABrokenDefinitionKeepsTheServingGenerationAndAMendedOneReplacesIt` runs an app that loads the definitions from a Root.wad the test builds and names it as its install: a definition broken on disk refuses `reload messages` with the error naming it, the generation that was serving stays, MSG_SERVERMESSAGE still encodes to the same bytes, and the mended file takes a new generation. It found that no app had a messages target at all, because an app names its install only once it has started, after the targets were registered, so `SetMessageSource` now registers it
 - [x] `.reload all` reports each target's result and generation, in dependency order
-- [ ] Integration: a live world-database edit writes one journal entry, and `.journal export` writes a pending_db_world file that applies cleanly to a fresh world database
+- [x] Integration: a live world-database edit writes one journal entry, and `.journal export` writes a pending_db_world file that applies cleanly to a fresh world database. `WorldEditsTest.AnEditTheDatabaseTakesIsJournaledOnceAndItsExportAppliesToAFreshWorldDatabase` against MariaDB: an edit through `WorldEdits::Apply` changes the live world database at once and writes one journal entry naming who made it and where it came in, and the file the journal exports applies cleanly to a fresh world database the updater builds, which then holds the edit; `WorldEditsTest.AnEditTheDatabaseRefusesOrOneWithNothingInItIsNeverJournaled` keeps refused and empty edits out. `.journal export` writes into the pending folder the updater reads (`DatabaseLoaderTest.PendingUpdatesLiveUnderTheUpdatersSourceFolder`) rather than under the server's working directory
 
 **Risks**
 

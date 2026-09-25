@@ -1,11 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * The reload group: 'reload' on its own lists what this app can rebuild and which generation each is serving, 'reload all' rebuilds every one in the order they depend on, and 'reload <target>' rebuilds one by name, so nothing has to be added here when a later subsystem registers itself. A refusal is answered with every error the build found rather than the first, because an operator who is told only that it failed has to go to the log to learn why.
+ * The reload group: 'reload' on its own lists what this app can rebuild and which generation each is serving, 'reload all' rebuilds every one in the order they depend on, and 'reload <target>' rebuilds one by name, so nothing has to be added here when a later subsystem registers itself. A refusal is answered with every error the build found rather than the first, because an operator who is told only that it failed has to go to the log to learn why. 'journal export' writes the world edit journal into the world database's pending update folder, the one the updater reads, under Updates.SourcePath or the folder the build came from, rather than wherever the server happens to be running.
  */
 
 #include "AccountMgr.h"
 #include "ChatCommand.h"
 #include "CommandCaller.h"
+#include "ConfigMgr.h"
+#include "DatabaseLoader.h"
 #include "ReloadMgr.h"
 #include "WorldEditJournal.h"
 #include "ScriptMgr.h"
@@ -57,7 +59,7 @@ namespace
     bool ExportJournal(CommandCaller& caller, std::vector<std::string> const&)
     {
         std::string error;
-        std::optional<std::filesystem::path> const written = sWorldEditJournal.Export("data/sql/updates/pending_db_world", error);
+        std::optional<std::filesystem::path> const written = sWorldEditJournal.Export(DatabaseLoader::PendingUpdatesFolder(sConfigMgr, "world"), error);
         if (!written)
         {
             caller.Reply(error.empty() ? "The journal was not exported" : error);

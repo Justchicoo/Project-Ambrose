@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * With AMBROSE_TEST_DB set, tests transactions, deadlock retries, chained callbacks on the polling thread, holder callbacks, the loader's open and failure paths, and live pool reconfiguration.
+ * With AMBROSE_TEST_DB set, tests transactions, deadlock retries, chained callbacks on the polling thread, holder callbacks, the loader's open and failure paths, and live pool reconfiguration; and without it, that a database's pending update folder is the one under Updates.SourcePath, or under the folder the build came from when it names none.
  */
 
 #include "AsyncCallbackProcessor.h"
@@ -15,6 +15,7 @@
 #include "QueryHolder.h"
 #include "QueryResult.h"
 #include "ScopeExit.h"
+#include "SourceFolder.h"
 #include "TestAppender.h"
 #include "Transaction.h"
 
@@ -22,6 +23,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <atomic>
 #include <mutex>
 #include <stdexcept>
@@ -283,6 +285,19 @@ TEST(DatabaseTransactionTest, InvalidOrResubmittedTransactionsAreRefused)
     EXPECT_FALSE(pool.DirectCommitTransaction(once));
     once->Append("SELECT 2");
     EXPECT_FALSE(once->IsValid());
+}
+
+TEST(DatabaseLoaderTest, PendingUpdatesLiveUnderTheUpdatersSourceFolder)
+{
+    LogTestDirectory directory;
+    std::string source = ConfigMgr::PathToUtf8(directory.Path() / "source");
+    std::replace(source.begin(), source.end(), '\\', '/');
+    auto const configured = LoadConfig(directory, fmt::format("Updates.SourcePath = \"{}\"\n", source));
+    EXPECT_EQ(DatabaseLoader::PendingUpdatesFolder(*configured, "world"), directory.Path() / "source" / "data" / "sql" / "updates" / "pending_db_world");
+
+    auto const unset = LoadConfig(directory, "");
+    EXPECT_EQ(DatabaseLoader::PendingUpdatesFolder(*unset, "characters"), Ambrose::FindSourceFolder() / "data" / "sql" / "updates" / "pending_db_characters")
+        << "with no source path named, pending updates are read from the folder the build came from, never from wherever the server runs";
 }
 
 TEST(DatabaseLoaderTest, BadInfoFailsAndValidInfoLogsThePool)

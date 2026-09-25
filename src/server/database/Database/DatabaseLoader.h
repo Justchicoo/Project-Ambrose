@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Opens an app's database pools from its configuration in order, running the updater first at startup for databases Updates.EnableDatabases selects, unwinds on the first failure, re-applies changed connection options live, and closes them in reverse; while the app runs it reports each database's state and pool use, lists its applied and pending updates, and applies the pending data-only ones live, with one updater run at a time across the app.
+ * Opens an app's database pools from its configuration in order, running the updater first at startup for databases Updates.EnableDatabases selects, unwinds on the first failure, re-applies changed connection options live, and closes them in reverse; while the app runs it reports each database's state and pool use, lists its applied and pending updates, and applies the pending data-only ones live, with one updater run at a time across the app; it also names the folder a database's pending updates are read from, the one a world edit export belongs in.
  */
 
 #ifndef AMBROSE_DATABASELOADER_H
@@ -12,6 +12,7 @@
 #include "UpdateFetcher.h"
 
 #include <array>
+#include <filesystem>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -101,6 +102,8 @@ public:
     DatabaseApplyResult ApplyDataUpdates(std::string_view name);
 
     static std::string_view StateName(DatabaseState state) noexcept;
+    static UpdaterSettings ReadUpdaterSettings(ConfigMgr const& config);
+    static std::filesystem::path PendingUpdatesFolder(ConfigMgr const& config, std::string_view updateFolder);
 
 private:
     struct Entry
@@ -119,7 +122,6 @@ private:
 
     void ReadOptions(Entry const& entry, std::string& info, uint32& asyncThreads, uint32& syncThreads) const;
     void ApplyPingInterval() const;
-    UpdaterSettings ReadUpdaterSettings() const;
     bool UpdatesEnabled(Entry const& entry) const;
     bool RunUpdater(Entry const& entry, std::string const& info) const;
     void SetState(Entry& entry, DatabaseState state);

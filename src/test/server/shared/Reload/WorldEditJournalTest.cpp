@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks what the journal promises: an edit is written down with who made it and where it came from, an edit with nothing in it is not written down at all, a journal that fills keeps the newest rather than the first, the exported file carries the branding header and every statement in the order they were made with a semicolon whether the caller wrote one or not, an export names itself the way every other update file is named and counts within the day rather than overwriting, and exporting an empty journal writes no file and says why.
+ * Checks what the journal promises: an edit is written down with who made it and where it came from, an edit with nothing in it is not written down at all, a journal that fills keeps the newest rather than the first, the exported file carries the branding header and every statement in the order they were made with a semicolon whether the caller wrote one or not, a line break in who made an edit or where it came from stays inside its comment line, an export names itself the way every other update file is named and counts within the day rather than overwriting, and exporting an empty journal writes no file and says why.
  */
 
 #include "WorldEditJournal.h"
@@ -104,6 +104,19 @@ TEST_F(WorldEditJournalTest, TheRenderedFileCarriesTheHeaderAndEveryStatementInO
     EXPECT_NE(text.find("DELETE FROM c WHERE d = 2;"), std::string::npos);
     EXPECT_EQ(text.find("DELETE FROM c WHERE d = 2;") > text.find("UPDATE a SET b = 1;"), true) << "the order they were made is the order they are written";
     EXPECT_NE(text.find("by Wizard from a command"), std::string::npos) << "a reviewer must see who made each edit";
+}
+
+TEST_F(WorldEditJournalTest, ALineBreakInWhoOrWhereCannotEndTheCommentLine)
+{
+    WorldEdit edit = At(1, "UPDATE a SET b = 1");
+    edit.Who = "Wizard\nDROP TABLE zone_object;";
+    edit.Source = "the panel\r\nDELETE FROM c";
+    std::string const text = WorldEditJournal::Render({ edit });
+
+    EXPECT_EQ(text.find("\nDROP TABLE"), std::string::npos) << "text after a break in a name would otherwise run as a statement";
+    EXPECT_EQ(text.find("\nDELETE FROM c"), std::string::npos);
+    EXPECT_NE(text.find("by Wizard DROP TABLE zone_object; from the panel  DELETE FROM c\n"), std::string::npos) << text;
+    EXPECT_NE(text.find("\nUPDATE a SET b = 1;"), std::string::npos) << "the statement itself still stands on a line of its own";
 }
 
 TEST_F(WorldEditJournalTest, AnExportIsNamedTheWayEveryOtherUpdateFileIsAndCountsWithinTheDay)

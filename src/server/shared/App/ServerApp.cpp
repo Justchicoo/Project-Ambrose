@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, opens the admin API with the app's own routes and the live log stream already in it before the app starts, keeping a generated token in the data folder or, where the machine names none, beside the config file, and refuses to run when its binding is unsafe, stops gracefully on signals, requests, the shutdown command or POST /api/shutdown, now or after a delay either can cancel, with the reason logged when the delay runs out, answers GET /api/settings with the options the app declares restart-required, moves the one lifecycle state the console and the admin API both read, tells an app whether it runs only to check its start, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, and runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use.
+ * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, opens the admin API with the app's own routes and the live log stream already in it before the app starts, keeping a generated token in the data folder or, where the machine names none, beside the config file, and refuses to run when its binding is unsafe, stops gracefully on signals, requests, the shutdown command or POST /api/shutdown, now or after a delay either can cancel, with the reason logged when the delay runs out, answers GET /api/settings with the options the app declares restart-required, moves the one lifecycle state the console and the admin API both read, tells an app whether it runs only to check its start, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use, and registers the config reload target before the app starts and the messages one when the app names the install its definitions come from, which it only knows once it has started.
  */
 
 #include "ServerApp.h"
@@ -355,6 +355,16 @@ void ServerApp::OnConfigChanged(std::vector<std::string> const& changed)
 void ServerApp::SetMessageSource(std::filesystem::path clientRoot)
 {
     _messageSource = std::move(clientRoot);
+    bool const added = sReloadMgr.Register("messages", [this](std::vector<std::string>& errors)
+    {
+        if (sMessageRegistry.LoadFromClient(_messageSource))
+            return true;
+        for (MessageIssue const& issue : sMessageRegistry.GetErrors())
+            errors.push_back(issue.ToString());
+        return false;
+    });
+    if (added)
+        sAdminCapabilities.AddReloadTarget("messages");
 }
 
 void ServerApp::SetClientSetup(ClientSetupResult setup)
@@ -371,16 +381,6 @@ void ServerApp::RegisterReloadTargets()
             errors.push_back(issue.ToString());
         return result.Succeeded();
     });
-
-    if (!_messageSource.empty())
-        sReloadMgr.Register("messages", [this](std::vector<std::string>& errors)
-        {
-            if (sMessageRegistry.LoadFromClient(_messageSource))
-                return true;
-            for (MessageIssue const& issue : sMessageRegistry.GetErrors())
-                errors.push_back(issue.ToString());
-            return false;
-        });
 
     _configSubscription = _config.SubscribeToChanges([this](std::vector<std::string> const& changed)
     {
