@@ -17,6 +17,14 @@ def answered(said, wanted):
     return str(said) == str(wanted)
 
 
+SETTLE_SECONDS = 0.3
+MOVE_MARGIN = 0.2
+
+
+def held_key_moved(still, held, margin=MOVE_MARGIN):
+    return held <= still - margin
+
+
 class Engine:
     def __init__(self, scenario, client, server, store, shots, variables, databases=None):
         self.scenario = scenario
@@ -211,6 +219,24 @@ class Engine:
         virtual_key = step["vk"] if isinstance(step["vk"], int) else int(str(step["vk"]), 0)
         self.client.key(virtual_key)
         return f"posted the key {virtual_key:#x}"
+
+    def act_hold_key(self, step):
+        virtual_key = step["vk"] if isinstance(step["vk"], int) else int(str(step["vk"]), 0)
+        seconds = float(step["seconds"])
+        before = self.client.frame()
+        time.sleep(seconds)
+        idle = self.client.frame()
+        self.client.key(virtual_key, hold=seconds)
+        time.sleep(SETTLE_SECONDS)
+        after = self.client.frame()
+        self.current = after
+        still = screens.matching(before, idle)
+        held = screens.matching(idle, after)
+        said = (f"held the key {virtual_key:#x} for {seconds}s: {held:.3f} of the frame stayed the same while it was held, "
+                f"against {still:.3f} over the same time with no key")
+        if step.get("moves") and not held_key_moved(still, held):
+            raise StepFailed(f"{said}, which is not the view moving")
+        return said
 
     def act_server_command(self, step):
         self.server.send(self.fill(step["command"]))

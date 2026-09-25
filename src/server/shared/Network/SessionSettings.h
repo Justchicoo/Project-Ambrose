@@ -21,6 +21,7 @@ struct SessionSettings
     static constexpr uint32 DefaultKeepAliveTimeoutSeconds = 15;
     static constexpr uint32 MaxSeconds = 3600;
     static constexpr uint32 DefaultHandoffGraceSeconds = 30;
+    static constexpr uint32 DefaultAttachTimeoutSeconds = 30;
     static constexpr uint32 DefaultMaxStrikes = 10;
     static constexpr uint32 MaxStrikesLimit = 1000;
     static constexpr uint32 DefaultDroppedMessageBurst = 64;
@@ -33,6 +34,7 @@ struct SessionSettings
     std::chrono::milliseconds KeepAliveInterval{ std::chrono::seconds(DefaultKeepAliveIntervalSeconds) };
     std::chrono::milliseconds KeepAliveTimeout{ std::chrono::seconds(DefaultKeepAliveTimeoutSeconds) };
     std::chrono::milliseconds HandoffGrace{ std::chrono::seconds(DefaultHandoffGraceSeconds) };
+    std::chrono::milliseconds AttachTimeout{ std::chrono::seconds(DefaultAttachTimeoutSeconds) };
     uint32 MaxStrikes = DefaultMaxStrikes;
     uint32 DroppedMessageBurst = DefaultDroppedMessageBurst;
     uint32 DroppedMessagesPerSecond = DefaultDroppedMessagesPerSecond;

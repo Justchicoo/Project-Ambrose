@@ -36,6 +36,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Oversized.** 4.08 zone extractor across 3356 zone WADs with 0 failures (M). The failure triage alone is open-ended.
 - **Ordering.** 4.04 carries LOG-11's acceptance as well as WLD-1's, but only the LocationString part of LOG-11 is its own work. Three of its checks, the CharID selection errors, the MSG_ATTACH integration and the real-client Play, describe 4.05 and cannot be earned until 4.05 lands, so 4.04 stays open with its own eight ticked. Found on 2026-09-23 when an outside contributor delivered every part of 4.04 that 4.04 builds.
 - **Ordering.** 4.12 carries WIZ-1 whole, but its title leaves the PLAYERWIZBANG broadcast out, because other clients in range only exist from 6.01, and 6.02 carries that handler and the spellbook half of the real-client check already. **Resolved on 2026-09-25:** 4.12 builds the rest, and its deliverable and check no longer name the broadcast. The client sends its entry chatter after MSG_LOGINCOMPLETE but before MSG_CLIENTZONED, so the handlers take it from LoggedIn as well as InWorld; the tests of every WIZARD name and of the WIZARD orders read the user's own XML, so they are client tests.
+- **Correction.** 4.13 and 4.14 asked for CriticalObjects as a wrapped, empty CriticalObjectList. The client's own GameClient::MSG_LoginComplete, read in Ghidra, takes an empty CriticalObjects as no critical objects and would read a list there with no envelope, so the checks now ask for it empty, as Entering the world in doc/ARCHITECTURE.md records. **Resolved on 2026-09-25.**
 - **Ordering.** 4.09 depends on 4.15, so 4.15 lands before 4.09. Settings named in 4.02-4.14 read their config value until 4.16 lands, then become live settings with the same keys.
 
 ## 4.01 sWorld tick, GameSession, ScriptMgr hooks and AddSC loaders (new core)
@@ -646,9 +647,9 @@ A character entering the world gets no errors or unknown-message spam from the W
 
 **Acceptance**
 
-- [ ] Wrong LoginKey sends MSG_ATTACHFAILED, never LOGINCOMPLETE
-- [ ] Another account's CharID rejected
-- [ ] A socket that never attaches closes after Attach.Timeout
+- [x] Wrong LoginKey sends MSG_ATTACHFAILED, never LOGINCOMPLETE. `HandoffTest.AnAttachCarryingAKeyNobodyIssuedIsRefusedAndTheSocketIsClosed` attaches with a key the login server never issued: the game server answers MSG_ATTACHFAILED, nothing follows it for two seconds, the connection closes and the session names no account
+- [x] Another account's CharID rejected. `HandoffTest.AnAttachNamingAnotherAccountsWizardIsRefusedEvenWithAGoodKey` signs in, takes the key issued for its own wizard and attaches naming another account's wizard: MSG_ATTACHFAILED, nothing after it, the connection closed, and the other account's wizard never taken on
+- [x] A socket that never attaches closes after Attach.Timeout. `GameAttachTest.ASocketThatNeverAttachesIsClosedOnceAttachTimeoutPasses` sets Attach.Timeout to one second: the session is still open at once, the world's update closes it once the second has passed, and the client reads nothing before the close, while `HandoffTest.AClientSignsInPicksAWizardLeavesAndAttachesToTheGameServerItWasSentTo` shows a session that has attached is never closed for it
 
 ### Detailed spec from WLD-7: Attach and login complete: standing in an empty zone
 
@@ -675,12 +676,12 @@ A real client that selects a character loads into its saved zone and stands at t
 
 **Acceptance**
 
-- [ ] Real client: log in, pick a character, see the loading screen, then control the wizard in WizardCity/WC_Hub at 'Start'
+- [x] Real client: log in, pick a character, see the loading screen, then control the wizard in WizardCity/WC_Hub at 'Start'. The client driver's enter-the-commons run 20260925-124322 on 2026-09-25 seeded a wizard in WizardCity/WC_Hub with no position of its own: the game server logged `put wizard 1 in WizardCity/WC_Hub instance 1 at (-3.267008, 50.24604, -30.47341)`, which is WC_Hub's Start in the zone rows, the client loaded the zone and said so, and the scenario's hold_key step held W for 1.5 seconds with `moves`: 0.237 of the view stayed the same while it was held, against 0.996 over the same time with no key, and the screenshot after it shows the wizard walked off the plaza onto the lawn
 - [x] Real client: a character whose saved zone is WizardCity/WC_Ravenwood loads into Ravenwood. Client driver runs 20260925-100208 and 20260925-100536: the enter-world scenario's wizard, saved in WizardCity/WC_Ravenwood, is placed at the zone's Start, the client accepts MSG_LOGINCOMPLETE and loads Ravenwood
-- [ ] Unit: HandleAttach with a wrong LoginKey sends MSG_ATTACHFAILED and never MSG_LOGINCOMPLETE
-- [ ] Unit: HandleAttach with another account's CharID is rejected
-- [ ] Integration: a socket that never sends MSG_ATTACH is closed after the timeout
-- [ ] LOGINCOMPLETE fills ZoneName, ZoneID, DynamicZoneID, DynamicServerProcID, ServerTime (unix seconds), RealmName and CriticalObjects (a wrapped, empty CriticalObjectList)
+- [x] Unit: HandleAttach with a wrong LoginKey sends MSG_ATTACHFAILED and never MSG_LOGINCOMPLETE. `HandoffTest.AnAttachCarryingAKeyNobodyIssuedIsRefusedAndTheSocketIsClosed` attaches with a key the login server never issued: the game server answers MSG_ATTACHFAILED, nothing follows it for two seconds, the connection closes and the session names no account
+- [x] Unit: HandleAttach with another account's CharID is rejected. `HandoffTest.AnAttachNamingAnotherAccountsWizardIsRefusedEvenWithAGoodKey` signs in, takes the key issued for its own wizard and attaches naming another account's wizard: MSG_ATTACHFAILED, nothing after it, the connection closed, and the other account's wizard never taken on
+- [x] Integration: a socket that never sends MSG_ATTACH is closed after the timeout. `GameAttachTest.ASocketThatNeverAttachesIsClosedOnceAttachTimeoutPasses` sets Attach.Timeout to one second: the session is still open at once, the world's update closes it once the second has passed, and the client reads nothing before the close, while `HandoffTest.AClientSignsInPicksAWizardLeavesAndAttachesToTheGameServerItWasSentTo` shows a session that has attached is never closed for it
+- [x] LOGINCOMPLETE fills ZoneName, ZoneID, DynamicZoneID, DynamicServerProcID, ServerTime (unix seconds), RealmName and CriticalObjects (empty, which the client takes as no critical objects). The client driver's enter-the-commons run 20260925-124322 on 2026-09-25 logged `Session 1 sent MSG_LOGINCOMPLETE: zone WizardCity/WC_Hub, id 1727411499, dynamic zone 1 in process 1, server time 1790354697, realm Ambrose Driver, permissions 0x2f, CSR 0, test server 0, critical objects none`: the server time is the run's own second, 2026-09-25 16:44:57 UTC, the id is the KI string hash of the zone's path, which the client sent back in MSG_CLIENTZONED, and the client left its loading screen for the Commons
 
 **Risks**
 
@@ -698,9 +699,9 @@ A real client that selects a character loads into its saved zone and stands at t
 
 **Acceptance**
 
-- [ ] Real client: log in, pick a character, loading screen, then control the wizard in WizardCity/WC_Hub at 'Start'
+- [x] Real client: log in, pick a character, loading screen, then control the wizard in WizardCity/WC_Hub at 'Start'. The client driver's enter-the-commons run 20260925-124322 on 2026-09-25 seeded a wizard in WizardCity/WC_Hub with no position of its own: the game server logged `put wizard 1 in WizardCity/WC_Hub instance 1 at (-3.267008, 50.24604, -30.47341)`, which is WC_Hub's Start in the zone rows, the client loaded the zone and said so, and the scenario's hold_key step held W for 1.5 seconds with `moves`: 0.237 of the view stayed the same while it was held, against 0.996 over the same time with no key, and the screenshot after it shows the wizard walked off the plaza onto the lawn
 - [x] Saved zone WC_Ravenwood loads Ravenwood. Client driver runs 20260925-100208 and 20260925-100536: the enter-world scenario's wizard, saved in WizardCity/WC_Ravenwood, is placed at the zone's Start, the client accepts MSG_LOGINCOMPLETE and loads Ravenwood
-- [ ] LOGINCOMPLETE fills ZoneName, ZoneID, DynamicZoneID, ServerTime, RealmName and a wrapped empty CriticalObjects
+- [x] LOGINCOMPLETE fills ZoneName, ZoneID, DynamicZoneID, ServerTime, RealmName and an empty CriticalObjects. The client driver's enter-the-commons run 20260925-124322 on 2026-09-25 logged `Session 1 sent MSG_LOGINCOMPLETE: zone WizardCity/WC_Hub, id 1727411499, dynamic zone 1 in process 1, server time 1790354697, realm Ambrose Driver, permissions 0x2f, CSR 0, test server 0, critical objects none`: the server time is the run's own second, 2026-09-25 16:44:57 UTC, the id is the KI string hash of the zone's path, which the client sent back in MSG_CLIENTZONED, and the client left its loading screen for the Commons
 - [x] MSG_CLIENTZONED (53:64) marks the session in world. The same runs: the client sends it with ZoneNameID 699201167, the KI string hash of WizardCity/WC_Ravenwood, and the game server logs the wizard standing in the world
 
 ### Detailed spec from WLD-7: Attach and login complete: standing in an empty zone
@@ -728,12 +729,12 @@ A real client that selects a character loads into its saved zone and stands at t
 
 **Acceptance**
 
-- [ ] Real client: log in, pick a character, see the loading screen, then control the wizard in WizardCity/WC_Hub at 'Start'
+- [x] Real client: log in, pick a character, see the loading screen, then control the wizard in WizardCity/WC_Hub at 'Start'. The client driver's enter-the-commons run 20260925-124322 on 2026-09-25 seeded a wizard in WizardCity/WC_Hub with no position of its own: the game server logged `put wizard 1 in WizardCity/WC_Hub instance 1 at (-3.267008, 50.24604, -30.47341)`, which is WC_Hub's Start in the zone rows, the client loaded the zone and said so, and the scenario's hold_key step held W for 1.5 seconds with `moves`: 0.237 of the view stayed the same while it was held, against 0.996 over the same time with no key, and the screenshot after it shows the wizard walked off the plaza onto the lawn
 - [x] Real client: a character whose saved zone is WizardCity/WC_Ravenwood loads into Ravenwood. Client driver runs 20260925-100208 and 20260925-100536: the enter-world scenario's wizard, saved in WizardCity/WC_Ravenwood, is placed at the zone's Start, the client accepts MSG_LOGINCOMPLETE and loads Ravenwood
-- [ ] Unit: HandleAttach with a wrong LoginKey sends MSG_ATTACHFAILED and never MSG_LOGINCOMPLETE
-- [ ] Unit: HandleAttach with another account's CharID is rejected
-- [ ] Integration: a socket that never sends MSG_ATTACH is closed after the timeout
-- [ ] LOGINCOMPLETE fills ZoneName, ZoneID, DynamicZoneID, DynamicServerProcID, ServerTime (unix seconds), RealmName and CriticalObjects (a wrapped, empty CriticalObjectList)
+- [x] Unit: HandleAttach with a wrong LoginKey sends MSG_ATTACHFAILED and never MSG_LOGINCOMPLETE. `HandoffTest.AnAttachCarryingAKeyNobodyIssuedIsRefusedAndTheSocketIsClosed` attaches with a key the login server never issued: the game server answers MSG_ATTACHFAILED, nothing follows it for two seconds, the connection closes and the session names no account
+- [x] Unit: HandleAttach with another account's CharID is rejected. `HandoffTest.AnAttachNamingAnotherAccountsWizardIsRefusedEvenWithAGoodKey` signs in, takes the key issued for its own wizard and attaches naming another account's wizard: MSG_ATTACHFAILED, nothing after it, the connection closed, and the other account's wizard never taken on
+- [x] Integration: a socket that never sends MSG_ATTACH is closed after the timeout. `GameAttachTest.ASocketThatNeverAttachesIsClosedOnceAttachTimeoutPasses` sets Attach.Timeout to one second: the session is still open at once, the world's update closes it once the second has passed, and the client reads nothing before the close, while `HandoffTest.AClientSignsInPicksAWizardLeavesAndAttachesToTheGameServerItWasSentTo` shows a session that has attached is never closed for it
+- [x] LOGINCOMPLETE fills ZoneName, ZoneID, DynamicZoneID, DynamicServerProcID, ServerTime (unix seconds), RealmName and CriticalObjects (empty, which the client takes as no critical objects). The client driver's enter-the-commons run 20260925-124322 on 2026-09-25 logged `Session 1 sent MSG_LOGINCOMPLETE: zone WizardCity/WC_Hub, id 1727411499, dynamic zone 1 in process 1, server time 1790354697, realm Ambrose Driver, permissions 0x2f, CSR 0, test server 0, critical objects none`: the server time is the run's own second, 2026-09-25 16:44:57 UTC, the id is the KI string hash of the zone's path, which the client sent back in MSG_CLIENTZONED, and the client left its loading screen for the Commons
 
 **Risks**
 

@@ -26,6 +26,7 @@ SessionSettings SessionSettings::Load(ConfigMgr const& config, std::vector<std::
     settings.KeepAliveInterval = seconds("Network.KeepAliveInterval", DefaultKeepAliveIntervalSeconds, 0);
     settings.KeepAliveTimeout = seconds("Network.KeepAliveTimeout", DefaultKeepAliveTimeoutSeconds, 1);
     settings.HandoffGrace = seconds("Network.HandoffGrace", DefaultHandoffGraceSeconds, 1);
+    settings.AttachTimeout = seconds("Attach.Timeout", DefaultAttachTimeoutSeconds, 1);
     auto count = [&](std::string const& option, uint32 fallback, uint32 maximum)
     {
         uint32 const configured = config.GetOption<uint32>(option, fallback, true);

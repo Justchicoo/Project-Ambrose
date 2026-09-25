@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A game server over loopback for tests: real GameSessions on a port of their own, each found by its session id, clients connected and handshaken, the game message table declared over Ambrose-authored definitions for as long as a test holds them, and helpers that send a declared message the way a client does and tell which declared message a reply is.
+ * A game server over loopback for tests: real GameSessions on a port of their own, under the session settings a test gives, each found by its session id, clients connected and handshaken, the game message table declared over Ambrose-authored definitions for as long as a test holds them, and helpers that send a declared message the way a client does and tell which declared message a reply is.
  */
 
 #ifndef AMBROSE_GAMETESTHARNESS_H
@@ -46,9 +46,9 @@ namespace GameTesting
     class GameListener
     {
     public:
-        GameListener()
+        explicit GameListener(SessionSettings settings = {})
         {
-            _context = std::make_shared<SessionContext>(SessionSettings{});
+            _context = std::make_shared<SessionContext>(settings);
             _manager = std::make_unique<SocketMgr<GameSession>>([this](asio::ip::tcp::socket&& socket, FrameLimits const& limits)
             {
                 auto session = std::make_shared<GameSession>(std::move(socket), limits, _context);

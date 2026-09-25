@@ -217,6 +217,30 @@ TEST(SessionSettingsTest, LoadsDefaultsAndClampsOutOfRangeSeconds)
     EXPECT_EQ(loaded.PingsPerSecond, SessionSettings::DefaultPingsPerSecond);
 }
 
+TEST(SessionSettingsTest, TheAttachTimeoutLoadsItsDefaultAndIsNeverUnderASecond)
+{
+    LogTestDirectory directory;
+    std::filesystem::path const file = directory.Path() / "session.conf";
+    std::ofstream(file) << "Network.KeepAliveInterval = 60\n";
+    ConfigMgr defaults;
+    ASSERT_TRUE(defaults.LoadInitial(file).Succeeded());
+    std::vector<std::string> problems;
+    EXPECT_EQ(SessionSettings::Load(defaults, &problems).AttachTimeout, std::chrono::seconds(SessionSettings::DefaultAttachTimeoutSeconds));
+    EXPECT_TRUE(problems.empty());
+
+    std::ofstream(file) << "Attach.Timeout = 5\n";
+    ConfigMgr five;
+    ASSERT_TRUE(five.LoadInitial(file).Succeeded());
+    EXPECT_EQ(SessionSettings::Load(five, &problems).AttachTimeout, std::chrono::seconds(5));
+    EXPECT_TRUE(problems.empty());
+
+    std::ofstream(file) << "Attach.Timeout = 0\n";
+    ConfigMgr zero;
+    ASSERT_TRUE(zero.LoadInitial(file).Succeeded());
+    EXPECT_EQ(SessionSettings::Load(zero, &problems).AttachTimeout, std::chrono::seconds(1)) << "a client always gets a moment to attach";
+    EXPECT_EQ(problems.size(), 1u);
+}
+
 TEST_F(SessionBaseTest, OfferIsTheFirstFrameWithTheSessionIdAndOfferTime)
 {
     FakeSessionClient client(Start(Timing(std::chrono::seconds(30))));

@@ -50,6 +50,7 @@ Realm.HeartbeatInterval = 30
 World.UpdateInterval = 50
 Zone.UnloadDelay = 60
 Zone.MobileIdReleaseDelay = 2000
+Attach.Timeout = 30
 LoginComplete.Permissions = 47
 LoginComplete.CSRSecurityLevel = 2
 LoginComplete.TestServer = 0

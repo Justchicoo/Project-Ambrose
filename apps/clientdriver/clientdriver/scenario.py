@@ -18,6 +18,7 @@ ACTIONS = {
     "type": (("text",), ()),
     "char": (("code",), ()),
     "key": (("vk",), ()),
+    "hold_key": (("vk", "seconds"), ("moves",)),
     "click": (("target",), ("attempts", "dwell", "dwell_step", "on_screen", "until")),
     "shot": ((), ("file",)),
     "server_command": (("command",), ("pattern", "timeout")),
@@ -30,6 +31,7 @@ REQUIRES = ("client", "capture", "gameserver")
 WIZARD = ("school", "zone", "first", "middle", "last")
 SIDES = ("server", "client")
 OUTCOMES = ("pass", "failure")
+MAX_HOLD_SECONDS = 30
 
 
 def fill(value, variables):
@@ -138,6 +140,8 @@ def _check_step(path, index, step):
         raise Refused(f"{where} ({name}) needs a timeout in seconds")
     if action == "wait_screen" and (not isinstance(step["screens"], list) or not step["screens"]):
         raise Refused(f"{where} ({name}) needs a list of screens to wait for")
+    if action == "hold_key" and (not isinstance(step["seconds"], (int, float)) or not 0 < step["seconds"] <= MAX_HOLD_SECONDS):
+        raise Refused(f"{where} ({name}) needs to hold its key for more than 0 and at most {MAX_HOLD_SECONDS} seconds")
     if action == "forbid_log" and step["side"] not in SIDES:
         raise Refused(f"{where} ({name}) must forbid a line on the {' or '.join(SIDES)} side")
     for key in ("pattern", "fail"):

@@ -234,6 +234,18 @@ class ScenarioTests(TemporaryFolder):
             scenario.load("extra.json", search=(os.path.join(self.folder, "scenarios"),))
         self.assertIn("'screens'", str(raised.exception))
 
+    def test_a_held_key_needs_a_time_it_can_be_held_for(self):
+        self.scenario_file("good.json", {"title": "x", "steps": [{"action": "hold_key", "name": "walk", "vk": "0x57", "seconds": 1.5, "moves": True}]})
+        scenario.load("good.json", search=(os.path.join(self.folder, "scenarios"),))
+        for seconds in (0, 31, "long"):
+            self.scenario_file("bad.json", {"title": "x", "steps": [{"action": "hold_key", "name": "walk", "vk": "0x57", "seconds": seconds}]})
+            with self.assertRaises(Refused) as raised:
+                scenario.load("bad.json", search=(os.path.join(self.folder, "scenarios"),))
+            self.assertIn("seconds", str(raised.exception))
+        self.scenario_file("none.json", {"title": "x", "steps": [{"action": "hold_key", "name": "walk", "vk": "0x57"}]})
+        with self.assertRaises(Refused):
+            scenario.load("none.json", search=(os.path.join(self.folder, "scenarios"),))
+
     def test_a_press_carries_the_check_that_it_took_and_that_check_is_checked_too(self):
         self.scenario_file("good.json", {"title": "x", "steps": [
             {"action": "click", "name": "press", "target": "press",
@@ -596,8 +608,9 @@ class FakeClient:
     def post_char(self, code):
         self.typed.append(chr(code))
 
-    def key(self, virtual_key):
+    def key(self, virtual_key, hold=0.05):
         self.typed.append(virtual_key)
+        self.held = hold
 
     def click(self, x, y, dwell=0.35):
         self.presses.append((x, y, round(dwell, 2)))
@@ -700,6 +713,31 @@ class EngineTests(TemporaryFolder):
         running.run()
         self.assertEqual(len(running.notes), 1)
         self.assertIn("listed 0 character(s)", running.notes[0]["line"])
+
+    def test_a_held_key_that_moves_the_view_changes_far_more_of_it_than_the_same_time_idle(self):
+        running = self.build([{"action": "hold_key", "name": "walk", "vk": "0x57", "seconds": 0.01, "moves": True}])
+        self.client.arriving = [frame_of(RED, BLUE), frame_of(RED, BLUE), frame_of(GREEN, GREEN)]
+        running.run()
+        self.assertEqual(self.client.typed, [0x57])
+        self.assertEqual(self.client.held, 0.01)
+        self.assertIn("0.000 of the frame stayed the same while it was held, against 1.000", running.steps[0]["result"])
+
+    def test_a_held_key_that_leaves_the_view_as_it_was_fails_a_step_that_expects_it_to_move(self):
+        running = self.build([{"action": "hold_key", "name": "walk", "vk": "0x57", "seconds": 0.01, "moves": True}])
+        self.client.arriving = [frame_of(RED, BLUE), frame_of(RED, BLUE), frame_of(RED, BLUE)]
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("not the view moving", str(raised.exception))
+        idle = self.build([{"action": "hold_key", "name": "look", "vk": "0x57", "seconds": 0.01}])
+        self.client.arriving = [frame_of(RED, BLUE), frame_of(RED, BLUE), frame_of(RED, BLUE)]
+        idle.run()
+        self.assertTrue(idle.steps[0]["ok"])
+
+    def test_the_view_counts_as_moved_only_well_past_what_it_changes_idle(self):
+        self.assertTrue(engine.held_key_moved(0.98, 0.40))
+        self.assertTrue(engine.held_key_moved(0.98, 0.70))
+        self.assertFalse(engine.held_key_moved(0.98, 0.85))
+        self.assertFalse(engine.held_key_moved(0.50, 0.45))
 
     def test_a_screen_step_waits_until_the_screen_is_there(self):
         running = self.build([{"action": "wait_screen", "name": "the login window", "screens": ["login"], "timeout": 2}],

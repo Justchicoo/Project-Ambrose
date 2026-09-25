@@ -64,6 +64,18 @@ std::size_t GameSession::DrainQueue(std::size_t limit)
     return ProcessQueuedMessages(limit);
 }
 
+void GameSession::WorldUpdate(std::chrono::steady_clock::time_point now)
+{
+    if (!IsOpen() || IsAttached() || _attaching.load(std::memory_order_relaxed))
+        return;
+    std::chrono::milliseconds const timeout = GetContext().GetSettings().AttachTimeout;
+    if (now - _connectedAt < timeout)
+        return;
+    LOG_INFO("server.gamesession", "Session {} from {} sent no MSG_ATTACH within Attach.Timeout of {} s; closing it",
+        GetSessionId(), GetRemoteAddress().to_string(), std::chrono::duration_cast<std::chrono::seconds>(timeout).count());
+    CloseSocket();
+}
+
 void GameSession::ProcessCallbacks()
 {
     _countedCallbacks.ProcessReadyCallbacks();
@@ -289,6 +301,9 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     complete.RealmName = config.GetOption<std::string>("Realm.Name", "Ambrose", true);
     SendDmlMessage(complete);
     SetStatus(SessionStatus::LoggedIn);
+    LOG_DEBUG("server.gamesession", "Session {} sent MSG_LOGINCOMPLETE: zone {}, id {}, dynamic zone {} in process {}, server time {}, realm {}, permissions {:#x}, CSR {}, test server {}, critical objects {}",
+        GetSessionId(), complete.ZoneName, complete.ZoneId, complete.DynamicZoneId, complete.DynamicServerProcId, complete.ServerTime, complete.RealmName, complete.Permissions,
+        complete.IsCsr, complete.TestServer, complete.CriticalObjects.empty() ? "none" : "a list");
     LOG_INFO("server.gamesession", "Session {} put wizard {} in {} instance {} at ({}, {}, {}) with mobile id {}, and sent its {}-byte object",
         GetSessionId(), character.Guid, character.Zone, map.GetDynamicZoneId(), placement.X, placement.Y, placement.Z, placement.MobileId, data.Bytes.size());
 }

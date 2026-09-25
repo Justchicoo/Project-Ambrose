@@ -553,6 +553,7 @@ Settled on 2026-09-25, under the maintainer's standing delegation, from the clie
 - `ZoneID` is the KI string hash of the zone's path, the same number the client sends back as MSG_CLIENTZONED's `ZoneNameID` once it has loaded the zone, so both name the zone the same way. `DynamicZoneID` and `DynamicServerProcID` are the instance's dynamic zone id, because one process holds every instance.
 - A message with `SegmentedMessage` 0 stands alone. The client gathers `Data` across messages when it is 1 for the first segment or more for the next ones and `LastSegment` is 0, which a player object too large for one frame will need.
 - A wizard stands in the world when MSG_CLIENTZONED names the zone it was sent to.
+- A client that has neither attached nor begun to within `Attach.Timeout` of connecting, 30 seconds by default, is closed by the world tick, which gives every session the tick's time, so a socket that never says who it is cannot hold a slot. A key nobody issued, and the right key naming another account's wizard, are both answered with MSG_ATTACHFAILED and nothing after it.
 
 ### Server-side class schemas
 

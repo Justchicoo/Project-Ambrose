@@ -1,0 +1,250 @@
+{
+  "title": "Log in with a wizard already made, play it in the Commons, and walk it",
+  "include": "parts/common.json",
+  "notes": [
+    "The same entry as enter-world.json, for a wizard saved in WizardCity/WC_Hub with no position of its own,",
+    "so the game server puts it at the zone's Start, and it records the fields MSG_LOGINCOMPLETE carried.",
+    "Once the wizard stands in the Commons the run holds W, the client's walk key, and passes only if that",
+    "changes far more of the view than the same time with no key does, which is the player controlling the",
+    "wizard. The client moves it on its own; the game server does not read MSG_CLIENTMOVE until phase 5, so",
+    "the moves are among the messages it reports once and does not handle yet."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "steps": [
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server decodes the authentication message field by field",
+      "pattern": "sent MSG_USER_AUTHEN_V3: version (W\\.\\d+\\.\\d+\\.\\d+), revision \\S+, data revision \\S+, locale \\S+, machine [0-9A-F]+,",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server lists the wizard the run made",
+      "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "shot",
+      "name": "the wizard on the character selection screen",
+      "file": "character-selection"
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server sends the wizard its object",
+      "pattern": "put wizard \\d+ in (\\S+) instance \\d+ at .* and sent its \\d+-byte object",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "expect": "WizardCity/WC_Hub",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the client loading the zone",
+      "file": "loading-the-zone"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard \\d+ stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server says what MSG_LOGINCOMPLETE carried",
+      "pattern": "sent MSG_LOGINCOMPLETE: zone (\\S+), id \\d+, dynamic zone \\d+ in process \\d+, server time \\d+, realm .+, permissions 0x[0-9a-f]+, CSR \\d, test server \\d, critical objects none",
+      "timeout": 30,
+      "from": "start",
+      "expect": "WizardCity/WC_Hub",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the wizard standing in the Commons",
+      "file": "standing-in-the-commons"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server answers the timed access passes",
+      "pattern": "Session \\d+ asked for its timed access passes and was told it has none",
+      "timeout": 60,
+      "from": "start"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server answers the subscriber-only items",
+      "pattern": "Session \\d+ asked which items only subscribers may use and was told none",
+      "timeout": 60,
+      "from": "start"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server takes the end of shopping",
+      "pattern": "Session \\d+ is done shopping, transaction \\d+",
+      "timeout": 60,
+      "from": "start"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server takes the screen the client runs at",
+      "pattern": "Session \\d+ runs its client at (\\d+x\\d+)",
+      "timeout": 60,
+      "from": "start",
+      "record": true
+    },
+    {
+      "action": "hold_key",
+      "name": "walk the wizard forward",
+      "vk": "0x57",
+      "seconds": 1.5,
+      "moves": true
+    },
+    {
+      "action": "shot",
+      "name": "the wizard after walking",
+      "file": "after-walking"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard is still connected at the next keepalive",
+      "pattern": "Session \\d+ keepalive from the client",
+      "timeout": 90,
+      "fail": "Closing session \\d+"
+    },
+    {
+      "action": "shot",
+      "name": "the wizard still standing",
+      "file": "still-standing"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the client loaded every object the server sent",
+      "side": "client",
+      "pattern": "LoadObject Failed|LoadObject tried to read more data"
+    }
+  ],
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CLIENTMOVE",
+    "MSG_CLIENTMOVESTATE",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ]
+}

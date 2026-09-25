@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives the handoff a client makes over loopback: a game server listening on its own port offers a session, and a client that has just been told where to go connects, handshakes and sends MSG_ATTACH, which is dispatched while the session is only Connected, because a client that has not attached has nothing else it may say. Checks that the attach is answered rather than counted as a message with no rule, that a server with no login database behind it refuses the key and says so with MSG_ATTACHFAILED instead of believing the account and wizard the client named for itself, and that a game message with no rule is counted rather than acted on.
+ * Drives the handoff a client makes over loopback: a game server listening on its own port offers a session, and a client that has just been told where to go connects, handshakes and sends MSG_ATTACH, which is dispatched while the session is only Connected, because a client that has not attached has nothing else it may say. Checks that the attach is answered rather than counted as a message with no rule, that a server with no login database behind it refuses the key and says so with MSG_ATTACHFAILED instead of believing the account and wizard the client named for itself, that a game message with no rule is counted rather than acted on, and that a socket that never attaches is left its whole Attach.Timeout and then closed with nothing sent.
  */
 
 #include "GameTestHarness.h"
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <string>
@@ -56,4 +57,25 @@ TEST(GameAttachTest, AGameMessageWithNoRuleIsCountedRatherThanActedOn)
 
     ASSERT_TRUE(WaitForCondition([&] { return session->GetUnhandledMessageCount() > 0; })) << "a game message with no rule must be noticed";
     EXPECT_EQ(session->GetAccountId(), 0u) << "and must not reach a handler";
+}
+
+TEST(GameAttachTest, ASocketThatNeverAttachesIsClosedOnceAttachTimeoutPasses)
+{
+    GameDefinitions definitions;
+    SessionSettings settings;
+    settings.AttachTimeout = std::chrono::seconds(1);
+    GameListener server(settings);
+    uint16 sessionId = 0;
+    std::unique_ptr<FakeSessionClient> const client = server.Connect(sessionId);
+    std::shared_ptr<GameSession> session;
+    ASSERT_TRUE(WaitForCondition([&] { session = server.Find(sessionId); return session != nullptr; }));
+    auto const connected = std::chrono::steady_clock::now();
+
+    session->WorldUpdate(connected);
+    EXPECT_TRUE(session->IsOpen()) << "a client is left its whole timeout to attach";
+    ASSERT_TRUE(WaitForCondition([&] { session->WorldUpdate(std::chrono::steady_clock::now()); return !session->IsOpen(); }, std::chrono::seconds(10)));
+    EXPECT_GE(std::chrono::steady_clock::now() - connected, std::chrono::milliseconds(900)) << "and closed only once it has passed";
+    EXPECT_FALSE(ReadNextDml(*client, std::chrono::seconds(2))) << "with nothing sent, least of all MSG_LOGINCOMPLETE";
+    EXPECT_TRUE(client->WaitForClose());
+    EXPECT_FALSE(session->IsAttached());
 }

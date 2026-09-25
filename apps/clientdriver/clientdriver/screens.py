@@ -86,6 +86,12 @@ def compare(first, second, tolerance=DEFAULT_TOLERANCE, step=1):
     return {"fraction": round(1.0 - off / counted, 3), "mean": round(difference / (counted * 3), 1), "pixels": counted}
 
 
+def matching(first, second, tolerance=DEFAULT_TOLERANCE):
+    if first is None or second is None or first.size != second.size:
+        return 0.0
+    return compare(first, second, tolerance=tolerance, step=CHANGE_STEP)["fraction"]
+
+
 def changed(first, second, tolerance=DEFAULT_TOLERANCE, fraction=CHANGE_FRACTION):
     if first is None or second is None or first.size != second.size:
         return True, None

@@ -21,6 +21,15 @@ individual regression checks. This catalog groups them under C-03 without
 changing their executable behavior or asserting that a run passed without a
 client and local server.
 
+## World entry
+
+| Check | Scenario | What it verifies |
+| --- | --- | --- |
+| Standing in Ravenwood | [`enter-world.json`](./enter-world.json) | A wizard saved in WizardCity/WC_Ravenwood is listed, played and handed its object in MSG_LOGINCOMPLETE, the client loads the zone and says so, the entry chatter is answered, and the session stays up through a keepalive. |
+| Walking in the Commons | [`enter-the-commons.json`](./enter-the-commons.json) | The same entry for a wizard saved in WizardCity/WC_Hub with no position, placed at the zone's Start, with the fields MSG_LOGINCOMPLETE carried recorded, and a held W that moves the view far more than the same time idle, which is the player controlling the wizard. |
+
+Both require the game server as well as the login server; the driver starts one of its own.
+
 ## Listing and running
 
 List the scenarios without starting a client or server:
