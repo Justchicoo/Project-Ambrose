@@ -26,8 +26,8 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Ordering.** Phase 9 outcome and 9.10 require a 'wandering mob', but path-walking NPCs (10.14) come after phase 9 and 9.10 does not depend on them. Creature decks (11.14) also come after 9.10, although 9.10 says the mob 'casts its attack'. An interim hard-coded or authored creature spell source is needed, or 9.10 starts with a stationary mob and its 'wandering' check moves to 10.14.
 - **Ordering.** 9.04 spawns creatures but does not depend on 7.01 (object_template extractor). Creature names, behaviors and templates come from there, and 7.01 is not reachable through 9.04's dependency chain.
 - **Missing work.** Game event / holiday scheduler and daily reset (AzerothCore game_event equivalent). It gates HalloweenSpawner1's ReqGlobalRegistryValue (9.04), daily assignments (14.16), daily PvP and holiday data. Global registry storage is also missing.
-- **Oversized.** 9.08 single-target damage cast with cinematic parity (M). It bundles COMBATACTIONS encoding, m_effectChosen bits, fizzle, pips and hit rolls, and it is also where the open 'client simulates results' question must be settled.
-- **Correction.** The 9.01/decision-list note that the XML says MoveType '0 pass, 1 attack, 2 enchant, 3 flee' is misquoted. WizCombatMessages.xml says '0 for pass, 1 for attack, 2 for cast on a spell, 3 for flee'.
+- **Oversized.** 9.08 single-target damage cast with cinematic parity (M). It bundles COMBATACTIONS encoding, m_effectChosen bits, fizzle, pips and hit rolls, and its real-client check is where the client resolving results itself, settled under Combat messages in doc/ARCHITECTURE.md, is first seen.
+- **Correction.** The 9.01/decision-list note that the XML says MoveType '0 pass, 1 attack, 2 enchant, 3 flee' is misquoted. WizCombatMessages.xml says '0 for pass, 1 for attack, 2 for cast on a spell, 3 for flee', and the client's own code shows that description is wrong; Combat messages in doc/ARCHITECTURE.md gives the values.
 
 ## 9.01 WizCombat protocol surface and stubs (CMB-1)
 
@@ -330,7 +330,7 @@ A duel loops through PrePlanning, Planning, Execution and Resolution with a work
 
 **Risks**
 
-- MoveType meaning conflicts: the XML description says 0 pass, 1 attack, 2 cast on a spell, 3 flee, but the reference enum is Attack 0, Flee 1, Discard 2, Pass 3, ChangeMind 4. Must be settled by capture or client RE before this milestone
+- MoveType is settled under Combat messages in doc/ARCHITECTURE.md from the client's own code: 0 cast, 1 flee, 2 discard, 3 pass and 4 a change of mind, with pass still to be proven here by pressing Pass on a real client, and a value the server does not know logged once and refused
 - The reference only fills MSG_COMBATPHASE Data for phase 1; other phases may need data too
 
 ## 9.07 Play deck and hand (CMB-5)
@@ -421,7 +421,7 @@ The player can cast a damage card that hits or fizzles, pays pips, and visibly d
 
 **Risks**
 
-- The client probably replays CombatActions with its own CombatResolver: the server-supplied roll fields (m_criticalHitRoll, m_stunResistRoll, m_randomSpellEffectPerTargetRolls, m_CritHitList) point that way. If so, server math must match the client exactly or health bars desync. Must be confirmed here with a real client
+- The client resolves CombatActions itself from the server's rolls, as Combat messages in doc/ARCHITECTURE.md settles from its own type data, so server math must match the client exactly or health bars desync; this milestone's real-client check is where that is first seen
 - Execution-phase length is guessed; too short cuts cinematics off, too long stalls the duel. Combat.ExecutionPaddingSeconds lets it be tuned live against a real client
 - If the client resolves pips itself, a Combat.PowerPipValue other than the client's value desyncs the pip display, so its bounds must hold it to what the client accepts
 

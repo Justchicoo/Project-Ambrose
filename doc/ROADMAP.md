@@ -69,11 +69,12 @@ Total: 387 milestones.
 
 These block specific milestones. The maintainer decides each one, then this list and doc/ARCHITECTURE.md are updated.
 
-- MSG_COMBATMOVE MoveType values: the XML description says 0 pass, 1 attack, 2 enchant, 3 flee, the reference says Attack 0, Flee 1, Discard 2, Pass 3, ChangeMind 4. A capture or client RE must settle it. Blocks 9.06.
-- Whether the client simulates spell results from server-supplied rolls, which would require bit-exact server math. Must be settled in 9.08. Blocks 11.05 and 11.06.
+None are open. A new one is listed here with the milestones it blocks until the maintainer settles it.
 
 
 ### Resolved
+
+Settled on 2026-09-25 at the maintainer's direction to settle every open decision, and recorded under Decisions in doc/ARCHITECTURE.md: Time zones; Panel operations, covering the panel's scopes and roles, the console's level cap, the keyring, sealing and keyed hashes, outbound HTTP, certificates, the event socket, backups, S3 storage, login-screen countdowns, schedules on nodes, the file editor and archives, SFTP and remote pull, security keys, QR codes, trash and versions, database credentials, maintenance bypass, world edit exports, player registration, the patch signing key, the sequential ramp, search and the installation file; World threads, zone data and extracted tables; Content, SQL and releases, covering columns, pending SQL names, tools linking the database, crowns, the tutorial and revision checks; and Combat messages, covering MoveType and results the client resolves itself. Fifteen entries this list still carried had been settled earlier, in the paragraphs below, and were removed the same day.
 
 Settled on 2026-09-17 at the maintainer's direction, and recorded under Decisions, Experimental features in doc/ARCHITECTURE.md: no client revision or type dump is pinned. Ambrose follows the revision of the user's install (3.23) and builds each revision's type dump from the user's own client program (3.21). GPL and AGPL tools and libraries may be used, starting with Unicorn in typeextract.
 
