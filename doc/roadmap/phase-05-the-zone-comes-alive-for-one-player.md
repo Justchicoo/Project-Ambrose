@@ -150,9 +150,9 @@ The server always knows where each player is, and a relog returns the player to 
 
 **Acceptance**
 
-- [ ] Synthetic MagicXPConfig fixture emits expected rows
-- [ ] A row per (school, level) up to m_maxSchoolLevel; 16 magic_school_template rows
-- [ ] GetInfo(Fire,1) matches the row
+- [x] Synthetic MagicXPConfig fixture emits expected rows
+- [x] A row per (school, level) up to m_maxSchoolLevel; 16 magic_school_template rows
+- [x] GetInfo(Fire,1) matches the row
 - [ ] `.reload player_level_stats` applies new base stats on the next level-up or login
 
 ### Detailed spec from WIZ-2: Level, school and stat-config extractor
@@ -161,11 +161,11 @@ The world database holds the per-school, per-level stat table and school definit
 
 **Deliverables**
 
-- src/tools/extractor/MagicXPExtractor: reads Root.wad MagicXPConfig.xml (BINd, root class MagicXPConfig), walks m_classInfo and m_levelInfo (MagicLevelInfo: m_level, m_xpToLevel, m_hitpoints, m_mana, m_gold, m_pipChance, m_trainingPoints, m_petEnergy, m_shadowPipRating, m_archmastery, pip conversion ratings) and m_maxSchoolLevel
-- src/tools/extractor/MagicSchoolExtractor: MagicSchools/*.xml (16 MagicSchoolTemplate: m_schoolName, m_minLevel, m_schoolIndex)
-- src/tools/extractor/StatConfigExtractor: WizStatisticEffectConfig.xml -> config rows
-- data/sql/base/db_world: player_level_stats, magic_school_template, stat_effect_config schema files
-- src/server/game/Entities/Player/PlayerLevelMgr (sPlayerLevelMgr) loaded at startup. `.reload player_level_stats` rebuilds it off to the side, validates it, and swaps it; a failure keeps the old table and reports every error.
+- src/server/shared/ClientData/LevelExtractor and LevelViews, which the `extractor levels` command and the game server's first start both run, as Automatic setup settles for the name tables: reads Root.wad MagicXPConfig.xml (BINd, root class MagicXPConfig), walks m_classInfo and m_levelInfo (MagicLevelInfo: m_level, m_xpToLevel, m_hitpoints, m_mana, m_gold, m_pipChance, m_trainingPoints, m_craftingSlots, m_petEnergy, m_shadowPipRating, m_archmastery, pip conversion ratings), m_maxSchoolLevel and the rest of the class's settings, m_encounterXPFactors and m_levelsConfig; MagicSchools/*.xml (16 MagicSchoolTemplate: m_schoolName, m_minLevel, m_schoolIndex, m_secondarySchoolBadgeList); and WizStatisticEffectConfig.xml's settings and bands
+- src/server/shared/Characters/PlayerLevels and StatEffects: the validating sets the extractor checks before it writes and the manager checks when it loads
+- src/server/database/Extraction/LevelScript: the world SQL that replaces the nine tables in one transaction
+- data/sql/updates/db_world/2026_09_25_01.sql: player_level_stats, magic_school_template, magic_school_badge, magic_xp_config, magic_xp_encounter_factor, mob_rank_level, stat_effect_config, stat_crit_block_band and stat_pip_conversion_band, in an update rather than data/sql/base because Database updates settles that every change is an update
+- src/server/game/Entities/Player/PlayerLevelMgr (sPlayerLevelMgr) loaded at startup. `.reload player_level_stats` and `.reload stat_effect_config` rebuild a set off to the side, validate it, and swap it; a failure keeps the old set and reports every error.
 
 **Data sources**
 
@@ -177,19 +177,20 @@ The world database holds the per-school, per-level stat table and school definit
 **Database tables**
 
 - world.player_level_stats
-- world.magic_school_template
-- world.stat_effect_config
+- world.magic_school_template, world.magic_school_badge
+- world.magic_xp_config, world.magic_xp_encounter_factor, world.mob_rank_level
+- world.stat_effect_config, world.stat_crit_block_band, world.stat_pip_conversion_band
 
 **Acceptance**
 
-- [ ] Unit test: the extractor, run on a synthetic BINd MagicXPConfig fixture built in the test, emits the expected rows
-- [ ] Run against the user's install: player_level_stats has a row for each (school, level) up to m_maxSchoolLevel, and magic_school_template has 16 rows
-- [ ] Unit test: sPlayerLevelMgr.GetInfo(Fire, 1) returns hitpoints, mana and training points matching the imported row
+- [x] Unit test: the extractor, run on a synthetic BINd MagicXPConfig fixture built in the test, emits the expected rows. `LevelExtractorTest.EachSchoolTakesItsOwnValuesAndTheSharedTableOtherwise` encodes MagicXPConfig, two school templates and a WizStatisticEffectConfig through a type dump it writes: Fire's level 1 row takes its own 415 hitpoints and the shared table's experience, mana, gold and energy, Moon is named without rows, and the settings, factors, mob ranks, badges and bands come out in order; the script test checks the nine tables' SQL and the broken-input test each refusal
+- [x] Run against the user's install: player_level_stats has a row for each (school, level) up to m_maxSchoolLevel, and magic_school_template has 16 rows. On r806919 `extractor --dry-run levels` prints 1267 rows for Fire, Ice, Storm, Life, Myth, Death and Balance, levels 0 to 180, and 16 magic_school_template rows, as `LevelExtractorClientTest` and the Extractor CTest check; the development game server, started on a world database without the tables, extracted and loaded them itself ('Extracted 1267 level rows for 7 schools, 16 magic schools and 39 stat settings', then 'Loaded 16 magic schools with level tables for 7 of them up to level 180, and 39 stat settings with 121 band values'), and level 1 reads 415, 500, 400, 425, 460, 450 and 480 hitpoints for Fire, Ice, Storm, Myth, Life, Death and Balance
+- [x] Unit test: sPlayerLevelMgr.GetInfo(Fire, 1) returns hitpoints, mana and training points matching the imported row. `PlayerLevelMgrTest.RowsLoadAndAReloadAppliesEditsOrKeepsTheServingSet` against MariaDB loads the rows it writes and reads Fire's level 1 back with 415 hitpoints, 15 mana, 2 training points and every other column, and `LevelExtractorClientTest.TheRowsFillAWorldDatabaseTheManagerLoads` does the same with the install's own rows
 - [ ] Unit test: editing a player_level_stats row, then `.reload player_level_stats`, applies the new base stats on the next level-up or login without a restart; a row that fails validation keeps the old table
 
 **Risks**
 
-- Whether m_classInfo is keyed by school name and how its level list is laid out is unverified. The reference server groups levels by class name.
+- Settled: m_classInfo holds one ClassInfo per magic school, named by m_className, and the client keys each by the hash of that name. Only the seven wizard schools list levels, and they set only their hitpoints and their own pip conversion rating, so each school's row takes the shared table's value wherever its own table leaves one unset, as Levels and stats in doc/ARCHITECTURE.md records with the client code that shows it.
 
 ## 5.05 Character state and player-object stats (WIZ-3)
 

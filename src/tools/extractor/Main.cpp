@@ -1,11 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * extractor entry point: silences the log, reads its arguments and environment as UTF-8, refuses an option value that is itself an option, checks the world database, --sql and --dry-run before anything is searched, then when no install or type dump is named follows AMBROSE_SETUP_MODE: auto uses the newest install found and the type dump built from it, ask offers the finds and a build, off prints them with the flag to pass; opens the user's own Root.wad and a type dump bound to the extractor's views, extracts the character names, disallowed names, schools and creation options, prints their counts and the problems found, then replaces the world tables in one transaction, writes the SQL to a file, or on a dry run writes nothing and checks the world tables of any database it was given; exits 0 on success, 1 when the install, dump, data or database fails, and 2 on bad usage.
+ * extractor entry point: silences the log, reads its arguments and environment as UTF-8, refuses an option value that is itself an option and a command named twice, checks the world database, --sql and --dry-run before anything is searched, then when no install or type dump is named follows AMBROSE_SETUP_MODE: auto uses the newest install found and the type dump built from it, ask offers the finds and a build, off prints them with the flag to pass; opens the user's own Root.wad and a type dump bound to the views of every command named, extracts for each command in turn, the character names, disallowed names, schools and creation options for names and the level, school and stat tables for levels, prints their counts and the problems found, then replaces every command's world tables in one transaction, writes the SQL to a file, or on a dry run writes nothing and checks the world tables of any database it was given; exits 0 on success, 1 when the install, dump, data or database fails, and 2 on bad usage.
  */
 
 #include "CharacterNameExtractor.h"
 #include "ClientSetup.h"
 #include "CharacterNameScript.h"
+#include "LevelExtractor.h"
+#include "LevelScript.h"
+#include "LevelViews.h"
 #include "ConfigMgr.h"
 #include "Environment.h"
 #include "KiwadArchive.h"
@@ -17,12 +20,14 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
+#include <algorithm>
 #include <exception>
 #include <filesystem>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -33,13 +38,17 @@ namespace
     constexpr int Failure = 1;
     constexpr int BadUsage = 2;
 
-    constexpr std::string_view Usage = R"(Usage: extractor [options] names
+    constexpr std::string_view Usage = R"(Usage: extractor [options] <command>...
 
-Extracts world database rows from your own Wizard101 install.
+Extracts world database rows from your own Wizard101 install. Name several
+commands to extract them together; their tables are replaced in one transaction.
 
 Commands:
   names   every character name table in every locale, the disallowed names, and
           the schools and creation options a new wizard is offered
+  levels  every school's base stats and experience for each level, the magic
+          schools and their badges, the level each mob rank stands for, and the
+          stat settings with their crit, block and pip conversion bands
 
 Options:
   --client <dir>      the install holding Data/GameData (default: AMBROSE_CLIENT_DIR)
@@ -116,10 +125,16 @@ database fails, 2 on bad usage.
             return parsed;
         if (parsed.Words.empty())
             error = "name a command";
-        else if (parsed.Words.front() != "names")
-            error = fmt::format("unknown command '{}'", parsed.Words.front());
-        else if (parsed.Words.size() > 1)
-            error = "names takes no arguments";
+        std::set<std::string> named;
+        for (std::string const& word : parsed.Words)
+        {
+            if (word != "names" && word != "levels")
+                error = fmt::format("unknown command '{}'", word);
+            else if (!named.insert(word).second)
+                error = fmt::format("{} is named twice", word);
+            if (!error.empty())
+                break;
+        }
         if (!error.empty())
             return std::nullopt;
         if (parsed.DryRun && parsed.SqlFile)
@@ -138,6 +153,15 @@ database fails, 2 on bad usage.
             value = std::move(found);
     }
 
+    struct Extracted
+    {
+        bool Ok = false;
+        std::size_t ErrorCount = 0;
+        std::vector<std::string> Errors;
+        std::vector<WorldSqlScript> Scripts;
+        std::vector<std::string_view> Tables;
+    };
+
     void PrintCounts(NameExtraction const& extraction)
     {
         std::map<std::string, std::vector<std::string>> tables;
@@ -151,6 +175,41 @@ database fails, 2 on bad usage.
         for (CreationSchool const& school : extraction.Schools)
             std::cout << fmt::format("  {} {}\n", school.Name, school.Id);
         std::cout << fmt::format("character_create_option: {} rows\n", extraction.Options.size());
+    }
+
+    void PrintCounts(LevelExtraction const& extraction)
+    {
+        PlayerLevelData const& levels = extraction.Levels;
+        std::cout << fmt::format("player_level_stats: {} rows for {} schools\n", levels.Levels.size(), extraction.SchoolsWithTables.size());
+        if (!extraction.SchoolsWithTables.empty())
+            std::cout << fmt::format("  with level tables: {}\n", fmt::join(extraction.SchoolsWithTables, ", "));
+        if (!extraction.SchoolsWithoutTables.empty())
+            std::cout << fmt::format("  without: {}\n", fmt::join(extraction.SchoolsWithoutTables, ", "));
+        std::size_t badges = 0;
+        for (MagicSchool const& school : levels.Schools)
+            badges += school.Badges.size();
+        std::cout << fmt::format("magic_school_template: {} rows\n", levels.Schools.size());
+        std::cout << fmt::format("magic_school_badge: {} rows\n", badges);
+        std::cout << fmt::format("magic_xp_config: {} rows\n", levels.XpConfig.size());
+        for (ConfigValue const& setting : levels.XpConfig)
+            std::cout << fmt::format("  {} {}\n", setting.Name, setting.Value);
+        std::cout << fmt::format("magic_xp_encounter_factor: {} rows\n", levels.EncounterXpFactors.size());
+        std::cout << fmt::format("mob_rank_level: {} rows\n", levels.MobRanks.size());
+        std::cout << fmt::format("stat_effect_config: {} rows\n", extraction.Stats.Settings.size());
+        std::cout << fmt::format("stat_crit_block_band: {} rows\n", extraction.Stats.CritAndBlock.size());
+        std::cout << fmt::format("stat_pip_conversion_band: {} rows\n", extraction.Stats.PipConversion.size());
+    }
+
+    template<typename Script, typename Extraction>
+    void Collect(Extraction const& extraction, Extracted& extracted)
+    {
+        PrintCounts(extraction);
+        extracted.ErrorCount += extraction.ErrorCount;
+        extracted.Errors.insert(extracted.Errors.end(), extraction.Errors.begin(), extraction.Errors.end());
+        if (extraction.Ok())
+            extracted.Scripts.push_back(Script::Build(extraction));
+        std::vector<std::string_view> const tables = Script::GetTables();
+        extracted.Tables.insert(extracted.Tables.end(), tables.begin(), tables.end());
     }
 
     int Run(std::vector<std::string> const& args)
@@ -211,8 +270,14 @@ database fails, 2 on bad usage.
             std::cerr << fmt::format("extractor: cannot open {}: {}\n", ConfigMgr::PathToUtf8(rootWad), error);
             return Failure;
         }
+        std::vector<std::string> const& commands = arguments->Words;
+        bool const names = std::find(commands.begin(), commands.end(), "names") != commands.end();
+        bool const levels = std::find(commands.begin(), commands.end(), "levels") != commands.end();
         TypedViewRegistry views;
-        NameViews::RegisterAll(views);
+        if (names)
+            NameViews::RegisterAll(views);
+        if (levels)
+            LevelViews::RegisterAll(views);
         TypeRegistry registry(&views);
         if (!registry.LoadFromFile(LogConfig::Utf8Path(*arguments->TypeDump)))
         {
@@ -222,12 +287,18 @@ database fails, 2 on bad usage.
             return Failure;
         }
 
-        NameExtraction const extraction = CharacterNameExtractor::Extract(*archive, registry.GetCatalog());
-        PrintCounts(extraction);
-        if (!extraction.Ok())
+        Extracted extracted;
+        for (std::string const& command : commands)
         {
-            std::cerr << fmt::format("extractor: {} problems; nothing was written\n", extraction.ErrorCount);
-            for (std::string const& problem : extraction.Errors)
+            if (command == "names")
+                Collect<CharacterNameScript>(CharacterNameExtractor::Extract(*archive, registry.GetCatalog()), extracted);
+            else
+                Collect<LevelScript>(LevelExtractor::Extract(*archive, registry.GetCatalog()), extracted);
+        }
+        if (extracted.ErrorCount != 0)
+        {
+            std::cerr << fmt::format("extractor: {} problems; nothing was written\n", extracted.ErrorCount);
+            for (std::string const& problem : extracted.Errors)
                 std::cerr << "  " << problem << '\n';
             return Failure;
         }
@@ -235,7 +306,7 @@ database fails, 2 on bad usage.
         {
             if (database)
             {
-                if (!WorldSqlScript::CheckTables(*database, CharacterNameScript::GetTables(), error))
+                if (!WorldSqlScript::CheckTables(*database, extracted.Tables, error))
                 {
                     std::cerr << fmt::format("extractor: {}\n", error);
                     return Failure;
@@ -245,7 +316,9 @@ database fails, 2 on bad usage.
             std::cout << "dry run: nothing was written\n";
             return Success;
         }
-        WorldSqlScript const script = CharacterNameScript::Build(extraction);
+        WorldSqlScript script;
+        for (WorldSqlScript const& part : extracted.Scripts)
+            script.Append(part);
         if (arguments->SqlFile)
         {
             std::filesystem::path const file = LogConfig::Utf8Path(*arguments->SqlFile);

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables after the world database takes one, loads the character name tables when the world database is open and, when they are empty, extracts them from the install and reloads them, automatically in auto mode, after a yes in ask mode and never in off mode, loads the zones, the named places inside them and the objects placed in them and registers each as a reload target, refusing to start when they cannot be read, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits or realm heartbeat is applied on the world thread.
+ * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables and the level and stat tables after the world database takes one, loads the character name tables and the level and stat tables when the world database is open and, when either set is empty, extracts it from the install and loads it again, automatically in auto mode, after a yes in ask mode and never in off mode, registering the level and stat sets as reload targets, loads the zones, the named places inside them and the objects placed in them and registers each as a reload target, refusing to start when they cannot be read, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits or realm heartbeat is applied on the world thread.
  */
 
 #include "TypeDumpCache.h"
@@ -17,6 +17,9 @@
 #include "ObjectTemplateMgr.h"
 #include "ZoneMgr.h"
 #include "CharacterNameScript.h"
+#include "LevelExtractor.h"
+#include "LevelScript.h"
+#include "PlayerLevelMgr.h"
 #include "AccountMgr.h"
 #include "ClientSetup.h"
 #include "CommandMgr.h"
@@ -76,6 +79,16 @@ namespace
                 for (std::string const& warning : names.Warnings)
                     LOG_WARN("server.gameserver", "Character name tables: {}", warning);
                 return AdminStoreReload{ names.Loaded, names.Errors, names.Warnings };
+            });
+            _databaseView.AddStore("level and stat tables", WorldDatabase.GetName(), []
+            {
+                PlayerLevelLoadResult const levels = sPlayerLevelMgr.Load();
+                if (levels.Loaded)
+                    LOG_INFO("server.gameserver", "Reloaded {} magic schools with level tables for {} of them up to level {}, and {} stat settings with {} band values", levels.Schools, levels.LevelTables, levels.MaxLevel, levels.StatSettings, levels.BandValues);
+                else
+                    for (std::string const& problem : levels.Errors)
+                        LOG_ERROR("server.gameserver", "Level and stat tables were not reloaded, and the loaded ones stay in use: {}", problem);
+                return AdminStoreReload{ levels.Loaded, levels.Errors, {} };
             });
         }
 
@@ -207,6 +220,14 @@ namespace
                     LOG_INFO("server.gameserver", "Loaded {} character name tables holding {} names in {} locales, and {} disallowed names", names.Tables, names.Parts, names.HumanLocales, names.Disallowed);
                 for (std::string const& warning : names.Warnings)
                     LOG_WARN("server.gameserver", "Character name tables: {}", warning);
+            }
+            sPlayerLevelMgr.RegisterReloadTargets();
+            if (!WorldDatabase.IsOpen())
+                LOG_WARN("server.gameserver", "WorldDatabaseInfo is empty, so the level and stat tables are not loaded");
+            else if (!LoadPlayerLevels(setup, *prompt))
+            {
+                _databases.Close();
+                return false;
             }
             sZoneMgr.RegisterReloadTargets();
             sMapMgr.SetSettingsReader([]
@@ -359,28 +380,36 @@ namespace
             return false;
         }
 
-        bool ExtractNames(ClientSetupResult const& setup, SetupPrompt& prompt)
+        bool ConfirmExtraction(ClientSetupResult const& setup, SetupPrompt& prompt, std::string_view tables, std::string_view command)
         {
             if (!setup.Install || !setup.TypeDump)
                 return false;
             std::string const install = setup.Install->Describe();
             if (setup.Mode == SetupMode::Off)
             {
-                LOG_WARN("server.gameserver", "The world database has no character name tables, and Setup.Mode is off, so they are not extracted from {}; set Setup.Mode = auto, or run the extractor's names command", install);
+                LOG_WARN("server.gameserver", "The world database has no {}, and Setup.Mode is off, so they are not extracted from {}; set Setup.Mode = auto, or run the extractor's {} command", tables, install, command);
                 return false;
             }
             if (setup.Mode == SetupMode::Ask)
             {
                 if (!prompt.IsInteractive())
                 {
-                    LOG_WARN("server.gameserver", "The world database has no character name tables, and setup could not ask whether to extract them from {}; start the game server in a terminal, set Setup.Mode = auto, or run the extractor's names command", install);
+                    LOG_WARN("server.gameserver", "The world database has no {}, and setup could not ask whether to extract them from {}; start the game server in a terminal, set Setup.Mode = auto, or run the extractor's {} command", tables, install, command);
                     return false;
                 }
-                if (!prompt.Confirm(fmt::format("The world database has no character name tables. Extract them now from your install {}?", install)))
+                if (!prompt.Confirm(fmt::format("The world database has no {}. Extract them now from your install {}?", tables, install)))
                     return false;
             }
             else
-                LOG_INFO("server.gameserver", "The world database has no character name tables, so they are extracted from {}", install);
+                LOG_INFO("server.gameserver", "The world database has no {}, so they are extracted from {}", tables, install);
+            return true;
+        }
+
+        bool ExtractNames(ClientSetupResult const& setup, SetupPrompt& prompt)
+        {
+            if (!ConfirmExtraction(setup, prompt, "character name tables", "names"))
+                return false;
+            std::string const install = setup.Install->Describe();
             std::string error;
             std::optional<NameExtraction> const extraction = CharacterNameExtractor::ExtractFromInstall(setup.Install->Root, *setup.TypeDump, error);
             if (!extraction)
@@ -401,6 +430,58 @@ namespace
                 return false;
             }
             LOG_INFO("server.gameserver", "Extracted {} character name tables holding {} names from {}", extraction->Tables.size(), extraction->GetPartCount(), install);
+            return true;
+        }
+
+        bool LoadPlayerLevels(ClientSetupResult const& setup, SetupPrompt& prompt)
+        {
+            PlayerLevelLoadResult levels = sPlayerLevelMgr.Load();
+            if (levels.Loaded && levels.Empty && ExtractLevels(setup, prompt))
+                levels = sPlayerLevelMgr.Load();
+            if (!levels.Loaded)
+            {
+                for (std::string const& problem : levels.Errors)
+                    LOG_ERROR("server.gameserver", "Level and stat tables: {}", problem);
+                LOG_ERROR("server.gameserver", "Cannot load the level and stat tables from the world database");
+                return false;
+            }
+            if (levels.Empty)
+                LOG_WARN("server.gameserver", "The world database holds no level or stat tables, so wizards have no base health, mana or experience thresholds; run the extractor's levels command against your install");
+            else
+            {
+                LOG_INFO("server.gameserver", "Loaded {} magic schools with level tables for {} of them up to level {}, and {} stat settings with {} band values", levels.Schools, levels.LevelTables, levels.MaxLevel, levels.StatSettings, levels.BandValues);
+                if (levels.Levels == 0 || levels.StatSettings == 0)
+                    LOG_WARN("server.gameserver", "The world database holds {} but no {}; run the extractor's levels command against your install to fill both", levels.Levels == 0 ? "stat tables" : "level tables", levels.Levels == 0 ? "level tables" : "stat tables");
+            }
+            return true;
+        }
+
+        bool ExtractLevels(ClientSetupResult const& setup, SetupPrompt& prompt)
+        {
+            if (!ConfirmExtraction(setup, prompt, "level or stat tables", "levels"))
+                return false;
+            std::string const install = setup.Install->Describe();
+            std::string error;
+            std::optional<LevelExtraction> const extraction = LevelExtractor::ExtractFromInstall(setup.Install->Root, *setup.TypeDump, error);
+            if (!extraction)
+            {
+                LOG_ERROR("server.gameserver", "Cannot extract the level and stat tables: {}", error);
+                return false;
+            }
+            if (!extraction->Ok())
+            {
+                for (std::string const& problem : extraction->Errors)
+                    LOG_ERROR("server.gameserver", "Level extraction: {}", problem);
+                return false;
+            }
+            std::optional<MySQLConnectionInfo> const world = MySQLConnectionInfo::Parse(Config().GetOption<std::string>("WorldDatabaseInfo", "", true), &error);
+            if (!world || !LevelScript::Build(*extraction).Apply(*world, error))
+            {
+                LOG_ERROR("server.gameserver", "Cannot write the level and stat tables to the world database: {}", error);
+                return false;
+            }
+            LOG_INFO("server.gameserver", "Extracted {} level rows for {} schools, {} magic schools and {} stat settings from {}", extraction->Levels.Levels.size(), extraction->SchoolsWithTables.size(),
+                extraction->Levels.Schools.size(), extraction->Stats.Settings.size(), install);
             return true;
         }
 

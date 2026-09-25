@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds a DELETE and batched multi-row INSERT statements per replaced table, renders numbers as decimals and text as X'..' hex or '' when empty, writes the script wrapped in START TRANSACTION and COMMIT to a temporary file renamed over the target only once it is complete, commits the statements through the transaction task, telling a refused commit from one whose reply was lost, probes each table with an empty select, and names dbimport when a table does not exist.
+ * Builds a DELETE and batched multi-row INSERT statements per replaced table, renders whole numbers of either sign as decimals, fractions in the shortest form that reads back as the same double, and text as X'..' hex or '' when empty, writes the script wrapped in START TRANSACTION and COMMIT to a temporary file renamed over the target only once it is complete, commits the statements through the transaction task, telling a refused commit from one whose reply was lost, probes each table with an empty select, and names dbimport when a table does not exist.
  */
 
 #include "WorldSqlScript.h"
@@ -45,6 +45,11 @@ void WorldSqlScript::ReplaceTable(std::string_view table, std::vector<std::strin
         }
         _statements.push_back(std::move(statement));
     }
+}
+
+void WorldSqlScript::Append(WorldSqlScript const& other)
+{
+    _statements.insert(_statements.end(), other._statements.begin(), other._statements.end());
 }
 
 std::string WorldSqlScript::ToText() const
@@ -145,6 +150,10 @@ bool WorldSqlScript::CheckTables(MySQLConnectionInfo const& info, std::vector<st
 std::string WorldSqlScript::Literal(Value const& value)
 {
     if (uint64 const* const number = std::get_if<uint64>(&value))
+        return fmt::format("{}", *number);
+    if (int64 const* const number = std::get_if<int64>(&value))
+        return fmt::format("{}", *number);
+    if (double const* const number = std::get_if<double>(&value))
         return fmt::format("{}", *number);
     std::string const& text = std::get<std::string>(value);
     if (text.empty())

@@ -164,7 +164,7 @@ if(NAME STREQUAL "gameserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AMB
     foreach(expected IN ITEMS "Created database ambrose_smoke_login_" "Created database ambrose_smoke_character_" "Created database ambrose_smoke_world_"
             "The login database is up to date|Applied [0-9]+ update\\(s\\) to the login database"
             "Applied [0-9]+ update\\(s\\) to the characters database" "Applied [0-9]+ update\\(s\\) to the world database"
-            "Opened database connection pool world: 1 async, 1 sync" "The world database holds no character name tables" "gameserver ready" "Closed database connection pool world" "gameserver stopped")
+            "Opened database connection pool world: 1 async, 1 sync" "The world database holds no character name tables" "The world database holds no level or stat tables" "gameserver ready" "Closed database connection pool world" "gameserver stopped")
         if(NOT realmOutput MATCHES "${expected}")
             ambrose_test_fail("gameserver on empty databases did not log '${expected}': ${realmOutput}${realmError}")
         endif()
