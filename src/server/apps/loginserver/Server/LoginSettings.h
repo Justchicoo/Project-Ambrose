@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Login rules read from configuration, which each authentication attempt, character list and idle check takes a snapshot of: the name the login server shows, revision enforcement, failed-attempt limits and lockouts, what a second login to an online account does, how long session keys last, when idle clients are dropped, and how long a shutdown waits for clients to leave.
+ * Login rules read from configuration, which each authentication attempt, character list and idle check takes a snapshot of: the name the login server shows, revision enforcement, failed-attempt limits and lockouts, what a second login to an online account does, how long session keys last, how many wizards an account may hold and whether it may name them itself, when idle clients are dropped, and how long a shutdown waits for clients to leave.
  */
 
 #ifndef AMBROSE_LOGINSETTINGS_H
@@ -34,6 +34,8 @@ struct LoginSettings
     static constexpr int8 DefaultAfkWarning = 1;
     static constexpr uint32 DefaultKeyTtlSeconds = 60;
     static constexpr uint32 MinKeyTtlSeconds = 5;
+    static constexpr uint32 DefaultMaxCharactersPerAccount = 6;
+    static constexpr uint32 MaxCharactersPerAccountLimit = 250;
     static constexpr uint32 DefaultShutdownGraceSeconds = 5;
     static constexpr uint32 MaxShutdownGraceSeconds = 60;
 
@@ -48,6 +50,8 @@ struct LoginSettings
     std::chrono::seconds KeyTtl{ DefaultKeyTtlSeconds };
     DuplicateLoginPolicy DuplicateLogins = DuplicateLoginPolicy::KickExisting;
     std::chrono::seconds SessionKeyLifetime{ DefaultSessionKeyLifetimeSeconds };
+    uint32 MaxCharactersPerAccount = DefaultMaxCharactersPerAccount;
+    bool AllowChosenNames = false;
     std::chrono::seconds AfkTimeout{ DefaultAfkTimeoutSeconds };
     int8 AfkWarning = DefaultAfkWarning;
     std::chrono::seconds ShutdownGrace{ DefaultShutdownGraceSeconds };

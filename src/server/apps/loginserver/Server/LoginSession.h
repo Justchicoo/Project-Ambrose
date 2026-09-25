@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The login server's session: routes every client message through the login message table, authenticates MSG_USER_AUTHEN_V3 against the login database without blocking its network thread, holds the account it claimed and admitted, lists the account's characters from the login and characters databases the same way, coalescing a request made meanwhile into one more list, drops the client once it idles past the AFK timeout before choosing a character, and tells it when the login server shuts down.
+ * The login server's session: routes every client message through the login message table, authenticates MSG_USER_AUTHEN_V3 against the login database without blocking its network thread, holds the account it claimed and admitted, lists the account's characters from the login and characters databases the same way, coalescing a request made meanwhile into one more list, creates a wizard the same way again and answers only that it did or did not, drops the client once it idles past the AFK timeout before choosing a character, and tells it when the login server shuts down.
  */
 
 #ifndef AMBROSE_LOGINSESSION_H
@@ -18,6 +18,8 @@
 #include <memory>
 #include <string>
 #include <string_view>
+
+class PropertyObject;
 
 class LoginSession : public SessionBase
 {
@@ -44,6 +46,8 @@ public:
     void HandleRequestCharacterList(LoginMessages::RequestCharacterList& message);
     void HandleRequestServerList(LoginMessages::RequestServerList& message);
     void HandleSelectCharacter(LoginMessages::SelectCharacter& message);
+    void HandleCreateCharacter(LoginMessages::CreateCharacter& message);
+    void HandleLoginLogCharacterCreation(LoginMessages::LoginLogCharacterCreation& message);
 
 protected:
     void OnAccepted() override;
@@ -65,6 +69,9 @@ private:
     void FinishCharacterList(uint32 purchasedSlots, PreparedQueryResult result);
     void FailCharacterList(std::string_view detail);
     bool AbandonCharacterList();
+    void JudgeCreation(PropertyObject const& info, uint32 purchasedSlots, uint8 securityLevel, uint32 existing);
+    void RefuseCreation(std::string_view detail);
+    bool AbandonCreation();
     void EndCharacterList();
     void ReleaseClaim();
     SQLOperation::CompletionHandler MakeCompletionHandler();
@@ -82,6 +89,9 @@ private:
     bool _authenticating = false;
     bool _listingCharacters = false;
     bool _relistCharacters = false;
+    bool _creatingCharacter = false;
+    uint32 _creationStage = 0;
+    uint32 _creationParameter = 0;
     uint32 _failedResponses = 0;
     uint64 _claimedAccountId = 0;
     std::atomic<uint64> _accountId{ 0 };

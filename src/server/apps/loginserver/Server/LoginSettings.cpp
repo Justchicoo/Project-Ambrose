@@ -54,6 +54,9 @@ LoginSettings LoginSettings::Load(ConfigMgr const& config, std::vector<std::stri
     settings.SessionKeyLifetime = std::chrono::seconds(bounded("Login.SessionKeyLifetime", DefaultSessionKeyLifetimeSeconds, MinSessionKeyLifetimeSeconds, MaxDurationSeconds));
     settings.KeyTtl = std::chrono::seconds(bounded("Login.KeyTTL", DefaultKeyTtlSeconds, MinKeyTtlSeconds, MaxDurationSeconds));
 
+    settings.MaxCharactersPerAccount = bounded("Character.MaxPerAccount", DefaultMaxCharactersPerAccount, 0, MaxCharactersPerAccountLimit);
+    settings.AllowChosenNames = config.GetOption<bool>("Character.AllowChosenNames", false, true);
+
     settings.AfkTimeout = std::chrono::seconds(bounded("Login.AfkTimeout", DefaultAfkTimeoutSeconds, 0, MaxAfkTimeoutSeconds));
     settings.ShutdownGrace = std::chrono::seconds(bounded("Login.ShutdownGrace", DefaultShutdownGraceSeconds, 0, MaxShutdownGraceSeconds));
     int32 const warning = config.GetOption<int32>("Login.AfkWarning", DefaultAfkWarning, true);

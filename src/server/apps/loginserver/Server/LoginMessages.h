@@ -263,6 +263,46 @@ namespace LoginMessages
         }
     };
 
+    struct CreateCharacter
+    {
+        static constexpr uint8 ServiceId = LoginService;
+        static constexpr std::string_view Tag = "MSG_CREATECHARACTER";
+
+        std::string CreationInfo;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("CreationInfo", &CreateCharacter::CreationInfo) };
+        }
+    };
+
+    struct CreateCharacterResponse
+    {
+        static constexpr uint8 ServiceId = LoginService;
+        static constexpr std::string_view Tag = "MSG_CREATECHARACTERRESPONSE";
+
+        int32 ErrorCode = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ErrorCode", &CreateCharacterResponse::ErrorCode) };
+        }
+    };
+
+    struct LoginLogCharacterCreation
+    {
+        static constexpr uint8 ServiceId = LoginService;
+        static constexpr std::string_view Tag = "MSG_LOGINLOGCHARACTERCREATION";
+
+        uint32 Stage = 0;
+        uint32 Parameter = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Stage", &LoginLogCharacterCreation::Stage), DmlField("Parameter", &LoginLogCharacterCreation::Parameter) };
+        }
+    };
+
     struct WebValidate
     {
         static constexpr uint8 ServiceId = LoginService;

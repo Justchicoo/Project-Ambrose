@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks what the sampler promises: the first reading of a process writes everything but the processor share, because a share needs two readings, the second works the share out against the time that actually passed rather than the time a round was meant to take, an app with no process is skipped so its graph carries a gap rather than zeroes, an app that stops and starts again is measured against its new process rather than against a total that belongs to the old one, every app is written under its own name, a round costs few enough microseconds per app to sit on a timer beside twenty of them, the series a graph would draw for a process holding half a core agrees within ten points with what that process measured on its own clock, and an app that stops leaves a gap at the end of its own graph while the app beside it goes on being written.
+ * Checks what the sampler promises: the first reading of a process writes everything but the processor share, because a share needs two readings, the second works the share out against the time that actually passed rather than the time a round was meant to take, an app with no process is skipped so its graph carries a gap rather than zeroes, an app that stops and starts again is measured against its new process rather than against a total that belongs to the old one, every app is written under its own name, a round costs few enough microseconds per app to sit on a timer beside twenty of them, the series a graph would draw for a process holding half a core agrees within fifteen points with what that process measured on its own clock, which is wide enough that a machine busy building something else does not fail it and narrow enough that a share worked out per machine rather than per core still does, and an app that stops leaves a gap at the end of its own graph while the app beside it goes on being written.
  */
 
 #include "ChildProcess.h"
@@ -248,8 +248,9 @@ TEST(ResourceSamplerTest, TheSeriesTheGraphDrawsMatchesAProcessUnderLoad)
     std::cout << "[ GRAPHCPU ] the process held " << *held << "% of one core and the series the graph draws says " << drawn << "%"
               << std::endl;
 
-    EXPECT_GT(drawn, *held - 10.0) << "the graph would show " << drawn << "% where the process held " << *held << "%";
-    EXPECT_LT(drawn, *held + 10.0) << "the graph would show " << drawn << "% where the process held " << *held << "%";
+    constexpr double Slack = 15.0;
+    EXPECT_GT(drawn, *held - Slack) << "the graph would show " << drawn << "% where the process held " << *held << "%";
+    EXPECT_LT(drawn, *held + Slack) << "the graph would show " << drawn << "% where the process held " << *held << "%";
 }
 
 TEST(ResourceSamplerTest, AStoppedAppLeavesAGapWhileTheOthersKeepBeingWritten)

@@ -3,6 +3,9 @@
  * Login server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile and never saving an install it has no type dump for, loads account and login settings and the type dump, declares the login message table and checks it against the client's message definitions, refuses to serve clients from an install without a type dump, naming why and where ClientDir came from, or without both databases, opens the login and characters databases, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, listens for clients, and offers account console commands until shutdown, telling connected clients before it shuts down and closing the databases, which drains their callbacks, before its network threads stop.
  */
 
+#include "CharacterCreateStore.h"
+#include "CharacterNameMgr.h"
+#include "CharacterRepository.h"
 #include "TypeDumpCache.h"
 #include "RealmLoader.h"
 #include "AccountCommands.h"
@@ -61,7 +64,32 @@ namespace
         LoginServerApp() : ServerApp({ "loginserver", "loginserver.conf", 12010 }, sConfigMgr, sLog, std::cout, std::cerr), _databases(Config()), _databaseView(_databases)
         {
             _databases.AddDatabase(LoginDatabase, "Login", DatabaseLoader::DATABASE_LOGIN)
-                .AddDatabase(CharacterDatabase, "Character", DatabaseLoader::DATABASE_CHARACTER);
+                .AddDatabase(CharacterDatabase, "Character", DatabaseLoader::DATABASE_CHARACTER)
+                .AddDatabase(WorldDatabase, "World", DatabaseLoader::DATABASE_WORLD);
+            _databaseView.AddStore("character names", WorldDatabase.GetName(), []
+            {
+                CharacterNameLoadResult const names = sCharacterNameMgr.Load();
+                if (names.Loaded)
+                    LOG_INFO("server.loginserver", "Reloaded {} character name tables holding {} names in {} locales, and {} disallowed names", names.Tables, names.Parts, names.HumanLocales, names.Disallowed);
+                else
+                    for (std::string const& problem : names.Errors)
+                        LOG_ERROR("server.loginserver", "Character name tables were not reloaded, and the loaded ones stay in use: {}", problem);
+                for (std::string const& warning : names.Warnings)
+                    LOG_WARN("server.loginserver", "Character name tables: {}", warning);
+                return AdminStoreReload{ names.Loaded, names.Errors, names.Warnings };
+            });
+            _databaseView.AddStore("character creation", WorldDatabase.GetName(), []
+            {
+                CharacterCreateLoadResult const rows = sCharacterCreateStore.Load();
+                if (rows.Loaded)
+                    LOG_INFO("server.loginserver", "Reloaded {} schools a wizard may be given and {} starting states", rows.Schools, rows.Starts);
+                else
+                    for (std::string const& problem : rows.Errors)
+                        LOG_ERROR("server.loginserver", "The creation rows were not reloaded, and the loaded ones stay in use: {}", problem);
+                for (std::string const& warning : rows.Warnings)
+                    LOG_WARN("server.loginserver", "Character creation: {}", warning);
+                return AdminStoreReload{ rows.Loaded, rows.Errors, rows.Warnings };
+            });
         }
 
     protected:
@@ -69,6 +97,49 @@ namespace
         {
             _databaseView.Register(admin.Routes());
             OnlinePlayersView::Register(admin.Routes());
+        }
+
+        bool LoadCreationRows()
+        {
+            sCharacterNameMgr.SetDefaultLocale(Config().GetOption<std::string>("Locale.Default", "en-US", true));
+            if (!WorldDatabase.IsOpen())
+            {
+                LOG_WARN("server.loginserver", "WorldDatabaseInfo is empty, so no wizard can be created until it names a world database");
+                return true;
+            }
+
+            CharacterNameLoadResult const names = sCharacterNameMgr.Load();
+            for (std::string const& problem : names.Errors)
+                LOG_ERROR("server.loginserver", "Character name tables: {}", problem);
+            for (std::string const& warning : names.Warnings)
+                LOG_WARN("server.loginserver", "Character name tables: {}", warning);
+            if (!names.Loaded)
+            {
+                LOG_ERROR("server.loginserver", "Cannot load the character name tables from the world database");
+                return false;
+            }
+
+            CharacterCreateLoadResult const rows = sCharacterCreateStore.Load();
+            for (std::string const& problem : rows.Errors)
+                LOG_ERROR("server.loginserver", "Character creation: {}", problem);
+            for (std::string const& warning : rows.Warnings)
+                LOG_WARN("server.loginserver", "Character creation: {}", warning);
+            if (!rows.Loaded)
+            {
+                LOG_ERROR("server.loginserver", "Cannot load the schools and starting states a wizard is made from");
+                return false;
+            }
+
+            std::optional<uint64> const highest = CharacterRepository::GetMaxGuid();
+            if (!highest)
+            {
+                LOG_ERROR("server.loginserver", "Cannot read the highest character id ever used, so no wizard can be given one safely");
+                return false;
+            }
+            sLoginMgr.ResumeCharacterGuids(*highest);
+            LOG_INFO("server.loginserver", "Wizards can be created from {} schools and {} starting states, with the next character id {}",
+                rows.Schools, rows.Starts, sLoginMgr.PeekCharacterGuid().value_or(0));
+            return true;
         }
 
         std::vector<RestartRequiredOption> GetRestartRequiredOptions() const override
@@ -187,10 +258,16 @@ namespace
 
             if (!_databases.Load())
             {
-                LOG_ERROR("server.loginserver", "Cannot open the login and characters databases");
+                LOG_ERROR("server.loginserver", "Cannot open the login, characters and world databases");
                 return false;
             }
             AppenderDB::Enable(Logger(), 0);
+            if (!LoadCreationRows())
+            {
+                AppenderDB::Disable(Logger());
+                _databases.Close();
+                return false;
+            }
 
             std::vector<std::string> problems;
             _context = std::make_shared<SessionContext>(SessionSettings::Load(Config(), &problems));

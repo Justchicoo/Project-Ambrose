@@ -651,8 +651,8 @@ The server knows the valid first, middle and last name index ranges per gender, 
 
 **Acceptance**
 
-- [ ] Bad school hash, gender=2, hair beyond bui4, bad name index, 7th character each give ErrorCode!=0 and write nothing
-- [ ] A garbage blob gives ErrorCode!=0 without closing the session
+- [x] Bad school hash, gender=2, hair beyond bui4, bad name index, 7th character each give ErrorCode!=0 and write nothing (2026-09-24: CreationInfoReaderTest refuses each by name with nothing filled in, and CreateCharacterDatabaseTest drives MSG_CREATECHARACTER over loopback against a real session and a real database, where a school no row knows and a name index past the end of its table each answer MSG_CREATECHARACTERRESPONSE ErrorCode=1 with the account still holding nothing, and the third wizard on an account allowed two is refused with exactly two still stored. A model beyond its bit width is refused where that refusal bites, which is the moment it is asked for: m_nHairModel is four bits wide, so PropertyObject::Set returns OutOfRange for a sixteenth model and no client can encode one)
+- [x] A garbage blob gives ErrorCode!=0 without closing the session (2026-09-24: 64 bytes of 0x7F and a request cut in half are both refused by the decoder, each answering ErrorCode=1, after which the same session lists its characters and then creates one)
 
 ### Detailed spec from LOG-8: Character creation: MSG_CREATECHARACTER -> MSG_CREATECHARACTERRESPONSE
 
@@ -686,9 +686,9 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 
 **Acceptance**
 
-- [ ] Unit: a blob built by our serializer with valid fields creates exactly one character; a bad school hash, gender=2, hair_model beyond bui4, an out-of-range name index and a 7th character each return ErrorCode!=0 and write nothing
-- [ ] Unit: a truncated or garbage blob returns ErrorCode!=0 without crashing or closing the session
-- [ ] Unit: lowering Character.MaxPerAccount on a running server refuses the next create over the new limit without a restart
+- [x] Unit: a blob built by our serializer with valid fields creates exactly one character; a bad school hash, gender=2, hair_model beyond bui4, an out-of-range name index and a 7th character each return ErrorCode!=0 and write nothing (2026-09-24: CreateCharacterDatabaseTest and CreationInfoReaderTest, 15 tests; a bui4 model above fifteen is refused by PropertyObject::Set rather than by the reader, because four bits cannot carry one)
+- [x] Unit: a truncated or garbage blob returns ErrorCode!=0 without crashing or closing the session (2026-09-24: CreateCharacterDatabaseTest.ARequestThatIsRefusedWritesNothingAndLeavesTheSessionUsable)
+- [x] Unit: lowering Character.MaxPerAccount on a running server refuses the next create over the new limit without a restart (2026-09-24: CreateCharacterDatabaseTest.LoweringTheLimitTakesHoldOnTheNextRequestWithNothingRestarted, which creates one wizard, lowers the setting on the running server and has the next request refused)
 - [ ] Real client: completing the creation flow returns to character select with the new wizard at level 1 with the chosen school, look and name; restarting the client and logging in again still shows it
 - [ ] Real client: on an account already at the slot limit, the create attempt shows the client's failure message and the list is unchanged
 
@@ -709,7 +709,7 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 
 **Acceptance**
 
-- [ ] A valid blob creates exactly one character in one transaction
+- [x] A valid blob creates exactly one character in one transaction (2026-09-24: CreateCharacterDatabaseTest.AValidRequestStoresExactlyOneWizardWhereTheWorldRowsSay, where one request leaves one row in characters and one in character_appearance, at level 1 in the world, zone and place playercreateinfo names, owned by the account that asked, and EachWizardIsGivenAnIdOfItsOwn shows three requests taking three ids with the high-water mark following them)
 - [ ] Real client: the creation flow returns to select with the new level-1 wizard; it survives restart
 - [ ] At the slot limit the client shows failure and the list is unchanged
 

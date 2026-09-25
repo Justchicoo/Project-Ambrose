@@ -35,6 +35,7 @@ void LoginDatabaseConnection::DoPrepareStatements()
         "ON DUPLICATE KEY UPDATE `machine_id` = ?, `session_key_hash` = ?, `created` = ?, `expires` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_UPD_VERIFIER_RESEAL, "LOGIN_UPD_VERIFIER_RESEAL", "UPDATE `account` SET `verifier` = ?, `verifier_key_id` = ? WHERE `id` = ? AND `verifier` = ? AND `verifier_key_id` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_ACCOUNT_PURCHASED_SLOTS, "LOGIN_SEL_ACCOUNT_PURCHASED_SLOTS", "SELECT `purchased_slots` FROM `account` WHERE `id` = ?", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_SEL_ACCOUNT_CREATION_LIMITS, "LOGIN_SEL_ACCOUNT_CREATION_LIMITS", "SELECT `purchased_slots`, `security_level` FROM `account` WHERE `id` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_REALMLIST, "LOGIN_SEL_REALMLIST", "SELECT `id`, `name`, `address`, `local_address`, `port`, `flags`, `population`, `player_limit`, `last_heartbeat` FROM `realmlist` ORDER BY `name`", ConnectionFlags::Both);
     PrepareStatement(LOGIN_INS_REALM, "LOGIN_INS_REALM", "INSERT IGNORE INTO `realmlist` (`name`, `address`, `local_address`, `port`, `flags`) VALUES (?, ?, ?, ?, 1)", ConnectionFlags::Both);
     PrepareStatement(LOGIN_UPD_REALM_HEARTBEAT, "LOGIN_UPD_REALM_HEARTBEAT", "UPDATE `realmlist` SET `population` = ?, `last_heartbeat` = ?, `flags` = (`flags` & ~1) | ? WHERE `name` = ?", ConnectionFlags::Both);

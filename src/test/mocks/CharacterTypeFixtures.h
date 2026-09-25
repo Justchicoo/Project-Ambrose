@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A format v2 type dump written by the project with the character select classes the login server builds, WizardCharacterCreationInfo, WizardCharacterBehavior and the equipment list, laid out with the property names, types, ids and flags the client's classes use, for login screen tests that run without a client.
+ * A format v2 type dump written by the project with the character select classes the login server builds, WizardCharacterCreationInfo, WizardCharacterBehavior and the equipment list, laid out with the property names, types, ids, flags and enum options the client's classes use, for character screen tests that run without a client.
  */
 
 #ifndef AMBROSE_CHARACTERTYPEFIXTURES_H
@@ -72,6 +72,8 @@ namespace CharacterTypeFixtures
 
         Json gender = Property("enum eGender", "m_eGender", 17, EnumAppearance);
         gender["enum_options"] = Json{ { "Male", 1 }, { "Female", 0 }, { "Neutral", 2 } };
+        Json race = Property("enum eRace", "m_eRace", 18, EnumAppearance);
+        race["enum_options"] = Json{ { "Human", 79806088 }, { "Frog", 2274918 } };
         AddClass(classes, "class WizardCharacterBehavior", Json::array({ "BehaviorInstance", "PropertyClass" }), {
             { "m_behaviorTemplateNameID", Property("unsigned int", "m_behaviorTemplateNameID", 0, Local) },
             { "m_nHeadHandsModel", Property("bui2", "m_nHeadHandsModel", 1, Appearance) },
@@ -91,7 +93,7 @@ namespace CharacterTypeFixtures
             { "m_nFeetColor", Property("bui5", "m_nFeetColor", 15, Appearance) },
             { "m_nFeetDecal", Property("bui5", "m_nFeetDecal", 16, Appearance) },
             { "m_eGender", gender },
-            { "m_eRace", Property("enum eRace", "m_eRace", 18, EnumAppearance) },
+            { "m_eRace", race },
             { "m_afterCombatDance", Property("unsigned char", "m_afterCombatDance", 19, Appearance) },
             { "m_nSkinDecal2", Property("unsigned short", "m_nSkinDecal2", 20, Appearance) },
             { "m_extendedHairColor", Property("unsigned char", "m_extendedHairColor", 21, Appearance) },

@@ -21,29 +21,31 @@ namespace
         return true;
     }
 
+    bool IsStorable(CharacterSummary const& character)
+    {
+        if (character.Guid == 0 || character.Account == 0 || character.DeletedAt || character.DeletedAccount)
+            return false;
+        if (character.CustomName && !IsStorableText(*character.CustomName, CharacterRepository::MaxCustomNameBytes))
+            return false;
+        return IsStorableText(character.Zone, CharacterRepository::MaxZoneBytes) && IsStorableText(character.ZoneDisplay, CharacterRepository::MaxZoneBytes);
+    }
+
     CharacterRepository::Statement Prepare(CharacterDatabaseStatements id)
     {
         return CharacterDatabase.GetPreparedStatement(id);
     }
 }
 
-CharacterOpResult CharacterRepository::Create(CharacterSummary const& character)
+CharacterRepository::CreateTransaction CharacterRepository::PrepareCreate(CharacterSummary const& character)
 {
-    if (character.Guid == 0 || character.Account == 0 || character.DeletedAt || character.DeletedAccount)
-        return CharacterOpResult::InvalidData;
-    if ((character.CustomName && !IsStorableText(*character.CustomName, MaxCustomNameBytes)) || !IsStorableText(character.Zone, MaxZoneBytes) || !IsStorableText(character.ZoneDisplay, MaxZoneBytes))
-        return CharacterOpResult::InvalidData;
-    CharacterLoad const existing = Load(character.Guid);
-    if (existing.Result != CharacterOpResult::Ok && existing.Result != CharacterOpResult::NotFound)
-        return existing.Result;
-    if (existing.Character)
-        return CharacterOpResult::AlreadyExists;
+    if (!IsStorable(character))
+        return nullptr;
 
     Statement insert = Prepare(CHAR_INS_CHARACTER);
     Statement appearance = Prepare(CHAR_INS_APPEARANCE);
     Statement sequence = Prepare(CHAR_INS_ID_SEQUENCE);
     if (!insert || !appearance || !sequence)
-        return CharacterOpResult::DatabaseError;
+        return nullptr;
     insert->SetData(0, character.Guid);
     insert->SetData(1, character.Account);
     insert->SetData(2, character.NameIndices);
@@ -98,10 +100,26 @@ CharacterOpResult CharacterRepository::Create(CharacterSummary const& character)
     sequence->SetData(1, character.Guid);
     sequence->SetData(2, character.Guid);
 
-    std::shared_ptr<Transaction<CharacterDatabaseConnection>> const transaction = CharacterDatabase.BeginTransaction();
+    CreateTransaction transaction = CharacterDatabase.BeginTransaction();
     transaction->Append(std::move(insert));
     transaction->Append(std::move(appearance));
     transaction->Append(std::move(sequence));
+    return transaction;
+}
+
+CharacterOpResult CharacterRepository::Create(CharacterSummary const& character)
+{
+    if (!IsStorable(character))
+        return CharacterOpResult::InvalidData;
+    CharacterLoad const existing = Load(character.Guid);
+    if (existing.Result != CharacterOpResult::Ok && existing.Result != CharacterOpResult::NotFound)
+        return existing.Result;
+    if (existing.Character)
+        return CharacterOpResult::AlreadyExists;
+
+    CreateTransaction const transaction = PrepareCreate(character);
+    if (!transaction)
+        return CharacterOpResult::DatabaseError;
     if (!CharacterDatabase.DirectCommitTransaction(transaction))
     {
         CharacterLoad const stored = Load(character.Guid);

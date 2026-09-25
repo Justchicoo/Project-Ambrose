@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * State the login server's sessions share: the live login settings, read without locking, the clock idle checks and lockouts read, which tests can freeze and move forward, the failed-login throttle, a log budget for authentication failures, and which session holds each account, applying the duplicate login policy when a second session claims one.
+ * State the login server's sessions share: the live login settings, read without locking, the clock idle checks and lockouts read, which tests can freeze and move forward, the failed-login throttle, a log budget for authentication failures, which session holds each account, applying the duplicate login policy when a second session claims one, and the source of character ids, resumed from the highest one ever stored so a new wizard can never be given an id a deleted one still holds.
  */
 
 #ifndef AMBROSE_LOGINMGR_H
 #define AMBROSE_LOGINMGR_H
 
 #include "AuthThrottle.h"
+#include "GuidGenerator.h"
 #include "LoginSettings.h"
 #include "TokenBucket.h"
 
@@ -14,6 +15,7 @@
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <unordered_map>
 
 class ConfigMgr;
@@ -49,6 +51,10 @@ public:
     std::shared_ptr<LoginSession> FindAccountSession(uint64 accountId) const;
     std::size_t GetAccountSessionCount() const;
 
+    void ResumeCharacterGuids(uint64 highestUsed) noexcept;
+    std::optional<uint64> NextCharacterGuid() noexcept;
+    std::optional<uint64> PeekCharacterGuid() const noexcept;
+
     void Reset();
 
 private:
@@ -60,6 +66,7 @@ private:
     std::atomic<int64> _clockOffset{ 0 };
     std::atomic<AuthThrottle::Clock::rep> _frozenClock{ 0 };
     AuthThrottle _throttle;
+    GuidGenerator _characterGuids;
     std::mutex _logMutex;
     TokenBucket _authLogs;
     mutable std::mutex _accountsMutex;

@@ -120,6 +120,21 @@ std::size_t LoginMgr::GetAccountSessionCount() const
     return count;
 }
 
+void LoginMgr::ResumeCharacterGuids(uint64 highestUsed) noexcept
+{
+    _characterGuids.Resume(highestUsed);
+}
+
+std::optional<uint64> LoginMgr::NextCharacterGuid() noexcept
+{
+    return _characterGuids.Generate();
+}
+
+std::optional<uint64> LoginMgr::PeekCharacterGuid() const noexcept
+{
+    return _characterGuids.PeekNext();
+}
+
 void LoginMgr::Reset()
 {
     SetSettings(LoginSettings{});

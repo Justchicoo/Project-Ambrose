@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Stores and loads wizards in the characters database: creating a character with its appearance and the guid high-water mark in one transaction, listing and counting an account's live characters, loading one by guid even when deleted, soft deletion of offline characters and restoring, the online flag, and the highest guid ever used, with statement builders and a row reader for callers that query asynchronously.
+ * Stores and loads wizards in the characters database: creating a character with its appearance and the guid high-water mark in one transaction, which a caller that must not block its network thread can build and commit itself, listing and counting an account's live characters, loading one by guid even when deleted, soft deletion of offline characters and restoring, the online flag, and the highest guid ever used, with statement builders and a row reader for callers that query asynchronously.
  */
 
 #ifndef AMBROSE_CHARACTERREPOSITORY_H
@@ -40,6 +40,7 @@ class CharacterRepository
 {
 public:
     using Statement = std::unique_ptr<PreparedStatement<CharacterDatabaseConnection>>;
+    using CreateTransaction = std::shared_ptr<Transaction<CharacterDatabaseConnection>>;
 
     static constexpr std::string_view GuidSequence = "character";
     static constexpr std::size_t MaxCustomNameBytes = 64;
@@ -48,6 +49,7 @@ public:
     CharacterRepository() = delete;
 
     static CharacterOpResult Create(CharacterSummary const& character);
+    static CreateTransaction PrepareCreate(CharacterSummary const& character);
     static CharacterList LoadByAccount(uint64 account);
     static CharacterLoad Load(uint64 guid);
     static std::optional<uint32> CountByAccount(uint64 account);
