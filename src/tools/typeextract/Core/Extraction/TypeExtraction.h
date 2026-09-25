@@ -28,6 +28,7 @@ struct TypeExtractionOptions
     uint64 GetterBudget = 50000000;
     uint64 RaceBudget = 200000000;
     std::function<void(std::string_view)> Progress;
+    bool RequireDerivedLayout = false;
 };
 
 struct TypeExtractionStats
@@ -59,6 +60,7 @@ struct TypeExtractionResult
     std::map<std::string, std::vector<std::string>> ProblemSamples;
     std::map<std::string, uint64> UnhandledApiCalls;
     std::vector<std::string> Discovered;
+    std::vector<ClientLayoutEvidence> LayoutEvidence;
 
     bool Succeeded() const noexcept { return Error.empty(); }
 };

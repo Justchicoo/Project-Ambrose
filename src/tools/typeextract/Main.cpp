@@ -40,6 +40,8 @@ Options:
   --client <dir>     the install (default: AMBROSE_CLIENT_DIR, else the newest install found on this machine)
   --out <file>       where to write the dump (default: types/<revision>.json in the Ambrose data folder)
   --compare <dump>   compare the result with another type dump and print every difference
+  --require-derived-layout
+                     refuse extraction unless every client layout field was derived from runtime evidence
   --quiet            print only errors
   --exit-when-input-ends
                      exit as soon as standard input ends, for a program that runs typeextract
@@ -55,6 +57,7 @@ validation or writing fails, or input ends with --exit-when-input-ends, 2 on bad
         std::optional<std::string> Client;
         std::optional<std::string> Out;
         std::optional<std::string> Compare;
+        bool RequireDerivedLayout = false;
         bool Quiet = false;
         bool ExitWhenInputEnds = false;
         bool Help = false;
@@ -72,6 +75,8 @@ validation or writing fails, or input ends with --exit-when-input-ends, 2 on bad
                 parsed.Quiet = true;
             else if (arg == "--exit-when-input-ends")
                 parsed.ExitWhenInputEnds = true;
+            else if (arg == "--require-derived-layout")
+                parsed.RequireDerivedLayout = true;
             else if (arg == "--client" || arg == "--out" || arg == "--compare")
             {
                 if (index + 1 >= args.size() || args[index + 1].starts_with("--"))
@@ -191,6 +196,7 @@ validation or writing fails, or input ends with --exit-when-input-ends, 2 on bad
 
         TypeExtractionOptions options;
         options.ClientDir = ConfigMgr::PathFromUtf8(*arguments->Client);
+        options.RequireDerivedLayout = arguments->RequireDerivedLayout;
         options.Progress = [&](std::string_view text) { say(std::string(text)); };
         TypeExtractionResult const result = TypeExtraction::Extract(options);
         for (std::string const& line : result.Discovered)

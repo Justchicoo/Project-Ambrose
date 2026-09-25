@@ -123,6 +123,11 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
         return fail(fmt::format("{} names the revision {} in Bin/revision.dat, which cannot name a dump file: only letters, digits, '.', '_' and '-' are allowed", ClientLocator::PathText(options.ClientDir), install->Revision));
     result.Metadata.Revision = install->Revision;
     result.Metadata.Extractor = std::string(ExtractorName);
+    result.LayoutEvidence = options.Layout.Evidence();
+    for (ClientLayoutEvidence const& evidence : result.LayoutEvidence)
+        result.Discovered.push_back(fmt::format("layout {} = {:#x} ({}, confirmed by {})", evidence.Field, evidence.Value, evidence.Status, evidence.ConfirmedBy));
+    if (options.RequireDerivedLayout)
+        return fail("the client layout could not be derived: Type.name (layout derivation is not available for this client)");
 
     try
     {

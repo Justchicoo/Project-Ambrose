@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -113,6 +114,26 @@ TEST(TypeExtractionTest, InstallsWhoseRevisionCannotNameADumpAreRefusedBeforeLoa
     EXPECT_FALSE(result.Succeeded());
     EXPECT_EQ(result.Error.find("revision.dat"), std::string::npos) << result.Error;
     EXPECT_EQ(result.Metadata.Revision, "r806919.Wizard_1_610");
+}
+
+TEST(TypeExtractionTest, LayoutEvidenceNamesEveryFieldAndCanRefuseWithoutWritingADump)
+{
+    ClientLayout layout;
+    std::vector<ClientLayoutEvidence> const evidence = layout.Evidence();
+    EXPECT_EQ(evidence.size(), 33u);
+    EXPECT_TRUE(std::all_of(evidence.begin(), evidence.end(), [](ClientLayoutEvidence const& item)
+    {
+        return !item.Field.empty() && !item.Status.empty() && !item.ConfirmedBy.empty();
+    }));
+
+    LogTestDirectory directory;
+    TypeExtractionOptions options;
+    options.ClientDir = MakeInstall(directory, "unknown-layout", std::string("r999999"));
+    options.RequireDerivedLayout = true;
+    TypeExtractionResult result = TypeExtraction::Extract(options);
+    EXPECT_FALSE(result.Succeeded());
+    EXPECT_EQ(result.Error, "the client layout could not be derived: Type.name (layout derivation is not available for this client)");
+    EXPECT_EQ(result.LayoutEvidence.size(), evidence.size());
 }
 
 TEST(TypeExtractionTest, DefaultOutputPathNeedsAPlainRevisionAndAnAbsoluteDataFolder)
