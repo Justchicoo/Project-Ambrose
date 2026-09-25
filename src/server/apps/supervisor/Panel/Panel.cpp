@@ -298,9 +298,9 @@ void Panel::RegisterSignIn()
     routes.AddOpen("DELETE", "/api/panel/session", [this](AdminRequest const& request) { return SignOut(request); });
     routes.AddOpen("GET", "/api/panel/me", [this](AdminRequest const& request) { return WhoAmI(request); });
     routes.AddOpen("GET", "/api/panel/permissions", [](AdminRequest const&) { return AdminResponse::Json(200, PanelPermissions::CatalogJson()); });
-    routes.Add("GET", "/api/panel/settings", [this](AdminRequest const& request) { return PanelSettingsGet(request); });
-    routes.Add("PATCH", "/api/panel/settings", [this](AdminRequest const& request) { return PanelSettingsUpdate(request); });
-    routes.Add("POST", "/api/panel/settings/mail-test", [this](AdminRequest const& request) { return PanelMailTest(request); });
+    routes.AddGuarded("GET", "/api/panel/settings", "settings.read", [this](AdminRequest const& request) { return PanelSettingsGet(request); });
+    routes.AddGuarded("PATCH", "/api/panel/settings", "settings.edit", [this](AdminRequest const& request) { return PanelSettingsUpdate(request); });
+    routes.AddGuarded("POST", "/api/panel/settings/mail-test", "settings.edit", [this](AdminRequest const& request) { return PanelMailTest(request); });
 }
 
 AdminResponse Panel::PanelSettingsGet(AdminRequest const& request)
