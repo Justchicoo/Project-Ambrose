@@ -23,6 +23,8 @@
 
 ## Review notes for this phase
 
+- **8.14's order preservation is inert.** Every acceptance check is earned, but the property order it adds to PropertyObject is never what makes a re-encode match: disabling it leaves every test passing, because each file tested already writes in ordinal order. It needs a file that requires it, or it should come out with the per-object memory it costs. Recorded here when an audit on 2026-09-25 found both of the detailed list's checks earned by the same tests as the short list's and the milestone finished.
+
 The roadmap critic flagged these. Resolve each one before or while implementing the milestones it names.
 
 - **Oversized.** 8.04 SpellMgr decoding all 18173 Spells entries (M). Same corpus-triage problem.
@@ -714,8 +716,8 @@ The server and tools can write BINd files and versionable blobs that the client 
 
 **Acceptance**
 
-- [ ] Unit test: for synthetic objects, encode then decode gives equal objects
-- [ ] Client-gated test: decode then re-encode is byte-identical for the hat template, TemplateManifest.xml (compared after inflate, since zlib output may differ) and a random 2000-file sample; any non-identical file is listed with the first differing bit
+- [x] Unit test: for synthetic objects, encode then decode gives equal objects (`VersionableRoundTripTest.SyntheticVersionableObjectRoundTrips`, the test that earns the short list's twin of this check, run again on 2026-09-25 against the pinned r806919 install)
+- [x] Client-gated test: decode then re-encode is byte-identical for the hat template, TemplateManifest.xml (compared after inflate, since zlib output may differ) and a random 2000-file sample; any non-identical file is listed with the first differing bit (`VersionableRoundTripTest.HatTemplateAndManifestAreByteExact` and `TwoThousandDecodedFilesAreByteExact`, both passing when run again on 2026-09-25 against the pinned r806919 install; a mismatch is reported by `FirstDifference` as the bit, byte and both values)
 
 **Risks**
 
