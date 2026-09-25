@@ -79,7 +79,6 @@ These block specific milestones. The maintainer decides each one, then this list
 - Whether the tutorial moves earlier, since new characters see it first. Affects where 14.02/14.03 sit and 3.16's playercreateinfo start zone.
 - Whether the loginserver enforces Revision/DataRevision against the patch manifest. Blocks 16.07.
 - Operations: the panel scope tree (panel, node, cluster, realm and app) and the default role bundles, including the owner-only set. Blocks 17.22, 17.31, 17.48, 17.50, 17.56.
-- Operations: the command security level cap on console.write grants and how a linked game account's level applies; this ties to how account security levels map to LOGINCOMPLETE IsCSR, settled under Entering the world in doc/ARCHITECTURE.md. Blocks 17.38, 17.48, 17.49.
 - Operations: whether the supervisor store's secrets use a keyring file separate from the store, and where it lives on each platform. Blocks 17.28, 17.30, 17.47, 17.65, 17.72.
 - Operations: which library provides the panel's cipher and keyed hash. The Stack row names Botan 3 for SHA-2, Twofish, the random number generator and, since 2026-09-22, Argon2id for panel passwords, and AES-256-GCM is already settled for login.account.verifier, so either Botan's entry grows to name a cipher and a keyed hash as well, or a second library is brought in for them. Blocks 17.28, 17.47, 17.72.
 - Operations: how the panel obtains a certificate for a hostname in 17.108. ACME needs an HTTP client and the protocol itself, and the Stack row names no library for either, so this is a new dependency however it is answered: a small ACME library, the protocol written against the crypto already in the Stack, or leaving it to a reverse proxy the operator runs and saying so plainly in the docs rather than pretending the panel does it. Blocks 17.108's second deliverable; the loopback and private-network paths need nothing new and are not blocked.
@@ -101,7 +100,6 @@ These block specific milestones. The maintainer decides each one, then this list
 - Operations: a sequential color ramp for the views that encode magnitude rather than category, such as a heatmap, a density grid or a queue-length view, beside the categorical series ramp doc/DESIGN.md already asks for. The four meaning accents cannot serve, and the first grid built without one invents its own colors. Blocks 17.98, and the gate that would catch an invented ramp in 17.73.
 - Operations: the full-text search engine behind the log history, the activity log's search and the chat search, which are one engine and not three, and where its index lives against the retention caps. Blocks 17.80.
 - Operations: the format of the declarative installation file, which is read and written by hand as well as by the panel. Blocks 17.99 and, with it, 17.100.
-- Operations: what records an on-demand profile of the world tick and what reads the file it produces, given that a profiler is a build dependency and this one is off by default. Blocks 17.91.
 
 
 ### Resolved
