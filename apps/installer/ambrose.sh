@@ -39,7 +39,7 @@ deps() {
     need_command "$([[ "$PRESET" == *clang* ]] && printf clang++ || printf g++)"
     [[ -n "${VCPKG_ROOT:-}" ]] || fail "VCPKG_ROOT is not set; install vcpkg and export VCPKG_ROOT"
     [[ -f "$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" ]] || fail "VCPKG_ROOT does not contain vcpkg"
-    printf 'dependencies found: CMake, compiler and vcpkg; Boost, OpenSSL and MariaDB are supplied by vcpkg\n'
+    printf 'dependencies found: CMake, compiler and vcpkg; every library, such as OpenSSL, Botan and MariaDB, is supplied by vcpkg\n'
 }
 
 compile() {

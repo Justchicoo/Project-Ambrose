@@ -3,7 +3,7 @@
 # Installing Project Ambrose
 
 The installer supports Ubuntu 24.04 with GCC and Windows 11 with Visual Studio
-2022. It uses vcpkg for Boost, OpenSSL and MariaDB Connector/C. Install CMake
+2022. It uses vcpkg for every library, such as OpenSSL, Botan and MariaDB Connector/C. Install CMake
 3.25 or newer and set `VCPKG_ROOT` before starting.
 
 ## Linux

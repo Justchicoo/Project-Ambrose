@@ -33,7 +33,7 @@ function Invoke-Deps {
     if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) { Fail "missing 'cmake'; install it and run deps again" }
     if (-not $env:VCPKG_ROOT) { Fail 'VCPKG_ROOT is not set; install vcpkg and set VCPKG_ROOT' }
     if (-not (Test-Path (Join-Path $env:VCPKG_ROOT 'scripts\buildsystems\vcpkg.cmake'))) { Fail 'VCPKG_ROOT does not contain vcpkg' }
-    Write-Output 'dependencies found: CMake, Visual Studio and vcpkg; Boost, OpenSSL and MariaDB are supplied by vcpkg'
+    Write-Output 'dependencies found: CMake, Visual Studio and vcpkg; every library, such as OpenSSL, Botan and MariaDB, is supplied by vcpkg'
 }
 
 function Invoke-Compile {
