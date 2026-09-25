@@ -17,4 +17,5 @@ target_link_libraries(scripts
         scripting
         chat
         world
+        zones
         globals)

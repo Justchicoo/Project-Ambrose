@@ -451,10 +451,10 @@ world.zone_object and world.spawn_* hold every NPC and interactable placement an
 
 **Acceptance**
 
-- [ ] An unknown location falls back to 'Start'
-- [ ] '.zone info WizardCity/WC_Hub' prints counts
-- [ ] '.reload zone_location' applies without restart
-- [ ] A reload that fails validation keeps the old store and reports every error
+- [x] An unknown location falls back to 'Start' (2026-09-25: ZoneMgrTest.ANameTheZoneDoesNotHoldFallsBackToItsStart, and on a running gameserver against the maintainer's own extracted zones `zone place WizardCity/WC_Hub Door_That_Is_Not_There` answered with the Hub's Start at -3.267, 50.246, -30.473, naming the fall back)
+- [x] '.zone info WizardCity/WC_Hub' prints counts (2026-09-25 on a running gameserver: display name key WizardZone_TheCommons, 31 named place(s), 177 placed object(s), soft limit 50)
+- [x] '.reload zone_location' applies without restart (2026-09-25 on a running gameserver: the Hub's Start was edited in the world database, stayed at its old coordinates until `reload zone_location` reported generation 1, and then came back at 111, 222, 333, with nothing restarted)
+- [x] A reload that fails validation keeps the old store and reports every error (2026-09-25: ZoneMgrDatabaseTest.ARowNamingAZoneNoTemplateHoldsFailsTheBuildAndKeepsWhatWasServing, through the same ReloadMgr path the command takes)
 
 ### Detailed spec from WLD-4: Zone templates in memory: sZoneMgr and reload
 
@@ -482,11 +482,11 @@ The game server loads zone, location and object rows at startup into a global ma
 
 **Acceptance**
 
-- [ ] Unit: an unknown location name falls back to 'Start'; an unknown zone returns a typed error
-- [ ] gameserver startup logs zone template, location and object counts plus load time
-- [ ] '.zone info WizardCity/WC_Hub' prints display key, object count and location count in chat or console
-- [ ] Editing a zone_location row, then '.reload zone_location', returns the new coordinates without a restart
-- [ ] A zone_location row with an unknown zone path makes '.reload zone_location' fail with that row named, and lookups still return the old coordinates
+- [x] Unit: an unknown location name falls back to 'Start'; an unknown zone returns a typed error (2026-09-25: ZoneMgrTest, five tests with no database, among them ZoneLookup::FellBackToStart and ZoneLookup::UnknownZone)
+- [x] gameserver startup logs zone template, location and object counts plus load time (2026-09-25: 'Loaded 1339 zone(s), 3892 named place(s) and 25823 placed object(s) in 1927 ms' from the maintainer's own r806919 install, extracted by zone_extractor with 1339 of 1339 gamedata.bin files decoded)
+- [x] '.zone info WizardCity/WC_Hub' prints display key, object count and location count in chat or console (2026-09-25, on the console as recorded above)
+- [x] Editing a zone_location row, then '.reload zone_location', returns the new coordinates without a restart (2026-09-25: ZoneMgrDatabaseTest.EditingARowAndReloadingThatTargetReturnsTheNewCoordinates, and the same on a running gameserver as recorded above)
+- [x] A zone_location row with an unknown zone path makes '.reload zone_location' fail with that row named, and lookups still return the old coordinates (2026-09-25: ZoneMgrDatabaseTest.ARowNamingAZoneNoTemplateHoldsFailsTheBuildAndKeepsWhatWasServing names the row's zone and still returns the Hub's Start at its old coordinates)
 
 **Risks**
 

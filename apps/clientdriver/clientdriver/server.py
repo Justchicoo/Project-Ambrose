@@ -37,6 +37,7 @@ class LoginServer:
             f"LoginServerPort={self.port}",
             f"LoginDatabaseInfo={self.databases.info('login')}",
             f"CharacterDatabaseInfo={self.databases.info('characters')}",
+            f"WorldDatabaseInfo={self.databases.info('world')}",
             "Console.Enable=1",
             "Console.Colors=0",
         ] + self.settings

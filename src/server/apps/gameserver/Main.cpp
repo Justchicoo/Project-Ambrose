@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables after the world database takes one, loads the character name tables when the world database is open and, when they are empty, extracts them from the install and reloads them, automatically in auto mode, after a yes in ask mode and never in off mode, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close.
+ * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables after the world database takes one, loads the character name tables when the world database is open and, when they are empty, extracts them from the install and reloads them, automatically in auto mode, after a yes in ask mode and never in off mode, loads the zones, the named places inside them and the objects placed in them and registers each as a reload target, refusing to start when they cannot be read, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close.
  */
 
 #include "TypeDumpCache.h"
@@ -11,6 +11,7 @@
 #include "AppenderDB.h"
 #include "CharacterNameExtractor.h"
 #include "CharacterNameMgr.h"
+#include "ZoneMgr.h"
 #include "CharacterNameScript.h"
 #include "AccountMgr.h"
 #include "ClientSetup.h"
@@ -208,6 +209,20 @@ namespace
                 for (std::string const& warning : names.Warnings)
                     LOG_WARN("server.gameserver", "Character name tables: {}", warning);
             }
+            sZoneMgr.RegisterReloadTargets();
+            if (WorldDatabase.IsOpen())
+            {
+                ZoneLoadResult const zones = sZoneMgr.LoadAll();
+                if (!zones.Loaded)
+                {
+                    LOG_ERROR("server.gameserver", "Cannot load the zones from the world database");
+                    _databases.Close();
+                    return false;
+                }
+                if (zones.Zones == 0)
+                    LOG_WARN("server.gameserver", "The world database holds no zone, so there is nowhere to stand; run the zone extractor against your install");
+            }
+
             uint32 const realmId = Config().GetOption<uint32>("RealmID", 1, true);
             AppenderDB::Enable(Logger(), realmId);
             GameSession::SetRealmId(realmId);

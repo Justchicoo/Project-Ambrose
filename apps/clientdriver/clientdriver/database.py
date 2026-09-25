@@ -7,7 +7,7 @@ import time
 from .errors import Refused, StepFailed
 
 PREFIX = "ambrose_driver_"
-KINDS = ("login", "characters")
+KINDS = ("login", "characters", "world")
 NO_WINDOW = 0x08000000
 
 
