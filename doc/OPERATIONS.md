@@ -23,7 +23,7 @@ GRAFANA_ADMIN_PASSWORD=choose-a-local-password
 ```
 
 Prometheus reads its target literally from
-`apps/grafana/prometheus/prometheus.yml`; change `host.docker.internal:8080`
+`apps/grafana/prometheus/prometheus.yml`; change `host.docker.internal:12343`
 there before starting the stack when the gameserver listens somewhere else.
 Prometheus does not expand environment variables in that file.
 
