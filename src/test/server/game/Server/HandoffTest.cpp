@@ -12,6 +12,7 @@
 #include "FrameWriter.h"
 #include "GameMessageTable.h"
 #include "GameSession.h"
+#include "GameTestHarness.h"
 #include "LoginMessageTable.h"
 #include "LoginMgr.h"
 #include "LoginTestHarness.h"
@@ -33,6 +34,7 @@
 
 namespace
 {
+    using namespace GameTesting;
     using namespace LoginTesting;
 
     constexpr uint32 HandoffRealmId = 9;
@@ -42,47 +44,6 @@ namespace
     {
         return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     }
-
-    class GameListener
-    {
-    public:
-        GameListener()
-        {
-            _context = std::make_shared<SessionContext>(SessionSettings{});
-            _manager = std::make_unique<SocketMgr<GameSession>>([this](asio::ip::tcp::socket&& socket, FrameLimits const& limits)
-            {
-                auto session = std::make_shared<GameSession>(std::move(socket), limits, _context);
-                std::lock_guard const lock(_mutex);
-                _sessions.push_back(session);
-                return session;
-            });
-            NetworkSettings network;
-            network.BindIp = "127.0.0.1";
-            network.Port = 0;
-            network.Threads = 1;
-            std::string error;
-            EXPECT_TRUE(_manager->StartNetwork(network, error)) << error;
-        }
-
-        ~GameListener() { _manager.reset(); }
-
-        uint16 GetPort() const { return _manager->GetPort(); }
-
-        std::shared_ptr<GameSession> Find(uint16 sessionId)
-        {
-            std::lock_guard const lock(_mutex);
-            for (std::weak_ptr<GameSession> const& weak : _sessions)
-                if (std::shared_ptr<GameSession> session = weak.lock(); session && session->GetSessionId() == sessionId)
-                    return session;
-            return nullptr;
-        }
-
-    private:
-        std::shared_ptr<SessionContext> _context;
-        std::unique_ptr<SocketMgr<GameSession>> _manager;
-        std::mutex _mutex;
-        std::vector<std::weak_ptr<GameSession>> _sessions;
-    };
 
     class HandoffTest : public testing::Test
     {

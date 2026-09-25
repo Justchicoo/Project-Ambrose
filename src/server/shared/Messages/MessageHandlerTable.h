@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Per-app message dispatch: rules that handle a declared message in given session statuses, list one as not handled yet, or refuse it as server-only, resolved by tag against each loaded catalog, with strikes for protocol violations, a per-session budget on dropped-message logging, and declarations of the messages the app sends.
+ * Per-app message dispatch: rules that handle a declared message in given session statuses, list one as not handled yet, or refuse it as server-only, resolved by tag against each loaded catalog, with strikes for protocol violations, a per-session budget on dropped-message logging, a report of each message not handled yet the first time a session sends it rather than every time, and declarations of the messages the app sends.
  */
 
 #ifndef AMBROSE_MESSAGEHANDLERTABLE_H
@@ -168,6 +168,7 @@ public:
 private:
     DispatchResult Run(SessionT& session, MessageCatalog const& catalog, std::size_t index, uint8 serviceId, uint8 order, std::span<uint8 const> body) const;
     void Drop(SessionT& session, LogLevel level, std::string const& text) const;
+    void NotHandledYet(SessionT& session, uint8 serviceId, uint8 order, std::string const& name) const;
     void Violation(SessionT& session, std::string const& text, std::string const& strike) const;
 
     std::vector<Invoker> _invokers;
@@ -215,6 +216,20 @@ void MessageHandlerTable<SessionT>::Drop(SessionT& session, LogLevel level, std:
 }
 
 template<typename SessionT>
+void MessageHandlerTable<SessionT>::NotHandledYet(SessionT& session, uint8 serviceId, uint8 order, std::string const& name) const
+{
+    DroppedCount().Add();
+    if (!session.FirstNotHandled(serviceId, order))
+        return;
+    if (session.AllowDropLog())
+    {
+        LOG_INFO(LogCategory, "Session {} sent {}, which {} does not handle yet; later ones from this session are counted, not logged", session.GetSessionId(), name, GetAppName());
+        return;
+    }
+    session.AddStrike("dropped messages faster than the session's drop budget allows");
+}
+
+template<typename SessionT>
 void MessageHandlerTable<SessionT>::Violation(SessionT& session, std::string const& text, std::string const& strike) const
 {
     DroppedCount().Add();
@@ -253,7 +268,7 @@ DispatchResult MessageHandlerTable<SessionT>::Dispatch(SessionT& session, Messag
     {
         if (IsOwnService(serviceId))
         {
-            Drop(session, LogLevel::Info, fmt::format("Session {} sent {}, which {} does not handle yet", session.GetSessionId(), name, GetAppName()));
+            NotHandledYet(session, serviceId, order, name);
             return DispatchResult::NotHandled;
         }
         Violation(session, fmt::format("Session {} sent {}, which {} never accepts", session.GetSessionId(), name, GetAppName()), fmt::format("{}, which {} never accepts", name, GetAppName()));
@@ -273,7 +288,7 @@ DispatchResult MessageHandlerTable<SessionT>::Dispatch(SessionT& session, Messag
     }
     if (rule->Kind == MessageRuleKind::Pending)
     {
-        Drop(session, LogLevel::Info, fmt::format("Session {} sent {}, which {} does not handle yet", session.GetSessionId(), name, GetAppName()));
+        NotHandledYet(session, serviceId, order, name);
         return DispatchResult::NotHandled;
     }
 

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests message dispatch on Ambrose-authored fixtures with a fake session: handled, wrong-status, pending, refused, foreign and unknown messages, strikes, the dropped-message budget, short and truncated bodies, queued work, throwing handlers, table validation and coverage, catalogs reloaded with new orders, and that the service's counter moves once per message handled and once per message dropped.
+ * Tests message dispatch on Ambrose-authored fixtures with a fake session: handled, wrong-status, pending, refused, foreign and unknown messages, strikes, the dropped-message budget, a message not handled yet reported once per session however often it comes, short and truncated bodies, queued work, throwing handlers, table validation and coverage, catalogs reloaded with new orders, and that the service's counter moves once per message handled and once per message dropped.
  */
 
 #include "Log.h"
@@ -13,6 +13,7 @@
 
 #include <deque>
 #include <functional>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -117,6 +118,11 @@ namespace
             return true;
         }
 
+        bool FirstNotHandled(uint8 serviceId, uint8 order)
+        {
+            return Reported.insert(static_cast<uint16>((uint16{ serviceId } << 8) | order)).second;
+        }
+
         bool QueueInbound(std::function<void()> work, std::size_t bytes)
         {
             if (Queue.size() >= QueueLimit)
@@ -153,6 +159,7 @@ namespace
         std::size_t QueuedBytes = 0;
         std::vector<std::string> Strikes;
         std::vector<std::string> Kicks;
+        std::set<uint16> Reported;
         std::deque<std::function<void()>> Queue;
         std::vector<std::string> Hellos;
         std::vector<uint32> Laters;
@@ -320,13 +327,14 @@ TEST_F(MessageHandlerTableTest, DropsBeyondTheBudgetStrikeInsteadOfLogging)
     _session.DropBudget = 2;
     for (int i = 0; i < 5; ++i)
     {
-        DmlMessageData someday = Message(7, 4);
-        EXPECT_EQ(_table.Dispatch(_session, _catalog, someday), DispatchResult::NotHandled);
+        HelloMessage hello;
+        DmlMessageData early = Encoded(*_catalog, hello, 1);
+        EXPECT_EQ(_table.Dispatch(_session, _catalog, early), DispatchResult::WrongStatus);
     }
     EXPECT_EQ(_session.Strikes, (std::vector<std::string>(3, "dropped messages faster than the session's drop budget allows")));
     std::size_t logged = 0;
     for (LogMessage const& message : log.Store->Messages("Capture"))
-        if (message.Text.find("MSG_SOMEDAY") != std::string::npos)
+        if (message.Text.find("MSG_HELLO") != std::string::npos)
             ++logged;
     EXPECT_EQ(logged, 2u);
 
@@ -476,6 +484,41 @@ TEST_F(MessageHandlerTableTest, ValidationRequiresARuleForEveryMessageOfTheAppsO
     complete.Pending(7, "MSG_UNLISTED", SessionStatuses::Any);
     errors.clear();
     EXPECT_TRUE(complete.Validate(*_catalog, errors)) << (errors.empty() ? std::string() : errors.front());
+}
+
+TEST_F(MessageHandlerTableTest, AMessageNotHandledYetIsReportedOncePerSession)
+{
+    CapturedLog log;
+    _session.Status = SessionStatus::Authenticated;
+    _session.DropBudget = 1;
+    for (int i = 0; i < 5; ++i)
+    {
+        DmlMessageData someday = Message(7, 4);
+        EXPECT_EQ(_table.Dispatch(_session, _catalog, someday), DispatchResult::NotHandled);
+    }
+    auto const reports = [&log]
+    {
+        std::size_t count = 0;
+        for (LogMessage const& message : log.Store->Messages("Capture"))
+            if (message.Text.find("MSG_SOMEDAY") != std::string::npos)
+                ++count;
+        return count;
+    };
+    EXPECT_EQ(reports(), 1u) << "a client that repeats a message the server does not handle yet is reported for it once";
+    EXPECT_TRUE(log.Contains("Session 42 sent LOGIN MSG_SOMEDAY (7:4), which testserver does not handle yet; later ones from this session are counted, not logged"));
+    EXPECT_TRUE(_session.Strikes.empty()) << "and its repeats cost it nothing, because the client did nothing wrong";
+    EXPECT_EQ(_session.DropBudget, 0u) << "the first report is the only one that spends the drop budget";
+
+    DmlMessageData unlisted = Message(7, 5);
+    EXPECT_EQ(_table.Dispatch(_session, _catalog, unlisted), DispatchResult::NotHandled);
+    EXPECT_EQ(_session.Strikes, std::vector<std::string>{ "dropped messages faster than the session's drop budget allows" })
+        << "a message not reported before still spends the budget, so a client naming every message it knows strikes out";
+
+    FakeSession other;
+    other.Status = SessionStatus::Authenticated;
+    DmlMessageData fromOther = Message(7, 4);
+    EXPECT_EQ(_table.Dispatch(other, _catalog, fromOther), DispatchResult::NotHandled);
+    EXPECT_EQ(reports(), 2u) << "another session is reported for the same message on its own";
 }
 
 TEST_F(MessageHandlerTableTest, ARestRuleStandsForEveryMessageOfItsServiceThatNothingElseNames)

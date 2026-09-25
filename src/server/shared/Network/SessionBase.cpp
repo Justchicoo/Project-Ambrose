@@ -79,6 +79,17 @@ bool SessionBase::AllowDropLog()
     return _dropBudget.TryConsume();
 }
 
+bool SessionBase::FirstNotHandled(uint8 serviceId, uint8 order)
+{
+    uint16 const slot = static_cast<uint16>((uint16{ serviceId } << 8) | order);
+    std::lock_guard const lock(_budgetMutex);
+    auto const at = std::lower_bound(_reportedNotHandled.begin(), _reportedNotHandled.end(), slot);
+    if (at != _reportedNotHandled.end() && *at == slot)
+        return false;
+    _reportedNotHandled.insert(at, slot);
+    return true;
+}
+
 void SessionBase::Kick(std::string_view reason)
 {
     if (_kicked.exchange(true, std::memory_order_relaxed))

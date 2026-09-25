@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, and the note the client sends once it has loaded that zone, naming it by the string hash of its path.
+ * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, the note the client sends once it has loaded that zone, naming it by the string hash of its path, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder.
  */
 
 #ifndef AMBROSE_GAMEMESSAGES_H
@@ -106,6 +106,127 @@ namespace GameMessages
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("ZoneNameID", &ClientZoned::ZoneNameId) };
+        }
+    };
+
+    struct GetTimedAccessPasses
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_GETTIMEDACCESSPASSES";
+
+        static constexpr auto Fields()
+        {
+            return std::tuple<>{};
+        }
+    };
+
+    struct TimedAccessPasses
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_TIMEDACCESSPASSES";
+
+        std::string Data;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Data", &TimedAccessPasses::Data) };
+        }
+    };
+
+    struct GetSubscriberOnlyItems
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_GETSUBSCRIBERONLYITEMS";
+
+        static constexpr auto Fields()
+        {
+            return std::tuple<>{};
+        }
+    };
+
+    struct SubscriberOnlyItems
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_SUBSCRIBERONLYITEMS";
+
+        std::string Data;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Data", &SubscriberOnlyItems::Data) };
+        }
+    };
+
+    struct CrownBalance
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_CROWNBALANCE";
+
+        uint8 Failure = 0;
+        int32 TotalCrowns = 0;
+        uint64 CharacterId = 0;
+        uint8 CacheBalanceForCsSegmentation = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Failure", &CrownBalance::Failure), DmlField("TotalCrowns", &CrownBalance::TotalCrowns), DmlField("CharacterID", &CrownBalance::CharacterId),
+                DmlField("CacheBalanceForCSSegmentation", &CrownBalance::CacheBalanceForCsSegmentation) };
+        }
+    };
+
+    struct DoneShopping
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_DONESHOPPING";
+
+        uint64 TransactionId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("TransactionID", &DoneShopping::TransactionId) };
+        }
+    };
+
+    struct LogClientResolution
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_LOGCLIENTRESOLUTION";
+
+        uint32 ScreenWidth = 0;
+        uint32 ScreenHeight = 0;
+        uint8 FullScreen = 0;
+        uint8 ClassicMode = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ScreenWidth", &LogClientResolution::ScreenWidth), DmlField("ScreenHeight", &LogClientResolution::ScreenHeight),
+                DmlField("FullScreen", &LogClientResolution::FullScreen), DmlField("ClassicMode", &LogClientResolution::ClassicMode) };
+        }
+    };
+
+    struct LogPatchClientPatchTime
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_LOGPATCHCLIENTPATCHTIME";
+
+        uint32 PatchClientPatchTime = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("PatchClientPatchTime", &LogPatchClientPatchTime::PatchClientPatchTime) };
+        }
+    };
+
+    struct QuestFinderOption
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_QUESTFINDEROPTION";
+
+        uint8 Enable = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Enable", &QuestFinderOption::Enable) };
         }
     };
 }

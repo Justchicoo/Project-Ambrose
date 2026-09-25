@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A client session over one socket: sends SessionOffer at once, waits for a matching SessionAccept, answers and sends keepalives, hands DML messages to the app, encodes declared messages against the live definitions straight into their frames, and tracks its status, protocol strikes, ping budget and queued inbound work.
+ * A client session over one socket: sends SessionOffer at once, waits for a matching SessionAccept, answers and sends keepalives, hands DML messages to the app, encodes declared messages against the live definitions straight into their frames, and tracks its status, protocol strikes, ping budget, the messages it has already been reported for sending before the server handles them, and queued inbound work.
  */
 
 #ifndef AMBROSE_SESSIONBASE_H
@@ -27,6 +27,7 @@
 #include <span>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 enum class SessionState : uint8
 {
@@ -63,6 +64,7 @@ public:
     bool AddStrike(std::string_view reason);
     void Kick(std::string_view reason);
     bool AllowDropLog();
+    bool FirstNotHandled(uint8 serviceId, uint8 order);
     bool QueueInbound(std::function<void()> work, std::size_t bytes = 0);
     std::size_t ProcessQueuedMessages(std::size_t limit = MaxQueuedMessages);
     std::size_t GetQueuedMessageCount() const;
@@ -107,6 +109,7 @@ private:
     std::mutex _budgetMutex;
     TokenBucket _dropBudget;
     TokenBucket _pingBudget;
+    std::vector<uint16> _reportedNotHandled;
     uint16 _sessionId = 0;
     std::atomic<SessionStatus> _status{ SessionStatus::Connected };
     std::atomic<uint32> _strikes{ 0 };

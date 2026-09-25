@@ -1279,6 +1279,18 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(built["unhandled_messages"], {"LOGIN MSG_LOGINLOGCHARACTERCREATION (7:28)": 1,
                                                        "LOGIN MSG_CREATECHARACTER (7:4)": 1})
 
+    def test_it_names_messages_of_numbered_protocols_and_mixed_case_tags(self):
+        lines = ["2026-09-25_11:43:05.702 INFO  [network.opcode] Session 1 sent WIZARD2 MSG_CrownShopLogging (53:78), "
+                 "which gameserver does not handle yet; later ones from this session are counted, not logged",
+                 "2026-09-25_11:43:05.702 INFO  [network.opcode] Session 1 sent WIZARD3 MSG_REQUESTTSDONEPREPFORMP (56:164), "
+                 "which gameserver does not handle yet; later ones from this session are counted, not logged"]
+        recorded = fixture()["clean"]
+        allowed = ["MSG_LOGINLOGCHARACTERCREATION", "MSG_CREATECHARACTER", "MSG_CrownShopLogging", "MSG_REQUESTTSDONEPREPFORMP"]
+        built = report.build(self.facts(pending_allowed=allowed), recorded["server"] + lines, recorded["client"])
+        self.assertEqual(built["unhandled_messages"]["WIZARD2 MSG_CrownShopLogging (53:78)"], 1)
+        self.assertEqual(built["unhandled_messages"]["WIZARD3 MSG_REQUESTTSDONEPREPFORMP (56:164)"], 1)
+        self.assertTrue(self.passed(built, "every message the server did not handle is one the scenario expects"))
+
     def test_a_message_the_scenario_does_not_expect_fails_the_run(self):
         built = self.clean_report(pending_allowed=["MSG_LOGINLOGCHARACTERCREATION"])
         self.assertFalse(self.passed(built, "every message the server did not handle is one the scenario expects"))

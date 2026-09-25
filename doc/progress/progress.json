@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 67,
+    "done": 69,
     "total": 394,
-    "percent": 17.0
+    "percent": 17.5
   },
   "checks": {
-    "done": 628,
+    "done": 635,
     "total": 2394,
-    "percent": 26.2
+    "percent": 26.5
   },
   "contributor_track": {
     "merged": 71,
@@ -26,9 +26,9 @@
     {
       "phase": 2,
       "title": "Log in to character select",
-      "milestones_done": 11,
+      "milestones_done": 12,
       "milestones_total": 15,
-      "checks_done": 112,
+      "checks_done": 113,
       "checks_total": 119
     },
     {
@@ -42,9 +42,9 @@
     {
       "phase": 4,
       "title": "A wizard stands in ravenwood",
-      "milestones_done": 4,
+      "milestones_done": 5,
       "milestones_total": 16,
-      "checks_done": 74,
+      "checks_done": 80,
       "checks_total": 132
     },
     {

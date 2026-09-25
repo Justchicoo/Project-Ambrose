@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a block, a type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads the block and type pairs the world database's core_object_type holds when it is given the world database, and when a pair stands for a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --pair or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
+ * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a block, a type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads the block and type pairs the world database's core_object_type holds when it is given the world database, and when a pair stands for a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --pair or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
  */
 
 #include "BindFile.h"
@@ -14,6 +14,7 @@
 #include "ClientSetup.h"
 #include "ConfigMgr.h"
 #include "KiwadArchive.h"
+#include "MessageDefinitionSet.h"
 #include "LocaleStore.h"
 #include "StringHash.h"
 #include "Log.h"
@@ -41,6 +42,8 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 namespace
@@ -57,8 +60,10 @@ Asks your own Wizard101 install a question and prints the answer.
 Commands:
   types <pattern>...     print every class whose name holds a pattern, or a hash
   types --list <pattern> print only the names, one per line
-  messages <tag>...      print what the client says a message carries
-  messages --list [text] print every message tag, or those holding the text
+  messages <tag>...      print what the client says a message carries, with its
+                         protocol, service and order
+  messages --list [text] print every message tag with its service and order, or those
+                         holding the text
   wad <entry>...         print an archive entry: BINd and headerless objects as JSON,
                          the rest as text
   wad --list [pattern]   print entry names holding the pattern
@@ -449,6 +454,9 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         std::string Tag;
         std::string File;
         std::string Text;
+        std::string Protocol;
+        uint32 Service = 0;
+        uint32 Order = 0;
     };
 
     std::filesystem::path MessageCachePath(std::filesystem::path const& dataFolder, std::string_view revision)
@@ -475,9 +483,11 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             return messages;
         for (nlohmann::json const& entry : document)
         {
-            if (!entry.is_object() || !entry.contains("tag") || !entry.contains("file") || !entry.contains("text"))
-                continue;
-            messages.push_back({ entry["tag"].get<std::string>(), entry["file"].get<std::string>(), entry["text"].get<std::string>() });
+            if (!entry.is_object() || !entry.contains("tag") || !entry.contains("file") || !entry.contains("text") || !entry.contains("protocol") || !entry.contains("service")
+                || !entry.contains("order"))
+                return {};
+            messages.push_back({ entry["tag"].get<std::string>(), entry["file"].get<std::string>(), entry["text"].get<std::string>(), entry["protocol"].get<std::string>(),
+                entry["service"].get<uint32>(), entry["order"].get<uint32>() });
         }
         return messages;
     }
@@ -490,7 +500,8 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             return;
         nlohmann::json document = nlohmann::json::array();
         for (CachedMessage const& message : messages)
-            document.push_back({ { "tag", message.Tag }, { "file", message.File }, { "text", message.Text } });
+            document.push_back({ { "tag", message.Tag }, { "file", message.File }, { "text", message.Text }, { "protocol", message.Protocol }, { "service", message.Service },
+                { "order", message.Order } });
         std::ofstream stream(path, std::ios::binary | std::ios::trunc);
         if (!stream)
             return;
@@ -534,11 +545,32 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                     position = nameEnd + 1;
                     continue;
                 }
-                messages.push_back({ tag, file, text->substr(position, close + tag.size() + 3 - position) });
+                messages.push_back({ tag, file, text->substr(position, close + tag.size() + 3 - position), {}, 0, 0 });
                 position = close + 1;
             }
         }
+
+        MessageDefinitionSet definitions;
+        definitions.LoadFromArchive(archive);
+        std::map<std::pair<std::string, std::string>, std::tuple<std::string, uint32, uint32>> numbered;
+        for (auto const& [service, protocol] : definitions.GetProtocols())
+            for (MessageDef const& definition : protocol.Messages)
+                numbered[{ std::filesystem::path(protocol.SourceFile).filename().string(), definition.Tag }] = { protocol.ProtocolType, service, definition.Order };
+        for (CachedMessage& message : messages)
+        {
+            auto const found = numbered.find({ std::filesystem::path(message.File).filename().string(), message.Tag });
+            if (found == numbered.end())
+                continue;
+            std::tie(message.Protocol, message.Service, message.Order) = found->second;
+        }
         return messages;
+    }
+
+    std::string Numbered(CachedMessage const& message)
+    {
+        if (message.Protocol.empty())
+            return fmt::format("{} (no order: the definition code refused its file)", message.Tag);
+        return fmt::format("{} {} ({}:{})", message.Protocol, message.Tag, message.Service, message.Order);
     }
 
     int RunMessages(Arguments const& arguments, std::vector<CachedMessage> const& messages)
@@ -549,29 +581,36 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             return Failure;
         }
 
-        std::string const wanted = arguments.Subjects.empty() ? std::string() : Ambrose::ToLower(arguments.Subjects.front());
-        bool found = false;
-        for (CachedMessage const& message : messages)
-        {
-            std::string const tag = Ambrose::ToLower(message.Tag);
-            bool const matches = arguments.List ? (wanted.empty() || tag.find(wanted) != std::string::npos)
-                                                : (tag == wanted || (!wanted.empty() && tag.find(wanted) != std::string::npos));
-            if (!matches)
-                continue;
-            found = true;
-            if (arguments.List)
-                std::cout << fmt::format("{}  {}\n", message.Tag, message.File);
-            else
-                std::cout << fmt::format("{}\n{}\n", message.File, message.Text);
-        }
+        std::vector<std::string> wanted;
+        for (std::string const& subject : arguments.Subjects)
+            wanted.push_back(Ambrose::ToLower(subject));
+        if (wanted.empty())
+            wanted.emplace_back();
 
-        if (!found && !arguments.List)
+        int status = Success;
+        for (std::string const& subject : wanted)
         {
-            std::cerr << fmt::format("{}: no message of that name is defined in this install\n",
-                arguments.Subjects.empty() ? std::string() : arguments.Subjects.front());
-            return Failure;
+            bool found = false;
+            for (CachedMessage const& message : messages)
+            {
+                std::string const tag = Ambrose::ToLower(message.Tag);
+                bool const matches = arguments.List ? (subject.empty() || tag.find(subject) != std::string::npos)
+                                                    : (tag == subject || (!subject.empty() && tag.find(subject) != std::string::npos));
+                if (!matches)
+                    continue;
+                found = true;
+                if (arguments.List)
+                    std::cout << fmt::format("{}  {}\n", Numbered(message), message.File);
+                else
+                    std::cout << fmt::format("{} in {}\n{}\n", Numbered(message), message.File, message.Text);
+            }
+            if (!found && !arguments.List)
+            {
+                std::cerr << fmt::format("{}: no message of that name is defined in this install\n", subject);
+                status = Failure;
+            }
         }
-        return Success;
+        return status;
     }
 
     int RunHex(Arguments const& arguments)

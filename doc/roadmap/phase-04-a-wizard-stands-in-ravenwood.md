@@ -35,6 +35,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Oversized.** 4.14 LOGINCOMPLETE and standing in zone (M). This is the first full CoreObject acceptance by the real client, with segmentation, CriticalObjects and CLIENTZONED. It is historically the hardest single step and should be split: byte-level LOGINCOMPLETE against a decoded capture, then real-client zone-in.
 - **Oversized.** 4.08 zone extractor across 3356 zone WADs with 0 failures (M). The failure triage alone is open-ended.
 - **Ordering.** 4.04 carries LOG-11's acceptance as well as WLD-1's, but only the LocationString part of LOG-11 is its own work. Three of its checks, the CharID selection errors, the MSG_ATTACH integration and the real-client Play, describe 4.05 and cannot be earned until 4.05 lands, so 4.04 stays open with its own eight ticked. Found on 2026-09-23 when an outside contributor delivered every part of 4.04 that 4.04 builds.
+- **Ordering.** 4.12 carries WIZ-1 whole, but its title leaves the PLAYERWIZBANG broadcast out, because other clients in range only exist from 6.01, and 6.02 carries that handler and the spellbook half of the real-client check already. **Resolved on 2026-09-25:** 4.12 builds the rest, and its deliverable and check no longer name the broadcast. The client sends its entry chatter after MSG_LOGINCOMPLETE but before MSG_CLIENTZONED, so the handlers take it from LoggedIn as well as InWorld; the tests of every WIZARD name and of the WIZARD orders read the user's own XML, so they are client tests.
 - **Ordering.** 4.09 depends on 4.15, so 4.15 lands before 4.09. Settings named in 4.02-4.14 read their config value until 4.16 lands, then become live settings with the same keys.
 
 ## 4.01 sWorld tick, GameSession, ScriptMgr hooks and AddSC loaders (new core)
@@ -603,9 +604,9 @@ The server can serialize a runtime world object into exactly the bytes MSG_NEWOB
 
 **Acceptance**
 
-- [ ] Every name in WizardMessages/2/3 maps to one handler or the unhandled list
-- [ ] UPDATEMANA=233 and ADDSPELLTOBOOK=10 fixtures
-- [ ] Real client: login chatter handled with no warnings
+- [x] Every name in WizardMessages/2/3 maps to one handler or the unhandled list. `GameMessageTableClientTest.EveryWorldMessageHasExactlyOneRuleAndTheEntryChatterIsHandled` finds exactly one rule for every GAME, WIZARD, WIZARD2 and WIZARD3 message of the r806919 install, named for it or standing for the rest of its service, with the seven entry messages handled
+- [x] UPDATEMANA=233 and ADDSPELLTOBOOK=10 fixtures. `GameMessageTableClientTest.WizardOrdersAreThePlacesOfTheirTagsSortedWithoutRepeats` checks every WIZARD order against its tag's place and pins both, and `client messages --list` now prints `WIZARD MSG_UPDATEMANA (12:233)` and `WIZARD MSG_ADDSPELLTOBOOK (12:10)` from the install
+- [x] Real client: login chatter handled with no warnings. The client driver's enter-world run 20260925-114135 logged `asked for its timed access passes and was told it has none`, `asked which items only subscribers may use and was told none`, `is done shopping` and `runs its client at 1280x720, in a window`, with no server warning outside the allow-list and no message dropped
 
 ### Detailed spec from WIZ-1: Wizard service dispatch skeleton and login chatter
 
@@ -613,11 +614,10 @@ A character entering the world gets no errors or unknown-message spam from the W
 
 **Deliverables**
 
-- src/server/game/Handlers/WizardHandler.cpp: register the handlers in the session dispatch table (state: in world)
+- src/server/game/Handlers/WizardHandler.cpp: register the handlers in the session dispatch table (state: from LoggedIn, since the client sends them before MSG_CLIENTZONED)
 - src/server/game/Handlers/WizardHandler.cpp: minimal replies. GETTIMEDACCESSPASSES -> empty TIMEDACCESSPASSES; GETSUBSCRIBERONLYITEMS -> empty SUBSCRIBERONLYITEMS; CROWNBALANCE -> TotalCrowns=0; DONESHOPPING, LOGCLIENTRESOLUTION, LOGPATCHCLIENTPATCHTIME and QUESTFINDEROPTION accepted and logged at debug
-- PLAYERWIZBANG handler: broadcast GAME MSG_WIZBANG to the zone (StateName SpellbookWizbang -> a non-zero WizBangID; any other state -> 0)
 - src/server/shared/Messages: an explicit list of unhandled WIZARD/WIZARD2/WIZARD3 messages that logs once per session, not per packet
-- src/test/server/game/WizardDispatchTest.cpp
+- src/test/server/game/Handlers/WizardHandlerTest.cpp, and src/test/client/GameMessageTableClientTest.cpp for the checks that read the user's own XML
 
 **Client messages:** MSG_LOGCLIENTRESOLUTION, MSG_LOGPATCHCLIENTPATCHTIME, MSG_GETTIMEDACCESSPASSES, MSG_TIMEDACCESSPASSES, MSG_GETSUBSCRIBERONLYITEMS, MSG_SUBSCRIBERONLYITEMS, MSG_CROWNBALANCE, MSG_DONESHOPPING, MSG_PLAYERWIZBANG, MSG_QUESTFINDEROPTION, MSG_SHOWCLIENTMESSAGEBOX, MSG_SHOWGUI
 
@@ -627,14 +627,14 @@ A character entering the world gets no errors or unknown-message spam from the W
 
 **Acceptance**
 
-- [ ] Unit test: every name from all three Wizard XML files maps to exactly one entry, either a handler or the unhandled list; MSG_PETHATCHREADYSTATUS maps to one order
-- [ ] Unit test: WIZARD message order is the 1-based index in the de-duplicated alphabetical list, with UPDATEMANA=233 and ADDSPELLTOBOOK=10 as fixtures
-- [ ] Real client: log in to a zone. The server log shows GETTIMEDACCESSPASSES, GETSUBSCRIBERONLYITEMS, LOGCLIENTRESOLUTION and DONESHOPPING handled with no warnings. Opening and closing the spellbook makes other clients in range see the book wizbang appear and clear.
+- [x] Unit test: every name from all three Wizard XML files maps to exactly one entry, either a handler or the unhandled list; MSG_PETHATCHREADYSTATUS maps to one order. `GameMessageTableClientTest.EveryWorldMessageHasExactlyOneRuleAndTheEntryChatterIsHandled` reads the three files and GameMessages.xml from the r806919 install, and MSG_PETHATCHREADYSTATUS is one message at order 122 with its two records
+- [x] Unit test: WIZARD message order is the 1-based index in the de-duplicated alphabetical list, with UPDATEMANA=233 and ADDSPELLTOBOOK=10 as fixtures. `GameMessageTableClientTest.WizardOrdersAreThePlacesOfTheirTagsSortedWithoutRepeats` checks every order in WizardMessages.xml against its tag's place and pins both
+- [x] Real client: log in to a zone. The server log shows GETTIMEDACCESSPASSES, GETSUBSCRIBERONLYITEMS, LOGCLIENTRESOLUTION and DONESHOPPING handled with no warnings. The client driver's enter-world run 20260925-114135 waits for each of the four handler lines and passes its checks that no server line outside the allow-list is WARN or worse and that no message was dropped or refused
 
 **Risks**
 
 - The duplicate PETHATCHREADYSTATUS element changes every order after position 122. Only UPDATEMANA was checked against a live capture, so check more high-order messages (for example UPDATEGOLD=231) against a real client.
-- The real response formats for TIMEDACCESSPASSES and SUBSCRIBERONLYITEMS are unknown. An empty Data string is untested.
+- The real response formats for TIMEDACCESSPASSES and SUBSCRIBERONLYITEMS are unknown. An empty Data string is untested. **Resolved on 2026-09-25** from the client's own handlers, read in Ghidra: WizardGraphicalClient::MSG_TimedAccessPasses loads Data into an ActiveTimedAccessPassList and the subscriber handler into a SubscriberOnlyItemsList, each with a SerializerBinary whose flags read no flags word and no envelope, so the replies are those classes empty and raw; an empty string would load nothing, leaving the pass window as it was. The crown handlers read only Failure and TotalCrowns, and the client sets CacheBalanceForCSSegmentation only on its own requests.
 
 ## 4.13 Attach handler server side (WLD-7 part 1)
 
