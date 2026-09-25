@@ -123,7 +123,6 @@ A row that says **before the reset** came from a pull request that was on the re
 
 | ID | Who | Sent as | What is left |
 |---|---|---|---|
-| 17.10 | MeruneFleuruwu | [#7](https://github.com/Justchicoo/Project-Ambrose/pull/7) | Taken as a draft the same day it opened, the first milestone spared out of the phase 17 hold. Both checks run on the contributor's own machine, so nothing here waits on the maintainer |
 | 16.03 | MeruneFleuruwu | [#6](https://github.com/Justchicoo/Project-Ambrose/pull/6) | The scanner is delivered and four checks are earned, two of them re-run by the maintainer on a real install rather than only in a fixture. Size, CRC, HeaderSize and HeaderCRC are right for 3589 of 3589 type 3 and 5 records, and a cached run is 194 seconds down to 1 with a byte-identical .bin. Left: package membership, 3820 of 3825, because `Windows/PatchClient/` is not matched and the manifest files scan themselves in; and four fields no check names, `TarFileName`, `CompressedHeaderSize`, the 40 type 5 WADs and the header fields on plain files |
 | 1.21 | MeruneFleuruwu | [#5](https://github.com/Justchicoo/Project-Ambrose/pull/5) | doc/PATCHING.md now matches what is built and the deliverable line names src/tools/launcher. Left: all three acceptance checks, which watch a real client, one listener seeing no patch connection, one recording what the client does with no `-P`, and one seeing no 'Patch failed' dialog |
 | 5.08 | MeruneFleuruwu | [#4](https://github.com/Justchicoo/Project-Ambrose/pull/4) | The scripts, env.dist and doc/INSTALL.md are delivered and the conf check is earned, verified by running both of them. Left: the check that a clean Ubuntu and a clean Windows machine reach 'ready' on all three apps, which needs those machines. The maintainer added the self-tests and fixed a relative install prefix that resolved against the working directory |
@@ -138,6 +137,7 @@ A row that says **before the reset** came from a pull request that was on the re
 
 | ID | Who | Sent as | What landed |
 |---|---|---|---|
+| 17.10 | MeruneFleuruwu | [#7](https://github.com/Justchicoo/Project-Ambrose/pull/7) | A Prometheus and Grafana stack with three provisioned dashboards and an operations runbook, the first milestone spared out of a held phase. Both checks earned on a real gameserver: live graphs at 28 seconds, all eleven panels drawing |
 | 16.02 | MeruneFleuruwu | [#3](https://github.com/Justchicoo/Project-Ambrose/pull/3) | One manifest read and written as both the client's XML and its binary form, keeping the table order the file declares. All five checks earned, including the env-gated one, which the maintainer ran against a reference XML: 3591 tables, Base 140, PatchClient 97 |
 | 1.12 | MeruneFleuruwu | before the reset | The client's CRC variant proved against the pinned install's own archives, the synthetic header measurement, and a sweep that opens every GameData archive and reads every stored entry |
 | 16.01 | MeruneFleuruwu | before the reset | The client's binary table list read and written byte for byte, proven against a reference list of exactly the size the check names, with all six checks earned |

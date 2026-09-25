@@ -1,0 +1,19 @@
+{
+  "_comment": "Project Ambrose by Imjustchico: Shows message throughput, handler latency, and reload activity.",
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {"datasource": {"type": "prometheus", "uid": "ambrose-prometheus"}, "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}, "id": 1, "title": "Messages handled", "type": "timeseries", "targets": [{"expr": "sum by (service) (rate(ambrose_messages_handled_total[5m]))", "legendFormat": "{{service}}"}]},
+    {"datasource": {"type": "prometheus", "uid": "ambrose-prometheus"}, "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "id": 2, "title": "Handler latency", "type": "timeseries", "targets": [{"expr": "histogram_quantile(0.95, sum by (service, le) (rate(ambrose_message_handle_seconds_bucket[5m])))", "legendFormat": "{{service}} p95"}]},
+    {"datasource": {"type": "prometheus", "uid": "ambrose-prometheus"}, "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}, "id": 3, "title": "Dropped messages", "type": "timeseries", "targets": [{"expr": "sum by (service) (rate(ambrose_messages_dropped_total[5m]))", "legendFormat": "{{service}}"}]},
+    {"datasource": {"type": "prometheus", "uid": "ambrose-prometheus"}, "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}, "id": 4, "title": "Reloads", "type": "timeseries", "targets": [{"expr": "sum by (target) (rate(ambrose_reloads_total[5m]))", "legendFormat": "{{target}}"}]}
+  ],
+  "schemaVersion": 39,
+  "tags": ["ambrose", "performance"],
+  "templating": {"list": []},
+  "time": {"from": "now-30m", "to": "now"},
+  "title": "Ambrose Performance",
+  "uid": "ambrose-performance",
+  "version": 1
+}

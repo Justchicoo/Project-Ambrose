@@ -1,0 +1,12 @@
+# Project Ambrose by Imjustchico
+# Scrapes the gameserver's guarded Prometheus endpoint for the local dashboards.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+scrape_configs:
+  - job_name: ambrose-gameserver
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "host.docker.internal:12343"
+    bearer_token_file: /etc/prometheus/secrets/metrics_token

@@ -1,0 +1,11 @@
+# Project Ambrose by Imjustchico
+# Provisions the local Prometheus data source without storing credentials in Git.
+apiVersion: 1
+datasources:
+  - name: Ambrose Prometheus
+    uid: ambrose-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

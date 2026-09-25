@@ -1,0 +1,19 @@
+{
+  "_comment": "Project Ambrose by Imjustchico: Shows whether the realm is up and how many sessions it currently holds.",
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {"datasource": {"type": "prometheus", "uid": "ambrose-prometheus"}, "fieldConfig": {"defaults": {"unit": "none"}, "overrides": []}, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}, "id": 1, "title": "Sessions", "type": "timeseries", "targets": [{"expr": "ambrose_world_sessions", "legendFormat": "sessions"}]},
+    {"datasource": {"type": "prometheus", "uid": "ambrose-prometheus"}, "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "id": 2, "title": "World tick duration", "type": "timeseries", "targets": [{"expr": "rate(ambrose_world_tick_seconds_sum[5m]) / clamp_min(rate(ambrose_world_tick_seconds_count[5m]), 1)", "legendFormat": "average tick"}]},
+    {"datasource": {"type": "prometheus", "uid": "ambrose-prometheus"}, "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}, "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}, "id": 3, "title": "World ticks", "type": "timeseries", "targets": [{"expr": "rate(ambrose_world_ticks_total[5m])", "legendFormat": "ticks/s"}]},
+    {"datasource": {"type": "prometheus", "uid": "ambrose-prometheus"}, "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}, "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}, "id": 4, "title": "Scrape up", "type": "stat", "targets": [{"expr": "up{job=\"ambrose-gameserver\"}", "legendFormat": "gameserver"}]}
+  ],
+  "schemaVersion": 39,
+  "tags": ["ambrose", "realm"],
+  "templating": {"list": []},
+  "time": {"from": "now-30m", "to": "now"},
+  "title": "Ambrose Realm Overview",
+  "uid": "ambrose-realm-overview",
+  "version": 1
+}
