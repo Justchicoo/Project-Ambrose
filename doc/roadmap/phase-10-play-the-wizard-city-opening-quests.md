@@ -970,7 +970,7 @@ A new wizard can play the first real Wizard City quests end to end, covering off
 
 **Risks**
 
-- Retail goal structure, dialog-key-to-quest mapping and rewards for the committed chain must be reconstructed from observed behavior, not from any other project's data, and may not match retail exactly. An opt-in importer that reads another project's quest data from a copy the user has, into that user's local world database only and never committed, is planned, not yet scheduled.
+- Retail goal structure, dialog-key-to-quest mapping and rewards for the committed chain must be reconstructed from observed behavior, not from any other project's data, and may not match retail exactly. 7.05 imports a CSR package the user kept from an older client into that user's local world database, never committed; an importer for another project's quest data is planned, not yet scheduled.
 - Real zone triggers may reference goals we do not author, leaving gates closed.
 
 ## 10.17 Wizard City chain real-client playthrough (QST-23 part 2)
@@ -1016,7 +1016,7 @@ A new wizard can play the first real Wizard City quests end to end, covering off
 
 **Risks**
 
-- Retail goal structure, dialog-key-to-quest mapping and rewards for the committed chain must be reconstructed from observed behavior, not from any other project's data, and may not match retail exactly. An opt-in importer that reads another project's quest data from a copy the user has, into that user's local world database only and never committed, is planned, not yet scheduled.
+- Retail goal structure, dialog-key-to-quest mapping and rewards for the committed chain must be reconstructed from observed behavior, not from any other project's data, and may not match retail exactly. 7.05 imports a CSR package the user kept from an older client into that user's local world database, never committed; an importer for another project's quest data is planned, not yet scheduled.
 - Real zone triggers may reference goals we do not author, leaving gates closed.
 
 ## 10.18 Quest helper extras (QST-24)

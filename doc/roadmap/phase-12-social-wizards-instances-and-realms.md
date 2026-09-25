@@ -350,6 +350,7 @@ Wizards earn badges, can pick one as the title above their head, and the badge b
 
 - world.badge_template (name, title key, info key, filter, requirements, registry name/value, auto-add, overcount) authored as SQL, because BadgeTemplate files do not appear as roots in Root.wad; badge_template and badge_filter reload live with `.reload badge_template`, keeping the old tables on failure
 - BadgeFilterDescriptions.xml extractor -> world.badge_filter
+- An importer for the badge templates of a CSR package the user kept from an older client, into their local world database only, each row naming the package as its source
 - data/sql/updates/db_characters: character_badge (badge, progress, complete), character_stats.selected_badge
 - GAME BADGES (segmented, with the BadgeInfo/BadgeFilterInfo blobs), SELECT_BADGE handler that updates ClientWizPlayerNameBehavior.m_badgeTitle and broadcasts NEWTITLE
 - WIZARD3 REQUESTNEWBADGE / REQUESTPLAYERBADGE minimal handlers; the leaderboard and reward-loot badge messages are planned as a follow-up milestone in this phase
@@ -360,7 +361,9 @@ Wizards earn badges, can pick one as the title above their head, and the badge b
 **Data sources**
 
 - Root.wad BadgeFilterDescriptions.xml (root BadgeFilterDescriptionList)
-- Root.wad Locale/*.lang badge title keys
+- Root.wad Locale/*.lang badge title keys (Badges, WizardBadges, ClientBadgeNames)
+- Root.wad MagicSchools/*.xml m_secondarySchoolBadgeList
+- Badges in a CSR package the user kept from an older client, for import only
 
 **Database tables**
 
@@ -377,7 +380,7 @@ Wizards earn badges, can pick one as the title above their head, and the badge b
 
 **Risks**
 
-- The badge definitions list is server-side and must be authored clean-room. Where the names and requirements come from is unresolved.
+- The badge definitions list is server-side. Titles, filters and images are client identifiers each install resolves, and requirements are authored, as Server-side content in doc/ARCHITECTURE.md settles.
 - The BADGES segment and blob layout needs capture confirmation. The private sniffer holds decoded BadgeInfoList samples for study only.
 
 ## 12.09 Bank and shared bank (WIZ-23)

@@ -145,7 +145,7 @@ Quests authored as SQL rows load into an immutable sQuestMgr snapshot built on t
 
 **Data sources**
 
-- Authored SQL only (the client has no QuestTemplate data)
+- Authored SQL, since current installs carry no QuestTemplate data; 7.05 imports a CSR package kept from an older client into that user's local world database
 - object_template from QST-3; LocaleStore from QST-1
 
 **Database tables**
@@ -229,6 +229,7 @@ Quest availability, goal activation, dialog entries, spawns and triggers can all
 
 - [ ] refs over WC_Ravenwood lists WC-STRM-C03-003 and KillColossus of WC-BAL-C02-001; WC_Hub lists WC-MAIN-C01-003_Goal0
 - [ ] validate exits nonzero on a misspelled persona and suggests closest object_name
+- [ ] import loads a CSR package's quests into a local world DB, each naming its source; no export into data/sql takes them
 
 ### Detailed spec from QST-22: Quest authoring toolchain and reference index
 
@@ -236,7 +237,7 @@ A contributor can write a new quest as a dated SQL update that uses only keys an
 
 **Deliverables**
 
-- src/tools/questtool: 'validate <sql or db>' runs QuestValidator plus LocaleStore key checks, template-id existence and persona and adjective matching, and prints each resolved key's text locally for review. 'scaffold --title-key QuestTitle_xxxxx --giver <templateId> --lang-stem WizQstNNNNNN' writes a skeleton data/sql/updates/pending_db_world/YYYY_MM_DD_NN.sql with a Prep dialog entry bound to the giver and a persona goal stub. 'refs' builds a local, uncommitted index of quest and goal names referenced by client zone data (ReqHasGoal/ReqHasQuest in triggers.xml and spawnData.xml, GoalComplete_* events), so authored names match what zone triggers expect.
+- src/tools/questtool: 'validate <sql or db>' runs QuestValidator plus LocaleStore key checks, template-id existence and persona and adjective matching, and prints each resolved key's text locally for review. 'scaffold --title-key QuestTitle_xxxxx --giver <templateId> --lang-stem WizQstNNNNNN' writes a skeleton data/sql/updates/pending_db_world/YYYY_MM_DD_NN.sql with a Prep dialog entry bound to the giver and a persona goal stub. 'refs' builds a local, uncommitted index of quest and goal names referenced by client zone data (ReqHasGoal/ReqHasQuest in triggers.xml and spawnData.xml, GoalComplete_* events), so authored names match what zone triggers expect. 'import --package <CSR.wad>' reads the quest templates of a CSR package the user kept from an older client into their own world database only, marking every row with the package as its source, as Server-side content in doc/ARCHITECTURE.md settles; scaffold and every export into data/sql refuse such rows.
 - doc/QuestAuthoring.md: table reference, key-only rule (never paste client text), Prep-first-entry binding rule, persona = object_name rule, bounty adjectives and tally rule, goal-logic patterns, reload loop.
 - apps/codestyle check: reject SQL in data/sql that contains non-key display text in *_key columns.
 
@@ -244,6 +245,7 @@ A contributor can write a new quest as a dated SQL update that uses only keys an
 
 - Zone WADs triggers.xml / spawnData.xml / volumes.xml (3377 zones)
 - Root.wad Locale/*, ObjectData/*
+- QuestData in a CSR package the user kept from an older client, for import only
 
 **Database tables**
 
@@ -256,6 +258,7 @@ A contributor can write a new quest as a dated SQL update that uses only keys an
 - [ ] questtool refs over WizardCity-WC_Ravenwood.wad lists quest WC-STRM-C03-003 and goal KillColossus of WC-BAL-C02-001. Over WizardCity-WC_Hub.wad it lists WC-MAIN-C01-003 / WC-MAIN-C01-003_Goal0.
 - [ ] questtool validate exits nonzero on a fixture with a misspelled persona name and prints the closest object_name.
 - [ ] A contributor following doc/QuestAuthoring.md scaffolds, edits, validates, runs .reload quest_template and accepts the quest in the client, with no server restart.
+- [ ] questtool import over a CSR package loads its quests into a local world database, each row naming the package as its source, and no export into data/sql writes one of them.
 
 **Risks**
 
