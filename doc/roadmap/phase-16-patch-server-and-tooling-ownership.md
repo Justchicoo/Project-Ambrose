@@ -293,8 +293,8 @@ The retail client patches against Ambrose, finds nothing to change on a complete
 
 - [ ] PATCHINGBLOCKED and LOGPATCHCLIENTPATCHTIME registered 'logged in'
 - [ ] -P 0 zones in with no download-package messages
-- [ ] Revision mismatch rejected only with Login.RequireRevision=1
-- [ ] Login.RequireRevision and Patch.Enabled changes apply live
+- [ ] Revision mismatch rejected only with Login.EnforceRevision=1
+- [ ] Login.EnforceRevision and Patch.Enabled changes apply live
 
 ### Detailed spec from PAT-9: Game/login integration switches for patching
 
@@ -302,7 +302,7 @@ Login and game servers behave correctly whether patching is enabled or disabled.
 
 **Deliverables**
 
-- loginserver: accept and log PatchClientID / Revision / DataRevision from MSG_USER_AUTHEN_V3 (and V2/MSG_USER_VALIDATE), and optionally reject a Revision that differs from the patchserver manifest revision (live setting Login.RequireRevision, applied from the next login)
+- loginserver: accept and log PatchClientID / Revision / DataRevision from MSG_USER_AUTHEN_V3 (and V2/MSG_USER_VALIDATE), and optionally reject a Revision that differs from the patchserver manifest revision (live setting Login.EnforceRevision, applied from the next login)
 - gameserver: live setting Patch.Enabled, applied from the next zone transfer; when 0 never send MSG_DOWNLOADPACKAGE / MSG_DOWNLOADPACKAGEELEMENT / MSG_DOWNLOADBROWSER
 - gameserver handlers for client MSG_PATCHINGBLOCKED (log PackageName/ZoneName and keep the player in place) and MSG_LOGPATCHCLIENTPATCHTIME (log only), in game/Handlers/PatchHandler.cpp
 
@@ -318,8 +318,8 @@ Login and game servers behave correctly whether patching is enabled or disabled.
 
 - [ ] Unit: dispatch table has MSG_PATCHINGBLOCKED and MSG_LOGPATCHCLIENTPATCHTIME registered with state 'logged in'
 - [ ] Real client with -P 0 logs in and zones in without the gameserver sending any download-package message (sniffer or server log shows none)
-- [ ] Login with mismatched Revision is rejected with a clear login error only when Login.RequireRevision=1
-- [ ] `.settings set Login.RequireRevision 1` on a running loginserver rejects the next mismatched login without a restart, and setting Patch.Enabled to 0 stops download-package messages from the next zone transfer
+- [ ] Login with mismatched Revision is rejected with a clear login error only when Login.EnforceRevision=1
+- [ ] `.settings set Login.EnforceRevision 1` on a running loginserver rejects the next mismatched login without a restart, and setting Patch.Enabled to 0 stops download-package messages from the next zone transfer
 
 **Risks**
 

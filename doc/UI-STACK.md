@@ -545,9 +545,8 @@ uses is already here, and arrives with the milestone that needs it:
 - **anser 2.3.5** stays for captured output only. 17.76 carries a log line's value runs as typed ranges on the
   record, so 17.07 renders them from data rather than re-lexing text in the browser, which is what keeps the
   terminal and the panel from drifting.
-- 17.98's weekly grid is real markup on a generated ramp, not a heatmap library; the ramp itself is listed
-  under Decisions needed in doc/ROADMAP.md, and until it is settled the grid names its quietest hours in
-  words.
+- 17.98's weekly grid is real markup on a generated ramp, not a heatmap library; the ramp itself is settled
+  under Panel operations in doc/ARCHITECTURE.md, and the grid names its quietest hours in words as well.
 - The number, unit and time formatting doc/DESIGN.md's Type rules describe is one module of ours, mirrored in
   C++ for the terminal, because the platform's own unit list has no binary units and rendering 8,589,934,592
   bytes as 8.59 GB when the operating system says 8 GB is a small lie that costs trust during an incident.
@@ -559,9 +558,9 @@ target-size measurement that walks each dense page under each pointer type; **St
 cannot see, a focused row under sticky chrome, a target under its floor and an authentication field that
 refuses a paste.
 
-Two library-shaped choices these milestones raise are deliberately not settled here and are listed under
-Decisions needed in doc/ROADMAP.md: the one search engine behind 17.80, which is server side rather than front
-end, and what records 17.91's on-demand profile. One is settled outside this document: 17.83 writes crash
+Two library-shaped choices these milestones raise are settled outside this document, under Panel operations in doc/ARCHITECTURE.md:
+the one search engine behind 17.80 is SQLite's FTS5, and 17.91's on-demand profile is a Chrome trace event
+file written with no profiler library. A third is settled outside it too: 17.83 writes crash
 dumps with the operating system's own writer rather than a crash reporting library, and THIRD-PARTY-NOTICES.md
 records why.
 
@@ -622,7 +621,7 @@ These are not settled here. Each needs a decision before the work it blocks.
    colours. Separately, doc/PANEL.md names "amber above 80 percent and red above 90 percent", which are not
    token names; they should read gold and ember, or doc/DESIGN.md should gain those names, or the panel and the
    terminal will drift. The common case barely engages any of this, since most graphs carry one or two series.
-7. **The file editor library is already listed under Decisions needed** as blocking 17.39 and 17.53, and this
-   document proposes CodeMirror 6 with the repository move recorded, without settling it. The QR renderer for
-   two-factor enrollment and the event socket protocol are likewise listed there; partysocket is a client
+7. **The file editor library is settled** under Panel operations in doc/ARCHITECTURE.md as CodeMirror 6, with the
+   repository move recorded here. The QR renderer for two-factor enrollment, qrcode-generator, and the event
+   socket protocol are settled there too; partysocket is a client
    library choice that assumes nothing about the protocol.

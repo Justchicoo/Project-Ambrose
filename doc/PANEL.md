@@ -60,7 +60,7 @@ The supervisor keeps one SQLite file in WAL mode in the Ambrose data folder. It 
 - launch settings, database host records and panel settings;
 - alert rules, alert history and downsampled graph history.
 
-Times are UTC Unix milliseconds in `INTEGER` columns. What is settled about cryptography is narrower than what the panel needs: Botan 3 is the project's library, covering SHA-2, Twofish and the random number generator under Decisions, Stack; Botan's Argon2id hashes panel passwords under Decisions, Operations, libsodium having been dropped on 2026-09-22 because its port needs autotools a clean Linux machine lacks; and AES-256-GCM is the cipher Decisions, Accounts and the console already uses for `login.account.verifier`. What this design proposes is that the panel adds no third library, so its sealing and its keyed hashes come from Botan while libsodium stays at Argon2id. Whether Botan's entry grows to name a cipher and a keyed hash, or libsodium widens instead, is a proposal listed under Decisions needed in doc/ROADMAP.md, and no milestone treats it as settled. Under that proposal, secrets the supervisor must use again, such as TOTP secrets, SMTP and S3 credentials and database host passwords, are sealed with AES-256-GCM under a supervisor key, with a key id on each row so keys rotate the way `Account.VerifierKeys` does; whether that key lives in a keyring file separate from the store, and where it lives on each platform, is another proposal in doc/ROADMAP.md. Secrets that are only checked, such as passwords, API key secrets, session ids, invite tokens and recovery codes, are stored only as hashes, keyed where the value is random enough to be found by direct lookup. Schema changes to the store use the same dated update files as the game databases, applied by the supervisor at start.
+Times are UTC Unix milliseconds in `INTEGER` columns. Cryptography is Botan's alone, as Decisions, Stack and Panel operations in doc/ARCHITECTURE.md settle: Argon2id hashes panel passwords, libsodium having been dropped on 2026-09-22 because its port needs autotools a clean Linux machine lacks; AES-256-GCM seals every secret the supervisor must use again, such as TOTP secrets, SMTP and S3 credentials and database host passwords; HMAC-SHA-256 keys the hashes that are found by lookup; and HKDF-SHA-256 derives a key per purpose. Sealed rows carry the id of the key that sealed them, so keys rotate the way `Account.VerifierKeys` does, and the keys live in a keyring file separate from the store, whose place on each platform the same entry gives. Secrets that are only checked, such as passwords, API key secrets, session ids, invite tokens and recovery codes, are stored only as hashes, keyed where the value is random enough to be found by direct lookup. Schema changes to the store use the same dated update files as the game databases, applied by the supervisor at start.
 
 The store is included in backups as the `panel` component (see Backups and restore) and is never restored implicitly.
 
@@ -81,7 +81,7 @@ The panel follows the Live reload and live settings rule. Every panel option, su
 Panel users are operators, separate from game accounts in `login.account`. A panel user can be linked to a game account (see Account page).
 
 - `panel_user`: id, uuid, username (the game-account username rules: up to 32 ASCII letters, digits, `_`, `-` and `.`, unique regardless of case), display name, optional email (unique when set), password hash, disabled flag, `password_changed_at`, `session_generation`, TOTP state, created, last sign-in time and address, locale, theme and linked game account id.
-- Passwords use libsodium `crypto_pwhash_str` (Argon2id), as settled under Decisions, Operations, with its limits as bounded settings, and are rehashed at the next sign-in when the limits change.
+- Passwords use Botan's Argon2id, as settled under Decisions, Operations, with its limits as bounded settings, and are rehashed at the next sign-in when the limits change.
 - One password policy applies on every path, self-service, admin, console and API: at least 12 bytes by default, at most 128 bytes to match the game password limit.
 - A disabled user cannot sign in, and disabling ends their sessions. Deleting is separate and cascades to grants, keys and sessions.
 - The last owner can never be deleted, disabled or demoted, and nobody can raise their own role or edit their own grants.
@@ -106,7 +106,7 @@ Throttling reuses the 17.02 token bucket at three levels: per address (an IPv6 c
 - Disabling needs the password and a current code or recovery code, deletes the secret and the recovery codes, and ends every other session.
 - Recovery codes: 10 codes of 10 Crockford base32 characters, grouped for typing and read case-insensitively. They are random, so each is stored as a keyed hash under a supervisor key, which allows a direct lookup instead of a loop over every stored code; which library provides that keyed hash is the crypto proposal described under Store. A used code records its time; the account page shows how many remain and can regenerate them with the password and a code.
 - `Panel.TwoFactorRequired` is none, holders of a danger permission and owners and admins, or everyone. When two-factor is required and missing, every API route and the socket answer 403 with the code `two_factor_required`, except the sign-in, account security and enrollment routes, and the panel sends the user to enrollment. Enforcement lands with two-factor sign-in itself in 17.47; 17.35's settings page only shows the key with the layer that locks it.
-- Security keys and passkeys through WebAuthn are an opt-in second factor or passwordless sign-in (17.45). They need a secure context, which localhost is and a TLS panel is, so the listener's bind rule already makes that the normal case. The WebAuthn implementation is a proposal in doc/ROADMAP.md.
+- Security keys and passkeys through WebAuthn are an opt-in second factor or passwordless sign-in (17.45). They need a secure context, which localhost is and a TLS panel is, so the listener's bind rule already makes that the normal case. The panel verifies WebAuthn itself over Botan, as Panel operations in doc/ARCHITECTURE.md settles.
 
 ### Sessions
 
@@ -131,9 +131,9 @@ Email is optional. The baseline, which always works, is an admin action that iss
 
 ### Scopes
 
-What is settled, under Decisions, Operations in doc/ARCHITECTURE.md, is roles plus per-app grants in the style of sub-users. Until the maintainer settles more, every grant, route and acceptance check in phase 17 stays at that app scope.
+What is settled, under Decisions, Operations in doc/ARCHITECTURE.md, is roles plus per-app grants in the style of sub-users. The wider scope tree below is settled too, under Panel operations in doc/ARCHITECTURE.md, and until the milestones that build nodes, clusters and realms land, app scope is the only one a grant can name.
 
-A wider scope tree is a proposal listed under Decisions needed in doc/ROADMAP.md, because it decides how realms, clusters and nodes are addressed at all. If it lands, a grant applies at a scope and to everything below it, from widest to narrowest:
+The scope tree decides how realms, clusters and nodes are addressed at all. A grant applies at a scope and to everything below it, from widest to narrowest:
 
 | Scope | Holds |
 |---|---|
@@ -147,7 +147,7 @@ Characters are stored in the shared `characters` database, as Decisions, Charact
 
 ### Roles
 
-Roles are named permission bundles resolved on the server, and they are edited live: a change builds a new resolution table, swaps it in and bumps the session generation of every affected user. 17.50 keeps them as rows built from the catalog rather than bundles compiled into the binary, with a roles page where an owner adds or edits a custom role, so the five below are rows like any other. The bundles below and the owner-only set are proposed together with the scope tree in doc/ROADMAP.md.
+Roles are named permission bundles resolved on the server, and they are edited live: a change builds a new resolution table, swaps it in and bumps the session generation of every affected user. 17.50 keeps them as rows built from the catalog rather than bundles compiled into the binary, with a roles page where an owner adds or edits a custom role, so the five below are rows like any other. The bundles below are the five 17.48 built, and they and the owner-only set are settled with the scope tree under Panel operations in doc/ARCHITECTURE.md.
 
 | Role | Holds |
 |---|---|
@@ -163,7 +163,7 @@ A user's effective permissions at a scope are the union of their role and every 
 
 ### Permission catalog
 
-The catalog is one C++ table of groups, keys, descriptions, a structured danger flag, the scope types each key may be granted at, and default role membership. The panel serves it at `GET /api/panel/permissions`, the Svelte UI renders the grant editor from it, and the route registry checks every route against it when routes register. Renaming a key goes through a mapping that drops unknown names rather than granting something wider. The catalog is built in 17.48, and its Scopes column below belongs to the scope tree proposal; today every key is granted at app scope.
+The catalog is one C++ table of groups, keys, descriptions, a structured danger flag, the scope types each key may be granted at, and default role membership. The panel serves it at `GET /api/panel/permissions`, the Svelte UI renders the grant editor from it, and the route registry checks every route against it when routes register. Renaming a key goes through a mapping that drops unknown names rather than granting something wider. The catalog is built in 17.48, and its Scopes column below is where each key may be granted once the scope tree's milestones land; today every key is granted at app scope.
 
 | Group | Keys | Scopes |
 |---|---|---|
@@ -283,7 +283,7 @@ Namespaces: `auth` (sign-in, lockout, second factor, recovery code, sign-out, se
 
 ## Event socket
 
-The panel has one WebSocket, `/api/panel/events`, for console output, status, stats, progress of long operations, audit rows and alerts. Its envelope, tickets and generated types are 17.26, its subscriptions and live permission filtering 17.57, and its limits, supervisor fan-out and the move of the existing live pages onto it 17.58. The protocol itself, with its message types and close codes, is a proposal listed under Decisions needed in doc/ROADMAP.md. Each app keeps its own `/api/logs` and `/api/events` sockets (17.04, 17.12), which only the supervisor subscribes to; both sit on the one stream layer with sequence numbers, a bounded backlog and resume that 17.04 builds, so no milestone writes a second copy of it.
+The panel has one WebSocket, `/api/panel/events`, for console output, status, stats, progress of long operations, audit rows and alerts. Its envelope, tickets and generated types are 17.26, its subscriptions and live permission filtering 17.57, and its limits, supervisor fan-out and the move of the existing live pages onto it 17.58. The protocol below, with its message types and close codes, is settled under Panel operations in doc/ARCHITECTURE.md. Each app keeps its own `/api/logs` and `/api/events` sockets (17.04, 17.12), which only the supervisor subscribes to; both sit on the one stream layer with sequence numbers, a bounded backlog and resume that 17.04 builds, so no milestone writes a second copy of it.
 
 ### Connection
 
@@ -511,7 +511,7 @@ Run now returns 202 with a run id and never runs a task inside the HTTP request.
 
 ### Countdown notices
 
-On the gameserver, countdown announcements go through the zone broadcast from 6.01 and GM system messages from 6.04. On the loginserver, MSG_LOGINSERVERSHUTDOWN closes the connection as it is shown, as 2.15 confirmed with the retail client, so it can serve only as the final notice. Earlier login-screen warnings need a notice message that does not disconnect, found by capture or client reverse engineering, which is a proposal in doc/ROADMAP.md. Until one is found, 17.15 sends only the final notice on the login server and earlier warnings go to players in the world.
+On the gameserver, countdown announcements go through the zone broadcast from 6.01 and GM system messages from 6.04. On the loginserver, MSG_LOGINSERVERSHUTDOWN closes the connection as it is shown, as 2.15 confirmed with the retail client, so it can serve only as the final notice. So 17.15 sends only the final notice on the login server and earlier warnings go to players in the world, as Panel operations in doc/ARCHITECTURE.md settles; a login-screen notice that does not disconnect is adopted if capture or client reverse engineering finds one.
 
 ### Page
 
@@ -529,7 +529,7 @@ The schedules page (17.68) lists name, targets, a plain-language trigger ("every
 
 A backup (17.16) covers one installation, the supervisor or one node, because the login and characters databases are shared by every realm. It lists named components: `db:login`, `db:characters`, `db:world`, a database per module when a module adds one, `config` (each app's `.conf` and `conf.d`), `data` (the Ambrose data folder), `types` (type dumps), `panel` (the supervisor store), and optionally `logs`, `audit` and `patch` (off by default, since they can be rebuilt from the user's install). Each component has include and exclude patterns. Restore groups the panel enforces: player data (login and characters together), content (world with its live edit journal), config, client data, and the panel store, which is never restored implicitly.
 
-The `types` component, and the extracted data inside `data`, are built from the operator's own client install, so the bring-your-own-files rule under Decisions, Experimental features applies to every archive: the contents list names each component and its byte count, no component carries a client file the operator did not place in a backed-up folder, and off-machine storage (17.43) is a bucket the operator controls, never a public host. An archive also holds `login.account.verifier` rows and the config that holds `Account.VerifierKeys`, so it is as sensitive as a password file: file permissions, a step-up download ticket and `Backups.Encrypt` (17.72), off by default, which seals the archive with AES-256-GCM under a key in the supervisor's keyring, as Store describes. Whether sealing becomes the default rather than opt-in, and whether dumps become structured rows through prepared inserts rather than SQL text, are proposals listed under Decisions needed in doc/ROADMAP.md.
+The `types` component, and the extracted data inside `data`, are built from the operator's own client install, so the bring-your-own-files rule under Decisions, Experimental features applies to every archive: the contents list names each component and its byte count, no component carries a client file the operator did not place in a backed-up folder, and off-machine storage (17.43) is a bucket the operator controls, never a public host. An archive also holds `login.account.verifier` rows and the config that holds `Account.VerifierKeys`, so it is as sensitive as a password file: file permissions, a step-up download ticket and `Backups.Encrypt` (17.72), on by default, which seals the archive with AES-256-GCM under a key in the supervisor's keyring, as Store describes. Databases are dumped as structured rows restored through prepared inserts, never as SQL text, both as Panel operations in doc/ARCHITECTURE.md settles.
 
 ### Records
 
@@ -602,7 +602,7 @@ The supervisor store, its keys, admin token files, TLS keys, any SFTP host key a
 
 A root marked client-derived refuses download, archive, extraction targets, share links, SFTP and remote pull for every caller whatever their permissions, an owner included, and the refusal names the root. It refuses an editor read and a preview as well, since both hand a file's bytes to a browser, so no panel response ever carries a client file's bytes: what the panel shows about such a root is the listing and the metadata the client data page reads at runtime (17.20). That is the bring-your-own-files rule under Decisions, Experimental features: Ambrose hosts, mirrors and redistributes nothing it does not own, and a remote panel must not become a way to pull WADs off the operator's machine.
 
-An owner can define extra roots of their own (17.56) with the same policy fields, including the client-derived flag. A root is refused when its path holds the supervisor's store, its keys, token files or TLS keys, when it overlaps an existing root, when the path is a link, or when the service user cannot open it. Grants over an extra root use the same `files.*` keys at app scope; node-scoped roots follow 17.22, and wider scopes wait for the scope tree proposal.
+An owner can define extra roots of their own (17.56) with the same policy fields, including the client-derived flag. A root is refused when its path holds the supervisor's store, its keys, token files or TLS keys, when it overlaps an existing root, when the path is a link, or when the service user cannot open it. Grants over an extra root use the same `files.*` keys at app scope; node-scoped roots follow 17.22, and wider scopes follow the scope tree as its milestones land.
 
 ### Jail
 
@@ -643,7 +643,7 @@ Signed links for browser-native downloads and uploads are an HMAC over scope, us
 
 ### Editor
 
-The editor (17.53) uses the library the maintainer chooses; CodeMirror 6 is the proposal in doc/ROADMAP.md, as are the archive library for extraction, the default archive format for folder downloads, and the trash and version store locations with their retention defaults. It offers Ctrl+S, an unsaved-changes guard, drafts per node, root and path in session storage, the conflict diff, a version history with restore, and an apply-live button. Modes are detected by file name first, then extension, with a manual override: an Ambrose `.conf` mode with key completion, type, bound and default hovers and unknown-key warnings from the settings schema; SQL in the MySQL and MariaDB dialect; JSON with a tree viewer for large type dumps; XML; Lua; logs with level colors and follow; INI, YAML, Dockerfile, shell, PowerShell, batch, Markdown, CSV and plain text.
+The editor (17.53) is CodeMirror 6, and the archive library, the default archive format for folder downloads, and the trash and version store locations with their retention defaults are settled under Panel operations in doc/ARCHITECTURE.md. It offers Ctrl+S, an unsaved-changes guard, drafts per node, root and path in session storage, the conflict diff, a version history with restore, and an apply-live button. Modes are detected by file name first, then extension, with a manual override: an Ambrose `.conf` mode with key completion, type, bound and default hovers and unknown-key warnings from the settings schema; SQL in the MySQL and MariaDB dialect; JSON with a tree viewer for large type dumps; XML; Lua; logs with level colors and follow; INI, YAML, Dockerfile, shell, PowerShell, batch, Markdown, CSV and plain text.
 
 ### From Pterodactyl
 
@@ -711,7 +711,7 @@ A node (17.22) is a machine running the supervisor in node mode. On first start 
 
 ### Heartbeat
 
-Each node pushes a heartbeat over its link at a set interval with its build, uptime, per-app state and exit codes, CPU, memory, handles, disk, sessions, players, tick times, settings generation, last reload result, client revision and type dump revision. Missing a set number of heartbeats marks it offline; it shows online within 10 seconds of the link returning. A node that loses the panel keeps its apps running, keeps its own schedules on time, buffers audit rows and run results, and resyncs when the link returns. Whether a node's schedules run on the node from replicated definitions or centrally on the panel is a proposal in doc/ROADMAP.md. The browser only ever talks to the panel, which relays console, logs, files, backups, schedules, graphs and power actions under the signed-in user's permissions.
+Each node pushes a heartbeat over its link at a set interval with its build, uptime, per-app state and exit codes, CPU, memory, handles, disk, sessions, players, tick times, settings generation, last reload result, client revision and type dump revision. Missing a set number of heartbeats marks it offline; it shows online within 10 seconds of the link returning. A node that loses the panel keeps its apps running, keeps its own schedules on time, buffers audit rows and run results, and resyncs when the link returns. A schedule whose targets are all on one node runs on that node from definitions the panel replicates, and one whose targets span nodes runs on the panel, as Panel operations in doc/ARCHITECTURE.md settles. The browser only ever talks to the panel, which relays console, logs, files, backups, schedules, graphs and power actions under the signed-in user's permissions.
 
 ### Moves
 
@@ -758,7 +758,7 @@ The realms page (17.31) lists every row of `realmlist` from 4.03: name (its Real
 - A realm page shows population over time, players at character select headed there, the zones the realm has loaded from `sZoneMgr` (4.09) with players and instances per zone, and, once 12.17 lands, public instances with their capacity.
 - Zone actions, each audited and checked: reload a zone's data through 4.15, and teleport or kick everyone in a zone once 6.06 and 6.05 exist.
 
-Realm maintenance (17.32) closes a realm to players while game masters at or above `Realm.MaintenanceBypassLevel`, whose default is a proposal in doc/ROADMAP.md, can still enter. Entering maintenance can run a countdown, kicks connected players with a notice, sets the realm list flag so the login server stops sending players there, and records who and why. A node in maintenance can put its realms into maintenance.
+Realm maintenance (17.32) closes a realm to players while game masters at or above `Realm.MaintenanceBypassLevel`, game master (2) by default, can still enter. Entering maintenance can run a countdown, kicks connected players with a notice, sets the realm list flag so the login server stops sending players there, and records who and why. A node in maintenance can put its realms into maintenance.
 
 ### Players online
 
@@ -781,7 +781,7 @@ Operators should not have to type console commands to make a player an account, 
 - Throttles run per address, per account and per email domain through the listener's limiter, the 17.35 captcha applies after repeated attempts, and mails per address per day are capped. Every registration, verification, reset request and reset is audited with the client address, and no response tells a stranger whether a username or email exists.
 - An operator page lists recent registrations with their verification state, resend and block, behind `accounts.read` and `accounts.registration`.
 
-Whether the panel offers player registration at all, and with which requirements, is a proposal listed under Decisions needed in doc/ROADMAP.md.
+Player registration is offered, off by default, on these terms, as Panel operations in doc/ARCHITECTURE.md settles.
 
 ### Moderation
 
@@ -807,7 +807,7 @@ The world edits page (17.34) is a typed editor over the content tables the game 
 
 - Rows are browsed with search and filters, and each table's form comes from a schema the game server publishes with types, bounds and references, so a foreign key is picked from its table.
 - An edit is sent to the game server, which applies it to the world database, records it in the 4.15 world edit journal with the panel user as author, and reloads the affected store, reporting the reload result. A group of edits applies as one change set and reloads together.
-- The page shows the journal with who, when, source (the panel or a GM command such as `.npc add`) and statement, and exports selected entries as a local-only SQL file into `data/sql/custom/db_world`, the tree doc/ARCHITECTURE.md sanctions for local SQL, the way `.journal export` does. A request naming any other folder is refused. `pending_db_<name>/` belongs to open pull requests, and its naming is an open decision that blocks 3.19, so a running panel never writes there.
+- The page shows the journal with who, when, source (the panel or a GM command such as `.npc add`) and statement, and exports selected entries as a local-only SQL file into `data/sql/custom/db_world`, the tree doc/ARCHITECTURE.md sanctions for local SQL, the way `.journal export` does. A request naming any other folder is refused. `pending_db_<name>/` belongs to open pull requests, as Content, SQL and releases in doc/ARCHITECTURE.md settles, so a running panel never writes there.
 - A failed reload rolls back the database change and keeps the previous store serving.
 
 ### Database management
@@ -823,7 +823,7 @@ Database hosts (17.30) extend it:
 
 - A registry of database servers with host, port, administrative user, sealed password, TLS mode, node affinity and server version, auto-registering the private MariaDB from 17.24. A connection, version and privilege test runs before a host is saved, and a failure saves nothing.
 - The panel creates least-privilege users: one runtime user per app with only data access to its databases, and a separate updater user with schema rights used only by the 2.06 updater, with host restrictions and a connection limit sized from the app's worker and synchronous threads. Identifiers come from an allow list and are quoted, never taken from free text.
-- Credential rotation causes no downtime. On MySQL 8.0.14 and later, the new password is added while the old is retained, the app's connection setting is changed through the live settings path so its pool opens a new generation and swaps (keeping the old generation on failure, as Decisions, Database pools settles), and then the old password is discarded. On MariaDB, which has no dual passwords, a second user with the same grants is created, the pool swaps to it, and the old user is dropped. Revealing a password needs `database.secrets.read` and a step-up check, and every test, create, rotation and reveal is audited. Rotation per server type, and whether a realm ever gets its own world database, are proposals in doc/ROADMAP.md.
+- Credential rotation causes no downtime. On MySQL 8.0.14 and later, the new password is added while the old is retained, the app's connection setting is changed through the live settings path so its pool opens a new generation and swaps (keeping the old generation on failure, as Decisions, Database pools settles), and then the old password is discarded. On MariaDB, which has no dual passwords, a second user with the same grants is created, the pool swaps to it, and the old user is dropped. Revealing a password needs `database.secrets.read` and a step-up check, and every test, create, rotation and reveal is audited. Rotation per server type is settled this way under Panel operations in doc/ARCHITECTURE.md, and a realm may be given its own world database, opt-in.
 - The group has no export key of its own. A single database's contents leave the machine one way only: as a backup component taken by 17.16 and fetched through `backups.download` with the recent step-up check and the audit row 17.52 requires, so there is one audited path instead of two.
 
 ### Announcements and events
@@ -839,7 +839,7 @@ Timed game events are scheduled groups of setting changes with an automatic reve
 
 Realm maintenance (17.32) closes one realm. Closing the whole installation for database work, while game masters can still sign in and check it, is `Login.Maintenance` (17.64), a live setting through 17.12.
 
-- 2.14's authentication answers with the maintenance reason the client shows, and the realm list offers players nothing. Accounts at or above `Login.MaintenanceBypassLevel` sign in normally; its default, like the realm bypass level, is a proposal in doc/ROADMAP.md.
+- 2.14's authentication answers with the maintenance reason the client shows, and the realm list offers players nothing. Accounts at or above `Login.MaintenanceBypassLevel` sign in normally; its default, like the realm bypass level, is game master (2).
 - The panel shows a banner and the control with who, why, when it started and an optional window, audited, and publishes the window to the public status page.
 - Maintenance survives a loginserver restart while it is on and leaves players already in the world connected, unless the operator also closes their realms through 17.32.
 - A schedule task enters and leaves maintenance, so a database window is planned like any other job.
@@ -849,7 +849,7 @@ Realm maintenance (17.32) closes one realm. Closing the whole installation for d
 The patchserver has a page of its own (17.65) over the 16.03 manifest: the revisions the patch output holds with their file counts, bytes and build times, which one is being served, and the last generator run with its live output.
 
 - Publishing a revision runs the generator against a chosen install, validates the output, then swaps the served manifest through 16.08's reload so downloads in flight keep the old file set, with a rollback to the previous revision.
-- The operator's own signing key lives here: generated or imported, its public part and fingerprint shown, rotated with an overlap window, its private part sealed with the supervisor's key, never in a response, and exportable only by an owner after a step-up check. Where that key lives and how it rotates is a proposal in doc/ROADMAP.md.
+- The operator's own signing key lives here: generated or imported, its public part and fingerprint shown, rotated with an overlap window, its private part sealed with the supervisor's key, never in a response, and exportable only by an owner after a step-up check. The key is Ed25519, kept in the supervisor's keyring and rotated with an overlap window, as Panel operations in doc/ARCHITECTURE.md settles.
 - That key is what Decisions, Experimental features requires before the patchserver serves an executable: a component whose signature does not verify is refused, naming the key it expected.
 - Publishing and the key routes are owner-only, and every publish, swap, rollback, generation and rotation is audited. No route here returns a file from outside the patch output root, nothing is published that the operator did not build or place themselves, and the patch output root is client-derived, so the panel neither downloads nor archives it.
 
@@ -869,7 +869,7 @@ The account page (17.38) has Profile (display name, email, locale, theme), Secur
 
 - Changing email needs the password and a fresh second-factor check, is limited per day per user, and, when SMTP is configured, confirms the new address by link and notifies the old one.
 - Linking a game account needs proof of ownership: that account's password, or a one-time code typed in game once 6.04 exists. The linked account's security level then caps console commands, and role changes that follow the level apply on the next request.
-- Two-factor enrollment renders its QR code in the browser from a renderer bundled with the dashboard, never fetched from another host, and the page's CSP would block one; which renderer is a proposal in doc/ROADMAP.md.
+- Two-factor enrollment renders its QR code in the browser from a renderer bundled with the dashboard, never fetched from another host, and the page's CSP would block one; the renderer is qrcode-generator, as Panel operations in doc/ARCHITECTURE.md settles.
 - Show-once dialogs for keys and recovery codes cannot be dismissed from outside and offer copy and download as text. Buttons stay disabled until the form is valid, with the reason shown, and errors show inline beside the form that caused them.
 
 ## Panel settings
@@ -927,6 +927,6 @@ A top bar holds a realm and app switcher, a global search across accounts, chara
 - The Pterodactyl egg (17.23) is for operators who already run Pterodactyl. It uses Wings' contract: the ready lifecycle line as the startup done string, `shutdown` as the stop command so Wings does not count the exit as a crash, and plain log lines when output is redirected.
 - The desktop app (17.24) installs Ambrose, starts the supervisor, the private database and the client, and opens the panel through a fresh one-time owner link bound to the local machine (17.46), so a player hosting on their own computer never types a panel password.
 
-## Open decisions
+## Decisions
 
-Nothing here is settled by being written in this document. Every choice this design proposes is listed under Decisions needed in doc/ROADMAP.md, which is where decisions that block milestones live: the maintainer settles each one, doc/ARCHITECTURE.md records it under Decisions, and the roadmap entry says which milestones it blocks. Each section above marks its own proposals where they matter and points here, so this document keeps no second list of them to fall out of date, and no milestone may treat a choice as settled because it appears in this file.
+Every choice this design proposed was settled on 2026-09-25 and is recorded under Decisions in doc/ARCHITECTURE.md, chiefly Panel operations, Time zones and Content, SQL and releases. Nothing is settled by being written in this document: a new choice this design proposes is listed under Decisions needed in doc/ROADMAP.md until the maintainer settles it, and no milestone may treat a choice as settled because it appears in this file.

@@ -21,7 +21,7 @@ A change on this track touches only these paths:
 | `contrib/notes/` | Longer research writing that is not one claim: a survey, a walkthrough of a system, a summary of what you tried |
 | `contrib/proposals/` | A proposal for something in the phases, as a document. The maintainer folds an accepted one into the roadmap; you never edit a phase file yourself |
 | `apps/clientdriver/scenarios/` | Scenarios for the client driver, which are data, not code |
-| `data/sql/updates/pending_db_world/` | World rows you authored yourself, such as a table of door destinations, as a dated update file that the maintainer moves into `data/sql/updates/db_world/` when it is merged |
+| `data/sql/updates/pending_db_world/` | World rows you authored yourself, such as a table of door destinations, as a pending update file named `rev_<unix seconds>_<short-name>.sql`, which is renamed into `data/sql/updates/db_world/` when it is merged |
 | `data/fuzz/` | Seed inputs for the fuzzers that already exist |
 | `doc/guides/` | Guides: running on a distribution, a graphics card, a language, a setup that needed a workaround |
 | `contrib/locale/` | Translations of Ambrose's own text, never the game's |

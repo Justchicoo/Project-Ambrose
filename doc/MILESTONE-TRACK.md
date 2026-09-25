@@ -115,7 +115,7 @@ Everything not in the table above, including every milestone whose dependencies 
 | 16.11 | Overlaps the type extraction already built in 3.21 and is being rethought |
 | 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal, and nothing else left to build |
 | 3.26 | Unblocked by the design system landing, and next in the maintainer's own queue after the terminal dashboard |
-| 17.47 | Kept for the maintainer's panel session: two-factor sign-in touches the store's secrets, which is still an open decision |
+| 17.47 | Kept for the maintainer's panel session, beside the roles it builds on |
 
 ## In flight
 

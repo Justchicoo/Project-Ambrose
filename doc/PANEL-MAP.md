@@ -43,7 +43,7 @@ Each row names one behavior, the phase 17 milestone that covers it in Ambrose, o
 | Re-fetching setup rotating a scanned secret | 17.38 | Pending secret kept apart from the active one |
 | Confirmation token not consumed on a failed checkpoint | 17.47 | Challenge dies after a set number of attempts |
 | Recovery tokens: 10, shown once, single use | 17.47, 17.38 | Kept, as keyed hashes found by lookup, with a count left and regeneration |
-| Recovery tokens stored as salted bcrypt requiring a loop | 17.47 | Keyed hash under a supervisor key, found by direct lookup; which library provides it is an open decision |
+| Recovery tokens stored as salted bcrypt requiring a loop | 17.47 | Keyed hash under a supervisor key, found by direct lookup: Botan's HMAC-SHA-256, as Panel operations in doc/ARCHITECTURE.md settles |
 | Case-sensitive recovery codes with no grouping | 17.47 | Crockford base32, grouped, case-insensitive |
 | Security keys and WebAuthn (absent) | 17.45 | Opt-in security keys and passkeys |
 | Session cookie flags and encrypted cookies | 17.14 | HttpOnly, SameSite=Strict, Secure and `__Host-` under TLS |
@@ -338,7 +338,7 @@ Each row names one behavior, the phase 17 milestone that covers it in Ambrose, o
 | Backup UI: list, create modal, context menu, restore dialog | 17.16, 17.51 | Restore wizard with typed confirmation |
 | Trash button on failed backups not permission-gated | 17.52 | Every control gated |
 | A restore checked against the dump's own record (absent) | 17.16, 17.51 | Per-table row counts and checksums taken inside the dump transaction, compared by the restore report |
-| Archive encryption (absent) | 17.72 | Opt-in `Backups.Encrypt`; whether it becomes the default is an open decision |
+| Archive encryption (absent) | 17.72 | `Backups.Encrypt`, on by default, as Panel operations in doc/ARCHITECTURE.md settles |
 
 ## File management
 

@@ -133,7 +133,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Sizes.** A size is read off the milestone's own content, so a label can be checked against the text: S is at most 4 deliverables and at most 5 acceptance checks, L is 8 or more deliverables or 8 or more acceptance checks, and M is everything between. Two milestones carry L on judgment instead of count, 17.24 because it installs and runs on two desktop operating systems and 17.51 because it is one operation from end to end, and the Oversized note names both with the rest. Recounting moved sizes that were already published, without touching any id: 17.01 and 17.07 to S, 17.03, 17.04 and 17.12 to M, and 17.06, 17.14, 17.15 and 17.16 to L. Of the milestones added later, 17.50 moved to M with its roles page, 17.64 to M on its count, 17.106 carries L on its eight deliverables, 17.107 carries M on six deliverables and six checks, and of the three plugin milestones added on 2026-09-23, 17.109 carries M while 17.110 carries L on its nine acceptance checks and 17.111 on its ten deliverables. Of the thirty-one added on 2026-09-18, the thirteen marked S each carry at most 4 deliverables and at most 5 checks, and none of the eighteen marked M reaches 8 of either, so nothing new is large and the Oversized note's list of nine stands as it is. Where a 2026-09-18 deliverable was added to a milestone that already existed, it was folded into a deliverable already there wherever a new bullet would have changed that milestone's size, which is why 17.21 and 17.70 gained a clause rather than a line.
 - **Oversized.** The large milestones are the twelve carrying L: 17.110 the frame a panel tool runs in and 17.111 plugins shipping with the panel, and 17.06 dashboard app and overview page, 17.14 panel listener and audit store, 17.15 schedules, 17.16 backups, 17.18 file roots and the path jail, 17.22 nodes, 17.24 desktop control app, 17.51 backup restore, 17.73 the design system and 17.106 error reports. No other milestone in this phase is large. Split 17.106 along these lines if a focused stretch cannot finish it: the source location on every record with its grouping, and the errors page with its report file. Split 17.73 along these lines if a focused stretch cannot finish it: the token pipeline with its generator and gates, and the component set with its gallery and tests. Split any of them again if a focused stretch cannot finish it, along these lines: 17.14 into the listener with its TLS and the sessions, limiter and audit store; 17.15 into the engine with its triggers and the tasks with their completion and countdowns; 17.16 into the dumps with their snapshot record and the archive with its verification; 17.06 into the app shell with its route table and the overview cards; 17.18 into the jail with its roots and the listing and reading page; 17.22 into the join with its heartbeat and the nodes page with placement.
 - **Gated checks.** A check that needs the maintainer's own machine, a second machine, a security key, a desktop SFTP client, a Pterodactyl install or a retail client session is marked `Dev-gated:` with what it needs, the form phase 16 already uses; a check an environment variable turns on is marked `Env-gated` with that variable, as the Tests section of doc/ARCHITECTURE.md describes. doc/ROADMAP.md's Where we are paragraph lists the phase 17 checks that wait for the maintainer.
-- **Proposals.** doc/PANEL.md proposes the choices this phase rests on, and doc/ROADMAP.md lists every one of them under Decisions needed with the milestones it blocks. Twenty-one are open. Four have been settled: on 2026-09-22, when 17.14 built it, whether the admin API's remote-access rule extends to the panel's own listener, which it does, under Panel option names; and on 2026-09-25 the time zone data source, which is the platform's own database, with the distribution's tzdata in the image, under Time zones in doc/ARCHITECTURE.md; and the same day the command security level cap on `console.write` and what records an on-demand profile of the world tick, under Panel operations. The rest: the scope tree with its default role bundles; the keyring for the supervisor's sealed secrets; whether the panel's ciphers and keyed hashes stay inside the Botan stack, which since 2026-09-22 also hashes panel passwords, or a second library is brought in; the event socket protocol with its close codes; backup archive encryption as a default and whether dumps are structured rows rather than SQL text; the S3 client; the login-screen countdown notice; whether a node's schedules run on the node or centrally; the file editor and archive libraries with the default archive format; whether SFTP access and remote file pull are built at all, and the SSH library; the WebAuthn implementation; the QR renderer; the trash and version store locations; database credential rotation per server type; the realm and installation maintenance bypass levels; whether the panel may export world edits into a pending SQL tree; whether the panel offers player registration; where the operator's patch signing key lives; the sequential ramp for a heatmap or a density grid; the one search engine behind the log, activity and chat searches; the declarative installation file's format. Nothing here settles any of them, each milestone's text names the ones it rests on as proposals, and no check assumes one. Until the scope tree is settled, grants are the per-app sub-user grants already settled under Decisions, Operations, and every acceptance check here stays at app scope.
+- **Proposals.** doc/PANEL.md proposed the choices this phase rests on, and every one of them is settled. On 2026-09-22, when 17.14 built it, the admin API's remote-access rule was extended to the panel's own listener, under Panel option names. On 2026-09-25 the rest were settled at the maintainer's direction: the time zone data source under Time zones in doc/ARCHITECTURE.md, and under Panel operations in doc/ARCHITECTURE.md the scope tree with its default role bundles, the command security level cap on `console.write`, the keyring, the cipher and keyed hashes, outbound HTTP, certificates for a hostname, the event socket protocol, backup sealing and structured dumps, the S3 client, the login-screen countdown, where a node's schedules run, the file editor and archive libraries with the default archive format, SFTP and remote pull, WebAuthn, the QR renderer, the trash and version stores, database credential rotation, the maintenance bypass levels, world edit exports, player registration, the patch signing key, the sequential ramp, the one search engine and the installation file's format. Each milestone below names the entry it rests on. Until the milestones that build nodes, clusters and realms land, grants are the per-app sub-user grants and every acceptance check here stays at app scope.
 - **Docs.** The supervisor is a fourth executable and the panel's host. The commit that adds this file also adds it to doc/ARCHITECTURE.md's Processes table, its repository layout block and its Operations paragraph, so nothing is left to do there. The panel listener's own bind and TLS rule was recorded under Decisions, Operations on 2026-09-22, when 17.14 built it, so nothing is left open there either.
 - **Security first.** Trusted proxies and the client-address rule land with the panel listener in 17.14, and required two-factor with 17.47, not behind 17.19 and 17.35. Sign-in throttles, rate limits and audit addresses are wrong without them.
 - **One of each.** One stream layer with backlog, sequence numbers and resume (17.04), which 17.12 and 17.26 reuse; one app list (17.06); one browser socket (17.26); one audit store (17.14) with one scope that writes into it (17.49); one stored command history (17.49). No milestone builds a second copy of a subsystem. The one piece of rework is transport: the 17.06 overview and the live pages of 17.07 and 17.13 ship on the per-app streams of 17.04 and 17.12, and 17.58 moves them onto the panel socket so the dashboard ends with one socket client and one reconnect policy. What is replaced there is the transport, not the pages.
@@ -659,7 +659,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 - A nodes page with each node's health, resources, apps, launch settings from 17.28 and port allocations from 17.29, a maintenance flag that stops new placements, badges the node and puts the realms placed on it into the 17.32 realm maintenance state, and the ability to place an app or realm on a node; moving one follows in 17.42
 - A node may report on and receive commands only for apps placed on it, and config pushed to a node is validated, written and swapped, with refusals naming the layer that locks a key
 - Console, logs, files, backups, schedules, graphs and power actions work the same for apps on any node, relayed by the panel under the signed-in user's permissions through 17.49; browsers only ever connect to the panel
-- A node that loses the panel keeps its apps running and its schedules on time, buffers audit rows and run results, and resyncs when the link returns. Whether a node's schedules run on the node or centrally is a proposal in doc/PANEL.md
+- A node that loses the panel keeps its apps running and its schedules on time, buffers audit rows and run results, and resyncs when the link returns. A schedule whose targets are all on one node runs on that node, and one whose targets span nodes runs on the panel, as Panel operations in doc/ARCHITECTURE.md settles
 
 **Acceptance**
 
@@ -747,7 +747,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 **Deliverables**
 
 - WebSocket `/api/panel/events`, the only socket a browser opens, authenticated by the session cookie with an exact Origin match and a CSRF token in the first frame, and a one-time ticket from `POST /api/panel/events/ticket` for API key clients, sent in the first frame and never in the URL
-- The envelope `{v, type, id, scope, seq, time, data}` with structured data, and the client and server message types listed under Event socket in doc/PANEL.md; the protocol and its close codes are a proposal there
+- The envelope `{v, type, id, scope, seq, time, data}` with structured data, and the client and server message types listed under Event socket in doc/PANEL.md; the protocol and its close codes are settled under Panel operations in doc/ARCHITECTURE.md
 - Sequence numbers, backlog and resume taken from 17.04's stream layer rather than written again, with status and power events never dropped and stats keeping only the newest sample
 - TypeScript types generated from the schemas the C++ side serializes, a test that fields are only added, and a contract test that fails when the server can send a type the dashboard does not handle
 - Full error text only for `debug.errors`, and otherwise a generic message with a correlation id that also appears in the supervisor log
@@ -795,7 +795,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 **Deliverables**
 
 - Launch settings per app in the supervisor's store: the build it runs, command-line overrides, environment variables with secret values sealed and masked, working folder, start and stop timeouts, restart policy (always, on crash, never), backoff and crash loop limits, autostart with the supervisor and process priority
-- Secret launch values sealed with AES-256-GCM under the supervisor's key, the cipher Decisions, Accounts and the console already settles for `login.account.verifier`; which library provides the panel's cipher and keyed hashes is the crypto stack proposal listed under Decisions needed in doc/ROADMAP.md, which names this milestone, and where the key lives is the keyring proposal there
+- Secret launch values sealed with AES-256-GCM under the supervisor's key, the cipher Decisions, Accounts and the console already settles for `login.account.verifier`; Botan provides the cipher and the keyed hashes and the key lives in the keyring, both as Panel operations in doc/ARCHITECTURE.md settles
 - Opt-in hard limits on memory and CPU through a job object on Windows and a cgroup on Linux, off by default
 - A launch page with a preview of the exact command line and environment, secret values masked, applied at the app's next start and audited with old and new values
 - Keys the supervisor passes on the command line are the settled command-line override layer, not a new layer: the settings page shows them locked and names that layer, exactly as an operator's own command line does
@@ -845,7 +845,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 - Rotation with no downtime: on MySQL 8.0.14 and later, add the new password while retaining the old, change the app's connection setting live so its pool opens a new generation and swaps, then discard the old password; on MariaDB, create a second user with the same grants, swap the pool to it, then drop the old user; a failed pool swap keeps the old generation and leaves the old credentials working
 - Revealing a stored password needs `database.secrets.read` and a recent 17.47 step-up check, and every test, create, rotation and reveal is audited
 - The database page gains the hosts list, each app's user and grants, and a rotate button
-- Rotation per server type and whether a realm ever gets its own world database are proposals in doc/PANEL.md
+- Rotation per server type as Panel operations in doc/ARCHITECTURE.md settles, and a realm may be given its own world database, opt-in
 
 **Acceptance**
 
@@ -868,7 +868,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 - A realm page with population over time, players at character select headed there, the zones the realm has loaded with players per zone, and public instances with their capacity once 12.17 lands
 - Zone actions checked and audited: reload a zone's data through 4.15, and move or kick everyone in a zone once 6.06 and 6.05 exist
 - Realm and zone changes streamed live as realm events on the 17.26 socket
-- Authorization is at the scope of the realm's own gameserver app, as settled under Decisions, Operations; a realm scope of its own waits for the scope tree proposal in doc/PANEL.md
+- Authorization is at the scope of the realm's own gameserver app, as settled under Decisions, Operations; a realm scope of its own follows the scope tree settled under Panel operations in doc/ARCHITECTURE.md once the realm scope is built
 
 **Acceptance**
 
@@ -889,7 +889,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 - A maintenance state per realm with who, why and when, set from the realm page or a schedule task, with an optional countdown through 17.15, and badged on the overview and the realms page; a node in maintenance putting the realms placed on it into this state is 17.22, which owns node maintenance
 - Entering maintenance warns in-world players through 6.01 and then removes them through the 6.05 kick path, and sets the realm list flag so the login server stops sending players there
-- `Realm.MaintenanceBypassLevel`, a live setting, lets accounts at or above that security level enter a realm in maintenance; its default is a proposal in doc/PANEL.md
+- `Realm.MaintenanceBypassLevel`, a live setting, lets accounts at or above that security level enter a realm in maintenance; its default is game master (2), as Panel operations in doc/ARCHITECTURE.md settles
 - Leaving maintenance clears the flag and is audited
 
 **Acceptance**
@@ -1024,7 +1024,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 **Deliverables**
 
 - Profile: display name, email, locale and theme; changing email needs the password and a fresh second-factor check, is limited per day, and with SMTP configured confirms the new address by link and notifies the old one
-- Security: password change with the current password, two-factor setup with the secret grouped for typing and a QR code rendered in the browser by a renderer bundled with the dashboard, never fetched from another host; the renderer choice is a proposal in doc/PANEL.md. A pending secret is kept apart from the active one, recovery codes are shown once with copy and download, with a count of those left, regeneration needs the password and a code, and disabling needs the password and a code
+- Security: password change with the current password, two-factor setup with the secret grouped for typing and a QR code rendered in the browser by a renderer bundled with the dashboard, never fetched from another host; the renderer is qrcode-generator, as Panel operations in doc/ARCHITECTURE.md settles. A pending secret is kept apart from the active one, recovery codes are shown once with copy and download, with a count of those left, regeneration needs the password and a code, and disabling needs the password and a code
 - Sessions: each session's device, address, first and last seen, with sign out per session and everywhere
 - Self-service password reset by email when SMTP is configured, answering the same whether or not the account exists, rate limited per address and per user, with the token in the request body, and never signing in past two-factor sign-in
 - Linking a game account with proof of ownership: that account's password, or a one-time code typed in game once 6.04 exists; the linked account's security level then caps console commands as Panel operations in doc/ARCHITECTURE.md settles, and unlinking is audited
@@ -1048,7 +1048,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 **Deliverables**
 
 - Archive creation of chosen files and folders to zip or tar.zst, named with a UTC time without colons, as a cancellable background job with progress on the 17.26 socket, leaving out protected paths, the trash, the version store and every root marked client-derived
-- Download of folders and selections as an archive streamed on the fly, in the default format the maintainer chooses from the proposals in doc/PANEL.md
+- Download of folders and selections as an archive streamed on the fly, zip by default with tar.zst beside it, as Panel operations in doc/ARCHITECTURE.md settles
 - Safe extraction as a background job: entry names normalized and resolved through the jail; link, device and FIFO entries refused unless a link stays inside its root; caps on each entry's declared size, total size, entry count, depth and compression ratio; modes masked to 0644 and 0755; names that collide by case or are reserved on Windows refused; extraction into staging on the same volume, then moved into place with conflicts listed or resolved as the operator chose; and a report of written, skipped and refused entries
 - Name search within a root, bounded by entry count and time, with results paged and the bound reported when it stops early
 - Following a growing log file live across rotation and truncation, with pause, and an app's own log offered through its structured stream instead
@@ -1071,7 +1071,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Deliverables**
 
-- An SFTP service in the supervisor, off by default behind `Panel.Sftp.Enable`, documented with its risk under Decisions, Experimental features; whether it is built at all and the SSH library are proposals in doc/PANEL.md
+- An SFTP service in the supervisor, off by default behind `Panel.Sftp.Enable`, documented with its risk under Decisions, Experimental features; it is built, opt-in, on libssh, as Panel operations in doc/ARCHITECTURE.md settles
 - An Ed25519 host key generated at first start with its fingerprint shown in the panel, modern key exchange, ciphers and MACs only, the SFTP subsystem only, and at most 6 authentication attempts
 - Authentication by SSH keys registered on the account page, validated before parsing (allowed key type prefixes, at most 16384 bytes, no NUL, no DSA, RSA of at least 2048 bits, fingerprint unique per user), or by keyboard-interactive password plus TOTP for users with two-factor sign-in; rate limited per user and per address
 - The same roots, jail, protected paths, space guard and `files.*` grants as HTTP, with `files.sftp` required to connect; the config root read-only over SFTP; client-derived roots not offered at all; append and resume honored; writes refused during protected states; sessions ended when the user's permissions change
@@ -1144,7 +1144,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 - A manifest sidecar per archive, an optional local copy with its own retention, and restores that stream from storage with resumable ranged reads
 - A scan that lists the local backup folder and the storage prefix, matches entries by uuid, imports unknown archives after verifying their manifests, and offers to delete orphans
 - The upload page states plainly that the archive holds the type dump and data built from the operator's own client install, as the Client-derived data review note requires, and that the bucket must be storage the operator controls; 17.72's sealing is offered before the first upload
-- The S3 client is a proposal in doc/PANEL.md and is the maintainer's decision
+- The S3 client is Signature Version 4 over Botan and the outbound HTTP client, as Panel operations in doc/ARCHITECTURE.md settles
 
 **Acceptance**
 
@@ -1185,7 +1185,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 - `panel_webauthn_credential` rows with credential id, public key, signature counter, transports, name, and created and last used times, managed on the account page
 - Security keys as a second factor alongside TOTP, and passkeys as passwordless sign-in when the owner allows it, with the same throttles, session generation and audit as other sign-ins
 - A signature counter that does not advance refuses the sign-in and raises an alert, and removing the last second factor while two-factor sign-in is required is refused
-- The WebAuthn implementation is a proposal in doc/PANEL.md and is the maintainer's decision
+- WebAuthn is verified by the panel itself over Botan, with its own CBOR reader, as Panel operations in doc/ARCHITECTURE.md settles
 
 **Acceptance**
 
@@ -1229,7 +1229,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 **Deliverables**
 
 - TOTP with a window of one step either side by default, refusing any time step at or below the last one accepted, on sign-in, on enabling and on step-up checks
-- Ten recovery codes per user, stored as keyed hashes under a supervisor key so one can be found by lookup instead of a loop, each usable once, shown once with a count of those left; which library provides that keyed hash is the crypto stack proposal listed under Decisions needed in doc/ROADMAP.md, which names this milestone, and where the key lives is the keyring proposal there
+- Ten recovery codes per user, stored as keyed hashes under a supervisor key so one can be found by lookup instead of a loop, each usable once, shown once with a count of those left; the keyed hash is Botan's HMAC-SHA-256 and the key lives in the keyring, as Panel operations in doc/ARCHITECTURE.md settles
 - Enabling needs the password and a current code; disabling needs the password and a current code and ends the user's other sessions
 - `Panel.TwoFactorRequired` (none, danger permission holders, owners and admins, or everyone) enforced on every route and socket from this milestone, with only the sign-in and enrollment routes exempt, and API key requests answering 403 with `two_factor_required`
 - Step-up checks with a freshness window as a live setting, required by secret reveals, backup downloads, credential rotation and other danger actions, and recorded in the audit log with what they authorized
@@ -1251,7 +1251,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 **Deliverables**
 
 - The permission catalog from doc/PANEL.md as one C++ table of groups, keys, descriptions, danger flags and the scopes each key may be granted at, served at `GET /api/panel/permissions`
-- Roles owner, admin, operator, game master and viewer as permission bundles, plus per-app sub-user grants of single permissions such as `console.read`, `console.write`, `power.restart`, `files.write`, `backups.restore`, `schedules.edit`, `settings.edit` and `accounts.ban`, which is the arrangement settled under Decisions, Operations; the wider node, cluster and realm scopes are a proposal in doc/PANEL.md and no route or check here depends on them
+- Roles owner, admin, operator, game master and viewer as permission bundles, plus per-app sub-user grants of single permissions such as `console.read`, `console.write`, `power.restart`, `files.write`, `backups.restore`, `schedules.edit`, `settings.edit` and `accounts.ban`, which is the arrangement settled under Decisions, Operations; the wider node, cluster and realm scopes are settled under Panel operations in doc/ARCHITECTURE.md, and no route or check here depends on them until their milestones build them
 - One `AuthorizationMgr` that decides every check in order: authenticate, resolve the scope with 404 when the caller holds nothing there, confirm every object in the path belongs to that scope, check the permission with 403 and an audit row for a refused danger permission, then check state with 409
 - Route registration that fails when a route declares neither a permission nor that it is open to any member, and a test generated from the route registry that checks every route answers 403 without its permission and 404 for a scope the caller cannot see
 - Response shaping from the catalog: secret settings masked without `settings.secrets.read`, account email, address and MachineID hidden without `accounts.pii.read`, and no verifier, session key hash, two-factor secret or key secret in any response whatever the caller holds
@@ -1367,10 +1367,10 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Deliverables**
 
-- A text editor with syntax highlighting for `.conf`, SQL, JSON, XML and Lua, from the editor library the maintainer chooses from the proposals in doc/PANEL.md
+- A text editor with syntax highlighting for `.conf`, SQL, JSON, XML and Lua, CodeMirror 6, as Panel operations in doc/ARCHITECTURE.md settles
 - `.conf` validation against the 17.12 settings schema before saving, a warning when a key is shadowed by a live setting or locked by a layer, and an offer to run `reload config` afterwards
 - Saves that require the ETag from the last read, write a temporary file and rename it over the target, and answer 409 with the current ETag and a diff when the file changed underneath, the diff shown in the editor's own merge view; a settings, grant or schedule review shows a structured difference instead, never a text difference of formatted JSON, which invents noise from key order and hides which secret is which
-- A version store per root keeping previous versions with who and when, with view, diff and restore; its location and retention are a live setting and a proposal in doc/PANEL.md
+- A version store per root keeping previous versions with who and when, with view, diff and restore; its location and retention defaults are settled under Panel operations in doc/ARCHITECTURE.md, and the retention is a live setting
 - Every save audited with the file's hash before and after, and secret values still redacted in the editor without `settings.secrets.read`
 
 **Acceptance**
@@ -1435,7 +1435,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 - Extra roots defined by an owner: a name, an absolute path, a policy of list, read, write, download and archive, and a client-derived flag, stored in the supervisor's store
 - A root refused when its path holds the supervisor's store, keyring, token files or TLS keys, when it overlaps an existing root, when the path is a link, or when the service user cannot open it
-- Grants over an extra root use the same `files.*` keys at app scope; node-scoped roots follow 17.22, and the wider scopes wait for the scope tree proposal in doc/PANEL.md
+- Grants over an extra root use the same `files.*` keys at app scope; node-scoped roots follow 17.22, and the wider scopes follow the scope tree settled under Panel operations in doc/ARCHITECTURE.md as they are built
 - Adding, changing and removing a root is audited, open sessions re-resolve their roots within a second, and removing a root ends its open operations
 
 **Acceptance**
@@ -1457,7 +1457,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 - Re-filtering when a user's role, grants or session generation change, closing a subscription with 4403 when nothing permitted is left and the whole socket with 4401 when the session ends; revocation closes only that user's sockets
 - A `session.expiring` message a set time before a session's idle or absolute lifetime ends, so a page can prompt rather than fail mid-action
 - Scope resolution shared with 17.48's `AuthorizationMgr`, so a subscription to an app the caller cannot see answers not found exactly as the route does
-- Every close code and its meaning documented with the socket types in doc/PANEL.md, which the protocol proposal covers
+- Every close code and its meaning documented with the socket types in doc/PANEL.md, which the protocol settled under Panel operations in doc/ARCHITECTURE.md covers
 
 **Acceptance**
 
@@ -1570,7 +1570,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 - Throttles per address, per account and per email domain through the 17.14 limiter, the 17.35 captcha after repeated attempts, and a cap on mails per address per day
 - Every registration, verification, reset request and reset audited with the client address, and no response that tells a stranger whether a username or email exists
 - An operator page listing recent registrations with verification state, resend and block, behind `accounts.read` and `accounts.registration`
-- Whether the panel offers registration at all, and with which requirements, is a proposal listed under Decisions needed in doc/ROADMAP.md
+- Registration is offered, off by default, on the terms Panel operations in doc/ARCHITECTURE.md settles
 
 **Acceptance**
 
@@ -1615,7 +1615,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 **Deliverables**
 
 - `Login.Maintenance`, a live setting through 17.12, that closes the login server to players: 2.14's authentication answers with the maintenance reason the client shows, and the realm list offers them nothing
-- `Login.MaintenanceBypassLevel`, a live setting, letting accounts at or above that level sign in normally while maintenance is on; its default is a proposal in doc/PANEL.md
+- `Login.MaintenanceBypassLevel`, a live setting, letting accounts at or above that level sign in normally while maintenance is on; its default is game master (2), as Panel operations in doc/ARCHITECTURE.md settles
 - A panel banner and control with who, why, when it started and an optional window, audited, and the window published to 17.70's public page
 - Maintenance that survives a loginserver restart while it is on, and that leaves players already in the world connected unless the operator also closes their realms through 17.32
 - A schedule task that enters and leaves maintenance, so a database window can be planned through 17.15
@@ -1638,7 +1638,7 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 - A patch page over the 16.03 manifest: the revisions the patch output holds, each with its file count, bytes and build time, which one is being served, and the last generator run with its live output
 - Publishing a revision: run the 16.03 generator against a chosen install, validate the output, then swap the served manifest through 16.08's reload so downloads in flight keep the old file set, with a rollback to the previous revision
-- The operator's own signing key for patch components: generated or imported, its public part and fingerprint shown, rotation with an overlap window, the private part sealed in the supervisor's keyring, never in a response, and exportable only by an owner after a 17.47 step-up check; where that key lives and how it rotates is a proposal listed under Decisions needed in doc/ROADMAP.md
+- The operator's own signing key for patch components: generated or imported, its public part and fingerprint shown, rotation with an overlap window, the private part sealed in the supervisor's keyring, never in a response, and exportable only by an owner after a 17.47 step-up check; the key is Ed25519 and rotates with signatures from both keys through the window, as Panel operations in doc/ARCHITECTURE.md settles
 - Signed components and a patchserver that refuses to serve an executable whose signature does not verify, as Decisions, Experimental features requires
 - Owner-only permissions for publishing and for the key, with every publish, swap, rollback, generation and rotation audited
 - No route here serves a client file for download, and nothing is published that the operator did not build or place themselves, as the Client-derived data review note requires
@@ -1793,10 +1793,10 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Deliverables**
 
-- `Backups.Encrypt`, off by default and documented with its risk under Decisions, Experimental features: the archive sealed with AES-256-GCM under a key in the supervisor's keyring, so an archive holding account verifiers and the config that holds `Account.VerifierKeys` is unreadable without it; which library provides that cipher is the crypto stack proposal listed under Decisions needed in doc/ROADMAP.md, which names this milestone
+- `Backups.Encrypt`, on by default: the archive sealed with Botan's AES-256-GCM under a key in the supervisor's keyring, so an archive holding account verifiers and the config that holds `Account.VerifierKeys` is unreadable without it, and an owner asked to export that key until they have, as Panel operations in doc/ARCHITECTURE.md settles
 - A key generated once, never written into an archive or a backup record, exportable only by an owner after a 17.47 step-up check, with the plain warning that a lost key makes every sealed archive unreadable
 - Restore, 17.52's downloads and 17.43's catalog scan all recognizing a sealed archive, naming the key id they need and refusing clearly when it is absent
-- Whether encryption becomes the default, and whether dumps become structured rows rather than SQL text, are proposals listed under Decisions needed in doc/ROADMAP.md
+- Databases dumped as structured rows and restored through prepared inserts, never as SQL text, as Panel operations in doc/ARCHITECTURE.md settles
 
 **Acceptance**
 
@@ -1990,7 +1990,7 @@ Added on 2026-09-18 at the maintainer's direction. 17.01 shipped a console where
 - A volume histogram above the results drawn with the same chart wrapper the graphs use, so a burst is visible before it is read
 - The context around a hit, the lines either side from the same run, and links to the player, the account and the app the line came from
 - A retention cap by days and by bytes enforced by the same sweep the activity log uses, and a refusal to write rather than to fill the volume when the space guard says no
-- One search engine serving this, the activity log's search and the chat search, so there is one and not three; which engine is a decision listed under Decisions needed in doc/ROADMAP.md
+- One search engine serving this, the activity log's search and the chat search, so there is one and not three; SQLite's FTS5 in an index file of its own, as Panel operations in doc/ARCHITECTURE.md settles
 - Every identity field behind the permission that covers it, and export through the formula-safe writer
 
 **Acceptance**
@@ -2388,7 +2388,7 @@ Added on 2026-09-18 at the maintainer's direction. 17.01 shipped a console where
 
 - A fit over the stored history for each volume and each growing store, reported as the date it runs out, refused when the history is too short to say
 - A rule offered to the alerts for a resource forecast to run out inside a window, so the notice comes before the disk is full rather than when it is
-- A grid of median players by hour and weekday as real markup, so it is selectable, printable and readable, taking the sequential ramp listed under Decisions needed in doc/ROADMAP.md once it is settled, with the quietest hours named in words either way
+- A grid of median players by hour and weekday as real markup, so it is selectable, printable and readable, taking the sequential ramp settled under Panel operations in doc/ARCHITECTURE.md, with the quietest hours named in words as well
 - Those quietest hours offered to the schedule editor as the anchor for a restart, which is what makes the player-aware conditions chosen rather than guessed
 
 **Acceptance**
@@ -2407,7 +2407,7 @@ Added on 2026-09-18 at the maintainer's direction. 17.01 shipped a console where
 
 **Deliverables**
 
-- One file describing apps, launch settings, ports and addresses, realms, schedules, alert rules, notification channels, file roots, and panel roles and grants, in the types the settings schema already generates; its own format is a decision listed under Decisions needed in doc/ROADMAP.md
+- One file describing apps, launch settings, ports and addresses, realms, schedules, alert rules, notification channels, file roots, and panel roles and grants, in the types the settings schema already generates; its format is TOML 1.0 through toml++, as Panel operations in doc/ARCHITECTURE.md settles
 - An export writing the running installation into that file, with every secret a reference into the keyring and never a value
 - A difference between the file and what is running, shown before anything is written, in the review shape the settings editor already uses
 - An apply that is idempotent, refuses anything the caller's permissions do not cover, and stops at the first refusal with nothing half applied

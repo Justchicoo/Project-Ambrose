@@ -8,7 +8,7 @@ It does not go in `data/sql/custom/db_world/`. That folder is a machine's own lo
 
 ## The file
 
-One file per pull request, named `YYYY_MM_DD_NN.sql` for the day you wrote it with `NN` counting from `00` within that day, which is what doc/ARCHITECTURE.md asks of every update and what the updater demands of this one once it is moved. The name must be unique across every update folder of this database, so read `data/sql/updates/db_world/` before choosing one. How pending files are finally named is still an open decision in doc/ROADMAP.md, so the maintainer may rename yours when it is promoted; that is their work, not yours, and nothing about your rows changes. The file starts with the two-line SQL branding header and carries no other comment:
+One file per pull request, named `rev_<unix seconds>_<short-name>.sql`: the moment you wrote it, which `date +%s` prints, and a few words for what it holds, in letters, digits, hyphens and underscores, such as `rev_1790241513_zone-teleport.sql`. That is the only name the updater accepts for a pending file, and two open pull requests never choose the same one. When the pull request merges, the file is renamed to the next free `YYYY_MM_DD_NN.sql` in `data/sql/updates/db_world/`, as Content, SQL and releases in doc/ARCHITECTURE.md settles; that is the maintainer's work, not yours, and nothing about your rows changes. The file starts with the two-line SQL branding header and carries no other comment:
 
 ```sql
 -- Project Ambrose by Imjustchico

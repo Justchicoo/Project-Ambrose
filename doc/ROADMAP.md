@@ -69,52 +69,17 @@ Total: 387 milestones.
 
 These block specific milestones. The maintainer decides each one, then this list and doc/ARCHITECTURE.md are updated.
 
-- Pending SQL promotion: naming of pending_ files. Blocks 3.19.
 - MSG_COMBATMOVE MoveType values: the XML description says 0 pass, 1 attack, 2 enchant, 3 flee, the reference says Attack 0, Flee 1, Discard 2, Pass 3, ChangeMind 4. A capture or client RE must settle it. Blocks 9.06.
 - Whether the client simulates spell results from server-supplied rolls, which would require bit-exact server math. Must be settled in 9.08. Blocks 11.05 and 11.06.
-- Whether extractor-filled tables (object_template, zone_*, item_template, spells) are generated locally into the shared world DB or into a separate local-only DB, and whether templates are decoded at runtime from WADs or stored in the DB. Blocks 4.08, 5.01, 7.01, 8.04, 8.06.
-- Threading model: one world thread vs map-per-thread or strands. Blocks 4.01, 4.10, 6.01 and duel timers in 9.06.
-- Whether zone spawns for all 3356 zones load at startup or lazily per instance. Blocks 4.09 and 5.02.
-- Crowns policy: GM grant only, or earned in game. Blocks 12.15 and 13.20.
-- Whether the tutorial moves earlier, since new characters see it first. Affects where 14.02/14.03 sit and 3.16's playercreateinfo start zone.
-- Whether the loginserver enforces Revision/DataRevision against the patch manifest. Blocks 16.07.
-- Operations: the panel scope tree (panel, node, cluster, realm and app) and the default role bundles, including the owner-only set. Blocks 17.22, 17.31, 17.48, 17.50, 17.56.
-- Operations: whether the supervisor store's secrets use a keyring file separate from the store, and where it lives on each platform. Blocks 17.28, 17.30, 17.47, 17.65, 17.72.
-- Operations: which library provides the panel's cipher and keyed hash. The Stack row names Botan 3 for SHA-2, Twofish, the random number generator and, since 2026-09-22, Argon2id for panel passwords, and AES-256-GCM is already settled for login.account.verifier, so either Botan's entry grows to name a cipher and a keyed hash as well, or a second library is brought in for them. Blocks 17.28, 17.47, 17.72.
-- Operations: how the panel obtains a certificate for a hostname in 17.108. ACME needs an HTTP client and the protocol itself, and the Stack row names no library for either, so this is a new dependency however it is answered: a small ACME library, the protocol written against the crypto already in the Stack, or leaving it to a reverse proxy the operator runs and saying so plainly in the docs rather than pretending the panel does it. Blocks 17.108's second deliverable; the loopback and private-network paths need nothing new and are not blocked.
-- Operations: the panel event socket protocol as the one real-time channel, with its message types and close codes. Blocks 17.26, 17.57, 17.58.
-- Operations: backup archive encryption, whether it is the default rather than opt-in, and whether dumps are structured rows through prepared inserts rather than SQL text. Blocks 17.16, 17.72.
-- Operations: the S3 client, either aws-sdk-cpp from vcpkg or SigV4 signing over Botan with an HTTP client library. Blocks 17.43.
-- Operations: the login-screen countdown, either a notice message that does not disconnect, found by capture or client reverse engineering, or limiting login-screen warnings to the final notice. Blocks 17.15, 17.32, 17.64.
-- Operations: whether a node's schedules run on the node from replicated definitions or centrally on the panel. Blocks 17.22.
-- Operations: the editor library for the file manager (CodeMirror 6 proposed), the archive library for extraction, and the default archive format for folder downloads. Blocks 17.39, 17.53.
-- Operations: whether SFTP access and remote file pull are built as opt-in features, and the SSH library for SFTP. Blocks 17.40, 17.41.
-- Operations: the WebAuthn implementation for security keys and passkeys. Blocks 17.45.
-- Operations: the QR renderer for two-factor enrollment, bundled with the dashboard rather than fetched from another host. Blocks 17.38.
-- Operations: the trash and version store locations and their retention defaults. Blocks 17.53, 17.55.
-- Operations: database credential rotation per server type, and whether a realm ever gets its own world database. Blocks 17.30.
-- Operations: the realm maintenance bypass level and the installation-wide maintenance bypass level, and their defaults. Blocks 17.32, 17.64.
-- Operations: whether the panel may export world edits into a pending SQL tree at all, or only into data/sql/custom/db_world; this ties to the pending SQL promotion decision. Blocks 17.34 and, with it, 3.19.
-- Operations: whether the panel offers player-facing account registration, with its captcha and email verification requirements, or account creation stays an operator-only path. Blocks 17.62.
-- Operations: where the operator's patch signing key lives and how it rotates, given that executables served from the patchserver must match a manifest signed with that key. Blocks 17.65.
-- Operations: a sequential color ramp for the views that encode magnitude rather than category, such as a heatmap, a density grid or a queue-length view, beside the categorical series ramp doc/DESIGN.md already asks for. The four meaning accents cannot serve, and the first grid built without one invents its own colors. Blocks 17.98, and the gate that would catch an invented ramp in 17.73.
-- Operations: the full-text search engine behind the log history, the activity log's search and the chat search, which are one engine and not three, and where its index lives against the retention caps. Blocks 17.80.
-- Operations: the format of the declarative installation file, which is read and written by hand as well as by the panel. Blocks 17.99 and, with it, 17.100.
 
 
 ### Resolved
 
 Settled on 2026-09-17 at the maintainer's direction, and recorded under Decisions, Experimental features in doc/ARCHITECTURE.md: no client revision or type dump is pinned. Ambrose follows the revision of the user's install (3.23) and builds each revision's type dump from the user's own client program (3.21). GPL and AGPL tools and libraries may be used, starting with Unicorn in typeextract.
 
-- Which client revision and type dump hash to pin. Blocked 3.03 in practice and 16.11.
 
 Settled on 2026-09-16 at the maintainer's direction that the project rejects nothing, and recorded under Decisions, Experimental features in doc/ARCHITECTURE.md: authored SQL may commit client identifiers but not display text, so a door destination table holding only identifiers may be committed; Ambrose builds its own type dumper, an opt-in tool that reads the user's own running client with the terms risk stated; an embedded Lua runtime runs the client-shipped minigame scripts from the user's own install; and battlegrounds, castle magic and monster magic stay in scope. The same day plain HTTP for the admin API beyond localhost became an opt-in setting, off by default, recorded under Decisions, Operations.
 
-- Whether client identifiers (locale keys, template ids, internal quest/goal names) may be committed in authored SQL while display text may not, and whether a door destination table derived from client location names counts as extracted data. Blocks 6.14, 7.05, 10.16.
-- Whether Ambrose builds its own type dumper (reads a live client process) or documents an external tool. Blocks 16.11.
-- Whether to embed a Lua runtime to run the client-shipped minigame Server.lua scripts or reimplement them in C++. Blocks 13.11.
-- Whether battlegrounds, castle magic and monster magic stay in scope. Blocks 14.14, 14.15 and 15.17-15.20.
-- Whether a CI bot may push promoted pending SQL to main. Blocks 3.19.
 
 Settled on 2026-09-16 at the maintainer's direction to make CI cheaper, and recorded under Decisions, Continuous integration in doc/ARCHITECTURE.md: checks run daily, on pushes that change CI files and on pull requests; builds run on a schedule when code changed, by `ci:` label or on demand; and a repository variable stops builds.
 
@@ -126,20 +91,9 @@ Settled on 2026-09-14 at the maintainer's direction, and recorded under Decision
 
 Settled on 2026-09-13 with the maintainer's direction to favor the most capable option, and recorded under Decisions, Operations in doc/ARCHITECTURE.md: Crow for the admin API, TypeScript and Svelte with Vite for the dashboard, an Ambrose supervisor for process control, and localhost-only access unless TLS and a token are configured.
 
-- Operations: the HTTP and WebSocket library for the admin API, either hand-written HTTP/1.1 on the Asio layer, Boost.Beast, or a small embedded server library. Blocks 17.02.
-- Operations: the dashboard front-end stack, for example TypeScript with Svelte or React built by Vite. Blocks 17.06.
-- Operations: how apps are started and restarted, either an Ambrose supervisor process or operating system services such as systemd and Windows services. Blocks 17.08.
-- Operations: whether the admin API may ever listen beyond localhost, and the TLS and token rules when it does. Blocks 17.02 and 17.10.
 
 Settled on 2026-09-13 and recorded under Decisions in doc/ARCHITECTURE.md: runtime-loaded protocol definitions and type dump with startup-validated declarations, the stack and libraries, the database server and connector, SQL update execution and hashing, tool languages, config documentation, and tools linking the database layer.
 
-- How CI and builds work without client files: a client-gated build with a self-hosted runner, a stub mode, or runtime-loaded message definitions. Blocks 1.04, 1.15, 1.16 and the shape of every handler after them.
-- Stack choices. C++20/CMake/presets block 1.01. Vendored deps vs vcpkg/Conan block 1.01, 1.13 and 2.01. GoogleTest vs Catch2 blocks 1.02. Boost.Asio vs standalone Asio blocks 1.11, 1.19 and 16.05 (Beast). fmt vs std::format blocks 1.10.
-- Libraries not yet on the pending list: an XML parser (1.14, 3.12, 16.02), a JSON parser for the type dump (3.03), zlib vs zlib-ng (1.13), OpenSSL vs self-contained hashes (1.12), and a Twofish source written from the spec vs Botan/Crypto++ (2.11).
-- MySQL 8 vs MariaDB and which connector, including licensing. Blocks 2.01, 2.02, and JSON-vs-normalized columns in 7.03 and 10.01.
-- SQL file execution through CLIENT_MULTI_STATEMENTS or the mysql CLI (DELIMITER support), and whether the updates table uses SHA-256 or SHA-1. Blocks 2.06.
-- Rule exceptions. Is Python allowed for apps/codestyle and apps/ci (1.03, 1.04)? Is deps/ exempt from the header rule (1.03)? Where do .conf.dist options get documented, given no comments (1.09)? Should dbimport and extractors be allowed to link src/server/database despite 'tools depend only on shared/common' (2.07, 3.14, 4.08, 7.01)?
-- Whether typed views are hand-written with constexpr hashes or generated at build time. Blocks 3.07.
 
 ## Top risks
 
