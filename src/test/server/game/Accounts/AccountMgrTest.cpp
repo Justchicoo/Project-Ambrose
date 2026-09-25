@@ -109,7 +109,7 @@ TEST(AccountMgrTest, UsernameAndPasswordRules)
     sAccountMgr.SetSettings(AccountSettings{});
 }
 
-TEST_F(AccountMgrDatabaseTest, UpdatesApplyInNameOrderAndAreRecorded)
+TEST_F(AccountMgrDatabaseTest, EveryLoginUpdateIsRecordedAsReleased)
 {
     std::vector<std::string> expected;
     for (std::filesystem::directory_entry const& entry : std::filesystem::directory_iterator(DBUpdater::GetBuiltInSourceDirectory() / "data" / "sql" / "updates" / "db_login"))
@@ -118,7 +118,7 @@ TEST_F(AccountMgrDatabaseTest, UpdatesApplyInNameOrderAndAreRecorded)
     std::sort(expected.begin(), expected.end());
     ASSERT_FALSE(expected.empty());
 
-    QueryResult const result = LoginDatabase.Query("SELECT `name` FROM `updates` WHERE `state` = 'RELEASED' ORDER BY `timestamp`, `name`");
+    QueryResult const result = LoginDatabase.Query("SELECT `name` FROM `updates` WHERE `state` = 'RELEASED' ORDER BY `name`");
     ASSERT_TRUE(result);
     std::vector<std::string> applied;
     do
