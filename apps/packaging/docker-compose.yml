@@ -20,7 +20,7 @@ services:
   ambrose:
     build:
       context: ../..
-      dockerfile: apps/packaging/Dockerfile
+      dockerfile: apps/packaging/ambrose-dockerfile.txt
     restart: unless-stopped
     depends_on:
       database:
