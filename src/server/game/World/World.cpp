@@ -5,6 +5,8 @@
 
 #include "World.h"
 #include "GameSession.h"
+#include "Log.h"
+#include "MapMgr.h"
 #include "MetricRegistry.h"
 #include "ScriptMgr.h"
 
@@ -78,6 +80,9 @@ void World::Update(std::chrono::milliseconds diff)
     std::size_t const sessionCount = sessions.size();
     for (std::shared_ptr<GameSession> const& session : sessions)
         session->DrainQueue();
+
+    for (uint32 const taken : sMapMgr.Update())
+        LOG_DEBUG("server.world", "Took down zone instance {}, empty for longer than its unload delay", taken);
 
     sScriptMgr.OnWorldUpdate(diff);
 

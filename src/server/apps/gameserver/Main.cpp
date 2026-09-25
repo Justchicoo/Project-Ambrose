@@ -11,6 +11,7 @@
 #include "AppenderDB.h"
 #include "CharacterNameExtractor.h"
 #include "CharacterNameMgr.h"
+#include "MapMgr.h"
 #include "ZoneMgr.h"
 #include "CharacterNameScript.h"
 #include "AccountMgr.h"
@@ -210,6 +211,13 @@ namespace
                     LOG_WARN("server.gameserver", "Character name tables: {}", warning);
             }
             sZoneMgr.RegisterReloadTargets();
+            sMapMgr.SetSettingsReader([]
+            {
+                MapSettings settings;
+                settings.UnloadDelay = std::chrono::seconds(std::clamp<uint32>(sConfigMgr.GetOption<uint32>("Zone.UnloadDelay", 60, true), 0, 86400));
+                settings.MobileIdReleaseDelay = std::chrono::milliseconds(std::clamp<uint32>(sConfigMgr.GetOption<uint32>("Zone.MobileIdReleaseDelay", 2000, true), 0, 60000));
+                return settings;
+            });
             if (WorldDatabase.IsOpen())
             {
                 ZoneLoadResult const zones = sZoneMgr.LoadAll();

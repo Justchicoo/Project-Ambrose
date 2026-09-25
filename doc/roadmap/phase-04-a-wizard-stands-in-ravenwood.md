@@ -500,9 +500,9 @@ The game server loads zone, location and object rows at startup into a global ma
 
 **Acceptance**
 
-- [ ] 1000 allocate/release cycles never reuse within delay
-- [ ] Exhausted range errors
-- [ ] Same zone_object gives same permID across restarts
+- [x] 1000 allocate/release cycles never reuse within delay (2026-09-25: MobileIdAllocatorTest.AThousandCyclesNeverHandOutAnIdThatIsHeldOrCooling, random allocate and release on a moving clock, checking every id against what is held and when each released one may return)
+- [x] Exhausted range errors (2026-09-25: MobileIdAllocatorTest.RunningOutOfThePlayerRangeIsAnAnswerNotACrash hands out all 16383 player ids, gets an empty answer for the next one and can still allocate from the object range)
+- [x] Same zone_object gives same permID across restarts (2026-09-25: ObjectGuidTest.TheSamePlacedObjectGetsTheSamePermIdOnEveryRun pins the value 0x5658625877D119B9 for WizardCity/WC_Hub, template 4242, object 7, computed independently of the server, so a permID cannot drift between runs or machines without the test failing)
 
 ### Detailed spec from WLD-5: Maps, instances and identifiers
 
@@ -519,11 +519,11 @@ The server can create, tick and destroy zone instances that allocate mobile ids 
 
 **Acceptance**
 
-- [ ] Unit: 1000 allocate/release cycles never hand out an id still held or within its release delay
-- [ ] Unit: exhausting the player range returns an error, not a crash
-- [ ] Unit: two instances of the same zone get different dynamic zone ids; an empty instance is destroyed only after the delay
-- [ ] Unit: the delay is read when an instance empties, so a changed Zone.UnloadDelay applies to the next instance that empties with no restart
-- [ ] Unit: the same zone_object row gives the same permID across restarts, while runtime GIDs are unique
+- [x] Unit: 1000 allocate/release cycles never hand out an id still held or within its release delay (2026-09-25: as above; a released id also goes to the back of its range's line once its delay passes, so the id the client most recently saw leave is the last to come back)
+- [x] Unit: exhausting the player range returns an error, not a crash (2026-09-25: as above)
+- [x] Unit: two instances of the same zone get different dynamic zone ids; an empty instance is destroyed only after the delay (2026-09-25: MapTest.TwoInstancesOfOneZoneGetDifferentDynamicZoneIds, MapTest.AnEmptyInstanceIsTakenDownOnlyAfterItsDelay and MapTest.AWizardWhoComesBackBeforeTheDelayKeepsTheInstance)
+- [x] Unit: the delay is read when an instance empties, so a changed Zone.UnloadDelay applies to the next instance that empties with no restart (2026-09-25: MapTest.TheDelayInForceWhenAnInstanceEmptiesIsTheOneUsed empties one instance under a 60 second delay, lowers the setting to 5, empties a second, and six seconds later only the second is taken down)
+- [x] Unit: the same zone_object row gives the same permID across restarts, while runtime GIDs are unique (2026-09-25: ObjectGuidTest, the pinned permID above and 10000 runtime GIDs that are all distinct and all at or above 1<<52, where no stored id falls)
 
 **Risks**
 
