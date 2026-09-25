@@ -5,6 +5,7 @@
 
 #include "GameSession.h"
 #include "AccountMgr.h"
+#include "CharacterNameMgr.h"
 #include "CharacterRepository.h"
 #include "ConfigMgr.h"
 #include "CoreObjectSerializer.h"
@@ -299,6 +300,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     complete.IsCsr = _securityLevel.load(std::memory_order_relaxed) >= config.GetOption<uint32>("LoginComplete.CSRSecurityLevel", SEC_GAMEMASTER, true) ? 1 : 0;
     complete.TestServer = config.GetOption<bool>("LoginComplete.TestServer", false, true) ? 1 : 0;
     complete.RealmName = config.GetOption<std::string>("Realm.Name", "Ambrose", true);
+    SetCharacterName(sCharacterNameMgr.FormatName(character.NameIndices, character.Appearance.Gender).value_or(std::string()));
     SendDmlMessage(complete);
     SetStatus(SessionStatus::LoggedIn);
     LOG_DEBUG("server.gamesession", "Session {} sent MSG_LOGINCOMPLETE: zone {}, id {}, dynamic zone {} in process {}, server time {}, realm {}, permissions {:#x}, CSR {}, test server {}, critical objects {}",
@@ -321,8 +323,21 @@ void GameSession::HandleClientZoned(GameMessages::ClientZoned& message)
     LOG_INFO("server.gamesession", "Session {} loaded {}, and wizard {} stands in the world", GetSessionId(), _zonePath, _worldGuid);
 }
 
+std::string GameSession::GetCharacterName() const
+{
+    std::lock_guard const lock(_nameMutex);
+    return _characterName;
+}
+
+void GameSession::SetCharacterName(std::string name)
+{
+    std::lock_guard const lock(_nameMutex);
+    _characterName = std::move(name);
+}
+
 void GameSession::LeaveWorld()
 {
+    SetCharacterName(std::string());
     if (!_mapId)
         return;
     if (Map* const map = sMapMgr.Find(*_mapId))

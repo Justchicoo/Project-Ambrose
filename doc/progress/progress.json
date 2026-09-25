@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 73,
+    "done": 74,
     "total": 394,
-    "percent": 18.5
+    "percent": 18.8
   },
   "checks": {
-    "done": 656,
+    "done": 657,
     "total": 2394,
     "percent": 27.4
   },
@@ -26,9 +26,9 @@
     {
       "phase": 2,
       "title": "Log in to character select",
-      "milestones_done": 12,
+      "milestones_done": 13,
       "milestones_total": 15,
-      "checks_done": 113,
+      "checks_done": 114,
       "checks_total": 119
     },
     {

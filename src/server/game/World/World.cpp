@@ -39,6 +39,12 @@ std::size_t World::GetSessionCount() const
     return _sessions.size();
 }
 
+std::vector<std::shared_ptr<GameSession>> World::GetSessions() const
+{
+    std::lock_guard const lock(_mutex);
+    return _sessions;
+}
+
 void World::Clear()
 {
     std::lock_guard const lock(_mutex);

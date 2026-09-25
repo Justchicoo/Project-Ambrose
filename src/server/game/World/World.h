@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The game's update loop and the sessions it owns: one thread calls Update, which is the world thread from then on, and everything the world touches happens there, so a session's queued work is drained on it rather than on the network thread that read the message; the tick carries every script's OnUpdate after the sessions have been drained, so a script sees the state the messages of that tick left behind.
+ * The game's update loop and the sessions it owns, of which a command may take a copy to act on: one thread calls Update, which is the world thread from then on, and everything the world touches happens there, so a session's queued work is drained on it rather than on the network thread that read the message; the tick carries every script's OnUpdate after the sessions have been drained, so a script sees the state the messages of that tick left behind.
  */
 
 #ifndef AMBROSE_WORLD_H
@@ -28,6 +28,7 @@ public:
     void AddSession(std::shared_ptr<GameSession> session);
     void RemoveSession(GameSession const* session);
     std::size_t GetSessionCount() const;
+    std::vector<std::shared_ptr<GameSession>> GetSessions() const;
     void Clear();
 
     void Update(std::chrono::milliseconds diff);

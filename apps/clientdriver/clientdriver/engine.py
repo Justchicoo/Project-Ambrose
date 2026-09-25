@@ -239,11 +239,19 @@ class Engine:
         return said
 
     def act_server_command(self, step):
-        self.server.send(self.fill(step["command"]))
+        return self.console_command(self.server, step)
+
+    def act_game_command(self, step):
+        if self.game is None:
+            raise StepFailed("the scenario gives the game server a command, but it does not require the game server")
+        return self.console_command(self.game, step)
+
+    def console_command(self, server, step):
+        server.send(self.fill(step["command"]))
         if step.get("pattern"):
-            found = self.server.console.wait(self.fill(step["pattern"]), step.get("timeout", 30), alive=self.server.alive)
+            found = server.console.wait(self.fill(step["pattern"]), step.get("timeout", 30), alive=server.alive)
             return found.group(0).strip()
-        return f"sent the console command {self.fill(step['command'])!r}"
+        return f"sent {server.WHAT} the console command {self.fill(step['command'])!r}"
 
     def act_click(self, step):
         target = step["target"]

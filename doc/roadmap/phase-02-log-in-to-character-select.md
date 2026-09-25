@@ -425,12 +425,12 @@ Game code sends any generated message with one call, and the server can show a m
 
 - [x] Unit: SendMessage of MSG_SERVERMESSAGE produces a frame with service 2, order 6 and a correct WSTR body
 - [x] Unit: KickPlayer leaves the socket open until MSG_FORCE_DISCONNECT is flushed
-- [ ] Real client (once a character is in the world, or at the earliest stage it renders): a GM command (cs_server 'announce' or similar, owned by EXT/WLD) sends MSG_SERVERMESSAGE and the client visibly shows the text; 'kick' sends MSG_FORCE_DISCONNECT and the client shows its disconnect dialog instead of a silent 'connection lost'
+- [x] Real client (once a character is in the world, or at the earliest stage it renders): a GM command (cs_server 'announce' or similar, owned by EXT/WLD) sends MSG_SERVERMESSAGE and the client visibly shows the text; 'kick' sends MSG_FORCE_DISCONNECT and the client shows its disconnect dialog instead of a silent 'connection lost' (earned on 2026-09-25 by the client driver's announce-and-kick.json on r806919, with a wizard standing in the Commons: `server announce` on the game server console showed the text as the client's notification and the client logged it as `Server Message:`, and `kick` with the wizard's character id sent Type 52803, the string hash of CSR, after which the client opened GUI_CSRDisconnect, "You have been disconnected from the server by an Administrator.")
 
 **Risks**
 
 - Whether the client sends MSG_PING, and what it does with MSG_SERVERMESSAGE before entering the world, is unverified
-- The reference server never sends MSG_FORCE_DISCONNECT (it shows a modal MSG_SERVERMESSAGE and closes instead), so the TimeStamp format and the client's reaction to the message are unverified until the real-client check
+- The reference server never sends MSG_FORCE_DISCONNECT (it shows a modal MSG_SERVERMESSAGE and closes instead), so the TimeStamp format and the client's reaction to the message are unverified until the real-client check. **Resolved in 2.10 for the reaction:** the client's handler compares Type with the string hash of a reason name, CSR, Maintenance, Banned, AccountBanned, MachineBanned or AISDisconnect, and picks its dialog by it, reading Message only for Maintenance and TimeStamp only for the three bans; any other Type gets its plain disconnect dialog. DisconnectReason.h holds the hashes and the real-client run proves CSR. The TimeStamp format stays unverified until a ban is sent
 
 ## 2.11 Twofish-256 OFB (FND-8 + LOG-3 cipher)
 

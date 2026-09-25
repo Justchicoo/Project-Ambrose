@@ -620,6 +620,8 @@ class FakeClient:
 
 
 class FakeServer:
+    WHAT = "the login server"
+
     def __init__(self, log_path, console_path):
         self.log = LogTail(log_path, interval=0.01)
         self.console = LogTail(console_path, interval=0.01)
@@ -825,6 +827,22 @@ class EngineTests(TemporaryFolder):
         running = self.build([{"action": "server_command", "name": "ask for the accounts", "command": "account list"}])
         running.run()
         self.assertEqual(self.server.commands, ["account list"])
+
+    def test_a_game_command_reaches_the_game_server_and_waits_for_its_answer(self):
+        running = self.build([{"action": "game_command", "name": "tell the world", "command": "server announce Hello {user}",
+                               "pattern": r"Shown to (\d+) wizard", "timeout": 1}])
+        game_console = self.write(os.path.join("game", "console.txt"), ["Shown to 1 wizard(s) in the world"])
+        running.game = FakeServer(self.write(os.path.join("game", "Server.log"), []), game_console)
+        running.run()
+        self.assertEqual(running.game.commands, ["server announce Hello clientdriver"])
+        self.assertEqual(self.server.commands, [], "a game command never reaches the login server")
+        self.assertIn("Shown to 1 wizard", running.steps[0]["result"])
+
+    def test_a_game_command_is_refused_without_the_game_server(self):
+        running = self.build([{"action": "game_command", "name": "tell the world", "command": "server announce Hello"}])
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("does not require the game server", str(raised.exception))
 
     def test_a_database_step_waits_for_the_row_it_expects(self):
         running = self.build([{"action": "wait_db", "name": "no wizard yet", "database": "characters",

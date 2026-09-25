@@ -22,6 +22,7 @@ ACTIONS = {
     "click": (("target",), ("attempts", "dwell", "dwell_step", "on_screen", "until")),
     "shot": ((), ("file",)),
     "server_command": (("command",), ("pattern", "timeout")),
+    "game_command": (("command",), ("pattern", "timeout")),
     "wait_game_log": (("pattern", "timeout"), ("from", "fail", "expect", "reject", "record")),
 }
 COMMON_KEYS = ("action", "name")
