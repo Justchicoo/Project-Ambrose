@@ -49,7 +49,7 @@ All 36 service-51 messages and the combat WIZARD/GAME messages encode and decode
 
 **Deliverables**
 
-- src/server/shared/Messages: generated or declared WizCombat service 51 message structs, ids assigned by sorting names in ordinal order (MSG_ALLOWLEAVEPVP=1, MSG_COMBATACTIONS=2, ...)
+- src/server/game/Server/GameMessages.h: a struct for each WizCombat service 51 message a handler reads, holding only the fields it reads, as MSG_GETTIMEDACCESSPASSES does. Each message's order comes from the runtime registry, which numbers a service without explicit orders by sorted tag (MSG_ALLOWLEAVEPVP=1, MSG_COMBATACTIONS=2, ...)
 - src/server/game/Handlers/CombatHandler.cpp: Session::HandleCombatMove, HandleCombatDraw, HandleCombatAFK, HandleCombatVictory, HandlePetWillCast, HandleDismissSummon, HandleCombatCheat stubs, registered with required state 'in world'
 - src/test/server/shared/Messages/WizCombatMessagesTest.cpp
 
@@ -61,7 +61,7 @@ All 36 service-51 messages and the combat WIZARD/GAME messages encode and decode
 
 **Acceptance**
 
-- [ ] Unit test: the ordinal of every service-51 message equals its index in the name-sorted list; spot checks MSG_ALLOWLEAVEPVP=1, MSG_COMBATACTIONS=2, MSG_SETSTATUS=last
+- [ ] Unit test: the ordinal of every service-51 message equals its index in the name-sorted list; spot checks MSG_ALLOWLEAVEPVP=1, MSG_COMBATACTIONS=2, MSG_UPDATEDUELTIMER=last
 - [ ] Unit test: byte round-trip of MSG_COMBATMOVE (MoveType UBYT, SpellSelection UBYT, SpellTarget UINT, TimeLeft INT, ShadowPactTarget INT, SelectedTieredSpellID INT) and MSG_COMBATPHASEFORSPECTATORS (8 STR names), with NOXFER fields skipped
 - [ ] Unit test: dispatch table rejects MSG_COMBATMOVE from a session not in world
 - [ ] Real client: nothing visible yet; the server log shows a decoded MSG_COMBATAFK or MSG_COMBATMOVE when forced from a test harness

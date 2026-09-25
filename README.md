@@ -13,7 +13,7 @@
 [![Front end](https://github.com/Justchicoo/Project-Ambrose/actions/workflows/front-end.yml/badge.svg)](https://github.com/Justchicoo/Project-Ambrose/actions/workflows/front-end.yml)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-8798BC?labelColor=131B31)](#building)
 [![Progress](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FJustchicoo%2FProject-Ambrose%2Fmain%2Fdoc%2Fprogress%2Fbadge.json)](doc/progress/)
-[![Contributor track](https://img.shields.io/badge/open%20items-82-5FD3C4?labelColor=131B31)](doc/CONTRIBUTOR-TRACK.md)
+[![Contributor track](https://img.shields.io/badge/open%20items-81-5FD3C4?labelColor=131B31)](doc/CONTRIBUTOR-TRACK.md)
 
 **[Roadmap](doc/ROADMAP.md)** &nbsp;·&nbsp; **[Architecture](doc/ARCHITECTURE.md)** &nbsp;·&nbsp; **[Panel](doc/PANEL.md)** &nbsp;·&nbsp; **[Work board](https://justchicoo.github.io/Project-Ambrose/)** &nbsp;·&nbsp; **[Contribute](doc/CONTRIBUTOR-TRACK.md)** &nbsp;·&nbsp; **[Milestones](doc/MILESTONE-TRACK.md)** &nbsp;·&nbsp; **[Start with your AI](contrib/AI-START-HERE.md)** &nbsp;·&nbsp; **[Discord](https://discord.gg/Dx6ACDUj6N)**
 
@@ -104,7 +104,7 @@ The **contributor track** has its own folders and cannot collide with a mileston
 
 | | |
 |---|---|
-| **82 open items** | [doc/CONTRIBUTOR-TRACK.md](doc/CONTRIBUTOR-TRACK.md) - findings about the game, scenarios that turn a real-client check into one command, and tools, fixtures, guides and proposals, each with what it needs and how it is proven |
+| **81 open items** | [doc/CONTRIBUTOR-TRACK.md](doc/CONTRIBUTOR-TRACK.md) - findings about the game, scenarios that turn a real-client check into one command, and tools, fixtures, guides and proposals, each with what it needs and how it is proven |
 | **Start in one paste** | [contrib/AI-START-HERE.md](contrib/AI-START-HERE.md) - a prompt for any AI assistant, with everything it needs to work here without guessing |
 | **What is free to take** | [The work board](https://justchicoo.github.io/Project-Ambrose/) - generated from the roadmap and the open pull requests: what is being built right now, by whom, and which milestones anyone can take. Its [state.json](https://justchicoo.github.io/Project-Ambrose/state.json) is the same thing for your AI |
 | **Build a milestone** | [doc/MILESTONE-TRACK.md](doc/MILESTONE-TRACK.md) - the rules behind the board, and [contrib/AI-MILESTONES-HERE.md](contrib/AI-MILESTONES-HERE.md), the prompt that goes with them |
