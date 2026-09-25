@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Indexes the executable sections of a PE image for discovery: RIP-relative lea references, direct call sites, RIP-relative indirect calls and jumps through a memory slot, instruction decoding with Zydis from a known instruction start, and the instructions of a function up to an address.
+ * Indexes the executable sections of a PE image for discovery: RIP-relative lea references, direct call sites, RIP-relative indirect calls and jumps through a memory slot, instruction decoding with Zydis from a known instruction start, the instructions of a function up to an address, and, decoded the first time they are asked for, every RIP-relative operand of the functions the exception table lists.
  */
 
 #ifndef AMBROSE_CODEINDEX_H
@@ -8,6 +8,7 @@
 
 #include "Types.h"
 
+#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -46,6 +47,7 @@ public:
     std::span<uint64 const> LeaReferences(uint64 target) const;
     std::span<uint64 const> CallSites(uint64 target) const;
     std::span<uint64 const> IndirectBranchSites(uint64 slot) const;
+    std::span<uint64 const> RipReferences(uint64 target) const;
 
     std::optional<uint64> FunctionStart(uint64 address) const;
     std::vector<uint64> FindStrings(std::string_view text) const;
@@ -61,6 +63,10 @@ private:
     std::unordered_map<uint64, std::vector<uint64>> _leaReferences;
     std::unordered_map<uint64, std::vector<uint64>> _callSites;
     std::unordered_map<uint64, std::vector<uint64>> _indirectBranchSites;
+    mutable std::once_flag _ripIndexed;
+    mutable std::unordered_map<uint64, std::vector<uint64>> _ripReferences;
+
+    void IndexRipReferences() const;
 };
 
 #endif

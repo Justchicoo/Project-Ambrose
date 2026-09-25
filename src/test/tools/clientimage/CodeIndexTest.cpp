@@ -1,8 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the code index over a hand-assembled PeBuilder image: lea, direct call and indirect branch indexes with their filters, function starts through chained unwind info, string addresses, Zydis decoding of kinds, targets and operands, and decode limits at byte, instruction, file-backed and invalid-opcode boundaries.
+ * Tests the code index over a hand-assembled PeBuilder image: lea, direct call and indirect branch indexes with their filters, every RIP-relative operand of the functions the exception table lists, function starts through chained unwind info, string addresses, Zydis decoding of kinds, targets and operands, and decode limits at byte, instruction, file-backed and invalid-opcode boundaries.
  */
 
+#include "CodeBuffer.h"
 #include "CodeIndex.h"
 #include "PeBuilder.h"
 #include "PeImage.h"
@@ -27,51 +28,6 @@ namespace
     constexpr uint32 Slot = Data + 8;
     constexpr uint32 Global = Data + 0x10;
     constexpr uint32 Function = Text + 0x40;
-
-    class CodeBuffer
-    {
-    public:
-        CodeBuffer(uint32 rva, std::size_t size) : _rva(rva), _bytes(size, 0xCC)
-        {
-        }
-
-        void Put(uint32 at, std::initializer_list<uint8> bytes)
-        {
-            std::size_t offset = at - _rva;
-            for (uint8 const byte : bytes)
-                _bytes.at(offset++) = byte;
-        }
-
-        void Displacement(uint32 at, uint32 next, uint64 target)
-        {
-            uint32 const value = static_cast<uint32>(target - next);
-            Put(at, { static_cast<uint8>(value), static_cast<uint8>(value >> 8), static_cast<uint8>(value >> 16), static_cast<uint8>(value >> 24) });
-        }
-
-        void Lea(uint32 at, uint8 rex, uint8 modrm, uint32 target)
-        {
-            Put(at, { rex, 0x8D, modrm });
-            Displacement(at + 3, at + 7, target);
-        }
-
-        void Call(uint32 at, uint32 target)
-        {
-            Put(at, { 0xE8 });
-            Displacement(at + 1, at + 5, target);
-        }
-
-        void Indirect(uint32 at, uint8 modrm, uint64 slot)
-        {
-            Put(at, { 0xFF, modrm });
-            Displacement(at + 2, at + 6, slot);
-        }
-
-        std::vector<uint8> const& Bytes() const noexcept { return _bytes; }
-
-    private:
-        uint32 _rva;
-        std::vector<uint8> _bytes;
-    };
 
     std::vector<uint8> TestImage()
     {
@@ -142,6 +98,15 @@ namespace
             addresses.push_back(Base + rva);
         return addresses;
     }
+}
+
+TEST_F(CodeIndexTest, RipReferencesAreEveryRipRelativeOperandOfTheListedFunctions)
+{
+    EXPECT_EQ(Sites(_code->RipReferences(Base + Table)), Addresses({ Text, Text + 0x07, Text + 0x80 }));
+    EXPECT_EQ(Sites(_code->RipReferences(Base + Global)), Addresses({ Function + 0x07 })) << "a mov that reads memory counts, not only a lea";
+    EXPECT_EQ(Sites(_code->RipReferences(Base + Slot)), Addresses({ Text + 0x13, Function + 0x0E })) << "so does a call or jump through a slot";
+    EXPECT_TRUE(_code->RipReferences(Base + SecondTable).empty()) << "code no function lists is not decoded";
+    EXPECT_TRUE(_code->RipReferences(0).empty());
 }
 
 TEST_F(CodeIndexTest, LeaReferencesAreIndexedByTarget)

@@ -1,7 +1,7 @@
 # Project Ambrose by Imjustchico
-# Builds typeextract_tests over the typeextract library: unit tests on synthetic PE images, code and heaps that need no client, and the client-gated extraction checks, labelled client, that read the user's own install and type dump.
+# Builds typeextract_tests over the typeextract library: unit tests on synthetic PE images, built by the shared PeBuilder, and on code and heaps that need no client, and the client-gated extraction checks, labelled client, that read the user's own install and type dump.
 file(GLOB typeextract_test_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
-add_executable(typeextract_tests ${typeextract_test_sources} "${CMAKE_CURRENT_SOURCE_DIR}/../../Main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../mocks/LogTestDirectory.cpp")
+add_executable(typeextract_tests ${typeextract_test_sources} "${CMAKE_CURRENT_SOURCE_DIR}/../../Main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../mocks/LogTestDirectory.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../../mocks/PeBuilder.cpp")
 
 target_include_directories(typeextract_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../../mocks")
 

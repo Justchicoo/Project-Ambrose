@@ -1,14 +1,16 @@
 /*
  * Project Ambrose by Imjustchico
- * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a block, a type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads the block and type pairs the world database's core_object_type holds when it is given the world database, and when a pair stands for a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --pair or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
+ * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `handlers` says which classes in the client program handle a message and where, found the way the program registers them: each handler goes in under a debug name such as WizardGraphicalClient::MSG_TimedAccessPasses, with its plain name and a pointer to the function, so client-image finds the code that reads both names and the function address it loads, and the answer is written once per revision; a message nothing registers that way is one the client only sends or registers some other way, which the tool says rather than guessing which. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a block, a type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads the block and type pairs the world database's core_object_type holds when it is given the world database, and when a pair stands for a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --pair or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
  */
 
 #include "BindFile.h"
+#include "CodeIndex.h"
 #include "BlobEnvelope.h"
 #include "CoreObjectSerializer.h"
 #include "DatabaseEnv.h"
 #include "ObjectSchemaMgr.h"
 #include "ObjectSerializer.h"
+#include "PeImage.h"
 #include "ClientLocator.h"
 #include "Environment.h"
 #include "ClientSetup.h"
@@ -16,6 +18,7 @@
 #include "KiwadArchive.h"
 #include "MessageDefinitionSet.h"
 #include "LocaleStore.h"
+#include "MessageHandlers.h"
 #include "StringHash.h"
 #include "Log.h"
 #include "LogConfig.h"
@@ -35,9 +38,11 @@
 #include <cctype>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <span>
 #include <string>
 #include <string_view>
@@ -64,6 +69,10 @@ Commands:
                          protocol, service and order
   messages --list [text] print every message tag with its service and order, or those
                          holding the text
+  handlers <tag>...      print which classes in the client program handle a message
+                         and the address of each handler, or name a class or a
+                         handler name instead of a tag
+  handlers --list [text] print every handler the client program registers
   wad <entry>...         print an archive entry: BINd and headerless objects as JSON,
                          the rest as text
   wad --list [pattern]   print entry names holding the pattern
@@ -457,6 +466,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         std::string Protocol;
         uint32 Service = 0;
         uint32 Order = 0;
+        std::string Handler;
     };
 
     std::filesystem::path MessageCachePath(std::filesystem::path const& dataFolder, std::string_view revision)
@@ -484,10 +494,10 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         for (nlohmann::json const& entry : document)
         {
             if (!entry.is_object() || !entry.contains("tag") || !entry.contains("file") || !entry.contains("text") || !entry.contains("protocol") || !entry.contains("service")
-                || !entry.contains("order"))
+                || !entry.contains("order") || !entry.contains("handler"))
                 return {};
             messages.push_back({ entry["tag"].get<std::string>(), entry["file"].get<std::string>(), entry["text"].get<std::string>(), entry["protocol"].get<std::string>(),
-                entry["service"].get<uint32>(), entry["order"].get<uint32>() });
+                entry["service"].get<uint32>(), entry["order"].get<uint32>(), entry["handler"].get<std::string>() });
         }
         return messages;
     }
@@ -501,7 +511,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         nlohmann::json document = nlohmann::json::array();
         for (CachedMessage const& message : messages)
             document.push_back({ { "tag", message.Tag }, { "file", message.File }, { "text", message.Text }, { "protocol", message.Protocol }, { "service", message.Service },
-                { "order", message.Order } });
+                { "order", message.Order }, { "handler", message.Handler } });
         std::ofstream stream(path, std::ios::binary | std::ios::trunc);
         if (!stream)
             return;
@@ -545,23 +555,23 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                     position = nameEnd + 1;
                     continue;
                 }
-                messages.push_back({ tag, file, text->substr(position, close + tag.size() + 3 - position), {}, 0, 0 });
+                messages.push_back({ tag, file, text->substr(position, close + tag.size() + 3 - position), {}, 0, 0, {} });
                 position = close + 1;
             }
         }
 
         MessageDefinitionSet definitions;
         definitions.LoadFromArchive(archive);
-        std::map<std::pair<std::string, std::string>, std::tuple<std::string, uint32, uint32>> numbered;
+        std::map<std::pair<std::string, std::string>, std::tuple<std::string, uint32, uint32, std::string>> numbered;
         for (auto const& [service, protocol] : definitions.GetProtocols())
             for (MessageDef const& definition : protocol.Messages)
-                numbered[{ std::filesystem::path(protocol.SourceFile).filename().string(), definition.Tag }] = { protocol.ProtocolType, service, definition.Order };
+                numbered[{ std::filesystem::path(protocol.SourceFile).filename().string(), definition.Tag }] = { protocol.ProtocolType, service, definition.Order, definition.Handler };
         for (CachedMessage& message : messages)
         {
             auto const found = numbered.find({ std::filesystem::path(message.File).filename().string(), message.Tag });
             if (found == numbered.end())
                 continue;
-            std::tie(message.Protocol, message.Service, message.Order) = found->second;
+            std::tie(message.Protocol, message.Service, message.Order, message.Handler) = found->second;
         }
         return messages;
     }
@@ -607,6 +617,125 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             if (!found && !arguments.List)
             {
                 std::cerr << fmt::format("{}: no message of that name is defined in this install\n", subject);
+                status = Failure;
+            }
+        }
+        return status;
+    }
+
+    std::filesystem::path HandlerCachePath(std::filesystem::path const& dataFolder, std::string_view revision)
+    {
+        return dataFolder / "handlers" / (std::string(revision) + ".json");
+    }
+
+    constexpr uint32 HandlerFinderVersion = 5;
+
+    std::vector<MessageHandlerRegistration> ReadHandlerCache(std::filesystem::path const& path)
+    {
+        std::vector<MessageHandlerRegistration> registrations;
+        std::ifstream stream(path, std::ios::binary);
+        if (!stream)
+            return registrations;
+        nlohmann::json document;
+        try
+        {
+            stream >> document;
+        }
+        catch (std::exception const&)
+        {
+            return registrations;
+        }
+        if (!document.is_object() || !document.contains("finder") || document["finder"] != HandlerFinderVersion || !document.contains("registrations")
+            || !document["registrations"].is_array())
+            return registrations;
+        for (nlohmann::json const& entry : document["registrations"])
+        {
+            if (!entry.is_object() || !entry.contains("owner") || !entry.contains("handler") || !entry.contains("site") || !entry.contains("address"))
+                return {};
+            registrations.push_back({ entry["owner"].get<std::string>(), entry["handler"].get<std::string>(), entry["site"].get<uint64>(), entry["address"].get<uint64>() });
+        }
+        return registrations;
+    }
+
+    void WriteHandlerCache(std::filesystem::path const& path, std::vector<MessageHandlerRegistration> const& registrations)
+    {
+        std::error_code code;
+        std::filesystem::create_directories(path.parent_path(), code);
+        if (code)
+            return;
+        nlohmann::json list = nlohmann::json::array();
+        for (MessageHandlerRegistration const& registration : registrations)
+            list.push_back({ { "owner", registration.Owner }, { "handler", registration.Handler }, { "site", registration.Site }, { "address", registration.Address } });
+        nlohmann::json const document = { { "finder", HandlerFinderVersion }, { "registrations", std::move(list) } };
+        std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+        if (!stream)
+            return;
+        stream << document.dump(1, '\t');
+        if (stream.good())
+            std::cerr << fmt::format("client: wrote the {} message handlers this install's client program registers to {}, so every later question reads it instead of the program\n",
+                registrations.size(), ConfigMgr::PathToUtf8(path));
+    }
+
+    std::string DescribeRegistration(MessageHandlerRegistration const& registration)
+    {
+        if (registration.Address == 0)
+            return fmt::format("  {}::{}  registered at 0x{:x}; no function address is loaded before it", registration.Owner, registration.Handler, registration.Site);
+        return fmt::format("  {}::{}  handler 0x{:x}, registered at 0x{:x}", registration.Owner, registration.Handler, registration.Address, registration.Site);
+    }
+
+    int RunHandlers(Arguments const& arguments, std::vector<CachedMessage> const& messages, std::vector<MessageHandlerRegistration> const& registrations)
+    {
+        if (arguments.List)
+        {
+            std::string const pattern = arguments.Subjects.empty() ? std::string() : Ambrose::ToLower(arguments.Subjects.front());
+            std::size_t shown = 0;
+            for (MessageHandlerRegistration const& registration : registrations)
+            {
+                if (!pattern.empty() && Ambrose::ToLower(registration.Owner + "::" + registration.Handler).find(pattern) == std::string::npos)
+                    continue;
+                std::cout << DescribeRegistration(registration).substr(2) << "\n";
+                ++shown;
+            }
+            std::cerr << fmt::format("client: {} of the {} handler registrations in the client program match\n", shown, registrations.size());
+            return shown == 0 ? Failure : Success;
+        }
+
+        int status = Success;
+        for (std::string const& subject : arguments.Subjects)
+        {
+            std::string const wanted = Ambrose::ToLower(subject);
+            bool answered = false;
+            std::set<std::string> shownHandlers;
+            for (CachedMessage const& message : messages)
+            {
+                if (Ambrose::ToLower(message.Tag) != wanted || message.Handler.empty() || !shownHandlers.insert(message.Handler).second)
+                    continue;
+                answered = true;
+                std::cout << fmt::format("{} is handled as {}\n", Numbered(message), message.Handler);
+                bool registered = false;
+                for (MessageHandlerRegistration const& registration : registrations)
+                {
+                    if (registration.Handler != message.Handler)
+                        continue;
+                    registered = true;
+                    std::cout << DescribeRegistration(registration) << "\n";
+                }
+                if (!registered)
+                    std::cout << "  no Class::MSG_Name registration in the client program names it; the client registers some handlers another way, which this tool does not find yet\n";
+            }
+            if (answered)
+                continue;
+            for (MessageHandlerRegistration const& registration : registrations)
+            {
+                if (Ambrose::ToLower(registration.Handler) != wanted && Ambrose::ToLower(registration.Owner) != wanted
+                    && Ambrose::ToLower(registration.Owner + "::" + registration.Handler) != wanted)
+                    continue;
+                answered = true;
+                std::cout << DescribeRegistration(registration).substr(2) << "\n";
+            }
+            if (!answered)
+            {
+                std::cerr << fmt::format("{}: no message, class or handler of that name is known to this install\n", subject);
                 status = Failure;
             }
         }
@@ -879,7 +1008,7 @@ int main(int argc, char** argv)
         return RunHex(*arguments);
     }
 
-    if (command != "types" && command != "messages" && command != "wad" && command != "lang" && command != "core")
+    if (command != "types" && command != "messages" && command != "handlers" && command != "wad" && command != "lang" && command != "core")
     {
         std::cerr << fmt::format("there is no command {}\n{}", arguments->Command, Usage);
         return BadUsage;
@@ -1026,34 +1155,60 @@ int main(int argc, char** argv)
         return status;
     }
 
-    if (command == "messages")
+    std::string revision;
+    if (std::optional<ClientInstall> const install = ClientInstall::Inspect(system, LogConfig::Utf8Path(*arguments->Client)))
+        revision = install->Revision;
+
+    std::vector<CachedMessage> messages;
+    if ((command == "messages" || command == "handlers") && !revision.empty())
+        messages = ReadMessageCache(MessageCachePath(ClientLocator::GetDataFolder(system), revision));
+    if (command == "messages" && !messages.empty())
+        return RunMessages(*arguments, messages);
+
+    std::unique_ptr<KiwadArchive> archive;
+    if (command != "handlers" || messages.empty())
     {
-        std::string revision;
-        if (std::optional<ClientInstall> const install = ClientInstall::Inspect(system, LogConfig::Utf8Path(*arguments->Client)))
-            revision = install->Revision;
-        if (!revision.empty())
+        std::filesystem::path const source = command == "handlers" ? LogConfig::Utf8Path(*arguments->Client) / "Data" / "GameData" / "Root.wad" : wad;
+        archive = KiwadArchive::Open(source, error);
+        if (!archive)
         {
-            std::filesystem::path const cache = MessageCachePath(ClientLocator::GetDataFolder(system), revision);
-            std::vector<CachedMessage> const cached = ReadMessageCache(cache);
-            if (!cached.empty())
-                return RunMessages(*arguments, cached);
+            std::cerr << fmt::format("{}: {}\n", ConfigMgr::PathToUtf8(source), error);
+            return Failure;
         }
     }
-
-    std::unique_ptr<KiwadArchive> const archive = KiwadArchive::Open(wad, error);
-    if (!archive)
+    if ((command == "messages" || command == "handlers") && messages.empty())
     {
-        std::cerr << fmt::format("{}: {}\n", ConfigMgr::PathToUtf8(wad), error);
-        return Failure;
+        messages = GatherMessages(*archive);
+        if (!revision.empty() && !messages.empty())
+            WriteMessageCache(MessageCachePath(ClientLocator::GetDataFolder(system), revision), messages);
     }
-
     if (command == "messages")
-    {
-        std::vector<CachedMessage> const messages = GatherMessages(*archive);
-        if (std::optional<ClientInstall> const install = ClientInstall::Inspect(system, LogConfig::Utf8Path(*arguments->Client)))
-            if (!install->Revision.empty() && !messages.empty())
-                WriteMessageCache(MessageCachePath(ClientLocator::GetDataFolder(system), install->Revision), messages);
         return RunMessages(*arguments, messages);
+
+    if (command == "handlers")
+    {
+        std::vector<MessageHandlerRegistration> registrations;
+        if (!revision.empty())
+            registrations = ReadHandlerCache(HandlerCachePath(ClientLocator::GetDataFolder(system), revision));
+        if (registrations.empty())
+        {
+            std::filesystem::path const program = LogConfig::Utf8Path(*arguments->Client) / "Bin" / "WizardGraphicalClient.exe";
+            std::unique_ptr<PeImage> const image = PeImage::Load(program, error);
+            if (!image)
+            {
+                std::cerr << fmt::format("{}: {}\n", ConfigMgr::PathToUtf8(program), error);
+                return Failure;
+            }
+            registrations = MessageHandlers::Find(*image, CodeIndex(*image));
+            if (!revision.empty() && !registrations.empty())
+                WriteHandlerCache(HandlerCachePath(ClientLocator::GetDataFolder(system), revision), registrations);
+        }
+        if (registrations.empty())
+        {
+            std::cerr << "the client program registers no message handler this tool can find\n";
+            return Failure;
+        }
+        return RunHandlers(*arguments, messages, registrations);
     }
     return RunWad(*arguments, *archive, catalog);
 }

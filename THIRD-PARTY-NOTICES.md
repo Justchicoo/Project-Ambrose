@@ -20,7 +20,7 @@ Project Ambrose itself is MIT licensed, in LICENSE. It uses the libraries below.
 | SQLite | The panel's own store: sessions, audit rows and settings | blessing | A public-domain dedication: nothing beyond keeping it with the source |
 | FTXUI | The full-screen terminal panels behind `--tui` | MIT | Keep the notice |
 | WebView2 | The launcher's window behind `--window-ui` on Windows, which hosts the page shipped beside the program | BSD-3-Clause | Keep the notice and the disclaimer, and do not use Microsoft's name to endorse this. Only the loader is linked; the runtime it drives is the one already on the machine and is not distributed here |
-| Zydis and Zycore | Decoding x86 instructions in the type extractor | MIT | Keep the notice |
+| Zydis and Zycore | Decoding x86 instructions of the user's client program, in the type extractor and the client tool | MIT | Keep the notice |
 | Unicorn 2 | Running the user's own client program in a sandbox to rebuild its type data | GPL-2.0-or-later | Only `typeextract` links it, and only as a shared library. That one program is therefore distributed under GPL-2.0-or-later; every other program here stays MIT. A build without the tools has no GPL code in it |
 
 ## What ships in the panel and the launcher window

@@ -1,7 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds typeextract, the tool that emulates the user's own client program to build its type dump: the typeextract-core library links Unicorn (GPL-2.0, a DLL on Windows and a shared library on Linux) and Zydis, and the executable is a front end over it.
-find_package(zycore CONFIG REQUIRED)
-find_package(zydis CONFIG REQUIRED)
+# Builds typeextract, the tool that emulates the user's own client program to build its type dump: the typeextract-core library links Unicorn (GPL-2.0, a DLL on Windows and a shared library on Linux) and client-image, which reads the program and indexes its code, and the executable is a front end over it.
 
 if(NOT TARGET ambrose-unicorn)
     foreach(stale IN ITEMS AMBROSE_UNICORN_INCLUDE_DIR AMBROSE_UNICORN_LIBRARY_RELEASE AMBROSE_UNICORN_LIBRARY_DEBUG AMBROSE_UNICORN_DLL_RELEASE AMBROSE_UNICORN_DLL_DEBUG)
@@ -66,7 +64,7 @@ target_link_libraries(typeextract-core
     PUBLIC
         shared
         ambrose-unicorn
-        Zydis::Zydis
+        client-image
     PRIVATE
         pugixml::pugixml
         nlohmann_json::nlohmann_json)

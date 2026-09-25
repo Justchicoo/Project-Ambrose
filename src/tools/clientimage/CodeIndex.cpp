@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Scans the raw bytes of a PE image's executable sections once for RIP-relative lea, direct call and RIP-relative indirect call and jump patterns, keeps sorted sites per target, and decodes instructions with Zydis into their kind, branch and RIP-relative targets and leading operands.
+ * Scans the raw bytes of a PE image's executable sections once for RIP-relative lea, direct call and RIP-relative indirect call and jump patterns, keeps sorted sites per target, and decodes instructions with Zydis into their kind, branch and RIP-relative targets and leading operands; the first time RIP-relative references are asked for, it decodes every function the exception table lists and keeps each instruction whose operand is RIP-relative by the address it names, whatever the instruction, so a string copied with mov or movups is found as well as one loaded with lea.
  */
 
 #include "CodeIndex.h"
@@ -189,6 +189,47 @@ std::span<uint64 const> CodeIndex::CallSites(uint64 target) const
 std::span<uint64 const> CodeIndex::IndirectBranchSites(uint64 slot) const
 {
     return SitesOf(_indirectBranchSites, slot);
+}
+
+std::span<uint64 const> CodeIndex::RipReferences(uint64 target) const
+{
+    std::call_once(_ripIndexed, [this] { IndexRipReferences(); });
+    return SitesOf(_ripReferences, target);
+}
+
+void CodeIndex::IndexRipReferences() const
+{
+    ZydisDecoder decoder;
+    if (!ZYAN_SUCCESS(ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64)))
+        return;
+    uint64 const base = _image.GetImageBase();
+    for (PeFunction const& function : _image.GetFunctions())
+    {
+        if (function.End <= function.Begin)
+            continue;
+        std::span<uint8 const> const bytes = _image.ReadRva(function.Begin, function.End - function.Begin);
+        std::size_t offset = 0;
+        while (offset < bytes.size())
+        {
+            ZydisDecodedInstruction instruction;
+            ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
+            if (!ZYAN_SUCCESS(ZydisDecoderDecodeFull(&decoder, bytes.data() + offset, bytes.size() - offset, &instruction, operands)))
+                break;
+            uint64 const address = base + function.Begin + offset;
+            for (std::size_t index = 0; index < instruction.operand_count; ++index)
+            {
+                ZydisDecodedOperand const& operand = operands[index];
+                uint64 absolute = 0;
+                if (operand.type == ZYDIS_OPERAND_TYPE_MEMORY && operand.mem.base == ZYDIS_REGISTER_RIP && ZYAN_SUCCESS(ZydisCalcAbsoluteAddress(&instruction, &operand, address, &absolute)))
+                {
+                    _ripReferences[absolute].push_back(address);
+                    break;
+                }
+            }
+            offset += instruction.length;
+        }
+    }
+    SortSites(_ripReferences);
 }
 
 std::optional<uint64> CodeIndex::FunctionStart(uint64 address) const

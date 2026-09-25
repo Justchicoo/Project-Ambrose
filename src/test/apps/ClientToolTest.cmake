@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs the client tool to check its usage text and that bad usage exits 2, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install and type dump, that types prints a class the dump holds with its hash, messages prints what the client's own XML says a message carries under its protocol, service and order, wad prints a BINd entry as JSON, and wad reads a zone's gamedata.bin, which carries a versionable object with no BINd header, into a WizZoneData holding the zone's name and its real locations, each a LocationTemplate with a name and a place, rather than the empty lists a wrong property mask gives; it reports itself skipped when the client checks cannot run.
+# Runs the client tool to check its usage text and that bad usage exits 2, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install and type dump, that types prints a class the dump holds with its hash, messages prints what the client's own XML says a message carries under its protocol, service and order, handlers names the class in the client program that handles MSG_TIMEDACCESSPASSES and its function, wad prints a BINd entry as JSON, and wad reads a zone's gamedata.bin, which carries a versionable object with no BINd header, into a WizZoneData holding the zone's name and its real locations, each a LocationTemplate with a name and a place, rather than the empty lists a wrong property mask gives; it reports itself skipped when the client checks cannot run.
 if(NOT APP OR NOT WORKDIR)
     message(FATAL_ERROR "APP and WORKDIR must be set")
 endif()
@@ -31,6 +31,11 @@ endif()
 execute_process(COMMAND "${APP}" messages MSG_CHARACTERSELECTED RESULT_VARIABLE messagesResult OUTPUT_VARIABLE messagesOutput ERROR_VARIABLE messagesError TIMEOUT 300)
 if(NOT messagesResult EQUAL 0 OR NOT messagesOutput MATCHES "LOGIN MSG_CHARACTERSELECTED \\(7:[0-9]+\\)" OR NOT messagesOutput MATCHES "LoginServer")
     message(FATAL_ERROR "client messages did not print what the message carries (${messagesResult}): ${messagesOutput}${messagesError}")
+endif()
+
+execute_process(COMMAND "${APP}" handlers MSG_TIMEDACCESSPASSES RESULT_VARIABLE handlersResult OUTPUT_VARIABLE handlersOutput ERROR_VARIABLE handlersError TIMEOUT 600)
+if(NOT handlersResult EQUAL 0 OR NOT handlersOutput MATCHES "WIZARD MSG_TIMEDACCESSPASSES \\(12:[0-9]+\\) is handled as MSG_TimedAccessPasses" OR NOT handlersOutput MATCHES "WizardGraphicalClient::MSG_TimedAccessPasses  handler 0x[0-9a-f]+")
+    message(FATAL_ERROR "client handlers did not name the class that handles the message (${handlersResult}): ${handlersOutput}${handlersError}")
 endif()
 
 set(hat "ObjectData/CrownItems/Series58/Hats/Crowns-S58-Hats-L110-BS-008-01.xml")
