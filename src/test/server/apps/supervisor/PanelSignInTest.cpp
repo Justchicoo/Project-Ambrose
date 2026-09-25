@@ -151,7 +151,7 @@ TEST_F(PanelSignInTest, HoldsBackAGuesserUntilTheWindowPasses)
     _harness.ApplyOrFail("Appender.Capture = 200,1,0\nLogger.root = 1,Capture\n");
     Start();
     MakeOwner("owner", "a good long password");
-    _panel->SignInThrottle().SetLimits(20, std::chrono::seconds(60));
+    _panel->SignInThrottle().SetLimits(20, std::chrono::hours(1));
 
     for (int attempt = 0; attempt < 20; ++attempt)
         EXPECT_EQ(Post("/api/panel/session", { { "username", "owner" }, { "password", "not the password" } }).Status, 401) << attempt;
