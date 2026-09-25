@@ -66,10 +66,7 @@
     }
 </script>
 
-<PageHeader
-    title="Panel settings"
-    description="Configure the panel itself. Changes are typed, validated and written to the activity log."
->
+<PageHeader title="Panel settings" description="Configure the panel itself. Changes are typed, validated and written to the activity log.">
     {#snippet actions()}
         <Button onclick={() => void save()} disabled={busy || answer === null}><SaveIcon />{busy ? "Saving…" : "Save changes"}</Button>
     {/snippet}
