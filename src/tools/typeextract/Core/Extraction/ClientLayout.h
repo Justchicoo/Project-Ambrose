@@ -8,7 +8,9 @@
 
 #include "Types.h"
 
+#include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 struct ClientLayoutEvidence
@@ -61,9 +63,16 @@ struct ClientLayout
     uint64 ContainerNameSlot = 1;
     uint64 ContainerDynamicSlot = 4;
 
+    std::map<std::string, std::string> DerivedFields;
+
+    void ConfirmDerived(std::string field, std::string confirmedBy)
+    {
+        DerivedFields.insert_or_assign(std::move(field), std::move(confirmedBy));
+    }
+
     std::vector<ClientLayoutEvidence> Evidence() const
     {
-        return {
+        std::vector<ClientLayoutEvidence> evidence = {
             { "std::string.size", StringSize, "assumed", "MSVC x64 std::string reference layout" },
             { "std::string.capacity", StringCapacity, "assumed", "MSVC x64 std::string reference layout" },
             { "std::string.inline_capacity", StringInlineCapacity, "assumed", "MSVC x64 std::string reference layout" },
@@ -98,6 +107,13 @@ struct ClientLayout
             { "Container.name_slot", ContainerNameSlot, "assumed", "r801440/r806919 reference layout" },
             { "Container.dynamic_slot", ContainerDynamicSlot, "assumed", "r801440/r806919 reference layout" }
         };
+        for (ClientLayoutEvidence& item : evidence)
+            if (auto const found = DerivedFields.find(item.Field); found != DerivedFields.end())
+            {
+                item.Status = "derived";
+                item.ConfirmedBy = found->second;
+            }
+        return evidence;
     }
 };
 

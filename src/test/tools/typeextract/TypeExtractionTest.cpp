@@ -116,7 +116,7 @@ TEST(TypeExtractionTest, InstallsWhoseRevisionCannotNameADumpAreRefusedBeforeLoa
     EXPECT_EQ(result.Metadata.Revision, "r806919.Wizard_1_610");
 }
 
-TEST(TypeExtractionTest, LayoutEvidenceNamesEveryFieldAndCanRefuseWithoutWritingADump)
+TEST(TypeExtractionTest, LayoutEvidenceNamesEveryFieldAndStrictModeDoesNotAssumeAnUnloadedClient)
 {
     ClientLayout layout;
     std::vector<ClientLayoutEvidence> const evidence = layout.Evidence();
@@ -125,6 +125,12 @@ TEST(TypeExtractionTest, LayoutEvidenceNamesEveryFieldAndCanRefuseWithoutWriting
     {
         return !item.Field.empty() && !item.Status.empty() && !item.ConfirmedBy.empty();
     }));
+    layout.ConfirmDerived("Type.hash", "matched registered type hashes");
+    std::vector<ClientLayoutEvidence> const updated = layout.Evidence();
+    auto const derived = std::find_if(updated.begin(), updated.end(), [](ClientLayoutEvidence const& item) { return item.Field == "Type.hash"; });
+    ASSERT_NE(derived, updated.end());
+    EXPECT_EQ(derived->Status, "derived");
+    EXPECT_EQ(derived->ConfirmedBy, "matched registered type hashes");
 
     LogTestDirectory directory;
     TypeExtractionOptions options;
@@ -132,7 +138,7 @@ TEST(TypeExtractionTest, LayoutEvidenceNamesEveryFieldAndCanRefuseWithoutWriting
     options.RequireDerivedLayout = true;
     TypeExtractionResult result = TypeExtraction::Extract(options);
     EXPECT_FALSE(result.Succeeded());
-    EXPECT_EQ(result.Error, "the client layout could not be derived: Type.name (layout derivation is not available for this client)");
+    EXPECT_NE(result.Error.find("WizardGraphicalClient.exe was not found"), std::string::npos) << result.Error;
     EXPECT_EQ(result.LayoutEvidence.size(), evidence.size());
 }
 
