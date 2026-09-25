@@ -33,9 +33,9 @@ The server can fetch any client template by template id, backed by the TemplateM
 
 **Deliverables**
 
-- src/server/game/Templates/TemplateMgr.h/.cpp (sTemplateMgr): loads TemplateManifest.xml into an id->path map (137423 entries); GetTemplate(id) decodes lazily from Root.wad with an LRU cache; typed accessors through OBJ-10 views
+- src/server/game/Entities/ObjectTemplateMgr.h/.cpp (sObjectTemplateMgr), which already reads the player's template, grown to every template: TemplateManifest.xml loaded into an id->path map (137423 entries); GetTemplate(id) decoding lazily with an LRU cache from the archive each entry names, since 12807 entries name theirs as '|World|Part|path', meaning World-Part.wad; typed accessors through OBJ-10 views
 - `.reload templates` rebuilds the manifest map off to the side, validates it, swaps it, and drops cache entries by generation. Objects keep the template snapshot they spawned with. A failure keeps the old map and reports every error.
-- src/test/server/game/Templates/TemplateMgrTest.cpp using an in-memory fake archive
+- src/test/server/game/Entities/ObjectTemplateMgrTest.cpp using an in-memory fake archive
 
 **Acceptance**
 
@@ -46,7 +46,7 @@ The server can fetch any client template by template id, backed by the TemplateM
 
 **Risks**
 
-- The architecture puts content in the world DB. Whether full template objects come from the client at runtime or from extracted DB rows is an open question (see OBJ-17)
+- Templates are decoded from the user's install at run time and never stored in a database, as World threads, zone data and extracted tables in doc/ARCHITECTURE.md settles
 
 ## 5.02 Static zone objects appear (WLD-8)
 
