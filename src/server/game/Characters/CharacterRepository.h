@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Stores and loads wizards in the characters database: creating a character with its appearance and the guid high-water mark in one transaction, which a caller that must not block its network thread can build and commit itself, listing and counting an account's live characters, loading one by guid even when deleted, soft deletion of offline characters and restoring, the online flag, and the highest guid ever used, with statement builders and a row reader for callers that query asynchronously.
+ * Stores and loads wizards in the characters database: creating a character with its appearance and the guid high-water mark in one transaction, which a caller that must not block its network thread can build and commit itself, listing and counting an account's live characters, loading one by guid even when deleted, soft deletion of offline characters and restoring, the online flag, the highest guid ever used, and a wizard's character_stats row, read through the wizard so a missing wizard, a wizard with no row yet and a failed read are told apart, and saved whole, with statement builders and row readers for callers that query or save asynchronously.
  */
 
 #ifndef AMBROSE_CHARACTERREPOSITORY_H
 #define AMBROSE_CHARACTERREPOSITORY_H
 
+#include "CharacterStats.h"
 #include "CharacterSummary.h"
 #include "DatabaseEnv.h"
 
@@ -28,6 +29,12 @@ struct CharacterLoad
 {
     CharacterOpResult Result = CharacterOpResult::DatabaseError;
     std::optional<CharacterSummary> Character;
+};
+
+struct CharacterStatsLoad
+{
+    CharacterOpResult Result = CharacterOpResult::DatabaseError;
+    std::optional<CharacterStats> Stats;
 };
 
 struct CharacterList
@@ -57,11 +64,17 @@ public:
     static CharacterOpResult Restore(uint64 guid);
     static CharacterOpResult SetOnline(uint64 guid, bool online);
     static std::optional<uint64> GetMaxGuid();
+    static CharacterStatsLoad LoadStats(uint64 guid);
+    static CharacterOpResult SaveStats(uint64 guid, CharacterStats const& stats);
 
     static Statement PrepareLoadByAccount(uint64 account);
     static Statement PrepareLoad(uint64 guid);
     static Statement PrepareCountByAccount(uint64 account);
     static std::vector<CharacterSummary> ReadCharacters(PreparedResultSet& result);
+    static Statement PrepareLoadStats(uint64 guid);
+    static Statement PrepareSaveStats(uint64 guid, CharacterStats const& stats);
+    static std::optional<CharacterStats> ReadStats(PreparedResultSet& result);
+    static bool IsValidStats(CharacterStats const& stats) noexcept;
     static std::string_view GetResultName(CharacterOpResult result) noexcept;
 };
 

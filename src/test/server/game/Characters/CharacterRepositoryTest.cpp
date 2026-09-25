@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; and guids resuming above the highest guid ever used, even after its row is gone.
+ * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used, even after its row is gone; and a wizard's stats row, missing until the first save, saved and replaced whole with full health and mana kept as full, a write older than the row changing nothing, refused with a negative amount, and read as no wizard for a guid that has none.
  */
 
 #include "CharacterRepository.h"
@@ -173,6 +173,8 @@ TEST(CharacterRepositoryTest, AClosedCharactersDatabaseIsReportedAsAnError)
     EXPECT_EQ(CharacterRepository::Restore(1), CharacterOpResult::DatabaseError);
     EXPECT_EQ(CharacterRepository::SetOnline(1, true), CharacterOpResult::DatabaseError);
     EXPECT_FALSE(CharacterRepository::GetMaxGuid());
+    EXPECT_EQ(CharacterRepository::LoadStats(1).Result, CharacterOpResult::DatabaseError);
+    EXPECT_EQ(CharacterRepository::SaveStats(1, CharacterStats{}), CharacterOpResult::DatabaseError);
     EXPECT_EQ(CharacterRepository::GetResultName(CharacterOpResult::NotFound), "no such character");
 }
 
@@ -333,4 +335,60 @@ TEST_F(CharacterRepositoryDatabaseTest, GuidsResumeAboveTheHighestGuidEverUsedAf
     EXPECT_EQ(*next, 1007u);
     EXPECT_EQ(CharacterRepository::Create(MakeCharacter(random, *next, 1, 1800000000)), CharacterOpResult::Ok);
     EXPECT_EQ(CharacterRepository::GetMaxGuid(), 1007u);
+}
+
+TEST_F(CharacterRepositoryDatabaseTest, AWizardsStatsAreMissingUntilSavedAndThenReplacedWhole)
+{
+    std::mt19937 random(20260925);
+    CharacterSummary const wizard = MakeCharacter(random, 301, 7, 1800000301);
+    ASSERT_EQ(CharacterRepository::Create(wizard), CharacterOpResult::Ok);
+    CharacterStatsLoad const none = CharacterRepository::LoadStats(301);
+    ASSERT_EQ(none.Result, CharacterOpResult::Ok);
+    EXPECT_FALSE(none.Stats) << "a wizard that has never been saved has no stats row yet";
+    EXPECT_EQ(CharacterRepository::LoadStats(999).Result, CharacterOpResult::NotFound);
+
+    CharacterStats stats;
+    stats.OverflowXp = 12;
+    stats.SecondarySchoolId = 72777;
+    stats.TrainingPoints = 4;
+    stats.Gold = 1234;
+    stats.Health = 300;
+    stats.PotionCharge = 1.5f;
+    stats.PotionMax = 2.0f;
+    stats.ArenaPoints = 40;
+    stats.LevelLocked = true;
+    stats.Revision = 1;
+    ASSERT_EQ(CharacterRepository::SaveStats(301, stats), CharacterOpResult::Ok);
+    CharacterStatsLoad const saved = CharacterRepository::LoadStats(301);
+    ASSERT_EQ(saved.Result, CharacterOpResult::Ok);
+    ASSERT_TRUE(saved.Stats);
+    EXPECT_EQ(*saved.Stats, stats);
+    EXPECT_FALSE(saved.Stats->Mana) << "full mana is kept as full";
+
+    stats.Gold = 0;
+    stats.Health.reset();
+    stats.Mana = 7;
+    stats.LevelLocked = false;
+    stats.Revision = 3;
+    ASSERT_EQ(CharacterRepository::SaveStats(301, stats), CharacterOpResult::Ok);
+    EXPECT_EQ(*CharacterRepository::LoadStats(301).Stats, stats);
+
+    CharacterStats stale = stats;
+    stale.Gold = 555;
+    stale.Revision = 2;
+    ASSERT_EQ(CharacterRepository::SaveStats(301, stale), CharacterOpResult::Ok);
+    EXPECT_EQ(*CharacterRepository::LoadStats(301).Stats, stats) << "a write older than the row, landing late, leaves the newer row";
+    stale.Revision = 3;
+    ASSERT_EQ(CharacterRepository::SaveStats(301, stale), CharacterOpResult::Ok);
+    EXPECT_EQ(CharacterRepository::LoadStats(301).Stats->Gold, 0) << "a write is newer only when its revision is higher";
+
+    CharacterStats negative = stats;
+    negative.Gold = -1;
+    EXPECT_EQ(CharacterRepository::SaveStats(301, negative), CharacterOpResult::InvalidData);
+    negative = stats;
+    negative.Health = -5;
+    EXPECT_EQ(CharacterRepository::SaveStats(301, negative), CharacterOpResult::InvalidData);
+    EXPECT_EQ(CharacterRepository::SaveStats(0, stats), CharacterOpResult::InvalidData);
+    EXPECT_EQ(*CharacterRepository::LoadStats(301).Stats, stats) << "a refused save changes nothing";
+    EXPECT_EQ(CharacterRepository::SaveStats(999, stats), CharacterOpResult::DatabaseError) << "a stats row needs its wizard";
 }

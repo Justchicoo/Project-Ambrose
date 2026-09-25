@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the level manager: a closed world database is reported and keeps the empty sets, and with AMBROSE_TEST_DB set it installs the world schema and checks that empty tables load as empty, rows the test writes load with Fire's level 1 matching its row, an edited row applies through the player_level_stats reload target, a reload that meets a gap, a badge out of order or a school id that is not its name's hash keeps the serving set and names each fault, and the stat tables reload on their own target.
+ * Tests the level manager: a closed world database is reported and keeps the empty sets, and with AMBROSE_TEST_DB set it installs the world schema and checks that empty tables load as empty, rows the test writes load with Fire's level 1 matching its row, an edited row applies through the player_level_stats reload target, a reload that meets a gap, a badge out of order or a school id that is not its name's hash keeps the serving set and names each fault, and the stat tables reload on their own target; and a reload reaches the next wizard to enter the world, whose stats are built from the set then serving.
  */
 
 #include "DBUpdater.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
 #include "PlayerLevelMgr.h"
+#include "PlayerStats.h"
 #include "ReloadMgr.h"
 #include "StringHash.h"
 
@@ -170,4 +171,31 @@ TEST_F(PlayerLevelMgrTest, RowsLoadAndAReloadAppliesEditsOrKeepsTheServingSet)
     EXPECT_FALSE(gap.Ok);
     EXPECT_TRUE(Mentions(gap.Errors, "stat_pip_conversion_band gives the band from level 0 3 positions that do not run from 0 without a gap"));
     EXPECT_EQ(sPlayerLevelMgr.GetStats()->Get("m_shadowPipMax"), 3.0);
+}
+
+TEST_F(PlayerLevelMgrTest, AReloadReachesTheNextWizardToEnterTheWorld)
+{
+    InsertLevels();
+    ASSERT_TRUE(sPlayerLevelMgr.Load().Loaded);
+    CharacterSummary wizard;
+    wizard.Guid = 9;
+    wizard.SchoolId = Fire;
+    wizard.Level = 1;
+    std::string problem;
+    std::optional<PlayerStats> const before = PlayerStats::Create(wizard, std::nullopt, *sPlayerLevelMgr.GetLevels(), *sPlayerLevelMgr.GetStats(), problem);
+    ASSERT_TRUE(before) << problem;
+    EXPECT_EQ(before->GetMaxHitpoints(), 415);
+    EXPECT_EQ(before->GetMaxMana(), 15);
+    EXPECT_EQ(before->GetTrainingPoints(), 2);
+
+    Execute(fmt::format("UPDATE `player_level_stats` SET `hitpoints` = 450, `mana` = 16, `training_points` = 3 WHERE `school_id` = {} AND `level` = 1", Fire));
+    ReloadOutcome const reloaded = sReloadMgr.Reload(PlayerLevelMgr::LevelTarget);
+    ASSERT_TRUE(reloaded.Ok) << (reloaded.Errors.empty() ? std::string() : reloaded.Errors.front());
+    std::optional<PlayerStats> const after = PlayerStats::Create(wizard, std::nullopt, *sPlayerLevelMgr.GetLevels(), *sPlayerLevelMgr.GetStats(), problem);
+    ASSERT_TRUE(after) << problem;
+    EXPECT_EQ(after->GetMaxHitpoints(), 450);
+    EXPECT_EQ(after->GetMaxMana(), 16);
+    EXPECT_EQ(after->GetTrainingPoints(), 3);
+    EXPECT_EQ(after->GetHitpoints(), 450) << "a wizard at full health is full of the new maximum";
+    EXPECT_EQ(before->GetMaxHitpoints(), 415) << "a wizard already in the world keeps the stats it entered with";
 }

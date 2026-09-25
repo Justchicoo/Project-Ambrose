@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind.
+# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens.
 import os
 import re
 import time
@@ -114,6 +114,8 @@ class Engine:
 
     def act_shot(self, step):
         name = step.get("file") or step.get("name", "shot")
+        if step.get("settle"):
+            time.sleep(float(step["settle"]))
         picture = self.client.frame()
         self.current = picture
         taken = self.shot(name, picture)

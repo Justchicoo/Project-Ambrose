@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, and refuses a step whose action, keys, screen or target the driver does not know, or a pattern that does not compile, before anything is started.
+# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle or hold outside its bounds, or a seeded wizard's stat it does not carry or a negative one, before anything is started.
 import json
 import os
 import re
@@ -20,7 +20,7 @@ ACTIONS = {
     "key": (("vk",), ()),
     "hold_key": (("vk", "seconds"), ("moves",)),
     "click": (("target",), ("attempts", "dwell", "dwell_step", "on_screen", "until")),
-    "shot": ((), ("file",)),
+    "shot": ((), ("file", "settle")),
     "server_command": (("command",), ("pattern", "timeout")),
     "game_command": (("command",), ("pattern", "timeout")),
     "wait_game_log": (("pattern", "timeout"), ("from", "fail", "expect", "reject", "record")),
@@ -30,9 +30,11 @@ ALLOW_LISTS = ("pending_allowed", "dropped_allowed", "server_log_allowed", "clie
 TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "game_settings", "wizard", "variables", "expect", "steps") + ALLOW_LISTS
 REQUIRES = ("client", "capture", "gameserver")
 WIZARD = ("school", "zone", "first", "middle", "last")
+WIZARD_STATS = ("overflow_xp", "secondary_school", "training_points", "gold", "health", "mana", "potion_charge", "potion_max", "arena_points", "level_locked")
 SIDES = ("server", "client")
 OUTCOMES = ("pass", "failure")
 MAX_HOLD_SECONDS = 30
+MAX_SETTLE_SECONDS = 30
 
 
 def fill(value, variables):
@@ -143,6 +145,8 @@ def _check_step(path, index, step):
         raise Refused(f"{where} ({name}) needs a list of screens to wait for")
     if action == "hold_key" and (not isinstance(step["seconds"], (int, float)) or not 0 < step["seconds"] <= MAX_HOLD_SECONDS):
         raise Refused(f"{where} ({name}) needs to hold its key for more than 0 and at most {MAX_HOLD_SECONDS} seconds")
+    if action == "shot" and "settle" in step and (not isinstance(step["settle"], (int, float)) or isinstance(step["settle"], bool) or not 0 <= step["settle"] <= MAX_SETTLE_SECONDS):
+        raise Refused(f"{where} ({name}) may let the screen settle for 0 to {MAX_SETTLE_SECONDS} seconds before its shot")
     if action == "forbid_log" and step["side"] not in SIDES:
         raise Refused(f"{where} ({name}) must forbid a line on the {' or '.join(SIDES)} side")
     for key in ("pattern", "fail"):
@@ -170,6 +174,15 @@ def _check_document(path, document):
         missing = [key for key in WIZARD if key not in wizard]
         if missing:
             raise Refused(f"{path}: the wizard needs {', '.join(missing)}")
+        stats = wizard.get("stats")
+        if stats is not None:
+            if not isinstance(stats, dict):
+                raise Refused(f"{path}: the wizard's stats must be an object")
+            for key, value in stats.items():
+                if key not in WIZARD_STATS:
+                    raise Refused(f"{path}: the wizard's stats have {key!r}, which a wizard does not carry; it carries {', '.join(WIZARD_STATS)}")
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+                    raise Refused(f"{path}: the wizard's {key} must be a number of zero or more")
         if not (document.get("requires") or {}).get("gameserver"):
             raise Refused(f"{path} seeds a wizard but does not require the game server it enters the world on")
     if document.get("expect", "pass") not in OUTCOMES:

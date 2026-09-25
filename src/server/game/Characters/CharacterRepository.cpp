@@ -1,11 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Binds wizard fields to the characters statements and reads joined character and appearance rows back field by field; refuses a zero guid or account, a character already marked deleted, and text that is not UTF-8, holds control characters or is too long, before touching the database; treats a commit whose reply was lost as done when the stored character matches; and tells soft deletion, restoring and the online flag apart by the rows each update changed.
+ * Binds wizard fields to the characters statements and reads joined character and appearance rows back field by field; refuses a zero guid or account, a character already marked deleted, and text that is not UTF-8, holds control characters or is too long, before touching the database; treats a commit whose reply was lost as done when the stored character matches; and tells soft deletion, restoring and the online flag apart by the rows each update changed. A stats write older than the row it would replace changes nothing, which the statement itself decides, so it is not an error. A stats row with a negative amount or vital, or a potion charge that is not a finite number of zero or more, is refused before it is written, A stats read that finds the wizard but no row loads as having none, and one that finds no wizard is told apart from both.
  */
 
 #include "CharacterRepository.h"
 #include "Log.h"
 #include "Utf.h"
+
+#include <cmath>
 
 #include <string_view>
 
@@ -321,6 +323,92 @@ std::vector<CharacterSummary> CharacterRepository::ReadCharacters(PreparedResult
         look.NewPlayerOptions2 = result[45].Get<uint32>();
     } while (result.NextRow());
     return characters;
+}
+
+CharacterStatsLoad CharacterRepository::LoadStats(uint64 guid)
+{
+    Statement const statement = PrepareLoadStats(guid);
+    if (!statement)
+        return {};
+    PreparedQueryResult result;
+    if (!CharacterDatabase.TryQuery(*statement, result))
+        return {};
+    if (!result)
+        return { CharacterOpResult::NotFound, std::nullopt };
+    return { CharacterOpResult::Ok, ReadStats(*result) };
+}
+
+CharacterOpResult CharacterRepository::SaveStats(uint64 guid, CharacterStats const& stats)
+{
+    if (guid == 0 || !IsValidStats(stats))
+        return CharacterOpResult::InvalidData;
+    Statement const statement = PrepareSaveStats(guid, stats);
+    if (!statement)
+        return CharacterOpResult::DatabaseError;
+    return CharacterDatabase.DirectExecute(*statement) ? CharacterOpResult::Ok : CharacterOpResult::DatabaseError;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareLoadStats(uint64 guid)
+{
+    Statement statement = Prepare(CHAR_SEL_CHARACTER_STATS);
+    if (statement)
+        statement->SetData(0, guid);
+    return statement;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareSaveStats(uint64 guid, CharacterStats const& stats)
+{
+    Statement statement = Prepare(CHAR_REP_CHARACTER_STATS);
+    if (!statement)
+        return statement;
+    statement->SetData(0, guid);
+    statement->SetData(1, stats.OverflowXp);
+    statement->SetData(2, stats.SecondarySchoolId);
+    statement->SetData(3, stats.TrainingPoints);
+    statement->SetData(4, stats.Gold);
+    if (stats.Health)
+        statement->SetData(5, *stats.Health);
+    else
+        statement->SetData(5, nullptr);
+    if (stats.Mana)
+        statement->SetData(6, *stats.Mana);
+    else
+        statement->SetData(6, nullptr);
+    statement->SetData(7, stats.PotionCharge);
+    statement->SetData(8, stats.PotionMax);
+    statement->SetData(9, stats.ArenaPoints);
+    statement->SetData(10, static_cast<uint8>(stats.LevelLocked ? 1 : 0));
+    statement->SetData(11, stats.Revision);
+    return statement;
+}
+
+std::optional<CharacterStats> CharacterRepository::ReadStats(PreparedResultSet& result)
+{
+    Field const* const row = result.Fetch();
+    if (row[0].Get<uint32>() == 0)
+        return std::nullopt;
+    CharacterStats stats;
+    stats.OverflowXp = row[1].Get<int32>();
+    stats.SecondarySchoolId = row[2].Get<uint32>();
+    stats.TrainingPoints = row[3].Get<int32>();
+    stats.Gold = row[4].Get<int32>();
+    if (!row[5].IsNull())
+        stats.Health = row[5].Get<int32>();
+    if (!row[6].IsNull())
+        stats.Mana = row[6].Get<int32>();
+    stats.PotionCharge = row[7].Get<float>();
+    stats.PotionMax = row[8].Get<float>();
+    stats.ArenaPoints = row[9].Get<int32>();
+    stats.LevelLocked = row[10].Get<uint32>() != 0;
+    stats.Revision = row[11].Get<uint64>();
+    return stats;
+}
+
+bool CharacterRepository::IsValidStats(CharacterStats const& stats) noexcept
+{
+    auto const amount = [](float value) { return std::isfinite(value) && value >= 0.0f; };
+    return stats.OverflowXp >= 0 && stats.TrainingPoints >= 0 && stats.Gold >= 0 && stats.ArenaPoints >= 0 && (!stats.Health || *stats.Health >= 0) && (!stats.Mana || *stats.Mana >= 0)
+        && amount(stats.PotionCharge) && amount(stats.PotionMax);
 }
 
 std::string_view CharacterRepository::GetResultName(CharacterOpResult result) noexcept

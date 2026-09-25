@@ -28,8 +28,9 @@ client and local server.
 | Standing in Ravenwood | [`enter-world.json`](./enter-world.json) | A wizard saved in WizardCity/WC_Ravenwood is listed, played and handed its object in MSG_LOGINCOMPLETE, the client loads the zone and says so, the entry chatter is answered, and the session stays up through a keepalive. |
 | Announcing and kicking | [`announce-and-kick.json`](./announce-and-kick.json) | The Commons entry, then `server announce` on the game server console, whose text the client shows as a notification and logs as a server message, and `kick` with the wizard's character id, which sends the reason CSR and opens the client's dialog for a disconnect by an administrator. |
 | Walking in the Commons | [`enter-the-commons.json`](./enter-the-commons.json) | The same entry for a wizard saved in WizardCity/WC_Hub with no position, placed at the zone's Start, with the fields MSG_LOGINCOMPLETE carried recorded, and a held W that moves the view far more than the same time idle, which is the player controlling the wizard. |
+| A wizard's stats | [`wizard-stats.json`](./wizard-stats.json) | A level 5 Fire wizard seeded with 900 experience, 1234 gold, 300 health and 10 mana enters Ravenwood; the game server logs the stats it built from the database and the level tables, and the run shoots the HUD, then the backpack and the character stats opened with the keys the client's own InputBindings.xml gives them. |
 
-All three require the game server as well as the login server; the driver starts one of its own.
+All four require the game server as well as the login server; the driver starts one of its own.
 
 ## Listing and running
 

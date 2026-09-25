@@ -1,15 +1,17 @@
 /*
  * Project Ambrose by Imjustchico
- * One connected game client, on the network side a session like the login server's and on the game side the thing the world owns: what arrives is queued by the network thread that read it and run later by the world thread that owns the game state, so a handler never touches the world from two threads at once, and the account and character it belongs to are carried here for every later system to read. What arrives goes through the game server's own message table, so a message with no rule is counted and reported rather than acted on. An attach is judged by the handoff key it carries, which is spent against the login database off the network thread, so a client is only ever let in on a key that this attach won; the wizard it names is then loaded, checked to belong to that account, placed in its zone's instance on the world thread and handed its own object in MSG_LOGINCOMPLETE, and when the client says it has loaded that zone the wizard is in the world. The wizard's name, as its client shows it, is kept for a command to find the session by, under a lock of its own since a console asks from another thread. The instance and zone it stands in are the world thread's alone, and it leaves them when the session goes. The WIZARD messages a client sends as it enters are answered by the handlers in game/Handlers. The world ticks each session, and one that has neither attached nor begun to within Attach.Timeout of connecting is closed, so a socket that never says who it is cannot hold a slot.
+ * One connected game client, on the network side a session like the login server's and on the game side the thing the world owns: what arrives is queued by the network thread that read it and run later by the world thread that owns the game state, so a handler never touches the world from two threads at once, and the account and character it belongs to are carried here for every later system to read. What arrives goes through the game server's own message table, so a message with no rule is counted and reported rather than acted on. An attach is judged by the handoff key it carries, which is spent against the login database off the network thread, so a client is only ever let in on a key that this attach won; the wizard it names is then loaded, checked to belong to that account, placed in its zone's instance on the world thread and handed its own object in MSG_LOGINCOMPLETE, and when the client says it has loaded that zone the wizard is in the world. The wizard's name, as its client shows it, is kept for a command to find the session by, under a lock of its own since a console asks from another thread. The instance and zone it stands in are the world thread's alone, and it leaves them when the session goes. The WIZARD messages a client sends as it enters are answered by the handlers in game/Handlers. The wizard's stats are read with it, from its character_stats row, and kept on the world thread while it plays; they are written when they change and when it leaves, never on a timer, each write queued so a closing session need not wait on it and carrying the next revision of the wizard's row, so writes that land out of order leave the newest. The world ticks each session, and one that has neither attached nor begun to within Attach.Timeout of connecting is closed, so a socket that never says who it is cannot hold a slot.
  */
 
 #ifndef AMBROSE_GAMESESSION_H
 #define AMBROSE_GAMESESSION_H
 
 #include "AsyncCallbackProcessor.h"
+#include "CharacterStats.h"
 #include "CharacterSummary.h"
 #include "GameMessages.h"
 #include "LoginKeyValidator.h"
+#include "PlayerStats.h"
 #include "SessionBase.h"
 
 #include <atomic>
@@ -44,6 +46,7 @@ public:
     void HandleAttach(GameMessages::Attach& message);
     void HandleClientZoned(GameMessages::ClientZoned& message);
     void LeaveWorld();
+    PlayerStats const* GetStats() const noexcept { return _stats ? &*_stats : nullptr; }
 
     void HandleGetTimedAccessPasses(GameMessages::GetTimedAccessPasses& message);
     void HandleGetSubscriberOnlyItems(GameMessages::GetSubscriberOnlyItems& message);
@@ -69,7 +72,9 @@ private:
     void RefuseAttach(LoginKeyClaim const& claim, LoginKeyVerdict verdict);
     void LoadAccount(LoginKeyClaim const& claim);
     void LoadCharacter(LoginKeyClaim const& claim);
-    void EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character);
+    void LoadStats(LoginKeyClaim const& claim, CharacterSummary character);
+    void EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character, std::optional<CharacterStats> const& stored);
+    void SaveStats();
     void RefuseEntry(LoginKeyClaim const& claim, std::string const& reason);
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
@@ -84,6 +89,8 @@ private:
     std::optional<uint32> _mapId;
     std::string _zonePath;
     uint64 _worldGuid = 0;
+    std::optional<PlayerStats> _stats;
+    uint64 _statsRevision = 0;
     mutable std::mutex _nameMutex;
     std::string _characterName;
 };

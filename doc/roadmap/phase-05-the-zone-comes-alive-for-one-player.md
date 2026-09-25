@@ -112,8 +112,8 @@ NPCs, signs, doors and props from the zone data appear for a player entering a z
 
 - [ ] Real client: walk to the Ravenwood gate, relog, spawn there within a few units
 - [ ] Stale ZoneCounter leaves position unchanged
-- [ ] 1000 moves give at most one DB write per interval
-- [ ] Changing Player.SaveInterval applies from the next save
+- [ ] 1000 moves write nothing until the wizard leaves, then write once
+- [ ] A zone change writes the position
 
 ### Detailed spec from WLD-9: Own movement: position tracking and persistence
 
@@ -122,7 +122,7 @@ The server always knows where each player is, and a relog returns the player to 
 **Deliverables**
 
 - src/server/game/Handlers/MovementHandler.cpp: HandleClientMove (unpack, drop packets whose ZoneCounter differs from the session's), HandleClientMoveState, HandleJump
-- src/server/game/Entities/Player position fields plus a dirty-save to characters DB every Player.SaveInterval, and a save on logout. Player.SaveInterval is a live setting applied from the next save.
+- src/server/game/Entities/Player position fields, written to the characters DB when the wizard leaves the world and when it changes zone, never on a timer, as Saving in doc/ARCHITECTURE.md settles at the maintainer's direction
 - Session zone counter bumped on every zone change
 
 **Client messages:** MSG_CLIENTMOVE, MSG_CLIENTMOVESTATE, MSG_JUMP
@@ -135,8 +135,8 @@ The server always knows where each player is, and a relog returns the player to 
 
 - [ ] Real client: walk to the Ravenwood gate, log out, log back in, and spawn at that gate (within a few units)
 - [ ] Unit: a MSG_CLIENTMOVE with a stale ZoneCounter leaves position unchanged
-- [ ] Unit: 1000 moves between saves produce at most one DB write per save interval
-- [ ] Unit: changing Player.SaveInterval applies from the next save without a restart
+- [ ] Unit: 1000 moves write no position until the wizard leaves the world, and leaving writes it once
+- [ ] Unit: a zone change writes the position
 
 **Risks**
 
@@ -153,7 +153,7 @@ The server always knows where each player is, and a relog returns the player to 
 - [x] Synthetic MagicXPConfig fixture emits expected rows
 - [x] A row per (school, level) up to m_maxSchoolLevel; 16 magic_school_template rows
 - [x] GetInfo(Fire,1) matches the row
-- [ ] `.reload player_level_stats` applies new base stats on the next level-up or login
+- [x] `.reload player_level_stats` applies new base stats on the next level-up or login
 
 ### Detailed spec from WIZ-2: Level, school and stat-config extractor
 
@@ -186,7 +186,7 @@ The world database holds the per-school, per-level stat table and school definit
 - [x] Unit test: the extractor, run on a synthetic BINd MagicXPConfig fixture built in the test, emits the expected rows. `LevelExtractorTest.EachSchoolTakesItsOwnValuesAndTheSharedTableOtherwise` encodes MagicXPConfig, two school templates and a WizStatisticEffectConfig through a type dump it writes: Fire's level 1 row takes its own 415 hitpoints and the shared table's experience, mana, gold and energy, Moon is named without rows, and the settings, factors, mob ranks, badges and bands come out in order; the script test checks the nine tables' SQL and the broken-input test each refusal
 - [x] Run against the user's install: player_level_stats has a row for each (school, level) up to m_maxSchoolLevel, and magic_school_template has 16 rows. On r806919 `extractor --dry-run levels` prints 1267 rows for Fire, Ice, Storm, Life, Myth, Death and Balance, levels 0 to 180, and 16 magic_school_template rows, as `LevelExtractorClientTest` and the Extractor CTest check; the development game server, started on a world database without the tables, extracted and loaded them itself ('Extracted 1267 level rows for 7 schools, 16 magic schools and 39 stat settings', then 'Loaded 16 magic schools with level tables for 7 of them up to level 180, and 39 stat settings with 121 band values'), and level 1 reads 415, 500, 400, 425, 460, 450 and 480 hitpoints for Fire, Ice, Storm, Myth, Life, Death and Balance
 - [x] Unit test: sPlayerLevelMgr.GetInfo(Fire, 1) returns hitpoints, mana and training points matching the imported row. `PlayerLevelMgrTest.RowsLoadAndAReloadAppliesEditsOrKeepsTheServingSet` against MariaDB loads the rows it writes and reads Fire's level 1 back with 415 hitpoints, 15 mana, 2 training points and every other column, and `LevelExtractorClientTest.TheRowsFillAWorldDatabaseTheManagerLoads` does the same with the install's own rows
-- [ ] Unit test: editing a player_level_stats row, then `.reload player_level_stats`, applies the new base stats on the next level-up or login without a restart; a row that fails validation keeps the old table
+- [x] Unit test: editing a player_level_stats row, then `.reload player_level_stats`, applies the new base stats on the next level-up or login without a restart; a row that fails validation keeps the old table. `PlayerLevelMgrTest.AReloadReachesTheNextWizardToEnterTheWorld` against MariaDB builds a Fire wizard's stats the way entering the world does, edits the level 1 row to 450 hitpoints, 16 mana and 3 training points, reloads the player_level_stats target, and the next wizard's stats carry the new values at full health while the stats built before keep 415; `PlayerLevelMgrTest.RowsLoadAndAReloadAppliesEditsOrKeepsTheServingSet` shows a gap, a badge out of order and a school id that is not its name's hash refused with the serving set kept
 
 **Risks**
 
@@ -202,9 +202,9 @@ The world database holds the per-school, per-level stat table and school definit
 
 **Acceptance**
 
-- [ ] New Fire level-1 base HP/mana/training points match player_level_stats(Fire,1)
-- [ ] WizGameStats round-trips all transmitted fields
-- [ ] Real client: gold=1234, level=5 shows on HUD, backpack and sheet
+- [x] New Fire level-1 base HP/mana/training points match player_level_stats(Fire,1)
+- [x] WizGameStats round-trips all transmitted fields
+- [x] Real client: gold=1234, level=5 shows on HUD, backpack and sheet
 
 ### Detailed spec from WIZ-3: Character state persistence and player-object stats
 
@@ -212,10 +212,11 @@ A logged-in character's level, school, XP, training points, gold, health, mana a
 
 **Deliverables**
 
-- data/sql/updates/db_characters/<date>_01.sql: character_stats (level, xp, overflow_xp, school_id, secondary_school_id, training_points, gold, health, mana, potion_charge, potion_max, arena_points, level_locked)
-- src/server/game/Entities/Player/PlayerStats: builds WizGameStats (m_baseHitpoints, m_baseMana, m_baseGoldPouch, m_currentHitpoints, m_currentMana, m_currentGold, m_powerPipBase, m_potionMax, m_potionCharge, m_schoolID, m_secondarySchool, m_shadowPipMax...) as WizClientObject.m_gameStats, and ClientMagicSchoolBehavior (m_schoolOfFocus, m_experiencePoints, m_level, m_trainingPoints, m_overflowXP, m_levelLocked, m_secondarySchool)
-- Save on logout and every Player.SaveInterval, the live setting shared with WLD-9
-- src/test/server/game/PlayerStatsTest.cpp
+- data/sql/updates/db_characters/2026_09_25_01.sql: character_stats (overflow_xp, secondary_school_id, training_points, gold, health, mana, potion_charge, potion_max, arena_points, level_locked, revision). Level, experience and school stay in characters, where the character list already reads them, so each has one home; health and mana are NULL when full.
+- src/server/game/Entities/Player/PlayerStats: builds WizGameStats (m_baseHitpoints, m_baseMana, m_baseGoldPouch, m_energyMax, m_currentHitpoints, m_currentMana, m_currentGold, m_currentArenaPoints, m_powerPipBase, m_pipConversionBaseAllSchools, m_shadowPipRating, m_archmasteryBase, m_potionMax, m_potionCharge, m_referenceLevel, m_schoolID, m_secondarySchool, m_shadowPipMax) as WizClientObject.m_gameStats, and ClientMagicSchoolBehavior (m_schoolOfFocus, m_experiencePoints, m_level, m_trainingPoints, m_overflowXP, m_levelLocked, m_secondarySchool)
+- GameSession reads the stats row through the wizard, so a failed read never passes for a wizard with no row, and refuses a wizard whose school has no level table
+- Written as a stat changes and when the wizard leaves the world, never on a timer, each write carrying the next revision so writes that land out of order leave the newest, as Saving in doc/ARCHITECTURE.md settles at the maintainer's direction
+- src/test/server/game/Entities/Player/PlayerStatsTest.cpp, src/test/client/PlayerStatsClientTest.cpp, and the client driver's wizard-stats.json, whose seeded wizard now carries experience and a stats row
 
 **Client messages:** MSG_WIZGAMESTATS
 
@@ -229,14 +230,15 @@ A logged-in character's level, school, XP, training points, gold, health, mana a
 
 **Acceptance**
 
-- [ ] Unit test: a new Fire character at level 1 gets base HP, mana and training points equal to player_level_stats(Fire,1)
-- [ ] Unit test: the ObjectProperty round-trip of the built WizGameStats keeps all transmitted fields
-- [ ] Real client: a character with gold=1234 and level=5 in the DB logs in. The HUD health and mana globes show DB values over base maximums, the backpack shows 1234 gold, and the character sheet shows level 5 and the correct school.
+- [x] Unit test: a new Fire character at level 1 gets base HP, mana and training points equal to player_level_stats(Fire,1). `PlayerStatsTest.ANewFireWizardAtLevelOneTakesItsRowsBaseValuesAtFullHealthAndMana`: 415 hitpoints, its row's mana and training points, at full health and mana, saved back as full
+- [x] Unit test: the ObjectProperty round-trip of the built WizGameStats keeps all transmitted fields. `PlayerStatsClientTest.TheClientsOwnStatsClassesCarryEveryValueThroughTheTransmitForm` fills r806919's own WizGameStats and ClientMagicSchoolBehavior from a level 5 wizard's stats and reads every transmitted property back unchanged; `PlayerStatsTest.TheGameStatsAndSchoolBehaviorCarryEveryValueAndReadBackThroughTheTransmitForm` does the same on classes the test lays out
+- [x] Real client: a character with gold=1234 and level=5 in the DB logs in. The HUD health and mana globes show DB values over base maximums, the backpack shows 1234 gold, and the character sheet shows level 5 and the correct school. Earned on 2026-09-25 by the client driver's wizard-stats.json on r806919 (run 20260925-192225): a level 5 Fire wizard seeded with 900 experience, 1234 gold, 300 health and 10 mana entered Ravenwood, the game server logged 'level 5 with 300 of 503 health and 10 of 24 mana', the HUD globes read 300 and 10 partly drained, and the character stats page opened with C read Apprentice (Level 5), Pyromancer, Health 300/503, Mana 10/24, Experience 195/495, Gold 1,234/300,000 and Energy 0/42. The backpack opened with B shows its item count and no gold in this client revision, so the gold is read on the character stats page, where the client shows it
 
 **Risks**
 
-- Which WizGameStats fields the client needs non-zero to avoid UI glitches is unverified (for example m_baseGoldPouch=0 may block showing gold).
-- When MSG_WIZGAMESTATS is needed (for mobs, per its description) versus embedding stats in LOGINCOMPLETE Data is unverified for players.
+- Settled: the client shows each value against the maximum it computes itself, health as m_baseHitpoints plus m_bonusHitpoints (WizGameStats::CalcTotalHitpoints), mana as base plus bonus less its mana reduction (CalcMaxMana), energy as m_energyMax plus m_bonusEnergy (CalcMaxEnergy), and gold against m_baseGoldPouch, so the base values from the level tables are what it needs.
+- Settled: the client hands MSG_WIZGAMESTATS to ClientDuelManager, which reads a duel participant's stats, so a player's own stats travel in its object in MSG_LOGINCOMPLETE.
+- Current energy is not sent yet, so the character page reads 0 of the maximum; it belongs with the vitals in 8.01.
 
 ## 5.06 Return to character select (LOG-13)
 

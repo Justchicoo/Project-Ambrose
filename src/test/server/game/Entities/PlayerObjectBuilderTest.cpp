@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the object a wizard stands in the world as, on classes the test lays out the way the client's are: it opens with the pair the core object table gives WizClientObject and the player's template id, carries the wizard's id, place, facing and mobile id, holds one behavior for each the template names in the template's order with an empty slot where the client takes one or the template itself leaves one, fills the look, name and school from the stored wizard, and reads back equal through the CoreObject form; a behavior nothing maps, and a template never read, are refused rather than guessed.
+ * Tests the object a wizard stands in the world as, on classes the test lays out the way the client's are: it opens with the pair the core object table gives WizClientObject and the player's template id, carries the wizard's id, place, facing and mobile id, holds one behavior for each the template names in the template's order with an empty slot where the client takes one or the template itself leaves one, fills the look and name from the stored wizard and the school behavior and stats from its stats, and reads back equal through the CoreObject form; a behavior nothing maps, and a template never read, are refused rather than guessed.
  */
 
 #include "CharacterTypeFixtures.h"
 #include "CoreObjectSerializer.h"
 #include "ObjectSchemaMgr.h"
 #include "PlayerObjectBuilder.h"
+#include "PlayerStatsFixtures.h"
 #include "TypeRegistry.h"
 
 #include <gtest/gtest.h>
@@ -48,9 +49,7 @@ namespace
         std::vector<std::pair<std::string, Json>> player = client;
         player.emplace_back("m_gameStats", Property("class WizGameStats*", "m_gameStats", 9, Wire));
         AddClass(classes, "class WizClientObject", Json::array({ "ClientObject", "CoreObject", "PropertyClass" }), player);
-        AddClass(classes, "class WizGameStats", Json::array({ "PropertyClass" }), {
-            { "m_baseHitpoints", Property("int", "m_baseHitpoints", 0, Wire) },
-            { "m_highestCharacterLevelOnAccount", Property("int", "m_highestCharacterLevelOnAccount", 1, Wire) } });
+        AddClass(classes, "class WizGameStats", Json::array({ "PropertyClass" }), PlayerStatsFixtures::GameStatsProperties());
 
         Json gender = Property("enum eGender", "m_eGender", 3, 0x20001F);
         gender["enum_options"] = Json{ { "Male", 1 }, { "Female", 0 }, { "Neutral", 2 } };
@@ -62,11 +61,7 @@ namespace
             { "m_nameKeys", Property("unsigned int", "m_nameKeys", 2, Wire) },
             { "m_eGender", gender },
             { "m_eRace", race } });
-        AddClass(classes, "class ClientMagicSchoolBehavior", Json::array({ "BehaviorInstance", "PropertyClass" }), {
-            { "m_behaviorTemplateNameID", Property("unsigned int", "m_behaviorTemplateNameID", 0, Local) },
-            { "m_schoolOfFocus", Property("unsigned int", "m_schoolOfFocus", 1, Wire) },
-            { "m_experiencePoints", Property("int", "m_experiencePoints", 2, Wire) },
-            { "m_level", Property("int", "m_level", 3, Wire) } });
+        AddClass(classes, "class ClientMagicSchoolBehavior", Json::array({ "BehaviorInstance", "PropertyClass" }), PlayerStatsFixtures::SchoolBehaviorProperties());
         AddClass(classes, "TestMobileBehavior", Json::array({ "BehaviorInstance", "PropertyClass" }), {
             { "m_behaviorTemplateNameID", Property("unsigned int", "m_behaviorTemplateNameID", 0, Local) } });
 
@@ -113,6 +108,12 @@ namespace
             _placement.Z = -28.0f;
             _placement.Yaw = 1.5f;
             _placement.MobileId = 3277;
+
+            _levels = PlayerLevelSet::Build(PlayerStatsFixtures::FireLevels(5), errors);
+            ASSERT_TRUE(_levels) << (errors.empty() ? std::string() : errors.front());
+            std::string problem;
+            _stats = PlayerStats::Create(_character, std::nullopt, *_levels, StatEffectSet(), problem);
+            ASSERT_TRUE(_stats) << problem;
         }
 
         TypeCatalogPtr _catalog;
@@ -121,13 +122,15 @@ namespace
         ObjectTemplate _template;
         CharacterSummary _character;
         PlayerPlacement _placement;
+        std::shared_ptr<PlayerLevelSet const> _levels;
+        std::optional<PlayerStats> _stats;
     };
 }
 
 TEST_F(PlayerObjectBuilderTest, TheWizardsObjectCarriesItsHeaderIdsPlaceAndBehaviorsInTemplateOrder)
 {
     std::string problem;
-    PropertyObjectPtr const player = PlayerObjectBuilder::Build(_catalog, *_types, *_behaviors, _template, _character, _placement, problem);
+    PropertyObjectPtr const player = PlayerObjectBuilder::Build(_catalog, *_types, *_behaviors, _template, _character, *_stats, _placement, problem);
     ASSERT_TRUE(player) << problem;
     ASSERT_TRUE(player->GetCoreHeader());
     EXPECT_EQ(*player->GetCoreHeader(), (CoreObjectHeader{ 104, 2, 1 }));
@@ -162,6 +165,10 @@ TEST_F(PlayerObjectBuilderTest, TheWizardsObjectCarriesItsHeaderIdsPlaceAndBehav
     PropertyObject const* const stats = player->Get("m_gameStats")->AsObject();
     ASSERT_NE(stats, nullptr);
     EXPECT_EQ(*stats->Get("m_highestCharacterLevelOnAccount")->GetIf<int32>(), 4);
+    EXPECT_EQ(*stats->Get("m_baseHitpoints")->GetIf<int32>(), 460);
+    EXPECT_EQ(*stats->Get("m_currentHitpoints")->GetIf<int32>(), 460);
+    EXPECT_EQ(*stats->Get("m_schoolID")->GetIf<uint32>(), 2343174u);
+    EXPECT_EQ(*behaviors[4].AsObject()->Get("m_trainingPoints")->GetIf<int32>(), 2);
 }
 
 TEST_F(PlayerObjectBuilderTest, ASlotTheTemplateLeavesEmptyStaysEmpty)
@@ -169,7 +176,7 @@ TEST_F(PlayerObjectBuilderTest, ASlotTheTemplateLeavesEmptyStaysEmpty)
     std::string problem;
     ObjectTemplate withEmpty = _template;
     withEmpty.Behaviors.insert(withEmpty.Behaviors.begin() + 1, std::string());
-    PropertyObjectPtr const player = PlayerObjectBuilder::Build(_catalog, *_types, *_behaviors, withEmpty, _character, _placement, problem);
+    PropertyObjectPtr const player = PlayerObjectBuilder::Build(_catalog, *_types, *_behaviors, withEmpty, _character, *_stats, _placement, problem);
     ASSERT_TRUE(player) << problem;
     PropertyValue::List const& behaviors = *player->Get("m_inactiveBehaviors")->GetList();
     ASSERT_EQ(behaviors.size(), 6u);
@@ -181,7 +188,7 @@ TEST_F(PlayerObjectBuilderTest, ASlotTheTemplateLeavesEmptyStaysEmpty)
 TEST_F(PlayerObjectBuilderTest, TheObjectReadsBackEqualThroughTheCoreObjectForm)
 {
     std::string problem;
-    PropertyObjectPtr const player = PlayerObjectBuilder::Build(_catalog, *_types, *_behaviors, _template, _character, _placement, problem);
+    PropertyObjectPtr const player = PlayerObjectBuilder::Build(_catalog, *_types, *_behaviors, _template, _character, *_stats, _placement, problem);
     ASSERT_TRUE(player) << problem;
     EncodeResult const encoded = CoreObjectSerializer::Encode(*player, *_types);
     ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
@@ -198,12 +205,12 @@ TEST_F(PlayerObjectBuilderTest, ABehaviorNothingMapsAndATemplateNeverReadAreRefu
     std::string problem;
     ObjectTemplate unmapped = _template;
     unmapped.Behaviors.insert(unmapped.Behaviors.begin() + 2, "LadderBehavior");
-    EXPECT_FALSE(PlayerObjectBuilder::Build(_catalog, *_types, *_behaviors, unmapped, _character, _placement, problem));
+    EXPECT_FALSE(PlayerObjectBuilder::Build(_catalog, *_types, *_behaviors, unmapped, _character, *_stats, _placement, problem));
     EXPECT_NE(problem.find("names behavior LadderBehavior, which behavior_client_class does not list"), std::string::npos) << problem;
 
-    EXPECT_FALSE(PlayerObjectBuilder::Build(_catalog, *_types, *_behaviors, ObjectTemplate(), _character, _placement, problem));
+    EXPECT_FALSE(PlayerObjectBuilder::Build(_catalog, *_types, *_behaviors, ObjectTemplate(), _character, *_stats, _placement, problem));
     EXPECT_NE(problem.find("has not been read from the install"), std::string::npos) << problem;
 
-    EXPECT_FALSE(PlayerObjectBuilder::Build(_catalog, CoreObjectTypeTable(), *_behaviors, _template, _character, _placement, problem));
+    EXPECT_FALSE(PlayerObjectBuilder::Build(_catalog, CoreObjectTypeTable(), *_behaviors, _template, _character, *_stats, _placement, problem));
     EXPECT_NE(problem.find("core_object_type gives class WizClientObject no block and type"), std::string::npos) << problem;
 }

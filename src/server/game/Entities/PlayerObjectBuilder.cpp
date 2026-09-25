@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Makes the player object from the catalog's own classes and defaults and sets only what the stored wizard decides: a behavior the template names that behavior_client_class does not know refuses the build rather than being guessed or dropped, because the client reads the behaviors by position and one missing slot shifts every later one, and a slot the template itself leaves empty stays empty; the stats carry the wizard's level as the highest on the account and otherwise the class's defaults, since the level tables vitals come from arrive with phase 8.
+ * Makes the player object from the catalog's own classes and defaults and sets only what the stored wizard decides: a behavior the template names that behavior_client_class does not know refuses the build rather than being guessed or dropped, because the client reads the behaviors by position and one missing slot shifts every later one, and a slot the template itself leaves empty stays empty; the school behavior and the stats come from the wizard's stats, with its level as the highest on the account, and every other field keeps the class's default.
  */
 
 #include "PlayerObjectBuilder.h"
 #include "AvatarAppearance.h"
+#include "PropertyFiller.h"
 #include "Utf.h"
 
 #include <fmt/format.h>
@@ -13,28 +14,6 @@
 
 namespace
 {
-    class Filler
-    {
-    public:
-        Filler(PropertyObject& object, std::string& problem) : _object(object), _problem(problem)
-        {
-        }
-
-        Filler& Set(std::string_view name, PropertyValue&& value)
-        {
-            if (!_problem.empty())
-                return *this;
-            PropertySetResult const result = _object.Set(name, std::move(value));
-            if (result != PropertySetResult::Ok)
-                _problem = fmt::format("{} property {} refused its value: {}", _object.GetClass().Name, name, PropertyObject::GetResultName(result));
-            return *this;
-        }
-
-    private:
-        PropertyObject& _object;
-        std::string& _problem;
-    };
-
     PropertyObjectPtr Create(TypeCatalogPtr const& catalog, std::string_view className, std::string& problem)
     {
         PropertyObjectPtr object = PropertyObject::Create(catalog, className);
@@ -43,7 +22,7 @@ namespace
         return object;
     }
 
-    bool FillBehavior(PropertyObject& behavior, CharacterSummary const& character, std::string& problem)
+    bool FillBehavior(PropertyObject& behavior, CharacterSummary const& character, PlayerStats const& stats, std::string& problem)
     {
         std::string_view const name = behavior.GetClass().Name;
         if (name == "class WizardCharacterBehavior")
@@ -61,7 +40,7 @@ namespace
                 }
                 custom = std::move(*converted);
             }
-            Filler(behavior, problem)
+            PropertyFiller(behavior, problem)
                 .Set("m_wsNameOverride", std::move(custom))
                 .Set("m_nameKeys", character.NameIndices)
                 .Set("m_eGender", int64{ character.Appearance.Gender })
@@ -69,19 +48,13 @@ namespace
             return problem.empty();
         }
         if (name == "class ClientMagicSchoolBehavior")
-        {
-            Filler(behavior, problem)
-                .Set("m_schoolOfFocus", character.SchoolId)
-                .Set("m_level", character.Level)
-                .Set("m_experiencePoints", character.Experience);
-            return problem.empty();
-        }
+            return stats.WriteSchool(behavior, problem);
         return true;
     }
 }
 
 PropertyObjectPtr PlayerObjectBuilder::Build(TypeCatalogPtr const& catalog, CoreObjectTypeTable const& types, BehaviorClientClasses const& behaviors, ObjectTemplate const& playerTemplate,
-    CharacterSummary const& character, PlayerPlacement const& placement, std::string& problem)
+    CharacterSummary const& character, PlayerStats const& stats, PlayerPlacement const& placement, std::string& problem)
 {
     problem.clear();
     if (!catalog)
@@ -95,8 +68,8 @@ PropertyObjectPtr PlayerObjectBuilder::Build(TypeCatalogPtr const& catalog, Core
         return nullptr;
     }
     PropertyObjectPtr player = Create(catalog, PlayerClass, problem);
-    PropertyObjectPtr stats = Create(catalog, StatsClass, problem);
-    if (!player || !stats)
+    PropertyObjectPtr gameStats = Create(catalog, StatsClass, problem);
+    if (!player || !gameStats)
         return nullptr;
     CoreObjectType const* const pair = types.FindByClass(player->GetClass().Hash);
     if (!pair)
@@ -128,13 +101,15 @@ PropertyObjectPtr PlayerObjectBuilder::Build(TypeCatalogPtr const& catalog, Core
             continue;
         }
         PropertyObjectPtr behavior = Create(catalog, *row->ClassName, problem);
-        if (!behavior || !FillBehavior(*behavior, character, problem))
+        if (!behavior || !FillBehavior(*behavior, character, stats, problem))
             return nullptr;
         inactive.emplace_back(std::move(behavior));
     }
 
-    Filler(*stats, problem).Set("m_highestCharacterLevelOnAccount", character.Level);
-    Filler(*player, problem)
+    if (!stats.WriteGameStats(*gameStats, problem))
+        return nullptr;
+    PropertyFiller(*gameStats, problem).Set("m_highestCharacterLevelOnAccount", character.Level);
+    PropertyFiller(*player, problem)
         .Set("m_inactiveBehaviors", std::move(inactive))
         .Set("m_globalID.m_full", character.Guid)
         .Set("m_permID", uint64{ 0 })
@@ -144,7 +119,7 @@ PropertyObjectPtr PlayerObjectBuilder::Build(TypeCatalogPtr const& catalog, Core
         .Set("m_templateID.m_full", uint64{ playerTemplate.TemplateId })
         .Set("m_nMobileID", placement.MobileId)
         .Set("m_characterId", character.Guid)
-        .Set("m_gameStats", std::move(stats));
+        .Set("m_gameStats", std::move(gameStats));
     if (!problem.empty())
         return nullptr;
     return player;

@@ -362,6 +362,26 @@ class WorldEntryTests(TemporaryFolder):
         self.assertEqual(loaded.wizard["zone"], "WizardCity/WC_Ravenwood")
         self.assertEqual(loaded.game_settings, ["Realm.Name=Test"])
 
+    def test_a_seeded_wizard_may_carry_stats_it_has_and_none_it_does_not(self):
+        steps = [{"action": "wait_game_log", "name": "in", "pattern": "stands in the world", "timeout": 1},
+                 {"action": "shot", "name": "look", "settle": 2.5}]
+        search = (os.path.join(self.folder, "scenarios"),)
+        stats = {"gold": 1234, "health": 300, "mana": 10, "training_points": 1, "level_locked": 1, "potion_charge": 1.5}
+        self.scenario_file("stats.json", {"title": "stats", "requires": {"gameserver": True}, "wizard": dict(self.WIZARD, level=5, experience=900, stats=stats), "steps": steps})
+        loaded = scenario.load("stats.json", search=search)
+        self.assertEqual(loaded.wizard["stats"]["gold"], 1234)
+        for bad, said in (({"copper": 3}, "which a wizard does not carry"), ({"gold": -1}, "must be a number of zero or more"), ({"gold": "lots"}, "must be a number"), ([1], "must be an object")):
+            self.scenario_file("bad.json", {"title": "bad", "requires": {"gameserver": True}, "wizard": dict(self.WIZARD, stats=bad), "steps": steps})
+            with self.assertRaises(Refused) as raised:
+                scenario.load("bad.json", search=search)
+            self.assertIn(said, str(raised.exception))
+        for settle in (-1, 31, "2", True):
+            self.scenario_file("settle.json", {"title": "settle", "requires": {"gameserver": True}, "wizard": self.WIZARD,
+                                                "steps": [{"action": "shot", "name": "look", "settle": settle}]})
+            with self.assertRaises(Refused) as raised:
+                scenario.load("settle.json", search=search)
+            self.assertIn("settle for 0 to 30 seconds", str(raised.exception))
+
     def test_the_shipped_enter_world_scenario_loads_with_its_game_server_and_wizard(self):
         loaded = scenario.load("enter-world.json", search=(paths.SCENARIOS,))
         self.assertTrue(loaded.needs_gameserver)
@@ -397,6 +417,12 @@ class WorldEntryTests(TemporaryFolder):
         self.assertEqual((wizard["locale"], wizard["first"], wizard["middle"], wizard["last"]), ("en-US", 100, 248, 27))
         self.assertEqual(wizard["appearance"], {"gender": 1, "race": 79806088})
         self.assertEqual(wizard["level"], 3)
+        self.assertEqual(wizard["experience"], 0)
+        self.assertNotIn("stats", wizard)
+        row["xp"] = 705
+        copied = database.Scratch.wizard_from_rows(row, {}, {"gold": 1234, "health": None, "secondary_school_id": 72777, "revision": 4})
+        self.assertEqual(copied["experience"], 705)
+        self.assertEqual(copied["stats"], {"gold": 1234, "secondary_school": 72777}, "a full health stays full, and the row's revision is not a stat")
 
 
 class ReferenceTests(TemporaryFolder):
