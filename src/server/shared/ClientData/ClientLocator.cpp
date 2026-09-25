@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Walks each place an install may live, the fixed places first with each installed program's own folder among them, and only then two folders deep below installed programs and nowhere else, never querying the same folder twice; those places and walks spend one budget of folder queries, while the Lutris prefixes under ~/Games and the Proton prefixes of all Steam libraries each spend a budget of their own that covers every prefix one listing returns, so no search can starve another; Steam libraries and folders compare by canonical path, case-insensitively on Windows, so each is searched and each install listed once, and a Wine or Proton prefix's drive_c is checked once before the folders inside it; install locations lose surrounding quotes, whitespace and trailing separators, Steam's libraryfolders.vdf is read in both its old flat layout and its newer nested one with Windows drive paths mapped to WSL mounts, installs sort by revision number with unknown revisions last, a type dump is accepted when its first bytes parse as a JSON object with a root key named version or classes before any error, an XDG_DATA_HOME that is not an absolute path is ignored as the XDG base directory rules require, and paths show with forward slashes on every platform, with text Windows cannot convert replaced by U+FFFD instead of throwing.
+ * Walks each place an install may live, the fixed places first with each installed program's own folder among them, and only then two folders deep below installed programs and nowhere else, never querying the same folder twice; those places and walks spend one budget of folder queries, while the Lutris prefixes under ~/Games and the Proton prefixes of all Steam libraries each spend a budget of their own that covers every prefix one listing returns, so no search can starve another; Steam libraries and folders compare by canonical path, case-insensitively on Windows, so each is searched and each install listed once, and a Wine or Proton prefix's drive_c is checked once before the folders inside it; install locations lose surrounding quotes, whitespace and trailing separators, Steam's libraryfolders.vdf is read in both its old flat layout and its newer nested one with Windows drive paths mapped to WSL mounts, installs sort by revision number with unknown revisions last and, within one revision, with the client program first and then by how many archives Data/GameData holds, so a complete download comes before one that streams the rest on demand, a type dump is accepted when its first bytes parse as a JSON object with a root key named version or classes before any error, an XDG_DATA_HOME that is not an absolute path is ignored as the XDG base directory rules require, and paths show with forward slashes on every platform, with text Windows cannot convert replaced by U+FFFD instead of throwing.
  */
 
 #include "ClientLocator.h"
@@ -16,6 +16,7 @@
 #include <limits>
 #include <map>
 #include <set>
+#include <tuple>
 #include <utility>
 
 namespace
@@ -247,7 +248,7 @@ namespace
 
         std::vector<ClientCandidate> Take()
         {
-            std::stable_sort(_found.begin(), _found.end(), [](ClientCandidate const& left, ClientCandidate const& right) { return left.Install.RevisionNumber() > right.Install.RevisionNumber(); });
+            std::stable_sort(_found.begin(), _found.end(), [](ClientCandidate const& left, ClientCandidate const& right) { return left.Install.IsPreferredTo(right.Install); });
             return std::move(_found);
         }
 
@@ -343,6 +344,11 @@ uint64 ClientInstall::RevisionNumber() const noexcept
     return number;
 }
 
+bool ClientInstall::IsPreferredTo(ClientInstall const& other) const noexcept
+{
+    return std::tuple(RevisionNumber(), HasProgram, Archives) > std::tuple(other.RevisionNumber(), other.HasProgram, other.Archives);
+}
+
 std::string ClientInstall::Describe() const
 {
     return fmt::format("{} ({})", ClientLocator::PathText(Root), Revision.empty() ? std::string("revision unknown") : Revision);
@@ -357,6 +363,9 @@ std::optional<ClientInstall> ClientInstall::Inspect(ClientSystem const& system, 
     if (!install.Root.has_filename() && install.Root.has_relative_path())
         install.Root = install.Root.parent_path();
     install.HasProgram = system.IsFile(install.Root / "Bin" / FromUtf8(ProgramFile));
+    for (std::filesystem::path const& file : system.ListFiles(install.Root / "Data" / "GameData", MaxArchives))
+        if (Ambrose::EqualsIgnoreCase(ClientLocator::PathText(file.extension()), ".wad"))
+            ++install.Archives;
     if (std::optional<std::string> const text = system.ReadText(install.Root / "Bin" / "revision.dat", MaxRevisionBytes))
     {
         std::string_view const revision = Ambrose::Trim(*text);

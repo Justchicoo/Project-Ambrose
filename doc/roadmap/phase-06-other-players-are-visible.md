@@ -443,7 +443,7 @@ Classes that exist in client data or server logic but not in the client dump dec
 **Deliverables**
 
 - A supplemental schema format (JSON or conf, our own) of classes with name or hash-only id, bases, and properties (name or hash, type, flags, container), merged into sTypeRegistry after the dump. Every named entry is verified by the hash formula at load
-- Location: authored by us under data/ (or a world DB table server_class_schema, see open questions); contains no client bytes
+- Location: the world database's server_class, server_class_base and server_class_property tables, settled on 2026-09-25 and recorded in doc/ARCHITECTURE.md; contains no client bytes. The tables, their loader and the registry's rebuild were built early for 4.11, whose player object needs BasicMobileBehavior, and this milestone's checks stay open until 6.09 is done
 - Registry reports which classes came from the dump and which from the supplement
 - `.reload server_class_schema` merges the edited supplement into a new registry generation off to the side, verifies every hash, and swaps it; a failure keeps the old registry and reports every error
 

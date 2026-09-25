@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The loaded type dump as an immutable catalog of classes found by hash or name, aliases included, each generation holding the typed view bindings made when it loaded, and the registry that builds a catalog off to the side, validates it and binds its views completely, and swaps it in, keeping the active one when a load fails.
+ * The loaded type dump as an immutable catalog of classes found by hash or name, aliases included, each generation holding the typed view bindings made when it loaded, and the registry that builds a catalog off to the side, validates it and binds its views completely, and swaps it in, keeping the active one when a load fails. A supplement of classes the client uses but its dump does not describe, handed in by whoever keeps them in the dump's own shape, joins the dump's classes whenever a catalog is built: every class and property it names is checked against the hash formula the client uses, a new supplement rebuilds the dump already loaded, which the registry keeps for that, into a new generation off to the side, a supplement that fails either step keeps the one already in place and the catalog serving, and a class the dump turns out to describe after all is taken from the dump, because the client's own description wins over ours.
  */
 
 #ifndef AMBROSE_TYPEREGISTRY_H
@@ -95,18 +95,34 @@ public:
     bool LoadFromText(std::string_view text, std::string sourceName);
     void Clear();
 
+    bool SetSupplement(TypeDumpLoader::RawDump supplement, std::string sourceName, std::vector<std::string>& errors);
+    bool ClearSupplement(std::vector<std::string>& errors);
+    std::size_t GetSupplementClassCount() const;
+    bool IsFromSupplement(uint32 hash) const;
+
     TypeCatalogPtr GetCatalog() const;
     bool IsLoaded() const;
     uint64 GetGeneration() const;
     std::vector<std::string> GetErrors() const;
 
 private:
+    using RawDumpPtr = std::shared_ptr<TypeDumpLoader::RawDump const>;
+
     bool Build(std::string_view text, std::string sourceName);
     bool BuildRaw(TypeDumpLoader::RawDump dump, std::string sourceName, std::string sha256);
+    bool BuildFrom(RawDumpPtr source, std::string sourceName, std::string sha256, RawDumpPtr supplement, std::string supplementSource,
+        std::chrono::steady_clock::time_point start, std::vector<std::string> errors);
     bool Publish(TypeCatalogPtr catalog, std::vector<std::string> errors, std::string sourceName,
         std::chrono::steady_clock::time_point start);
+    bool ReplaceSupplement(RawDumpPtr supplement, std::string sourceName, std::vector<std::string>& errors);
 
     TypedViewRegistry* _views;
+    RawDumpPtr _source;
+    std::string _sourceName;
+    std::string _sourceSha256;
+    RawDumpPtr _supplement;
+    std::string _supplementSource;
+    std::vector<uint32> _supplementHashes;
     std::atomic<TypeCatalogPtr> _catalog;
     mutable std::mutex _writeMutex;
     std::vector<std::string> _errors;

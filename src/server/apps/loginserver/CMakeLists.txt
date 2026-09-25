@@ -5,7 +5,7 @@ list(FILTER login_sources EXCLUDE REGEX "/Main\\.cpp$")
 add_library(login STATIC ${login_sources})
 ambrose_collect_include_dirs("${CMAKE_CURRENT_SOURCE_DIR}" login_include_dirs)
 target_include_directories(login PUBLIC ${login_include_dirs})
-target_link_libraries(login PUBLIC ambrose-compile-options accounts characters globals)
+target_link_libraries(login PUBLIC ambrose-compile-options accounts characters entities globals)
 
 add_executable(loginserver "${CMAKE_CURRENT_SOURCE_DIR}/Main.cpp")
 target_link_libraries(loginserver PRIVATE ambrose-compile-options login)

@@ -12,6 +12,7 @@
 #include "CharacterNameExtractor.h"
 #include "CharacterNameMgr.h"
 #include "MapMgr.h"
+#include "ObjectSchemaMgr.h"
 #include "ZoneMgr.h"
 #include "CharacterNameScript.h"
 #include "AccountMgr.h"
@@ -113,25 +114,6 @@ namespace
             for (std::string const& problem : limitProblems)
                 LOG_WARN("server.gameserver", "{}", problem);
 
-            if (!setup.TypeDump)
-                LOG_WARN("server.gameserver", "No type dump is in use, so ObjectProperty data cannot be read or written: {}", setup.TypeDumpError);
-            else
-            {
-                std::filesystem::path const binary = TypeDumpCache::FastCopyOf(*setup.TypeDump);
-                if (std::string fastCopyError; !TypeDumpCache::EnsureFastCopy(*setup.TypeDump, fastCopyError))
-                    LOG_WARN("server.worldserver", "The type dump's fast copy could not be built, so it is read from JSON this time: {}", fastCopyError);
-                bool loaded = false;
-                if (std::filesystem::exists(binary))
-                    loaded = sTypeRegistry.LoadBinary(binary, *setup.TypeDump, setup.Install ? setup.Install->Revision : std::string_view{});
-                else
-                    loaded = sTypeRegistry.LoadFromFile(*setup.TypeDump);
-                if (!loaded)
-                {
-                    LOG_ERROR("server.gameserver", "Cannot load the type dump {}", ConfigMgr::PathToUtf8(*setup.TypeDump));
-                    return false;
-                }
-            }
-
             MessageHandlerTable<GameSession> const& messages = GameMessageTable::Get();
             std::vector<std::string> messageErrors;
             if (!messages.Declare(sMessageRegistry, messageErrors))
@@ -185,6 +167,11 @@ namespace
             if (!_databases.Load())
             {
                 LOG_ERROR("server.gameserver", "Cannot open the realm's databases");
+                return false;
+            }
+            if (!LoadObjectSchema(setup))
+            {
+                _databases.Close();
                 return false;
             }
             sCharacterNameMgr.SetDefaultLocale(locale);
@@ -294,6 +281,52 @@ namespace
                             realm.RealmName, realm.Address, realm.Port);
                 },
                 [] { return LoginDatabase.IsOpen(); });
+            return true;
+        }
+
+        bool LoadObjectSchema(ClientSetupResult const& setup)
+        {
+            std::vector<std::string> errors;
+            if (!WorldDatabase.IsOpen())
+                LOG_WARN("server.gameserver", "WorldDatabaseInfo is empty, so the classes the type dump does not describe, the core object types and the behavior classes are not loaded");
+            else if (!sObjectSchemaMgr.LoadClasses(errors))
+            {
+                for (std::string const& problem : errors)
+                    LOG_ERROR("server.gameserver", "Server classes: {}", problem);
+                LOG_ERROR("server.gameserver", "Cannot load the classes the type dump does not describe from the world database");
+                return false;
+            }
+
+            if (!setup.TypeDump)
+                LOG_WARN("server.gameserver", "No type dump is in use, so ObjectProperty data cannot be read or written: {}", setup.TypeDumpError);
+            else
+            {
+                std::filesystem::path const binary = TypeDumpCache::FastCopyOf(*setup.TypeDump);
+                if (std::string fastCopyError; !TypeDumpCache::EnsureFastCopy(*setup.TypeDump, fastCopyError))
+                    LOG_WARN("server.worldserver", "The type dump's fast copy could not be built, so it is read from JSON this time: {}", fastCopyError);
+                bool loaded = false;
+                if (std::filesystem::exists(binary))
+                    loaded = sTypeRegistry.LoadBinary(binary, *setup.TypeDump, setup.Install ? setup.Install->Revision : std::string_view{});
+                else
+                    loaded = sTypeRegistry.LoadFromFile(*setup.TypeDump);
+                if (!loaded)
+                {
+                    LOG_ERROR("server.gameserver", "Cannot load the type dump {}", ConfigMgr::PathToUtf8(*setup.TypeDump));
+                    return false;
+                }
+            }
+
+            sObjectSchemaMgr.RegisterReloadTargets();
+            if (!WorldDatabase.IsOpen() || !sTypeRegistry.IsLoaded())
+                return true;
+            ObjectSchemaLoadResult const tables = sObjectSchemaMgr.LoadTables();
+            if (!tables.Loaded)
+            {
+                for (std::string const& problem : tables.Errors)
+                    LOG_ERROR("server.gameserver", "Object schema: {}", problem);
+                LOG_ERROR("server.gameserver", "Cannot load the core object types and behavior classes from the world database");
+                return false;
+            }
             return true;
         }
 

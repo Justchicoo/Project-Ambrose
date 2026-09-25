@@ -1,9 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
+ * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a block, a type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads the block and type pairs the world database's core_object_type holds when it is given the world database, and when a pair stands for a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --pair or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
  */
 
 #include "BindFile.h"
+#include "BlobEnvelope.h"
+#include "CoreObjectSerializer.h"
+#include "DatabaseEnv.h"
+#include "ObjectSchemaMgr.h"
 #include "ObjectSerializer.h"
 #include "ClientLocator.h"
 #include "Environment.h"
@@ -30,6 +34,7 @@
 #include <cctype>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -60,6 +65,10 @@ Commands:
   lang <key>             print the text a locale key holds, which is what the client
                          shows where the data carries only an id
   lang --list [text]     print the keys whose text holds the pattern
+  core <file>...         print a game object blob, the Data a MSG_LOGINCOMPLETE or a
+                         MSG_NEWOBJECT carries, enveloped or not, with the block, type
+                         and template its header names; --as names the class they stand for
+  hex <file>...          print a file's bytes with their offsets, from --from for --count
 
 Options:
   --client <dir>       the install to read (default: AMBROSE_CLIENT_DIR)
@@ -67,6 +76,26 @@ Options:
   --wad <file>         the archive wad reads (default: Root.wad)
   --locale <name>      the locale lang reads (default: en-US)
   --all                print every match rather than the first few
+  --as <class>         the class a game object's block and type stand for, such as
+                       "class WizClientObject"
+  --trailing           let core stop where the class ends and go on to read each object
+                       that follows it the same way, as MSG_LOGINCOMPLETE's Data holds the
+                       player and then its stats, saying where bytes are left that do not
+                       read, which is how a class that ends early is told from a wrong one
+  --mask <n>           read core with this property flag mask rather than the one the
+                       server sends a player's own object with, Transmit|AuthorityTransmit
+                       (decimal or 0x hex)
+  --pair <b>:<t>=<class>
+                       the class a block and type stand for wherever they appear in a
+                       core blob, such as 115:9="class WizClientObjectItem"; repeatable,
+                       and it takes the place of the world database's row for that pair
+  --world-db <info>    the world database, host;port;user;password;database, whose
+                       server_class and core_object_type rows join what the dump says
+                       (default: AMBROSE_WORLD_DATABASE_INFO)
+  --flags <n>          read core with exactly these serializer flags rather than trying
+                       the plain form and then a stream that opens with its own flags
+  --from <n>, --count <n>
+                       where hex starts and how many bytes it prints (decimal or 0x hex)
   --help               print this text
 
 Exit status: 0 when every question was answered, 1 when one was not, 2 on bad usage.
@@ -79,8 +108,16 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         std::optional<std::string> TypeDump;
         std::string Wad = "Root.wad";
         std::string Locale = "en-US";
+        std::optional<std::string> As;
+        std::vector<std::string> Pairs;
+        std::optional<std::string> WorldDatabase;
+        std::size_t From = 0;
+        std::size_t Count = 0;
         bool List = false;
         bool All = false;
+        bool Trailing = false;
+        std::optional<uint32> Flags;
+        std::optional<uint32> Mask;
         bool Help = false;
         std::vector<std::string> Subjects;
     };
@@ -122,6 +159,30 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                 parsed.Help = true;
             else if (arg == "--list")
                 parsed.List = true;
+            else if (arg == "--trailing")
+                parsed.Trailing = true;
+            else if (arg == "--pair")
+            {
+                std::optional<std::string> const given = value(arg);
+                if (!given)
+                    return std::nullopt;
+                parsed.Pairs.push_back(*given);
+            }
+            else if (arg == "--flags" || arg == "--mask")
+            {
+                std::optional<std::string> const given = value(arg);
+                if (!given)
+                    return std::nullopt;
+                std::string_view const digits = *given;
+                bool const hexadecimal = digits.size() > 2 && digits[0] == '0' && (digits[1] == 'x' || digits[1] == 'X');
+                std::optional<uint32> const number = hexadecimal ? Ambrose::StringTo<uint32>(digits.substr(2), 16) : Ambrose::StringTo<uint32>(digits, 10);
+                if (!number)
+                {
+                    error = arg == "--flags" ? "--flags takes the serializer flags as a number, decimal or 0x hex" : "--mask takes the property flag mask as a number, decimal or 0x hex";
+                    return std::nullopt;
+                }
+                (arg == "--flags" ? parsed.Flags : parsed.Mask) = *number;
+            }
             else if (arg == "--all")
                 parsed.All = true;
             else if (arg == "--locale")
@@ -133,7 +194,29 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                 }
                 parsed.Locale = args[++index];
             }
-            else if (arg == "--client" || arg == "--type-dump" || arg == "--wad")
+            else if (arg == "--as")
+            {
+                std::optional<std::string> const given = value(arg);
+                if (!given)
+                    return std::nullopt;
+                parsed.As = *given;
+            }
+            else if (arg == "--from" || arg == "--count")
+            {
+                std::optional<std::string> const given = value(arg);
+                if (!given)
+                    return std::nullopt;
+                std::string_view const digits = *given;
+                bool const hexadecimal = digits.size() > 2 && digits[0] == '0' && (digits[1] == 'x' || digits[1] == 'X');
+                std::optional<uint64> const number = hexadecimal ? Ambrose::StringTo<uint64>(digits.substr(2), 16) : Ambrose::StringTo<uint64>(digits, 10);
+                if (!number)
+                {
+                    error = fmt::format("{} takes a number of bytes, decimal or 0x hex", arg);
+                    return std::nullopt;
+                }
+                (arg == "--from" ? parsed.From : parsed.Count) = static_cast<std::size_t>(*number);
+            }
+            else if (arg == "--client" || arg == "--type-dump" || arg == "--wad" || arg == "--world-db")
             {
                 std::optional<std::string> const given = value(arg);
                 if (!given)
@@ -142,6 +225,8 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                     parsed.Client = *given;
                 else if (arg == "--type-dump")
                     parsed.TypeDump = *given;
+                else if (arg == "--world-db")
+                    parsed.WorldDatabase = *given;
                 else
                     parsed.Wad = *given;
             }
@@ -166,6 +251,44 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         if (property.Pointer)
             text += " *";
         text += fmt::format("  id {} offset {} hash {}", property.Id, property.Offset, property.Hash);
+        if (property.Flags != 0)
+        {
+            static constexpr std::pair<PropertyFlag, std::string_view> Named[] = {
+                { PropertyFlag::Save, "Save" },
+                { PropertyFlag::Copy, "Copy" },
+                { PropertyFlag::Public, "Public" },
+                { PropertyFlag::Transmit, "Transmit" },
+                { PropertyFlag::AuthorityTransmit, "AuthorityTransmit" },
+                { PropertyFlag::Persistent, "Persistent" },
+                { PropertyFlag::Deprecated, "Deprecated" },
+                { PropertyFlag::NoScript, "NoScript" },
+                { PropertyFlag::DirtyEncode, "DirtyEncode" },
+                { PropertyFlag::Blob, "Blob" },
+                { PropertyFlag::Immutable, "Immutable" },
+                { PropertyFlag::FileName, "FileName" },
+                { PropertyFlag::Color, "Color" },
+                { PropertyFlag::Bits, "Bits" },
+                { PropertyFlag::Enum, "Enum" },
+                { PropertyFlag::Localized, "Localized" },
+                { PropertyFlag::StringKey, "StringKey" },
+                { PropertyFlag::ObjectId, "ObjectId" },
+                { PropertyFlag::ReferenceId, "ReferenceId" },
+                { PropertyFlag::ObjectName, "ObjectName" },
+                { PropertyFlag::HasBaseClass, "HasBaseClass" },
+            };
+            std::string names;
+            uint32 known = 0;
+            for (auto const& [flag, name] : Named)
+                if (property.HasFlag(flag))
+                {
+                    names += names.empty() ? "" : "|";
+                    names += name;
+                    known |= PropertyFlags::Bit(flag);
+                }
+            if ((property.Flags & ~known) != 0)
+                names += fmt::format("{}{:#x}", names.empty() ? "" : "|", property.Flags & ~known);
+            text += fmt::format("  flags {}", names);
+        }
         if (!property.Options.empty())
         {
             text += "  {";
@@ -182,7 +305,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
 
     void Print(ClassInfo const& info)
     {
-        std::cout << fmt::format("{}  hash {}\n", info.Name, info.Hash);
+        std::cout << fmt::format("{}  hash {}{}\n", info.Name, info.Hash, sTypeRegistry.IsFromSupplement(info.Hash) ? fmt::format("  from {}", ObjectSchemaMgr::ClassSource) : std::string());
         if (!info.Bases.empty())
         {
             std::cout << "  bases:";
@@ -451,6 +574,184 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         return Success;
     }
 
+    int RunHex(Arguments const& arguments)
+    {
+        int status = Success;
+        for (std::string const& subject : arguments.Subjects)
+        {
+            std::ifstream stream(LogConfig::Utf8Path(subject), std::ios::binary);
+            if (!stream)
+            {
+                std::cerr << fmt::format("{}: cannot be read\n", subject);
+                status = Failure;
+                continue;
+            }
+            std::vector<uint8> const bytes((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+            std::size_t const from = std::min(arguments.From, bytes.size());
+            std::size_t const to = arguments.Count == 0 ? bytes.size() : std::min(bytes.size(), from + arguments.Count);
+            for (std::size_t line = from; line < to; line += 16)
+            {
+                std::string hex;
+                std::string text;
+                for (std::size_t at = line; at < line + 16; ++at)
+                {
+                    if (at < to)
+                    {
+                        hex += fmt::format("{:02x} ", bytes[at]);
+                        text += bytes[at] >= 0x20 && bytes[at] < 0x7F ? static_cast<char>(bytes[at]) : '.';
+                    }
+                    else
+                        hex += "   ";
+                    if (at == line + 7)
+                        hex += ' ';
+                }
+                std::cout << fmt::format("{:08x}  {} {}\n", line, hex, text);
+            }
+        }
+        return status;
+    }
+
+    int RunCore(Arguments const& arguments, TypeCatalogPtr const& catalog)
+    {
+        ClassInfo const* named = nullptr;
+        if (arguments.As)
+        {
+            named = catalog->FindClass(*arguments.As);
+            if (!named || named->Kind != ClassKind::PropertyClass)
+            {
+                std::cerr << fmt::format("{} is not a property class the type dump lists\n", *arguments.As);
+                return Failure;
+            }
+        }
+        std::vector<CoreObjectType> rows;
+        CoreObjectTypeTablePtr const known = sObjectSchemaMgr.GetCoreObjectTypes();
+        rows.assign(known->GetTypes().begin(), known->GetTypes().end());
+        for (std::string const& text : arguments.Pairs)
+        {
+            std::size_t const colon = text.find(':');
+            std::size_t const equals = text.find('=');
+            std::optional<uint8> const block = colon == std::string::npos ? std::nullopt : Ambrose::StringTo<uint8>(std::string_view(text).substr(0, colon));
+            std::optional<uint8> const type = colon == std::string::npos || equals == std::string::npos || equals < colon
+                ? std::nullopt
+                : Ambrose::StringTo<uint8>(std::string_view(text).substr(colon + 1, equals - colon - 1));
+            if (!block || !type || equals + 1 >= text.size())
+            {
+                std::cerr << fmt::format("--pair {} is not <block>:<type>=<class>\n", text);
+                return BadUsage;
+            }
+            std::erase_if(rows, [&](CoreObjectType const& row) { return row.Block == *block && row.Type == *type; });
+            rows.push_back({ *block, *type, text.substr(equals + 1) });
+        }
+        int status = Success;
+        for (std::string const& subject : arguments.Subjects)
+        {
+            std::ifstream stream(LogConfig::Utf8Path(subject), std::ios::binary);
+            if (!stream)
+            {
+                std::cerr << fmt::format("{}: cannot be read\n", subject);
+                status = Failure;
+                continue;
+            }
+            std::vector<uint8> const bytes((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+            std::vector<uint8> inflated;
+            if (bytes.size() > 4)
+            {
+                BlobEnvelope::UnwrapResult const opened = BlobEnvelope::Unwrap(bytes, SerializerLimits::Current().MaxInflatedSize);
+                if (opened.Succeeded())
+                    inflated.assign(opened.Data.begin(), opened.Data.end());
+            }
+            DecodeResult decoded;
+            bool enveloped = false;
+            bool decodedOnce = false;
+            CoreObjectTypeTablePtr decodedTypes;
+            SerializerOptions decodedOptions;
+            std::vector<uint8> const* const payloads[] = { &bytes, &inflated };
+            for (std::vector<uint8> const* const payload : payloads)
+            {
+                if (payload->size() < 2)
+                    continue;
+                std::vector<CoreObjectType> table = rows;
+                uint8 const rootBlock = (*payload)[0];
+                uint8 const rootType = (*payload)[1];
+                bool const rootListed = std::any_of(table.begin(), table.end(), [&](CoreObjectType const& row) { return row.Block == rootBlock && row.Type == rootType; });
+                if (named && !rootListed && (rootBlock != 0 || rootType != 0))
+                    table.push_back({ rootBlock, rootType, named->Name });
+                std::vector<std::string> tableErrors;
+                CoreObjectTypeTablePtr const types = CoreObjectTypeTable::Build(std::move(table), *catalog, tableErrors);
+                if (!types)
+                {
+                    for (std::string const& problem : tableErrors)
+                        std::cerr << fmt::format("{}: {}\n", subject, problem);
+                    return BadUsage;
+                }
+                std::vector<SerializerFlag> const tries = arguments.Flags ? std::vector<SerializerFlag>{ static_cast<SerializerFlag>(*arguments.Flags) }
+                                                                         : std::vector<SerializerFlag>{ SerializerFlag::None, SerializerFlag::SerializeFlags };
+                for (SerializerFlag const flags : tries)
+                {
+                    SerializerOptions options;
+                    options.Flags = flags;
+                    options.Mask = arguments.Mask.value_or(SerializerOptions::TransmitMask);
+                    options.AllowTrailingBytes = arguments.Trailing;
+                    DecodeResult attempt = CoreObjectSerializer::Decode(catalog, *payload, *types, options);
+                    if (attempt.Ok() || !decodedOnce)
+                    {
+                        decoded = std::move(attempt);
+                        enveloped = payload == &inflated;
+                        decodedOnce = true;
+                        decodedTypes = types;
+                        decodedOptions = options;
+                    }
+                    if (decoded.Ok())
+                        break;
+                }
+                if (decoded.Ok())
+                    break;
+            }
+            if (!decoded.Ok())
+            {
+                if (decoded.UnknownCore)
+                {
+                    CoreObjectHeader const& missing = *decoded.UnknownCore;
+                    std::cerr << fmt::format("{}: an object in it names block {} type {}; pass --pair {}:{}=<class>{} with the class they stand for, one of those the dump derives from CoreObject:\n",
+                        subject, missing.Block, missing.Type, missing.Block, missing.Type, decoded.Header && decoded.Header->Block == missing.Block && decoded.Header->Type == missing.Type ? ", or --as <class>," : "");
+                    if (ClassInfo const* const core = catalog->FindClass(CoreObjectTypeTable::CoreObjectClass))
+                        for (ClassInfo const* const candidate : catalog->GetClasses())
+                            if (candidate && candidate->Kind == ClassKind::PropertyClass && candidate != core && candidate->IsA(*core))
+                                std::cerr << fmt::format("  {}\n", candidate->Name);
+                }
+                else
+                    std::cerr << fmt::format("{}: {} {}\n", subject, ObjectSerializer::GetStatusName(decoded.Status), decoded.Detail);
+                status = Failure;
+                continue;
+            }
+            if (decoded.Header)
+                std::cerr << fmt::format("{}: {}block {} type {} template {}{}, {} bytes read\n", subject, enveloped ? "enveloped, " : "",
+                    decoded.Header->Block, decoded.Header->Type, decoded.Header->TemplateId,
+                    decoded.StreamFlags ? fmt::format(", serializer flags {:#x}", *decoded.StreamFlags) : std::string(), decoded.BytesRead);
+            std::cout << PropertyJson::Dump(decoded.Object.get(), 2) << "\n";
+            if (!arguments.Trailing)
+                continue;
+            std::vector<uint8> const& data = enveloped ? inflated : bytes;
+            std::size_t offset = decoded.BytesRead;
+            while (offset < data.size())
+            {
+                DecodeResult const next = CoreObjectSerializer::Decode(catalog, std::span<uint8 const>(data).subspan(offset), *decodedTypes, decodedOptions);
+                if (!next.Ok() || next.BytesRead == 0)
+                {
+                    std::cerr << fmt::format("{}: {} byte(s) from offset {:#x} do not read as another object, {} {}; client hex --from {:#x} shows them\n", subject,
+                        data.size() - offset, offset, ObjectSerializer::GetStatusName(next.Status), next.Detail, offset);
+                    status = Failure;
+                    break;
+                }
+                std::cerr << fmt::format("{}: another object at offset {:#x}, {} bytes, block {} type {}{}\n", subject, offset, next.BytesRead, next.Header ? next.Header->Block : 0,
+                    next.Header ? next.Header->Type : 0, next.Object ? fmt::format(", a {}", next.Object->GetClass().Name) : std::string(", null"));
+                std::cout << PropertyJson::Dump(next.Object.get(), 2) << "\n";
+                offset += next.BytesRead;
+            }
+        }
+        return status;
+    }
+
     int RunWad(Arguments const& arguments, KiwadArchive const& archive, TypeCatalogPtr const& catalog)
     {
         if (arguments.List)
@@ -529,7 +830,17 @@ int main(int argc, char** argv)
     }
 
     std::string const command = Ambrose::ToLower(arguments->Command);
-    if (command != "types" && command != "messages" && command != "wad" && command != "lang")
+    if (command == "hex")
+    {
+        if (arguments->Subjects.empty())
+        {
+            std::cerr << "client hex needs a file\n";
+            return BadUsage;
+        }
+        return RunHex(*arguments);
+    }
+
+    if (command != "types" && command != "messages" && command != "wad" && command != "lang" && command != "core")
     {
         std::cerr << fmt::format("there is no command {}\n{}", arguments->Command, Usage);
         return BadUsage;
@@ -541,7 +852,7 @@ int main(int argc, char** argv)
         return BadUsage;
     }
 
-    bool const needsDump = command == "types" || command == "wad";
+    bool const needsDump = command == "types" || command == "wad" || command == "core";
     LocalClientSystem const system;
     SetupMode const mode = ClientSetup::ModeForTool(system, std::cerr, "client");
     std::unique_ptr<SetupPrompt> const prompt = ClientSetup::ToolPrompt(std::cout, mode);
@@ -550,7 +861,26 @@ int main(int argc, char** argv)
         ClientSetup::ToolTypeDumps(system, "client", std::cerr), "client", std::cerr);
     arguments->Client = client;
 
-    TypeRegistry registry;
+    if (!arguments->WorldDatabase)
+        arguments->WorldDatabase = Ambrose::GetEnv("AMBROSE_WORLD_DATABASE_INFO");
+    bool const world = needsDump && arguments->WorldDatabase && !arguments->WorldDatabase->empty();
+    if (world)
+    {
+        std::vector<std::string> errors;
+        if (!WorldDatabase.SetConnectionInfo(*arguments->WorldDatabase, 1, 1) || WorldDatabase.Open() != 0)
+        {
+            std::cerr << "client: the world database --world-db names cannot be opened\n";
+            return Failure;
+        }
+        if (!sObjectSchemaMgr.LoadClasses(errors))
+        {
+            for (std::string const& problem : errors)
+                std::cerr << fmt::format("client: {}\n", problem);
+            WorldDatabase.Close();
+            return Failure;
+        }
+    }
+
     TypeCatalogPtr catalog;
     if (arguments->TypeDump && !arguments->TypeDump->empty())
     {
@@ -562,18 +892,41 @@ int main(int argc, char** argv)
 
         bool loaded = false;
         if (std::filesystem::exists(binary))
-            loaded = registry.LoadBinary(binary, json, {});
+            loaded = sTypeRegistry.LoadBinary(binary, json, {});
         if (!loaded)
-            loaded = registry.LoadFromFile(json);
+            loaded = sTypeRegistry.LoadFromFile(json);
         if (loaded)
-            catalog = registry.GetCatalog();
+            catalog = sTypeRegistry.GetCatalog();
         else if (command == "types")
         {
             std::cerr << fmt::format("the type dump {} cannot be read\n", *arguments->TypeDump);
-            for (std::string const& problem : registry.GetErrors())
+            for (std::string const& problem : sTypeRegistry.GetErrors())
                 std::cerr << "  " << problem << "\n";
             return Failure;
         }
+    }
+    if (world && catalog)
+    {
+        ObjectSchemaLoadResult const tables = sObjectSchemaMgr.LoadTables();
+        WorldDatabase.Close();
+        if (!tables.Loaded)
+        {
+            for (std::string const& problem : tables.Errors)
+                std::cerr << fmt::format("client: {}\n", problem);
+            return Failure;
+        }
+    }
+    else if (world)
+        WorldDatabase.Close();
+
+    if (command == "core")
+    {
+        if (catalog == nullptr)
+        {
+            std::cerr << "client core needs a type dump; name one with --type-dump\n";
+            return Failure;
+        }
+        return RunCore(*arguments, catalog);
     }
 
     if (command == "types")

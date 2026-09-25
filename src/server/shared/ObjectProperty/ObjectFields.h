@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The message fields that carry ObjectProperty objects: for each, the classes its object may be, whether the blob sits in the 4-byte envelope, and whether it may hold no object.
+ * The message fields that carry ObjectProperty objects: for each, the classes its object may be, whether the blob sits in the 4-byte envelope, whether it may hold no object, and whether its objects travel in the CoreObject form game objects are created from.
  */
 
 #ifndef AMBROSE_OBJECTFIELDS_H
@@ -16,6 +16,7 @@ struct ObjectField
     std::span<std::string_view const> Classes;
     bool Enveloped = false;
     bool AllowNull = false;
+    bool CoreObjects = false;
 };
 
 namespace ObjectFields

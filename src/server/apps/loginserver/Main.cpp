@@ -28,6 +28,7 @@
 #include "MessageRegistry.h"
 #include "NetworkSettings.h"
 #include "OnlinePlayersView.h"
+#include "ObjectSchemaMgr.h"
 #include "ObjectSerializer.h"
 #include "ServerApp.h"
 #include "SessionContext.h"
@@ -238,6 +239,20 @@ namespace
             for (std::string const& problem : limitProblems)
                 LOG_WARN("server.loginserver", "{}", problem);
 
+            if (!_databases.Load())
+            {
+                LOG_ERROR("server.loginserver", "Cannot open the login, characters and world databases");
+                return false;
+            }
+            if (std::vector<std::string> errors; WorldDatabase.IsOpen() && !sObjectSchemaMgr.LoadClasses(errors))
+            {
+                for (std::string const& problem : errors)
+                    LOG_ERROR("server.loginserver", "Server classes: {}", problem);
+                LOG_ERROR("server.loginserver", "Cannot load the classes the type dump does not describe from the world database");
+                _databases.Close();
+                return false;
+            }
+
             if (!setup.TypeDump)
                 LOG_WARN("server.loginserver", "No type dump is in use, so ObjectProperty data cannot be read or written: {}", setup.TypeDumpError);
             else
@@ -253,15 +268,11 @@ namespace
                 if (!loaded)
                 {
                     LOG_ERROR("server.loginserver", "Cannot load the type dump {}", ConfigMgr::PathToUtf8(*setup.TypeDump));
+                    _databases.Close();
                     return false;
                 }
             }
-
-            if (!_databases.Load())
-            {
-                LOG_ERROR("server.loginserver", "Cannot open the login, characters and world databases");
-                return false;
-            }
+            sObjectSchemaMgr.RegisterClassReloadTarget();
             AppenderDB::Enable(Logger(), 0);
             if (!LoadCreationRows())
             {

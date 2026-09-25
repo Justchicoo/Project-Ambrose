@@ -540,9 +540,9 @@ The server can create, tick and destroy zone instances that allocate mobile ids 
 
 **Acceptance**
 
-- [ ] ClientObject encodes (2,2), WizClientObject (104,2); round-trip equal
-- [ ] Public mask omits authority-only properties
-- [ ] Local-gated: captured LOGINCOMPLETE Data begins 68 02 01000000 and decodes fully
+- [x] ClientObject encodes (2,2), WizClientObject (104,2); round-trip equal. CoreObjectSerializerTest writes both headers with their template ids and reads each object back equal, a nested item keeping its own pair and a nested behavior the plain form
+- [x] Public mask omits authority-only properties. CoreObjectSerializerTest
+- [ ] Local-gated: captured LOGINCOMPLETE Data begins 68 02 01000000 and decodes fully. The maintainer's capture begins 68 02 01000000 and `client core --trailing` reads it through every property but the last: the player carries its stats as the nested m_gameStats, and the capture ends where r806919's final WizGameStats property, m_dontAllowEndorsements, would begin, so it was written against a revision without that property. It stays open for a capture of the r806919 client
 
 ### Detailed spec from OBJ-9: CoreObject serializer variant
 
@@ -551,7 +551,7 @@ Game objects for MSG_LOGINCOMPLETE and MSG_NEWOBJECT serialize with the block/ty
 **Deliverables**
 
 - src/server/shared/ObjectProperty/CoreObjectSerializer.h/.cpp: the object header is u8 block, u8 type, u32 template id. Block 0 and type 0 mean a plain class hash follows instead
-- A block/type table as a config/data table (not code constants): ClientObject 2/2, WizClientObject 104/2, WizClientObjectItem 115/9, WizClientPet 106/2, WizClientMount 108/2, ClientReagentItem 132/9, ClientRecipe 131/131 (from behavior study; each entry to be confirmed)
+- A block/type table as a config/data table (not code constants): ClientObject 2/2, WizClientObject 104/2, WizClientObjectItem 115/9, WizClientPet 106/2, WizClientMount 108/2, ClientReagentItem 132/9, ClientRecipe 131/131 (from behavior study; each entry to be confirmed). It is the world database's core_object_type, which holds only the pairs a capture proves, 104/2 and 115/9, each with its evidence; the others join as a capture or the client proves them
 - `.reload core_object_type` once 4.15 lands: validates that every class resolves in the type registry and no block/type pair repeats, swaps the table, and keeps the old one on failure; objects already sent keep the prefix they were sent with
 - src/test/server/shared/ObjectProperty/CoreObjectSerializerTest.cpp
 
@@ -585,8 +585,8 @@ The server can serialize a runtime world object into exactly the bytes MSG_NEWOB
 **Acceptance**
 
 - [ ] Unit: a built ClientObject encodes with block/type (2,2); a WizClientObject with (104,2); the round-trip decode is equal
-- [ ] Unit: blob wrapper round-trips raw and zlib forms; an unwrapped blob fails the validator
-- [ ] Unit: encoding with the Public flag mask leaves out authority-only properties that the AuthorityTransmit mask keeps
+- [x] Unit: blob wrapper round-trips raw and zlib forms; an unwrapped blob fails the validator. BlobEnvelopeTest round-trips both forms, and ObjectFieldTest refuses an unwrapped blob in an enveloped field
+- [x] Unit: encoding with the Public flag mask leaves out authority-only properties that the AuthorityTransmit mask keeps. CoreObjectSerializerTest
 
 **Risks**
 

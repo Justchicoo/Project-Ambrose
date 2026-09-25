@@ -152,6 +152,29 @@ TEST(ClientLocatorTest, WindowsInstallsAreFoundOnceNewestRevisionFirst)
     EXPECT_TRUE(found[0].Install.HasProgram);
 }
 
+TEST(ClientLocatorTest, WithinOneRevisionTheInstallHoldingMoreArchivesIsListedFirst)
+{
+    FakeClientSystem system;
+    system.Uninstall.push_back({ "Wizard101", "C:/ProgramData/KingsIsle Entertainment/Wizard101" });
+    system.AddInstall("C:/ProgramData/KingsIsle Entertainment/Wizard101", "r806919.Wizard_1_610");
+    system.AddFile("C:/ProgramData/KingsIsle Entertainment/Wizard101/Data/GameData/WizardCity-WC_Hub.wad", "KIWAD");
+    system.Steam = "C:/Program Files (x86)/Steam";
+    std::string const steam = "C:/Program Files (x86)/Steam/steamapps/common/Wizard101";
+    system.AddInstall(steam, "r806919.Wizard_1_610");
+    for (std::string const zone : { "WizardCity-WC_Hub", "WizardCity-WC_Ravenwood", "WizardCity-WC_Streets_Unicorn_Way" })
+        system.AddFile(steam + "/Data/GameData/" + zone + ".wad", "KIWAD");
+    system.AddFile(steam + "/Data/GameData/Readme.txt", "not an archive");
+
+    std::vector<ClientCandidate> const found = ClientLocator::FindInstalls(system);
+    EXPECT_EQ(Roots(found), (std::vector<std::string>{ steam, "C:/ProgramData/KingsIsle Entertainment/Wizard101" }));
+    ASSERT_EQ(found.size(), 2u);
+    EXPECT_EQ(found[0].Install.Archives, 4u) << "Root.wad and three zones, and a file that is not an archive does not count";
+    EXPECT_EQ(found[1].Install.Archives, 2u);
+    EXPECT_TRUE(found[0].Install.IsPreferredTo(found[1].Install));
+    EXPECT_FALSE(found[1].Install.IsPreferredTo(found[0].Install));
+    EXPECT_FALSE(found[0].Install.IsPreferredTo(found[0].Install));
+}
+
 TEST(ClientLocatorTest, WindowsPathsCompareCaseInsensitivelyAndQuotedLocationsAreCleaned)
 {
     FakeClientSystem system;

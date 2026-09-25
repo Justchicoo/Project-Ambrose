@@ -57,8 +57,8 @@ TEST(LoginMessageTableClientTest, EveryLoginMessageHasOneRuleThatMatchesTheInsta
     EXPECT_EQ(orders.size(), 29u);
     EXPECT_EQ(*orders.begin(), 1u);
     EXPECT_EQ(*orders.rbegin(), 29u);
-    EXPECT_EQ(handled, 9u) << "MSG_SELECTCHARACTER joined the handled messages when 4.05 answered it";
-    EXPECT_EQ(pending, 7u) << "and left the pending ones, which is the same message counted once either way";
+    EXPECT_EQ(handled, 11u) << "MSG_SELECTCHARACTER joined the handled messages when 4.05 answered it, and MSG_CREATECHARACTER and MSG_LOGINLOGCHARACTERCREATION when 3.16 did";
+    EXPECT_EQ(pending, 5u) << "and left the pending ones, which is the same messages counted once either way";
     EXPECT_EQ(refused, 13u);
     EXPECT_EQ(handled + pending + refused, orders.size()) << "every message of this service is counted exactly once";
 

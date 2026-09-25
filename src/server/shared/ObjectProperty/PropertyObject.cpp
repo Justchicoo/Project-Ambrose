@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds property objects from the defaults the type registry resolved at load, inline child objects created and pointers left null, checks every write, whole or one list element at a time, against the property's value kind, container, bit width, enum range, nullability, class and catalog, refuses a write that would make an object own itself, leaving a refused value with the caller, hands out child objects for in-place edits, and clones and compares objects deeply.
+ * Builds property objects from the defaults the type registry resolved at load, inline child objects created and pointers left null, checks every write, whole or one list element at a time, against the property's value kind, container, bit width, enum range, nullability, class and catalog, refuses a write that would make an object own itself, leaving a refused value with the caller, hands out child objects for in-place edits, and clones and compares objects deeply, their CoreObject headers included.
  */
 
 #include "PropertyObject.h"
@@ -323,12 +323,13 @@ PropertyObjectPtr PropertyObject::Clone() const
     copy->_present = _present;
     copy->_presentOrder = _presentOrder;
     copy->_preserveOrder = _preserveOrder;
+    copy->_coreHeader = _coreHeader;
     return copy;
 }
 
 bool PropertyObject::operator==(PropertyObject const& other) const
 {
-    return _type == other._type && _values == other._values;
+    return _type == other._type && _coreHeader == other._coreHeader && _values == other._values;
 }
 
 std::vector<PropertyValue>& PropertyObject::GetValues(BuildKey) noexcept

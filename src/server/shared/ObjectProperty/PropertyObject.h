@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * An instance of any property class from the loaded type dump: values stored by property ordinal, read and written by name, hash or ordinal, with list elements and child objects edited in place, every write checked against the property's kind, container, bit width, class, catalog and ownership and taking the offered value only when it succeeds, built with the dump's defaults, deep-cloned and compared exactly, and keeping the catalog it was built from alive, with blank construction and direct value access reserved for the serializers that fill every value themselves.
+ * An instance of any property class from the loaded type dump: values stored by property ordinal, read and written by name, hash or ordinal, with list elements and child objects edited in place, every write checked against the property's kind, container, bit width, class, catalog and ownership and taking the offered value only when it succeeds, built with the dump's defaults, deep-cloned and compared exactly, carrying the CoreObject header a game object is created from when it has one, its block, type and template id, and keeping the catalog it was built from alive, with blank construction and direct value access reserved for the serializers that fill every value themselves.
  */
 
 #ifndef AMBROSE_PROPERTYOBJECT_H
@@ -10,8 +10,19 @@
 #include "TypeRegistry.h"
 
 #include <cstddef>
+#include <optional>
 #include <string_view>
 #include <vector>
+
+struct CoreObjectHeader
+{
+    uint8 Block = 0;
+    uint8 Type = 0;
+    uint32 TemplateId = 0;
+
+    bool IsPlain() const noexcept { return Block == 0 && Type == 0; }
+    bool operator==(CoreObjectHeader const&) const = default;
+};
 
 enum class PropertySetResult : uint8
 {
@@ -80,6 +91,9 @@ public:
     std::vector<std::size_t> const& GetPresentOrder() const noexcept { return _presentOrder; }
     bool HasPreservedOrder() const noexcept { return _preserveOrder; }
 
+    std::optional<CoreObjectHeader> const& GetCoreHeader() const noexcept { return _coreHeader; }
+    void SetCoreHeader(std::optional<CoreObjectHeader> header) noexcept { _coreHeader = header; }
+
 private:
     PropertyObject(TypeCatalogPtr catalog, ClassInfo const& type) noexcept;
 
@@ -92,6 +106,7 @@ private:
     std::vector<bool> _present;
     std::vector<std::size_t> _presentOrder;
     bool _preserveOrder = false;
+    std::optional<CoreObjectHeader> _coreHeader;
 };
 
 #endif

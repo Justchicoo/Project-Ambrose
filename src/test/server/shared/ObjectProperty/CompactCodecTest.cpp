@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the compact ObjectProperty codec on classes the test invents: golden bytes for mask filtering, skipped deprecated properties, packed bools and bit fields, the dirty-present bit and every other value layout the codec writes, a nested list of derived and null children round-tripping exactly, alias hashes, text enums and flag names, root class rules, and hostile or malformed data refused with the status and property path it failed at, including the memory budget and the depth ceiling.
+ * Tests the compact ObjectProperty codec on classes the test invents: golden bytes for mask filtering, skipped deprecated properties, packed bools and bit fields, the dirty-present bit and every other value layout the codec writes, a nested list of derived and null children round-tripping exactly, alias hashes, text enums and flag names, root class rules, a stream that opens with its own flags word read with the flags it names, and hostile or malformed data refused with the status and property path it failed at, including the memory budget, the depth ceiling and a flags word that asks for compression.
  */
 
 #include "ObjectSerializer.h"
@@ -370,13 +370,29 @@ TEST_F(CompactCodecTest, MalformedOrHostileDataIsRefusedWithWhereItFailed)
     tight.Limits.emplace().MaxObjects = 3;
     EXPECT_EQ(ObjectSerializer::Decode(_catalog, bytes, tight).Status, SerializerStatus::TooManyObjects);
 
-    for (SerializerFlag const streamFlag : { SerializerFlag::SerializeFlags, SerializerFlag::Compress })
-    {
-        SerializerOptions stream;
-        stream.Flags = streamFlag;
-        EXPECT_EQ(ObjectSerializer::Decode(_catalog, bytes, stream).Status, SerializerStatus::UnsupportedFlags);
-        EXPECT_EQ(ObjectSerializer::Encode(deck.get(), stream).Status, SerializerStatus::UnsupportedFlags);
-    }
+    SerializerOptions compressed;
+    compressed.Flags = SerializerFlag::Compress;
+    EXPECT_EQ(ObjectSerializer::Decode(_catalog, bytes, compressed).Status, SerializerStatus::UnsupportedFlags);
+    EXPECT_EQ(ObjectSerializer::Encode(deck.get(), compressed).Status, SerializerStatus::UnsupportedFlags);
+
+    SerializerOptions stream;
+    stream.Flags = SerializerFlag::SerializeFlags | SerializerFlag::CompactLength;
+    EncodeResult const flagged = ObjectSerializer::Encode(deck.get(), stream);
+    ASSERT_TRUE(flagged.Ok()) << flagged.Detail;
+    ASSERT_GE(flagged.Bytes.size(), 4u);
+    EXPECT_EQ(std::vector<uint8>(flagged.Bytes.begin(), flagged.Bytes.begin() + 4), (std::vector<uint8>{ 0x03, 0x00, 0x00, 0x00 })) << "the stream opens with the flags it was written with";
+    SerializerOptions reader;
+    reader.Flags = SerializerFlag::SerializeFlags;
+    DecodeResult const unflagged = ObjectSerializer::Decode(_catalog, flagged.Bytes, reader);
+    ASSERT_TRUE(unflagged.Ok()) << unflagged.Detail;
+    EXPECT_EQ(unflagged.BytesRead, flagged.Bytes.size()) << "the reader takes the compact lengths from the word, not from what it was told";
+    EXPECT_EQ(ObjectSerializer::Encode(unflagged.Object.get(), stream).Bytes, flagged.Bytes);
+    ASSERT_TRUE(unflagged.StreamFlags);
+    EXPECT_EQ(*unflagged.StreamFlags, 0x03u);
+
+    std::vector<uint8> asksToCompress = flagged.Bytes;
+    asksToCompress[0] = 0x09;
+    EXPECT_EQ(ObjectSerializer::Decode(_catalog, asksToCompress, reader).Status, SerializerStatus::UnsupportedFlags);
 
     PropertyObjectPtr const card = MakeCard("class TestCard", 1);
     ASSERT_TRUE(card);

@@ -8,6 +8,7 @@
 #include "BitWriter.h"
 #include "BlobEnvelope.h"
 #include "ConfigMgr.h"
+#include "CoreObjectSerializer.h"
 #include "PropertyEnums.h"
 
 #include <fmt/format.h>
@@ -29,7 +30,7 @@
 namespace
 {
     constexpr std::size_t NoIndex = std::numeric_limits<std::size_t>::max();
-    constexpr SerializerFlag UnsupportedFlags = SerializerFlag::SerializeFlags | SerializerFlag::Compress;
+    constexpr SerializerFlag UnsupportedFlags = SerializerFlag::Compress;
     constexpr std::size_t ReserveCap = 4096;
     constexpr std::size_t ValueBytes = sizeof(PropertyValue);
     constexpr uint64 ShortLengthCeiling = uint64{ 1 } << 7;
@@ -183,6 +184,9 @@ namespace
             if (_status == SerializerStatus::Ok && !_options.AllowTrailingBytes && result.BytesRead != size)
                 Fail(SerializerStatus::TrailingBytes, fmt::format("ends after {} of {} bytes", result.BytesRead, size));
             result.Status = _status;
+            result.Header = _header;
+            result.StreamFlags = _streamFlags;
+            result.UnknownCore = _unknownCore;
             if (_status == SerializerStatus::Ok)
             {
                 result.Object = std::move(object);
@@ -254,7 +258,7 @@ namespace
 
         bool ReadLength(bool text, uint64& length)
         {
-            if (HasFlag(_options.Flags, SerializerFlag::CompactLength))
+            if (HasFlag(_flags, SerializerFlag::CompactLength))
             {
                 bool const wide = _reader.ReadBit();
                 length = _reader.ReadBits(wide ? 31 : 7);
@@ -284,10 +288,45 @@ namespace
 
         bool ReadObject(uint32 depth, ClassInfo const* expected, PropertyObjectPtr& out, bool& skipped)
         {
-            uint32 const hash = _reader.Read<uint32>();
-            if (_reader.Failed())
-                return Truncated();
-            if (hash == 0)
+            uint32 hash = 0;
+            std::optional<CoreObjectHeader> core;
+            if (_options.CoreObjects && !_versionable)
+            {
+                CoreObjectHeader header;
+                header.Block = _reader.Read<uint8>();
+                header.Type = _reader.Read<uint8>();
+                header.TemplateId = _reader.Read<uint32>();
+                if (_reader.Failed())
+                    return Truncated();
+                if (depth == 1)
+                {
+                    _header = header;
+                    if (!ReadStreamFlags())
+                        return false;
+                }
+                if (header.IsPlain())
+                    hash = header.TemplateId;
+                else if (CoreObjectType const* const named = _options.CoreObjects->Find(header.Block, header.Type))
+                {
+                    hash = named->ClassHash;
+                    core = header;
+                }
+                else
+                {
+                    _unknownCore = header;
+                    return Fail(SerializerStatus::UnknownClass,
+                        fmt::format("names core object block {} type {}, which the core object table does not list", header.Block, header.Type));
+                }
+            }
+            else
+            {
+                if (depth == 1 && !ReadStreamFlags())
+                    return false;
+                hash = _reader.Read<uint32>();
+                if (_reader.Failed())
+                    return Truncated();
+            }
+            if (!core && hash == 0)
                 return true;
             std::size_t objectEnd = 0;
             if (_versionable && !ReadObjectSize(objectEnd))
@@ -322,10 +361,25 @@ namespace
                 return false;
 
             PropertyObjectPtr object = PropertyObject::CreateBlank(_key, _catalog, *type);
+            object->SetCoreHeader(core);
             std::vector<PropertyValue>& values = object->GetValues(_key);
             if (_versionable ? !ReadVersionableProperties(*type, *object, values, depth, objectEnd) : !ReadCompactProperties(*type, values, depth))
                 return false;
             out = std::move(object);
+            return true;
+        }
+
+        bool ReadStreamFlags()
+        {
+            if (!HasFlag(_flags, SerializerFlag::SerializeFlags) || _streamFlags)
+                return true;
+            uint32 const word = _reader.Read<uint32>();
+            if (_reader.Failed())
+                return Truncated();
+            _streamFlags = word;
+            _flags = static_cast<SerializerFlag>(word);
+            if (HasFlag(_flags, UnsupportedFlags))
+                return Fail(SerializerStatus::UnsupportedFlags, fmt::format("opens with serializer flags {:#x}, which include a mode the object codec does not implement", word));
             return true;
         }
 
@@ -458,7 +512,7 @@ namespace
         {
             if (property.Container == ContainerKind::Static)
                 return ReadElement(property, depth, out);
-            std::size_t const minimum = MinimumBits(property, _options.Flags);
+            std::size_t const minimum = MinimumBits(property, _flags);
             if (minimum == 0)
                 return Fail(SerializerStatus::UnsupportedType, fmt::format("has type {}, whose wire layout is not known", property.TypeName));
             uint64 count = 0;
@@ -543,7 +597,7 @@ namespace
                 case ValueKind::UInt32:
                 case ValueKind::Enum:
                 {
-                    if (!IsTextNumber(property, _options.Flags))
+                    if (!IsTextNumber(property, _flags))
                     {
                         if (property.Kind == ValueKind::Int32)
                             out = _reader.Read<int32>();
@@ -708,6 +762,10 @@ namespace
         uint32 _depthLimit = std::min(_limits.MaxDepth, SerializerLimits::DepthCeiling);
         PathTracker _path;
         ClassInfo const* _root = nullptr;
+        std::optional<CoreObjectHeader> _header;
+        std::optional<CoreObjectHeader> _unknownCore;
+        SerializerFlag _flags = _options.Flags;
+        std::optional<uint32> _streamFlags;
         uint32 _objects = 0;
         std::size_t _charged = 0;
         SerializerStatus _status = SerializerStatus::Ok;
@@ -765,6 +823,11 @@ namespace
         {
             if (!object)
             {
+                if (_options.CoreObjects && !_versionable)
+                {
+                    _writer.Write<uint8>(0);
+                    _writer.Write<uint8>(0);
+                }
                 _writer.Write<uint32>(0);
                 return true;
             }
@@ -773,7 +836,23 @@ namespace
                 return Fail(SerializerStatus::TooDeep, fmt::format("nests objects deeper than {}", _depthLimit));
             if (!_root)
                 _root = &type;
-            _writer.Write<uint32>(type.Hash);
+            if (_options.CoreObjects && !_versionable)
+            {
+                CoreObjectHeader header;
+                if (!CoreHeaderOf(*object, header))
+                    return false;
+                _writer.Write<uint8>(header.Block);
+                _writer.Write<uint8>(header.Type);
+                _writer.Write<uint32>(header.IsPlain() ? type.Hash : header.TemplateId);
+                if (depth == 1)
+                    WriteStreamFlags();
+            }
+            else
+            {
+                if (depth == 1)
+                    WriteStreamFlags();
+                _writer.Write<uint32>(type.Hash);
+            }
             std::size_t const objectStart = _writer.GetBitPosition();
             if (_versionable)
                 _writer.Write<uint32>(0);
@@ -793,7 +872,7 @@ namespace
                 PropertyInfo const& property = type.Properties[ordinal];
                 if (!ObjectSerializer::IsSelected(property, _options.Mask))
                     continue;
-                bool const present = !property.HasFlag(PropertyFlag::DirtyEncode) || HasFlag(_options.Flags, SerializerFlag::ForceDirtyEncode) || !_options.IsDirty || _options.IsDirty(*object, property);
+                bool const present = !property.HasFlag(PropertyFlag::DirtyEncode) || HasFlag(_flags, SerializerFlag::ForceDirtyEncode) || !_options.IsDirty || _options.IsDirty(*object, property);
                 _path.Push(property);
                 if (_versionable)
                 {
@@ -827,9 +906,35 @@ namespace
             return !_versionable || PatchSize(objectStart, objectStart);
         }
 
+        bool CoreHeaderOf(PropertyObject const& object, CoreObjectHeader& header)
+        {
+            ClassInfo const& type = object.GetClass();
+            CoreObjectType const* const listed = _options.CoreObjects->FindByClass(type.Hash);
+            std::optional<CoreObjectHeader> const& carried = object.GetCoreHeader();
+            if (!carried || carried->IsPlain())
+            {
+                if (listed)
+                    return Fail(SerializerStatus::WrongClass, fmt::format("is a {}, which the core object table gives block {} and type {}, but carries no template id to write after them",
+                        type.Name, listed->Block, listed->Type));
+                header = {};
+                return true;
+            }
+            if (!listed || listed->Block != carried->Block || listed->Type != carried->Type)
+                return Fail(SerializerStatus::WrongClass, fmt::format("is a {} but carries core object block {} and type {}, where the core object table gives {}", type.Name, carried->Block,
+                    carried->Type, listed ? fmt::format("block {} and type {}", listed->Block, listed->Type) : std::string("it none")));
+            header = *carried;
+            return true;
+        }
+
+        void WriteStreamFlags()
+        {
+            if (HasFlag(_flags, SerializerFlag::SerializeFlags))
+                _writer.Write<uint32>(static_cast<uint32>(_flags));
+        }
+
         bool WriteLength(std::size_t length, bool text, std::string_view verb, std::string_view noun)
         {
-            if (HasFlag(_options.Flags, SerializerFlag::CompactLength))
+            if (HasFlag(_flags, SerializerFlag::CompactLength))
             {
                 if (length >= CompactLengthCeiling)
                     return Fail(SerializerStatus::ValueTooLong, fmt::format("{} {} {}, more than a compact length can hold", verb, length, noun));
@@ -900,7 +1005,7 @@ namespace
             T const* const number = value.GetIf<T>();
             if (!number)
                 return Mismatch(property);
-            if (IsTextNumber(property, _options.Flags))
+            if (IsTextNumber(property, _flags))
                 return WriteTextNumber(property, int64{ *number });
             _writer.Write<T>(*number);
             return true;
@@ -986,7 +1091,7 @@ namespace
                     int64 const* const number = Get<int64>(property, value);
                     if (!number)
                         return false;
-                    if (IsTextNumber(property, _options.Flags))
+                    if (IsTextNumber(property, _flags))
                         return WriteTextNumber(property, *number);
                     _writer.Write<uint32>(static_cast<uint32>(*number));
                     return true;
@@ -1091,6 +1196,7 @@ namespace
         PathTracker _path;
         ClassInfo const* _root = nullptr;
         SerializerStatus _status = SerializerStatus::Ok;
+        SerializerFlag _flags = _options.Flags;
         std::string _detail;
     };
 }
@@ -1155,6 +1261,10 @@ DecodeResult ObjectSerializer::DecodeField(TypeCatalogPtr const& catalog, Object
     };
     if (!catalog)
         return refuse(SerializerStatus::UnknownClass, "cannot be read without a type catalog");
+    if (!field.CoreObjects)
+        options.CoreObjects = nullptr;
+    else if (!options.CoreObjects)
+        return refuse(SerializerStatus::UnknownClass, "holds a game object in CoreObject form, which cannot be read without the core object table");
     options.RootClasses.clear();
     for (std::string_view const name : field.Classes)
     {
@@ -1206,6 +1316,10 @@ EncodeResult ObjectSerializer::EncodeField(ObjectField const& field, PropertyObj
         return refuse(SerializerStatus::NullNotAllowed, "needs an object");
     if (object && std::none_of(field.Classes.begin(), field.Classes.end(), [object](std::string_view name) { return object->IsA(name); }))
         return refuse(SerializerStatus::WrongClass, fmt::format("cannot carry a {}", object->GetClass().Name));
+    if (!field.CoreObjects)
+        options.CoreObjects = nullptr;
+    else if (!options.CoreObjects)
+        return refuse(SerializerStatus::UnknownClass, "carries a game object in CoreObject form, which cannot be written without the core object table");
     result = Encode(object, options);
     if (!result.Ok())
     {

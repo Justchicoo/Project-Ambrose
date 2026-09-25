@@ -269,7 +269,7 @@ TEST(ClientSetupTest, AutoPicksTheNewestInstallSavesOnlyClientDirAndUsesTheBuilt
     EXPECT_EQ(setup.Builder.Calls.size(), 2u);
 }
 
-TEST(ClientSetupTest, NewestPrefersHigherRevisionsThenTheProgramThenDiscoveryOrder)
+TEST(ClientSetupTest, NewestPrefersHigherRevisionsThenTheProgramThenMoreArchivesThenDiscoveryOrder)
 {
     EXPECT_FALSE(ClientSetup::Newest({}));
     std::optional<ClientCandidate> const newest = ClientSetup::Newest({ Candidate("A", "r806919.Wizard_1_610", true), Candidate("B", "r900000.Wizard_1_700", false), Candidate("C", "r900000.Wizard_1_700", true), Candidate("D", "r900000", true), Candidate("E", "", true) });
@@ -281,6 +281,16 @@ TEST(ClientSetupTest, NewestPrefersHigherRevisionsThenTheProgramThenDiscoveryOrd
     std::optional<ClientCandidate> const unknown = ClientSetup::Newest({ Candidate("A", "", false), Candidate("B", "", false) });
     ASSERT_TRUE(unknown);
     EXPECT_EQ(ClientLocator::PathText(unknown->Install.Root), "A");
+
+    ClientCandidate streamed = Candidate("Streamed", "r806919.Wizard_1_610", true);
+    streamed.Install.Archives = 1463;
+    ClientCandidate complete = Candidate("Complete", "r806919.Wizard_1_610", true);
+    complete.Install.Archives = 3594;
+    ClientCandidate bare = Candidate("Bare", "r806919.Wizard_1_610", false);
+    bare.Install.Archives = 9000;
+    std::optional<ClientCandidate> const fuller = ClientSetup::Newest({ streamed, bare, complete });
+    ASSERT_TRUE(fuller);
+    EXPECT_EQ(ClientLocator::PathText(fuller->Install.Root), "Complete") << "within one revision the program still comes first, and then the install holding the whole game";
 }
 
 TEST(ClientSetupTest, AutoKeepsUsableAndLockedValuesAndReplacesAnUnusableDump)

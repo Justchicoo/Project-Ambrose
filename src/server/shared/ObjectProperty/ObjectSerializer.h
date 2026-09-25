@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Encodes and decodes property objects in the compact ObjectProperty format the client uses inside messages, a class hash per object then the properties the mask selects in id order with no headers, and in the versionable format its data files use, where every object and property carries its size in bits and every property its hash, so unknown or unselected ones are skipped and reported and a clean dirty-encoded property is left out; bits pack least significant first, lengths are fixed-width or compact, every decode is bounded by depth, object, list, memory and inflation limits read from live settings, the root is optionally held to a set of classes or to the rules of the message field it came from, and every failure names the property path it happened at. Every field of the option and issue structures carries a default, so naming only the fields a caller cares about is the intended way to build one rather than an omission GCC refuses.
+ * Encodes and decodes property objects in the compact ObjectProperty format the client uses inside messages, a class hash per object then the properties the mask selects in id order with no headers, and in the versionable format its data files use, where every object and property carries its size in bits and every property its hash, so unknown or unselected ones are skipped and reported and a clean dirty-encoded property is left out; bits pack least significant first, lengths are fixed-width or compact, every decode is bounded by depth, object, list, memory and inflation limits read from live settings, the root is optionally held to a set of classes or to the rules of the message field it came from, and a game object is written in the client's CoreObject form when a core object table is handed in, where every object in the stream, the root and each one nested in it, opens with a block and a type ahead of its four-byte id instead of the id alone: the block and type the table gives the object's class, followed by the template id the object carries, or both zero followed by a plain class hash for a class the table does not list, and a null as six zero bytes, while a decoded object keeps the header it was read with and an encoded one must carry the pair the table gives its class; a stream written with SerializeFlags carries its own flags word, after that header or before the root's hash, and every value after it is read with the flags the word names, bits nobody has named yet included; every failure names the property path it happened at. Every field of the option and issue structures carries a default, so naming only the fields a caller cares about is the intended way to build one rather than an omission GCC refuses.
  */
 
 #ifndef AMBROSE_OBJECTSERIALIZER_H
@@ -90,6 +90,8 @@ struct SerializerLimits
     bool operator==(SerializerLimits const&) const = default;
 };
 
+class CoreObjectTypeTable;
+
 struct SerializerOptions
 {
     static constexpr uint32 TransmitMask = PropertyFlags::Bit(PropertyFlag::Transmit) | PropertyFlags::Bit(PropertyFlag::AuthorityTransmit);
@@ -103,6 +105,7 @@ struct SerializerOptions
     bool AllowNullRoot = true;
     std::vector<ClassInfo const*> RootClasses = {};
     std::function<bool(PropertyObject const& object, PropertyInfo const& property)> IsDirty = {};
+    CoreObjectTypeTable const* CoreObjects = nullptr;
 };
 
 struct DecodeIssue
@@ -121,6 +124,9 @@ struct DecodeResult
     std::size_t BytesRead = 0;
     std::string Detail;
     std::vector<DecodeIssue> Issues;
+    std::optional<CoreObjectHeader> Header;
+    std::optional<uint32> StreamFlags;
+    std::optional<CoreObjectHeader> UnknownCore;
 
     bool Ok() const noexcept { return Status == SerializerStatus::Ok; }
 };

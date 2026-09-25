@@ -1047,8 +1047,7 @@ std::optional<ClientCandidate> ClientSetup::Newest(std::vector<ClientCandidate> 
     std::optional<ClientCandidate> best;
     for (ClientCandidate const& candidate : installs)
     {
-        uint64 const revision = candidate.Install.RevisionNumber();
-        if (!best || revision > best->Install.RevisionNumber() || (revision == best->Install.RevisionNumber() && candidate.Install.HasProgram && !best->Install.HasProgram))
+        if (!best || candidate.Install.IsPreferredTo(best->Install))
             best = candidate;
     }
     return best;

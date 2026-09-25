@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the type registry on small dumps written by the test with invented classes: aliases collapsed into their class, into an unprefixed template class, or standing in for a missing one; base chains; properties in id order found by hash and name; per-property enum options in both directions with text options, integer and text defaults in dump order and the base class hint; value, primitive and bit kinds; the class kind counts; and loads refused while the active catalog keeps serving: bad hashes, unknown bases and types, broken, empty or misshapen JSON, fields of the wrong JSON type or missing, duplicates, id gaps, oversized values, bad containers, keys that differ from the hash, inconsistent base chains and inherited property ids, classes that hold themselves inline and the wrong version.
+ * Tests the type registry on small dumps written by the test with invented classes: aliases collapsed into their class, into an unprefixed template class, or standing in for a missing one; base chains; properties in id order found by hash and name; per-property enum options in both directions with text options, integer and text defaults in dump order and the base class hint; value, primitive and bit kinds; the class kind counts; and loads refused while the active catalog keeps serving: bad hashes, unknown bases and types, broken, empty or misshapen JSON, fields of the wrong JSON type or missing, duplicates, id gaps, oversized values, bad containers, keys that differ from the hash, inconsistent base chains and inherited property ids, classes that hold themselves inline and the wrong version. A supplement of classes the dump does not describe joins the dump loaded before or after it, rebuilds the catalog into a new generation, is marked as coming from the supplement, gives way to the dump where the dump describes the same class, and when a name or property does not hash to what it declares, or the rebuild fails, is refused with the catalog that was serving left in place.
  */
 
 #include "StringHash.h"
+#include "TypeDumpLoader.h"
 #include "TypeRegistry.h"
 #include "TypeRegistryBinary.h"
 
@@ -15,7 +16,9 @@
 #include <string>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <variant>
+#include <vector>
 
 namespace
 {
@@ -550,4 +553,117 @@ TEST_F(TypeRegistryTest, ASuccessfulLoadStartsANewGenerationWhileOlderCatalogsSt
     _registry.Clear();
     EXPECT_FALSE(_registry.IsLoaded());
     EXPECT_EQ(_registry.GetGeneration(), 0u);
+}
+
+namespace
+{
+    TypeDumpLoader::RawDump Supplement(std::string const& name, std::string const& base, std::optional<uint64> declaredPropertyHash = std::nullopt)
+    {
+        TypeDumpLoader::RawClass type;
+        type.Key = std::to_string(StringHash::KiStringHash(name));
+        type.Name = name;
+        type.Hash = StringHash::KiStringHash(name);
+        type.Bases = { base, "class PropertyClass" };
+        TypeDumpLoader::RawProperty id;
+        id.Name = "m_id";
+        id.Type = "unsigned __int64";
+        id.Container = "Static";
+        id.Id = 0;
+        id.Offset = 8;
+        id.Flags = 31;
+        id.Dynamic = false;
+        id.Singleton = false;
+        id.Pointer = false;
+        id.Hash = declaredPropertyHash.value_or(StringHash::PropertyHash("unsigned __int64", "m_id"));
+        TypeDumpLoader::RawProperty named = id;
+        named.Name = "m_name";
+        named.Type = "std::string";
+        named.Id = 1;
+        named.Offset = 16;
+        named.Hash = StringHash::PropertyHash("std::string", "m_name");
+        type.Properties = { id, named };
+        TypeDumpLoader::RawDump dump;
+        dump.Version = TypeDumpLoader::SupportedVersion;
+        dump.HasClasses = true;
+        dump.Classes.push_back(std::move(type));
+        return dump;
+    }
+}
+
+TEST_F(TypeRegistryTest, ASupplementClassJoinsTheLoadedDumpInANewGeneration)
+{
+    ASSERT_NO_FATAL_FAILURE(Activate());
+    uint32 const hash = StringHash::KiStringHash("TestServerBehavior");
+    EXPECT_EQ(_active->FindClass(hash), nullptr);
+    EXPECT_FALSE(_registry.IsFromSupplement(hash));
+
+    std::vector<std::string> errors;
+    ASSERT_TRUE(_registry.SetSupplement(Supplement("TestServerBehavior", "class TestBase"), "test rows", errors)) << (errors.empty() ? std::string() : errors.front());
+    TypeCatalogPtr const rebuilt = _registry.GetCatalog();
+    EXPECT_EQ(rebuilt->GetGeneration(), _active->GetGeneration() + 1);
+    ClassInfo const* const added = rebuilt->FindClass("TestServerBehavior");
+    ASSERT_NE(added, nullptr);
+    EXPECT_EQ(added->Hash, hash);
+    ClassInfo const* const base = rebuilt->FindClass("class TestBase");
+    ASSERT_NE(base, nullptr);
+    EXPECT_TRUE(added->IsA(*base)) << "a supplemental class extends a class the dump describes";
+    EXPECT_TRUE(_registry.IsFromSupplement(hash));
+    EXPECT_FALSE(_registry.IsFromSupplement(base->Hash));
+    EXPECT_EQ(_registry.GetSupplementClassCount(), 1u);
+    EXPECT_EQ(_active->FindClass(hash), nullptr) << "a catalog already handed out keeps what it held";
+
+    ASSERT_TRUE(_registry.LoadFromText(SyntheticDump().dump(), "synthetic-again.json"));
+    EXPECT_NE(_registry.GetCatalog()->FindClass(hash), nullptr) << "the supplement joins every later load too";
+
+    ASSERT_TRUE(_registry.ClearSupplement(errors));
+    EXPECT_EQ(_registry.GetCatalog()->FindClass(hash), nullptr);
+    EXPECT_FALSE(_registry.IsFromSupplement(hash));
+}
+
+TEST_F(TypeRegistryTest, ASupplementSetBeforeTheDumpJoinsItWhenItLoads)
+{
+    std::vector<std::string> errors;
+    ASSERT_TRUE(_registry.SetSupplement(Supplement("TestServerBehavior", "class TestBase"), "test rows", errors));
+    EXPECT_FALSE(_registry.IsLoaded());
+    ASSERT_NO_FATAL_FAILURE(Activate());
+    EXPECT_EQ(_active->GetGeneration(), 1u) << "one build, not a build and a rebuild";
+    EXPECT_NE(_active->FindClass("TestServerBehavior"), nullptr);
+}
+
+TEST_F(TypeRegistryTest, ASupplementThatDoesNotHashIsRefusedAndTheCatalogKeepsServing)
+{
+    ASSERT_NO_FATAL_FAILURE(Activate());
+    std::vector<std::string> errors;
+    ASSERT_TRUE(_registry.SetSupplement(Supplement("TestServerBehavior", "class TestBase"), "test rows", errors));
+    TypeCatalogPtr const serving = _registry.GetCatalog();
+
+    EXPECT_FALSE(_registry.SetSupplement(Supplement("TestOtherBehavior", "class TestBase", uint64{ 12345 }), "test rows", errors));
+    ASSERT_FALSE(errors.empty());
+    EXPECT_NE(errors.front().find("declares hash 12345"), std::string::npos) << errors.front();
+    EXPECT_EQ(_registry.GetCatalog(), serving);
+    EXPECT_TRUE(_registry.IsFromSupplement(StringHash::KiStringHash("TestServerBehavior"))) << "the supplement that was in place stays in place";
+
+    errors.clear();
+    TypeDumpLoader::RawDump misnamed = Supplement("TestOtherBehavior", "class TestBase");
+    misnamed.Classes.front().Hash = 7;
+    EXPECT_FALSE(_registry.SetSupplement(std::move(misnamed), "test rows", errors));
+    ASSERT_FALSE(errors.empty());
+    EXPECT_NE(errors.front().find("declares hash 7, but its name hashes to"), std::string::npos) << errors.front();
+
+    errors.clear();
+    EXPECT_FALSE(_registry.SetSupplement(Supplement("TestOtherBehavior", "class TestNowhere"), "test rows", errors)) << "a base nothing describes fails the rebuild";
+    EXPECT_FALSE(errors.empty());
+    EXPECT_EQ(_registry.GetCatalog(), serving);
+    EXPECT_FALSE(_registry.IsFromSupplement(StringHash::KiStringHash("TestOtherBehavior")));
+}
+
+TEST_F(TypeRegistryTest, TheDumpsOwnDescriptionWinsOverTheSupplements)
+{
+    ASSERT_NO_FATAL_FAILURE(Activate());
+    std::vector<std::string> errors;
+    ASSERT_TRUE(_registry.SetSupplement(Supplement("class TestBase", "class PropertyClass"), "test rows", errors)) << (errors.empty() ? std::string() : errors.front());
+    ClassInfo const* const kept = _registry.GetCatalog()->FindClass("class TestBase");
+    ASSERT_NE(kept, nullptr);
+    EXPECT_EQ(kept->Properties.size(), _active->FindClass("class TestBase")->Properties.size());
+    EXPECT_FALSE(_registry.IsFromSupplement(kept->Hash));
 }
