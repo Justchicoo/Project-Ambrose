@@ -711,6 +711,48 @@ class RoadmapSummaryTests(unittest.TestCase):
         self.commit("drop a check")
         self.assertEqual(self.run_check(), 0)
 
+    TICKED = "## 4.04 World wire math\n\n- [x] Unit: packing lands within 4 units (MovementPackingTest.Packing)\n- [ ] Unit: yaw survives a round trip\n"
+    EMPTY = "## 4.04 World wire math\n\n- [ ] Unit: packing lands within 4 units\n- [ ] Unit: yaw survives a round trip\n"
+
+    def ticked_base(self):
+        self.write("doc/roadmap/phase-04-a-wizard.md", self.TICKED)
+        self.write("doc/ROADMAP.md", "## Where we are\n\nPhase 3 is built, and 4.04 packs positions.\n")
+        self.base = self.commit("tick one check and say so")
+
+    def test_a_ticked_check_turned_back_to_empty_is_refused_on_every_branch(self):
+        self.ticked_base()
+        self.write("doc/roadmap/phase-04-a-wizard.md", self.EMPTY)
+        self.commit("an older copy of the phase file")
+        self.assertEqual(self.run_check(), 1)
+        self.assertEqual(self.run_check("milestone/4.04-world-wire-math"), 1)
+
+    def test_an_untick_that_says_why_is_allowed(self):
+        self.ticked_base()
+        self.write("doc/roadmap/phase-04-a-wizard.md", self.EMPTY)
+        self.commit("drop a tick\n\nUnticks: the test it named never ran")
+        self.assertEqual(self.run_check(), 0)
+
+    def test_putting_back_lost_ticks_needs_no_summary_when_the_commit_says_so(self):
+        self.write("doc/roadmap/phase-04-a-wizard.md", self.TICKED)
+        self.commit("restore a lost tick")
+        self.assertEqual(self.run_check(), 1)
+        self.write("doc/roadmap/phase-04-a-wizard.md", self.EMPTY)
+        self.base = self.commit("back to where the loss left it\n\nUnticks: resetting the fixture")
+        self.write("doc/roadmap/phase-04-a-wizard.md", self.TICKED)
+        self.commit("restore a lost tick\n\nRestores: an older checkout reverted it")
+        self.assertEqual(self.run_check(), 0)
+
+    def test_an_untick_is_read_from_the_lines_themselves(self):
+        lines = ["-- [x] Unit: packing lands within 4 units (MovementPackingTest.Packing)", "+- [ ] Unit: packing lands within 4 units"]
+        self.assertEqual(len(ci_roadmap_state.unticked_in(lines)), 1)
+        reworded = ["-- [x] Unit: packing lands within 4 units (OldTest.Name)", "+- [x] Unit: packing lands within 4 units (NewTest.Name)"]
+        self.assertEqual(ci_roadmap_state.unticked_in(reworded), [])
+        short = ["-- [x] A check that happens to be long enough (X.Y)", "+- [ ] A check"]
+        self.assertEqual(ci_roadmap_state.unticked_in(short), [])
+        self.assertEqual(ci_roadmap_state.problems([], [], "", ["x"], ""),
+                         ["1 acceptance check(s) went from ticked back to empty; if that is meant, say why on an 'Unticks:' line in the commit message"])
+        self.assertEqual(ci_roadmap_state.problems([], [], "", ["x"], "Unticks: wrong"), [])
+
     def test_a_range_that_cannot_be_diffed_checks_nothing(self):
         self.assertEqual(ci_roadmap_state.main(["--root", self.folder, "--range", "f" * 40 + "...HEAD"]), 0)
 
