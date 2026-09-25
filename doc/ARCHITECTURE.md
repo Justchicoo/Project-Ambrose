@@ -592,6 +592,15 @@ Questions decided under these rules the same day:
 - An embedded Lua runtime, added through vcpkg, runs the client-shipped minigame Server.lua scripts from the user's own install in 13.11, so the scripts reload live.
 - Battlegrounds, castle magic and monster magic stay in scope, in 14.14, 14.15 and 15.17-15.20.
 
+### Time zones
+
+Settled on 2026-09-25 at the maintainer's direction. Every time zone comes from the C++20 standard library's own database, through `std::chrono::get_tzdb` and `locate_zone`, on every platform. No third-party time zone library is used, and neither the repository nor a release carries a copy of the database, because keeping it current is the operating system's job.
+
+- On Windows the standard library reads the ICU that Windows carries, which needs Windows 10 version 1903 or later, or Windows Server 2022 or later. On Linux, libstdc++ reads the distribution's tzdata package from `/usr/share/zoneinfo/tzdata.zi`. When the system has none, it falls back without a word to a copy compiled into the library, and it does not read `TZDIR`.
+- Measured on 2026-09-25 with one probe that loads the database and resolves America/New_York, Europe/London and Australia/Lord_Howe. MSVC 14.44 on Windows 11 build 26200 resolved all three from ICU's tzdata 2022g. GCC 13.3 and 14.2 on Ubuntu 24.04 resolved them from the distribution's 2026c, and from the library's own 2024a when no tzdata was installed. No supported platform lacks a database; what varies is how old it is.
+- A platform's copy can be years behind, and a missing system database is replaced silently. So whatever uses time zones reports the database version it loaded and whether it came from the system or from the library's built-in copy: the supervisor's startup line and 17.15's schedule page. A schedule written in UTC or a fixed offset depends on neither.
+- The Docker image installs the distribution's tzdata package in its runtime stage, so its database is as current as the image, and rebuilding the image refreshes it. 17.23's check proves the zones resolve from that system database rather than the built-in copy. That is how an image built without tzdata fails the check instead of starting on stale rules.
+
 ### Still open
 
 Decisions that block later milestones are listed under Decisions needed in doc/ROADMAP.md. Propose them to the maintainer when their milestone is next.

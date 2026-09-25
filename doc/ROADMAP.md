@@ -86,7 +86,6 @@ These block specific milestones. The maintainer decides each one, then this list
 - Operations: the panel event socket protocol as the one real-time channel, with its message types and close codes. Blocks 17.26, 17.57, 17.58.
 - Operations: backup archive encryption, whether it is the default rather than opt-in, and whether dumps are structured rows through prepared inserts rather than SQL text. Blocks 17.16, 17.72.
 - Operations: the S3 client, either aws-sdk-cpp from vcpkg or SigV4 signing over Botan with an HTTP client library. Blocks 17.43.
-- Operations: the time zone data source where a platform's C++20 library lacks it, and whether the Docker image ships tzdata. Blocks 17.15, 17.23.
 - Operations: the login-screen countdown, either a notice message that does not disconnect, found by capture or client reverse engineering, or limiting login-screen warnings to the final notice. Blocks 17.15, 17.32, 17.64.
 - Operations: whether a node's schedules run on the node from replicated definitions or centrally on the panel. Blocks 17.22.
 - Operations: the editor library for the file manager (CodeMirror 6 proposed), the archive library for extraction, and the default archive format for folder downloads. Blocks 17.39, 17.53.
