@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a built server executable to check --version, a missing config, and --check with a copy of its shipped .conf.dist in the work folder, so no saved choice in the build folder's conf.d applies, where neither that run nor a run in Setup.Mode ask with ClientDir and TypeDumpPath empty and unlocked, an empty input file and a machine holding a synthetic install may print any text of a setup question to either output, the game and login servers must log that install as found with the advice for a run without a terminal, and no choice is saved; with AMBROSE_TEST_DB the game server and the login server, with its login and characters databases, create, update, open and close uniquely named databases that are dropped afterwards, the login server runs account commands piped into its console input, a bad login database string exits 1, the game server beats for the realm it was named as and leaves it offline when it stops, and the supervisor's --check names every app it would run and starts none of them, with its admin API on a port of its own choosing and its token in the work folder.
+# Runs a built server executable to check --version, a missing config, and --check with a copy of its shipped .conf.dist in the work folder, so no saved choice in the build folder's conf.d applies, where neither that run nor a run in Setup.Mode ask with ClientDir and TypeDumpPath empty and unlocked, an empty input file and a machine holding a synthetic install may print any text of a setup question to either output, the game and login servers must log that install as found with the advice for a run without a terminal, and no choice is saved; with AMBROSE_TEST_DB the game server and the login server, with its login, characters and world databases, create, update, open and close uniquely named databases that are dropped afterwards, the login server saying it can create wizards from the world it opened, the login server runs account commands piped into its console input, a bad login database string exits 1, the game server beats for the realm it was named as and leaves it offline when it stops, and the supervisor's --check names every app it would run and starts none of them, with its admin API on a port of its own choosing and its token in the work folder.
 if(NOT APP OR NOT NAME OR NOT WORKDIR)
     message(FATAL_ERROR "APP, NAME and WORKDIR must be set")
 endif()
@@ -77,11 +77,14 @@ endif()
 if(NAME STREQUAL "loginserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AMBROSE_TEST_DB}" STREQUAL "")
     ambrose_test_database_info(ambrose_smoke_login smokeDatabase)
     ambrose_test_database_info(ambrose_smoke_characters smokeCharacters)
+    ambrose_test_database_info(ambrose_smoke_world smokeWorld)
     foreach(round IN ITEMS first second)
         execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=${smokeDatabase}" "--set=CharacterDatabaseInfo=${smokeCharacters}"
+                "--set=WorldDatabaseInfo=${smokeWorld}"
             WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE databaseResult OUTPUT_VARIABLE databaseOutput ERROR_VARIABLE databaseError TIMEOUT 60)
         if(NOT databaseResult EQUAL 0 OR NOT databaseOutput MATCHES "Opened database connection pool login: 1 async, 1 sync" OR NOT databaseOutput MATCHES "loginserver ready" OR NOT databaseOutput MATCHES "Closed database connection pool login"
-            OR NOT databaseOutput MATCHES "Opened database connection pool characters: 1 async, 1 sync")
+            OR NOT databaseOutput MATCHES "Opened database connection pool characters: 1 async, 1 sync" OR NOT databaseOutput MATCHES "Opened database connection pool world: 1 async, 1 sync"
+            OR NOT databaseOutput MATCHES "Wizards can be created from")
             ambrose_test_fail("loginserver with AMBROSE_TEST_DB did not update, open and close the login pool on its ${round} start (${databaseResult}): ${databaseOutput}${databaseError}")
         endif()
         if(round STREQUAL "first" AND (NOT databaseOutput MATCHES "Created database ambrose_smoke_login_" OR NOT databaseOutput MATCHES "importing 2 base file" OR NOT databaseOutput MATCHES "Applied RELEASED 2026_01_01_00\\.sql to the login database"
@@ -96,6 +99,7 @@ if(NAME STREQUAL "loginserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AM
     file(WRITE "${WORKDIR}/console.txt" "help account\naccount create smoke_user smoke_secret\naccount create SMOKE_USER smoke_secret\naccount info Smoke_User\nshutdown\n")
     execute_process(COMMAND "${CMAKE_COMMAND}" -E cat "${WORKDIR}/console.txt"
         COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=${smokeDatabase}" "--set=CharacterDatabaseInfo=${smokeCharacters}"
+            "--set=WorldDatabaseInfo=${smokeWorld}"
         WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE consoleResult OUTPUT_VARIABLE consoleOutput ERROR_VARIABLE consoleError TIMEOUT 60)
     if(NOT consoleResult EQUAL 0)
         ambrose_test_fail("loginserver reading console commands exited ${consoleResult}: ${consoleOutput}${consoleError}")
