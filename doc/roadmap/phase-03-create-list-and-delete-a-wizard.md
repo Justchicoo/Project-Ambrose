@@ -237,7 +237,7 @@ Objects inside client messages can be decoded from and encoded to the non-versio
 
 - [x] Unit test with synthetic classes: mask filtering, Deprecated skipping, DirtyEncode bit, null child, nested list of derived objects (CompactCodecTest, with golden bytes for every value layout the codec writes)
 - [x] Local-gated test (sniffer captures on the maintainer's machine, not committed): BadgeFilterInfoList (1256 bytes) and the inflated BadgeInfoList (363 bytes) decode consuming exactly all bytes, and re-encode byte-identically (CompactCodecClientTest; all 42 captures, BadgeInfoList sizes 363, 386, 400, 466 and 512 bytes, the enveloped ones unwrapped first)
-- [ ] Real client, with LOG wiring: the server encodes a WizardCharacterCreationInfo into MSG_CHARACTERINFO.CharacterInfo (LoginMessages.xml) and the character appears on the selection screen; the client's MSG_CREATECHARACTER.CreationInfo decodes to the chosen name parts, school and appearance
+- [x] Real client, with LOG wiring: the server encodes a WizardCharacterCreationInfo into MSG_CHARACTERINFO.CharacterInfo (LoginMessages.xml) and the character appears on the selection screen; the client's MSG_CREATECHARACTER.CreationInfo decodes to the chosen name parts, school and appearance (2026-09-24 on the maintainer's own r806919 client: the CreationInfo it sent decoded to school 2343174, the male human appearance it had been given and name indices 0x0364F81B, and the wizard the server then encoded came back on the selection screen as Luke Wyvernfriend, Level 1 Novice Pyromancer, with the look that was chosen)
 
 **Risks**
 
@@ -672,6 +672,8 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 
 **Data sources**
 
+- m_nameIndices is packed `locale<<24 | first<<16 | middle<<8 | last`, measured on 2026-09-24 against the maintainer's own r806919 client: choosing Finnigan Dragonwall, whose parts are positions 60, 14 and 240 in the en-US tables, sent 0x033C0EF0. The top byte is not spare, which is what the server had assumed, and 3 is what that client sends for en-US, the third locale its own CharacterNames.xml lists; whether that ordering is the client's locale numbering is a hypothesis on one measurement, and a run in another locale would settle it. The disallowed list's own m_locale values are 1 and 2, which is consistent with it and proves nothing by itself. The value is stored and handed back exactly as it arrived.
+- The refusal is what made that finding cheap: naming the value it saw, rather than only that something was wrong, turned three rounds of guessing into one run. Every refusal of a number a client hands us should name the number.
 - Type dump WizardCharacterCreationInfo / WizardCharacterBehavior (enum eGender options Female=0, Male=1, Neutral=2; eRace Human=79806088)
 - World DB rows from LOG-7
 - a reference server's character service (behavior only)
@@ -710,7 +712,7 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 **Acceptance**
 
 - [x] A valid blob creates exactly one character in one transaction (2026-09-24: CreateCharacterDatabaseTest.AValidRequestStoresExactlyOneWizardWhereTheWorldRowsSay, where one request leaves one row in characters and one in character_appearance, at level 1 in the world, zone and place playercreateinfo names, owned by the account that asked, and EachWizardIsGivenAnIdOfItsOwn shows three requests taking three ids with the high-water mark following them)
-- [ ] Real client: the creation flow returns to select with the new level-1 wizard; it survives restart
+- [x] Real client: the creation flow returns to select with the new level-1 wizard; it survives restart (2026-09-24: creation on the maintainer's own client left character 1 stored and the client returned to select showing Luke Wyvernfriend at level 1; both servers were then stopped and started again, the client logged in to a new login server process at 22:26:59 and the same wizard was there to pick at 22:27:12. What that proves is a fresh login against a restarted server rather than a restart of the client process, which was not separately recorded)
 - [ ] At the slot limit the client shows failure and the list is unchanged
 
 ### Detailed spec from LOG-8: Character creation: MSG_CREATECHARACTER -> MSG_CREATECHARACTERRESPONSE
@@ -745,10 +747,10 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 
 **Acceptance**
 
-- [ ] Unit: a blob built by our serializer with valid fields creates exactly one character; a bad school hash, gender=2, hair_model beyond bui4, an out-of-range name index and a 7th character each return ErrorCode!=0 and write nothing
-- [ ] Unit: a truncated or garbage blob returns ErrorCode!=0 without crashing or closing the session
-- [ ] Unit: lowering Character.MaxPerAccount on a running server refuses the next create over the new limit without a restart
-- [ ] Real client: completing the creation flow returns to character select with the new wizard at level 1 with the chosen school, look and name; restarting the client and logging in again still shows it
+- [x] Unit: a blob built by our serializer with valid fields creates exactly one character; a bad school hash, gender=2, hair_model beyond bui4, an out-of-range name index and a 7th character each return ErrorCode!=0 and write nothing (2026-09-24: the same fifteen tests 3.15 records)
+- [x] Unit: a truncated or garbage blob returns ErrorCode!=0 without crashing or closing the session (2026-09-24: CreateCharacterDatabaseTest.ARequestThatIsRefusedWritesNothingAndLeavesTheSessionUsable)
+- [x] Unit: lowering Character.MaxPerAccount on a running server refuses the next create over the new limit without a restart (2026-09-24: CreateCharacterDatabaseTest.LoweringTheLimitTakesHoldOnTheNextRequestWithNothingRestarted)
+- [x] Real client: completing the creation flow returns to character select with the new wizard at level 1 with the chosen school, look and name; restarting the client and logging in again still shows it (2026-09-24: Luke Wyvernfriend, Level 1 Novice Pyromancer, created from the client's own flow and still there after both servers were restarted and the client logged in again; the first two attempts were refused because the server read the top byte of m_nameIndices as unused, which is recorded in the spec below)
 - [ ] Real client: on an account already at the slot limit, the create attempt shows the client's failure message and the list is unchanged
 
 **Risks**

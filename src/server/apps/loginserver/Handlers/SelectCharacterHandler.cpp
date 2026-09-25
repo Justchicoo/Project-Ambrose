@@ -83,16 +83,17 @@ void LoginSession::SelectCharacter(uint64 charId, std::string const& realmName, 
         return;
     }
 
-    std::optional<Realm> const realm = sRealmList.Choose(realmName, NowEpochSeconds());
+    int64 const now = NowEpochSeconds();
+    std::optional<Realm> const realm = sRealmList.Choose(realmName, now);
     if (!realm)
     {
-        FailCharacterSelect(charId, realmName.empty() ? "no realm is online to send it to"
-            : fmt::format("realm {} is not online", Ambrose::ForLog(realmName, 64)));
+        FailCharacterSelect(charId, realmName.empty()
+                ? fmt::format("no realm is online to send it to: {}", sRealmList.Describe(now))
+                : fmt::format("realm {} is not online: {}", Ambrose::ForLog(realmName, 64), sRealmList.Describe(now)));
         return;
     }
 
     std::string const key = Base64::Encode(Ambrose::Crypto::GetRandomBytes(KeyBytes));
-    int64 const now = NowEpochSeconds();
     int64 const expires = now + sLoginMgr.GetSettings()->KeyTtl.count();
 
     std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> insert = LoginDatabase.IsOpen() ? LoginDatabase.GetPreparedStatement(LOGIN_INS_LOGIN_KEY) : nullptr;

@@ -68,7 +68,8 @@ TEST(CharacterNamesTest, PackedIndicesRoundTrip)
     EXPECT_EQ(indices.Middle, 0xCD);
     EXPECT_EQ(indices.Last, 0xEF);
     EXPECT_EQ(indices.Pack(), 0x00ABCDEFu);
-    EXPECT_EQ(NameIndices::Unpack(0xFF000102u), (NameIndices{ 0, 1, 2 }));
+    EXPECT_EQ(NameIndices::Unpack(0xFF000102u), (NameIndices{ 0, 1, 2, 0xFF })) << "the top byte is the locale the client counted its positions in, and is kept rather than dropped";
+    EXPECT_EQ((NameIndices{ 0xAB, 0xCD, 0xEF, 3 }).Pack(), 0x03ABCDEFu);
     EXPECT_EQ(Pack(120, 45, 200), (120u << 16) | (45u << 8) | 200u);
 }
 
@@ -106,10 +107,12 @@ TEST(CharacterNamesTest, IndicesOutsideTheTablesAreRefused)
     EXPECT_EQ(names->Check(Pack(2, 0, 0), Female, "en-US"), NameCheck::FirstOutOfRange);
     EXPECT_EQ(names->Check(Pack(0, 3, 0), Male, "en-US"), NameCheck::MiddleOutOfRange);
     EXPECT_EQ(names->Check(Pack(0, 0, 4), Female, "en-US"), NameCheck::LastOutOfRange);
-    EXPECT_EQ(names->Check(0x01000000u, Male, "en-US"), NameCheck::UnusedBitsSet);
+    EXPECT_EQ(names->Check(0x03000000u | Pack(2, 2, 3), Male, "en-US"), NameCheck::Ok)
+        << "the client marks which locale its indices are positions in in the top byte, which is not part of any index";
+    EXPECT_EQ(NameIndices::Unpack(0x03000000u | Pack(2, 2, 3)).Locale, 3);
     EXPECT_EQ(names->Check(0, 2, "en-US"), NameCheck::UnknownGender);
     EXPECT_EQ(names->Check(0, Male, "pl"), NameCheck::UnknownLocale);
-    for (uint32 const bad : { Pack(3, 0, 0), Pack(0, 3, 0), Pack(0, 0, 4), 0x80000000u })
+    for (uint32 const bad : { Pack(3, 0, 0), Pack(0, 3, 0), Pack(0, 0, 4) })
     {
         EXPECT_FALSE(names->IsValidIndices(bad, Male, "en-US")) << bad;
         EXPECT_FALSE(names->FormatName(bad, Male, "en-US")) << bad;

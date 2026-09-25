@@ -5,6 +5,8 @@
 
 #include "RealmList.h"
 
+#include <fmt/format.h>
+
 #include "StringUtil.h"
 
 #include <algorithm>
@@ -34,10 +36,24 @@ RealmPolicy RealmList::GetPolicy() const
     return _policy;
 }
 
-void RealmList::Replace(std::vector<Realm> realms)
+void RealmList::Replace(std::vector<Realm> realms, int64 readAtEpoch)
 {
     std::unique_lock const lock(_mutex);
     _realms = std::move(realms);
+    _readAtEpoch = readAtEpoch;
+}
+
+std::string RealmList::Describe(int64 nowEpoch) const
+{
+    std::shared_lock const lock(_mutex);
+    std::size_t online = 0;
+    for (Realm const& realm : _realms)
+        if (IsOnline(realm, _policy, nowEpoch))
+            ++online;
+    if (_readAtEpoch <= 0)
+        return fmt::format("the realm list holds {} realm(s), {} of them online", _realms.size(), online);
+    return fmt::format("the realm list holds {} realm(s), {} of them online, and was last read {} second(s) ago",
+        _realms.size(), online, nowEpoch - _readAtEpoch);
 }
 
 std::vector<Realm> RealmList::All() const

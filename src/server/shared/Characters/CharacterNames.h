@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Wizard names: the first, middle and last indices a wizard stores packed in one number, a client name table per locale with each position's locale key and text, the disallowed name combinations, and CharacterNameSet, an immutable snapshot that validates all of them once and then checks a wizard's indices against its locale's human tables and the disallowed list and formats the name.
+ * Wizard names: the first, middle and last indices a wizard stores packed in one number, with the top byte carrying the locale the client counted those positions in, which the retail client sends as 3 for en-US, the third locale its own CharacterNames.xml lists, and which is kept exactly as it arrived so the name the client shows back is the name it asked for; a client name table per locale with each position's locale key and text; the disallowed name combinations, matched against that same locale marker when the caller names no other; and CharacterNameSet, an immutable snapshot that validates all of them once and then checks a wizard's indices against its locale's human tables and the disallowed list and formats the name.
  */
 
 #ifndef AMBROSE_CHARACTERNAMES_H
@@ -18,20 +18,21 @@
 
 struct NameIndices
 {
-    static constexpr uint32 UnusedBits = 0xFF000000u;
+    static constexpr uint32 LocaleBits = 0xFF000000u;
 
     uint8 First = 0;
     uint8 Middle = 0;
     uint8 Last = 0;
+    uint8 Locale = 0;
 
     static constexpr NameIndices Unpack(uint32 packed) noexcept
     {
-        return { static_cast<uint8>(packed >> 16), static_cast<uint8>(packed >> 8), static_cast<uint8>(packed) };
+        return { static_cast<uint8>(packed >> 16), static_cast<uint8>(packed >> 8), static_cast<uint8>(packed), static_cast<uint8>(packed >> 24) };
     }
 
     constexpr uint32 Pack() const noexcept
     {
-        return (uint32{ First } << 16) | (uint32{ Middle } << 8) | uint32{ Last };
+        return (uint32{ Locale } << 24) | (uint32{ First } << 16) | (uint32{ Middle } << 8) | uint32{ Last };
     }
 
     bool operator==(NameIndices const&) const = default;
@@ -80,7 +81,6 @@ enum class NameCheck : uint8
     Ok,
     UnknownLocale,
     UnknownGender,
-    UnusedBitsSet,
     FirstOutOfRange,
     MiddleOutOfRange,
     LastOutOfRange,

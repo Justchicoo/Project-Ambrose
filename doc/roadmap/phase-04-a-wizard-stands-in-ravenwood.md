@@ -216,7 +216,7 @@ Picking a wizard sends the client to the right gameserver with a one-time key, s
 - [x] Unit: LocationString formats (-32,-552,-28, yaw 6.350083) as '-32,-552,-28,6.350083', the exact string in the capture, and parses it back (LocationStringTest.FormatsAndParsesTheCapturedCoordinates)
 - [x] Unit: selecting another account's CharID, a deleted character or with no realm online gives Error!=0 and no login_key row (SelectCharacterTest.AnotherAccountsWizardIsRefusedAndWritesNoKey, .ADeletedWizardIsRefusedAndWritesNoKey, .NoRealmOnlineIsRefusedAndWritesNoKey, with .ARealmThatStoppedBeatingIsRefusedRatherThanUsedAnyway and .ANamedRealmThatIsNotThereIsRefusedRatherThanSwappedForAnother for the two ways a realm can be missing, and .AnOwnWizardOnAnOnlineRealmIsSentThereWithAKeyThatWasWrittenDown for the pick that works)
 - [ ] Integration: a stub TCP listener on the realm port receives a connection and a GAME MSG_ATTACH whose LoginKey == Key, UserID and CharID match, and ZoneName and Location echo the CHARACTERSELECTED values (the behavior at capture lines 11-12)
-- [ ] Real client: after clicking Play, the loading screen appears and the client connects to the gameserver port (visible in the gameserver log) instead of showing a disconnect dialog
+- [x] Real client: after clicking Play, the loading screen appears and the client connects to the gameserver port (visible in the gameserver log) instead of showing a disconnect dialog (2026-09-24 on the maintainer's own client: Play showed the Entering Game loading screen and the gameserver logged session 1 offered to and accepted from the client at 22:27:12, with no disconnect dialog; the client then waits there, because LOGINCOMPLETE is 4.14's)
 
 **Risks**
 
@@ -283,7 +283,7 @@ Picking a wizard sends the client to the right gameserver with a one-time key, s
 **Acceptance**
 
 - [x] Integration: login handshake, CHARACTERSELECTED, disconnect, game handshake, MSG_ATTACH in STATUS_CONNECTED
-- [ ] Real client: no 'connection lost' at character select; new game session id logged
+- [x] Real client: no 'connection lost' at character select; new game session id logged (2026-09-24: the login server sent account 1 with wizard 1 to realm Ambrose at 127.0.0.1:12333 and the gameserver logged a new session 1 accepted 50 ms later, the client showing the loading screen rather than a connection dialog)
 
 ### Detailed spec from NET-13: Login-to-game connection handoff transport
 

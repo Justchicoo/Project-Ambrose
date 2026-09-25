@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reading realmlist and handing it to sRealmList. The read is synchronous because it runs on the server's own timer rather than on a player's request, and a player who arrives mid-refresh is answered from the list already in place rather than waiting on a database. What comes back is swapped in whole, so a realm is never half-updated: a reader sees the list as it was or as it is.
+ * Reading realmlist and handing it to sRealmList with the moment it was read, so a list that has stopped being refreshed can say so rather than only turning players away. The read is synchronous because it runs on the server's own timer rather than on a player's request, and a player who arrives mid-refresh is answered from the list already in place rather than waiting on a database. What comes back is swapped in whole, so a realm is never half-updated: a reader sees the list as it was or as it is.
  */
 
 #include "RealmLoader.h"
@@ -10,8 +10,17 @@
 #include "Log.h"
 #include "StringUtil.h"
 
+#include <chrono>
 #include <utility>
 #include <vector>
+
+namespace
+{
+    int64 NowEpochSeconds()
+    {
+        return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    }
+}
 
 RealmLoaderSettings RealmLoaderSettings::Load(ConfigMgr const& config)
 {
@@ -81,7 +90,7 @@ void RealmLoader::LoadNow()
     } while (result->NextRow());
 
     std::size_t const count = realms.size();
-    sRealmList.Replace(std::move(realms));
+    sRealmList.Replace(std::move(realms), NowEpochSeconds());
     if (_loads == 0)
         LOG_INFO("server.loginserver", "The realm list holds {} realm(s), read again every {} second(s)", count, _settings.RefreshSeconds);
     ++_loads;

@@ -64,7 +64,8 @@ public:
     void SetPolicy(RealmPolicy policy);
     RealmPolicy GetPolicy() const;
 
-    void Replace(std::vector<Realm> realms);
+    void Replace(std::vector<Realm> realms, int64 readAtEpoch = 0);
+    std::string Describe(int64 nowEpoch) const;
     std::vector<Realm> All() const;
     std::vector<Realm> Online(int64 nowEpoch) const;
     std::optional<Realm> Find(std::string_view name) const;
@@ -79,6 +80,7 @@ private:
     mutable std::shared_mutex _mutex;
     std::vector<Realm> _realms;
     RealmPolicy _policy;
+    int64 _readAtEpoch = 0;
 };
 
 #define sRealmList RealmList::Instance()

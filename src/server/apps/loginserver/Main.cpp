@@ -60,6 +60,7 @@ namespace
     {
     public:
         static constexpr uint16 DefaultPort = 12000;
+        static constexpr std::chrono::milliseconds RealmTick{ 1000 };
 
         LoginServerApp() : ServerApp({ "loginserver", "loginserver.conf", 12010 }, sConfigMgr, sLog, std::cout, std::cerr), _databases(Config()), _databaseView(_databases)
         {
@@ -297,6 +298,11 @@ namespace
             AccountCommands::Register(Commands());
             _realms.Configure(RealmLoaderSettings::Load(Config()));
             return true;
+        }
+
+        std::chrono::milliseconds GetUpdateInterval() const override
+        {
+            return RealmTick;
         }
 
         void OnUpdate(std::chrono::milliseconds diff) override

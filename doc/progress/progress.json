@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 62,
+    "done": 63,
     "total": 394,
-    "percent": 15.7
+    "percent": 16.0
   },
   "checks": {
-    "done": 590,
+    "done": 598,
     "total": 2392,
-    "percent": 24.7
+    "percent": 25.0
   },
   "contributor_track": {
     "merged": 71,
@@ -34,9 +34,9 @@
     {
       "phase": 3,
       "title": "Create list and delete a wizard",
-      "milestones_done": 14,
+      "milestones_done": 15,
       "milestones_total": 28,
-      "checks_done": 121,
+      "checks_done": 127,
       "checks_total": 178
     },
     {
@@ -44,7 +44,7 @@
       "title": "A wizard stands in ravenwood",
       "milestones_done": 2,
       "milestones_total": 16,
-      "checks_done": 47,
+      "checks_done": 49,
       "checks_total": 132
     },
     {

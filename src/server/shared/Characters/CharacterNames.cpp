@@ -194,8 +194,6 @@ NameCheck CharacterNameSet::CheckRanges(uint32 packed, uint32 gender, HumanTable
 {
     if (gender > static_cast<uint32>(NameGender::Male))
         return NameCheck::UnknownGender;
-    if ((packed & NameIndices::UnusedBits) != 0)
-        return NameCheck::UnusedBitsSet;
     NameIndices const indices = NameIndices::Unpack(packed);
     CharacterNameTable const& first = *(gender == static_cast<uint32>(NameGender::Male) ? human.FirstMale : human.FirstFemale);
     if (indices.First >= first.Parts.size())
@@ -214,7 +212,9 @@ NameCheck CharacterNameSet::Check(uint32 packed, uint32 gender, std::string_view
         return NameCheck::UnknownLocale;
     if (NameCheck const ranges = CheckRanges(packed, gender, *human); ranges != NameCheck::Ok)
         return ranges;
-    return IsDisallowed(packed, gender, localeId) ? NameCheck::Disallowed : NameCheck::Ok;
+    uint8 const marked = NameIndices::Unpack(packed).Locale;
+    std::optional<uint32> const against = localeId ? localeId : marked == 0 ? std::nullopt : std::optional<uint32>(marked);
+    return IsDisallowed(packed, gender, against) ? NameCheck::Disallowed : NameCheck::Ok;
 }
 
 bool CharacterNameSet::IsValidIndices(uint32 packed, uint32 gender, std::string_view locale) const noexcept
@@ -253,7 +253,6 @@ std::string_view CharacterNameSet::GetCheckName(NameCheck check) noexcept
         case NameCheck::Ok: return "valid";
         case NameCheck::UnknownLocale: return "no human name tables for the locale";
         case NameCheck::UnknownGender: return "unknown gender";
-        case NameCheck::UnusedBitsSet: return "unused high bits set";
         case NameCheck::FirstOutOfRange: return "first name index out of range";
         case NameCheck::MiddleOutOfRange: return "middle name index out of range";
         case NameCheck::LastOutOfRange: return "last name index out of range";
