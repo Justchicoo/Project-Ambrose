@@ -454,6 +454,8 @@ namespace SupervisorService
             return 0;
         if (GetLastError() != ERROR_FAILED_SERVICE_CONTROLLER_CONNECT)
             return 1;
+#else
+        static_cast<void>(stop);
 #endif
         std::vector<std::string> normal;
         normal.reserve(arguments.size());
