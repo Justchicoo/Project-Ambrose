@@ -120,6 +120,7 @@ void LoginSession::JudgeCreation(PropertyObject const& info, uint32 purchasedSlo
     rules.AllowCustomName = (settings && settings->AllowChosenNames) || securityLevel > 0;
     rules.Locale = sCharacterNameMgr.GetDefaultLocale();
 
+    LogRequest(info);
     CreationOutcome outcome = CreationInfoReader::Read(info, *rows, *names, limits, rules);
     if (!outcome.Ok)
     {
@@ -164,6 +165,38 @@ void LoginSession::JudgeCreation(PropertyObject const& info, uint32 purchasedSlo
         response.ErrorCode = Accepted;
         SendDmlMessage(response);
     }));
+}
+
+void LoginSession::LogRequest(PropertyObject const& info) const
+{
+    auto const number = [&info](std::string_view name) -> int64
+    {
+        PropertyValue const* const value = info.Get(name);
+        if (value == nullptr)
+            return -1;
+        if (auto const* const whole = value->GetIf<uint32>())
+            return *whole;
+        if (auto const* const wide = value->GetIf<uint64>())
+            return static_cast<int64>(*wide);
+        return -1;
+    };
+    PropertyValue const* const behaviorValue = info.Get("m_avatarBehavior");
+    PropertyObject const* const behavior = behaviorValue == nullptr ? nullptr : behaviorValue->AsObject();
+    auto const option = [behavior](std::string_view name) -> int64
+    {
+        if (behavior == nullptr)
+            return -1;
+        PropertyValue const* const value = behavior->Get(name);
+        if (value == nullptr)
+            return -1;
+        int64 const* const held = value->GetIf<int64>();
+        return held == nullptr ? -1 : *held;
+    };
+    PropertyValue const* const nameValue = info.Get("m_name");
+    std::u16string const* const chosen = nameValue == nullptr ? nullptr : nameValue->GetIf<std::u16string>();
+    LOG_DEBUG(CreateLog, "Session {} asks for a wizard: school {}, name indices 0x{:08X}, gender {}, race {}, template {}, {}",
+        GetSessionId(), number("m_schoolOfFocus"), static_cast<uint32>(number("m_nameIndices")), option("m_eGender"), option("m_eRace"),
+        number("m_templateID"), chosen == nullptr || chosen->empty() ? "no name of its own" : "a name of its own");
 }
 
 void LoginSession::RefuseCreation(std::string_view detail)

@@ -70,6 +70,7 @@ private:
     void FailCharacterList(std::string_view detail);
     bool AbandonCharacterList();
     void JudgeCreation(PropertyObject const& info, uint32 purchasedSlots, uint8 securityLevel, uint32 existing);
+    void LogRequest(PropertyObject const& info) const;
     void RefuseCreation(std::string_view detail);
     bool AbandonCreation();
     void EndCharacterList();

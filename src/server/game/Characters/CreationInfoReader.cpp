@@ -247,7 +247,9 @@ CreationOutcome CreationInfoReader::Read(PropertyObject const& info, CharacterCr
     {
         NameCheck const checked = names.Check(character.NameIndices, appearance.Gender, rules.Locale);
         if (checked != NameCheck::Ok)
-            return Refuse(fmt::format("the name it asks for is refused: {}", CharacterNameSet::GetCheckName(checked)));
+            return Refuse(fmt::format("the name it asks for is refused: {} (name indices 0x{:08X}, first {}, middle {}, last {}, in {})",
+                CharacterNameSet::GetCheckName(checked), character.NameIndices, (character.NameIndices >> 16) & 0xFFu,
+                (character.NameIndices >> 8) & 0xFFu, character.NameIndices & 0xFFu, rules.Locale));
     }
 
     CharacterStartState const* const start = rows.GetStart(static_cast<uint32>(*school));
