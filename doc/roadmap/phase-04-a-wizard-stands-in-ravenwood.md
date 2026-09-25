@@ -216,7 +216,7 @@ Picking a wizard sends the client to the right gameserver with a one-time key, s
 
 - [x] Unit: LocationString formats (-32,-552,-28, yaw 6.350083) as '-32,-552,-28,6.350083', the exact string in the capture, and parses it back (LocationStringTest.FormatsAndParsesTheCapturedCoordinates)
 - [x] Unit: selecting another account's CharID, a deleted character or with no realm online gives Error!=0 and no login_key row (SelectCharacterTest.AnotherAccountsWizardIsRefusedAndWritesNoKey, .ADeletedWizardIsRefusedAndWritesNoKey, .NoRealmOnlineIsRefusedAndWritesNoKey, with .ARealmThatStoppedBeatingIsRefusedRatherThanUsedAnyway and .ANamedRealmThatIsNotThereIsRefusedRatherThanSwappedForAnother for the two ways a realm can be missing, and .AnOwnWizardOnAnOnlineRealmIsSentThereWithAKeyThatWasWrittenDown for the pick that works)
-- [ ] Integration: a stub TCP listener on the realm port receives a connection and a GAME MSG_ATTACH whose LoginKey == Key, UserID and CharID match, and ZoneName and Location echo the CHARACTERSELECTED values (the behavior at capture lines 11-12)
+- [x] Integration: a stub TCP listener on the realm port receives a connection and a GAME MSG_ATTACH whose LoginKey == Key, UserID and CharID match, and ZoneName and Location echo the CHARACTERSELECTED values (the behavior at capture lines 11-12). The real client made that exchange in the client driver's enter-world run 20260925-114135 on 2026-09-25: the login server logged `Session 2 sent account 1 with wizard 1 to realm Ambrose Driver at 127.0.0.2:12433, zone WizardCity/WC_Ravenwood at Start, on a key good for 60 second(s)`, and the game server listening on that port logged `Session 1 from 127.0.0.1 is attaching as account 1 with wizard 1 for zone WizardCity/WC_Ravenwood at Start, on a key of 44 character(s)` and then `its key accepted and spent`, so the client echoed the key, account, wizard, zone and location it was given. `HandoffTest.AClientSignsInPicksAWizardLeavesAndAttachesToTheGameServerItWasSentTo` holds the same exchange with no client
 - [x] Real client: after clicking Play, the loading screen appears and the client connects to the gameserver port (visible in the gameserver log) instead of showing a disconnect dialog (2026-09-24 on the maintainer's own client: Play showed the Entering Game loading screen and the gameserver logged session 1 offered to and accepted from the client at 22:27:12, with no disconnect dialog; the client then waits there, because LOGINCOMPLETE is 4.14's)
 
 **Risks**
@@ -235,7 +235,7 @@ Picking a wizard sends the client to the right gameserver with a one-time key, s
 **Acceptance**
 
 - [x] Another account's CharID, deleted character or no realm gives Error!=0 and no login_key
-- [ ] Stub listener receives MSG_ATTACH whose LoginKey == Key with matching UserID/CharID
+- [x] Stub listener receives MSG_ATTACH whose LoginKey == Key with matching UserID/CharID. The real game server received it from the real client in the client driver's enter-world run 20260925-114135 on 2026-09-25, which logged the key accepted and spent for account 1 and wizard 1, the ones CHARACTERSELECTED named
 
 ### Detailed spec from LOG-11: Character select and handoff: MSG_SELECTCHARACTER -> MSG_CHARACTERSELECTED
 
@@ -265,8 +265,8 @@ Picking a wizard sends the client to the right gameserver with a one-time key, s
 
 - [x] Unit: LocationString formats (-32,-552,-28, yaw 6.350083) as '-32,-552,-28,6.350083', the exact string in the capture, and parses it back (LocationStringTest.FormatsAndParsesTheCapturedCoordinates)
 - [x] Unit: selecting another account's CharID, a deleted character or with no realm online gives Error!=0 and no login_key row (SelectCharacterTest.AnotherAccountsWizardIsRefusedAndWritesNoKey, .ADeletedWizardIsRefusedAndWritesNoKey, .NoRealmOnlineIsRefusedAndWritesNoKey, with .ARealmThatStoppedBeatingIsRefusedRatherThanUsedAnyway and .ANamedRealmThatIsNotThereIsRefusedRatherThanSwappedForAnother for the two ways a realm can be missing, and .AnOwnWizardOnAnOnlineRealmIsSentThereWithAKeyThatWasWrittenDown for the pick that works)
-- [ ] Integration: a stub TCP listener on the realm port receives a connection and a GAME MSG_ATTACH whose LoginKey == Key, UserID and CharID match, and ZoneName and Location echo the CHARACTERSELECTED values (the behavior at capture lines 11-12)
-- [ ] Real client: after clicking Play, the loading screen appears and the client connects to the gameserver port (visible in the gameserver log) instead of showing a disconnect dialog
+- [x] Integration: a stub TCP listener on the realm port receives a connection and a GAME MSG_ATTACH whose LoginKey == Key, UserID and CharID match, and ZoneName and Location echo the CHARACTERSELECTED values (the behavior at capture lines 11-12). The real client made that exchange in the client driver's enter-world run 20260925-114135 on 2026-09-25: the login server logged `Session 2 sent account 1 with wizard 1 to realm Ambrose Driver at 127.0.0.2:12433, zone WizardCity/WC_Ravenwood at Start, on a key good for 60 second(s)`, and the game server listening on that port logged `Session 1 from 127.0.0.1 is attaching as account 1 with wizard 1 for zone WizardCity/WC_Ravenwood at Start, on a key of 44 character(s)` and then `its key accepted and spent`, so the client echoed the key, account, wizard, zone and location it was given. `HandoffTest.AClientSignsInPicksAWizardLeavesAndAttachesToTheGameServerItWasSentTo` holds the same exchange with no client
+- [x] Real client: after clicking Play, the loading screen appears and the client connects to the gameserver port (visible in the gameserver log) instead of showing a disconnect dialog. In the client driver's enter-world run 20260925-114135 on 2026-09-25 the press on Play was followed by the game server's `Session 1 offered to 127.0.0.1`, `accepted` and `attached`, and the run's screenshot of the loading screen, taken after it sent the wizard its object, shows no dialog
 
 **Risks**
 
@@ -306,7 +306,7 @@ The client disconnects from the loginserver after MSG_CHARACTERSELECTED and reco
 **Acceptance**
 
 - [x] Integration test: a fake client completes login handshake -> CHARACTERSELECTED -> disconnect -> game handshake -> MSG_ATTACH is dispatched in STATUS_CONNECTED (HandoffTest.AClientSignsInPicksAWizardLeavesAndAttachesToTheGameServerItWasSentTo, which stands up both servers and carries the key the login server issued through to the game session, with GameAttachTest.AnAttachIsTakenWhileOnlyConnectedAndIsRefusedWhenNoKeyCanBeSpent holding the status the attach is taken in and .AGameMessageWithNoRuleIsCountedRatherThanActedOn holding what happens to anything else)
-- [ ] Real client: after picking a character, the server log shows the login socket closed by the client, a new game session id offered and accepted, and MSG_ATTACH received. The client moves past character select to its loading screen, with no 'connection lost' dialog
+- [x] Real client: after picking a character, the server log shows the login socket closed by the client, a new game session id offered and accepted, and MSG_ATTACH received. The client moves past character select to its loading screen, with no 'connection lost' dialog. In the client driver's enter-world run 20260925-114135 on 2026-09-25 the login server logged the pick and then `Session 2 closed` 26 ms later, which it never does itself after sending MSG_CHARACTERSELECTED, then the game server logged `Session 1 offered`, `Session 1 accepted by 127.0.0.1 after 5 ms` and the MSG_ATTACH, and the client went on to its loading screen and into Ravenwood with no dialog
 - [ ] A MSG_ATTACH with a bad key produces MSG_ATTACHFAILED and the client returns to an error or the login screen
 
 **Risks**
@@ -354,7 +354,7 @@ The gameserver accepts a client only with a valid, unexpired, single-use key iss
 **Acceptance**
 
 - [x] Unit: a valid key passes once; replaying the same key, an expired key, a key for another CharID and a key for another realm each fail
-- [ ] Real client: select a character and the gameserver log shows the key accepted, after which WLD's LOGINCOMPLETE flow runs
+- [x] Real client: select a character and the gameserver log shows the key accepted, after which WLD's LOGINCOMPLETE flow runs. In the client driver's enter-world run 20260925-114135 on 2026-09-25 the game server logged `Session 1 attached: account 1 with wizard 1 on realm 1, its key accepted and spent`, then `Session 1 put wizard 1 in WizardCity/WC_Ravenwood instance 1 at (-5.628328, -1531.451, -30.48013) with mobile id 49152, and sent its 309-byte object`, and the client said it had loaded the zone
 - [x] Negative: a hand-crafted attach with a random LoginKey (from a test client) gets MSG_ATTACHFAILED, and the socket closes
 
 **Risks**
