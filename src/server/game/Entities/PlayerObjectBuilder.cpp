@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Makes the player object from the catalog's own classes and defaults and sets only what the stored wizard decides: a behavior the template names that behavior_client_class does not know refuses the build rather than being guessed or dropped, because the client reads the behaviors by position and one missing slot shifts every later one; the stats carry the wizard's level as the highest on the account and otherwise the class's defaults, since the level tables vitals come from arrive with phase 8.
+ * Makes the player object from the catalog's own classes and defaults and sets only what the stored wizard decides: a behavior the template names that behavior_client_class does not know refuses the build rather than being guessed or dropped, because the client reads the behaviors by position and one missing slot shifts every later one, and a slot the template itself leaves empty stays empty; the stats carry the wizard's level as the highest on the account and otherwise the class's defaults, since the level tables vitals come from arrive with phase 8.
  */
 
 #include "PlayerObjectBuilder.h"
@@ -110,6 +110,11 @@ PropertyObjectPtr PlayerObjectBuilder::Build(TypeCatalogPtr const& catalog, Core
     inactive.reserve(playerTemplate.Behaviors.size());
     for (std::string const& behaviorName : playerTemplate.Behaviors)
     {
+        if (behaviorName.empty())
+        {
+            inactive.emplace_back(PropertyObjectPtr());
+            continue;
+        }
         BehaviorClientClass const* const row = behaviors.Find(behaviorName);
         if (!row)
         {

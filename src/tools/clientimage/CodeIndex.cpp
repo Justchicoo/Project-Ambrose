@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Scans the raw bytes of a PE image's executable sections once for RIP-relative lea, direct call and RIP-relative indirect call and jump patterns, keeps sorted sites per target, and decodes instructions with Zydis into their kind, branch and RIP-relative targets and leading operands; the first time RIP-relative references are asked for, it decodes every function the exception table lists and keeps each instruction whose operand is RIP-relative by the address it names, whatever the instruction, so a string copied with mov or movups is found as well as one loaded with lea.
+ * Scans the raw bytes of a PE image's executable sections once for RIP-relative lea, direct call and RIP-relative indirect call and jump patterns, keeps sorted sites per target, and decodes instructions with Zydis into their kind, branch and RIP-relative targets and leading operands, a memory operand with its base register and displacement; the first time RIP-relative references are asked for, it decodes every function the exception table lists and keeps each instruction whose operand is RIP-relative by the address it names, whatever the instruction, so a string copied with mov or movups is found as well as one loaded with lea.
  */
 
 #include "CodeIndex.h"
@@ -50,6 +50,8 @@ namespace
         {
             case ZYDIS_MNEMONIC_CALL:
                 return InstructionKind::Call;
+            case ZYDIS_MNEMONIC_INT3:
+                return InstructionKind::Breakpoint;
             case ZYDIS_MNEMONIC_JMP:
             case ZYDIS_MNEMONIC_JB:
             case ZYDIS_MNEMONIC_JBE:
@@ -84,11 +86,12 @@ namespace
         }
     }
 
-    std::string RegisterName(ZydisDecodedOperand const& operand)
+    std::string RegisterName(ZydisDecodedOperand const& operand, bool family = false)
     {
         if (operand.type != ZYDIS_OPERAND_TYPE_REGISTER)
             return {};
-        char const* const name = ZydisRegisterGetString(operand.reg.value);
+        ZydisRegister const reg = family ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, operand.reg.value) : operand.reg.value;
+        char const* const name = ZydisRegisterGetString(reg);
         if (name == nullptr)
             return {};
         std::string lowered(name);
@@ -116,10 +119,23 @@ namespace
         if (instruction.operand_count_visible > 0)
         {
             decoded.FirstRegister = RegisterName(operands[0]);
+            decoded.FirstRegisterFamily = RegisterName(operands[0], true);
+            decoded.WritesFirstOperand = (operands[0].actions & ZYDIS_OPERAND_ACTION_MASK_WRITE) != 0;
             decoded.FirstOperandIsMemory = operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY;
+            if (decoded.FirstOperandIsMemory)
+            {
+                ZydisDecodedOperand base = {};
+                base.type = ZYDIS_OPERAND_TYPE_REGISTER;
+                base.reg.value = operands[0].mem.base;
+                decoded.MemoryBase = RegisterName(base);
+                decoded.MemoryDisplacement = operands[0].mem.disp.has_displacement ? operands[0].mem.disp.value : 0;
+            }
         }
         if (instruction.operand_count_visible > 1)
+        {
             decoded.SecondRegister = RegisterName(operands[1]);
+            decoded.SecondRegisterFamily = RegisterName(operands[1], true);
+        }
         return decoded;
     }
 }
@@ -195,6 +211,17 @@ std::span<uint64 const> CodeIndex::RipReferences(uint64 target) const
 {
     std::call_once(_ripIndexed, [this] { IndexRipReferences(); });
     return SitesOf(_ripReferences, target);
+}
+
+std::vector<uint64> CodeIndex::RipTargets() const
+{
+    std::call_once(_ripIndexed, [this] { IndexRipReferences(); });
+    std::vector<uint64> targets;
+    targets.reserve(_ripReferences.size());
+    for (auto const& [target, sites] : _ripReferences)
+        targets.push_back(target);
+    std::sort(targets.begin(), targets.end());
+    return targets;
 }
 
 void CodeIndex::IndexRipReferences() const
@@ -292,6 +319,26 @@ std::vector<DecodedInstruction> CodeIndex::DecodeFunctionUntil(uint64 address) c
     std::vector<DecodedInstruction> instructions = Decode(*start, maxBytes, maxBytes);
     auto const after = std::find_if(instructions.begin(), instructions.end(), [address](DecodedInstruction const& instruction) { return instruction.Address >= address; });
     instructions.erase(after, instructions.end());
+    return instructions;
+}
+
+std::vector<DecodedInstruction> CodeIndex::DecodeFunctionFrom(uint64 address, std::size_t maxInstructions) const
+{
+    uint64 const base = _image.GetImageBase();
+    if (address < base || address - base > std::numeric_limits<uint32>::max())
+        return {};
+    uint32 const rva = static_cast<uint32>(address - base);
+    if (std::optional<uint32> const end = _image.FunctionEnd(rva))
+        return Decode(address, *end - rva, maxInstructions);
+    std::vector<PeFunction> const& functions = _image.GetFunctions();
+    std::size_t maxBytes = maxInstructions > std::numeric_limits<std::size_t>::max() / MaxInstructionLength ? std::numeric_limits<std::size_t>::max()
+                                                                                                            : maxInstructions * MaxInstructionLength;
+    auto const next = std::upper_bound(functions.begin(), functions.end(), rva, [](uint32 value, PeFunction const& function) { return value < function.Begin; });
+    if (next != functions.end())
+        maxBytes = std::min<std::size_t>(maxBytes, next->Begin - rva);
+    std::vector<DecodedInstruction> instructions = Decode(address, maxBytes, maxInstructions);
+    auto const padding = std::find_if(instructions.begin(), instructions.end(), [](DecodedInstruction const& instruction) { return instruction.Kind == InstructionKind::Breakpoint; });
+    instructions.erase(padding, instructions.end());
     return instructions;
 }
 

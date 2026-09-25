@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the code index over a hand-assembled PeBuilder image: lea, direct call and indirect branch indexes with their filters, every RIP-relative operand of the functions the exception table lists, function starts through chained unwind info, string addresses, Zydis decoding of kinds, targets and operands, and decode limits at byte, instruction, file-backed and invalid-opcode boundaries.
+ * Tests the code index over a hand-assembled PeBuilder image: lea, direct call and indirect branch indexes with their filters, every RIP-relative operand of the functions the exception table lists by target and as one list, function starts through chained unwind info, decoding from an address to the end of its function, string addresses, Zydis decoding of kinds, targets and operands, and decode limits at byte, instruction, file-backed and invalid-opcode boundaries.
  */
 
 #include "CodeBuffer.h"
@@ -28,6 +28,10 @@ namespace
     constexpr uint32 Slot = Data + 8;
     constexpr uint32 Global = Data + 0x10;
     constexpr uint32 Function = Text + 0x40;
+    constexpr uint32 Split = Text + 0xA0;
+    constexpr uint32 Leaf = Text + 0xB0;
+    constexpr uint32 Tight = Text + 0xC0;
+    constexpr uint32 Narrow = Text + 0xD0;
 
     std::vector<uint8> TestImage()
     {
@@ -55,6 +59,18 @@ namespace
         code.Put(Text + 0x87, { 0xC3 });
         code.Lea(Text + 0x1F9, 0x48, 0x3D, SecondTable);
 
+        code.Put(Split, { 0x48, 0x83, 0xEC, 0x28 });
+        code.Put(Split + 0x04, { 0xCC });
+        code.Put(Split + 0x05, { 0x48, 0x83, 0xC4, 0x28 });
+        code.Put(Split + 0x09, { 0xC3 });
+        code.Put(Split + 0x0A, { 0xC3 });
+        code.Put(Leaf, { 0x48, 0x89, 0xC8 });
+        code.Put(Leaf + 0x03, { 0xC3 });
+        code.Put(Tight, { 0x90, 0x90 });
+        code.Put(Tight + 0x02, { 0xC3 });
+        code.Put(Narrow, { 0x89, 0xC2 });
+        code.Put(Narrow + 0x02, { 0x39, 0xC2 });
+
         std::vector<uint8> rdata(0x60, 0);
         std::string const name = "RaceManager::InitializeRaces";
         std::memcpy(rdata.data() + 0x30, name.data(), name.size());
@@ -68,6 +84,10 @@ namespace
         builder.AddFunction(Text, Text + 0x2A);
         builder.AddFunction(Function, Function + 0x15);
         builder.AddChainedFunction(Text + 0x80, Text + 0x88, Function, Function + 0x15);
+        builder.AddFunction(Split, Split + 0x04);
+        builder.AddChainedFunction(Split + 0x04, Split + 0x0A, Split, Split + 0x04);
+        builder.AddFunction(Split + 0x0A, Split + 0x0B);
+        builder.AddFunction(Tight + 0x02, Tight + 0x03);
         return builder.Build();
     }
 
@@ -107,6 +127,8 @@ TEST_F(CodeIndexTest, RipReferencesAreEveryRipRelativeOperandOfTheListedFunction
     EXPECT_EQ(Sites(_code->RipReferences(Base + Slot)), Addresses({ Text + 0x13, Function + 0x0E })) << "so does a call or jump through a slot";
     EXPECT_TRUE(_code->RipReferences(Base + SecondTable).empty()) << "code no function lists is not decoded";
     EXPECT_TRUE(_code->RipReferences(0).empty());
+    EXPECT_EQ(_code->RipTargets(), (std::vector<uint64>{ Base + Table, Base + Slot, Base + Global, Base + Text + 0x24 + 0x7FFFFFF0 }))
+        << "every address they read is listed once, in order";
 }
 
 TEST_F(CodeIndexTest, LeaReferencesAreIndexedByTarget)
@@ -163,6 +185,8 @@ TEST_F(CodeIndexTest, DecodeDescribesKindsTargetsAndOperands)
     EXPECT_EQ(caller[0].Length, 7);
     EXPECT_EQ(caller[0].Kind, InstructionKind::Lea);
     EXPECT_EQ(caller[0].FirstRegister, "rcx");
+    EXPECT_EQ(caller[0].FirstRegisterFamily, "rcx");
+    EXPECT_TRUE(caller[0].WritesFirstOperand);
     EXPECT_EQ(caller[0].SecondRegister, "");
     EXPECT_EQ(caller[0].RipRelativeTarget, Base + Table);
     EXPECT_FALSE(caller[0].BranchTarget);
@@ -219,8 +243,42 @@ TEST_F(CodeIndexTest, DecodeDescribesKindsTargetsAndOperands)
 
     std::vector<DecodedInstruction> const padding = _code->Decode(Base + Function + 0x15, 1, 10);
     ASSERT_EQ(padding.size(), 1u);
-    EXPECT_EQ(padding[0].Kind, InstructionKind::Other);
+    EXPECT_EQ(padding[0].Kind, InstructionKind::Breakpoint);
     EXPECT_EQ(padding[0].FirstRegister, "");
+}
+
+TEST_F(CodeIndexTest, RegistersAreNamedWithTheSixtyFourBitRegisterTheyArePartOf)
+{
+    std::vector<DecodedInstruction> const narrow = _code->Decode(Base + Narrow, 4, 10);
+    ASSERT_EQ(narrow.size(), 2u);
+    EXPECT_EQ(narrow[0].Kind, InstructionKind::Mov);
+    EXPECT_EQ(narrow[0].FirstRegister, "edx");
+    EXPECT_EQ(narrow[0].FirstRegisterFamily, "rdx");
+    EXPECT_EQ(narrow[0].SecondRegister, "eax");
+    EXPECT_EQ(narrow[0].SecondRegisterFamily, "rax");
+    EXPECT_TRUE(narrow[0].WritesFirstOperand);
+    EXPECT_EQ(narrow[1].FirstRegister, "edx");
+    EXPECT_FALSE(narrow[1].WritesFirstOperand) << "a compare reads its first operand without writing it";
+}
+
+TEST_F(CodeIndexTest, DecodeFunctionFromRunsToTheEndOfTheFunction)
+{
+    std::vector<DecodedInstruction> const split = _code->DecodeFunctionFrom(Base + Split, 100);
+    ASSERT_EQ(split.size(), 4u) << "a function the table splits into regions is read through every region continuing it, past an int3 inside it";
+    EXPECT_EQ(split[1].Kind, InstructionKind::Breakpoint);
+    EXPECT_EQ(split.back().Kind, InstructionKind::Return);
+    EXPECT_EQ(split.back().Address, Base + Split + 0x09);
+    EXPECT_EQ(_code->DecodeFunctionFrom(Base + Split + 0x05, 100).size(), 2u);
+    EXPECT_EQ(_code->DecodeFunctionFrom(Base + Split, 2).size(), 2u);
+
+    std::vector<DecodedInstruction> const leaf = _code->DecodeFunctionFrom(Base + Leaf, 100);
+    ASSERT_EQ(leaf.size(), 2u) << "a leaf function the table does not list ends at the int3 padding after it";
+    EXPECT_EQ(leaf.back().Kind, InstructionKind::Return);
+    EXPECT_EQ(_code->DecodeFunctionFrom(Base + Tight, 100).size(), 2u) << "or where the next function the table lists begins";
+
+    EXPECT_TRUE(_code->DecodeFunctionFrom(Base + Split, 0).empty());
+    EXPECT_TRUE(_code->DecodeFunctionFrom(Base - 1, 100).empty());
+    EXPECT_TRUE(_code->DecodeFunctionFrom(0, 100).empty());
 }
 
 TEST_F(CodeIndexTest, DecodeStopsAtItsLimitsBadBytesAndUnbackedMemory)

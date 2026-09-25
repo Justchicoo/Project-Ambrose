@@ -708,6 +708,18 @@ std::optional<uint32> PeImage::PrimaryFunctionStart(uint32 rva) const
     }
 }
 
+std::optional<uint32> PeImage::FunctionEnd(uint32 rva) const
+{
+    std::optional<uint32> const primary = PrimaryFunctionStart(rva);
+    if (!primary)
+        return std::nullopt;
+    auto region = std::upper_bound(_functions.begin(), _functions.end(), rva, [](uint32 value, PeFunction const& function) { return value < function.Begin; }) - 1;
+    uint32 end = region->End;
+    for (++region; region != _functions.end() && region->Begin == end && PrimaryFunctionStart(region->Begin) == primary; ++region)
+        end = region->End;
+    return end;
+}
+
 std::vector<uint32> PeImage::FindTerminatedString(std::string_view text) const
 {
     std::vector<uint32> found;

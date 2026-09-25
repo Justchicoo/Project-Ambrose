@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the PE32+ reader over PeBuilder images: headers, sections, RVA and offset mapping, exports with forwarders, imports, relocations, TLS, functions and chained unwind limits, string search, loading from disk, and refusal of truncated or hostile headers and directories, including import directories that share thunk arrays, repeat names past the file size or overlap address tables.
+ * Tests the PE32+ reader over PeBuilder images: headers, sections, RVA and offset mapping, exports with forwarders, imports, relocations, TLS, functions, the end of each through the regions that continue it, and chained unwind limits, string search, loading from disk, and refusal of truncated or hostile headers and directories, including import directories that share thunk arrays, repeat names past the file size or overlap address tables.
  */
 
 #include "PeBuilder.h"
@@ -543,6 +543,12 @@ TEST(PeImageTest, FunctionsAreFoundAndChainsLeadToThePrimaryStart)
     EXPECT_FALSE(image->PrimaryFunctionStart(sample.Text + 0x15));
     EXPECT_FALSE(image->PrimaryFunctionStart(0));
 
+    EXPECT_EQ(image->FunctionEnd(sample.Text + 2), sample.Text + 0x10);
+    EXPECT_EQ(image->FunctionEnd(sample.Text + 0x25), sample.Text + 0x38) << "a function ends where the last region continuing it ends";
+    EXPECT_EQ(image->FunctionEnd(sample.Text + 0x34), sample.Text + 0x38);
+    EXPECT_FALSE(image->FunctionEnd(sample.Text + 0x15));
+    EXPECT_FALSE(image->FunctionEnd(0));
+
     std::vector<uint8> unsorted = sample.Bytes;
     std::size_t const table = DirectoryOffset(unsorted, ExceptionDirectory);
     ASSERT_NE(table, 0u);
@@ -631,6 +637,10 @@ TEST(PeImageTest, ChainsStopAtTheirHopLimitLoopsAndMalformedInfo)
     EXPECT_FALSE(image->PrimaryFunctionStart(text + 0x31));
     EXPECT_FALSE(image->PrimaryFunctionStart(text + 0x39));
     EXPECT_EQ(image->PrimaryFunctionStart(text + 0xF4), text + 0xF0);
+
+    EXPECT_EQ(image->FunctionEnd(text + 0x01), text + 0x08) << "a region right after one whose chain leads elsewhere is another function";
+    EXPECT_EQ(image->FunctionEnd(text + 0x19), text + 0x20);
+    EXPECT_FALSE(image->FunctionEnd(text + 0x09));
 }
 
 TEST(PeImageTest, TerminatedStringsAreFoundInSectionData)

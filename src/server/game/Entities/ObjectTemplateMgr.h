@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The object templates the world builds its objects from (sObjectTemplateMgr), read from the user's own install the way the client reads them: TemplateManifest.xml names the file that holds a template id, and that file's GameObjectTemplate lists the behaviors every object made from it carries, in the order the client expects them. It holds the player's template, id 1, which every wizard in the world is made from; the rest of the store arrives with the template milestone. A template is rebuilt off to the side and swapped in whole, and a read that fails keeps the template serving.
+ * The object templates the world builds its objects from (sObjectTemplateMgr), read from the user's own install the way the client reads them: TemplateManifest.xml names the file that holds a template id, and that file's GameObjectTemplate lists the behaviors every object made from it carries, in the order the client expects them, with an empty name where the list holds no behavior, as many NPC and prop templates do. It holds the player's template, id 1, which every wizard in the world is made from; the rest of the store arrives with the template milestone. A template is rebuilt off to the side and swapped in whole, and a read that fails keeps the template serving.
  */
 
 #ifndef AMBROSE_OBJECTTEMPLATEMGR_H

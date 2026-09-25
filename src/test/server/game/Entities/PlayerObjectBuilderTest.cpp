@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the object a wizard stands in the world as, on classes the test lays out the way the client's are: it opens with the pair the core object table gives WizClientObject and the player's template id, carries the wizard's id, place, facing and mobile id, holds one behavior for each the template names in the template's order with an empty slot where the client takes one, fills the look, name and school from the stored wizard, and reads back equal through the CoreObject form; a behavior nothing maps, and a template never read, are refused rather than guessed.
+ * Tests the object a wizard stands in the world as, on classes the test lays out the way the client's are: it opens with the pair the core object table gives WizClientObject and the player's template id, carries the wizard's id, place, facing and mobile id, holds one behavior for each the template names in the template's order with an empty slot where the client takes one or the template itself leaves one, fills the look, name and school from the stored wizard, and reads back equal through the CoreObject form; a behavior nothing maps, and a template never read, are refused rather than guessed.
  */
 
 #include "CharacterTypeFixtures.h"
@@ -162,6 +162,20 @@ TEST_F(PlayerObjectBuilderTest, TheWizardsObjectCarriesItsHeaderIdsPlaceAndBehav
     PropertyObject const* const stats = player->Get("m_gameStats")->AsObject();
     ASSERT_NE(stats, nullptr);
     EXPECT_EQ(*stats->Get("m_highestCharacterLevelOnAccount")->GetIf<int32>(), 4);
+}
+
+TEST_F(PlayerObjectBuilderTest, ASlotTheTemplateLeavesEmptyStaysEmpty)
+{
+    std::string problem;
+    ObjectTemplate withEmpty = _template;
+    withEmpty.Behaviors.insert(withEmpty.Behaviors.begin() + 1, std::string());
+    PropertyObjectPtr const player = PlayerObjectBuilder::Build(_catalog, *_types, *_behaviors, withEmpty, _character, _placement, problem);
+    ASSERT_TRUE(player) << problem;
+    PropertyValue::List const& behaviors = *player->Get("m_inactiveBehaviors")->GetList();
+    ASSERT_EQ(behaviors.size(), 6u);
+    EXPECT_TRUE(behaviors[1].IsNullObject()) << "the empty slot is kept, so every later behavior stays at its position";
+    ASSERT_NE(behaviors[2].AsObject(), nullptr);
+    EXPECT_TRUE(behaviors[2].AsObject()->IsA("TestMobileBehavior"));
 }
 
 TEST_F(PlayerObjectBuilderTest, TheObjectReadsBackEqualThroughTheCoreObjectForm)

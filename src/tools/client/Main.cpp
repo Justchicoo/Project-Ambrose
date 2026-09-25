@@ -1,14 +1,16 @@
 /*
  * Project Ambrose by Imjustchico
- * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `handlers` says which classes in the client program handle a message and where, found the way the program registers them: each handler goes in under a debug name such as WizardGraphicalClient::MSG_TimedAccessPasses, with its plain name and a pointer to the function, so client-image finds the code that reads both names and the function address it loads, and the answer is written once per revision; a message nothing registers that way is one the client only sends or registers some other way, which the tool says rather than guessing which. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a block, a type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads the block and type pairs the world database's core_object_type holds when it is given the world database, and when a pair stands for a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --pair or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
+ * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `handlers` says which classes in the client program handle a message and where, found the way the program registers them: each handler goes in under a debug name such as WizardGraphicalClient::MSG_TimedAccessPasses, with its plain name and a pointer to the function, so client-image finds the code that reads both names and the function address it loads, and the answer is written once per revision; a message nothing registers that way is one the client only sends or registers some other way, which the tool says rather than guessing which. `behaviors` says which class the client program builds for each behavior it registers, by following each behavior's name to the factory the program stores for it, the vtable that factory's create function gives the object and the class name its GetType registers, with the bases each GetType registers its class under, which is how a behavior a template names is known to become a given client class without a capture of it; when the dump does not list that class, the nearest base it does list is named, since that is the class whose properties the dump can describe. `template` prints the object template an id names, found through TemplateManifest.xml the way the client and the game server find it, with its file, object name and behaviors, then the template itself, so a zone object's template id can be read without searching the manifest by hand. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a block, a type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads the block and type pairs the world database's core_object_type holds when it is given the world database, and when a pair stands for a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --pair or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
  */
 
+#include "BehaviorFactories.h"
 #include "BindFile.h"
 #include "CodeIndex.h"
 #include "BlobEnvelope.h"
 #include "CoreObjectSerializer.h"
 #include "DatabaseEnv.h"
 #include "ObjectSchemaMgr.h"
+#include "ObjectTemplateMgr.h"
 #include "ObjectSerializer.h"
 #include "PeImage.h"
 #include "ClientLocator.h"
@@ -73,6 +75,11 @@ Commands:
                          and the address of each handler, or name a class or a
                          handler name instead of a tag
   handlers --list [text] print every handler the client program registers
+  template <id>...       print the object template an id names, found through
+                         TemplateManifest.xml, with its file, name and behaviors
+  behaviors <name>...    print the class the client program builds for a behavior it
+                         registers, and where it found each link
+  behaviors --list [text] print every behavior the client program registers
   wad <entry>...         print an archive entry: BINd and headerless objects as JSON,
                          the rest as text
   wad --list [pattern]   print entry names holding the pattern
@@ -742,6 +749,130 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         return status;
     }
 
+    constexpr uint32 BehaviorFinderVersion = 1;
+
+    std::filesystem::path BehaviorCachePath(std::filesystem::path const& dataFolder, std::string_view revision)
+    {
+        return dataFolder / "behaviors" / (std::string(revision) + ".json");
+    }
+
+    std::vector<BehaviorFactory> ReadBehaviorCache(std::filesystem::path const& path)
+    {
+        std::vector<BehaviorFactory> factories;
+        std::ifstream stream(path, std::ios::binary);
+        if (!stream)
+            return factories;
+        nlohmann::json document;
+        try
+        {
+            stream >> document;
+        }
+        catch (std::exception const&)
+        {
+            return factories;
+        }
+        if (!document.is_object() || !document.contains("finder") || document["finder"] != BehaviorFinderVersion || !document.contains("behaviors")
+            || !document["behaviors"].is_array())
+            return factories;
+        for (nlohmann::json const& entry : document["behaviors"])
+        {
+            if (!entry.is_object() || !entry.contains("behavior") || !entry.contains("class") || !entry.contains("site") || !entry.contains("factory") || !entry.contains("create")
+                || !entry.contains("object") || !entry.contains("get_type") || !entry.contains("bases") || !entry["bases"].is_array())
+                return {};
+            factories.push_back({ entry["behavior"].get<std::string>(), entry["site"].get<uint64>(), entry["factory"].get<uint64>(), entry["create"].get<uint64>(),
+                entry["object"].get<uint64>(), entry["get_type"].get<uint64>(), entry["class"].get<std::string>(), entry["bases"].get<std::vector<std::string>>() });
+        }
+        return factories;
+    }
+
+    void WriteBehaviorCache(std::filesystem::path const& path, std::vector<BehaviorFactory> const& factories)
+    {
+        std::error_code code;
+        std::filesystem::create_directories(path.parent_path(), code);
+        if (code)
+            return;
+        nlohmann::json list = nlohmann::json::array();
+        for (BehaviorFactory const& factory : factories)
+            list.push_back({ { "behavior", factory.Behavior }, { "class", factory.ClassName }, { "site", factory.Site }, { "factory", factory.FactoryVtable },
+                { "create", factory.Create }, { "object", factory.ObjectVtable }, { "get_type", factory.GetType }, { "bases", factory.Bases } });
+        nlohmann::json const document = { { "finder", BehaviorFinderVersion }, { "behaviors", std::move(list) } };
+        std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+        if (!stream)
+            return;
+        stream << document.dump(1, '\t');
+        if (stream.good())
+            std::cerr << fmt::format("client: wrote the {} behaviors this install's client program registers to {}, so every later question reads it instead of the program\n",
+                factories.size(), ConfigMgr::PathToUtf8(path));
+    }
+
+    std::optional<std::string> DumpNameOf(TypeCatalog const* catalog, std::string const& className)
+    {
+        if (catalog == nullptr || className.empty())
+            return std::nullopt;
+        for (std::string_view const prefix : { std::string_view("class "), std::string_view("struct ") })
+            if (catalog->FindClass(std::string(prefix) + className) != nullptr)
+                return std::string(prefix) + className;
+        return std::nullopt;
+    }
+
+    std::string ClassOf(BehaviorFactory const& factory, TypeCatalog const* catalog)
+    {
+        if (factory.ClassName.empty())
+            return "class not found";
+        if (catalog == nullptr)
+            return factory.ClassName;
+        if (std::optional<std::string> const listed = DumpNameOf(catalog, factory.ClassName))
+            return *listed;
+        for (std::string const& base : factory.Bases)
+            if (std::optional<std::string> const listed = DumpNameOf(catalog, base))
+                return fmt::format("{}, which the type dump does not list, a {}", factory.ClassName, *listed);
+        return fmt::format("{}, which the type dump does not list, nor any of its bases", factory.ClassName);
+    }
+
+    std::string DescribeFactory(BehaviorFactory const& factory, TypeCatalog const* catalog)
+    {
+        return fmt::format("{}  {}  (factory 0x{:x}, create 0x{:x}, object vtable 0x{:x}, GetType 0x{:x}, read at 0x{:x})", factory.Behavior, ClassOf(factory, catalog),
+            factory.FactoryVtable, factory.Create, factory.ObjectVtable, factory.GetType, factory.Site);
+    }
+
+    int RunBehaviors(Arguments const& arguments, std::vector<BehaviorFactory> const& factories, TypeCatalog const* catalog)
+    {
+        if (arguments.List)
+        {
+            std::string const pattern = arguments.Subjects.empty() ? std::string() : Ambrose::ToLower(arguments.Subjects.front());
+            std::size_t shown = 0;
+            for (BehaviorFactory const& factory : factories)
+            {
+                if (!pattern.empty() && Ambrose::ToLower(fmt::format("{} {} {}", factory.Behavior, factory.ClassName, fmt::join(factory.Bases, " "))).find(pattern) == std::string::npos)
+                    continue;
+                std::cout << DescribeFactory(factory, catalog) << "\n";
+                ++shown;
+            }
+            std::cerr << fmt::format("client: {} of the {} behaviors the client program registers match\n", shown, factories.size());
+            return shown == 0 ? Failure : Success;
+        }
+        int status = Success;
+        for (std::string const& subject : arguments.Subjects)
+        {
+            bool answered = false;
+            for (BehaviorFactory const& factory : factories)
+            {
+                if (Ambrose::ToLower(factory.Behavior) != Ambrose::ToLower(subject))
+                    continue;
+                answered = true;
+                std::cout << DescribeFactory(factory, catalog) << "\n";
+                if (!factory.Bases.empty())
+                    std::cout << fmt::format("  {} derives from {}\n", factory.ClassName, fmt::join(factory.Bases, ", "));
+            }
+            if (!answered)
+            {
+                std::cerr << fmt::format("{}: the client program registers no factory this tool can follow for a behavior of that name\n", subject);
+                status = Failure;
+            }
+        }
+        return status;
+    }
+
     int RunHex(Arguments const& arguments)
     {
         int status = Success;
@@ -920,6 +1051,39 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         return status;
     }
 
+    int RunWad(Arguments const& arguments, KiwadArchive const& archive, TypeCatalogPtr const& catalog);
+
+    int RunTemplate(Arguments const& arguments, KiwadArchive const& archive, TypeCatalogPtr const& catalog)
+    {
+        int status = Success;
+        for (std::string const& subject : arguments.Subjects)
+        {
+            std::optional<uint32> const id = Ambrose::StringTo<uint32>(subject, 10);
+            if (!id)
+            {
+                std::cerr << fmt::format("{}: a template is named by its id, a number\n", subject);
+                status = Failure;
+                continue;
+            }
+            std::string error;
+            std::optional<ObjectTemplate> const found = ObjectTemplateMgr::Read(archive, catalog, *id, error);
+            if (!found)
+            {
+                std::cerr << fmt::format("template {}: {}\n", *id, error);
+                status = Failure;
+                continue;
+            }
+            std::cout << fmt::format("template {} is {}, object {}, with {} behavior(s): {}\n", found->TemplateId, found->File, found->ObjectName.empty() ? std::string("unnamed") : found->ObjectName,
+                found->Behaviors.size(), fmt::join(found->Behaviors, ", "));
+            Arguments entry = arguments;
+            entry.List = false;
+            entry.Subjects = { found->File };
+            if (RunWad(entry, archive, catalog) != Success)
+                status = Failure;
+        }
+        return status;
+    }
+
     int RunWad(Arguments const& arguments, KiwadArchive const& archive, TypeCatalogPtr const& catalog)
     {
         if (arguments.List)
@@ -1008,7 +1172,8 @@ int main(int argc, char** argv)
         return RunHex(*arguments);
     }
 
-    if (command != "types" && command != "messages" && command != "handlers" && command != "wad" && command != "lang" && command != "core")
+    if (command != "types" && command != "messages" && command != "handlers" && command != "behaviors" && command != "template" && command != "wad" && command != "lang"
+        && command != "core")
     {
         std::cerr << fmt::format("there is no command {}\n{}", arguments->Command, Usage);
         return BadUsage;
@@ -1020,7 +1185,7 @@ int main(int argc, char** argv)
         return BadUsage;
     }
 
-    bool const needsDump = command == "types" || command == "wad" || command == "core";
+    bool const needsDump = command == "types" || command == "wad" || command == "core" || command == "template" || command == "behaviors";
     LocalClientSystem const system;
     SetupMode const mode = ClientSetup::ModeForTool(system, std::cerr, "client");
     std::unique_ptr<SetupPrompt> const prompt = ClientSetup::ToolPrompt(std::cout, mode);
@@ -1159,6 +1324,32 @@ int main(int argc, char** argv)
     if (std::optional<ClientInstall> const install = ClientInstall::Inspect(system, LogConfig::Utf8Path(*arguments->Client)))
         revision = install->Revision;
 
+    if (command == "behaviors")
+    {
+        std::vector<BehaviorFactory> factories;
+        if (!revision.empty())
+            factories = ReadBehaviorCache(BehaviorCachePath(ClientLocator::GetDataFolder(system), revision));
+        if (factories.empty())
+        {
+            std::filesystem::path const program = LogConfig::Utf8Path(*arguments->Client) / "Bin" / "WizardGraphicalClient.exe";
+            std::unique_ptr<PeImage> const image = PeImage::Load(program, error);
+            if (!image)
+            {
+                std::cerr << fmt::format("{}: {}\n", ConfigMgr::PathToUtf8(program), error);
+                return Failure;
+            }
+            factories = BehaviorFactories::Find(*image, CodeIndex(*image));
+            if (!revision.empty() && !factories.empty())
+                WriteBehaviorCache(BehaviorCachePath(ClientLocator::GetDataFolder(system), revision), factories);
+        }
+        if (factories.empty())
+        {
+            std::cerr << "the client program registers no behavior factory this tool can find\n";
+            return Failure;
+        }
+        return RunBehaviors(*arguments, factories, catalog.get());
+    }
+
     std::vector<CachedMessage> messages;
     if ((command == "messages" || command == "handlers") && !revision.empty())
         messages = ReadMessageCache(MessageCachePath(ClientLocator::GetDataFolder(system), revision));
@@ -1209,6 +1400,15 @@ int main(int argc, char** argv)
             return Failure;
         }
         return RunHandlers(*arguments, messages, registrations);
+    }
+    if (command == "template")
+    {
+        if (catalog == nullptr)
+        {
+            std::cerr << "client template needs a type dump; name one with --type-dump\n";
+            return Failure;
+        }
+        return RunTemplate(*arguments, *archive, catalog);
     }
     return RunWad(*arguments, *archive, catalog);
 }

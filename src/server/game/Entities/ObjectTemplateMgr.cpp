@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a template from Root.wad: TemplateManifest.xml through its typed view for the file the id lives in, then that file's BINd GameObjectTemplate for its behaviors, each named by its m_behaviorName, and says which step failed and why when one does, so a template the install cannot give is a named refusal rather than an object built without its behaviors.
+ * Reads a template from Root.wad: TemplateManifest.xml through its typed view for the file the id lives in, then that file's BINd GameObjectTemplate for its behaviors, each named by its m_behaviorName and a null entry kept as an empty name, and says which step failed and why when one does, so a template the install cannot give is a named refusal rather than an object built without its behaviors.
  */
 
 #include "ObjectTemplateMgr.h"
@@ -131,7 +131,12 @@ std::optional<ObjectTemplate> ObjectTemplateMgr::Read(KiwadArchive const& root, 
     for (PropertyValue const& entry : view->GetBehaviors())
     {
         PropertyObject const* const behavior = entry.AsObject();
-        PropertyValue const* const name = behavior ? behavior->Get("m_behaviorName") : nullptr;
+        if (!behavior)
+        {
+            found.Behaviors.emplace_back();
+            continue;
+        }
+        PropertyValue const* const name = behavior->Get("m_behaviorName");
         std::string const* const text = name ? name->GetIf<std::string>() : nullptr;
         if (!text || text->empty())
         {

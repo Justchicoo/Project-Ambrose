@@ -106,6 +106,7 @@ public:
     std::vector<PeFunction> const& GetFunctions() const noexcept;
     PeFunction const* FunctionOfRva(uint32 rva) const;
     std::optional<uint32> PrimaryFunctionStart(uint32 rva) const;
+    std::optional<uint32> FunctionEnd(uint32 rva) const;
 
     std::vector<uint32> FindTerminatedString(std::string_view text) const;
 
