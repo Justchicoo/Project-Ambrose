@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the window's message into a launcher request and writes the launcher's answer back. A field the message does not carry is left unset rather than defaulted here, because the defaults belong to the launcher and its configuration, and filling one in twice is how a window and a terminal start disagreeing. A field that is not a string is refused by name instead of being coerced, since a window that sent a number where a folder belongs has a bug worth seeing. The plan is written out as what a person reads on the screen, the install and its revision, where the client will run, which server it will join and the whole command, so the window shows what will happen rather than a shape only this program understands.
+ * Reads the window's message into a launcher request and writes the launcher's answer back. A field the message does not carry is left unset rather than defaulted here, because the defaults belong to the launcher and its configuration, and filling one in twice is how a window and a terminal start disagreeing. A field that is not a string is refused by name instead of being coerced, since a window that sent a number where a folder belongs has a bug worth seeing. A password is never written out at all: the window is handed the command with the secret replaced, so a screen anybody can see, or photograph, never carries one. The plan is written out as what a person reads on the screen, the install and its revision, where the client will run, which server it will join and the whole command, so the window shows what will happen rather than a shape only this program understands.
  */
 
 #include "LauncherChannel.h"
@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -64,8 +65,34 @@ bool LauncherChannel::ReadRequest(std::string const& json, LauncherRequest& requ
     return true;
 }
 
+namespace
+{
+    std::vector<std::string> WithoutSecrets(std::vector<std::string> const& arguments)
+    {
+        std::vector<std::string> shown = arguments;
+        for (std::size_t at = 0; at + 2 < shown.size(); ++at)
+        {
+            if (shown[at] == "-U" && !shown[at + 2].empty())
+                shown[at + 2] = LauncherChannel::Hidden;
+        }
+        return shown;
+    }
+
+    std::string Rebuild(LauncherPlan const& plan, std::vector<std::string> const& arguments)
+    {
+        std::string line = Launcher::Quote(ConfigMgr::PathToUtf8(plan.Program));
+        for (std::string const& argument : arguments)
+        {
+            line += ' ';
+            line += Launcher::Quote(argument);
+        }
+        return line;
+    }
+}
+
 std::string LauncherChannel::DescribePlan(LauncherPlan const& plan)
 {
+    std::vector<std::string> const shown = WithoutSecrets(plan.Arguments);
     nlohmann::json body;
     body["schema"] = SchemaVersion;
     body["ready"] = true;
@@ -77,8 +104,8 @@ std::string LauncherChannel::DescribePlan(LauncherPlan const& plan)
     body["host"] = plan.Host;
     body["port"] = plan.Port;
     body["locale"] = plan.Locale;
-    body["arguments"] = plan.Arguments;
-    body["command"] = plan.Command();
+    body["arguments"] = shown;
+    body["command"] = Rebuild(plan, shown);
     return body.dump();
 }
 

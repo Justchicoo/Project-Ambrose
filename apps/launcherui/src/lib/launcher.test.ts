@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the launcher window's own logic against a channel a test answers as a launcher would: which screen each answer leads to, what the window sends when the operator plays or changes a setting, that a refusal shows the reason the launcher gave rather than a shape of its own, that a first run still working through its steps holds the first-run screen until it is finished, that the account is remembered by name and the password never is, and that nothing the operator changes is decided here rather than sent back to be decided.
+ * Tests the launcher window's own logic against a channel a test answers as a launcher would: which screen each answer leads to, what the window sends when the operator plays or changes a setting, that a refusal shows the reason the launcher gave rather than a shape of its own, that a first run still working through its steps holds the first-run screen until it is finished, that the account is remembered by name and the password never is, that a remembered name on its own is never sent as a login, and that nothing the operator changes is decided here rather than sent back to be decided.
  */
 
 import { describe, expect, it } from "vitest";
@@ -153,6 +153,23 @@ describe("the launcher window", () => {
         expect(second.password).toBe("");
         expect(held.peek()).toBe("wolf");
         expect(held.peek(), "nothing that was remembered may be the password").not.toContain("a-secret");
+    });
+
+    it("does not send a remembered name on its own as a login", async () => {
+        const made = rig();
+        const held = memory();
+        held.set("wolf");
+        const state = new LauncherState(made.channel, held);
+        await state.look();
+
+        await state.play();
+
+        expect(made.started).toHaveLength(1);
+        expect(
+            made.started[0].user,
+            "a name with no key is refused by the launcher, so a remembered name alone must not be sent as one",
+        ).toBeUndefined();
+        expect(state.screen).toBe("ready");
     });
 
     it("sends a changed setting back to be decided rather than deciding it", async () => {

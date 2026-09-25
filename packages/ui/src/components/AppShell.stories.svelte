@@ -47,8 +47,18 @@
 
 <Story name="The launcher window">
     {#snippet template()}
-        <AppShell product="Ambrose Launcher">
-            <Heading level={1}>Ready to play</Heading>
+        <AppShell product="Ambrose" bleed>
+            {#snippet barEnd()}
+                <Button variant="quiet">Settings</Button>
+            {/snippet}
+            <section class="flex min-h-0 flex-1 flex-col justify-end bg-surface-page p-40">
+                <p class="ambrose-label text-fg-faint">Ready</p>
+                <Heading level={1} size="44">Ready to play</Heading>
+            </section>
+            <footer class="flex shrink-0 items-center justify-between gap-20 border-t border-edge-quiet bg-surface-chrome px-40 py-16">
+                <p class="text-11 text-fg-faint">Ambrose writes nothing into your installation.</p>
+                <Button variant="action" size="wide" icon="play">Play</Button>
+            </footer>
         </AppShell>
     {/snippet}
 </Story>

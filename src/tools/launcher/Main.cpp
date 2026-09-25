@@ -3,12 +3,17 @@
  * launcher entry point: reads its arguments and environment as UTF-8, loads launcher.conf when there is one, lets every option override it, and then has the Launcher library find the user's own install, build the folder the client runs from and the command that starts the client against an Ambrose login server; a machine that cannot start a Windows program is named before anything is written, --dry-run prints the folder and the command and starts nothing, --wait returns the client's own exit code and ends the client if the launcher is stopped, --tail waits and prints the client's own log lines, and without either the client is started detached so closing the launcher leaves the game running; it exits 0 on success, 1 when a refusal names its cause or the client cannot be started, and 2 on bad usage.
  */
 
+#include "ClientLocator.h"
 #include "ClientSetup.h"
 #include "ClientSystem.h"
 #include "ConfigMgr.h"
 #include "Environment.h"
 #include "Launcher.h"
+#include "LauncherChannel.h"
 #include "LauncherFiles.h"
+#include "LauncherWindow.h"
+
+#include <nlohmann/json.hpp>
 #include "Log.h"
 #include "LogTail.h"
 
@@ -56,6 +61,7 @@ Options:
                        (needs milestone 5.06, which answers MSG_USER_VALIDATE)
   --character <name>   create or select that character, as the client's own -C option
                        (needs milestone 3.16, which creates a wizard)
+  --window-ui          open the launcher in a window instead of printing to this terminal
   --dry-run            print the run folder and the exact command, and start nothing
   --wait               wait for the client, return its exit code, and end it if the launcher is stopped
   --tail               print the client's own log lines while it runs, waiting as --wait does
@@ -78,6 +84,7 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
         std::optional<std::string> Config;
         LauncherRequest Request;
         bool DryRun = false;
+        bool WindowUi = false;
         bool Wait = false;
         bool Tail = false;
         bool Help = false;
@@ -98,6 +105,8 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
                 parsed.Help = true;
             else if (arg == "--dry-run")
                 parsed.DryRun = true;
+            else if (arg == "--window-ui")
+                parsed.WindowUi = true;
             else if (arg == "--wait")
                 parsed.Wait = true;
             else if (arg == "--tail")
@@ -165,6 +174,55 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
         return std::filesystem::path();
     }
 
+    std::string Answer(std::string const& message, Launcher const& launcher, Arguments const& arguments, SetupMode mode,
+        SetupPrompt& prompt)
+    {
+        nlohmann::json const asked = nlohmann::json::parse(message, nullptr, false);
+        if (!asked.is_object())
+            return std::string();
+
+        nlohmann::json reply;
+        reply["id"] = asked.value("id", 0);
+        reply["status"] = 200;
+        reply["ok"] = true;
+
+        std::string const path = asked.value("path", std::string());
+        auto const answered = [&reply](nlohmann::json body)
+        {
+            reply["body"] = std::move(body);
+            return reply.dump();
+        };
+
+        if (path == "/launcher/steps")
+        {
+            nlohmann::json body;
+            body["schema"] = LauncherChannel::SchemaVersion;
+            body["steps"] = nlohmann::json::array();
+            return answered(std::move(body));
+        }
+
+        LauncherRequest request = arguments.Request;
+        std::string error;
+        if (asked.contains("body") && asked["body"].is_object())
+        {
+            if (!LauncherChannel::ReadRequest(asked["body"].dump(), request, error))
+                return answered(nlohmann::json::parse(LauncherChannel::DescribeRefusal(error)));
+        }
+
+        std::optional<LauncherPlan> const plan = launcher.Prepare(request, mode, prompt, error);
+        if (!plan)
+            return answered(nlohmann::json::parse(LauncherChannel::DescribeRefusal(error)));
+
+        if (path == "/launcher/start")
+        {
+            if (!launcher.CanStart(error) || !launcher.WriteRunFolder(*plan, error))
+                return answered(nlohmann::json::parse(LauncherChannel::DescribeRefusal(error)));
+            if (!launcher.Start(*plan, false, [] { return false; }, error))
+                return answered(nlohmann::json::parse(LauncherChannel::DescribeRefusal(error)));
+        }
+        return answered(nlohmann::json::parse(LauncherChannel::DescribePlan(*plan)));
+    }
+
     int Run(std::vector<std::string> const& args)
     {
         std::string error;
@@ -198,6 +256,18 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
         SetupMode const mode = ClientSetup::ModeForTool(system, std::cerr, Launcher::ToolName);
         std::unique_ptr<SetupPrompt> const prompt = ClientSetup::ToolPrompt(std::cout, mode);
         Launcher const launcher(system, files, std::cerr);
+
+        if (arguments->WindowUi)
+        {
+            std::filesystem::path const page = Ambrose::GetExecutableDirectory() / "launcher-ui" / "index.html";
+            std::filesystem::path const placeFile = ClientLocator::GetDataFolder(system) / "launcher-window.json";
+            std::string windowError;
+            bool const shown = LauncherWindow::Show(page, placeFile,
+                [&](std::string const& message) { return Answer(message, launcher, *arguments, mode, *prompt); }, windowError);
+            if (shown)
+                return Success;
+            std::cerr << fmt::format("launcher: {}, so this terminal is what runs\n", windowError);
+        }
         std::optional<LauncherPlan> const plan = launcher.Prepare(arguments->Request, mode, *prompt, error);
         if (!plan)
         {

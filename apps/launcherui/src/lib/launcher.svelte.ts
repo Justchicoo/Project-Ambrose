@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What the window is showing and why. It asks the launcher what it found, and which screen follows is decided by the answer rather than by the page: a plan means ready to play, a refusal means the failure screen with the reason the launcher gave, and a first run that is still working through its steps means the first-run screen until it is done. Settings are a screen the operator opens and leaves, so it is the one state the answer does not choose. The account is remembered by name only, never the password, because a launcher that remembers a password has become somewhere to steal one from. Where it is remembered is handed in rather than reached for, so the window uses the browser's own store and a test uses its own, and neither needs the other to exist. Nothing here decides what would be run: every value the operator changes is sent back and the launcher answers with a new plan, so the window and the terminal can never drift apart.
+ * What the window is showing and why. It asks the launcher what it found, and which screen follows is decided by the answer rather than by the page: a plan means ready to play, a refusal means the failure screen with the reason the launcher gave, and a first run that is still working through its steps means the first-run screen until it is done. Settings are a screen the operator opens and leaves, so it is the one state the answer does not choose. The account is remembered by name only, never the password, because a launcher that remembers a password has become somewhere to steal one from, and a name on its own is never sent as a login, since a name with no key is a refusal and would turn a remembered name into a launcher that has stopped working. Where it is remembered is handed in rather than reached for, so the window uses the browser's own store and a test uses its own, and neither needs the other to exist. Nothing here decides what would be run: every value the operator changes is sent back and the launcher answers with a new plan, so the window and the terminal can never drift apart.
  */
 
 import { isPlan, type LauncherAnswer, type LauncherChannel, type LauncherPlan, type LauncherRequest, type SetupStep } from "./channel";
@@ -90,7 +90,7 @@ export class LauncherState {
         try {
             this.#memory.set(this.account);
             const request: LauncherRequest = { ...this.settings };
-            if (this.account !== "") {
+            if (this.account !== "" && this.password !== "") {
                 request.user = { user_id: this.account, key: this.password, name: this.account };
             }
             this.take(await this.#channel.start(request));

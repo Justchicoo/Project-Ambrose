@@ -33,6 +33,7 @@ See doc/config/README.md for the file format, the layers and the environment var
 | `--run-dir <dir>` | `RunDir` for this run |
 | `--user <id> <key> [name]` | Passed on as the client's own `-U ..<id> <key> [name]`, which makes the client send MSG_USER_VALIDATE instead of showing its login window. The `..` prefix is added when the id does not have it. A server answers that message from milestone 5.06 |
 | `--character <name>` | Passed on as the client's own `-C <name>`, which creates or selects that character. A server creates a wizard from milestone 3.16 |
+| `--window-ui` | Open the launcher as a window instead of printing to the terminal, as "The window" below describes. A machine with no web view says so once and runs as the console launcher |
 | `--dry-run` | Print the install, the run folder and the exact command, and start and write nothing |
 | `--wait` | Wait for the client and exit with its own code. The client runs in a job object that ends it if the launcher is killed, and Ctrl+C ends it too |
 | `--tail` | Print the client's own log lines while it runs. It waits for the client as `--wait` does, because the launcher has to stay running to read the log |
@@ -41,6 +42,16 @@ See doc/config/README.md for the file format, the layers and the environment var
 An option overrides the settings file. Values the environment sets override the file too, as doc/config/README.md's layers describe, so `AMBROSE_CLIENT_DIR` is enough to choose the install without a settings file. A setting left blank in the file counts as unset and the default above applies, as an empty environment variable does. No value may begin with `-`, because the client's own option parser would read it as one of its options.
 
 Without `--wait` or `--tail` the client is started detached, so closing the launcher leaves the game running.
+
+## The window
+
+`launcher --window-ui` opens the launcher as a window instead of printing to the terminal. Every option above still applies and still means the same thing, because the window asks the same launcher the terminal asks: it sends the values it holds, the launcher builds the plan, and the window shows what came back. Nothing is decided in the window, so the window and the terminal cannot disagree about what would be run.
+
+- **The window is the operating system's own web view**, WebView2 on Windows. A machine that has none says so in one line and runs as the console launcher instead, which is why `--window-ui` never turns a working launcher into one that will not start.
+- **The page is read from the program's own folder**, `launcher-ui` beside the executable, through a folder the view is given directly. No listener is opened and no port is taken, so the only traffic a run makes is the client's own to the login server. The fonts ship with the page, so it is the same window with the network unplugged.
+- **A password is hidden before the window is told anything.** The command the window shows carries `********` where a key would be, while the client is still started with the real one, because a screen anybody can see can be photographed.
+- **Where the window was left is remembered** in `launcher-window.json` in the Ambrose data folder: its size, its corner and whether it was maximised. A place no screen holds any more is dropped and the window opens where it would have on a machine that had never run it, and the window will not be made smaller than 820 by 560, which is what its own screens need to hold their words.
+- **The window has no account field yet.** The client's own login window is what asks, and automatic login from the launcher waits on milestone 5.06, which answers MSG_USER_VALIDATE. A field that looks as though it signs somebody in and does not is worse than no field.
 
 ## The folder the client runs from
 

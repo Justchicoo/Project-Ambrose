@@ -14,6 +14,7 @@ class LauncherChannel
 {
 public:
     static constexpr int SchemaVersion = 1;
+    static constexpr char const* Hidden = "********";
 
     LauncherChannel() = delete;
 

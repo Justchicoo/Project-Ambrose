@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks that the window can ask the launcher for nothing the terminal cannot ask for, and gets back the same answer: a message naming the same values the console options name builds the same plan the console builds, right down to the command, so no decision can drift into the window; a message that leaves a field out leaves it for the launcher and its configuration to decide rather than filling it in a second time; a field of the wrong shape is refused by name instead of being coerced; and a refusal names its reason, because a window that says only that something failed sends its user to a log file they do not have.
+ * Checks that the window can ask the launcher for nothing the terminal cannot ask for, and gets back the same answer: a message naming the same values the console options name builds the same plan the console builds, right down to the command, so no decision can drift into the window; a message that leaves a field out leaves it for the launcher and its configuration to decide rather than filling it in a second time; a field of the wrong shape is refused by name instead of being coerced; a refusal names its reason, because a window that says only that something failed sends its user to a log file they do not have, and a password is hidden before the window is told anything, since the command is drawn on a screen that can be photographed while the client still has to be started with the real one.
  */
 
 #include "LauncherChannel.h"
@@ -116,4 +116,41 @@ TEST(LauncherChannelTest, AnAccountArrivesWholeOrIsRefused)
     LauncherRequest second;
     EXPECT_FALSE(LauncherChannel::ReadRequest(R"({"user":{"user_id":7}})", second, error));
     EXPECT_NE(error.find("user_id"), std::string::npos) << error;
+}
+
+TEST(LauncherChannelTest, APasswordNeverReachesTheWindow)
+{
+    LauncherHarness harness;
+    harness.AddInstall();
+
+    LauncherRequest request;
+    ClientLogin login;
+    login.UserId = "tester";
+    login.Key = "a-real-password";
+    login.Name = "tester";
+    request.User = login;
+
+    std::optional<LauncherPlan> const plan = harness.Prepare(request);
+    ASSERT_TRUE(plan) << harness.Error;
+    ASSERT_NE(plan->Command().find("a-real-password"), std::string::npos)
+        << "the command the client is actually started with carries the password, which is the whole point of hiding it from the window";
+
+    std::string const described = LauncherChannel::DescribePlan(*plan);
+    EXPECT_EQ(described.find("a-real-password"), std::string::npos)
+        << "a screen anybody can see, or photograph, must never carry a password: " << described;
+
+    nlohmann::json const body = nlohmann::json::parse(described);
+    EXPECT_NE(body["command"].get<std::string>().find(LauncherChannel::Hidden), std::string::npos)
+        << "and the window is shown that something was hidden rather than a command that looks complete";
+    EXPECT_NE(body["command"].get<std::string>().find("tester"), std::string::npos)
+        << "the account name is not a secret and stays readable";
+
+    bool hidden = false;
+    for (auto const& argument : body["arguments"])
+    {
+        EXPECT_NE(argument.get<std::string>(), "a-real-password");
+        if (argument.get<std::string>() == LauncherChannel::Hidden)
+            hidden = true;
+    }
+    EXPECT_TRUE(hidden);
 }

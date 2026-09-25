@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The frame both surfaces share: a chrome bar of the fixed height, an optional side bar of the fixed width, and one main region with a skip link to it. -->
+<!-- Project Ambrose by Imjustchico: The frame both surfaces share: a chrome bar of the fixed height, an optional side bar of the fixed width, and one main region with a skip link to it. A page that fills the frame edge to edge, as the launcher window does, asks to bleed and is given the region whole, with its own regions deciding where the padding and the scrolling go. -->
 <script lang="ts">
     import type { Snippet } from "svelte";
     import { classes } from "../internal/classes";
@@ -6,6 +6,7 @@
     type Props = {
         product: string;
         skipLabel?: string;
+        bleed?: boolean;
         class?: string;
         side?: Snippet;
         barStart?: Snippet;
@@ -13,7 +14,7 @@
         children: Snippet;
     };
 
-    let { product, skipLabel = "Skip to content", class: extra, side, barStart, barEnd, children }: Props = $props();
+    let { product, skipLabel = "Skip to content", bleed = false, class: extra, side, barStart, barEnd, children }: Props = $props();
 </script>
 
 <div class={classes("flex h-full min-h-screen flex-col bg-surface-page text-fg-body", extra)}>
@@ -41,7 +42,11 @@
                 {@render side()}
             </div>
         {/if}
-        <main id="ambrose-main" class="min-w-0 flex-1 overflow-auto p-20" data-ambrose-scroll>
+        <main
+            id="ambrose-main"
+            class={classes("min-w-0 flex-1", bleed ? "flex min-h-0 flex-col overflow-hidden" : "overflow-auto p-20")}
+            data-ambrose-scroll={bleed ? undefined : true}
+        >
             {@render children()}
         </main>
     </div>

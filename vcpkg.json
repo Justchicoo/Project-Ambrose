@@ -15,7 +15,11 @@
     "sqlite3",
     "unicorn",
     "zlib",
-    "zydis"
+    "zydis",
+    {
+      "name": "webview2",
+      "platform": "windows"
+    }
   ],
   "features": {
     "tests": {
