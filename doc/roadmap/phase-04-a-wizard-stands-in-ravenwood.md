@@ -37,6 +37,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Ordering.** 4.04 carries LOG-11's acceptance as well as WLD-1's, but only the LocationString part of LOG-11 is its own work. Three of its checks, the CharID selection errors, the MSG_ATTACH integration and the real-client Play, describe 4.05 and cannot be earned until 4.05 lands, so 4.04 stays open with its own eight ticked. Found on 2026-09-23 when an outside contributor delivered every part of 4.04 that 4.04 builds.
 - **Ordering.** 4.12 carries WIZ-1 whole, but its title leaves the PLAYERWIZBANG broadcast out, because other clients in range only exist from 6.01, and 6.02 carries that handler and the spellbook half of the real-client check already. **Resolved on 2026-09-25:** 4.12 builds the rest, and its deliverable and check no longer name the broadcast. The client sends its entry chatter after MSG_LOGINCOMPLETE but before MSG_CLIENTZONED, so the handlers take it from LoggedIn as well as InWorld; the tests of every WIZARD name and of the WIZARD orders read the user's own XML, so they are client tests.
 - **Correction.** 4.13 and 4.14 asked for CriticalObjects as a wrapped, empty CriticalObjectList. The client's own GameClient::MSG_LoginComplete, read in Ghidra, takes an empty CriticalObjects as no critical objects and would read a list there with no envelope, so the checks now ask for it empty, as Entering the world in doc/ARCHITECTURE.md records. **Resolved on 2026-09-25.**
+- **Ordering.** 4.14 carried WLD-8 whole, static zone objects and all, though its title keeps only WLD-8's MSG_CLIENTZONED, while 5.02 carries static zone objects with the same checks and depends on 4.14 and on 5.01's template store, so neither could close before the other. **Resolved on 2026-09-25:** 4.14 keeps the MSG_CLIENTZONED deliverable, whose check it has earned, and the spawning deliverables and checks, the live-map '.reload zone_object' one included, are 5.02's, which 4.09's '.reload zone_object' line now names.
 - **Ordering.** 4.09 depends on 4.15, so 4.15 lands before 4.09. Settings named in 4.02-4.14 read their config value until 4.16 lands, then become live settings with the same keys.
 
 ## 4.01 sWorld tick, GameSession, ScriptMgr hooks and AddSC loaders (new core)
@@ -467,7 +468,7 @@ The game server loads zone, location and object rows at startup into a global ma
 - src/server/game/Zones/ZoneMgr.h/.cpp (sZoneMgr): ZoneTemplate, ZoneLocation and ZoneObjectSpawn stores keyed by zone path, location lookup with 'Start' fallback, each a 4.15 reload target that builds off to the side, validates, swaps, and keeps the old store on failure
 - src/server/game/World/World.cpp: startup load order and timing log
 - src/server/scripts/Commands/cs_zone.cpp: '.zone info <path>', '.reload zone_template', '.reload zone_location', '.reload zone_object'
-- '.reload zone_object': live maps spawn rows that were added and despawn rows that were removed once maps (4.10) and object spawning (4.14) exist
+- '.reload zone_object': live maps spawn rows that were added and despawn rows that were removed once maps (4.10) and object spawning (5.02) exist
 - src/test/server/game/Zones/ZoneMgrTest.cpp using an in-memory fixture DB
 
 **Client messages:** MSG_COMMAND, MSG_COMMANDRESULT
@@ -742,42 +743,19 @@ A real client that selects a character loads into its saved zone and stands at t
 - The player WizClientObject contents (behaviors, stats, equipment) belong to WIZ. Until WIZ lands, a minimal player object may render incompletely, so check the client does not crash on missing behaviors.
 - The capture shows MSG_SENDQUEST/MSG_SENDGOAL before LOGINCOMPLETE and MSG_UPDATEMANA and MARK_LOCATION_RESPONSE after it. Ordering needs beyond 'LOGINCOMPLETE first' are unverified.
 
-### Detailed spec from WLD-8: Static zone objects appear
+### Detailed spec from WLD-8: MSG_CLIENTZONED
 
-NPCs, signs, doors and props from the zone data appear for a player entering a zone, including objects the loading screen waits for.
+Only this part of WLD-8 is 4.14's; its static zone objects are 5.02's, with their deliverables, checks and risks.
 
 **Deliverables**
 
-- src/server/game/Entities/GameObject.cpp: spawn every zone_object row whose template has a RenderBehaviorTemplate when the Map is created, skipping sigil/minigame info classes
-- Map::AddPlayer: send MSG_NEWOBJECT for each visible object to the entering player; Map::RemovePlayer: nothing for the leaver (the client tears down)
-- Critical objects: templates whose adjective list holds 'Critical' go into LOGINCOMPLETE.CriticalObjects
 - MSG_CLIENTZONED (service 53) handler marks the session in world, and object streaming waits for or follows it as the capture shows
-- On a successful '.reload zone_object', each live Map spawns objects for added rows and removes objects for deleted rows, sending MSG_NEWOBJECT and MSG_REMOVEOBJECT to players in it
-- src/test/server/game/Zones/MapObjectSpawnTest.cpp
 
-**Client messages:** MSG_NEWOBJECT, MSG_LOGINCOMPLETE, MSG_CLIENTZONED
-
-**Data sources**
-
-- world.zone_object
-- ObjectData templates (DAT-2): GameObjectTemplate.m_behaviors, m_adjectiveList, m_exemptFromAOI
-
-**Database tables**
-
-- world.zone_object
+**Client messages:** MSG_CLIENTZONED
 
 **Acceptance**
 
-- [ ] Real client: in WizardCity/WC_Hub, statues, kiosks and NPC models stand where they do on retail, and nothing floats at 0,0,0
-- [ ] Real client: entering a zone with a Critical object leaves the loading screen (it does not hang)
-- [ ] Unit: a zone_object with a missing template is logged once and skipped; the Map still loads
-- [ ] Unit: after '.reload zone_object' adds one row and deletes another, a live Map holds the new object and not the deleted one, with no restart; a reload that fails validation leaves the Map unchanged
-- [ ] Server log: '<n> objects spawned in WizardCity/WC_Hub' matches the count of eligible zone_object rows
-
-**Risks**
-
-- That the client waits on CriticalObjects before dropping the loading screen is inferred from the reference, not confirmed
-- Objects with m_spawnRequirements (quest-gated) are shown to everyone until WLD-19
+- [x] MSG_CLIENTZONED (53:64) marks the session in world. Client driver runs 20260925-100208, 20260925-100536 and 20260925-124322: the client sends it with the KI string hash of the zone's path, 699201167 for WizardCity/WC_Ravenwood, and the game server logs the wizard standing in the world
 
 ## 4.15 Reload framework and reload commands
 

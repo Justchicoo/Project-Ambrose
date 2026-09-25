@@ -73,6 +73,7 @@ NPCs, signs, doors and props from the zone data appear for a player entering a z
 - Map::AddPlayer: send MSG_NEWOBJECT for each visible object to the entering player; Map::RemovePlayer: nothing for the leaver (the client tears down)
 - Critical objects: templates whose adjective list holds 'Critical' go into LOGINCOMPLETE.CriticalObjects
 - MSG_CLIENTZONED (service 53) handler marks the session in world, and object streaming waits for or follows it as the capture shows
+- On a successful '.reload zone_object', each live Map spawns objects for added rows and removes objects for deleted rows, sending MSG_NEWOBJECT and MSG_REMOVEOBJECT to players in it
 - src/test/server/game/Zones/MapObjectSpawnTest.cpp
 
 **Client messages:** MSG_NEWOBJECT, MSG_LOGINCOMPLETE, MSG_CLIENTZONED
@@ -91,6 +92,7 @@ NPCs, signs, doors and props from the zone data appear for a player entering a z
 - [ ] Real client: in WizardCity/WC_Hub, statues, kiosks and NPC models stand where they do on retail, and nothing floats at 0,0,0
 - [ ] Real client: entering a zone with a Critical object leaves the loading screen (it does not hang)
 - [ ] Unit: a zone_object with a missing template is logged once and skipped; the Map still loads
+- [ ] Unit: after '.reload zone_object' adds one row and deletes another, a live Map holds the new object and not the deleted one, with no restart; a reload that fails validation leaves the Map unchanged
 - [ ] Server log: '<n> objects spawned in WizardCity/WC_Hub' matches the count of eligible zone_object rows
 
 **Risks**
