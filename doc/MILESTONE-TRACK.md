@@ -93,7 +93,11 @@ Then one of four things happens, each with one message saying which and why: it 
 
 | ID | Milestone | Size | What you need | Why it is a good one to take |
 |---|---|---|---|---|
-| 17.35 | Panel settings: general, mail and security | M | A build and a browser. An SMTP account of your own to try the mail test against, or say so in the draft and the maintainer will run that one | The panel's own settings, on the same typed and audited model the game servers already use, so an owner sets the panel name, session lifetimes, SMTP and sign-in thresholds from the panel instead of a file. The settings model, the store and the audit rows all exist already, so this is a page and its bindings rather than new machinery. The second milestone deliberately spared from the phase hold, and it collides with nothing being built |
+| 17.49 | Panel audit scope, app relay and command history | M | A build, Node 20+ and a browser. No MySQL or MariaDB: the supervisor keeps its own store | Nothing the panel does happens without a record written in the same transaction as the change, the browser never holds an app's token, and one command history follows a user between browsers. The permission catalog, roles and grants it depends on landed in 17.48 and the audit tables in 17.14, so this wires parts that already exist. All six checks run on your own machine. Spared from the phase hold on 2026-09-25 |
+| 17.91 | Tick breakdown and on-demand profiles | M | A build, Node 20+ and a browser | A slow tick says which subsystem took the time, published through the metrics registry 17.09 built and drawn under the graphs 17.19 built. Measure at the tick's own call sites in `src/server/game/World`: `GameSession` and the WIZARD handlers are being changed for 4.12 right now, so leave them alone. All five checks run on your own machine. Spared from the phase hold on 2026-09-25 |
+| 17.106 | Error reports: source locations, grouping and a report file | L | A build, Node 20+ and a browser | An operator's errors reach the maintainer as a file naming the build, file and line each was raised at, so a bug report can be fixed without a screen share. It is large and it changes the logging macros every file uses, so read the note on macros with commas in contrib/AI-MILESTONES-HERE.md before touching them. All six checks run on your own machine. Spared from the phase hold on 2026-09-25 |
+| 17.23 | Operating system services, Docker image and Pterodactyl egg | M | A build and Docker. The reboot check and both Pterodactyl checks are the maintainer's: leave them unticked and name them in the pull request | Ambrose as a service that starts at boot, a small Docker image with a Compose file, and a Pterodactyl egg, so an operator runs it without a terminal open. The Compose and time zone checks are yours to earn. Where the image's time zone data comes from is still under Decisions needed in doc/ROADMAP.md, so propose it in the draft rather than settling it. A container that reaches the admin API as `host.docker.internal` needs `Admin.AllowedHosts`, as doc/OPERATIONS.md says. Spared from the phase hold on 2026-09-25 |
+| 3.28 | A type dump from any client, not only the two we tried | M | A build and your own client install. The first two checks compare against r801440 and r806919, which only the maintainer has, so the maintainer runs those in review; an install at any other revision is exactly what the last check wants | typeextract works out where the engine keeps its type data from the running client instead of reading offsets written down for two builds, so a server supports whatever client somebody has, and a build it cannot read is refused by name rather than dumped wrong. Spared on 2026-09-25 |
 
 ## Reserved
 
@@ -104,18 +108,14 @@ Everything not in the table above, including every milestone whose dependencies 
 | 1.18 | Answered against the maintainer's own capture of a session |
 | 3.02 | Built but for one check, which waits on a real client being sent MSG_BADGES, which NET and WIZ have not built yet |
 | 3.20 | Built but for one check, which has to be run on a real terminal against a real install |
-| 3.28 | Deriving the offsets is judged against the two pinned installs, which only the maintainer has |
 | 3.12 | Its remaining checks wait for 6.10 and for a real client session |
 | 3.23 | Next in the maintainer's own queue |
 | 4.02 | Held by the panel session, which needs it for the panel's roles. It is built and passes every automated check; its one real-client check waits on another milestone rather than on anybody's time |
+| 4.11 | Being built now, and the world entry after it runs through the same files |
 | 16.11 | Overlaps the type extraction already built in 3.21 and is being rethought |
-| 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal |
-| 17.23 | Dev-gated on a reboot and a Pterodactyl install |
-| 17.91 | Ready now that the metrics register and the resource graphs have landed, and held with the rest of phase 17 while the panel is built as one thread. It adds series to the sampler those milestones built rather than standing up a second one, so it is best taken beside that thread |
+| 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal, and nothing else left to build |
 | 3.26 | Unblocked by the design system landing, and next in the maintainer's own queue after the terminal dashboard |
-| 17.49 | Held with the rest of phase 17 while the panel is built as one thread |
-| 17.47 | Being built now |
-| 17.106 | Being built now |
+| 17.47 | Kept for the maintainer's panel session: two-factor sign-in touches the store's secrets, which is still an open decision |
 
 ## In flight
 
@@ -123,6 +123,7 @@ A row that says **before the reset** came from a pull request that was on the re
 
 | ID | Who | Sent as | What is left |
 |---|---|---|---|
+| 17.35 | MeruneFleuruwu | [#8](https://github.com/Justchicoo/Project-Ambrose/pull/8) | The page, its routes and the secret masking are built and CI is green. Left: the permission the milestone names, `panel.settings`, which the catalog marks Danger, in place of `settings.read` and `settings.edit`, which are for an app's own settings; a server-side test beside the other panel tests; the checks it earns ticked with their evidence; and a description in place of the template |
 | 16.03 | MeruneFleuruwu | [#6](https://github.com/Justchicoo/Project-Ambrose/pull/6) | The scanner is delivered and four checks are earned, two of them re-run by the maintainer on a real install rather than only in a fixture. Size, CRC, HeaderSize and HeaderCRC are right for 3589 of 3589 type 3 and 5 records, and a cached run is 194 seconds down to 1 with a byte-identical .bin. Left: package membership, 3820 of 3825, because `Windows/PatchClient/` is not matched and the manifest files scan themselves in; and four fields no check names, `TarFileName`, `CompressedHeaderSize`, the 40 type 5 WADs and the header fields on plain files |
 | 1.21 | MeruneFleuruwu | [#5](https://github.com/Justchicoo/Project-Ambrose/pull/5) | doc/PATCHING.md now matches what is built and the deliverable line names src/tools/launcher. Left: all three acceptance checks, which watch a real client, one listener seeing no patch connection, one recording what the client does with no `-P`, and one seeing no 'Patch failed' dialog |
 | 5.08 | MeruneFleuruwu | [#4](https://github.com/Justchicoo/Project-Ambrose/pull/4) | The scripts, env.dist and doc/INSTALL.md are delivered and the conf check is earned, verified by running both of them. Left: the check that a clean Ubuntu and a clean Windows machine reach 'ready' on all three apps, which needs those machines. The maintainer added the self-tests and fixed a relative install prefix that resolved against the working directory |

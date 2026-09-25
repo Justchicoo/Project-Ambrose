@@ -64,6 +64,6 @@
 <text x="40" y="464" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12.5" fill="#F2E8D5">17 Operations console admin a…</text>
 <rect x="286" y="454" width="96" height="8" rx="4.0" fill="#0E1527"/><rect x="286" y="454" width="13.0" height="8" rx="4.0" fill="#E4B457"/>
 <text x="392" y="463" font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" font-size="11.5" fill="#A8B6D4">15/111</text>
-<text x="40" y="528" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12" fill="#A8B6D4">Contributors: <tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" fill="#5FD3C4">71</tspan> items merged, <tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace">59</tspan> open</text>
+<text x="40" y="528" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12" fill="#A8B6D4">Contributors: <tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace" fill="#5FD3C4">71</tspan> items merged, <tspan font-family="'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace">82</tspan> open</text>
 <text x="840" y="528" text-anchor="end" font-family="Karla, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12" fill="#A8B6D4">Counted from the roadmap itself</text>
 </svg>
