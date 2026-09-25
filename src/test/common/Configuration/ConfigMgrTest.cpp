@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests config parsing errors, typed options, layer precedence, environment names, reloads, and warnings.
+ * Tests config parsing errors, typed options, layer precedence, environment names, reloads, warnings, and the live layer the settings registry fills: above the files, below the environment and overrides, kept across a reload, and announced only where the served value changes.
  */
 
 #include "ConfigMgr.h"
@@ -164,6 +164,36 @@ TEST(ConfigMgrTest, AReloadTellsSubscribersWhichKeysChanged)
     ASSERT_EQ(heard.size(), 1u) << "a reload that changed something must tell its subscribers once";
     EXPECT_EQ(heard.front(), (std::vector<std::string>{ "Logger.network" })) << "only the key that changed is named";
     EXPECT_EQ(config.GetOption<std::string>("Logger.network", "Info"), "Debug") << "the new value is the one being served";
+}
+
+TEST(ConfigMgrTest, TheLiveLayerSitsAboveTheFilesAndBelowTheEnvironmentAndSurvivesAReload)
+{
+    TempDirectory directory;
+    FakeEnvironment environment;
+    std::filesystem::path const file = directory.Write("gameserver.conf", Header + "World.UpdateInterval = 50\nZone.UnloadDelay = 60\n");
+    ConfigMgr config(environment.Lookup());
+    ASSERT_TRUE(config.LoadInitial(file).Succeeded());
+    environment.Values["AMBROSE_ZONE_UNLOAD_DELAY"] = "90";
+
+    std::vector<std::vector<std::string>> heard;
+    config.SubscribeToChanges([&heard](std::vector<std::string> const& changed) { heard.push_back(changed); });
+    config.SetLiveValues({ { "World.UpdateInterval", "100" }, { "Zone.UnloadDelay", "30" } });
+    EXPECT_EQ(config.GetOption<uint32>("World.UpdateInterval", 0), 100u) << "a live value outranks the files";
+    EXPECT_EQ(config.Resolve("World.UpdateInterval")->Kind, ConfigSourceKind::Live);
+    EXPECT_EQ(config.Resolve("World.UpdateInterval", false)->Value, "50") << "and the file value is still there beneath it";
+    EXPECT_EQ(config.GetOption<uint32>("Zone.UnloadDelay", 0), 90u) << "the environment outranks a live value";
+    ASSERT_EQ(heard.size(), 1u);
+    EXPECT_EQ(heard.front(), (std::vector<std::string>{ "World.UpdateInterval" })) << "a live value the environment hides changes nothing served";
+
+    directory.Write("gameserver.conf", Header + "World.UpdateInterval = 70\nZone.UnloadDelay = 60\n");
+    ASSERT_TRUE(config.Reload().Succeeded());
+    EXPECT_EQ(config.GetOption<uint32>("World.UpdateInterval", 0), 100u) << "a reload keeps the live layer";
+
+    heard.clear();
+    config.SetLiveValues({});
+    EXPECT_EQ(config.GetOption<uint32>("World.UpdateInterval", 0), 70u) << "without its live value the key serves the file again";
+    ASSERT_EQ(heard.size(), 1u);
+    EXPECT_EQ(heard.front(), (std::vector<std::string>{ "World.UpdateInterval" }));
 }
 
 TEST(ConfigMgrTest, AReloadThatChangedNothingSaysNothing)

@@ -24,7 +24,7 @@ Later layers override earlier ones for the same key. Every default sits below ev
 | 2 | Module defaults, sorted by file name | `conf.d/pets.conf.dist` |
 | 3 | Local config, required | `gameserver.conf` |
 | 4 | Module config, sorted by file name | `conf.d/pets.conf` |
-| 5 | Live settings (milestone 4.16), persisted in the `settings` table of the database the app owns | `.settings set Rate.XP.Quest 2` |
+| 5 | Live settings, persisted in the `settings` table of the database the app owns and listed in [settings.md](settings.md) | `.settings set Rate.XP.Quest 2` |
 | 6 | Environment variables | `AMBROSE_WORLD_SERVER_PORT=14000` |
 | 7 | Command-line overrides | passed by the app at startup |
 

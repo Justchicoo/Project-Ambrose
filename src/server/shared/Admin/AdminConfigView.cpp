@@ -20,6 +20,7 @@ std::string_view AdminConfigView::LayerName(ConfigSourceKind kind) noexcept
         case ConfigSourceKind::ModuleDefault: return "module_default";
         case ConfigSourceKind::Config: return "config";
         case ConfigSourceKind::ModuleConfig: return "module_config";
+        case ConfigSourceKind::Live: return "live";
         case ConfigSourceKind::Environment: return "environment";
         case ConfigSourceKind::Override: return "override";
     }

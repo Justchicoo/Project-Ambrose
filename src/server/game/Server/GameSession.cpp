@@ -7,7 +7,6 @@
 #include "AccountMgr.h"
 #include "CharacterNameMgr.h"
 #include "CharacterRepository.h"
-#include "ConfigMgr.h"
 #include "CoreObjectSerializer.h"
 #include "Frame.h"
 #include "GameMessageTable.h"
@@ -18,6 +17,7 @@
 #include "ObjectSchemaMgr.h"
 #include "ObjectTemplateMgr.h"
 #include "PlayerObjectBuilder.h"
+#include "Settings.h"
 #include "StringHash.h"
 #include "StringUtil.h"
 #include "ZoneMgr.h"
@@ -30,7 +30,6 @@
 
 namespace
 {
-    constexpr uint32 DefaultPermissions = 0x1 | 0x2 | 0x4 | 0x8 | 0x20;
 
     std::atomic<uint32> RealmId{ 0 };
 
@@ -288,7 +287,6 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         return;
     }
 
-    ConfigMgr const& config = sConfigMgr;
     GameMessages::LoginComplete complete;
     complete.ZoneName = character.Zone;
     complete.Data.assign(data.Bytes.begin(), data.Bytes.end());
@@ -296,10 +294,10 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     complete.ZoneId = StringHash::KiStringHash(character.Zone);
     complete.DynamicZoneId = map.GetDynamicZoneId();
     complete.DynamicServerProcId = map.GetDynamicZoneId();
-    complete.Permissions = config.GetOption<uint32>("LoginComplete.Permissions", DefaultPermissions, true);
-    complete.IsCsr = _securityLevel.load(std::memory_order_relaxed) >= config.GetOption<uint32>("LoginComplete.CSRSecurityLevel", SEC_GAMEMASTER, true) ? 1 : 0;
-    complete.TestServer = config.GetOption<bool>("LoginComplete.TestServer", false, true) ? 1 : 0;
-    complete.RealmName = config.GetOption<std::string>("Realm.Name", "Ambrose", true);
+    complete.Permissions = sSettings.Get<uint32>("LoginComplete.Permissions");
+    complete.IsCsr = _securityLevel.load(std::memory_order_relaxed) >= sSettings.Get<uint32>("LoginComplete.CSRSecurityLevel") ? 1 : 0;
+    complete.TestServer = sSettings.Get<bool>("LoginComplete.TestServer") ? 1 : 0;
+    complete.RealmName = sSettings.Get<std::string>("Realm.Name");
     SetCharacterName(sCharacterNameMgr.FormatName(character.NameIndices, character.Appearance.Gender).value_or(std::string()));
     SendDmlMessage(complete);
     SetStatus(SessionStatus::LoggedIn);

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Registers every login database statement with its name, SQL, and the connections that prepare it: the log sink, accounts, verifiers, security levels, locks, last logins, account, IP and machine bans, the one-query authentication lookup, hashed session keys, verifier resealing that never overwrites a changed password, an account's purchased character slots, the realms a player may be sent to, the row a gameserver adds for itself the first time it runs, which never overwrites one an operator has edited, and the beat each gameserver says it is alive with.
+ * Registers every login database statement with its name, SQL, and the connections that prepare it: the log sink, accounts, verifiers, security levels, locks, last logins, account, IP and machine bans, the one-query authentication lookup, hashed session keys, verifier resealing that never overwrites a changed password, an account's purchased character slots, the realms a player may be sent to, the row a gameserver adds for itself the first time it runs, which never overwrites one an operator has edited, and the beat each gameserver says it is alive with. It also registers the live settings statements: every persisted value, setting and removing one, writing a change's audit row, and reading a key's newest audit rows.
  */
 
 #include "LoginDatabase.h"
@@ -46,4 +46,9 @@ void LoginDatabaseConnection::DoPrepareStatements()
     PrepareStatement(LOGIN_UPD_ACCOUNT_ONLINE, "LOGIN_UPD_ACCOUNT_ONLINE", "UPDATE `account` SET `online` = ? WHERE `id` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_DEL_REALM_ONLINE_CHARACTER, "LOGIN_DEL_REALM_ONLINE_CHARACTER", "DELETE FROM `realm_online_character` WHERE `character_guid` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_ONLINE_PLAYERS, "LOGIN_SEL_ONLINE_PLAYERS", "SELECT o.`character_guid`, o.`account_id`, o.`realm_id`, o.`since`, a.`username`, r.`name` FROM `realm_online_character` o LEFT JOIN `account` a ON a.`id` = o.`account_id` LEFT JOIN `realmlist` r ON r.`id` = o.`realm_id` ORDER BY o.`since` DESC, o.`character_guid`", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_SEL_SETTINGS, "LOGIN_SEL_SETTINGS", "SELECT `key`, `value` FROM `settings`", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_REP_SETTING, "LOGIN_REP_SETTING", "INSERT INTO `settings` (`key`, `value`, `updated_by`, `updated_at`) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `updated_by` = VALUES(`updated_by`), `updated_at` = VALUES(`updated_at`)", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_DEL_SETTING, "LOGIN_DEL_SETTING", "DELETE FROM `settings` WHERE `key` = ?", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_INS_SETTING_AUDIT, "LOGIN_INS_SETTING_AUDIT", "INSERT INTO `setting_audit` (`key`, `old_value`, `new_value`, `who`, `account_id`, `source`, `reason`, `created`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_SEL_SETTING_AUDIT, "LOGIN_SEL_SETTING_AUDIT", "SELECT `id`, `key`, `old_value`, `new_value`, `who`, `account_id`, `source`, `reason`, `created` FROM `setting_audit` WHERE `key` = ? ORDER BY `id` DESC LIMIT ?", ConnectionFlags::Both);
 }

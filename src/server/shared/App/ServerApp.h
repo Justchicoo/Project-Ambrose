@@ -60,6 +60,8 @@ struct ServerAppInfo
     uint16 AdminPort = 0;
 };
 
+class SettingStore;
+
 class ServerApp
 {
 public:
@@ -108,7 +110,9 @@ protected:
     virtual void OnAdminApiReady(AdminServer& admin);
     virtual std::vector<RestartRequiredOption> GetRestartRequiredOptions() const;
     virtual void OnConfigChanged(std::vector<std::string> const& changed);
+    virtual uint8 GetSettingApps() const;
 
+    bool StartSettings(std::shared_ptr<SettingStore> store);
     ConfigMgr& Config() noexcept { return _config; }
     Log& Logger() noexcept { return _log; }
     Ambrose::Asio::IoContext& GetIoContext() noexcept { return _io; }
@@ -120,6 +124,7 @@ private:
     ClientSetupResult _clientSetup;
 
     bool IsStopping() const noexcept { return GetLifecycleState() == AppLifecycle::Stopping; }
+    bool DeclareSettings();
     bool StartAdminApi();
     void ScheduleUpdate();
     void ScheduleStop(Seconds delay, std::string reason);

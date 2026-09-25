@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables after the world database takes one, loads the character name tables when the world database is open and, when they are empty, extracts them from the install and reloads them, automatically in auto mode, after a yes in ask mode and never in off mode, loads the zones, the named places inside them and the objects placed in them and registers each as a reload target, refusing to start when they cannot be read, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close.
+ * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables after the world database takes one, loads the character name tables when the world database is open and, when they are empty, extracts them from the install and reloads them, automatically in auto mode, after a yes in ask mode and never in off mode, loads the zones, the named places inside them and the objects placed in them and registers each as a reload target, refusing to start when they cannot be read, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits or realm heartbeat is applied on the world thread.
  */
 
 #include "TypeDumpCache.h"
 #include "RealmHeartbeat.h"
+#include "Settings.h"
 #include "RealmList.h"
 #include "AdminDatabaseView.h"
 #include "AdminServer.h"
@@ -22,6 +23,7 @@
 #include "ConfigMgr.h"
 #include "DatabaseEnv.h"
 #include "DatabaseLoader.h"
+#include "DatabaseSettingStore.h"
 #include "Environment.h"
 #include "Log.h"
 #include "LocaleStore.h"
@@ -141,7 +143,7 @@ namespace
             else
                 SetMessageSource(setup.Install->Root);
 
-            std::string const locale = Config().GetOption<std::string>("Locale.Default", "en-US", true);
+            std::string const locale = sSettings.Get<std::string>("Locale.Default");
             if (!setup.Install)
                 LOG_WARN("server.gameserver", "No Wizard101 install is in use, so locale keys cannot be resolved to text");
             else
@@ -170,6 +172,14 @@ namespace
                 LOG_ERROR("server.gameserver", "Cannot open the realm's databases");
                 return false;
             }
+            if (!CharacterDatabase.IsOpen())
+                LOG_WARN("server.gameserver", "CharacterDatabaseInfo is empty, so live settings take their config values and cannot be changed or kept");
+            if (!StartSettings(CharacterDatabase.IsOpen() ? SettingStores::ForCharacters() : nullptr))
+            {
+                _databases.Close();
+                return false;
+            }
+            _settingsSubscription = sSettings.Subscribe([this](SettingChange const& change) { ApplySetting(change); });
             if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup))
             {
                 _databases.Close();
@@ -202,8 +212,8 @@ namespace
             sMapMgr.SetSettingsReader([]
             {
                 MapSettings settings;
-                settings.UnloadDelay = std::chrono::seconds(std::clamp<uint32>(sConfigMgr.GetOption<uint32>("Zone.UnloadDelay", 60, true), 0, 86400));
-                settings.MobileIdReleaseDelay = std::chrono::milliseconds(std::clamp<uint32>(sConfigMgr.GetOption<uint32>("Zone.MobileIdReleaseDelay", 2000, true), 0, 60000));
+                settings.UnloadDelay = std::chrono::seconds(sSettings.Get<uint32>("Zone.UnloadDelay"));
+                settings.MobileIdReleaseDelay = std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MobileIdReleaseDelay"));
                 return settings;
             });
             if (WorldDatabase.IsOpen())
@@ -396,8 +406,8 @@ namespace
 
         void LoadCommands()
         {
-            sCommandMgr.SetPrefix(Config().GetOption<std::string>("GM.CommandPrefix", std::string(CommandMgr::DefaultPrefix), true));
-            sCommandMgr.SetLogging(Config().GetOption<bool>("GM.LogCommands", true, true));
+            sCommandMgr.SetPrefix(sSettings.Get<std::string>("GM.CommandPrefix"));
+            sCommandMgr.SetLogging(sSettings.Get<bool>("GM.LogCommands"));
             sCommandMgr.Load(sScriptMgr.GetCommands());
             std::map<std::string, uint8, std::less<>> overrides;
             if (WorldDatabase.IsOpen())
@@ -435,8 +445,45 @@ namespace
             }
         }
 
+        void ApplySetting(SettingChange const& change)
+        {
+            std::string_view const key = change.Key;
+            if (key == "GM.CommandPrefix")
+                sCommandMgr.SetPrefix(sSettings.Get<std::string>("GM.CommandPrefix"));
+            else if (key == "GM.LogCommands")
+                sCommandMgr.SetLogging(sSettings.Get<bool>("GM.LogCommands"));
+            else if (key == "Locale.Default")
+            {
+                std::string const locale = sSettings.Get<std::string>("Locale.Default");
+                std::string error;
+                if (sLocaleStore.IsLoaded() && !sLocaleStore.SetDefaultLocale(locale, error))
+                {
+                    LOG_WARN("server.gameserver", "Locale.Default {} cannot be used, so names and text stay in {}: {}", locale, sLocaleStore.GetDefaultLocale(), error);
+                    return;
+                }
+                sCharacterNameMgr.SetDefaultLocale(locale);
+            }
+            else if (key == "Realm.Name" || key == "Realm.Address" || key == "PublicAddress" || key == "Realm.HeartbeatInterval")
+                _heartbeat.Reconfigure(RealmHeartbeatSettings::Load(Config()));
+            else if (_context && (key.starts_with("Network.") || key == "Attach.Timeout"))
+            {
+                std::vector<std::string> problems;
+                _context->SetSettings(SessionSettings::Load(Config(), &problems));
+                for (std::string const& problem : problems)
+                    LOG_WARN("server.gameserver", "{}", problem);
+            }
+        }
+
+        uint8 GetSettingApps() const override
+        {
+            return SettingApps::Game;
+        }
+
         void OnStop() override
         {
+            if (_settingsSubscription != 0)
+                sSettings.Unsubscribe(_settingsSubscription);
+            _settingsSubscription = 0;
             sStats.Unpublish("sessions");
             sStats.Unpublish("realm_beating");
             _heartbeat.Stop();
@@ -453,11 +500,7 @@ namespace
 
         std::chrono::milliseconds GetUpdateInterval() const override
         {
-            uint32 const configured = sConfigMgr.GetOption<uint32>("World.UpdateInterval", 50, true);
-            uint32 const interval = std::clamp<uint32>(configured, 1, 10000);
-            if (configured != interval && configured != _reportedInterval.exchange(configured))
-                AMBROSE_LOG(sLog, LogLevel::Warn, "server.gameserver", "World.UpdateInterval {} is outside 1..10000, using {} ms", configured, interval);
-            return std::chrono::milliseconds(interval);
+            return std::chrono::milliseconds(sSettings.Get<uint32>("World.UpdateInterval"));
         }
 
         void OnUpdate(std::chrono::milliseconds diff) override
@@ -467,7 +510,7 @@ namespace
         }
 
     private:
-        mutable std::atomic<uint32> _reportedInterval{ 0 };
+        uint64 _settingsSubscription = 0;
         RealmHeartbeat _heartbeat;
         DatabaseLoader _databases;
         std::shared_ptr<SessionContext> _context;

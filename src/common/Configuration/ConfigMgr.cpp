@@ -388,6 +388,7 @@ ConfigLoadResult ConfigMgr::Reload()
         next.File = _state.File;
         next.Arguments = _state.Arguments;
         next.Overrides = _state.Overrides;
+        next.Live = _state.Live;
         before = _state.Values;
     }
     std::filesystem::path const file = next.File;
@@ -460,7 +461,48 @@ std::string ConfigMgr::GetOption(std::string const& name, char const* defaultVal
     return GetOption<std::string>(name, defaultValue ? std::string(defaultValue) : std::string(), quiet);
 }
 
-std::optional<ConfigEntry> ConfigMgr::Resolve(std::string const& name) const
+void ConfigMgr::SetLiveValues(std::map<std::string, std::string> values)
+{
+    std::vector<std::string> changed;
+    {
+        std::lock_guard loadLock(_loadMutex);
+        std::set<std::string> keys;
+        std::map<std::string, std::optional<std::string>> before;
+        {
+            std::shared_lock lock(_stateMutex);
+            for (auto const& [key, value] : _state.Live)
+                keys.insert(key);
+        }
+        for (auto const& [key, value] : values)
+            keys.insert(key);
+        for (std::string const& key : keys)
+        {
+            std::optional<ConfigEntry> const entry = Resolve(key);
+            before[key] = entry ? std::optional<std::string>(entry->Value) : std::nullopt;
+        }
+        {
+            std::unique_lock lock(_stateMutex);
+            _state.Live = std::move(values);
+        }
+        for (std::string const& key : keys)
+        {
+            std::optional<ConfigEntry> const entry = Resolve(key);
+            std::optional<std::string> const after = entry ? std::optional<std::string>(entry->Value) : std::nullopt;
+            if (after != before[key])
+                changed.push_back(key);
+        }
+    }
+    if (changed.empty())
+        return;
+    {
+        std::lock_guard warningLock(_warningMutex);
+        for (std::string const& key : changed)
+            std::erase_if(_warnedKeys, [&key](std::string const& warned) { return warned == key || warned.starts_with(key + "="); });
+    }
+    Announce(changed);
+}
+
+std::optional<ConfigEntry> ConfigMgr::Resolve(std::string const& name, bool includeLive) const
 {
     std::string const environmentName = ToEnvironmentName(name);
     std::optional<std::string> environmentValue;
@@ -477,6 +519,9 @@ std::optional<ConfigEntry> ConfigMgr::Resolve(std::string const& name) const
         return ConfigEntry{ overrideIt->second, ConfigSourceKind::Override, {}, 0 };
     if (environmentValue)
         return ConfigEntry{ std::move(*environmentValue), ConfigSourceKind::Environment, environmentName, 0 };
+    if (includeLive)
+        if (auto const live = _state.Live.find(name); live != _state.Live.end())
+            return ConfigEntry{ live->second, ConfigSourceKind::Live, {}, 0 };
     auto const it = _state.Values.find(name);
     if (it == _state.Values.end())
         return std::nullopt;

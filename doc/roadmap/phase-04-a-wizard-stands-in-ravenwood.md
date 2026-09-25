@@ -809,12 +809,12 @@ Stores that load at startup share one reload path, so every later manager become
 
 **Acceptance**
 
-- [ ] Out-of-bounds or wrong-type value refused; nothing persisted
-- [ ] A set value survives a restart; `reset` returns to the config value
-- [ ] Exactly one change event per successful set
-- [ ] Every change writes one audit row with old, new, who and why
-- [ ] Editing an environment-locked key names the locking layer
-- [ ] `.settings set World.UpdateInterval 100` changes the measured tick within two ticks
+- [x] Out-of-bounds or wrong-type value refused; nothing persisted
+- [x] A set value survives a restart; `reset` returns to the config value
+- [x] Exactly one change event per successful set
+- [x] Every change writes one audit row with old, new, who and why
+- [x] Editing an environment-locked key names the locking layer
+- [x] `.settings set World.UpdateInterval 100` changes the measured tick within two ticks
 
 ### Detailed spec
 
@@ -829,6 +829,7 @@ Gameplay values and runtime options live in one typed registry, so the console, 
 - A config reload through 4.15 re-resolves every setting and raises change events only for keys whose effective value changed
 - src/server/scripts/Commands/cs_settings.cpp: `.settings list [category]`, `.settings get <key>`, `.settings set <key> <value> [reason]`, `.settings reset <key>`, `.settings history <key>`
 - doc/config/settings.md generated from the declarations, with default, bounds, unit and apply mode per key
+- Built as a live layer inside ConfigMgr, between the config files and the environment, which the registry fills with the persisted values that pass their checks, so every existing reader of an option and every hook that reapplies options on a configuration change sees a live value too; the game and login servers reapply the command prefix, command logging, default locale, session limits, realm heartbeat, login settings and realm refresh from `sSettings.Subscribe`, at the top of each tick. The start zone is not a setting: a new wizard's start comes from the playercreateinfo rows milestone 3.15 reads, so there is no Player.StartZone or Player.StartLocation to declare
 - First settings: Rate.XP.*, Rate.Gold.*, Rate.Drop.*, Rate.Respawn, plus the live-capable options from phases 1-4 (World.UpdateInterval, Zone.UnloadDelay, Zone.MobileIdReleaseDelay, Realm.HeartbeatInterval, Realm.DefaultRealm, Realm.OfflineAfterIntervals, Login.KeyTTL, Network.HandoffGrace, PublicAddress, Attach.Timeout, Player.StartZone, Player.StartLocation, Realm.Name, GM.CommandPrefix, GM.LogCommands and the phase 1-3 options)
 - src/test/server/shared/Settings/SettingsTest.cpp
 
@@ -841,12 +842,12 @@ Gameplay values and runtime options live in one typed registry, so the console, 
 
 **Acceptance**
 
-- [ ] Unit: an out-of-bounds or wrong-type value is refused with a message naming the bound or type, and nothing is persisted or audited
-- [ ] Integration: a set value survives a restart, and `.settings reset` returns the key to its config value
-- [ ] Unit: exactly one change event fires per successful set, and none for a refused one
-- [ ] Integration: every change writes one setting_audit row with old and new values, who made it, the source and the reason
-- [ ] Unit: `.settings set` on a key set by an environment variable is refused with a message naming that layer
-- [ ] Integration: `.settings set World.UpdateInterval 100` changes the measured tick within two ticks, with no restart
+- [x] Unit: an out-of-bounds or wrong-type value is refused with a message naming the bound or type, and nothing is persisted or audited. `SettingsTest.AWrongTypeOrOutOfBoundsValueIsRefusedNamingItAndNothingIsPersistedAuditedOrAnnounced`: `fast` is refused as not "a whole number of zero or more from 1 to 10000 ms", `20000` as outside "from 1 to 10000 ms", and a nine-byte command prefix as over its eight bytes, with the store never written and nothing announced
+- [x] Integration: a set value survives a restart, and `.settings reset` returns the key to its config value. `SettingsStoreTest.ASetValueSurvivesARestartAndAResetReturnsToTheConfigValue` against MariaDB: World.UpdateInterval set to 100 over the characters database reads 100 in a registry started afresh, the reset returns it to the file's 70, and a third start reads 70; `SettingsStoreTest.TheLoginDatabaseKeepsTheLoginServersSettings` does the same for Login.KeyTTL over the login database
+- [x] Unit: exactly one change event fires per successful set, and none for a refused one. `SettingsTest.ExactlyOneChangeIsAnnouncedPerSuccessfulSetAndNoneForARefusedOrUnchangedOne`: one set queues one change from 50 to 100, and setting the same value again or one out of bounds queues none and writes nothing
+- [x] Integration: every change writes one setting_audit row with old and new values, who made it, the source and the reason. `SettingsStoreTest.EveryChangeWritesOneAuditRowWithTheValuesWhoWhereAndWhy` against MariaDB: a set and a reset write two rows, newest first, each with the value before and after, the name and account of whoever made it, where it came in and why, and the refused set between them writes none
+- [x] Unit: `.settings set` on a key set by an environment variable is refused with a message naming that layer. `SettingsTest.AKeyAnEnvironmentVariableOrOverrideSetsIsLockedAndTheRefusalNamesThatLayer`: a set or reset of World.UpdateInterval while AMBROSE_WORLD_UPDATE_INTERVAL is set names that variable, and one of Zone.UnloadDelay under a command-line override names the override
+- [x] Integration: `.settings set World.UpdateInterval 100` changes the measured tick within two ticks, with no restart. `SettingsTickTest.SettingTheUpdateIntervalOnTheConsoleChangesTheMeasuredTickWithinTwoTicks` runs an app ticking at 20 ms whose tick is World.UpdateInterval, types `settings set World.UpdateInterval 100` on its console and measures at least 90 ms between the first and second ticks after it
 
 **Risks**
 

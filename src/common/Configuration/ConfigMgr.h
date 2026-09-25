@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Layered typed configuration: defaults, local config, conf.d drop-ins, AMBROSE_ environment variables, and overrides, with the shipped defaults kept readable under every layer, and the shape a subsystem declares an option it reads only at startup in, with the reason, where a key ending in a star stands for every key under that prefix.
+ * Layered typed configuration: defaults, local config, conf.d drop-ins, the live values the settings registry persists, AMBROSE_ environment variables, and overrides, with the shipped defaults kept readable under every layer, and the shape a subsystem declares an option it reads only at startup in, with the reason, where a key ending in a star stands for every key under that prefix.
  */
 
 #ifndef AMBROSE_CONFIGMGR_H
@@ -45,6 +45,7 @@ enum class ConfigSourceKind
     ModuleDefault,
     Config,
     ModuleConfig,
+    Live,
     Environment,
     Override
 };
@@ -117,7 +118,8 @@ public:
 
     std::string GetOption(std::string const& name, char const* defaultValue, bool quiet = false) const;
 
-    std::optional<ConfigEntry> Resolve(std::string const& name) const;
+    std::optional<ConfigEntry> Resolve(std::string const& name, bool includeLive = true) const;
+    void SetLiveValues(std::map<std::string, std::string> values);
     std::optional<ConfigEntry> ResolveDefault(std::string const& name) const;
     std::vector<std::string> GetKeysByString(std::string_view prefix) const;
     std::filesystem::path GetFilename() const;
@@ -148,6 +150,7 @@ private:
         std::map<std::string, ConfigEntry> Values;
         std::map<std::string, ConfigEntry> Defaults;
         std::map<std::string, std::string> Overrides;
+        std::map<std::string, std::string> Live;
     };
 
     static ConfigLoadResult Build(std::filesystem::path const& file, State& state);

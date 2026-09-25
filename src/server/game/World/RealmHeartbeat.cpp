@@ -60,6 +60,15 @@ void RealmHeartbeat::Configure(RealmHeartbeatSettings settings, Writer writer, C
     BeatNow();
 }
 
+void RealmHeartbeat::Reconfigure(RealmHeartbeatSettings settings)
+{
+    if (_beating && settings.RealmName != _settings.RealmName)
+        Stop();
+    uint64 const beats = _beats;
+    Configure(std::move(settings), std::move(_writer), std::move(_counter), std::move(_registrar), std::move(_canWrite));
+    _beats += beats;
+}
+
 void RealmHeartbeat::BeatNow()
 {
     if (!_beating || !_writer)

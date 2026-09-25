@@ -3,6 +3,8 @@
  * Login server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile and never saving an install it has no type dump for, loads account and login settings and the type dump, declares the login message table and checks it against the client's message definitions, refuses to serve clients from an install without a type dump, naming why and where ClientDir came from, or without both databases, opens the login and characters databases, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, listens for clients, and offers account console commands until shutdown, telling connected clients before it shuts down and closing the databases, which drains their callbacks, before its network threads stop.
  */
 
+#include "DatabaseSettingStore.h"
+#include "Settings.h"
 #include "CharacterCreateStore.h"
 #include "CharacterNameMgr.h"
 #include "CharacterRepository.h"
@@ -103,7 +105,7 @@ namespace
 
         bool LoadCreationRows()
         {
-            sCharacterNameMgr.SetDefaultLocale(Config().GetOption<std::string>("Locale.Default", "en-US", true));
+            sCharacterNameMgr.SetDefaultLocale(sSettings.Get<std::string>("Locale.Default"));
             if (!WorldDatabase.IsOpen())
             {
                 LOG_WARN("server.loginserver", "WorldDatabaseInfo is empty, so no wizard can be created until it names a world database");
@@ -244,6 +246,15 @@ namespace
                 LOG_ERROR("server.loginserver", "Cannot open the login, characters and world databases");
                 return false;
             }
+            if (!LoginDatabase.IsOpen())
+                LOG_WARN("server.loginserver", "LoginDatabaseInfo is empty, so live settings take their config values and cannot be changed or kept");
+            if (!StartSettings(LoginDatabase.IsOpen() ? SettingStores::ForLogin() : nullptr))
+            {
+                _databases.Close();
+                return false;
+            }
+            sLoginMgr.LoadSettings(Config());
+            _settingsSubscription = sSettings.Subscribe([this](SettingChange const& change) { ApplySetting(change); });
             if (std::vector<std::string> errors; WorldDatabase.IsOpen() && !sObjectSchemaMgr.LoadClasses(errors))
             {
                 for (std::string const& problem : errors)
@@ -311,6 +322,29 @@ namespace
             return true;
         }
 
+        void ApplySetting(SettingChange const& change)
+        {
+            std::string_view const key = change.Key;
+            if (key.starts_with("Login.") || key.starts_with("Character."))
+                sLoginMgr.LoadSettings(Config());
+            else if (key == "Locale.Default")
+                sCharacterNameMgr.SetDefaultLocale(sSettings.Get<std::string>("Locale.Default"));
+            else if (key.starts_with("Realm."))
+                _realms.Configure(RealmLoaderSettings::Load(Config()));
+            else if (_context && key.starts_with("Network."))
+            {
+                std::vector<std::string> problems;
+                _context->SetSettings(SessionSettings::Load(Config(), &problems));
+                for (std::string const& problem : problems)
+                    LOG_WARN("server.loginserver", "{}", problem);
+            }
+        }
+
+        uint8 GetSettingApps() const override
+        {
+            return SettingApps::Login;
+        }
+
         std::chrono::milliseconds GetUpdateInterval() const override
         {
             return RealmTick;
@@ -328,6 +362,9 @@ namespace
 
         void OnStop() override
         {
+            if (_settingsSubscription != 0)
+                sSettings.Unsubscribe(_settingsSubscription);
+            _settingsSubscription = 0;
             sStats.Unpublish("sessions");
             sStats.Unpublish("realms");
             sStats.Unpublish("realms_online");
@@ -344,6 +381,7 @@ namespace
 
     private:
         std::shared_ptr<SessionContext> _context;
+        uint64 _settingsSubscription = 0;
         std::unique_ptr<SocketMgr<LoginSession>> _sockets;
         RealmLoader _realms;
         DatabaseLoader _databases;

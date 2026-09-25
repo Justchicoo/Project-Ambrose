@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Registers every characters database statement with its name, SQL, and the connections that prepare it: an account's live characters in creation order, at most MaxCharactersListed of them, and one character by guid, each with its appearance, inserting a character and its appearance, soft deletion of an offline character that remembers the owner and restoring it, counting an account's live characters the way the list finds them, the online flag, and the highest guid ever used, kept in id_sequences so deleted rows cannot hand a guid out again.
+ * Registers every characters database statement with its name, SQL, and the connections that prepare it: an account's live characters in creation order, at most MaxCharactersListed of them, and one character by guid, each with its appearance, inserting a character and its appearance, soft deletion of an offline character that remembers the owner and restoring it, counting an account's live characters the way the list finds them, the online flag, and the highest guid ever used, kept in id_sequences so deleted rows cannot hand a guid out again. It also registers the live settings statements: every persisted value, setting and removing one, writing a change's audit row, and reading a key's newest audit rows.
  */
 
 #include "CharacterDatabase.h"
@@ -40,4 +40,9 @@ void CharacterDatabaseConnection::DoPrepareStatements()
         "COALESCE((SELECT `highest` FROM `id_sequences` WHERE `name` = 'character'), 0))", ConnectionFlags::Both);
     PrepareStatement(CHAR_INS_ID_SEQUENCE, "CHAR_INS_ID_SEQUENCE", "INSERT INTO `id_sequences` (`name`, `highest`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `highest` = GREATEST(`highest`, ?)",
         ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_SETTINGS, "CHAR_SEL_SETTINGS", "SELECT `key`, `value` FROM `settings`", ConnectionFlags::Both);
+    PrepareStatement(CHAR_REP_SETTING, "CHAR_REP_SETTING", "INSERT INTO `settings` (`key`, `value`, `updated_by`, `updated_at`) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `updated_by` = VALUES(`updated_by`), `updated_at` = VALUES(`updated_at`)", ConnectionFlags::Both);
+    PrepareStatement(CHAR_DEL_SETTING, "CHAR_DEL_SETTING", "DELETE FROM `settings` WHERE `key` = ?", ConnectionFlags::Both);
+    PrepareStatement(CHAR_INS_SETTING_AUDIT, "CHAR_INS_SETTING_AUDIT", "INSERT INTO `setting_audit` (`key`, `old_value`, `new_value`, `who`, `account_id`, `source`, `reason`, `created`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_SETTING_AUDIT, "CHAR_SEL_SETTING_AUDIT", "SELECT `id`, `key`, `old_value`, `new_value`, `who`, `account_id`, `source`, `reason`, `created` FROM `setting_audit` WHERE `key` = ? ORDER BY `id` DESC LIMIT ?", ConnectionFlags::Both);
 }

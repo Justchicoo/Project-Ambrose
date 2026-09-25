@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, opens the admin API with the app's own routes and the live log stream already in it before the app starts, keeping a generated token in the data folder or, where the machine names none, beside the config file, and refuses to run when its binding is unsafe, stops gracefully on signals, requests, the shutdown command or POST /api/shutdown, now or after a delay either can cancel, with the reason logged when the delay runs out, answers GET /api/settings with the options the app declares restart-required, moves the one lifecycle state the console and the admin API both read, tells an app whether it runs only to check its start, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use, and registers the config reload target before the app starts and the messages one when the app names the install its definitions come from, which it only knows once it has started.
+ * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, opens the admin API with the app's own routes and the live log stream already in it before the app starts, keeping a generated token in the data folder or, where the machine names none, beside the config file, and refuses to run when its binding is unsafe, stops gracefully on signals, requests, the shutdown command or POST /api/shutdown, now or after a delay either can cancel, with the reason logged when the delay runs out, answers GET /api/settings with the options the app declares restart-required, moves the one lifecycle state the console and the admin API both read, tells an app whether it runs only to check its start, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use, and registers the config reload target before the app starts and the messages one when the app names the install its definitions come from, which it only knows once it has started. An app that reads live settings declares them as soon as its configuration loads, so nothing reads one undeclared, opens them over its own database once that is open, re-resolves them when the configuration changes, and hands their changes to subscribers at the top of each tick.
  */
 
 #include "ServerApp.h"
@@ -28,6 +28,8 @@
 #include "LogStream.h"
 #include "MessageRegistry.h"
 #include "ReloadMgr.h"
+#include "Settings.h"
+#include "SettingsCommand.h"
 #include "SignalHandler.h"
 #include "StringUtil.h"
 #include "TerminalConsoleInput.h"
@@ -386,6 +388,8 @@ void ServerApp::RegisterReloadTargets()
     {
         if (changed.empty())
             return;
+        if (GetSettingApps() != 0)
+            sSettings.Resolve();
         bool touchesLogging = false;
         for (std::string const& key : changed)
             if (key.starts_with("Logger.") || key.starts_with("Appender."))
@@ -529,6 +533,12 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
         return EXIT_FAILURE;
     }
     _log.AttachConfigWarnings(_config);
+    if (!DeclareSettings())
+    {
+        _err << _info.Name << ": its live settings could not be declared\n";
+        FinishShutdown();
+        return EXIT_FAILURE;
+    }
 
     _io.Restart();
     _io.Poll();
@@ -790,8 +800,58 @@ void ServerApp::RunConsoleLine(std::string const& line)
     }
 }
 
+uint8 ServerApp::GetSettingApps() const
+{
+    return 0;
+}
+
+bool ServerApp::DeclareSettings()
+{
+    uint8 const apps = GetSettingApps();
+    if (apps == 0)
+        return true;
+    std::vector<std::string> errors;
+    std::vector<std::string> warnings;
+    if (sSettings.DeclareFor(apps, errors))
+        sSettings.Start(_config, nullptr, warnings);
+    for (std::string const& error : errors)
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, "server.settings", "{}", error);
+        _err << "  " << error << "\n";
+    }
+    for (std::string const& warning : warnings)
+        AMBROSE_LOG(_log, LogLevel::Warn, "server.settings", "{}", warning);
+    if (!errors.empty())
+        return false;
+    _commands.Register({ "settings", std::string(SettingsCommand::Arguments), std::string(SettingsCommand::Help), true,
+        [](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
+        {
+            return SettingsCommand::Run(sSettings, arguments, SettingAuthor{ "console", 0, "console" }, [&reply](std::string_view line) { reply(line); });
+        } });
+    return true;
+}
+
+bool ServerApp::StartSettings(std::shared_ptr<SettingStore> store)
+{
+    std::vector<std::string> warnings;
+    bool const started = sSettings.Start(_config, std::move(store), warnings);
+    for (std::string const& warning : warnings)
+        AMBROSE_LOG(_log, LogLevel::Warn, "server.settings", "{}", warning);
+    if (!started)
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, "server.settings", "The live settings could not be opened");
+        return false;
+    }
+    std::vector<SettingView> const views = sSettings.List();
+    std::size_t const live = static_cast<std::size_t>(std::count_if(views.begin(), views.end(), [](SettingView const& view) { return view.Layer == SettingLayer::Live; }));
+    AMBROSE_LOG(_log, LogLevel::Info, "server.settings", "{} live setting(s) are open, {} of them holding a value set live", views.size(), live);
+    return true;
+}
+
 void ServerApp::FinishShutdown()
 {
+    if (GetSettingApps() != 0)
+        sSettings.Clear();
     _lifecycle = AppLifecycle::Stopped;
     _log.DetachConfigWarnings();
     _log.Shutdown();
@@ -811,6 +871,7 @@ void ServerApp::ScheduleUpdate()
         auto const now = std::chrono::steady_clock::now();
         auto const diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - _lastUpdate);
         _lastUpdate = now;
+        sSettings.DispatchChanges();
         if (GetUpdateInterval().count() > 0)
         {
             OnUpdate(diff);
