@@ -38,7 +38,40 @@ There is a second door, in case it suits me better later: a named set of roadmap
 
 ## What it costs to run any of it
 
-There are no prebuilt binaries. Everything above needs CMake 3.25+, vcpkg with `VCPKG_ROOT` set, and Visual Studio 2022+ or GCC 13+: `cmake --preset windows-msvc-x64` then `cmake --build --preset windows-debug`, or `linux-gcc` and `linux-gcc-debug`. The first configure builds every dependency from source and takes about an hour. A login server also needs a MySQL or MariaDB it can reach - the default is `127.0.0.1;3306;ambrose;ambrose;ambrose_login`, and an unreachable one stops startup - and `dbimport` creates the databases. A tool of my own in `contrib/tools/` needs none of that: it stands alone with its own build file or script, and pins its own dependencies inside its own folder rather than touching the repository's manifests.
+There are no prebuilt binaries. Everything is free, so when my item needs something I lack, install it rather than work around it. Every item needs Git and Python 3.12. A finding answered with the built tools, or anything that runs a server, also needs a C++ build. On Windows 11:
+
+```
+winget install -e --id Git.Git
+winget install -e --id Python.Python.3.12
+winget install -e --id Kitware.CMake
+winget install -e --id Docker.DockerDesktop
+winget install -e --id Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+git clone https://github.com/microsoft/vcpkg C:\vcpkg
+C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+setx VCPKG_ROOT C:\vcpkg
+```
+
+On Ubuntu 24.04:
+
+```
+sudo apt-get update
+sudo apt-get install -y build-essential cmake ninja-build git curl zip unzip tar pkg-config python3 python3-venv docker.io docker-compose-v2
+sudo usermod -aG docker "$USER"
+git clone https://github.com/microsoft/vcpkg "$HOME/vcpkg"
+"$HOME/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+echo 'export VCPKG_ROOT="$HOME/vcpkg"' >> ~/.bashrc
+```
+
+Clone vcpkg whole, never with `--depth 1`, because `vcpkg.json` pins a baseline commit a shallow clone cannot find. Open a new terminal afterwards. Then `cmake --preset windows-msvc-x64` and `cmake --build --preset windows-debug`, or `linux-gcc` and `linux-gcc-debug`. The first configure builds every dependency from source and takes about an hour.
+
+A login server also needs a MySQL or MariaDB it can reach. The default is `127.0.0.1;3306;ambrose;ambrose;ambrose_login`, an unreachable one stops startup, and `dbimport` creates the databases. Docker gives one in a minute, the second line succeeding once the server has started:
+
+```
+docker run -d --name ambrose-mysql -p 127.0.0.1:3306:3306 -e MYSQL_ROOT_PASSWORD=root mysql:8.0
+docker exec ambrose-mysql mysql -uroot -proot -e "CREATE USER 'ambrose'@'%' IDENTIFIED BY 'ambrose'; GRANT ALL ON *.* TO 'ambrose'@'%';"
+```
+
+A client driver scenario also needs Wireshark with Npcap and its loopback adapter, `winget install -e --id WiresharkFoundation.Wireshark`, and my own client installed. A tool of my own in `contrib/tools/` needs none of the build: it stands alone with its own build file or script, and pins its own dependencies inside its own folder rather than touching the repository's manifests.
 
 ## Match the item to what I have before recommending one
 
@@ -96,9 +129,10 @@ A merged finding stays `claimed` and nothing is built on it until Ambrose re-der
 7. Prefer the smallest thing that answers the question. A tool that reads only what it needs beats one that reads everything: classify before you hash, compare cheap fields before expensive ones, and never read a whole installation where a size comparison would do.
 8. **Whatever I am proving something against has to come from outside the thing being proved.** A corpus whose expected answers were produced by the tool it tests, a fixture built from my own reading of a route rather than from the route, a finding whose evidence is my own tool agreeing with itself: each is green and each proves nothing. The milestone track next door learned this on a check about what a real client sends, which a test that wrote the message itself could never earn. Name where the input came from, and if it came from me, say so.
 9. **A checker is worth only the broken input it rejects.** For every rule a validator states, make one copy of the fixture that breaks only that rule and show the validator failing on it. The C-59 validator called any gap followed by samples a restart, so it passed a series with no restart at all.
-10. Make a tool fail usefully. Name the file and the reason, exit non-zero, and carry on past what can be skipped rather than losing a whole report to one unreadable file. Say in its README what would make its output wrong.
-11. Write the files in the required shape, then have me run every check below and fix whatever they print.
-12. Write the pull request description, replacing the template's own prompts rather than leaving them in place: the item id, what the change is, the commands run and what they printed, and what would disprove it. A description that is still the template tells a reviewer nothing and is the first thing they read.
+10. **Run everything I ship, and never reshape a file to pass a check.** A syntax check is not a run: build the tool, run the scenario through the driver, apply the SQL to a real MySQL and MariaDB, and paste what each printed. Find every path, option and port a file relies on in the tree first. A milestone pull request once copied a configuration file from a folder it has never lived in, and it renamed a `Dockerfile` to `.txt` to get past codestyle. If a check refuses a legitimate file, say so in the pull request, and the maintainer fixes the check.
+11. Make a tool fail usefully. Name the file and the reason, exit non-zero, and carry on past what can be skipped rather than losing a whole report to one unreadable file. Say in its README what would make its output wrong.
+12. Write the files in the required shape, then have me run every check below and fix whatever they print.
+13. Write the pull request description, replacing the template's own prompts rather than leaving them in place: the item id, what the change is, the commands run and what they printed, and what would disprove it. A description that is still the template tells a reviewer nothing and is the first thing they read.
 
 ## Before the pull request
 

@@ -46,7 +46,7 @@ In the phase file my milestone is a section headed `## <id> <title>`, and it hol
 1. **Paths.** My branch is named `milestone/<id>-<short-name>` and that name is what lets CI accept a change under `src/`. I may change the source tree, `data/sql/updates/`, `apps/` and `doc/`, plus **my own phase file and no other**. I may not touch `.github/`, `apps/ci/`, `apps/codestyle/`, `apps/progress/`, `doc/progress/`, `doc/work/`, `packages/ui/src/tokens/`, `README.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `LICENSE`, `THIRD-PARTY-NOTICES.md`, `CMakePresets.json`, `vcpkg.json`, `.gitignore`, `doc/ROADMAP.md`, `doc/ARCHITECTURE.md`, `doc/REVIEWING.md`, `doc/CONTRIBUTOR-TRACK.md`, `doc/MILESTONE-TRACK.md`, `contrib/README.md`, `contrib/AI-START-HERE.md` or `contrib/AI-MILESTONES-HERE.md`. `python apps/ci/ci_contrib_paths.py --range upstream/main...HEAD --branch <my branch>` enforces exactly that. A new dependency in `vcpkg.json` is a proposal in the pull request, not a commit.
 2. **No game data in the repository, ever.** That rule is why this repository can exist in public. No file from the client, no extracted asset, no dump, no capture, no run of hex or base64 pasted from one. `apps/ci/ci_forbidden_files.py` refuses `.wad`, `.nif`, `.kf`, `.kfm`, `.pcap` and `.pcapng`, any file beginning `KIWAD` or `BINd`, any JSON holding both `classes` and `version`, client protocol XML, and anything over 1,000,000 bytes. Offsets, field names, sizes, counts and hashes are facts about the data and are welcome; the bytes are not. Code reads my own installation at run time, behind an environment variable, and skips when it is absent. That is the line.
 3. **Clean room, and nothing that names another project.** Nothing copied, translated or ported from another Wizard101 server, emulator, wiki or site, and **nothing that names one, or names one of its files**. Behaviour may be studied; the name stays out. This one is not recoverable by a later commit: a pull request's diff is kept by the host forever, so a name that reaches one is permanent. This repository had to be deleted and re-uploaded because two file paths from other projects, written into planning documents months earlier, survived a full history rewrite inside pull request refs. `apps/ci/ci_forbidden_files.py` now refuses both the names and any path ending in `.cs`, `.rs`, `.csproj` or `.sln`, since this server is C++ and its tools are Python, so such a path is by definition somebody else's file. AzerothCore may be studied for structure, which is where the layout comes from, and not for code.
-4. **House style.** Every file I add starts with the branding header and a one-line brief of what it holds and does, and carries **no other comment anywhere**. The forms are exactly: C and C++, a block comment whose lines are ` * Project Ambrose by Imjustchico` then ` * <brief>`; CMake, shell, PowerShell, Python, YAML and conf, `# Project Ambrose by Imjustchico` then `# <brief>`; SQL, the same with `--`; Markdown, one HTML comment on line 1 reading `Project Ambrose by Imjustchico: <brief>`. The handle is the maintainer's and never changes to mine. JSON and binary files carry no header. Files are UTF-8 with no byte order mark, LF endings, no trailing whitespace, ending in a newline, ASCII unless the content is itself a translation. `python apps/codestyle/codestyle.py` is the judge. Write the brief as a sentence about what the file does, not a label: read a neighbouring file's header and match it.
+4. **House style.** Every file I add starts with the branding header and a one-line brief of what it holds and does, and carries **no other comment anywhere**. The forms are exactly: C and C++, a block comment whose lines are ` * Project Ambrose by Imjustchico` then ` * <brief>`; CMake, shell, PowerShell, Python, YAML and conf, `# Project Ambrose by Imjustchico` then `# <brief>`; SQL, the same with `--`; Markdown, one HTML comment on line 1 reading `Project Ambrose by Imjustchico: <brief>`. The handle is the maintainer's and never changes to mine. JSON and binary files carry no header, and no `_comment` key standing in for one. Files are UTF-8 with no byte order mark, LF endings, no trailing whitespace, ending in a newline, ASCII unless the content is itself a translation. `python apps/codestyle/codestyle.py` is the judge. Write the brief as a sentence about what the file does, not a label: read a neighbouring file's header and match it.
 5. **C++20, and the architecture as written.** The folder a subsystem belongs to, the layering order, dated SQL update files, content in the world database, custom content in scripts or modules rather than core edits. A milestone is not the place to re-litigate a settled Decision.
 6. **Evidence names nothing personal.** This repository is public. A ticked check that quotes a path, account, address or machine name writes `<account>`, `<address>` and so on instead. What matters is the behaviour the line shows.
 7. **Never** run KingsIsle's launcher or patcher against an install I want kept at a fixed revision, and never capture or contact KingsIsle's own servers. Everything here is done against my own installation and my own server.
@@ -71,7 +71,7 @@ The name of the test that runs it, or the tool run and what it printed, or the s
 2. `git fetch upstream`, branch from `upstream/main` with the name the table below gives, and **open the draft pull request straight away**, with the plan in its description rather than an empty body. That reserves the milestone within minutes and, more importantly, puts the approach where a reviewer can see it before a week of work rests on it. One milestone here was rebuilt from scratch after review because nobody saw the design until it was finished.
 3. Read the milestone's whole section in its phase file, then the phase's review notes, then whatever `doc/TOOLS.md` and `src/tools` already have for the format it touches.
 4. Write the plan out for me: each acceptance check, what will earn it, and which I cannot earn on this machine. That list is the pull request description at the end, so writing it now costs nothing.
-5. Build, so a broken toolchain surfaces before the work, not after it: `cmake --preset windows-msvc-x64` then `cmake --build --preset windows-debug` and `ctest --preset windows-debug`.
+5. Install whatever the setup section's first step lists that I lack, then build, so a broken toolchain surfaces before the work, not after it: `cmake --preset windows-msvc-x64` then `cmake --build --preset windows-debug` and `ctest --preset windows-debug`.
 6. Then write the failing test, then the code.
 
 ## How I want you to work
@@ -109,7 +109,31 @@ A milestone's deliverables name the folder. Where they and this disagree, follow
 
 Walk me through this once, step by step, waiting for what I actually see at each one. It ends with the servers, the panel and my own client running against each other, which is the setup the maintainer's own sessions work in. **Only the steps my milestone needs are worth doing first**, and the end of this section says which those are. None of it changes what I may take: the board decides that, and a machine set up beautifully gives me no claim on a held milestone.
 
-**1. The toolchain.** CMake 3.25 or newer, vcpkg with `VCPKG_ROOT` set, and Visual Studio 2022+ or GCC 13+. Node 20+ only if I touch the panel, and a MySQL or MariaDB for anything that stores something.
+**1. The installs, once.** Everything here is free, so when something is missing, install it; never work around it or call a check gated because a tool is absent. On Windows 11, from a terminal:
+
+```
+winget install -e --id Git.Git
+winget install -e --id Kitware.CMake
+winget install -e --id Python.Python.3.12
+winget install -e --id Docker.DockerDesktop
+winget install -e --id Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+git clone https://github.com/microsoft/vcpkg C:\vcpkg
+C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+setx VCPKG_ROOT C:\vcpkg
+```
+
+On Ubuntu 24.04:
+
+```
+sudo apt-get update
+sudo apt-get install -y build-essential cmake ninja-build git curl zip unzip tar pkg-config python3 python3-venv clang docker.io docker-compose-v2
+sudo usermod -aG docker "$USER"
+git clone https://github.com/microsoft/vcpkg "$HOME/vcpkg"
+"$HOME/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+echo 'export VCPKG_ROOT="$HOME/vcpkg"' >> ~/.bashrc
+```
+
+Clone vcpkg whole, never with `--depth 1`: `vcpkg.json` pins a baseline commit, and a shallow clone cannot find it. Open a new terminal afterwards so `VCPKG_ROOT` and the docker group take effect. Node 20 or newer is needed only for panel work: `winget install -e --id OpenJS.NodeJS.LTS` on Windows, `sudo snap install node --classic --channel=22` on Ubuntu, whose own package is too old. Then build and test:
 
 ```
 cmake --preset windows-msvc-x64
@@ -119,7 +143,14 @@ ctest --preset windows-debug
 
 On Linux the presets are `linux-gcc` and `linux-gcc-debug`, and `doc/guides/linux.md` is a guide somebody walked on Ubuntu 24.04. The first configure builds every dependency from source and takes about an hour; later ones are fast. The build is warnings-as-errors on both compilers, and MSVC and GCC disagree about what is a warning, so tell me which platform I built on and we say so in the pull request.
 
-**2. The databases.** Three of them, `ambrose_login`, `ambrose_characters` and `ambrose_world`, created by the `dbimport` tool in the build's output folder rather than by hand. The default connection string for each is `127.0.0.1;3306;ambrose;ambrose;ambrose_login` and so on, meaning host, port, user, password, database, so the quickest start is a MySQL user named `ambrose` with password `ambrose` that may create databases. Anything else goes in `AMBROSE_LOGIN_DATABASE_INFO`, `AMBROSE_CHARACTER_DATABASE_INFO` and `AMBROSE_WORLD_DATABASE_INFO`, or in `dbimport.conf`. `dbimport` opens each pool once to prove it works, then exits 0, or 1 naming the first failure. The database tests are separate: they run only when `AMBROSE_TEST_DB` holds a connection string such as `127.0.0.1;3306;root;root;ambrose_test`, and each one makes uniquely named databases and drops them.
+**2. The databases.** Three of them, `ambrose_login`, `ambrose_characters` and `ambrose_world`, created by the `dbimport` tool in the build's output folder rather than by hand. The default connection string for each is `127.0.0.1;3306;ambrose;ambrose;ambrose_login` and so on, meaning host, port, user, password, database, so the quickest start is a MySQL user named `ambrose` with password `ambrose` that may create databases. Docker gives exactly that, and MySQL 8.0 is what CI tests against:
+
+```
+docker run -d --name ambrose-mysql -p 127.0.0.1:3306:3306 -e MYSQL_ROOT_PASSWORD=root mysql:8.0
+docker exec ambrose-mysql mysql -uroot -proot -e "CREATE USER 'ambrose'@'%' IDENTIFIED BY 'ambrose'; GRANT ALL ON *.* TO 'ambrose'@'%';"
+```
+
+The second line fails for the first half minute while the server starts, so run it again until it succeeds. If port 3306 is taken, map another and name it in the connection strings below. A milestone that writes SQL is also run against MariaDB, the same way with `mariadb:11` on another port, because a file that parses on one of them can fail on the other. Anything else goes in `AMBROSE_LOGIN_DATABASE_INFO`, `AMBROSE_CHARACTER_DATABASE_INFO` and `AMBROSE_WORLD_DATABASE_INFO`, or in `dbimport.conf`. `dbimport` opens each pool once to prove it works, then exits 0, or 1 naming the first failure. The database tests are separate: they run only when `AMBROSE_TEST_DB` holds a connection string such as `127.0.0.1;3306;root;root;ambrose_test`, and each one makes uniquely named databases and drops them.
 
 **3. The configuration files.** Every app needs its own `<app>.conf` next to the executable, copied from the `<app>.conf.dist` the build puts there. Started without one, an app exits naming the full path it wanted and the `.dist` to copy, so the error is the instruction. `doc/config/README.md` has the file format and the layers, and `doc/config/<app>.md` documents every option that app takes, because the files themselves carry no comments beyond their header.
 
@@ -168,7 +199,9 @@ Three build traps on Windows, each of which has cost somebody an hour here:
 
 Every one of these came from real work on this repository, most of it from pull requests on this track. None of them was carelessness, and each cost a round trip.
 
-**The Linux leg fails on warnings MSVC never mentions.** The build is warnings-as-errors on both compilers, and GCC refuses things MSVC accepts. Three that have already bitten:
+**The Linux leg fails on warnings MSVC never mentions.** The build is warnings-as-errors on both compilers, and GCC refuses things MSVC accepts. Four that have already bitten:
+
+- A constructor's initialiser list written in a different order from the members it sets: GCC calls that `-Werror=reorder`, because members are always initialised in declaration order whatever the list says. Write the list in the order the header declares them. 17.35's first push failed the Linux leg on exactly this.
 
 - A range loop that binds by value: `for (auto const [tag, expected] : std::array<std::pair<std::string_view, uint8>, 8>{...})` copies each pair, and GCC calls that `-Werror=range-loop-construct`. Bind by reference, `auto const&`.
 - An aggregate initialised with fewer members than it has: GCC calls that `-Werror=missing-field-initializers`. Before changing my call site, look at the structure: this has bitten three times here, and each time the real cause was a few members with no default initialiser, so naming any one field could never compile on GCC whatever the caller wrote. Giving those members defaults fixes it for everyone, and is the maintainer's to take if the structure is not mine to change.
@@ -192,6 +225,22 @@ If I can only build on one platform, say so and let the leg tell us, but expect 
 - A check another milestone shares word for word is earned by the same run, so tick every milestone that shares it and say so. One locale round-trip test closed three milestones at once because their last check was the same sentence.
 - A check that describes work belonging to a different milestone cannot be earned here. Say which, and why, in the description. Do not tick it and do not leave it silent: 4.04 carries three checks that describe 4.05, and that was a flaw in the roadmap rather than in the contribution.
 - A check may already be earned by a test that exists. That is a real finding and worth a pull request of its own: run the test, tick the box, and quote the run.
+
+**When a check refuses a real file, the check is fixed, not the file.** 17.23 renamed its `Dockerfile` to `ambrose-dockerfile.txt` and its systemd unit to `.conf` and then `.txt` to get past the codestyle and forbidden-file checks. The files were then no longer what Docker and systemd look for, and the rule the checks were missing stayed hidden. If a check has no rule for a legitimate file type, stop and say so in the draft: `apps/codestyle` and `apps/ci` are the maintainer's, who adds the rule, as happened for Dockerfiles and systemd units the same day.
+
+**Checking syntax is not running it.** "The JSON parses and the shell has no syntax errors" was the whole verification of an image whose build stopped at its first `cmake` line, because the build stage never installed vcpkg. Build what you ship and run it: `docker build`, `docker compose up`, the install script in a throwaway container or virtual machine, the service started and stopped. Paste what each printed into the description.
+
+**A check is gated only by what you cannot get.** Docker, WSL, a virtual machine and a MySQL or MariaDB are installs, not gates. Only the maintainer's own install at a named revision, their Pterodactyl panel, a second physical machine or hardware you do not own make a check the maintainer's. 17.23 listed its Compose and time zone checks as gated when each needed only Docker.
+
+**Find every path, option and port in the tree before a script relies on it.** 17.23's scripts copied `supervisor.conf.dist` from `conf/dist/`, where it has never been, since the build puts each app's `.conf.dist` beside its executable. Its Compose file published the admin ports 12020 and 12343 and not the ports players use, 12000, 12333 and 12500. List the build output, grep the app's `.conf.dist` for the option or the port, and quote what you found in the description.
+
+**A script is not the code a deliverable names.** 17.23 asks for `supervisor --install-service`. Scripts that call `sc.exe` register a program Windows kills after 30 seconds with error 1053, because only code inside the supervisor can answer the Service Control Manager. When a deliverable names a flag, a class or a file under `src/`, that is what gets built, and a script beside it is extra.
+
+**Use the exact name a milestone gives, never a near one.** 17.35 asks for the `panel.settings` permission. Its pull request used `settings.edit`, which the catalog also holds and which means an app's own settings, so anyone allowed to edit a game server's settings could have changed the panel's SMTP password. Catalogs, settings and message tables are full of near misses, so grep for the exact name the acceptance checks use.
+
+**New code gets the test its siblings have.** Every panel route has a server-side test beside the others in `src/test/server/apps/supervisor`. A route with only browser tests leaves the store logic behind it untested, however green the page is.
+
+**Nothing may point at what does not exist.** An egg naming an image nobody has published, or a script copying from a folder the build never makes, fails on its first use. If the milestone needs an artifact that does not exist yet, say so in the draft rather than naming one.
 
 **A ticked box stays ticked.** When a rebase or a merge meets a conflict in the phase file, keep every tick `upstream/main` has, and never replace the whole file with my branch's older copy. CI refuses a push that turns a ticked box back into an empty one unless the commit message says `Unticks:` and why. On 2026-09-25 a landing that copied a phase file whole from an older branch silently un-ticked eight checks another session had earned.
 
@@ -235,6 +284,12 @@ That first line is the board again: my milestone should still say `building` wit
 Three dots, and the remote branch my pull request targets, never a local `main`, because a stale or moved-on `main` makes that check flag files I never touched. `upstream` is whichever of my remotes is github.com/Justchicoo/Project-Ambrose; a clone of my own fork has none until I add it with `git remote add upstream https://github.com/Justchicoo/Project-Ambrose.git`. `git status` must be clean: an extracted file, a dump or a generated database file left in the tree is the thing rule 2 exists to stop, and several milestones generate exactly those.
 
 Every commit on the branch needs a trailer naming you, such as `Co-Authored-By: <your model name> <noreply@example.com>`; the checker fails any commit in the range without one, not only the last.
+
+Three more checks that no script makes for me:
+
+- **Everything I ship has run.** Every image built, every Compose file brought up, every script and service run once in a throwaway container or virtual machine, and what each printed is in the description. A syntax check does not count.
+- **Every name the acceptance checks use is the one I used.** Grep the phase file's permission, setting, message and route names against my diff, and the tree for every path and port my scripts and configuration rely on.
+- **No file was renamed or reshaped to pass a check.** If a check refuses a legitimate file, the description says which check and which file, and the maintainer fixes the check.
 
 **Keep every message short and plain.** A commit title is a few words saying what changed. Most commits need no body at all, and one is written only where a later reader must know something to change the code safely. The pull request description answers the questions the template asks and stops. None of them argue, narrate what was tried, explain what was reverted, or say what somebody should do next. Work content only.
 
