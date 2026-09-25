@@ -31,6 +31,7 @@ RUN mkdir -p /var/lib/ambrose/{config,data,logs,backups,client} \
 
 USER ambrose
 WORKDIR /var/lib/ambrose
+ENV PATH="/opt/ambrose/bin:${PATH}"
 EXPOSE 12020 12080 12343 12500
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
