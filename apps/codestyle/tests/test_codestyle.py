@@ -126,6 +126,17 @@ class HashFamilyTests(CheckerTestCase):
         self.assertIssue(".editorconfig", HASH_HEADER + "root = true\n; note\n", "comment", 4)
         self.assertIssue("conf/dist/gameserver.conf.dist", HASH_HEADER + "# Port = 1\nPort = 12000\n", "comment", 3)
 
+    def test_dockerfiles_take_the_hash_header_and_refuse_comments(self):
+        self.assertClean("apps/packaging/Dockerfile", HASH_HEADER + "FROM ubuntu:24.04\nRUN echo '#1'\n")
+        self.assertIssue("apps/packaging/Dockerfile", HASH_HEADER + "FROM ubuntu:24.04\n# note\n", "comment", 4)
+        self.assertClean("apps/packaging/Dockerfile.runtime", HASH_HEADER + "FROM ubuntu:24.04\n")
+        self.assertIssue(".dockerignore", HASH_HEADER + "build/\n# note\n", "comment", 4)
+
+    def test_systemd_units_refuse_both_comment_forms(self):
+        self.assertClean("apps/packaging/ambrose.service", HASH_HEADER + "[Unit]\nDescription=Ambrose\n")
+        self.assertIssue("apps/packaging/ambrose.service", HASH_HEADER + "[Unit]\n; note\n", "comment", 4)
+        self.assertIssue("apps/packaging/ambrose.timer", HASH_HEADER + "[Timer]\n# note\n", "comment", 4)
+
     def test_dist_templates_use_their_inner_file_type(self):
         self.assertClean("conf/dist/config.cmake.dist", HASH_HEADER + 'set(TOOLS ON CACHE BOOL "Build tools")\n')
         self.assertIssue("conf/dist/config.cmake.dist", HASH_HEADER + "set(TOOLS ON) # note\n", "comment", 3)

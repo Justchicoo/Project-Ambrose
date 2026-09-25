@@ -51,7 +51,9 @@ def classify(relpath):
         return "editorconfig"
     if lower.endswith(".conf.dist") or lower.endswith(".conf"):
         return "conf"
-    if lower in (".npmrc", ".nvmrc", ".prettierignore", ".eslintignore"):
+    if lower in (".npmrc", ".nvmrc", ".prettierignore", ".eslintignore", ".dockerignore"):
+        return "linehash"
+    if lower == "dockerfile" or lower.startswith("dockerfile.") or lower.endswith(".dockerfile"):
         return "linehash"
     ext = os.path.splitext(lower)[1]
     if ext in CPP_EXTENSIONS:
@@ -75,6 +77,9 @@ def classify(relpath):
         ".md": "markdown",
         ".txt": "linehash",
         ".json": "exempt",
+        ".service": "conf",
+        ".socket": "conf",
+        ".timer": "conf",
     }
     if ext in mapping:
         return mapping[ext]
