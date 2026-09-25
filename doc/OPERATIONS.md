@@ -89,3 +89,52 @@ Treat forced removal as recovery: inspect logs, confirm database recovery on
 the next start, and verify that dashboards resume scraping. Do not store
 client files, captures, generated manifests, credentials, or private host
 paths in the checkout.
+
+## Service installation
+
+The packaged supervisor stays in the foreground and lets the host own its
+restart and shutdown lifecycle. On Linux, install the unit as root from the
+repository:
+
+```sh
+./apps/packaging/install-service.sh
+systemctl start ambrose
+systemctl status ambrose
+```
+
+The installer creates the dedicated `ambrose` user, enables start at boot and
+copies the distributed supervisor configuration to `/etc/ambrose`. It does not
+start the service automatically. To remove the unit while preserving state:
+
+```sh
+./apps/packaging/uninstall-service.sh
+```
+
+On Windows, use the same foreground supervisor executable with a service
+wrapper such as NSSM or the Service Control Manager's supported wrapper. The
+wrapper must pass `--config supervisor.conf`, run as a dedicated account and
+use the supervisor's normal stop command so child processes receive a graceful
+shutdown.
+
+## Docker and Pterodactyl
+
+The maintained image and Compose stack live under `apps/packaging`. Copy the
+example environment file below into an untracked `.env`, set a read-only
+`AMBROSE_CLIENT_DIR`, and start from that directory:
+
+```dotenv
+MARIADB_PASSWORD=choose-a-local-password
+MARIADB_ROOT_PASSWORD=choose-a-different-local-password
+AMBROSE_CLIENT_DIR=/absolute/path/to/Wizard101
+```
+
+```sh
+docker compose -f apps/packaging/docker-compose.yml --env-file apps/packaging/.env up -d --build
+```
+
+The client is mounted read-only. Configuration, data, logs and backups are
+named volumes, and the container health check runs the supervisor's
+`--check` path without starting child apps. Import
+`apps/packaging/pterodactyl-egg.json` into an existing Pterodactyl panel; its
+startup line waits for the supervisor's `ready` line and its stop command is
+the panel's normal `shutdown` command.

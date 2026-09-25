@@ -1,0 +1,51 @@
+# Project Ambrose by Imjustchico
+# Runs MariaDB and the Ambrose supervisor with persistent operator data and a read-only client install.
+
+services:
+  database:
+    image: mariadb:11.7
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: "${MARIADB_DATABASE:-ambrose}"
+      MARIADB_USER: "${MARIADB_USER:-ambrose}"
+      MARIADB_PASSWORD: "${MARIADB_PASSWORD:?Set MARIADB_PASSWORD in .env}"
+      MARIADB_ROOT_PASSWORD: "${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in .env}"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  ambrose:
+    build:
+      context: ../..
+      dockerfile: apps/packaging/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "${ADMIN_BIND:-127.0.0.1}:12020:12020"
+      - "${PANEL_BIND:-127.0.0.1}:12080:12080"
+      - "${GAME_BIND:-127.0.0.1}:12343:12343"
+    volumes:
+      - ambrose-config:/var/lib/ambrose/config
+      - ambrose-data:/var/lib/ambrose/data
+      - ambrose-logs:/var/lib/ambrose/logs
+      - ambrose-backups:/var/lib/ambrose/backups
+      - "${AMBROSE_CLIENT_DIR:?Set AMBROSE_CLIENT_DIR to a client install}:/var/lib/ambrose/client:ro"
+    environment:
+      AMBROSE_CLIENT_DIR: /var/lib/ambrose/client
+    healthcheck:
+      test: ["CMD", "/opt/ambrose/bin/supervisor", "--config", "/var/lib/ambrose/config/supervisor.conf", "--check"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  mariadb-data:
+  ambrose-config:
+  ambrose-data:
+  ambrose-logs:
+  ambrose-backups:

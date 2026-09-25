@@ -1,0 +1,41 @@
+{
+  "_comment": "Project Ambrose by Imjustchico: Pterodactyl egg for installing and supervising a mounted Ambrose runtime.",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2026-09-25T00:00:00+00:00",
+  "name": "Ambrose Supervisor",
+  "author": "project-ambrose@example.invalid",
+  "description": "Runs the Ambrose supervisor and its headless Wizard101 services.",
+  "features": [],
+  "docker_images": {
+    "ghcr.io/justchicoo/ambrose:latest": "ghcr.io/justchicoo/ambrose:latest"
+  },
+  "file_denylist": [],
+  "startup": "/opt/ambrose/bin/supervisor --config /home/container/config/supervisor.conf",
+  "stop": "shutdown",
+  "config": {
+    "files": "{}",
+    "startup": "{\"done\":\"ready\",\"user_interaction\":[]}",
+    "logs": "{\"custom\":false,\"location\":\"logs/latest.log\"}"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/bash\nset -euo pipefail\nmkdir -p /mnt/server/config /mnt/server/data /mnt/server/logs /mnt/server/backups\ncp /opt/ambrose/conf/supervisor.conf.dist /mnt/server/config/supervisor.conf\nsed -i 's#^LogsDir = .*#LogsDir = /home/container/logs#' /mnt/server/config/supervisor.conf\n",
+      "container": "ubuntu:24.04",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": [
+    {
+      "name": "Client install",
+      "description": "Read-only path to the operator's client data.",
+      "env_variable": "AMBROSE_CLIENT_DIR",
+      "default_value": "/home/container/client",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "string"
+    }
+  ]
+}

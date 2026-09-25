@@ -1,0 +1,25 @@
+# Project Ambrose by Imjustchico
+# Runs the foreground supervisor under systemd as the dedicated ambrose user.
+
+[Unit]
+Description=Project Ambrose supervisor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ambrose
+Group=ambrose
+WorkingDirectory=/var/lib/ambrose
+ExecStart=/opt/ambrose/bin/supervisor --config /etc/ambrose/supervisor.conf
+Restart=on-failure
+RestartSec=5s
+KillSignal=SIGTERM
+TimeoutStopSec=90s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ambrose /var/log/ambrose
+
+[Install]
+WantedBy=multi-user.target
