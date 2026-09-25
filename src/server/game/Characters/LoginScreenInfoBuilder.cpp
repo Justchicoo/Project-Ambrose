@@ -4,6 +4,7 @@
  */
 
 #include "LoginScreenInfoBuilder.h"
+#include "AvatarAppearance.h"
 #include "ObjectFields.h"
 #include "Utf.h"
 
@@ -72,34 +73,7 @@ PropertyObjectPtr LoginScreenInfoBuilder::Build(TypeCatalogPtr const& catalog, C
         name = std::move(*converted);
     }
 
-    CharacterAppearance const& look = character.Appearance;
-    Filler(*behavior, problem)
-        .Set("m_behaviorTemplateNameID", look.BehaviorTemplateNameId)
-        .Set("m_nHeadHandsModel", uint32{ look.HeadHandsModel })
-        .Set("m_nHairModel", uint32{ look.HairModel })
-        .Set("m_nHatModel", uint32{ look.HatModel })
-        .Set("m_nTorsoModel", uint32{ look.TorsoModel })
-        .Set("m_nFeetModel", uint32{ look.FeetModel })
-        .Set("m_nWandModel", uint32{ look.WandModel })
-        .Set("m_nSkinColor", uint32{ look.SkinColor })
-        .Set("m_nSkinDecal", uint32{ look.SkinDecal })
-        .Set("m_nHairColor", uint32{ look.HairColor })
-        .Set("m_nHatColor", uint32{ look.HatColor })
-        .Set("m_nHatDecal", uint32{ look.HatDecal })
-        .Set("m_nTorsoColor", uint32{ look.TorsoColor })
-        .Set("m_nTorsoDecal", uint32{ look.TorsoDecal })
-        .Set("m_nTorsoDecal2", uint32{ look.TorsoDecal2 })
-        .Set("m_nFeetColor", uint32{ look.FeetColor })
-        .Set("m_nFeetDecal", uint32{ look.FeetDecal })
-        .Set("m_eGender", int64{ look.Gender })
-        .Set("m_eRace", int64{ look.Race })
-        .Set("m_afterCombatDance", look.AfterCombatDance)
-        .Set("m_nSkinDecal2", look.SkinDecal2)
-        .Set("m_extendedHairColor", look.ExtendedHairColor)
-        .Set("m_extendedSkinDecal", look.ExtendedSkinDecal)
-        .Set("m_newPlayerOptions", look.NewPlayerOptions)
-        .Set("m_newPlayerOptions2", look.NewPlayerOptions2)
-        .Set("m_afterCombatVictoryDance", look.AfterCombatVictoryDance);
+    AvatarAppearance::Write(*behavior, character.Appearance, problem);
     Filler(*equipment, problem).Set("m_infoList", PropertyValue::List());
 
     uint32 const lastLogin = static_cast<uint32>(std::min<uint64>(character.LastLogout, std::numeric_limits<uint32>::max()));

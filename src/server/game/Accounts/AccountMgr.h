@@ -7,6 +7,7 @@
 #define AMBROSE_ACCOUNTMGR_H
 
 #include "AccountSettings.h"
+#include "DatabaseEnv.h"
 
 #include <chrono>
 #include <memory>
@@ -105,6 +106,8 @@ public:
 
     AccountLookup GetAccountByName(std::string_view username) const;
     AccountLookup GetAccountById(uint64 accountId) const;
+    static std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> PrepareGetAccountById(uint64 accountId);
+    static AccountInfo ReadAccountRow(PreparedResultSet const& row);
     std::optional<AccountBan> GetActiveBan(uint64 accountId, AccountOpResult* result = nullptr) const;
     std::optional<std::string> GetVerifier(AccountInfo const& account) const;
 

@@ -21,11 +21,13 @@ ACTIONS = {
     "click": (("target",), ("attempts", "dwell", "dwell_step", "on_screen", "until")),
     "shot": ((), ("file",)),
     "server_command": (("command",), ("pattern", "timeout")),
+    "wait_game_log": (("pattern", "timeout"), ("from", "fail", "expect", "reject", "record")),
 }
 COMMON_KEYS = ("action", "name")
 ALLOW_LISTS = ("pending_allowed", "dropped_allowed", "server_log_allowed", "client_log_allowed")
-TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "variables", "expect", "steps") + ALLOW_LISTS
-REQUIRES = ("client", "capture")
+TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "game_settings", "wizard", "variables", "expect", "steps") + ALLOW_LISTS
+REQUIRES = ("client", "capture", "gameserver")
+WIZARD = ("school", "zone", "first", "middle", "last")
 SIDES = ("server", "client")
 OUTCOMES = ("pass", "failure")
 
@@ -63,12 +65,15 @@ class Scenario:
         self.notes = list(document.get("notes") or [])
         self.steps = list(document.get("steps") or [])
         self.server_settings = list(document.get("server_settings") or [])
+        self.game_settings = list(document.get("game_settings") or [])
+        self.wizard = document.get("wizard")
         self.variables = dict(document.get("variables") or {})
         for name in ALLOW_LISTS:
             setattr(self, name, list(document.get(name) or []))
         requires = document.get("requires") or {}
         self.needs_client = bool(requires.get("client", True))
         self.needs_capture = bool(requires.get("capture", True))
+        self.needs_gameserver = bool(requires.get("gameserver", False))
         self.expect_failure = document.get("expect") == "failure"
 
     @property
@@ -153,6 +158,15 @@ def _check_document(path, document):
     for key in document.get("requires") or {}:
         if key not in REQUIRES:
             raise Refused(f"{path} requires {key!r}, which the driver does not know")
+    wizard = document.get("wizard")
+    if wizard is not None:
+        if not isinstance(wizard, dict):
+            raise Refused(f"{path}: wizard must be an object")
+        missing = [key for key in WIZARD if key not in wizard]
+        if missing:
+            raise Refused(f"{path}: the wizard needs {', '.join(missing)}")
+        if not (document.get("requires") or {}).get("gameserver"):
+            raise Refused(f"{path} seeds a wizard but does not require the game server it enters the world on")
     if document.get("expect", "pass") not in OUTCOMES:
         raise Refused(f"{path} expects {document['expect']!r}; a scenario expects {' or '.join(OUTCOMES)}")
     for key in ALLOW_LISTS:
@@ -191,6 +205,9 @@ def _merge(base, scenario):
     scenario.variables = dict(base.variables, **scenario.variables)
     scenario.needs_client = base.needs_client or scenario.needs_client
     scenario.needs_capture = base.needs_capture or scenario.needs_capture
+    scenario.needs_gameserver = base.needs_gameserver or scenario.needs_gameserver
+    scenario.game_settings = base.game_settings + [value for value in scenario.game_settings if value not in base.game_settings]
+    scenario.wizard = scenario.wizard or base.wizard
     scenario.expect_failure = base.expect_failure or scenario.expect_failure
     scenario.notes = base.notes + scenario.notes
     names = [step.get("name") or step["action"] for step in scenario.steps]

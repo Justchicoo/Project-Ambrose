@@ -95,7 +95,10 @@ def checks(facts, gathered):
         add("the install was only read", False,
             f"no file under {facts.get('install') or 'the install'} was read, so nothing was compared")
     else:
-        add("the install was only read", True, f"no file of the {read} read under the install was added, removed or changed")
+        own = facts.get("client_writes") or {}
+        written = sorted(name for names in own.values() for name in names)
+        add("the install was only read", True, f"no file of the {read} read under the install was added, removed or changed"
+            + (f", apart from the client's own {', '.join(written)}" if written else ""))
     if with_client:
         guard = facts.get("netguard")
         violations = (guard or {}).get("violations") or []

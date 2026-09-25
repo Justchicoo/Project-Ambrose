@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Finds everything a run needs on this machine: the repository, the built server and launcher, the shipped login server defaults, tshark, and the Ambrose data folder that holds the run output and the reference crops, none of which lie in the repository.
+# Finds everything a run needs on this machine: the repository, the built servers and launcher, the shipped server defaults, tshark, and the Ambrose data folder that holds the run output, the reference crops and the zone rows, none of which lie in the repository.
 import os
 import shutil
 import sys

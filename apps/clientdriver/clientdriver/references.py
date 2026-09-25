@@ -43,6 +43,15 @@ class References:
         if not self.screens:
             raise Refused(f"{path} names no screens")
         self.never_quit_after = [self._quit_rule(entry) for entry in (document.get("never_quit_after") or [])]
+        self.client_writes = []
+        for entry in document.get("client_writes") or []:
+            pattern = entry.get("path") if isinstance(entry, dict) else None
+            if not isinstance(pattern, str) or not str(entry.get("because", "")).strip():
+                raise Refused(f"{path}: every client_writes entry needs a path pattern and a line saying why the client writes it")
+            try:
+                self.client_writes.append(re.compile(pattern))
+            except re.error as error:
+                raise Refused(f"{path}: the client_writes pattern {pattern!r} does not compile: {error}")
 
     def _crop(self, name, entry):
         box = entry.get("crop") if isinstance(entry, dict) else None

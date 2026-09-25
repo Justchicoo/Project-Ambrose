@@ -1,18 +1,18 @@
 # Project Ambrose by Imjustchico
-# One run end to end: it drops and lets the server rebuild its own databases, starts the capture, the login server and its account, snapshots the install, starts the client through the launcher and guards it from the moment it exists against any connection off this machine, runs the scenario, then asks the client to quit or ends it outright when its own log says quitting would reach off the machine, stops everything in the order it started it with the guard watching until last, and writes the report whether the scenario passed or failed.
+# One run end to end: it drops and lets the server rebuild its own databases, starts the capture, the login server and its account, and for a scenario that enters the world loads the zone rows into its world database, starts the game server, which announces its realm to the login server, and seeds the scenario's wizard, then snapshots the install, starts the client through the launcher and guards it from the moment it exists against any connection off this machine, runs the scenario, then asks the client to quit or ends it outright when its own log says quitting would reach off the machine, stops everything in the order it started it with the guard watching until last, and writes the report over both servers' logs whether the scenario passed or failed.
 import os
 import re
 import secrets
 import time
 
-from . import install, paths, report, screens
+from . import install, paths, report, screens, zones
 from .capture import Capture
 from .client import Client, prepare_process
 from .database import Scratch
 from .engine import Engine
 from .logtail import read_lines
 from .netguard import NetGuard, kill_leftovers
-from .server import LoginServer
+from .server import GameServer, LoginServer
 
 USER = "clientdriver"
 
@@ -84,12 +84,18 @@ class Run:
                              self.environment["server_defaults"], os.path.join(self.folder, "server"),
                              options["host"], options["port"], databases,
                              settings=list(self.scenario.server_settings) + list(options.get("set") or []))
+        game = None
+        if self.scenario.needs_gameserver:
+            game = GameServer(os.path.join(self.environment["binaries"], paths.program("gameserver")),
+                              os.path.join(self.environment["binaries"], "gameserver.conf.dist"), os.path.join(self.folder, "game"),
+                              options["host"], options["game_port"], databases, settings=list(self.scenario.game_settings))
         client = Client(os.path.join(self.environment["binaries"], paths.program("launcher")),
                         os.path.join(self.folder, "client"), options["host"], options["port"],
                         self.references.window, client_dir=options.get("client"), locale=options.get("locale"),
                         install=self.environment.get("install"), revision=self.environment.get("revision"))
         store = screens.Store(self.references, options["refs"])
         engine = self.make_engine(client, server, store, variables, databases)
+        engine.game = game
         guard = None
         before = {}
         try:
@@ -102,6 +108,21 @@ class Run:
             self.cleanups.append(("stop the login server", server.stop))
             self.note("the login server", server.start(timeout=options["server_timeout"]))
             self.note("the account", server.ensure_account(variables["user"], password))
+            if game is not None:
+                sql, how = zones.ensure(self.environment["binaries"], self.environment.get("install"), self.environment.get("revision"))
+                self.note("the zone rows", how)
+                self.note("the world database", databases.apply_sql("world", sql))
+                self.cleanups.append(("stop the game server", game.stop))
+                self.note("the game server", game.start(timeout=options["server_timeout"]))
+                wizard = self.scenario.wizard
+                if wizard and options.get("wizard_from"):
+                    wizard = Scratch.read_wizard(options["wizard_from"], options.get("wizard_guid") or 1)
+                    self.note("the wizard copied", f"wizard {options.get('wizard_guid') or 1} of {options['wizard_from'].split(';')[-1]}, read and left as it was")
+                if wizard:
+                    guid, name = databases.seed_character(variables["user"], wizard)
+                    variables["wizard"] = name
+                    variables["wizard_guid"] = str(guid)
+                    self.note("the wizard", f"{name}, guid {guid}, in {wizard['zone']}")
             self.cleanups.append(("close the client", lambda: client.close(force=self.force_close)))
             self.note("the client", client.start(timeout=options["client_timeout"]))
             guard = NetGuard(client.pids, os.path.join(self.folder, "netguard.json"), started=started)
@@ -123,6 +144,7 @@ class Run:
             if leftovers:
                 self.failure("processes left running", ", ".join(leftovers))
             after = install.snapshot(self.environment.get("install"))
+            client_changes = install.split(install.diff(before, after), self.references.client_writes)
             try:
                 self.note("dropped the scratch databases", databases.drop())
                 remaining = databases.existing()
@@ -144,6 +166,8 @@ class Run:
                 "references": {"path": self.references.path, "key": self.references.key, "folder": options["refs"]},
                 "server_command": " ".join(server.command()),
                 "server_log": server.log.path,
+                "game_command": " ".join(game.command()) if game else None,
+                "game_log": game.log.path if game else None,
                 "client_log": client.log.path,
                 "steps": self.prepared + engine.steps,
                 "screenshots": engine.screenshots,
@@ -152,7 +176,8 @@ class Run:
                 "needs_client": self.scenario.needs_client,
                 "install": self.environment.get("install"),
                 "install_files": len(before),
-                "install_changes": install.diff(before, after),
+                "install_changes": client_changes[1],
+                "client_writes": client_changes[0],
                 "netguard": guard.record() if guard else None,
                 "leftover_processes": leftovers,
                 "databases_after": remaining,
@@ -162,13 +187,14 @@ class Run:
                 "client_log_allowed": self.scenario.client_log_allowed,
             }
             facts.update(self.extra(engine))
-            written, path = self.record(facts, server, client)
+            written, path = self.record(facts, server, client, game)
         self.summarize(written, path)
         return 0 if written["clean"] else 1
 
-    def record(self, facts, server, client):
+    def record(self, facts, server, client, game=None):
         try:
-            written = report.build(facts, read_lines(server.log.path), read_lines(client.log.path, "latin-1"))
+            server_lines = read_lines(server.log.path) + (read_lines(game.log.path) if game else [])
+            written = report.build(facts, server_lines, read_lines(client.log.path, "latin-1"))
         except Exception as error:
             self.failure("build the report", error)
             written = dict(facts, clean=False, result="FAILED",

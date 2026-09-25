@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Ambrose-authored LOGIN and GAME message definitions for login server tests: the authentication requests and replies, the AFK and shutdown messages with their field layouts, the character list request and its replies, the character pick and where it sends the client, and the GAME attach and its refusal, which the game server answers and the login server never accepts.
+ * Ambrose-authored LOGIN, GAME and WIZARD2 message definitions for login and game server tests: the authentication requests and replies, the AFK and shutdown messages with their field layouts, the character list request and its replies, the character pick and where it sends the client, the GAME attach, its refusal and the login completion that hands the client its object, which the game server sends and the login server never accepts, and the WIZARD2 note the client sends once it has loaded its zone.
  */
 
 #ifndef AMBROSE_LOGINMESSAGEFIXTURES_H
@@ -45,12 +45,22 @@ namespace LoginMessageFixtures
 <_ProtocolInfo><RECORD><ServiceID TYPE="UBYT">5</ServiceID><ProtocolType TYPE="STR">GAME</ProtocolType></RECORD></_ProtocolInfo>
 <MSG_ATTACH><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">7</_MsgOrder><LoginKey TYPE="STR"></LoginKey><UserID TYPE="GID"></UserID><CharID TYPE="GID"></CharID><ZoneName TYPE="STR"></ZoneName><Location TYPE="STR"></Location><ZoneID TYPE="GID"></ZoneID><Slot TYPE="INT"></Slot><Reattach TYPE="UBYT"></Reattach><Retry TYPE="UBYT"></Retry><Locale TYPE="STR"></Locale><MachineID TYPE="GID"></MachineID></RECORD></MSG_ATTACH>
 <MSG_ATTACHFAILED><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">8</_MsgOrder><Error TYPE="UINT"></Error><Rejected TYPE="UINT"></Rejected><NoDisconnect TYPE="UINT"></NoDisconnect></RECORD></MSG_ATTACHFAILED>
+<MSG_LOGINCOMPLETE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">108</_MsgOrder><ZoneName TYPE="STR"></ZoneName><Data TYPE="STR"></Data><ServerTime TYPE="UINT"></ServerTime><ZoneID TYPE="GID"></ZoneID><DynamicZoneID TYPE="UINT"></DynamicZoneID><DynamicServerProcID TYPE="UINT"></DynamicServerProcID><Permissions TYPE="UINT"></Permissions><IsCSR TYPE="INT"></IsCSR><ZoneServer TYPE="STR"></ZoneServer><TestServer TYPE="UBYT"></TestServer><AltMusicFile TYPE="UINT"></AltMusicFile><ShowSubscriberIcon TYPE="UBYT"></ShowSubscriberIcon><SubscriberCrownsPricePercent TYPE="INT"></SubscriberCrownsPricePercent><UseFriendFinder TYPE="INT"></UseFriendFinder><RealmName TYPE="STR"></RealmName><IsBossMarkZone TYPE="UBYT"></IsBossMarkZone><CriticalObjects TYPE="STR"></CriticalObjects><ZoneHasFriendlyPlayers TYPE="UBYT"></ZoneHasFriendlyPlayers><HourOffset TYPE="UINT"></HourOffset><DisableBeastmoonGroups TYPE="UINT"></DisableBeastmoonGroups><PickUpAllEnabled TYPE="UBYT"></PickUpAllEnabled><SegmentedMessage TYPE="UBYT"></SegmentedMessage><LastSegment TYPE="UBYT"></LastSegment></RECORD></MSG_LOGINCOMPLETE>
 </FixtureGameMessages>
+)";
+
+    inline constexpr std::string_view Wizard2Xml = R"(<?xml version="1.0" ?>
+<FixtureWizard2Messages>
+<_ProtocolInfo><RECORD><ServiceID TYPE="UBYT">53</ServiceID><ProtocolType TYPE="STR">WIZARD2</ProtocolType></RECORD></_ProtocolInfo>
+<MSG_CLIENTZONED><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">64</_MsgOrder><ZoneNameID TYPE="UINT"></ZoneNameID></RECORD></MSG_CLIENTZONED>
+</FixtureWizard2Messages>
 )";
 
     inline bool AddTo(MessageDefinitionSet& definitions, bool withGame = false)
     {
-        return definitions.Add(LoginXml, "FixtureLoginMessages.xml") && (!withGame || definitions.Add(GameXml, "FixtureGameMessages.xml")) && BaseMessageFixtures::AddTo(definitions);
+        return definitions.Add(LoginXml, "FixtureLoginMessages.xml")
+            && (!withGame || (definitions.Add(GameXml, "FixtureGameMessages.xml") && definitions.Add(Wizard2Xml, "FixtureWizard2Messages.xml")))
+            && BaseMessageFixtures::AddTo(definitions);
     }
 }
 

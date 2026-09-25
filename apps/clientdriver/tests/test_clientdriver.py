@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario.
+# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server, the scratch game server's settings, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario.
 import json
 import os
 import sys
@@ -9,7 +9,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from clientdriver import capture, database, engine, install, netguard, paths, preflight, references, refscapture, report, run, scenario, screens
+from clientdriver import capture, database, engine, install, netguard, paths, preflight, references, refscapture, report, run, scenario, screens, server, zones
 from clientdriver.errors import Refused, StepFailed
 from clientdriver.logtail import LogTail, read_lines
 
@@ -325,6 +325,66 @@ class ScenarioTests(TemporaryFolder):
             self.assertTrue(loaded.steps, f"{name} has no steps")
             found += 1
         self.assertGreaterEqual(found, 3)
+
+
+class WorldEntryTests(TemporaryFolder):
+    WIZARD = {"school": 2343174, "zone": "WizardCity/WC_Ravenwood", "first": 1, "middle": 1, "last": 1}
+
+    def scenario_file(self, name, document):
+        return self.write_json(os.path.join("scenarios", name), document)
+
+    def test_a_scenario_that_seeds_a_wizard_needs_the_game_server_and_every_part_of_the_wizard(self):
+        steps = [{"action": "wait_game_log", "name": "in", "pattern": "stands in the world", "timeout": 1}]
+        self.scenario_file("alone.json", {"title": "alone", "wizard": self.WIZARD, "steps": steps})
+        with self.assertRaises(Refused) as raised:
+            scenario.load("alone.json", search=(os.path.join(self.folder, "scenarios"),))
+        self.assertIn("does not require the game server", str(raised.exception))
+        self.scenario_file("partial.json", {"title": "partial", "requires": {"gameserver": True}, "wizard": {"school": 1}, "steps": steps})
+        with self.assertRaises(Refused) as raised:
+            scenario.load("partial.json", search=(os.path.join(self.folder, "scenarios"),))
+        self.assertIn("the wizard needs zone, first, middle, last", str(raised.exception))
+        self.scenario_file("whole.json", {"title": "whole", "requires": {"gameserver": True}, "wizard": self.WIZARD,
+                                          "game_settings": ["Realm.Name=Test"], "steps": steps})
+        loaded = scenario.load("whole.json", search=(os.path.join(self.folder, "scenarios"),))
+        self.assertTrue(loaded.needs_gameserver)
+        self.assertEqual(loaded.wizard["zone"], "WizardCity/WC_Ravenwood")
+        self.assertEqual(loaded.game_settings, ["Realm.Name=Test"])
+
+    def test_the_shipped_enter_world_scenario_loads_with_its_game_server_and_wizard(self):
+        loaded = scenario.load("enter-world.json", search=(paths.SCENARIOS,))
+        self.assertTrue(loaded.needs_gameserver)
+        self.assertEqual(loaded.wizard["zone"], "WizardCity/WC_Ravenwood")
+        self.assertIn("charselect_play", loaded.targets_used())
+
+    def test_the_game_server_announces_its_realm_at_the_run_s_own_address_and_port(self):
+        scratch = database.Scratch("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose_driver_run")
+        game = server.GameServer("gameserver.exe", "gameserver.conf.dist", os.path.join(self.folder, "game"), "127.0.0.2", 12433,
+                                 scratch, settings=["Realm.Name=Driver"])
+        overrides = game.overrides()
+        for wanted in ("WorldServerPort=12433", "Realm.Address=127.0.0.2", "BindIP=127.0.0.2", "Admin.Enable=0", "Realm.Name=Driver",
+                       f"WorldDatabaseInfo={scratch.info('world')}", f"LoginDatabaseInfo={scratch.info('login')}"):
+            self.assertIn(wanted, overrides)
+        self.assertNotIn("LoginServerPort=12433", overrides)
+        self.assertTrue(game.config.endswith("gameserver.conf"))
+        self.assertTrue(game.log.path.endswith("Server.log"))
+        login = server.LoginServer("loginserver.exe", "loginserver.conf.dist", os.path.join(self.folder, "login"), "127.0.0.2", 12100, scratch)
+        self.assertIn("LoginServerPort=12100", login.overrides())
+        self.assertTrue(login.log.path.endswith("Login.log"))
+
+    def test_the_zone_rows_are_cached_by_revision_outside_the_repository(self):
+        path = zones.cache_path("r806919.Wizard_1_610")
+        self.assertTrue(path.endswith(os.path.join("clientdriver", "zones", "r806919.Wizard_1_610.sql")))
+        self.assertFalse(os.path.abspath(path).startswith(os.path.abspath(paths.REPOSITORY)))
+        with self.assertRaises(StepFailed):
+            zones.ensure(self.folder, self.folder, "")
+
+    def test_a_copied_wizard_unpacks_its_name_indices_and_keeps_only_appearance_columns(self):
+        row = {"name_indices": (3 << 24) | (100 << 16) | (248 << 8) | 27, "school_id": 2343174, "level": 3, "world": 0,
+               "zone": "WizardCity/WC_Ravenwood", "zone_display": "Ravenwood"}
+        wizard = database.Scratch.wizard_from_rows(row, {"gender": 1, "race": 79806088, "guid": 9})
+        self.assertEqual((wizard["locale"], wizard["first"], wizard["middle"], wizard["last"]), ("en-US", 100, 248, 27))
+        self.assertEqual(wizard["appearance"], {"gender": 1, "race": 79806088})
+        self.assertEqual(wizard["level"], 3)
 
 
 class ReferenceTests(TemporaryFolder):

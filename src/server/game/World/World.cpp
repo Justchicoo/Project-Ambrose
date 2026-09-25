@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, and a session that has closed is dropped after its last queued work has run.
+ * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone.
  */
 
 #include "World.h"
@@ -80,6 +80,13 @@ void World::Update(std::chrono::milliseconds diff)
     std::size_t const sessionCount = sessions.size();
     for (std::shared_ptr<GameSession> const& session : sessions)
         session->DrainQueue();
+    for (std::shared_ptr<GameSession> const& session : sessions)
+    {
+        if (session->IsOpen())
+            continue;
+        session->LeaveWorld();
+        RemoveSession(session.get());
+    }
 
     for (uint32 const taken : sMapMgr.Update())
         LOG_DEBUG("server.world", "Took down zone instance {}, empty for longer than its unload delay", taken);

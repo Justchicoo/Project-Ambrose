@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs the scratch login server a scenario drives: its own port, its own databases and its own logs inside the run folder, started from the shipped defaults with every difference passed as a command-line override, with its account created over its own console and its shutdown waited for.
+# Runs the scratch servers a scenario drives: the login server, and the game server when the scenario enters the world, each on its own port with the run's databases and its own logs inside the run folder, started from the shipped defaults with every difference passed as a command-line override, the login server's account created over its own console, the game server announcing its realm at the run's own address, and each shutdown waited for.
 import os
 import re
 import shutil
@@ -9,12 +9,14 @@ from .errors import StepFailed
 from .logtail import LogTail
 
 NO_WINDOW = 0x08000000
-READY = r"loginserver ready"
-GENERATED = ("# Project Ambrose by Imjustchico\n"
-             "# Written by the client driver for one run; every other value comes from loginserver.conf.dist beside it.\n")
 
 
 class LoginServer:
+    WHAT = "the login server"
+    READY = r"loginserver ready"
+    LOG_FILE = "Login.log"
+    CONFIG = "loginserver.conf"
+
     def __init__(self, program, defaults, folder, host, port, databases, settings=()):
         self.program = program
         self.defaults = defaults
@@ -23,30 +25,33 @@ class LoginServer:
         self.port = int(port)
         self.databases = databases
         self.settings = list(settings)
-        self.config = os.path.join(folder, "loginserver.conf")
+        self.config = os.path.join(folder, self.CONFIG)
         self.console_path = os.path.join(folder, "console.txt")
         self.process = None
         self.console = LogTail(self.console_path)
-        self.log = LogTail(os.path.join(folder, "Login.log"))
+        self.log = LogTail(os.path.join(folder, self.LOG_FILE))
         self._output = None
 
-    def overrides(self):
+    def shared_overrides(self):
         return [
             f"LogsDir={self.folder}",
             f"BindIP={self.host}",
-            f"LoginServerPort={self.port}",
             f"LoginDatabaseInfo={self.databases.info('login')}",
             f"CharacterDatabaseInfo={self.databases.info('characters')}",
             f"WorldDatabaseInfo={self.databases.info('world')}",
             "Console.Enable=1",
             "Console.Colors=0",
-        ] + self.settings
+        ]
+
+    def overrides(self):
+        return self.shared_overrides() + [f"LoginServerPort={self.port}"] + self.settings
 
     def prepare(self):
         os.makedirs(self.folder, exist_ok=True)
         shutil.copyfile(self.defaults, self.config + ".dist")
         with open(self.config, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(GENERATED)
+            handle.write("# Project Ambrose by Imjustchico\n"
+                         f"# Written by the client driver for one run; every other value comes from {self.CONFIG}.dist beside it.\n")
         return self.config
 
     def command(self):
@@ -62,7 +67,7 @@ class LoginServer:
         self._output = open(self.console_path, "wb")
         self.process = subprocess.Popen(self.command(), cwd=self.folder, stdin=subprocess.PIPE, stdout=self._output,
                                         stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
-        self.console.wait(READY, timeout, fail=r"\bFATAL\b|^ERROR\s*:", alive=self.alive)
+        self.console.wait(self.READY, timeout, fail=r"\bFATAL\b|^ERROR\s*:", alive=self.alive)
         self.log.mark()
         return f"ready on {self.host}:{self.port} as process {self.process.pid}"
 
@@ -71,7 +76,7 @@ class LoginServer:
 
     def send(self, line):
         if not self.alive():
-            raise StepFailed("the login server is not running, so it cannot be given a command")
+            raise StepFailed(f"{self.WHAT} is not running, so it cannot be given a command")
         self.process.stdin.write((line + "\n").encode("utf-8"))
         self.process.stdin.flush()
 
@@ -116,3 +121,13 @@ class LoginServer:
         if self._output:
             self._output.close()
             self._output = None
+
+
+class GameServer(LoginServer):
+    WHAT = "the game server"
+    READY = r"gameserver ready"
+    LOG_FILE = "Server.log"
+    CONFIG = "gameserver.conf"
+
+    def overrides(self):
+        return self.shared_overrides() + [f"WorldServerPort={self.port}", f"Realm.Address={self.host}", "Admin.Enable=0"] + self.settings

@@ -14,6 +14,7 @@ SKIP = 77
 DEFAULT_SCENARIO = "login-to-charselect.json"
 DEFAULT_HOST = "127.0.0.2"
 DEFAULT_PORT = 12100
+DEFAULT_GAME_PORT = 12433
 DEFAULT_DB = ("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose_driver_run")
 
 
@@ -24,6 +25,7 @@ def add_common(parser):
     parser.add_argument("--locale", help="client locale, as the launcher's --locale")
     parser.add_argument("--host", default=DEFAULT_HOST, help="address the login server binds and the client connects to")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="login server port")
+    parser.add_argument("--game-port", type=int, default=DEFAULT_GAME_PORT, help="game server port, for a scenario that enters the world")
     parser.add_argument("--db-host", default=DEFAULT_DB[0], help="host of the scratch database server")
     parser.add_argument("--db-port", type=int, default=DEFAULT_DB[1], help="port of the scratch database server")
     parser.add_argument("--db-user", default=DEFAULT_DB[2], help="user on the scratch database server")
@@ -45,6 +47,7 @@ def options_of(args, need_crops=True):
         "locale": args.locale,
         "host": args.host,
         "port": args.port,
+        "game_port": args.game_port,
         "window": None,
         "db_host": args.db_host,
         "db_port": args.db_port,
@@ -61,6 +64,8 @@ def options_of(args, need_crops=True):
         "set": list(getattr(args, "set", None) or []),
         "label": getattr(args, "label", None),
         "user": getattr(args, "user", None),
+        "wizard_from": getattr(args, "wizard_from", None),
+        "wizard_guid": getattr(args, "wizard_guid", None),
         "background": getattr(args, "background", True),
         "replace": getattr(args, "replace", False),
     }
@@ -149,6 +154,8 @@ def build_parser():
     run.add_argument("--set", action="append", help="one more login server option, as Key=Value; may repeat")
     run.add_argument("--label", help="what this run checks, so a milestone can cite its run id")
     run.add_argument("--user", help="account name the run creates and logs in with")
+    run.add_argument("--wizard-from", help="a characters database, host;port;user;password;database, to copy the scenario's wizard from instead of the one it describes; it is only read")
+    run.add_argument("--wizard-guid", type=int, help="the wizard --wizard-from copies (default 1)")
     run.add_argument("--foreground", dest="background", action="store_false", help="leave the client window in front instead of at the bottom")
     check = commands.add_parser("check", help="say whether a run is possible on this machine, and exit 77 when it is not")
     add_common(check)

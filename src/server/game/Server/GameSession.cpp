@@ -1,20 +1,36 @@
 /*
  * Project Ambrose by Imjustchico
- * Draining is what this adds to a session, and dispatching what it can answer: the world calls DrainQueue on its own thread and the queued work runs there, bounded so one talkative client cannot hold the tick, and every handler is written knowing it runs on that thread and nowhere else. MSG_ATTACH is taken as soon as a client connects, because a client that has not attached has nothing else to say, and the key it carries is spent before the client is let in: the spend is one conditional update, so two clients holding the same key cannot both win it, and a spend that changed no row is read back only to say why, because the reason a client was turned away is worth knowing while the reason it was let in is not. A refused attach is told once and the socket closed behind it, and a session that was let in gives its wizard back when it goes.
+ * Draining is what this adds to a session, and dispatching what it can answer: the world calls DrainQueue on its own thread and the queued work runs there, bounded so one talkative client cannot hold the tick, and every handler is written knowing it runs on that thread and nowhere else. MSG_ATTACH is taken as soon as a client connects, because a client that has not attached has nothing else to say, and the key it carries is spent before the client is let in: the spend is one conditional update, so two clients holding the same key cannot both win it, and a spend that changed no row is read back only to say why, because the reason a client was turned away is worth knowing while the reason it was let in is not. A refused attach is told once and the socket closed behind it, and a session that was let in gives its wizard back when it goes. Entering the world is refused with MSG_ATTACHFAILED, the reason logged, when the wizard is missing, deleted or another account's, when its zone is one this server cannot load, when the instance has no mobile id left, or when its object cannot be built; the object is encoded with the transmit mask the owner's own object is read with, and CriticalObjects is sent empty, which the client reads as no critical objects rather than a list to deserialize.
  */
 
 #include "GameSession.h"
+#include "AccountMgr.h"
+#include "CharacterRepository.h"
+#include "ConfigMgr.h"
+#include "CoreObjectSerializer.h"
 #include "Frame.h"
 #include "GameMessageTable.h"
 #include "Log.h"
+#include "MapMgr.h"
 #include "MessageRegistry.h"
+#include "ObjectFields.h"
+#include "ObjectSchemaMgr.h"
+#include "ObjectTemplateMgr.h"
+#include "PlayerObjectBuilder.h"
+#include "StringHash.h"
 #include "StringUtil.h"
+#include "ZoneMgr.h"
+
+#include <fmt/format.h>
 
 #include <chrono>
 #include <utility>
+#include <vector>
 
 namespace
 {
+    constexpr uint32 DefaultPermissions = 0x1 | 0x2 | 0x4 | 0x8 | 0x20;
+
     std::atomic<uint32> RealmId{ 0 };
 
     int64 NowEpochSeconds()
@@ -72,8 +88,9 @@ void GameSession::OnMessage(DmlMessageData& message)
     if (result != DispatchResult::NotHandled && result != DispatchResult::UnknownMessage)
         return;
     _unhandled.fetch_add(1, std::memory_order_relaxed);
-    LOG_DEBUG("server.gamesession", "Session {} sent service {} order {}, which the game server has no handler for yet",
-        GetSessionId(), message.ServiceId, message.Order);
+    if (result == DispatchResult::UnknownMessage)
+        LOG_DEBUG("server.gamesession", "Session {} sent service {} order {}, which no loaded message definition names",
+            GetSessionId(), message.ServiceId, message.Order);
 }
 
 void GameSession::OnSessionClosed()
@@ -160,6 +177,152 @@ void GameSession::AcceptAttach(LoginKeyClaim const& claim)
     LoginKeyValidator::MarkOnline(claim);
     LOG_INFO("server.gamesession", "Session {} attached: account {} with wizard {} on realm {}, its key accepted and spent",
         GetSessionId(), claim.AccountId, claim.CharacterId, claim.RealmId);
+    LoadAccount(claim);
+}
+
+void GameSession::LoadAccount(LoginKeyClaim const& claim)
+{
+    std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> statement = LoginDatabase.IsOpen() ? AccountMgr::PrepareGetAccountById(claim.AccountId) : nullptr;
+    if (!statement)
+    {
+        RefuseEntry(claim, "the login database is not open");
+        return;
+    }
+    _queryCallbacks.AddCallback(LoginDatabase.AsyncQuery(std::move(statement), MakeCompletionHandler()).WithPreparedCallback([this, claim](PreparedQueryResult result)
+    {
+        if (!IsOpen() || IsKicked())
+            return;
+        if (!result)
+        {
+            RefuseEntry(claim, fmt::format("account {} is not in the login database", claim.AccountId));
+            return;
+        }
+        AccountInfo const account = AccountMgr::ReadAccountRow(*result);
+        _securityLevel.store(account.SecurityLevel, std::memory_order_relaxed);
+        LoadCharacter(claim);
+    }));
+}
+
+void GameSession::LoadCharacter(LoginKeyClaim const& claim)
+{
+    CharacterRepository::Statement statement = CharacterDatabase.IsOpen() ? CharacterRepository::PrepareLoad(claim.CharacterId) : nullptr;
+    if (!statement)
+    {
+        RefuseEntry(claim, "the characters database is not open");
+        return;
+    }
+    _queryCallbacks.AddCallback(CharacterDatabase.AsyncQuery(std::move(statement), MakeCompletionHandler()).WithPreparedCallback([this, claim](PreparedQueryResult result)
+    {
+        if (!IsOpen() || IsKicked())
+            return;
+        std::vector<CharacterSummary> found = result ? CharacterRepository::ReadCharacters(*result) : std::vector<CharacterSummary>();
+        if (found.empty())
+        {
+            RefuseEntry(claim, fmt::format("wizard {} is not in the characters database", claim.CharacterId));
+            return;
+        }
+        CharacterSummary character = std::move(found.front());
+        if (character.Account != claim.AccountId || character.IsDeleted())
+        {
+            RefuseEntry(claim, fmt::format("wizard {} is {}", claim.CharacterId, character.IsDeleted() ? "deleted" : fmt::format("account {}'s, not {}'s", character.Account, claim.AccountId)));
+            return;
+        }
+        std::shared_ptr<GameSession> const self = SharedSelf();
+        if (!QueueInbound([self, claim, character = std::move(character)] { self->EnterWorld(claim, character); }))
+            RefuseEntry(claim, "its queue of work is full");
+    }));
+}
+
+void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character)
+{
+    bool const placed = character.PositionX != 0.0f || character.PositionY != 0.0f || character.PositionZ != 0.0f;
+    ZonePlace const start = sZoneMgr.FindPlace(character.Zone, ZoneLocations::StartName);
+    if (!start.Found())
+    {
+        RefuseEntry(claim, fmt::format("wizard {} is in {}, and {}", character.Guid, Ambrose::ForLog(character.Zone, 128), ZoneMgr::GetLookupName(start.Result)));
+        return;
+    }
+    PlayerPlacement placement;
+    placement.X = placed ? character.PositionX : start.Location.X;
+    placement.Y = placed ? character.PositionY : start.Location.Y;
+    placement.Z = placed ? character.PositionZ : start.Location.Z;
+    placement.Yaw = placed ? character.Orientation : start.Location.Yaw.value_or(0.0f);
+
+    Map& map = sMapMgr.FindOrCreatePublic(character.Zone);
+    std::optional<uint16> const mobileId = sMapMgr.AddPlayer(map, character.Guid);
+    if (!mobileId)
+    {
+        RefuseEntry(claim, fmt::format("instance {} of {} has no mobile id left", map.GetDynamicZoneId(), character.Zone));
+        return;
+    }
+    _mapId = map.GetDynamicZoneId();
+    _zonePath = character.Zone;
+    _worldGuid = character.Guid;
+    placement.MobileId = *mobileId;
+
+    TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
+    CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
+    std::shared_ptr<BehaviorClientClasses const> const behaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
+    std::shared_ptr<ObjectTemplate const> const playerTemplate = sObjectTemplateMgr.GetPlayer();
+    std::string problem;
+    PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, character, placement, problem);
+    ObjectField const* const field = ObjectFields::Find("MSG_LOGINCOMPLETE", "Data");
+    EncodeResult const data = player && field ? CoreObjectSerializer::EncodeField(*field, *player, *types) : EncodeResult{};
+    if (!player || !field || !data.Ok())
+    {
+        LeaveWorld();
+        RefuseEntry(claim, player ? fmt::format("its object does not encode: {}", data.Detail) : fmt::format("its object cannot be built: {}", problem));
+        return;
+    }
+
+    ConfigMgr const& config = sConfigMgr;
+    GameMessages::LoginComplete complete;
+    complete.ZoneName = character.Zone;
+    complete.Data.assign(data.Bytes.begin(), data.Bytes.end());
+    complete.ServerTime = static_cast<uint32>(NowEpochSeconds());
+    complete.ZoneId = StringHash::KiStringHash(character.Zone);
+    complete.DynamicZoneId = map.GetDynamicZoneId();
+    complete.DynamicServerProcId = map.GetDynamicZoneId();
+    complete.Permissions = config.GetOption<uint32>("LoginComplete.Permissions", DefaultPermissions, true);
+    complete.IsCsr = _securityLevel.load(std::memory_order_relaxed) >= config.GetOption<uint32>("LoginComplete.CSRSecurityLevel", SEC_GAMEMASTER, true) ? 1 : 0;
+    complete.TestServer = config.GetOption<bool>("LoginComplete.TestServer", false, true) ? 1 : 0;
+    complete.RealmName = config.GetOption<std::string>("Realm.Name", "Ambrose", true);
+    SendDmlMessage(complete);
+    SetStatus(SessionStatus::LoggedIn);
+    LOG_INFO("server.gamesession", "Session {} put wizard {} in {} instance {} at ({}, {}, {}) with mobile id {}, and sent its {}-byte object",
+        GetSessionId(), character.Guid, character.Zone, map.GetDynamicZoneId(), placement.X, placement.Y, placement.Z, placement.MobileId, data.Bytes.size());
+}
+
+void GameSession::HandleClientZoned(GameMessages::ClientZoned& message)
+{
+    uint32 const expected = StringHash::KiStringHash(_zonePath);
+    if (message.ZoneNameId != expected)
+    {
+        LOG_WARN("server.gamesession", "Session {} says it loaded zone name id {}, but its wizard was sent to {} ({})", GetSessionId(), message.ZoneNameId,
+            Ambrose::ForLog(_zonePath, 128), expected);
+        return;
+    }
+    SetStatus(SessionStatus::InWorld);
+    LOG_INFO("server.gamesession", "Session {} loaded {}, and wizard {} stands in the world", GetSessionId(), _zonePath, _worldGuid);
+}
+
+void GameSession::LeaveWorld()
+{
+    if (!_mapId)
+        return;
+    if (Map* const map = sMapMgr.Find(*_mapId))
+        sMapMgr.RemovePlayer(*map, _worldGuid);
+    _mapId.reset();
+}
+
+void GameSession::RefuseEntry(LoginKeyClaim const& claim, std::string const& reason)
+{
+    LOG_WARN("server.gamesession", "Session {} cannot enter the world as account {} with wizard {}: {}", GetSessionId(), claim.AccountId, claim.CharacterId, reason);
+    GameMessages::AttachFailed failed;
+    failed.Error = 1;
+    failed.Rejected = 1;
+    failed.NoDisconnect = 0;
+    SendDmlMessageDelayedClose(failed);
 }
 
 void GameSession::RefuseAttach(LoginKeyClaim const& claim, LoginKeyVerdict verdict)

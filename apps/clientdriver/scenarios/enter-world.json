@@ -1,0 +1,198 @@
+{
+  "title": "Log in with a wizard already made, play it and stand in Ravenwood",
+  "include": "parts/common.json",
+  "notes": [
+    "The run seeds its account's one wizard before the client starts: a Fire wizard in WizardCity/WC_Ravenwood,",
+    "named from the install's own name tables and dressed in a look the client's own creation screens wrote.",
+    "The client lists it, and the run presses Play; the client's own -C option is not used, because it asks the",
+    "server to create a wizard from a bare name rather than choosing the one listed.",
+    "The login server hands the client to the scratch game server, which spends the key, loads the wizard,",
+    "puts it in the zone's public instance and sends MSG_LOGINCOMPLETE with its object; the client loads the",
+    "zone and says so with MSG_CLIENTZONED, which is when the wizard stands in the world.",
+    "The login server starts before the game server has extracted the creation tables and announced its",
+    "realm, so its two warnings about both being empty are expected here.",
+    "Entering the world, the client asks the game server for its buddies, mail, ladders, crowns, subscriptions,",
+    "tutorial log and more, and sends its first move; none is answered yet, and 4.12 and phase 5 answer them.",
+    "It then waits for the client's next keepalive on the game server, so a session closed after the wizard",
+    "stands fails the run rather than passing it; the game server's dropped-message burst fits the chatter above."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Ravenwood",
+    "zone_display": "Ravenwood",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "steps": [
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server lists the wizard the run made",
+      "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "shot",
+      "name": "the wizard on the character selection screen",
+      "file": "character-selection"
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server sends the wizard its object",
+      "pattern": "put wizard \\d+ in (\\S+) instance \\d+ at .* and sent its \\d+-byte object",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "expect": "WizardCity/WC_Ravenwood",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the client loading the zone",
+      "file": "loading-the-zone"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard \\d+ stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Ravenwood",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the wizard standing in Ravenwood",
+      "file": "standing-in-ravenwood"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard is still connected at the next keepalive",
+      "pattern": "Session \\d+ keepalive from the client",
+      "timeout": 90,
+      "fail": "Closing session \\d+"
+    },
+    {
+      "action": "shot",
+      "name": "the wizard still standing",
+      "file": "still-standing"
+    }
+  ],
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CLIENTMOVE",
+    "MSG_CLIENTMOVESTATE",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_DONESHOPPING",
+    "MSG_GETLADDER",
+    "MSG_GETSUBSCRIBERONLYITEMS",
+    "MSG_GETTIMEDACCESSPASSES",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGCLIENTRESOLUTION",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ]
+}

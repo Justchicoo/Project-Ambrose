@@ -541,6 +541,19 @@ Settled on 2026-09-16 at the maintainer's direction to make CI cheaper. A privat
 - `python apps/ci/ci_usage.py` adds up this month's billed minutes through `gh`, for a look before a large manual run.
 - Pushes build nothing, so run `ctest` with a preset before every push. Besides the unit tests it runs `codestyle.selftest`, `codestyle.tree`, `ci.selftest` and `ci.forbidden`, the checks CI runs.
 
+### Entering the world
+
+Settled on 2026-09-25, under the maintainer's standing delegation, from the client's own `GameClient::MSG_LoginComplete` and the code that reads what it stores, read in Ghidra, and from the maintainer's own captures of the r806919 client entering a zone.
+
+- MSG_LOGINCOMPLETE's `Data` is the wizard's WizClientObject in the CoreObject form, enveloped, written with the Transmit and AuthorityTransmit mask the owner's own object is read with. Its behaviors follow the player template's own order, read from the user's install through TemplateManifest.xml, and each is the class `behavior_client_class` names or an empty slot.
+- `Permissions` is the account's permission bitmask, which the client keeps and hands to its own permission setter. Its own code gives the bits these meanings: 0x1 menu chat and 0x4 open chat, the level the client lets a wizard speak at, 0x4 also opening new messages; 0x2 and 0x8 which chat the client shows; 0x20 gifting; 0x40 a feature the client also opens on a test server; 0x400 a paying account, which the client sets itself from the login response; 0x800 and 0x1000 the crown earning dialogs. Every account gets `LoginComplete.Permissions`, 47 by default, chat and gifting, until accounts carry chat levels of their own.
+- `IsCSR` opens the client's customer service and developer tools, among them its free camera and its scene graph dump, and the CSR data package it reads from CSR.wad. It is 1 for accounts at `LoginComplete.CSRSecurityLevel` and above, 2, a game master, by default, which settles how security levels map to it.
+- `TestServer` opens features the client keeps closed on an ordinary realm, and is `LoginComplete.TestServer`, off by default.
+- `CriticalObjects` is sent empty, which the client takes as no critical objects rather than a list to deserialize; the list it would hold is not enveloped.
+- `ZoneID` is the KI string hash of the zone's path, the same number the client sends back as MSG_CLIENTZONED's `ZoneNameID` once it has loaded the zone, so both name the zone the same way. `DynamicZoneID` and `DynamicServerProcID` are the instance's dynamic zone id, because one process holds every instance.
+- A message with `SegmentedMessage` 0 stands alone. The client gathers `Data` across messages when it is 1 for the first segment or more for the next ones and `LastSegment` is 0, which a player object too large for one frame will need.
+- A wizard stands in the world when MSG_CLIENTZONED names the zone it was sent to.
+
 ### Server-side class schemas
 
 Settled on 2026-09-25 at the maintainer's direction, which asked for storage that holds whatever the project needs without limit and can be written and used efficiently, rather than JSON files: what the project knows about the client's object classes beyond the type dump lives in world database tables, not in files under data/.

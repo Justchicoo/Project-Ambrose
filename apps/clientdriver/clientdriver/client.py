@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Drives the user's own client: the Ambrose launcher starts it, the window is found by class and size, text and keys are posted as window messages so the machine stays usable, a press borrows the cursor and the foreground for about a second because the client's interface drops mouse messages while its window is not the active one and says whether it got them, and frames come from the composited window surface so a covered window still reads.
+# Drives the user's own client: the Ambrose launcher starts it, the window is found by class and size, text and keys are posted as window messages so the machine stays usable, a press borrows the cursor and the foreground for about a second and raises the window above anything covering the point it presses, because the client's interface drops mouse messages while its window is not the active one and hit-tests a press against the real cursor, and says whether it got them, and frames come from the composited window surface so a covered window still reads.
 import contextlib
 import ctypes
 import os
@@ -101,7 +101,7 @@ def force_foreground(handle, timeout=2.0):
 
 class Client:
     def __init__(self, launcher, run_folder, host, port, window, client_dir=None, locale=None, log=None,
-                 install=None, revision=None):
+                 install=None, revision=None, character=None):
         self.launcher = launcher
         self.run_folder = run_folder
         self.host = host
@@ -109,6 +109,7 @@ class Client:
         self.window = window
         self.client_dir = client_dir
         self.locale = locale
+        self.character = character
         self.launcher_process = None
         self.launcher_output = os.path.join(os.path.dirname(run_folder), "launcher.txt")
         self.launcher_log = LogTail(self.launcher_output)
@@ -134,6 +135,8 @@ class Client:
             wanted += ["--client", self.client_dir]
         if self.locale:
             wanted += ["--locale", self.locale]
+        if self.character:
+            wanted += ["--character", self.character]
         return wanted
 
     def start(self, timeout=180):
@@ -368,10 +371,8 @@ class Client:
         import win32gui
 
         previous = win32gui.GetForegroundWindow()
-        if previous == self.handle:
-            yield True
-            return
-        got = force_foreground(self.handle)
+        got = True if previous == self.handle else force_foreground(self.handle)
+        win32gui.SetWindowPos(self.handle, win32con.HWND_TOP, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
         try:
             yield got
         finally:

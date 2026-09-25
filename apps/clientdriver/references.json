@@ -8,7 +8,8 @@
     "only the window mode, the window size and the metrics address; a changed scale invalidates every number",
     "here and the crops with it.",
     "'never_quit_after' holds the one thing this client does that reaches off the machine: what it must not",
-    "have last written in its own log when the driver asks it to quit, and what puts it right again."
+    "have last written in its own log when the driver asks it to quit, and what puts it right again.",
+    "'client_writes' names the files the client writes into its own data folder itself, which a run reports rather than counts against the install being only read."
   ],
   "key": {"revision": "r806919.Wizard_1_610", "window": "1280x720", "ui_scale": "install default"},
   "match": {"tolerance": 32, "fraction": 0.65},
@@ -30,6 +31,7 @@
   ],
   "targets": {
     "login_reconnect": {"at": [771, 428], "presses": "the button of the refused-login dialog that reconnects"},
+    "charselect_play": {"at": [640, 689], "presses": "the button of the character selection screen that plays the chosen wizard"},
     "charselect_new": {"at": [946, 689], "presses": "the button of the character selection screen that starts a new wizard"},
     "dialog_next": {"at": [806, 697], "presses": "the button that moves a creation dialogue on"},
     "test_skip": {"at": [405, 605], "presses": "the button that skips the sorting test"},
@@ -39,5 +41,8 @@
     "appearance_next": {"at": [1213, 668], "presses": "the button that accepts the wizard's look"},
     "name_random": {"at": [730, 697], "presses": "the button that rolls a name"},
     "name_done": {"at": [902, 697], "presses": "the button that submits the wizard"}
-  }
+  },
+  "client_writes": [
+    {"path": "^Data/GameData/CharacterRegistry/\\d+\\.xml$", "because": "the client keeps a registry file for each wizard that has entered the world, named by its character id, in its own data folder, and writes it itself on every entry"}
+  ]
 }

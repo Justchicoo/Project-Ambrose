@@ -13,6 +13,7 @@
 #include "CharacterNameMgr.h"
 #include "MapMgr.h"
 #include "ObjectSchemaMgr.h"
+#include "ObjectTemplateMgr.h"
 #include "ZoneMgr.h"
 #include "CharacterNameScript.h"
 #include "AccountMgr.h"
@@ -169,7 +170,7 @@ namespace
                 LOG_ERROR("server.gameserver", "Cannot open the realm's databases");
                 return false;
             }
-            if (!LoadObjectSchema(setup))
+            if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup))
             {
                 _databases.Close();
                 return false;
@@ -328,6 +329,24 @@ namespace
                 return false;
             }
             return true;
+        }
+
+        bool LoadObjectTemplates(ClientSetupResult const& setup)
+        {
+            sObjectTemplateMgr.RegisterReloadTargets();
+            if (!setup.Install || !sTypeRegistry.IsLoaded())
+            {
+                LOG_WARN("server.gameserver", "No Wizard101 install or type dump is in use, so the player's template is not read and no wizard can enter the world");
+                return true;
+            }
+            sObjectTemplateMgr.SetInstall(setup.Install->Root);
+            std::vector<std::string> errors;
+            if (sObjectTemplateMgr.LoadPlayer(errors))
+                return true;
+            for (std::string const& problem : errors)
+                LOG_ERROR("server.gameserver", "Player template: {}", problem);
+            LOG_ERROR("server.gameserver", "Cannot read the player's template from {}", ClientLocator::PathText(setup.Install->Root));
+            return false;
         }
 
         bool ExtractNames(ClientSetupResult const& setup, SetupPrompt& prompt)

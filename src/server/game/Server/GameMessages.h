@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The game service id and the GAME messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, and the refusal that sends it back where it came from.
+ * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, and the note the client sends once it has loaded that zone, naming it by the string hash of its path.
  */
 
 #ifndef AMBROSE_GAMEMESSAGES_H
@@ -15,6 +15,9 @@
 namespace GameMessages
 {
     inline constexpr uint8 GameService = 5;
+    inline constexpr uint8 WizardService = 12;
+    inline constexpr uint8 Wizard2Service = 53;
+    inline constexpr uint8 Wizard3Service = 56;
 
     struct Attach
     {
@@ -46,6 +49,63 @@ namespace GameMessages
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("Error", &AttachFailed::Error), DmlField("Rejected", &AttachFailed::Rejected), DmlField("NoDisconnect", &AttachFailed::NoDisconnect) };
+        }
+    };
+
+    struct LoginComplete
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_LOGINCOMPLETE";
+
+        std::string ZoneName;
+        std::string Data;
+        uint32 ServerTime = 0;
+        uint64 ZoneId = 0;
+        uint32 DynamicZoneId = 0;
+        uint32 DynamicServerProcId = 0;
+        uint32 Permissions = 0;
+        int32 IsCsr = 0;
+        std::string ZoneServer;
+        uint8 TestServer = 0;
+        uint32 AltMusicFile = 0;
+        uint8 ShowSubscriberIcon = 0;
+        int32 SubscriberCrownsPricePercent = 0;
+        int32 UseFriendFinder = 0;
+        std::string RealmName;
+        uint8 IsBossMarkZone = 0;
+        std::string CriticalObjects;
+        uint8 ZoneHasFriendlyPlayers = 0;
+        uint32 HourOffset = 0;
+        uint32 DisableBeastmoonGroups = 0;
+        uint8 PickUpAllEnabled = 0;
+        uint8 SegmentedMessage = 0;
+        uint8 LastSegment = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ZoneName", &LoginComplete::ZoneName), DmlField("Data", &LoginComplete::Data), DmlField("ServerTime", &LoginComplete::ServerTime),
+                DmlField("ZoneID", &LoginComplete::ZoneId), DmlField("DynamicZoneID", &LoginComplete::DynamicZoneId),
+                DmlField("DynamicServerProcID", &LoginComplete::DynamicServerProcId), DmlField("Permissions", &LoginComplete::Permissions), DmlField("IsCSR", &LoginComplete::IsCsr),
+                DmlField("ZoneServer", &LoginComplete::ZoneServer), DmlField("TestServer", &LoginComplete::TestServer), DmlField("AltMusicFile", &LoginComplete::AltMusicFile),
+                DmlField("ShowSubscriberIcon", &LoginComplete::ShowSubscriberIcon), DmlField("SubscriberCrownsPricePercent", &LoginComplete::SubscriberCrownsPricePercent),
+                DmlField("UseFriendFinder", &LoginComplete::UseFriendFinder), DmlField("RealmName", &LoginComplete::RealmName), DmlField("IsBossMarkZone", &LoginComplete::IsBossMarkZone),
+                DmlField("CriticalObjects", &LoginComplete::CriticalObjects), DmlField("ZoneHasFriendlyPlayers", &LoginComplete::ZoneHasFriendlyPlayers),
+                DmlField("HourOffset", &LoginComplete::HourOffset), DmlField("DisableBeastmoonGroups", &LoginComplete::DisableBeastmoonGroups),
+                DmlField("PickUpAllEnabled", &LoginComplete::PickUpAllEnabled), DmlField("SegmentedMessage", &LoginComplete::SegmentedMessage),
+                DmlField("LastSegment", &LoginComplete::LastSegment) };
+        }
+    };
+
+    struct ClientZoned
+    {
+        static constexpr uint8 ServiceId = Wizard2Service;
+        static constexpr std::string_view Tag = "MSG_CLIENTZONED";
+
+        uint32 ZoneNameId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ZoneNameID", &ClientZoned::ZoneNameId) };
         }
     };
 }

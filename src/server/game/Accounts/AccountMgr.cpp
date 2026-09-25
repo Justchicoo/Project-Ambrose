@@ -299,16 +299,28 @@ AccountLookup AccountMgr::GetAccountByName(std::string_view username) const
 
 AccountLookup AccountMgr::GetAccountById(uint64 accountId) const
 {
-    LoginStatement statement = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_BY_ID);
+    LoginStatement statement = PrepareGetAccountById(accountId);
     if (!statement)
         return { AccountOpResult::DatabaseError, std::nullopt };
-    statement->SetData(0, accountId);
     PreparedQueryResult result;
     if (!LoginDatabase.TryQuery(*statement, result))
         return { AccountOpResult::DatabaseError, std::nullopt };
     if (!result)
         return { AccountOpResult::Ok, std::nullopt };
     return { AccountOpResult::Ok, ReadAccount(*result) };
+}
+
+std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> AccountMgr::PrepareGetAccountById(uint64 accountId)
+{
+    LoginStatement statement = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_BY_ID);
+    if (statement)
+        statement->SetData(0, accountId);
+    return statement;
+}
+
+AccountInfo AccountMgr::ReadAccountRow(PreparedResultSet const& row)
+{
+    return ReadAccount(row);
 }
 
 std::optional<AccountBan> AccountMgr::GetActiveBan(uint64 accountId, AccountOpResult* result) const

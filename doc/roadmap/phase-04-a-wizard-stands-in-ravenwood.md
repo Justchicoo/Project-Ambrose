@@ -28,7 +28,7 @@
 The roadmap critic flagged these. Resolve each one before or while implementing the milestones it names.
 
 - **Ordering.** 4.09 lists MSG_COMMAND/MSG_COMMANDRESULT and '.zone info' / '.reload zone_location' as its acceptance, but chat-to-CommandMgr routing only arrives in 6.04. Until then 4.09 can only be console-verified. Also unverified: that GM text reaches the server as MSG_COMMAND. GameMessages.xml describes MSG_COMMAND (5:44; Command WSTR, ResultEvent STR, TimeLeft INT) as a 'Command Processor Message', and WizardMessages3.xml has a separate MSG_SERVERCOMMAND (56:172) described as 'Job Server sends command to a Zone Server'.
-- **Ordering.** 4.11/4.14 build the player's CoreObject for LOGINCOMPLETE before the template store (5.01). The player object is template 1 (ObjectData/PlayerObject.xml per 3.11) and carries behaviors. Either 4.14 needs 5.01 or a stub template path, or the plan should state that behaviors are hand-built until 5.01.
+- **Ordering.** 4.11/4.14 build the player's CoreObject for LOGINCOMPLETE before the template store (5.01). The player object is template 1 (ObjectData/PlayerObject.xml per 3.11) and carries behaviors. Either 4.14 needs 5.01 or a stub template path, or the plan should state that behaviors are hand-built until 5.01. **Resolved on 2026-09-25:** neither. `sObjectTemplateMgr` reads template 1 the way the client does, through TemplateManifest.xml to ObjectData/PlayerObject.xml in the user's own Root.wad, and the player object takes its 39 behaviors in that template's order, each as the class `behavior_client_class` names or an empty slot; 5.01 grows the same store to every template.
 - **Missing work.** LOGINCOMPLETE segmentation: MSG_LOGINCOMPLETE carries SegmentedMessage and LastSegment UBYT fields, plus DynamicServerProcID, Permissions, IsCSR, ZoneServer, HourOffset, PickUpAllEnabled and others (GameMessages.xml 5:108). 4.11/4.14 mention none of the segmentation semantics.
 - **Missing work.** MSG_ATTACH also carries PassKey, MachineID, Reattach, Retry, SessionID/SessionSlot and TargetPlayerID (5:7). 4.07/4.13 validate only LoginKey. Reattach/Retry semantics need an owner earlier than 6.08.
 - **Missing work.** Multi-realm inter-process communication: friends presence, cross-realm whispers, party member zones, realm-transfer handoff, and kicking a character online on another realm all need a login<->game or game<->game bus (or DB polling). Only heartbeat rows (4.03) and login keys exist.
@@ -676,7 +676,7 @@ A real client that selects a character loads into its saved zone and stands at t
 **Acceptance**
 
 - [ ] Real client: log in, pick a character, see the loading screen, then control the wizard in WizardCity/WC_Hub at 'Start'
-- [ ] Real client: a character whose saved zone is WizardCity/WC_Ravenwood loads into Ravenwood
+- [x] Real client: a character whose saved zone is WizardCity/WC_Ravenwood loads into Ravenwood. Client driver runs 20260925-100208 and 20260925-100536: the enter-world scenario's wizard, saved in WizardCity/WC_Ravenwood, is placed at the zone's Start, the client accepts MSG_LOGINCOMPLETE and loads Ravenwood
 - [ ] Unit: HandleAttach with a wrong LoginKey sends MSG_ATTACHFAILED and never MSG_LOGINCOMPLETE
 - [ ] Unit: HandleAttach with another account's CharID is rejected
 - [ ] Integration: a socket that never sends MSG_ATTACH is closed after the timeout
@@ -699,9 +699,9 @@ A real client that selects a character loads into its saved zone and stands at t
 **Acceptance**
 
 - [ ] Real client: log in, pick a character, loading screen, then control the wizard in WizardCity/WC_Hub at 'Start'
-- [ ] Saved zone WC_Ravenwood loads Ravenwood
+- [x] Saved zone WC_Ravenwood loads Ravenwood. Client driver runs 20260925-100208 and 20260925-100536: the enter-world scenario's wizard, saved in WizardCity/WC_Ravenwood, is placed at the zone's Start, the client accepts MSG_LOGINCOMPLETE and loads Ravenwood
 - [ ] LOGINCOMPLETE fills ZoneName, ZoneID, DynamicZoneID, ServerTime, RealmName and a wrapped empty CriticalObjects
-- [ ] MSG_CLIENTZONED (53:64) marks the session in world
+- [x] MSG_CLIENTZONED (53:64) marks the session in world. The same runs: the client sends it with ZoneNameID 699201167, the KI string hash of WizardCity/WC_Ravenwood, and the game server logs the wizard standing in the world
 
 ### Detailed spec from WLD-7: Attach and login complete: standing in an empty zone
 
@@ -729,7 +729,7 @@ A real client that selects a character loads into its saved zone and stands at t
 **Acceptance**
 
 - [ ] Real client: log in, pick a character, see the loading screen, then control the wizard in WizardCity/WC_Hub at 'Start'
-- [ ] Real client: a character whose saved zone is WizardCity/WC_Ravenwood loads into Ravenwood
+- [x] Real client: a character whose saved zone is WizardCity/WC_Ravenwood loads into Ravenwood. Client driver runs 20260925-100208 and 20260925-100536: the enter-world scenario's wizard, saved in WizardCity/WC_Ravenwood, is placed at the zone's Start, the client accepts MSG_LOGINCOMPLETE and loads Ravenwood
 - [ ] Unit: HandleAttach with a wrong LoginKey sends MSG_ATTACHFAILED and never MSG_LOGINCOMPLETE
 - [ ] Unit: HandleAttach with another account's CharID is rejected
 - [ ] Integration: a socket that never sends MSG_ATTACH is closed after the timeout

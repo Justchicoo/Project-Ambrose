@@ -75,7 +75,6 @@ These block specific milestones. The maintainer decides each one, then this list
 - Where server-side content not in the client comes from, clean-room: quests, creature decks, drop tables, vendor stock, trainer lists, badges, XP/gold formulas, bank capacities, potion rates. Blocks 8.13, 10.07-10.10, 10.16, 11.14, 12.08.
 - Whether extractor-filled tables (object_template, zone_*, item_template, spells) are generated locally into the shared world DB or into a separate local-only DB, and whether templates are decoded at runtime from WADs or stored in the DB. Blocks 4.08, 5.01, 7.01, 8.04, 8.06.
 - Threading model: one world thread vs map-per-thread or strands. Blocks 4.01, 4.10, 6.01 and duel timers in 9.06.
-- How account security levels map to LOGINCOMPLETE IsCSR/Permissions. Blocks 4.02 and 6.04.
 - Whether zone spawns for all 3356 zones load at startup or lazily per instance. Blocks 4.09 and 5.02.
 - Crowns policy: GM grant only, or earned in game. Blocks 12.15 and 13.20.
 - Whether the tutorial moves earlier, since new characters see it first. Affects where 14.02/14.03 sit and 3.16's playercreateinfo start zone.

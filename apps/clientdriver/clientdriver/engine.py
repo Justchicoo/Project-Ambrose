@@ -22,6 +22,7 @@ class Engine:
         self.scenario = scenario
         self.client = client
         self.server = server
+        self.game = None
         self.store = store
         self.shots = shots
         self.variables = variables
@@ -115,6 +116,11 @@ class Engine:
 
     def act_wait_server_log(self, step):
         return self.wait_log(self.server.log, step, self.server.alive)
+
+    def act_wait_game_log(self, step):
+        if self.game is None:
+            raise StepFailed("the scenario waits on the game server's log, but it does not require the game server")
+        return self.wait_log(self.game.log, step, self.game.alive)
 
     def act_wait_client_log(self, step):
         return self.wait_log(self.client.log, step, self.client.alive)
