@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Takes the admin API token from Admin.Token or its token file, generating 32 random bytes into a file it creates itself so the permissions are always the ones built here, keeping that file in the data folder or, where the machine names none, in the folder the config file came from, putting those permissions back on a file that already exists, and refusing a token that is too short or holds anything but printable characters.
+ * Takes the admin API token from Admin.Token or its token file, generating 32 random bytes into a file it creates itself so the owner and the permissions are always the ones built here, keeping that file in the data folder or, where the machine names none, in the folder the config file came from, putting that owner and those permissions back on a file that already exists, and refusing a token that is too short or holds anything but printable characters.
  */
 
 #include "AdminToken.h"
@@ -46,7 +46,12 @@ namespace
         return std::error_code(static_cast<int>(result), std::system_category()).message();
     }
 
-    bool BuildOwnerOnlyAcl(PACL& list, std::string& error)
+    PSID UserSid(std::vector<uint8> const& user)
+    {
+        return reinterpret_cast<TOKEN_USER const*>(user.data())->User.Sid;
+    }
+
+    bool BuildOwnerOnlyAcl(PACL& list, std::vector<uint8>& user, std::string& error)
     {
         HANDLE processToken = nullptr;
         if (!::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &processToken))
@@ -56,8 +61,8 @@ namespace
         }
         DWORD needed = 0;
         ::GetTokenInformation(processToken, TokenUser, nullptr, 0, &needed);
-        std::vector<uint8> buffer(needed != 0 ? needed : 1);
-        if (!::GetTokenInformation(processToken, TokenUser, buffer.data(), static_cast<DWORD>(buffer.size()), &needed))
+        user.assign(needed != 0 ? needed : 1, 0);
+        if (!::GetTokenInformation(processToken, TokenUser, user.data(), static_cast<DWORD>(user.size()), &needed))
         {
             error = LastError();
             ::CloseHandle(processToken);
@@ -71,7 +76,7 @@ namespace
         access.grfInheritance = NO_INHERITANCE;
         access.Trustee.TrusteeForm = TRUSTEE_IS_SID;
         access.Trustee.TrusteeType = TRUSTEE_IS_USER;
-        access.Trustee.ptstrName = static_cast<LPWSTR>(reinterpret_cast<TOKEN_USER const*>(buffer.data())->User.Sid);
+        access.Trustee.ptstrName = static_cast<LPWSTR>(UserSid(user));
 
         list = nullptr;
         if (DWORD const result = ::SetEntriesInAclW(1, &access, nullptr, &list); result != ERROR_SUCCESS)
@@ -84,12 +89,15 @@ namespace
 
     bool SecureOwnerOnly(std::filesystem::path const& file, std::string& error)
     {
+        std::vector<uint8> user;
         PACL list = nullptr;
-        if (!BuildOwnerOnlyAcl(list, error))
+        if (!BuildOwnerOnlyAcl(list, user, error))
             return false;
         std::wstring name = file.wstring();
-        DWORD const result = ::SetNamedSecurityInfoW(name.data(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, nullptr, nullptr, list, nullptr);
+        DWORD result = ::SetNamedSecurityInfoW(name.data(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, nullptr, nullptr, list, nullptr);
         ::LocalFree(list);
+        if (result == ERROR_SUCCESS)
+            result = ::SetNamedSecurityInfoW(name.data(), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION, UserSid(user), nullptr, nullptr, nullptr);
         if (result != ERROR_SUCCESS)
         {
             error = ErrorText(result);
@@ -100,11 +108,13 @@ namespace
 
     bool WriteOwnerOnly(std::filesystem::path const& file, std::string_view text, std::string& error)
     {
+        std::vector<uint8> user;
         PACL list = nullptr;
-        if (!BuildOwnerOnlyAcl(list, error))
+        if (!BuildOwnerOnlyAcl(list, user, error))
             return false;
         SECURITY_DESCRIPTOR descriptor{};
         bool prepared = ::InitializeSecurityDescriptor(&descriptor, SECURITY_DESCRIPTOR_REVISION) != FALSE;
+        prepared = prepared && ::SetSecurityDescriptorOwner(&descriptor, UserSid(user), FALSE) != FALSE;
         prepared = prepared && ::SetSecurityDescriptorDacl(&descriptor, TRUE, list, FALSE) != FALSE;
         prepared = prepared && ::SetSecurityDescriptorControl(&descriptor, SE_DACL_PROTECTED, SE_DACL_PROTECTED) != FALSE;
         if (!prepared)
