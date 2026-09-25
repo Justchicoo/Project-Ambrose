@@ -1,11 +1,10 @@
 # Project Ambrose by Imjustchico
-# Registers the foreground supervisor with Windows Service Control Manager under a dedicated local service account.
+# Registers the supervisor's native Windows service integration.
 
 [CmdletBinding()]
 param(
-    [string]$Binary = "$PSScriptRoot\..\..\build\windows-msvc-x64\bin\Release\supervisor.exe",
-    [string]$Config = "$env:ProgramData\Ambrose\supervisor.conf",
-    [string]$ServiceName = "AmbroseSupervisor"
+    [string]$Binary = "$PSScriptRoot\..\..\build\windows-msvc-x64\bin\RelWithDebInfo\supervisor.exe",
+    [string]$Config = "$env:ProgramData\Ambrose\supervisor.conf"
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,11 +18,6 @@ if (-not (Test-Path -LiteralPath $Binary)) {
 
 $configDirectory = Split-Path -Parent $Config
 New-Item -ItemType Directory -Force -Path $configDirectory | Out-Null
-$distributed = Join-Path (Split-Path -Parent $PSScriptRoot) "..\..\conf\dist\supervisor.conf.dist"
-if (-not (Test-Path -LiteralPath $Config)) {
-    Copy-Item -LiteralPath $distributed -Destination $Config
-}
-
-sc.exe create $ServiceName binPath= "`"$Binary`" --config `"$Config`"" start= auto DisplayName= "Project Ambrose Supervisor" | Out-Host
-sc.exe description $ServiceName "Runs the Project Ambrose supervisor and its headless server apps." | Out-Host
-Write-Output "Installed $ServiceName; start it with: Start-Service $ServiceName"
+& $Binary --install-service --config $Config
+if ($LASTEXITCODE -ne 0) { throw "supervisor --install-service failed with exit code $LASTEXITCODE" }
+Write-Output "Installed AmbroseSupervisor; start it with: Start-Service AmbroseSupervisor"
