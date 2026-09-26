@@ -126,7 +126,7 @@ Everything not in the table above, including every milestone whose dependencies 
 | 9.02 | Built on 2026-09-26 by the maintainer's world session, 6 of 7 checks. Left: its real-client check, which waits on 6.04 |
 | 5.02 | Kept for the maintainer's world session: it starts the chain through 6.01, 6.03 and 6.04 to 8.01 vitals behind the same menus |
 | 4.08 | Taken over by the maintainer's world session on 2026-09-26 for 5.02, which spawns from its zone_object rows and needs every eligible object: the writer skips an object it cannot read without a word, so WC_Hub writes 177 rows for 183 objects, and spawn data is not extracted. MeruneFleuruwu's decoding of every zone, with real positions and display keys, is in the tree and is what it builds on |
-| 6.09 | Taken over by the maintainer's world session on 2026-09-26, because it is the only road to the journal's inventory, through 6.10, 7.01, 8.06 and 8.08. MeruneFleuruwu's sweep and its two measurable checks are in the tree; left is the oracle that names the 104 unknown classes |
+| 6.10 | The maintainer's world session, after 5.02: NPC objects do not need it, because the client leaves those server-only behaviors as empty slots too, and its rows are extracted from the user's install at first run rather than committed |
 
 ## In flight
 
