@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The built-in typed views game code reads client objects through: character creation info, core, client and wizard client objects, game object and wizard item templates, the template manifest and its locations, requirement lists and named effects.
+ * The built-in typed views game code reads client objects through: character creation info, core, client and wizard client objects, the core template every template derives from, game object and wizard item templates, the template manifest and its locations, requirement lists and named effects.
  */
 
 #ifndef AMBROSE_OBJECTVIEWS_H
@@ -114,6 +114,20 @@ public:
     decltype(auto) GetGameStats() const noexcept { return Read<GameStats>(); }
 
     AMBROSE_TYPED_VIEW(WizClientObjectView)
+};
+
+class CoreTemplateView : public TypedView<CoreTemplateView>
+{
+public:
+    enum Field : std::size_t { Behaviors, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<PropertyValue::List>(Behaviors, "class BehaviorTemplate*", "m_behaviors"),
+    } };
+    static constexpr ViewDefinition Definition{ "CoreTemplateView", "class CoreTemplate", Fields };
+
+    decltype(auto) GetBehaviors() const noexcept { return Read<Behaviors>(); }
+
+    AMBROSE_TYPED_VIEW(CoreTemplateView)
 };
 
 class GameObjectTemplateView : public TypedView<GameObjectTemplateView>

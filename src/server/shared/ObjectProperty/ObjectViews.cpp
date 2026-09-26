@@ -11,6 +11,7 @@ void ObjectViews::RegisterAll(TypedViewRegistry& registry)
     registry.Add(CoreObjectView::Definition);
     registry.Add(ClientObjectView::Definition);
     registry.Add(WizClientObjectView::Definition);
+    registry.Add(CoreTemplateView::Definition);
     registry.Add(GameObjectTemplateView::Definition);
     registry.Add(WizItemTemplateView::Definition);
     registry.Add(TemplateManifestView::Definition);

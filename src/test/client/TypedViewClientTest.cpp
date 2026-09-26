@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Loads the user's own r806919 type dump, when AMBROSE_TYPE_DUMP_PATH names it, into a registry with every built-in typed view, checks each binds, builds a view over a default object of each view's class and reads every accessor, and checks views over a derived object and refusals over an unrelated one.
+ * Loads the user's own r806919 type dump, when AMBROSE_TYPE_DUMP_PATH names it, into a registry with every built-in typed view, checks each binds, builds a view over a default object of each view's class and reads every accessor, and checks views over a derived object, the core template view over game object, item and recipe templates alike, and refusals over an unrelated one.
  */
 
 #include "Environment.h"
@@ -21,7 +21,7 @@ TEST(TypedViewClientTest, EveryBuiltInViewBindsAgainstR806919AndReadsEveryField)
     ASSERT_TRUE(registry.LoadFromFile(LogConfig::Utf8Path(*path))) << (registry.GetErrors().empty() ? std::string() : registry.GetErrors().front());
     TypeCatalogPtr const catalog = registry.GetCatalog();
     std::vector<ViewDefinition const*> const views = sTypedViewRegistry.GetViews();
-    ASSERT_EQ(views.size(), 10u);
+    ASSERT_EQ(views.size(), 11u);
     for (ViewDefinition const* view : views)
     {
         ViewBinding const* const binding = catalog->FindView(*view);
@@ -114,11 +114,24 @@ TEST(TypedViewClientTest, EveryBuiltInViewBindsAgainstR806919AndReadsEveryField)
     EXPECT_EQ(item->GetRank(), 0);
     EXPECT_EQ(item->GetRarity(), 0);
 
+    PropertyObjectPtr const coreTemplate = create("class CoreTemplate");
+    ASSERT_TRUE(coreTemplate);
+    std::optional<CoreTemplateView> const coreView = CoreTemplateView::From(*coreTemplate);
+    ASSERT_TRUE(coreView);
+    EXPECT_TRUE(coreView->GetBehaviors().empty());
+    PropertyObjectPtr const recipe = create("class RecipeTemplate");
+    ASSERT_TRUE(recipe);
+    EXPECT_TRUE(CoreTemplateView::From(*recipe)) << "a recipe is a template without being a game object";
+    EXPECT_FALSE(GameObjectTemplateView::From(*recipe));
+    EXPECT_TRUE(CoreTemplateView::From(*hat));
+    EXPECT_FALSE(CoreTemplateView::From(*player)) << "an object in the world is not a template";
+
     PropertyObjectPtr const manifest = create("class TemplateManifest");
     ASSERT_TRUE(manifest);
     std::optional<TemplateManifestView> const manifestView = TemplateManifestView::From(*manifest);
     ASSERT_TRUE(manifestView);
     EXPECT_TRUE(manifestView->GetSerializedTemplates().empty());
+    EXPECT_FALSE(CoreTemplateView::From(*manifest));
 
     PropertyObjectPtr const location = create("class TemplateLocation");
     ASSERT_TRUE(location);

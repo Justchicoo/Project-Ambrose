@@ -23,9 +23,9 @@
 
 **Acceptance**
 
-- [ ] Fake archive: cache hit/miss, missing id returns null
-- [ ] GetTemplate(1) is PlayerObject; GetTemplate(1652259) is the hat; first access under 5 ms
-- [ ] `.reload templates` swaps in an edited manifest; a broken one keeps the old map
+- [x] Fake archive: cache hit/miss, missing id returns null
+- [x] GetTemplate(1) is PlayerObject; GetTemplate(1652259) is the hat; first access under 5 ms
+- [x] `.reload templates` swaps in an edited manifest; a broken one keeps the old map
 
 ### Detailed spec from OBJ-16: Template manifest and on-demand template store
 
@@ -33,20 +33,23 @@ The server can fetch any client template by template id, backed by the TemplateM
 
 **Deliverables**
 
-- src/server/game/Entities/ObjectTemplateMgr.h/.cpp (sObjectTemplateMgr), which already reads the player's template, grown to every template: TemplateManifest.xml loaded into an id->path map (137423 entries); GetTemplate(id) decoding lazily with an LRU cache from the archive each entry names, since 12807 entries name theirs as '|World|Part|path', meaning World-Part.wad; typed accessors through OBJ-10 views
-- `.reload templates` rebuilds the manifest map off to the side, validates it, swaps it, and drops cache entries by generation. Objects keep the template snapshot they spawned with. A failure keeps the old map and reports every error.
-- src/test/server/game/Entities/ObjectTemplateMgrTest.cpp using an in-memory fake archive
+- src/server/shared/ClientData/TemplateManifest: TemplateManifest.xml as a map from id to archive and entry (137423 entries), a plain path an entry of Root.wad and '|World|Part|path' one of World-Part.wad (12807 entries), refused whole with each fault named when an id is 0 or repeats, a path is empty or a piped path lacks a part or could leave the GameData folder
+- src/server/game/Entities/ObjectTemplateMgr.h/.cpp (sObjectTemplateMgr), which already read the player's template, grown to every template: GetTemplate(id), and Lookup(id), which also says why a template cannot be had, decoding lazily from the archive each entry names into an LRU cache under `Templates.CacheSize`, 256 MiB by default and changed live. A template is any class derived from CoreTemplate, since the manifest lists recipes, spells, decks and sounds as well as game objects, read through typed views (ObjectTemplate::As, with the new CoreTemplateView beside GameObjectTemplateView and WizItemTemplateView), and its behaviors are the slots CoreObjectFactory::AddBehavior gives an object, as Object templates in doc/ARCHITECTURE.md records
+- `.reload templates` rebuilds the manifest map off to the side from Root.wad opened afresh, validates it, swaps it, and drops cache entries by generation. Objects keep the template snapshot they spawned with. A failure keeps the old map and reports every error. `player_template` reads the player's template from its archive opened afresh and refuses one that is not a game object template
+- src/tools/client: `template` reads through the same store and names each template's archive and class, and `template --list` prints every id the manifest lists with its archive and entry, marking each the install lacks
+- src/test/server/game/Entities/ObjectTemplateMgrTest.cpp and src/test/server/shared/ClientData/TemplateManifestTest.cpp on an install the test builds, its archives made in memory and written to a temporary folder, and src/test/client/ObjectTemplateMgrClientTest.cpp on the user's own
 
 **Acceptance**
 
-- [ ] Unit test with a fake archive: manifest lookup, cache hit/miss, missing id returns null without throwing
-- [ ] Unit test with a fake archive: `.reload templates` with an edited manifest serves the new entry without a restart, an object spawned before the reload keeps its snapshot, and a manifest that fails validation keeps the old map and reports every error
-- [ ] Client-gated test: GetTemplate(1) returns the PlayerObject template; GetTemplate(1652259) returns the hat; a missing manifest path is reported
-- [ ] Client-gated benchmark: first access under 5 ms per template; decoding 10k random templates stays within the memory cap
+- [x] Unit test with a fake archive: manifest lookup, cache hit/miss, missing id returns null without throwing. `ObjectTemplateMgrTest.ASecondLookupIsACacheHitHandingOutTheSameTemplate`: the first lookup of template 7 is a miss that keeps it and the second a hit handing out the same template; `AMissingIdIsNullAndNamedWithoutThrowing`: template 99 is null, without throwing, and named as one TemplateManifest.xml does not list; `APipedPathIsReadFromItsWorldArchive` reads template 11 from Krokotopia-WorldData.wad, and `EachStepThatCannotBeTakenIsNamedAndNothingIsKept` names a missing entry, a file of another class and a missing archive, keeping none of them
+- [x] Unit test with a fake archive: `.reload templates` with an edited manifest serves the new entry without a restart, an object spawned before the reload keeps its snapshot, and a manifest that fails validation keeps the old map and reports every error. `ObjectTemplateMgrTest.ReloadingTemplatesServesAnEditedManifestWhileATemplateHandedOutKeepsItsContents`: after `sReloadMgr.Reload("templates")` template 7 is the Ravenwood Captain from its new file and template 13 exists, while the Ravenwood Guard handed out before the reload keeps its file, name and behaviors; `ABrokenManifestKeepsTheOldMapAndReportsEveryFault`: a manifest with an id of 0, an id listed twice, an empty path and a piped path missing a part is refused with those four errors, the generation and cache are unchanged and both kept and new lookups are served from the old map, as they are after a Root.wad that cannot be opened; `ARootWadWithoutAManifestIsRefusedAndTheOldMapKept`
+- [x] Client-gated test: GetTemplate(1) returns the PlayerObject template; GetTemplate(1652259) returns the hat; a missing manifest path is reported. `ObjectTemplateMgrClientTest` on r806919: template 1 is ObjectData/PlayerObject.xml in Root.wad, Player Object with its 39 behaviors, read through GameObjectTemplateView; 1652259 is Crowns-S58-Hats-L110-BS-008-01, the Balance hat of base cost 27250, read through WizItemTemplateView; and with the install's own manifest in a Root.wad that holds nothing else, template 1 is reported as ObjectData/PlayerObject.xml in Root.wad, which cannot be read, and template 4188 as needing Krokotopia-WorldData.wad, which cannot be opened. The install itself lacks none of the 137423 paths its manifest lists, as `client template --list` shows
+- [x] Client-gated benchmark: first access under 5 ms per template; decoding 10k random templates stays within the memory cap. `AFirstAccessTakesUnderFiveMillisecondsOnceItsArchiveIsOpen`: once each of the 27 archives has been opened, the first access to 1000 random templates took 0.053 ms on average and 0.744 ms at the slowest in an optimized build, and 0.62 ms on average in a debug build; `TenThousandRandomTemplatesStayWithinTheMemoryBudget`: 10000 random templates of 30 classes, 75 MiB decoded in all, never held more than the 16 MiB budget, which kept 2140 of them and dropped 7860, and every game object template among them carries the id the manifest lists it under
 
 **Risks**
 
 - Templates are decoded from the user's install at run time and never stored in a database, as World threads, zone data and extracted tables in doc/ARCHITECTURE.md settles
+- Settled from the client's own code: an entry of a template's m_behaviors whose m_behaviorName is empty gives an object no behavior at all, while a null entry gives an empty slot, and r806919's own templates have entries of both kinds, as Object templates in doc/ARCHITECTURE.md records. 5.02 builds a zone object's behaviors from these slots
 
 ## 5.02 Static zone objects appear (WLD-8)
 

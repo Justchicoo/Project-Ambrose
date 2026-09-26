@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs the client tool to check its usage text and that bad usage exits 2, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install and type dump, that types prints a class the dump holds with its hash, messages prints what the client's own XML says a message carries under its protocol, service and order, handlers names the class in the client program that handles MSG_TIMEDACCESSPASSES and its function, wad prints a BINd entry as JSON, and wad reads a zone's gamedata.bin, which carries a versionable object with no BINd header, into a WizZoneData holding the zone's name and its real locations, each a LocationTemplate with a name and a place, rather than the empty lists a wrong property mask gives; it reports itself skipped when the client checks cannot run.
+# Runs the client tool to check its usage text and that bad usage exits 2, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install and type dump, that types prints a class the dump holds with its hash, messages prints what the client's own XML says a message carries under its protocol, service and order, handlers names the class in the client program that handles MSG_TIMEDACCESSPASSES and its function, wad prints a BINd entry as JSON, template names the archive and class of the template an id names and its list finds a recipe in the World-Part.wad its piped path names, and wad reads a zone's gamedata.bin, which carries a versionable object with no BINd header, into a WizZoneData holding the zone's name and its real locations, each a LocationTemplate with a name and a place, rather than the empty lists a wrong property mask gives; it reports itself skipped when the client checks cannot run.
 if(NOT APP OR NOT WORKDIR)
     message(FATAL_ERROR "APP and WORKDIR must be set")
 endif()
@@ -11,7 +11,7 @@ if(NOT helpResult EQUAL 0 OR NOT helpOutput MATCHES "Usage: client" OR NOT helpO
     message(FATAL_ERROR "client --help exited ${helpResult}: ${helpOutput}${helpError}")
 endif()
 
-foreach(arguments IN ITEMS "" "--bogus" "types" "messages" "wad")
+foreach(arguments IN ITEMS "" "--bogus" "types" "messages" "wad" "template")
     execute_process(COMMAND "${APP}" ${arguments} RESULT_VARIABLE usageResult OUTPUT_VARIABLE usageOutput ERROR_VARIABLE usageError TIMEOUT 30)
     if(NOT usageResult EQUAL 2)
         message(FATAL_ERROR "client with arguments '${arguments}' exited ${usageResult} instead of 2: ${usageOutput}${usageError}")
@@ -42,6 +42,16 @@ set(hat "ObjectData/CrownItems/Series58/Hats/Crowns-S58-Hats-L110-BS-008-01.xml"
 execute_process(COMMAND "${APP}" wad "${hat}" RESULT_VARIABLE hatResult OUTPUT_VARIABLE hatOutput ERROR_VARIABLE hatError TIMEOUT 300)
 if(NOT hatResult EQUAL 0 OR NOT hatOutput MATCHES "class WizItemTemplate" OR NOT hatOutput MATCHES "1652259")
     message(FATAL_ERROR "client wad did not print the crown hat (${hatResult}): ${hatOutput}${hatError}")
+endif()
+
+execute_process(COMMAND "${APP}" template 1652259 RESULT_VARIABLE templateResult OUTPUT_VARIABLE templateOutput ERROR_VARIABLE templateError TIMEOUT 300)
+if(NOT templateResult EQUAL 0 OR NOT templateOutput MATCHES "template 1652259 is ${hat} in Root.wad, a class WizItemTemplate named Crowns-S58-Hats-L110-BS-008-01")
+    message(FATAL_ERROR "client template did not name the hat's archive and class (${templateResult}): ${templateOutput}${templateError}")
+endif()
+
+execute_process(COMMAND "${APP}" template --list Recipe-KR-Robe-L100-MS-007-01 RESULT_VARIABLE listResult OUTPUT_VARIABLE listOutput ERROR_VARIABLE listError TIMEOUT 300)
+if(NOT listResult EQUAL 0 OR NOT listOutput MATCHES "83998489  Recipes-WorldData.wad  ObjectData/Equipment_Recipes/Recipe-KR-Robe-L100-MS-007-01.xml")
+    message(FATAL_ERROR "client template --list did not find the recipe in its world archive (${listResult}): ${listOutput}${listError}")
 endif()
 
 set(zone "$ENV{AMBROSE_CLIENT_DIR}/Data/GameData/WizardCity-WC_Hub.wad")

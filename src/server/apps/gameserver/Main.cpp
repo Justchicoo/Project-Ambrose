@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables and the level and stat tables after the world database takes one, loads the character name tables and the level and stat tables when the world database is open and, when either set is empty, extracts it from the install and loads it again, automatically in auto mode, after a yes in ask mode and never in off mode, registering the level and stat sets as reload targets, loads the zones, the named places inside them and the objects placed in them and registers each as a reload target, refusing to start when they cannot be read, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close, after every wizard still in the world has left it and so been saved. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits or realm heartbeat is applied on the world thread.
+ * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables and the level and stat tables after the world database takes one, loads the character name tables and the level and stat tables when the world database is open and, when either set is empty, extracts it from the install and loads it again, automatically in auto mode, after a yes in ask mode and never in off mode, registering the level and stat sets as reload targets, loads the zones, the named places inside them and the objects placed in them and registers each as a reload target, refusing to start when they cannot be read, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close, after every wizard still in the world has left it and so been saved. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits, template cache or realm heartbeat is applied on the world thread. It reads the template manifest before the player's template, both reload targets.
  */
 
 #include "TypeDumpCache.h"
@@ -365,18 +365,19 @@ namespace
         bool LoadObjectTemplates(ClientSetupResult const& setup)
         {
             sObjectTemplateMgr.RegisterReloadTargets();
+            sObjectTemplateMgr.SetBudget(std::size_t{ sSettings.Get<uint32>("Templates.CacheSize") } << 20);
             if (!setup.Install || !sTypeRegistry.IsLoaded())
             {
-                LOG_WARN("server.gameserver", "No Wizard101 install or type dump is in use, so the player's template is not read and no wizard can enter the world");
+                LOG_WARN("server.gameserver", "No Wizard101 install or type dump is in use, so no template is read and no wizard can enter the world");
                 return true;
             }
             sObjectTemplateMgr.SetInstall(setup.Install->Root);
             std::vector<std::string> errors;
-            if (sObjectTemplateMgr.LoadPlayer(errors))
+            if (sObjectTemplateMgr.LoadManifest(errors) && sObjectTemplateMgr.LoadPlayer(errors))
                 return true;
             for (std::string const& problem : errors)
-                LOG_ERROR("server.gameserver", "Player template: {}", problem);
-            LOG_ERROR("server.gameserver", "Cannot read the player's template from {}", ClientLocator::PathText(setup.Install->Root));
+                LOG_ERROR("server.gameserver", "Object templates: {}", problem);
+            LOG_ERROR("server.gameserver", "Cannot read the object templates from {}", ClientLocator::PathText(setup.Install->Root));
             return false;
         }
 
@@ -544,6 +545,8 @@ namespace
                 }
                 sCharacterNameMgr.SetDefaultLocale(locale);
             }
+            else if (key == "Templates.CacheSize")
+                sObjectTemplateMgr.SetBudget(std::size_t{ sSettings.Get<uint32>("Templates.CacheSize") } << 20);
             else if (key == "Realm.Name" || key == "Realm.Address" || key == "PublicAddress" || key == "Realm.HeartbeatInterval")
                 _heartbeat.Reconfigure(RealmHeartbeatSettings::Load(Config()));
             else if (_context && (key.starts_with("Network.") || key == "Attach.Timeout"))

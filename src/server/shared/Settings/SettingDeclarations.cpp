@@ -54,6 +54,9 @@ namespace
             Unsigned("LoginComplete.CSRSecurityLevel", "2", "0", "4", "", "World", Game, NextUse, "The account security level from which MSG_LOGINCOMPLETE opens the client's game master tools."),
             Flag("LoginComplete.TestServer", "false", "World", Game, NextUse, "Whether MSG_LOGINCOMPLETE tells the client it is on a test server."),
 
+            Unsigned("Templates.CacheSize", "256", "1", "65536", "MiB", "World", Game, Live,
+                "How much memory the object templates decoded from the install may hold before the least recently used is dropped; a smaller budget drops them at once."),
+
             Unsigned("Zone.UnloadDelay", "60", "0", "86400", "s", "Zones", Game, NextUse, "How long an empty zone instance stays loaded, read when its last wizard leaves."),
             Unsigned("Zone.MobileIdReleaseDelay", "2000", "0", "60000", "ms", "Zones", Game, NextUse, "How long a mobile id rests after its wizard leaves before another wizard may take it."),
 

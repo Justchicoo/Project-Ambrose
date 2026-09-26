@@ -1,10 +1,11 @@
 # Project Ambrose by Imjustchico
-# Builds client_tests, which read the user's own client install or type dump and carry the CTest label client, including the game message table check and the login message table check when the login library is built, with the MariaDB client plugins beside it for database checks, and runs the whole-archive sweep on its own because it uses every hardware thread.
+# Builds client_tests, which read the user's own client install or type dump and carry the CTest label client, including the game message table check and the login message table check when the login library is built, with the archive builder and temporary folder helpers the template store check writes its own Root.wad with, the MariaDB client plugins beside it for database checks, and runs the whole-archive sweep on its own because it uses every hardware thread.
 file(GLOB client_test_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 if(NOT TARGET login)
     list(FILTER client_test_sources EXCLUDE REGEX "LoginMessageTableClientTest")
 endif()
-add_executable(client_tests ${client_test_sources} "${CMAKE_CURRENT_SOURCE_DIR}/../Main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../mocks/MessageRoundTrip.cpp")
+add_executable(client_tests ${client_test_sources} "${CMAKE_CURRENT_SOURCE_DIR}/../Main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../mocks/MessageRoundTrip.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mocks/KiwadBuilder.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../mocks/LogTestDirectory.cpp")
 
 target_include_directories(client_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../mocks")
 

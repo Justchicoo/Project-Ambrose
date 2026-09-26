@@ -86,6 +86,7 @@ Applies says when a change takes hold: live at once, or from the next connection
 | `LoginComplete.CSRSecurityLevel` | unsigned | 2 | from 0 to 4 | next connection or operation | gameserver | The account security level from which MSG_LOGINCOMPLETE opens the client's game master tools. |
 | `LoginComplete.Permissions` | unsigned | 47 | from 0 to 4294967295 | next connection or operation | gameserver | The permission bits MSG_LOGINCOMPLETE gives a wizard: 0x1 and 0x4 chat level, 0x2 and 0x8 show chat, 0x20 gifting, 0x40 test features, 0x400 paying, 0x1000 earning crowns. |
 | `LoginComplete.TestServer` | bool | false | none | next connection or operation | gameserver | Whether MSG_LOGINCOMPLETE tells the client it is on a test server. |
+| `Templates.CacheSize` | unsigned | 256 MiB | from 1 to 65536 MiB | live | gameserver | How much memory the object templates decoded from the install may hold before the least recently used is dropped; a smaller budget drops them at once. |
 | `World.Heartbeat` | unsigned | 60 s | from 0 to 86400 s | live | gameserver | How often the world logs that it is still ticking; 0 turns the line off. |
 | `World.UpdateInterval` | unsigned | 50 ms | from 1 to 10000 ms | live | gameserver | How long the world waits between ticks. |
 

@@ -54,6 +54,7 @@ Attach.Timeout = 30
 LoginComplete.Permissions = 47
 LoginComplete.CSRSecurityLevel = 2
 LoginComplete.TestServer = 0
+Templates.CacheSize = 256
 World.Heartbeat = 60
 GM.CommandPrefix = .
 GM.LogCommands = 1
