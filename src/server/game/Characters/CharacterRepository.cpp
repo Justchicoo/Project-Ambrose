@@ -321,6 +321,7 @@ std::vector<CharacterSummary> CharacterRepository::ReadCharacters(PreparedResult
         look.AfterCombatVictoryDance = result[43].Get<uint32>();
         look.NewPlayerOptions = result[44].Get<uint32>();
         look.NewPlayerOptions2 = result[45].Get<uint32>();
+        character.StateRevision = result[46].Get<uint64>();
     } while (result.NextRow());
     return characters;
 }
@@ -346,6 +347,31 @@ CharacterOpResult CharacterRepository::SaveStats(uint64 guid, CharacterStats con
     if (!statement)
         return CharacterOpResult::DatabaseError;
     return CharacterDatabase.DirectExecute(*statement) ? CharacterOpResult::Ok : CharacterOpResult::DatabaseError;
+}
+
+CharacterOpResult CharacterRepository::SavePosition(uint64 guid, float x, float y, float z, float orientation, uint64 revision)
+{
+    if (guid == 0 || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) || !std::isfinite(orientation))
+        return CharacterOpResult::InvalidData;
+    Statement const statement = PrepareSavePosition(guid, x, y, z, orientation, revision);
+    if (!statement)
+        return CharacterOpResult::DatabaseError;
+    return CharacterDatabase.DirectExecute(*statement) ? CharacterOpResult::Ok : CharacterOpResult::DatabaseError;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareSavePosition(uint64 guid, float x, float y, float z, float orientation, uint64 revision)
+{
+    Statement statement = Prepare(CHAR_UPD_POSITION);
+    if (!statement)
+        return statement;
+    statement->SetData(0, x);
+    statement->SetData(1, y);
+    statement->SetData(2, z);
+    statement->SetData(3, orientation);
+    statement->SetData(4, revision);
+    statement->SetData(5, guid);
+    statement->SetData(6, revision);
+    return statement;
 }
 
 CharacterRepository::Statement CharacterRepository::PrepareLoadStats(uint64 guid)

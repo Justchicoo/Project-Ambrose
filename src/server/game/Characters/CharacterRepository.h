@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Stores and loads wizards in the characters database: creating a character with its appearance and the guid high-water mark in one transaction, which a caller that must not block its network thread can build and commit itself, listing and counting an account's live characters, loading one by guid even when deleted, soft deletion of offline characters and restoring, the online flag, the highest guid ever used, and a wizard's character_stats row, read through the wizard so a missing wizard, a wizard with no row yet and a failed read are told apart, and saved whole, with statement builders and row readers for callers that query or save asynchronously.
+ * Stores and loads wizards in the characters database: creating a character with its appearance and the guid high-water mark in one transaction, which a caller that must not block its network thread can build and commit itself, listing and counting an account's live characters, loading one by guid even when deleted, soft deletion of offline characters and restoring, the online flag, the highest guid ever used, a wizard's position written under the revision of its row, and its character_stats row, read through the wizard so a missing wizard, a wizard with no row yet and a failed read are told apart, and saved whole, with statement builders and row readers for callers that query or save asynchronously.
  */
 
 #ifndef AMBROSE_CHARACTERREPOSITORY_H
@@ -66,6 +66,7 @@ public:
     static std::optional<uint64> GetMaxGuid();
     static CharacterStatsLoad LoadStats(uint64 guid);
     static CharacterOpResult SaveStats(uint64 guid, CharacterStats const& stats);
+    static CharacterOpResult SavePosition(uint64 guid, float x, float y, float z, float orientation, uint64 revision);
 
     static Statement PrepareLoadByAccount(uint64 account);
     static Statement PrepareLoad(uint64 guid);
@@ -73,6 +74,7 @@ public:
     static std::vector<CharacterSummary> ReadCharacters(PreparedResultSet& result);
     static Statement PrepareLoadStats(uint64 guid);
     static Statement PrepareSaveStats(uint64 guid, CharacterStats const& stats);
+    static Statement PrepareSavePosition(uint64 guid, float x, float y, float z, float orientation, uint64 revision);
     static std::optional<CharacterStats> ReadStats(PreparedResultSet& result);
     static bool IsValidStats(CharacterStats const& stats) noexcept;
     static std::string_view GetResultName(CharacterOpResult result) noexcept;

@@ -6,4 +6,5 @@ target_link_libraries(entities
     PUBLIC
         characters
         database
-        globals)
+        globals
+        movement)

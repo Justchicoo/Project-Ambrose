@@ -331,6 +331,8 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     SetCharacterName(sCharacterNameMgr.FormatName(character.NameIndices, character.Appearance.Gender).value_or(std::string()));
     _stats = std::move(stats);
     _statsRevision = stored ? stored->Revision : 0;
+    _movement.Reset({ placement.X, placement.Y, placement.Z, placement.Yaw }, 0);
+    _characterRevision = character.StateRevision;
     SendDmlMessage(complete);
     SetStatus(SessionStatus::LoggedIn);
     LOG_DEBUG("server.gamesession", "Session {} sent MSG_LOGINCOMPLETE: zone {}, id {}, dynamic zone {} in process {}, server time {}, realm {}, permissions {:#x}, CSR {}, test server {}, critical objects {}",
@@ -381,6 +383,16 @@ void GameSession::SaveStats()
         CharacterDatabase.Execute(std::move(statement));
 }
 
+void GameSession::SavePosition(PlayerPosition const& position)
+{
+    if (!CharacterDatabase.IsOpen())
+        return;
+    if (CharacterRepository::Statement statement = CharacterRepository::PrepareSavePosition(_worldGuid, position.X, position.Y, position.Z, position.Yaw, ++_characterRevision))
+        CharacterDatabase.Execute(std::move(statement));
+    LOG_INFO("server.gamesession", "Session {} saved wizard {} at ({}, {}, {}) facing {} in {} after {} move(s)", GetSessionId(), _worldGuid, position.X, position.Y, position.Z, position.Yaw,
+        Ambrose::ForLog(_zonePath, 128), _movement.GetMoves());
+}
+
 void GameSession::LeaveWorld()
 {
     SetCharacterName(std::string());
@@ -389,6 +401,8 @@ void GameSession::LeaveWorld()
         SaveStats();
         _stats.reset();
     }
+    if (std::optional<PlayerPosition> const moved = _movement.TakeWrite())
+        SavePosition(*moved);
     if (!_mapId)
         return;
     if (Map* const map = sMapMgr.Find(*_mapId))

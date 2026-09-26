@@ -127,6 +127,7 @@ class Run:
             self.note("the client", client.start(timeout=options["client_timeout"]))
             guard = NetGuard(client.pids, os.path.join(self.folder, "netguard.json"), started=started)
             guard.start()
+            engine.restart = lambda timeout: self.restart_client(client, guard, timeout, options)
             self.cleanups.append(("decide how the client is stopped", lambda: self.quit_safely(client)))
             self.note("the client window", f"{client.find_window(timeout=options['client_timeout']):#x} at "
                                            f"{self.references.window[0]}x{self.references.window[1]}")
@@ -206,6 +207,18 @@ class Run:
         except Exception as error:
             self.failure("write the report", error)
             return written, f"none could be written: {error}"
+
+    def restart_client(self, client, guard, timeout, options):
+        judged = self.quit_safely(client)
+        closed = client.close(force=self.force_close)
+        self.force_close = False
+        started = client.start(timeout=timeout)
+        guard.remember(client.pids)
+        window = client.find_window(timeout=timeout)
+        said = f"{judged}; {closed}; {started}, window {window:#x}"
+        if options.get("background", True):
+            said += f"; {client.to_background()}"
+        return said
 
     def make_engine(self, client, server, store, variables, databases):
         return Engine(self.scenario, client, server, store, self.shots, variables, databases)

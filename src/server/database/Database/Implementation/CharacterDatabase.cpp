@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Registers every characters database statement with its name, SQL, and the connections that prepare it: an account's live characters in creation order, at most MaxCharactersListed of them, and one character by guid, each with its appearance, inserting a character and its appearance, soft deletion of an offline character that remembers the owner and restoring it, counting an account's live characters the way the list finds them, the online flag, and the highest guid ever used, kept in id_sequences so deleted rows cannot hand a guid out again. It also registers the live settings statements: every persisted value, setting and removing one, writing a change's audit row, and reading a key's newest audit rows; and a wizard's character_stats row, read by guid through its character so the read returns a row whenever the wizard exists and an empty result means it failed, and written whole, inserted or replacing the one there only when the write's revision is newer than the row's, the revision assigned last so every column is judged against the revision the row had.
+ * Registers every characters database statement with its name, SQL, and the connections that prepare it: an account's live characters in creation order, at most MaxCharactersListed of them, and one character by guid, each with its appearance, inserting a character and its appearance, soft deletion of an offline character that remembers the owner and restoring it, counting an account's live characters the way the list finds them, the online flag, and the highest guid ever used, kept in id_sequences so deleted rows cannot hand a guid out again. It also registers the live settings statements: every persisted value, setting and removing one, writing a change's audit row, and reading a key's newest audit rows; and a wizard's character_stats row, read by guid through its character so the read returns a row whenever the wizard exists and an empty result means it failed, and written whole, inserted or replacing the one there only when the write's revision is newer than the row's, the revision assigned last so every column is judged against the revision the row had; and a wizard's position, written with the next revision of its character row only when the row's is older.
  */
 
 #include "CharacterDatabase.h"
@@ -17,7 +17,7 @@ void CharacterDatabaseConnection::DoPrepareStatements()
         "c.`pos_x`, c.`pos_y`, c.`pos_z`, c.`orientation`, c.`created`, c.`last_logout`, c.`online`, c.`deleted_at`, c.`deleted_account`, "
         "a.`behavior_template_name_id`, a.`gender`, a.`race`, a.`head_hands_model`, a.`hair_model`, a.`hat_model`, a.`torso_model`, a.`feet_model`, a.`wand_model`, "
         "a.`skin_color`, a.`skin_decal`, a.`hair_color`, a.`hat_color`, a.`hat_decal`, a.`torso_color`, a.`torso_decal`, a.`torso_decal2`, a.`feet_color`, a.`feet_decal`, "
-        "a.`skin_decal2`, a.`extended_hair_color`, a.`extended_skin_decal`, a.`after_combat_dance`, a.`after_combat_victory_dance`, a.`new_player_options`, a.`new_player_options2` "
+        "a.`skin_decal2`, a.`extended_hair_color`, a.`extended_skin_decal`, a.`after_combat_dance`, a.`after_combat_victory_dance`, a.`new_player_options`, a.`new_player_options2`, c.`state_revision` "
         "FROM `characters` c INNER JOIN `character_appearance` a ON a.`guid` = c.`guid`";
     PrepareStatement(CHAR_SEL_CHARACTERS_BY_ACCOUNT, "CHAR_SEL_CHARACTERS_BY_ACCOUNT", characterColumns + fmt::format(" WHERE c.`account` = ? AND c.`deleted_at` IS NULL ORDER BY c.`created`, c.`guid` LIMIT {}", MaxCharactersListed), ConnectionFlags::Both);
     PrepareStatement(CHAR_SEL_CHARACTER, "CHAR_SEL_CHARACTER", characterColumns + " WHERE c.`guid` = ?", ConnectionFlags::Both);
@@ -53,4 +53,6 @@ void CharacterDatabaseConnection::DoPrepareStatements()
     PrepareStatement(CHAR_REP_CHARACTER_STATS, "CHAR_REP_CHARACTER_STATS", "INSERT INTO `character_stats` (`guid`, `overflow_xp`, `secondary_school_id`, `training_points`, `gold`, `health`, `mana`, "
         "`potion_charge`, `potion_max`, `arena_points`, `level_locked`, `revision`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE " + newer
         + "`revision` = GREATEST(`revision`, VALUES(`revision`))", ConnectionFlags::Both);
+    PrepareStatement(CHAR_UPD_POSITION, "CHAR_UPD_POSITION", "UPDATE `characters` SET `pos_x` = ?, `pos_y` = ?, `pos_z` = ?, `orientation` = ?, `state_revision` = ? WHERE `guid` = ? AND `state_revision` < ?",
+        ConnectionFlags::Both);
 }

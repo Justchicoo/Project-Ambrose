@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle or hold outside its bounds, or a seeded wizard's stat it does not carry or a negative one, before anything is started.
+# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, or a seeded wizard's stat it does not carry or a negative one, before anything is started.
 import json
 import os
 import re
@@ -9,8 +9,8 @@ from .errors import Refused
 VARIABLE = re.compile(r"\{(\w+)\}")
 
 ACTIONS = {
-    "wait_server_log": (("pattern", "timeout"), ("from", "fail", "expect", "reject", "record")),
-    "wait_client_log": (("pattern", "timeout"), ("from", "fail", "expect", "reject", "record")),
+    "wait_server_log": (("pattern", "timeout"), ("from", "fail", "expect", "reject", "record", "keep")),
+    "wait_client_log": (("pattern", "timeout"), ("from", "fail", "expect", "reject", "record", "keep")),
     "forbid_log": (("side", "pattern"), ()),
     "wait_screen": (("screens", "timeout"), ()),
     "wait_db": (("query", "timeout"), ("database", "expect", "record")),
@@ -23,7 +23,8 @@ ACTIONS = {
     "shot": ((), ("file", "settle")),
     "server_command": (("command",), ("pattern", "timeout")),
     "game_command": (("command",), ("pattern", "timeout")),
-    "wait_game_log": (("pattern", "timeout"), ("from", "fail", "expect", "reject", "record")),
+    "wait_game_log": (("pattern", "timeout"), ("from", "fail", "expect", "reject", "record", "keep")),
+    "restart_client": ((), ("timeout",)),
 }
 COMMON_KEYS = ("action", "name")
 ALLOW_LISTS = ("pending_allowed", "dropped_allowed", "server_log_allowed", "client_log_allowed")
@@ -35,6 +36,8 @@ SIDES = ("server", "client")
 OUTCOMES = ("pass", "failure")
 MAX_HOLD_SECONDS = 30
 MAX_SETTLE_SECONDS = 30
+RUN_VARIABLES = ("user", "password", "wizard", "wizard_guid")
+KEPT_NAME = re.compile(r"^\w+$")
 
 
 def fill(value, variables):
@@ -145,6 +148,10 @@ def _check_step(path, index, step):
         raise Refused(f"{where} ({name}) needs a list of screens to wait for")
     if action == "hold_key" and (not isinstance(step["seconds"], (int, float)) or not 0 < step["seconds"] <= MAX_HOLD_SECONDS):
         raise Refused(f"{where} ({name}) needs to hold its key for more than 0 and at most {MAX_HOLD_SECONDS} seconds")
+    if "keep" in step and (not isinstance(step["keep"], str) or not KEPT_NAME.match(step["keep"]) or step["keep"] in RUN_VARIABLES):
+        raise Refused(f"{where} ({name}) keeps what it matched under a name of letters, digits and underscores that is not one of the run's own, {', '.join(RUN_VARIABLES)}")
+    if action == "restart_client" and "timeout" in step and (not isinstance(step["timeout"], (int, float)) or isinstance(step["timeout"], bool) or not 0 < step["timeout"] <= 600):
+        raise Refused(f"{where} ({name}) may wait more than 0 and at most 600 seconds for the client to come back")
     if action == "shot" and "settle" in step and (not isinstance(step["settle"], (int, float)) or isinstance(step["settle"], bool) or not 0 <= step["settle"] <= MAX_SETTLE_SECONDS):
         raise Refused(f"{where} ({name}) may let the screen settle for 0 to {MAX_SETTLE_SECONDS} seconds before its shot")
     if action == "forbid_log" and step["side"] not in SIDES:

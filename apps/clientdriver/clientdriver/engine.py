@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens.
+# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, for a scenario that logs a wizard in twice, and a log wait can keep what it matched for a later step to expect.
 import os
 import re
 import time
@@ -41,6 +41,7 @@ class Engine:
         self.taken = 0
         self.previous = None
         self.current = None
+        self.restart = None
 
     def fill(self, value):
         return fill(value, self.variables)
@@ -147,6 +148,8 @@ class Engine:
             raise StepFailed(f"the line says {said!r}, which the step rejects: {line}")
         if step.get("record"):
             self.notes.append({"step": step.get("name"), "line": line})
+        if step.get("keep"):
+            self.variables[step["keep"]] = said
         return line
 
     def act_forbid_log(self, step):
@@ -221,6 +224,11 @@ class Engine:
         virtual_key = step["vk"] if isinstance(step["vk"], int) else int(str(step["vk"]), 0)
         self.client.key(virtual_key)
         return f"posted the key {virtual_key:#x}"
+
+    def act_restart_client(self, step):
+        if self.restart is None:
+            raise StepFailed("this run has no client it can start again")
+        return self.restart(float(step.get("timeout", 180)))
 
     def act_hold_key(self, step):
         virtual_key = step["vk"] if isinstance(step["vk"], int) else int(str(step["vk"]), 0)

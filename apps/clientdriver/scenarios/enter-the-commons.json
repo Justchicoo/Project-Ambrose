@@ -6,8 +6,8 @@
     "so the game server puts it at the zone's Start, and it records the fields MSG_LOGINCOMPLETE carried.",
     "Once the wizard stands in the Commons the run holds W, the client's walk key, and passes only if that",
     "changes far more of the view than the same time with no key does, which is the player controlling the",
-    "wizard. The client moves it on its own; the game server does not read MSG_CLIENTMOVE until phase 5, so",
-    "the moves are among the messages it reports once and does not handle yet."
+    "wizard. The client moves it on its own and reports each move in MSG_CLIENTMOVE, which the game server",
+    "reads from 5.03 on to keep where the wizard stands."
   ],
   "requires": {
     "gameserver": true
@@ -230,8 +230,6 @@
     "MSG_BUDDYREQUESTLIST",
     "MSG_CHECK_MAIL",
     "MSG_CLIENT_DISCONNECT",
-    "MSG_CLIENTMOVE",
-    "MSG_CLIENTMOVESTATE",
     "MSG_CONNECTIONSTATS",
     "MSG_CrownShopLogging",
     "MSG_GETLADDER",

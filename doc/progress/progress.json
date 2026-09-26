@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 79,
+    "done": 80,
     "total": 394,
-    "percent": 20.1
+    "percent": 20.3
   },
   "checks": {
-    "done": 688,
+    "done": 696,
     "total": 2391,
-    "percent": 28.8
+    "percent": 29.1
   },
   "contributor_track": {
     "merged": 71,
@@ -50,9 +50,9 @@
     {
       "phase": 5,
       "title": "The zone comes alive for one player",
-      "milestones_done": 2,
+      "milestones_done": 3,
       "milestones_total": 8,
-      "checks_done": 17,
+      "checks_done": 25,
       "checks_total": 57
     },
     {

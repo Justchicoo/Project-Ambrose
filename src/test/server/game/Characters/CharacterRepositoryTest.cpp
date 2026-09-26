@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used, even after its row is gone; and a wizard's stats row, missing until the first save, saved and replaced whole with full health and mana kept as full, a write older than the row changing nothing, refused with a negative amount, and read as no wizard for a guid that has none.
+ * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used, even after its row is gone; and a wizard's stats row, missing until the first save, saved and replaced whole with full health and mana kept as full, a write older than the row changing nothing, refused with a negative amount, and read as no wizard for a guid that has none; and a wizard's position written under the revision of its row, a late older write changing nothing and a position that is not a number refused.
  */
 
 #include "CharacterRepository.h"
@@ -391,4 +391,31 @@ TEST_F(CharacterRepositoryDatabaseTest, AWizardsStatsAreMissingUntilSavedAndThen
     EXPECT_EQ(CharacterRepository::SaveStats(0, stats), CharacterOpResult::InvalidData);
     EXPECT_EQ(*CharacterRepository::LoadStats(301).Stats, stats) << "a refused save changes nothing";
     EXPECT_EQ(CharacterRepository::SaveStats(999, stats), CharacterOpResult::DatabaseError) << "a stats row needs its wizard";
+}
+
+TEST_F(CharacterRepositoryDatabaseTest, APositionWriteOlderThanTheRowChangesNothing)
+{
+    std::mt19937 random(20260926);
+    CharacterSummary wizard = MakeCharacter(random, 401, 7, 1800000401);
+    ASSERT_EQ(CharacterRepository::Create(wizard), CharacterOpResult::Ok);
+    EXPECT_EQ(CharacterRepository::Load(401).Character->StateRevision, 0u);
+
+    ASSERT_EQ(CharacterRepository::SavePosition(401, -100.0f, -1600.0f, -32.0f, 1.5f, 2), CharacterOpResult::Ok);
+    CharacterSummary const moved = *CharacterRepository::Load(401).Character;
+    EXPECT_EQ(moved.PositionX, -100.0f);
+    EXPECT_EQ(moved.PositionY, -1600.0f);
+    EXPECT_EQ(moved.PositionZ, -32.0f);
+    EXPECT_EQ(moved.Orientation, 1.5f);
+    EXPECT_EQ(moved.StateRevision, 2u);
+    EXPECT_EQ(moved.Zone, wizard.Zone) << "a position write leaves the zone as it was";
+
+    ASSERT_EQ(CharacterRepository::SavePosition(401, 500.0f, 500.0f, 0.0f, 0.0f, 1), CharacterOpResult::Ok);
+    EXPECT_EQ(CharacterRepository::Load(401).Character->PositionX, -100.0f) << "a write older than the row, landing late, leaves the newer place";
+    ASSERT_EQ(CharacterRepository::SavePosition(401, 500.0f, 500.0f, 0.0f, 0.0f, 2), CharacterOpResult::Ok);
+    EXPECT_EQ(CharacterRepository::Load(401).Character->PositionX, -100.0f) << "a write is newer only when its revision is higher";
+    ASSERT_EQ(CharacterRepository::SavePosition(401, 500.0f, 510.0f, 1.0f, 0.25f, 3), CharacterOpResult::Ok);
+    EXPECT_EQ(CharacterRepository::Load(401).Character->PositionY, 510.0f);
+    EXPECT_EQ(CharacterRepository::SavePosition(401, std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f, 0.0f, 9), CharacterOpResult::InvalidData);
+    EXPECT_EQ(CharacterRepository::SavePosition(0, 0.0f, 0.0f, 0.0f, 0.0f, 9), CharacterOpResult::InvalidData);
+    EXPECT_EQ(CharacterRepository::Load(401).Character->StateRevision, 3u);
 }

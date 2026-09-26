@@ -110,10 +110,10 @@ NPCs, signs, doors and props from the zone data appear for a player entering a z
 
 **Acceptance**
 
-- [ ] Real client: walk to the Ravenwood gate, relog, spawn there within a few units
-- [ ] Stale ZoneCounter leaves position unchanged
-- [ ] 1000 moves write nothing until the wizard leaves, then write once
-- [ ] A zone change writes the position
+- [x] Real client: walk to the Ravenwood gate, relog, spawn there within a few units
+- [x] Stale ZoneCounter leaves position unchanged
+- [x] 1000 moves write nothing until the wizard leaves, then write once
+- [x] A position write older than the stored one changes nothing
 
 ### Detailed spec from WLD-9: Own movement: position tracking and persistence
 
@@ -122,7 +122,9 @@ The server always knows where each player is, and a relog returns the player to 
 **Deliverables**
 
 - src/server/game/Handlers/MovementHandler.cpp: HandleClientMove (unpack, drop packets whose ZoneCounter differs from the session's), HandleClientMoveState, HandleJump
-- src/server/game/Entities/Player position fields, written to the characters DB when the wizard leaves the world and when it changes zone, never on a timer, as Saving in doc/ARCHITECTURE.md settles at the maintainer's direction
+- src/server/game/Entities/Player/PlayerMovement, where the wizard stands, written to the characters DB when it leaves the world, never on a timer, under the next characters.state_revision (data/sql/updates/db_characters/2026_09_25_02.sql), as Saving in doc/ARCHITECTURE.md settles at the maintainer's direction; the write on a zone change is 6.07's, whose transfer saves the position
+- src/server/game/Movement/MovementPacking brought to the client's own MoveBehavior constants, as Movement in doc/ARCHITECTURE.md records
+- apps/clientdriver: a `restart_client` step and a `keep` on log waits, and walk-and-return.json, for the relog the real-client check needs
 - Session zone counter bumped on every zone change
 
 **Client messages:** MSG_CLIENTMOVE, MSG_CLIENTMOVESTATE, MSG_JUMP
@@ -133,14 +135,14 @@ The server always knows where each player is, and a relog returns the player to 
 
 **Acceptance**
 
-- [ ] Real client: walk to the Ravenwood gate, log out, log back in, and spawn at that gate (within a few units)
-- [ ] Unit: a MSG_CLIENTMOVE with a stale ZoneCounter leaves position unchanged
-- [ ] Unit: 1000 moves write no position until the wizard leaves the world, and leaving writes it once
-- [ ] Unit: a zone change writes the position
+- [x] Real client: walk to the Ravenwood gate, log out, log back in, and spawn at that gate (within a few units). Earned on 2026-09-25 by the client driver's walk-and-return.json on r806919 (run 20260925-203406), in the Commons rather than at the gate, since what is checked is the place: the wizard stood at the zone's Start (-3.267008, 50.24604, -30.47341), walked into the pond with W, and the client was asked to quit, when the game server logged 'saved wizard 1 at (2460, -908, -64) facing 5.1 in WizardCity/WC_Hub after 20 move(s)'; the client was started again, logged in and pressed Play, and the game server put the wizard at (2460, -908, -64), the same place to the unit, where the screenshots before the quit and after the return show it standing at the same spot facing the same way
+- [x] Unit: a MSG_CLIENTMOVE with a stale ZoneCounter leaves position unchanged. `PlayerMovementTest.AMoveUnderTheSessionsZoneCounterPlacesTheWizardAndAStaleOneIsIgnored`: a move under counter 1 while the session's is 0 leaves the wizard where it was, and after the counter becomes 1 a move under 0 is the stale one
+- [x] Unit: 1000 moves write no position until the wizard leaves the world, and leaving writes it once. `PlayerMovementTest.AThousandMovesLeaveOneWriteThatIsTakenOnce`: a thousand moves leave one pending write holding the last place, which leaving the world takes once, and the move handler writes nothing; the real run's wizard was written once after its 20 moves
+- [x] Unit: a position write older than the one stored changes nothing, so writes that land out of order leave the newest. `CharacterRepositoryDatabaseTest.APositionWriteOlderThanTheRowChangesNothing` against MariaDB: a write under revision 1 after one under 2 leaves the row, one under the same revision does too, and one under 3 lands
 
 **Risks**
 
-- What ZoneCounter means is inferred from field names and MSG_UPDATEZONECOUNTER's description ('Sent to client during an intra zone transfer'). The behavior reference ignores it.
+- Settled: the client sets its zone counter to 0 when it sends MSG_ATTACH, takes a new one only from MSG_UPDATEZONECOUNTER or a zone transfer, and stamps every move with it, as Movement in doc/ARCHITECTURE.md records.
 
 ## 5.04 Level, school and stat-config extractor (WIZ-2)
 

@@ -109,6 +109,50 @@ namespace GameMessages
         }
     };
 
+    struct ClientMove
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_CLIENTMOVE";
+
+        uint16 LocationX = 0;
+        uint16 LocationY = 0;
+        uint16 LocationZ = 0;
+        uint8 Direction = 0;
+        uint8 ZoneCounter = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("LocationX", &ClientMove::LocationX), DmlField("LocationY", &ClientMove::LocationY), DmlField("LocationZ", &ClientMove::LocationZ),
+                DmlField("Direction", &ClientMove::Direction), DmlField("ZoneCounter", &ClientMove::ZoneCounter) };
+        }
+    };
+
+    struct ClientMoveState
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_CLIENTMOVESTATE";
+
+        int8 NewState = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("NewState", &ClientMoveState::NewState) };
+        }
+    };
+
+    struct Jump
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_JUMP";
+
+        uint8 ExcludeOriginator = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ExcludeOriginator", &Jump::ExcludeOriginator) };
+        }
+    };
+
     struct GetTimedAccessPasses
     {
         static constexpr uint8 ServiceId = WizardService;

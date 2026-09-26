@@ -453,13 +453,21 @@ Settled on 2026-09-25 in milestone 5.04, from the user's own r806919 files and t
 - A wizard's own stats, settled in 5.05: level, experience and school stay in `characters`, where the character list reads them, and `character_stats` keeps the rest, with health and mana NULL while full so a wizard stays full when its base values change. `PlayerStats` builds them when the wizard enters the world from those rows and its school's row for its level: a wizard without a stats row has earned the training points of every level up to its own and stands at full health and mana, and stored health, mana and gold are brought down to the maximum or pouch they exceed. It fills the WizGameStats the player object carries and the ClientMagicSchoolBehavior, and a wizard whose school has no rows is refused with the reason.
 - The client computes the maximums it shows itself, from `WizGameStats`' own methods: health is `m_baseHitpoints + m_bonusHitpoints` (`CalcTotalHitpoints`), mana is base plus bonus less its mana reduction, never below zero (`CalcMaxMana`), and energy is `m_energyMax + m_bonusEnergy` (`CalcMaxEnergy`), and it shows gold against `m_baseGoldPouch`. So the server sends base values and bonuses and never a computed maximum. It hands MSG_WIZGAMESTATS to `ClientDuelManager` for duel participants, so a player's stats travel in its own object.
 
+### Movement
+
+Settled on 2026-09-25 in milestone 5.03, from the r806919 client's own code.
+
+- Positions and facings travel the way the client's MoveBehavior packs them (`PackPositionOrientation` at 0x1416a36a0, `UnpackPositionOrientation` at 0x1416a37f0): a coordinate is multiplied by 0.25 and truncated to a signed 16-bit value and read back times 4, and a facing is multiplied by 40, keeping the low byte, and read back times 0.025, so a byte holds a facing in 1/40-radian steps. `MovementPacking` follows it; the rounding and 256-steps-per-turn facing it had before were not the client's.
+- The client stamps every MSG_CLIENTMOVE with its zone counter (`GameClient` + 0x21650), which it sets to 0 when it sends MSG_ATTACH and changes only when MSG_UPDATEZONECOUNTER or a zone transfer gives it a new one, and it sends moves only while its zone is loaded. So a session's counter starts at 0, and a move under any other counter was sent before a transfer and is ignored.
+- `PlayerMovement` keeps where the wizard stands from its moves, and the position is written to its character row when it leaves the world, under the next revision of that row, as Saving settles.
+
 ### Saving
 
 Settled on 2026-09-25 at the maintainer's direction, to follow the official game's servers rather than AzerothCore's timed saves.
 
 - A wizard's state is written when it changes and when the wizard leaves the world, never on a timer, so a server that stops unexpectedly loses nothing written before it stopped. A wizard leaves the world when it logs out, when its connection drops, which the server sees even when the client crashes, and when the game server stops, which saves every wizard still in the world before the databases close.
 - Writes are queued on the database's workers so the world thread never waits on one. A queued write carries the next revision of the rows it replaces, and the statement keeps a row whose revision is newer, so writes that land out of order leave the newest.
-- Stats: character_stats is written as each stat changes by the system that changes it, from 8.01 on; until then the one write is the one on leaving, which gives a new wizard its row. Position, in 5.03, is written when the wizard leaves the world and when it changes zone rather than as it moves.
+- Stats: character_stats is written as each stat changes by the system that changes it, from 8.01 on; until then the one write is the one on leaving, which gives a new wizard its row. Position is written when the wizard leaves the world, from 5.03, and when it changes zone, which 6.07's transfer does, rather than as it moves; `characters.state_revision` orders those writes as `character_stats.revision` orders the stats.
 
 ### Automatic setup
 

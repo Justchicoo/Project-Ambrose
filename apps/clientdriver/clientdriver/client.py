@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Drives the user's own client: the Ambrose launcher starts it, the window is found by class and size, text and keys are posted as window messages so the machine stays usable, a press borrows the cursor and the foreground for about a second and raises the window above anything covering the point it presses, because the client's interface drops mouse messages while its window is not the active one and hit-tests a press against the real cursor, and says whether it got them, and frames come from the composited window surface so a covered window still reads.
+# Drives the user's own client: the Ambrose launcher starts it, the window is found by class and size, text and keys are posted as window messages so the machine stays usable, a press borrows the cursor and the foreground for about a second and raises the window above anything covering the point it presses, because the client's interface drops mouse messages while its window is not the active one and hit-tests a press against the real cursor, and says whether it got them, and frames come from the composited window surface so a covered window still reads, with a blank frame, which the client gives while it swaps what it draws, tried again a few times before a step fails on it.
 import contextlib
 import ctypes
 import os
@@ -14,6 +14,8 @@ from .logtail import LogTail
 
 WINDOW_CLASS = "Wizard Graphical Client"
 PROGRAM = "WizardGraphicalClient.exe"
+FRAME_ATTEMPTS = 5
+FRAME_RETRY_SECONDS = 0.5
 LOG_NAME = "WizardClient.log"
 NO_WINDOW = 0x08000000
 SW_SHOWNOACTIVATE = 4
@@ -235,19 +237,25 @@ class Client:
         _x, _y, width, height = win32gui.GetClientRect(self.handle)
         return (left - origin[0], top - origin[1], left - origin[0] + width, top - origin[1] + height)
 
-    def frame(self):
+    def frame(self, attempts=FRAME_ATTEMPTS):
         import win32gui
 
-        if win32gui.IsIconic(self.handle):
-            raise StepFailed("the client window is minimized, so it draws nothing")
-        try:
-            picture = self.frame_from_surface()
-            self.frame_source = "the composited window surface"
-            return picture
-        except Exception as error:
-            picture = self.frame_from_printwindow()
-            self.frame_source = f"PrintWindow, because the window surface gave nothing: {error}"
-            return picture
+        for attempt in range(1, attempts + 1):
+            if win32gui.IsIconic(self.handle):
+                raise StepFailed("the client window is minimized, so it draws nothing")
+            try:
+                picture = self.frame_from_surface()
+                self.frame_source = "the composited window surface"
+                return picture
+            except Exception as error:
+                try:
+                    picture = self.frame_from_printwindow()
+                    self.frame_source = f"PrintWindow, because the window surface gave nothing: {error}"
+                    return picture
+                except StepFailed:
+                    if attempt == attempts:
+                        raise
+                    time.sleep(FRAME_RETRY_SECONDS)
 
     def frame_from_surface(self, timeout=5):
         import ctypes.wintypes

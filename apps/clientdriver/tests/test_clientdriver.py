@@ -382,6 +382,27 @@ class WorldEntryTests(TemporaryFolder):
                 scenario.load("settle.json", search=search)
             self.assertIn("settle for 0 to 30 seconds", str(raised.exception))
 
+    def test_a_kept_name_and_a_restart_wait_are_checked_before_anything_starts(self):
+        search = (os.path.join(self.folder, "scenarios"),)
+        wait = {"action": "wait_game_log", "name": "in", "pattern": "stands in the world", "timeout": 1}
+        for keep, said in ((1, "keeps what it matched"), ("two words", "keeps what it matched"), ("wizard_guid", "not one of the run's own")):
+            self.scenario_file("keep.json", {"title": "keep", "requires": {"gameserver": True}, "wizard": self.WIZARD, "steps": [dict(wait, keep=keep)]})
+            with self.assertRaises(Refused) as raised:
+                scenario.load("keep.json", search=search)
+            self.assertIn(said, str(raised.exception))
+        for timeout in (0, 601, "5", True):
+            self.scenario_file("restart.json", {"title": "restart", "requires": {"gameserver": True}, "wizard": self.WIZARD,
+                                                 "steps": [{"action": "restart_client", "name": "again", "timeout": timeout}]})
+            with self.assertRaises(Refused) as raised:
+                scenario.load("restart.json", search=search)
+            self.assertIn("at most 600 seconds", str(raised.exception))
+        self.scenario_file("fine.json", {"title": "fine", "requires": {"gameserver": True}, "wizard": self.WIZARD,
+                                          "steps": [dict(wait, keep="saved_place"), {"action": "restart_client", "name": "again", "timeout": 240}]})
+        self.assertEqual(len(scenario.load("fine.json", search=search).steps), 2)
+        walk = scenario.load("walk-and-return.json", search=(paths.SCENARIOS,))
+        self.assertTrue(walk.needs_gameserver)
+        self.assertIn("restart_client", [step["action"] for step in walk.steps])
+
     def test_the_shipped_enter_world_scenario_loads_with_its_game_server_and_wizard(self):
         loaded = scenario.load("enter-world.json", search=(paths.SCENARIOS,))
         self.assertTrue(loaded.needs_gameserver)
@@ -733,6 +754,34 @@ class EngineTests(TemporaryFolder):
         self.write(os.path.join("server", "Login.log"), ["2026 INFO [x] authenticated as clientdriver (id 1)"])
         running.run()
         self.assertTrue(running.steps[0]["ok"])
+
+    def test_a_kept_value_reaches_a_later_step_that_expects_it(self):
+        running = self.build([
+            {"action": "wait_server_log", "name": "where it was saved", "pattern": r"saved wizard \d+ at \((\S+, \S+, \S+)\)", "timeout": 1, "keep": "saved_place"},
+            {"action": "wait_server_log", "name": "where it came back", "pattern": r"put wizard \d+ at \((\S+, \S+, \S+)\)", "timeout": 1, "expect": "{saved_place}"}])
+        self.write(os.path.join("server", "Login.log"), ["INFO saved wizard 1 at (-3036, 2120, 4) facing 1.5", "INFO put wizard 1 at (-3036, 2120, 4) with"])
+        running.run()
+        self.assertEqual(running.variables["saved_place"], "-3036, 2120, 4")
+        self.assertTrue(running.steps[1]["ok"])
+        moved = self.build([
+            {"action": "wait_server_log", "name": "where it was saved", "pattern": r"saved wizard \d+ at \((\S+)\)", "timeout": 1, "keep": "saved_place"},
+            {"action": "wait_server_log", "name": "where it came back", "pattern": r"put wizard \d+ at \((\S+)\)", "timeout": 1, "expect": "{saved_place}"}])
+        self.write(os.path.join("server", "Login.log"), ["INFO saved wizard 1 at (7)", "INFO put wizard 1 at (8)"])
+        with self.assertRaises(StepFailed) as raised:
+            moved.run()
+        self.assertIn("where the step expects '7'", str(raised.exception))
+
+    def test_a_restart_needs_a_run_that_can_start_its_client_again(self):
+        running = self.build([{"action": "restart_client", "name": "again", "timeout": 5}])
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("no client it can start again", str(raised.exception))
+        again = self.build([{"action": "restart_client", "name": "again"}])
+        asked = []
+        again.restart = lambda timeout: asked.append(timeout) or "started again"
+        again.run()
+        self.assertEqual(asked, [180.0])
+        self.assertEqual(again.steps[0]["result"], "started again")
 
     def test_a_recorded_line_is_kept_for_the_report(self):
         running = self.build([{"action": "wait_server_log", "name": "the character list", "record": True,

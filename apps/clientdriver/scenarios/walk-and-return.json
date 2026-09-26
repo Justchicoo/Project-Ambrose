@@ -1,25 +1,12 @@
 {
-  "title": "Log in with a wizard already made, play it and stand in Ravenwood",
+  "title": "Walk a wizard, leave the world and come back to where it stood",
   "include": "parts/common.json",
   "notes": [
-    "The run seeds its account's one wizard before the client starts: a Fire wizard in WizardCity/WC_Ravenwood,",
-    "named from the install's own name tables and dressed in a look the client's own creation screens wrote.",
-    "The client lists it, and the run presses Play; the client's own -C option is not used, because it asks the",
-    "server to create a wizard from a bare name rather than choosing the one listed.",
-    "The login server hands the client to the scratch game server, which spends the key, loads the wizard,",
-    "puts it in the zone's public instance and sends MSG_LOGINCOMPLETE with its object; the client loads the",
-    "zone and says so with MSG_CLIENTZONED, which is when the wizard stands in the world.",
-    "The login server starts before the game server has extracted the creation tables and announced its",
-    "realm, so its two warnings about both being empty are expected here.",
-    "Entering the world, the client asks for its timed access passes and subscriber-only items, says it is done",
-    "shopping and reports its screen, which 4.12 answers and the run checks, before it says it has loaded the zone.",
-    "It also asks for its buddies, mail, ladders, subscriptions, tutorial log and more, and sends its first move;",
-    "later milestones answer those, and until then each is reported once by the game server and listed below.",
-    "It then waits for the client's next keepalive on the game server, so a session closed after the wizard",
-    "stands fails the run rather than passing it; a message the server does not handle yet spends the drop budget",
-    "only the first time a session sends it, so the chatter above fits the shared default.",
-    "The login server's DEBUG line for MSG_USER_AUTHEN_V3 shows the client's version, revision, locale and machine",
-    "decoded field by field, which the run records."
+    "The Commons entry of enter-the-commons.json, then the run walks the wizard by holding W and asks the client to",
+    "quit, which closes the wizard's session: the game server writes where the wizard stood, from the moves the client",
+    "sent, once, as it leaves the world, and logs the place it wrote. The run starts the client again under the same",
+    "guard, logs in, presses Play, and passes only if the game server puts the wizard back at the very place it wrote,",
+    "which is a different place from the zone's Start the wizard first stood at."
   ],
   "requires": {
     "gameserver": true
@@ -35,8 +22,8 @@
   ],
   "wizard": {
     "school": 2343174,
-    "zone": "WizardCity/WC_Ravenwood",
-    "zone_display": "Ravenwood",
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
     "locale": "en-US",
     "first": 1,
     "middle": 1,
@@ -147,7 +134,7 @@
       "pattern": "put wizard \\d+ in (\\S+) instance \\d+ at .* and sent its \\d+-byte object",
       "timeout": 60,
       "fail": "cannot enter the world",
-      "expect": "WizardCity/WC_Ravenwood",
+      "expect": "WizardCity/WC_Hub",
       "record": true
     },
     {
@@ -160,13 +147,22 @@
       "name": "the client loads the zone and the wizard stands in it",
       "pattern": "loaded (\\S+), and wizard \\d+ stands in the world",
       "timeout": 300,
-      "expect": "WizardCity/WC_Ravenwood",
+      "expect": "WizardCity/WC_Hub",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server says what MSG_LOGINCOMPLETE carried",
+      "pattern": "sent MSG_LOGINCOMPLETE: zone (\\S+), id \\d+, dynamic zone \\d+ in process \\d+, server time \\d+, realm .+, permissions 0x[0-9a-f]+, CSR \\d, test server \\d, critical objects none",
+      "timeout": 30,
+      "from": "start",
+      "expect": "WizardCity/WC_Hub",
       "record": true
     },
     {
       "action": "shot",
-      "name": "the wizard standing in Ravenwood",
-      "file": "standing-in-ravenwood"
+      "name": "the wizard standing in the Commons",
+      "file": "standing-in-the-commons"
     },
     {
       "action": "wait_game_log",
@@ -198,22 +194,136 @@
       "record": true
     },
     {
+      "action": "hold_key",
+      "name": "walk the wizard forward",
+      "vk": "0x57",
+      "seconds": 1.5,
+      "moves": true
+    },
+    {
       "action": "wait_game_log",
-      "name": "the wizard is still connected at the next keepalive",
-      "pattern": "Session \\d+ keepalive from the client",
-      "timeout": 90,
-      "fail": "Closing session \\d+"
+      "name": "the wizard first stands at the zone's start",
+      "pattern": "put wizard \\d+ in \\S+ instance \\d+ at \\((\\S+, \\S+, \\S+)\\)",
+      "timeout": 10,
+      "from": "start",
+      "keep": "start_place",
+      "record": true
+    },
+    {
+      "action": "hold_key",
+      "name": "walk the wizard further",
+      "vk": "0x57",
+      "seconds": 3
+    },
+    {
+      "action": "restart_client",
+      "name": "quit the client and start it again",
+      "timeout": 240
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server writes where the wizard stood as it leaves",
+      "pattern": "saved wizard \\d+ at \\((\\S+, \\S+, \\S+)\\) facing",
+      "timeout": 60,
+      "keep": "saved_place",
+      "reject": "{start_place}",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up, again",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen, again",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in, again",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server decodes the authentication message field by field, again",
+      "pattern": "sent MSG_USER_AUTHEN_V3: version (W\\.\\d+\\.\\d+\\.\\d+), revision \\S+, data revision \\S+, locale \\S+, machine [0-9A-F]+,",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password, again",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted, again",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server lists the wizard the run made, again",
+      "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads, again",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen, again",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play, again",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard back where it stood",
+      "pattern": "put wizard \\d+ in \\S+ instance \\d+ at \\((\\S+, \\S+, \\S+)\\)",
+      "timeout": 120,
+      "fail": "cannot enter the world",
+      "expect": "{saved_place}",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard stands in the world again",
+      "pattern": "loaded (\\S+), and wizard \\d+ stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
     },
     {
       "action": "shot",
-      "name": "the wizard still standing",
-      "file": "still-standing"
-    },
-    {
-      "action": "forbid_log",
-      "name": "the client loaded every object the server sent",
-      "side": "client",
-      "pattern": "LoadObject Failed|LoadObject tried to read more data"
+      "name": "the wizard back where it stood",
+      "file": "back-where-it-stood",
+      "settle": 2
     }
   ],
   "pending_allowed": [

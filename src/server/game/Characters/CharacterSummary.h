@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A stored wizard as the character screens use it: identity and owning account, name parts or a custom name, school, level, experience, world, zone and position, times in Unix seconds, online and soft-delete state, and the appearance kept one field per WizardCharacterBehavior property.
+ * A stored wizard as the character screens use it: identity and owning account, name parts or a custom name, school, level, experience, world, zone and position, times in Unix seconds, online and soft-delete state, the revision of the game server's last write to its row, and the appearance kept one field per WizardCharacterBehavior property.
  */
 
 #ifndef AMBROSE_CHARACTERSUMMARY_H
@@ -65,6 +65,7 @@ struct CharacterSummary
     bool Online = false;
     std::optional<uint64> DeletedAt;
     std::optional<uint64> DeletedAccount;
+    uint64 StateRevision = 0;
     CharacterAppearance Appearance;
 
     bool IsDeleted() const noexcept { return DeletedAt.has_value(); }

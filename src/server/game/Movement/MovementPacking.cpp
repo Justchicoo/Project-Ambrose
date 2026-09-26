@@ -1,18 +1,16 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements quarter-unit signed coordinate packing and a full-turn 8-bit yaw quantizer.
+ * Follows MoveBehavior::PackPositionOrientation and UnpackPositionOrientation in the r806919 client, which multiply a coordinate by 0.25 and truncate it to a short, read it back times 4, multiply a facing by 40 and keep the low byte, and read it back times 0.025; a facing is first brought into one turn from 0, where the client's own facings lie, and a coordinate a short cannot hold, or one that is not a finite number, is refused rather than wrapped.
  */
 
 #include "MovementPacking.h"
 
-#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <numbers>
 
 namespace
 {
-    constexpr float CoordinateScale = 4.0f;
     constexpr float FullTurn = 2.0f * std::numbers::pi_v<float>;
 }
 
@@ -20,19 +18,15 @@ std::optional<int16> MovementPacking::TryPackLocation(float value) noexcept
 {
     if (!std::isfinite(value))
         return std::nullopt;
-    constexpr float minimum = static_cast<float>(std::numeric_limits<int16>::min()) * CoordinateScale;
-    constexpr float maximum = static_cast<float>(std::numeric_limits<int16>::max()) * CoordinateScale;
-    if (value < minimum || value > maximum)
+    float const steps = std::trunc(value / LocationScale);
+    if (steps < static_cast<float>(std::numeric_limits<int16>::min()) || steps > static_cast<float>(std::numeric_limits<int16>::max()))
         return std::nullopt;
-    float const scaled = std::round(value / CoordinateScale);
-    if (scaled < static_cast<float>(std::numeric_limits<int16>::min()) || scaled > static_cast<float>(std::numeric_limits<int16>::max()))
-        return std::nullopt;
-    return static_cast<int16>(scaled);
+    return static_cast<int16>(steps);
 }
 
 float MovementPacking::UnpackLocation(int16 value) noexcept
 {
-    return static_cast<float>(value) * CoordinateScale;
+    return static_cast<float>(value) * LocationScale;
 }
 
 uint8 MovementPacking::PackYaw(float radians) noexcept
@@ -40,12 +34,12 @@ uint8 MovementPacking::PackYaw(float radians) noexcept
     if (!std::isfinite(radians))
         return 0;
     float normalized = std::fmod(radians, FullTurn);
-    if (normalized < 0)
+    if (normalized < 0.0f)
         normalized += FullTurn;
-    return static_cast<uint8>(std::lround(normalized * 256.0f / FullTurn)) & 0xFFu;
+    return static_cast<uint8>(static_cast<int32>(normalized * YawSteps) & 0xFF);
 }
 
 float MovementPacking::UnpackYaw(uint8 value) noexcept
 {
-    return static_cast<float>(value) * FullTurn / 256.0f;
+    return static_cast<float>(value) * YawStep;
 }
