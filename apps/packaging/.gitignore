@@ -1,0 +1,3 @@
+# Project Ambrose by Imjustchico
+# Ignores local deployment settings containing database credentials.
+.env

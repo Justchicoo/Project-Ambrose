@@ -20,6 +20,7 @@
 #include "ResourceSampler.h"
 #include "SeriesStore.h"
 #include "ServerApp.h"
+#include "ServiceInstaller.h"
 #include "StringUtil.h"
 #include "Supervisor.h"
 #include "TlsCertificate.h"
@@ -43,6 +44,8 @@ namespace
 {
     constexpr std::string_view ConsoleBreakOption = "--console-break";
     constexpr std::string_view SelfSignedOption = "--panel-self-signed";
+    constexpr std::string_view InstallServiceOption = "--install-service";
+    constexpr std::string_view UninstallServiceOption = "--uninstall-service";
 
     int SendConsoleBreak(std::vector<std::string> const& arguments)
     {
@@ -418,10 +421,16 @@ namespace
 int main(int argc, char** argv)
 {
     std::vector<std::string> const arguments = Ambrose::GetArguments(argc, argv);
+    if (std::find(arguments.begin(), arguments.end(), std::string(InstallServiceOption)) != arguments.end())
+        return SupervisorService::Install(arguments);
+    if (std::find(arguments.begin(), arguments.end(), std::string(UninstallServiceOption)) != arguments.end())
+        return SupervisorService::Uninstall();
     if (arguments.size() >= 2 && arguments[1] == ConsoleBreakOption)
         return SendConsoleBreak(arguments);
     if (std::find(arguments.begin(), arguments.end(), std::string(SelfSignedOption)) != arguments.end())
         return WriteSelfSignedCertificate(arguments);
     SupervisorApp app;
+    if (std::find(arguments.begin(), arguments.end(), "--service") != arguments.end())
+        return SupervisorService::Run(arguments, [&app](std::vector<std::string> const& normal) { return app.Run(normal); }, [&app] { app.RequestStop("service stop"); });
     return app.Run(arguments);
 }

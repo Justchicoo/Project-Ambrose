@@ -89,3 +89,71 @@ Treat forced removal as recovery: inspect logs, confirm database recovery on
 the next start, and verify that dashboards resume scraping. Do not store
 client files, captures, generated manifests, credentials, or private host
 paths in the checkout.
+
+## Service installation
+
+The supervisor itself registers the host service and remains in the foreground
+for the service manager to own its restart and shutdown lifecycle. On Linux,
+install it as root:
+
+```sh
+build/linux-gcc/bin/RelWithDebInfo/supervisor --install-service
+systemctl start ambrose
+systemctl status ambrose
+```
+
+The installer creates the dedicated `ambrose` user, enables start at boot and
+copies the distributed supervisor configuration to `/etc/ambrose`. It does not
+start the service automatically. To remove the unit while preserving state:
+
+```sh
+build/linux-gcc/bin/RelWithDebInfo/supervisor --uninstall-service
+```
+
+On Windows, run the elevated executable with `--install-service`; it registers
+the native Service Control Dispatcher entry as LocalService with a unique
+service SID and starts automatically:
+
+```powershell
+.\build\windows-msvc-x64\bin\RelWithDebInfo\supervisor.exe --install-service --config "$env:ProgramData\Ambrose\supervisor.conf"
+Start-Service AmbroseSupervisor
+.\build\windows-msvc-x64\bin\RelWithDebInfo\supervisor.exe --uninstall-service
+```
+
+The PowerShell scripts remain convenience wrappers around these native options.
+
+## Docker and Pterodactyl
+
+The maintained image and Compose stack live under `apps/packaging`. Copy the
+example environment file below into an untracked `.env`, set a read-only
+`AMBROSE_CLIENT_DIR`, and start from that directory:
+
+```dotenv
+MARIADB_PASSWORD=choose-a-local-password
+MARIADB_ROOT_PASSWORD=choose-a-different-local-password
+AMBROSE_CLIENT_DIR=/absolute/path/to/Wizard101
+```
+
+For the database password, use letters, digits, dot, underscore, or hyphen;
+the MySQL connection string format does not escape other characters.
+Compose publishes the player-facing login, game, and patch ports (12000,
+12333, and 12500) on loopback by default. Admin and panel listeners remain
+private; put an explicitly TLS-protected reverse proxy in front of management
+access rather than publishing those listeners directly.
+
+```sh
+docker compose -f apps/packaging/docker-compose.yml --env-file apps/packaging/.env up -d --build
+```
+
+The client is mounted read-only. Configuration, data, logs and backups are
+named volumes. The image carries the type extractor and the SQL, so the first
+start builds the type dump into the data volume and sets up the three
+databases, and the container reports healthy once the login server accepts
+connections on its port. Import
+`apps/packaging/pterodactyl-egg.json` into an existing Pterodactyl panel; its
+startup line waits for `supervisor ready` and its stop command is the panel's
+normal `shutdown` command. Both packaging paths create configuration files
+with mode `0640`; keep their owning user and group arranged so the supervisor
+can read them. The egg installer builds the selected source ref in
+Pterodactyl's Ubuntu yolk, so the selected client install must be available at
+the configured client path.

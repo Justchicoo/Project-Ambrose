@@ -689,10 +689,10 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 **Acceptance**
 
 - [ ] Dev-gated: after `--install-service` and a reboot, the servers are running and the panel is reachable, on Windows and on Linux. A reboot cannot run in CI, so it is run by hand and recorded
-- [ ] `docker compose up` on a clean machine with a client install mounted reaches a ready loginserver with no other steps
+- [x] `docker compose up` on a clean machine with a client install mounted reaches a ready loginserver with no other steps (run in review with a client install mounted read-only: the database turns healthy, the supervisor logs `supervisor ready`, then `loginserver is ready: it printed its ready line` 18 seconds later, once the image's typeextract has built the type dump, then `gameserver is ready`, and the container turns healthy when the login port accepts a connection)
 - [ ] Dev-gated: importing the egg into a Pterodactyl panel creates a server that installs, starts, shows its console and stops cleanly. Needs the maintainer's own Pterodactyl install
 - [ ] Dev-gated: stopping the egg's server from Pterodactyl leaves no crash message in its console. Needs the maintainer's own Pterodactyl install
-- [ ] The image resolves America/New_York, Europe/London and Australia/Lord_Howe from the system time zone database rather than the standard library's built-in copy, and an image built without tzdata fails this check rather than starting
+- [x] The image resolves America/New_York, Europe/London and Australia/Lord_Howe from the system time zone database rather than the standard library's built-in copy, and an image built without tzdata fails this check rather than starting (the build prints `time-zone check: libstdc++ resolved all required zones from system tzdata 2026c`, and the same image built without tzdata stops at `time-zone check: /usr/share/zoneinfo/tzdata.zi is missing or has no version header`)
 
 ## 17.24 Desktop control app
 

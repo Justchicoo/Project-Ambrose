@@ -1,0 +1,21 @@
+# Project Ambrose by Imjustchico
+# Keeps build output, installed packages, local configuration, captures and game data out of the image's build context, leaving .git in so the build can name its revision.
+build/
+out/
+cmake-build-*/
+.vs/
+.vscode/
+**/node_modules/
+**/dist/
+**/__pycache__/
+*.log
+*.conf
+*.wad
+*.pcap
+*.pcapng
+conf/env
+conf/config.cmake
+CMakeUserPresets.json
+CLAUDE.local.md
+apps/clientdriver/refs/
+apps/packaging/.env
