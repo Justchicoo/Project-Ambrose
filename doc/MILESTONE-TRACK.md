@@ -122,7 +122,7 @@ Everything not in the table above, including every milestone whose dependencies 
 | 3.26 | Unblocked by the design system landing, and next in the maintainer's own queue after the terminal dashboard |
 | 17.12 | Held with phase 17 for the panel session, which consumes it. The registry already has Set, Reset, Get, List, Describe and History; its batch route needs an all-or-nothing SetMany that validates every key before persisting any |
 | 17.47 | Kept for the maintainer's panel session, beside the roles it builds on |
-| 8.04 | Built on 2026-09-26 by the maintainer's world session, 9 of 12 checks. Left: the game master's real-client check, which waits on 6.04's in-game commands, and the two WIZ-9 checks that 8.05's spellbook earns, which the world session is building now |
+| 8.04 | Built on 2026-09-26 by the maintainer's world session, 10 of 12 checks. Left: the game master's real-client check, which waits on 6.04's in-game commands, and the real-client check that shows a spell in the Spell Deck, which waits on the deck 8.10 and 8.11 build |
 | 9.02 | Built on 2026-09-26 by the maintainer's world session, 6 of 7 checks. Left: its real-client check, which waits on 6.04 |
 | 5.02 | Kept for the maintainer's world session: it starts the chain through 6.01, 6.03 and 6.04 to 8.01 vitals behind the same menus |
 | 4.08 | Taken over by the maintainer's world session on 2026-09-26 for 5.02, which spawns from its zone_object rows and needs every eligible object: the writer skips an object it cannot read without a word, so WC_Hub writes 177 rows for 183 objects, and spawn data is not extracted. MeruneFleuruwu's decoding of every zone, with real positions and display keys, is in the tree and is what it builds on |
