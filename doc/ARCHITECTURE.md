@@ -527,7 +527,7 @@ Update files run through the connector with multi-statement support, so `DELIMIT
 
 ### Tools
 
-Server code is C++. Tools may use whatever language does the job best, and they must work reliably. A tool that reuses server code, such as the archive reader or the ObjectProperty codec, lives in `src/tools/` in C++. Repository tooling such as the codestyle checker, CI scripts, the installer and the design token generator lives in `apps/` and may be Python or shell. A generator whose output the C++ build reads, such as the terminal's token header, commits its output and is checked by regenerating and diffing it, so the servers build with no Node and no Python step in their path. Every tool file carries the branding header.
+Server code is C++. Tools may use whatever language does the job best, and they must work reliably. A tool that reuses server code, such as the archive reader or the ObjectProperty codec, lives in `src/tools/` in C++. Repository tooling such as the codestyle checker, CI scripts, the installer and the design token generator lives in `apps/` and may be Python or shell. A generator whose output the C++ build reads, such as the terminal's token header, commits its output and is checked by regenerating and diffing it, so the servers build with no Node and no Python step in their path. A tool may drive a program the user installs themselves, as the client tool's `decompile` drives Ghidra, by starting it as a separate program it never links or ships, and keeps what that program produces in the Ambrose data folder, never in the tree. Every tool file carries the branding header.
 
 ### Configuration
 

@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs the client tool to check its usage text and that bad usage exits 2, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install and type dump, that types prints a class the dump holds with its hash, messages prints what the client's own XML says a message carries under its protocol, service and order, handlers names the class in the client program that handles MSG_TIMEDACCESSPASSES and its function, wad prints a BINd entry as JSON, template names the archive and class of the template an id names and its list finds a recipe in the World-Part.wad its piped path names, and wad reads a zone's gamedata.bin, which carries a versionable object with no BINd header, into a WizZoneData holding the zone's name and its real locations, each a LocationTemplate with a name and a place, rather than the empty lists a wrong property mask gives; it reports itself skipped when the client checks cannot run.
+# Runs the client tool to check its usage text and that bad usage exits 2, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install and type dump, that types prints a class the dump holds with its hash, messages prints what the client's own XML says a message carries under its protocol, service and order, handlers names the class in the client program that handles MSG_TIMEDACCESSPASSES and its function, wad prints a BINd entry as JSON, template names the archive and class of the template an id names and its list finds a recipe in the World-Part.wad its piped path names, types lists the template classes that name themselves by an ObjectName property, strings finds a log message in the client program with the function that reads it, xrefs finds that read, disasm prints the function naming the message it reads, functions finds that function by the name it logs under, decompile prints it as C when AMBROSE_GHIDRA_DIR and AMBROSE_GHIDRA_PROJECT name a Ghidra install and project, and wad reads a zone's gamedata.bin, which carries a versionable object with no BINd header, into a WizZoneData holding the zone's name and its real locations, each a LocationTemplate with a name and a place, rather than the empty lists a wrong property mask gives; it reports itself skipped when the client checks cannot run.
 if(NOT APP OR NOT WORKDIR)
     message(FATAL_ERROR "APP and WORKDIR must be set")
 endif()
@@ -11,7 +11,7 @@ if(NOT helpResult EQUAL 0 OR NOT helpOutput MATCHES "Usage: client" OR NOT helpO
     message(FATAL_ERROR "client --help exited ${helpResult}: ${helpOutput}${helpError}")
 endif()
 
-foreach(arguments IN ITEMS "" "--bogus" "types" "messages" "wad" "template")
+foreach(arguments IN ITEMS "" "--bogus" "types" "messages" "wad" "template" "strings" "xrefs" "disasm" "decompile" "functions")
     execute_process(COMMAND "${APP}" ${arguments} RESULT_VARIABLE usageResult OUTPUT_VARIABLE usageOutput ERROR_VARIABLE usageError TIMEOUT 30)
     if(NOT usageResult EQUAL 2)
         message(FATAL_ERROR "client with arguments '${arguments}' exited ${usageResult} instead of 2: ${usageOutput}${usageError}")
@@ -52,6 +52,49 @@ endif()
 execute_process(COMMAND "${APP}" template --list Recipe-KR-Robe-L100-MS-007-01 RESULT_VARIABLE listResult OUTPUT_VARIABLE listOutput ERROR_VARIABLE listError TIMEOUT 300)
 if(NOT listResult EQUAL 0 OR NOT listOutput MATCHES "83998489  Recipes-WorldData.wad  ObjectData/Equipment_Recipes/Recipe-KR-Robe-L100-MS-007-01.xml")
     message(FATAL_ERROR "client template --list did not find the recipe in its world archive (${listResult}): ${listOutput}${listError}")
+endif()
+
+execute_process(COMMAND "${APP}" types --flag Nope Anything RESULT_VARIABLE flagResult OUTPUT_VARIABLE flagOutput ERROR_VARIABLE flagError TIMEOUT 300)
+if(NOT flagResult EQUAL 2 OR NOT flagError MATCHES "there is no property flag Nope; the flags are Save, Copy")
+    message(FATAL_ERROR "client types --flag with a flag nobody has did not exit 2 naming the flags (${flagResult}): ${flagOutput}${flagError}")
+endif()
+
+execute_process(COMMAND "${APP}" types --derived "class CoreTemplate" --flag ObjectName RESULT_VARIABLE derivedResult OUTPUT_VARIABLE derivedOutput ERROR_VARIABLE derivedError TIMEOUT 300)
+if(NOT derivedResult EQUAL 0 OR NOT derivedOutput MATCHES "class RecipeTemplate  m_recipeName" OR derivedOutput MATCHES "GameObjectTemplate")
+    message(FATAL_ERROR "client types --derived --flag did not list the template classes named by an ObjectName property (${derivedResult}): ${derivedOutput}${derivedError}")
+endif()
+
+set(message "Failed to find behavior name for behavior template")
+execute_process(COMMAND "${APP}" strings "${message}" RESULT_VARIABLE stringsResult OUTPUT_VARIABLE stringsOutput ERROR_VARIABLE stringsError TIMEOUT 600)
+if(NOT stringsResult EQUAL 0 OR NOT stringsOutput MATCHES "0x([0-9a-f]+)  \"${message} %s\"\n  0x([0-9a-f]+)  lea [a-z0-9]+, \\[0x0*([0-9A-F]+)\\]  in function 0x([0-9a-f]+), which logs as CoreObjectFactory::AddBehavior")
+    message(FATAL_ERROR "client strings did not find the log message and the function that reads it (${stringsResult}): ${stringsOutput}${stringsError}")
+endif()
+set(messageAddress "${CMAKE_MATCH_1}")
+set(readSite "${CMAKE_MATCH_2}")
+set(addBehavior "${CMAKE_MATCH_4}")
+
+execute_process(COMMAND "${APP}" xrefs "0x${messageAddress}" RESULT_VARIABLE xrefsResult OUTPUT_VARIABLE xrefsOutput ERROR_VARIABLE xrefsError TIMEOUT 600)
+if(NOT xrefsResult EQUAL 0 OR NOT xrefsOutput MATCHES "  0x${readSite}  lea ")
+    message(FATAL_ERROR "client xrefs did not find the read of the message (${xrefsResult}): ${xrefsOutput}${xrefsError}")
+endif()
+
+execute_process(COMMAND "${APP}" disasm "0x${readSite}" RESULT_VARIABLE disasmResult OUTPUT_VARIABLE disasmOutput ERROR_VARIABLE disasmError TIMEOUT 600)
+if(NOT disasmResult EQUAL 0 OR NOT disasmOutput MATCHES "^function 0x${addBehavior}, which logs as CoreObjectFactory::AddBehavior" OR NOT disasmOutput MATCHES "  0x${readSite}  lea [^\n]*  ; \"${message} %s\"")
+    message(FATAL_ERROR "client disasm did not print the function with the message it reads (${disasmResult}): ${disasmOutput}${disasmError}")
+endif()
+
+execute_process(COMMAND "${APP}" functions CoreObjectFactory::AddBehavior RESULT_VARIABLE functionsResult OUTPUT_VARIABLE functionsOutput ERROR_VARIABLE functionsError TIMEOUT 600)
+if(NOT functionsResult EQUAL 0 OR NOT functionsOutput MATCHES "0x${addBehavior}  CoreObjectFactory::AddBehavior\n")
+    message(FATAL_ERROR "client functions did not find the function by the name it logs under (${functionsResult}): ${functionsOutput}${functionsError}")
+endif()
+
+if(NOT "$ENV{AMBROSE_GHIDRA_DIR}" STREQUAL "" AND NOT "$ENV{AMBROSE_GHIDRA_PROJECT}" STREQUAL "")
+    execute_process(COMMAND "${APP}" decompile "0x${addBehavior}" RESULT_VARIABLE decompileResult OUTPUT_VARIABLE decompileOutput ERROR_VARIABLE decompileError TIMEOUT 1800)
+    if(NOT decompileResult EQUAL 0 OR NOT decompileOutput MATCHES "// function 0x${addBehavior}, [^,]+, which logs as CoreObjectFactory::AddBehavior" OR NOT decompileOutput MATCHES "${message}")
+        message(FATAL_ERROR "client decompile did not print the function as C (${decompileResult}): ${decompileOutput}${decompileError}")
+    endif()
+else()
+    message(STATUS "client tool test: decompile is not checked, since AMBROSE_GHIDRA_DIR and AMBROSE_GHIDRA_PROJECT do not both name a Ghidra install and project")
 endif()
 
 set(zone "$ENV{AMBROSE_CLIENT_DIR}/Data/GameData/WizardCity-WC_Hub.wad")

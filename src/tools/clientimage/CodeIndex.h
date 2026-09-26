@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Indexes the executable sections of a PE image for discovery: RIP-relative lea references, direct call sites, RIP-relative indirect calls and jumps through a memory slot, instruction decoding with Zydis from a known instruction start, naming each register operand and the 64-bit register it is part of, the instructions of a function up to an address or from one to its end, which is the last exception table region continuing it, or for a leaf function the table does not list the int3 padding or next listed function after it, and, decoded the first time they are asked for, every RIP-relative operand of the functions the exception table lists, by target or as the list of every address they read.
+ * Indexes the executable sections of a PE image for discovery: RIP-relative lea references, direct call sites, RIP-relative indirect calls and jumps through a memory slot, every place that reads, calls or branches to an address at a true instruction start or holds it as a pointer the relocation table lists, such as a vtable entry, instruction decoding with Zydis from a known instruction start, naming each register operand and the 64-bit register it is part of and, when asked, writing the instruction in Intel syntax with its targets as addresses, a whole function disassembled that way from its start, the instructions of a function up to an address or from one to its end, which is the last exception table region continuing it, or for a leaf function the table does not list the int3 padding or next listed function after it, and, decoded the first time they are asked for, every RIP-relative operand of the functions the exception table lists, by target or as the list of every address they read.
  */
 
 #ifndef AMBROSE_CODEINDEX_H
@@ -43,6 +43,14 @@ struct DecodedInstruction
     bool FirstOperandIsMemory = false;
     std::string MemoryBase;
     int64 MemoryDisplacement = 0;
+    std::string Text;
+};
+
+struct CodeReference
+{
+    uint64 Site = 0;
+    std::optional<uint64> Function;
+    bool Pointer = false;
 };
 
 class CodeIndex
@@ -55,13 +63,16 @@ public:
     std::span<uint64 const> IndirectBranchSites(uint64 slot) const;
     std::span<uint64 const> RipReferences(uint64 target) const;
     std::vector<uint64> RipTargets() const;
+    std::span<uint64 const> PointerSites(uint64 target) const;
+    std::vector<CodeReference> References(uint64 target) const;
 
     std::optional<uint64> FunctionStart(uint64 address) const;
     std::vector<uint64> FindStrings(std::string_view text) const;
 
-    std::vector<DecodedInstruction> Decode(uint64 address, std::size_t maxBytes, std::size_t maxInstructions) const;
+    std::vector<DecodedInstruction> Decode(uint64 address, std::size_t maxBytes, std::size_t maxInstructions, bool formatted = false) const;
     std::vector<DecodedInstruction> DecodeFunctionUntil(uint64 address) const;
-    std::vector<DecodedInstruction> DecodeFunctionFrom(uint64 address, std::size_t maxInstructions) const;
+    std::vector<DecodedInstruction> DecodeFunctionFrom(uint64 address, std::size_t maxInstructions, bool formatted = false) const;
+    std::vector<DecodedInstruction> Disassemble(uint64 address, std::size_t maxInstructions) const;
 
     uint64 GetImageBase() const noexcept;
     PeImage const& GetImage() const noexcept;
@@ -73,8 +84,11 @@ private:
     std::unordered_map<uint64, std::vector<uint64>> _indirectBranchSites;
     mutable std::once_flag _ripIndexed;
     mutable std::unordered_map<uint64, std::vector<uint64>> _ripReferences;
+    mutable std::once_flag _pointersIndexed;
+    mutable std::unordered_map<uint64, std::vector<uint64>> _pointerSites;
 
     void IndexRipReferences() const;
+    void IndexPointers() const;
 };
 
 #endif

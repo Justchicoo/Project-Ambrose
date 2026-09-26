@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Scans the raw bytes of a PE image's executable sections once for RIP-relative lea, direct call and RIP-relative indirect call and jump patterns, keeps sorted sites per target, and decodes instructions with Zydis into their kind, branch and RIP-relative targets and leading operands, a memory operand with its base register and displacement; the first time RIP-relative references are asked for, it decodes every function the exception table lists and keeps each instruction whose operand is RIP-relative by the address it names, whatever the instruction, so a string copied with mov or movups is found as well as one loaded with lea.
+ * Scans the raw bytes of a PE image's executable sections once for RIP-relative lea, direct call and RIP-relative indirect call and jump patterns, keeps sorted sites per target, reads every 64-bit pointer the relocation table lists the first time pointers are asked for, and joins them all with the decoded RIP-relative operands into every reference to an address, keeping a pattern site only when decoding its function from the start lands on it, since the pattern can sit inside another instruction, and decodes instructions with Zydis into their kind, branch and RIP-relative targets and leading operands, a memory operand with its base register and displacement; the first time RIP-relative references are asked for, it decodes every function the exception table lists and keeps each instruction whose operand is RIP-relative by the address it names, whatever the instruction, so a string copied with mov or movups is found as well as one loaded with lea.
  */
 
 #include "CodeIndex.h"
@@ -9,7 +9,9 @@
 #include <Zydis/Zydis.h>
 
 #include <algorithm>
+#include <array>
 #include <limits>
+#include <set>
 
 namespace
 {
@@ -259,6 +261,61 @@ void CodeIndex::IndexRipReferences() const
     SortSites(_ripReferences);
 }
 
+std::span<uint64 const> CodeIndex::PointerSites(uint64 target) const
+{
+    std::call_once(_pointersIndexed, [this] { IndexPointers(); });
+    return SitesOf(_pointerSites, target);
+}
+
+void CodeIndex::IndexPointers() const
+{
+    uint64 const base = _image.GetImageBase();
+    for (PeRelocation const& relocation : _image.GetRelocations())
+    {
+        if (relocation.Type != PeImage::RelocationDir64)
+            continue;
+        std::span<uint8 const> const bytes = _image.ReadRva(relocation.Rva, 8);
+        if (bytes.size() != 8)
+            continue;
+        uint64 value = 0;
+        for (std::size_t index = 0; index < 8; ++index)
+            value |= uint64{ bytes[index] } << (8 * index);
+        _pointerSites[value].push_back(base + relocation.Rva);
+    }
+    SortSites(_pointerSites);
+}
+
+std::vector<CodeReference> CodeIndex::References(uint64 target) const
+{
+    std::set<uint64> decoded;
+    for (uint64 const site : RipReferences(target))
+        decoded.insert(site);
+    std::set<uint64> patterned;
+    for (std::span<uint64 const> const sites : { LeaReferences(target), CallSites(target), IndirectBranchSites(target) })
+        for (uint64 const site : sites)
+            if (!decoded.contains(site))
+                patterned.insert(site);
+
+    std::vector<CodeReference> references;
+    for (uint64 const site : decoded)
+        references.push_back({ site, FunctionStart(site), false });
+    for (uint64 const site : PointerSites(target))
+        references.push_back({ site, std::nullopt, true });
+    for (uint64 const site : patterned)
+    {
+        std::optional<uint64> const function = FunctionStart(site);
+        if (function && *function != site)
+        {
+            std::vector<DecodedInstruction> const before = DecodeFunctionUntil(site);
+            if (before.empty() || before.back().Address + before.back().Length != site)
+                continue;
+        }
+        references.push_back({ site, function, false });
+    }
+    std::sort(references.begin(), references.end(), [](CodeReference const& left, CodeReference const& right) { return left.Site < right.Site; });
+    return references;
+}
+
 std::optional<uint64> CodeIndex::FunctionStart(uint64 address) const
 {
     uint64 const base = _image.GetImageBase();
@@ -280,12 +337,15 @@ std::vector<uint64> CodeIndex::FindStrings(std::string_view text) const
     return addresses;
 }
 
-std::vector<DecodedInstruction> CodeIndex::Decode(uint64 address, std::size_t maxBytes, std::size_t maxInstructions) const
+std::vector<DecodedInstruction> CodeIndex::Decode(uint64 address, std::size_t maxBytes, std::size_t maxInstructions, bool formatted) const
 {
     std::vector<DecodedInstruction> instructions;
     uint64 const base = _image.GetImageBase();
     ZydisDecoder decoder;
     if (address < base || !ZYAN_SUCCESS(ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64)))
+        return instructions;
+    ZydisFormatter formatter;
+    if (formatted && !ZYAN_SUCCESS(ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL)))
         return instructions;
     std::size_t consumed = 0;
     while (consumed < maxBytes && instructions.size() < maxInstructions)
@@ -304,6 +364,12 @@ std::vector<DecodedInstruction> CodeIndex::Decode(uint64 address, std::size_t ma
         if (!ZYAN_SUCCESS(ZydisDecoderDecodeFull(&decoder, bytes.data(), bytes.size(), &instruction, operands)))
             break;
         instructions.push_back(Describe(instruction, operands, current));
+        if (formatted)
+        {
+            std::array<char, 256> text{};
+            if (ZYAN_SUCCESS(ZydisFormatterFormatInstruction(&formatter, &instruction, operands, instruction.operand_count_visible, text.data(), text.size(), current, ZYAN_NULL)))
+                instructions.back().Text = text.data();
+        }
         consumed += instruction.length;
     }
     return instructions;
@@ -322,24 +388,29 @@ std::vector<DecodedInstruction> CodeIndex::DecodeFunctionUntil(uint64 address) c
     return instructions;
 }
 
-std::vector<DecodedInstruction> CodeIndex::DecodeFunctionFrom(uint64 address, std::size_t maxInstructions) const
+std::vector<DecodedInstruction> CodeIndex::DecodeFunctionFrom(uint64 address, std::size_t maxInstructions, bool formatted) const
 {
     uint64 const base = _image.GetImageBase();
     if (address < base || address - base > std::numeric_limits<uint32>::max())
         return {};
     uint32 const rva = static_cast<uint32>(address - base);
     if (std::optional<uint32> const end = _image.FunctionEnd(rva))
-        return Decode(address, *end - rva, maxInstructions);
+        return Decode(address, *end - rva, maxInstructions, formatted);
     std::vector<PeFunction> const& functions = _image.GetFunctions();
     std::size_t maxBytes = maxInstructions > std::numeric_limits<std::size_t>::max() / MaxInstructionLength ? std::numeric_limits<std::size_t>::max()
                                                                                                             : maxInstructions * MaxInstructionLength;
     auto const next = std::upper_bound(functions.begin(), functions.end(), rva, [](uint32 value, PeFunction const& function) { return value < function.Begin; });
     if (next != functions.end())
         maxBytes = std::min<std::size_t>(maxBytes, next->Begin - rva);
-    std::vector<DecodedInstruction> instructions = Decode(address, maxBytes, maxInstructions);
+    std::vector<DecodedInstruction> instructions = Decode(address, maxBytes, maxInstructions, formatted);
     auto const padding = std::find_if(instructions.begin(), instructions.end(), [](DecodedInstruction const& instruction) { return instruction.Kind == InstructionKind::Breakpoint; });
     instructions.erase(padding, instructions.end());
     return instructions;
+}
+
+std::vector<DecodedInstruction> CodeIndex::Disassemble(uint64 address, std::size_t maxInstructions) const
+{
+    return DecodeFunctionFrom(FunctionStart(address).value_or(address), maxInstructions, true);
 }
 
 uint64 CodeIndex::GetImageBase() const noexcept

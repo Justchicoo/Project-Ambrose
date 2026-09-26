@@ -1,11 +1,18 @@
 /*
  * Project Ambrose by Imjustchico
- * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `handlers` says which classes in the client program handle a message and where, found the way the program registers them: each handler goes in under a debug name such as WizardGraphicalClient::MSG_TimedAccessPasses, with its plain name and a pointer to the function, so client-image finds the code that reads both names and the function address it loads, and the answer is written once per revision; a message nothing registers that way is one the client only sends or registers some other way, which the tool says rather than guessing which. `behaviors` says which class the client program builds for each behavior it registers, by following each behavior's name to the factory the program stores for it, the vtable that factory's create function gives the object and the class name its GetType registers, with the bases each GetType registers its class under, which is how a behavior a template names is known to become a given client class without a capture of it; when the dump does not list that class, the nearest base it does list is named, since that is the class whose properties the dump can describe. `template` prints the object template an id names, found through TemplateManifest.xml the way the client and the game server find it, in Root.wad or in the World-Part.wad a path written |World|Part|path names, with its file, archive, object name and behaviors, then the template itself, so a zone object's template id can be read without searching the manifest by hand; it reads them through the game server's own template store, and its list prints every id the manifest holds with the archive and entry it names, marking each the install lacks, which is how a streamed archive not yet fetched shows up. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a block, a type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads the block and type pairs the world database's core_object_type holds when it is given the world database, and when a pair stands for a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --pair or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
+ * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `handlers` says which classes in the client program handle a message and where, found the way the program registers them: each handler goes in under a debug name such as WizardGraphicalClient::MSG_TimedAccessPasses, with its plain name and a pointer to the function, so client-image finds the code that reads both names and the function address it loads, and the answer is written once per revision; a message nothing registers that way is one the client only sends or registers some other way, which the tool says rather than guessing which. `behaviors` says which class the client program builds for each behavior it registers, by following each behavior's name to the factory the program stores for it, the vtable that factory's create function gives the object and the class name its GetType registers, with the bases each GetType registers its class under, which is how a behavior a template names is known to become a given client class without a capture of it; when the dump does not list that class, the nearest base it does list is named, since that is the class whose properties the dump can describe. `template` prints the object template an id names, found through TemplateManifest.xml the way the client and the game server find it, in Root.wad or in the World-Part.wad a path written |World|Part|path names, with its file, archive, object name and behaviors, then the template itself, so a zone object's template id can be read without searching the manifest by hand; it reads them through the game server's own template store, and its list prints every id the manifest holds with the archive and entry it names, marking each the install lacks, which is how a streamed archive not yet fetched shows up. `strings`, `xrefs`, `disasm`, `functions` and `decompile` read the client program's code, so what the client does is asked of the tool rather than worked out by hand: `strings` finds the text the program holds with each instruction that reads it, `xrefs` every instruction and relocated pointer that reaches an address, `disasm` a function in Intel syntax with the strings, imports, handlers and behavior classes it reaches named, `functions` a function by the name its own log lines give it, and `decompile` a function as C through the user's own Ghidra, started directly with the Java Ghidra picks rather than through its launch scripts, over a project the tool makes once or one it is given, keeping each function's C so asking again takes seconds; the names functions log under are found once per revision and written to the Ambrose data folder. `types --derived` lists every class derived from one and `--flag` the properties that carry a property flag. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a block, a type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads the block and type pairs the world database's core_object_type holds when it is given the world database, and when a pair stands for a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --pair or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
  */
 
 #include "BehaviorFactories.h"
 #include "BindFile.h"
+#include "CodeAnnotator.h"
 #include "CodeIndex.h"
+#include "GhidraDecompiler.h"
+#include "Hex.h"
+#include "LogNames.h"
+#include "ProgramStrings.h"
+#include "PropertyFlags.h"
+#include "SHA256.h"
 #include "BlobEnvelope.h"
 #include "CoreObjectSerializer.h"
 #include "DatabaseEnv.h"
@@ -44,12 +51,14 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <set>
 #include <span>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -59,6 +68,7 @@ namespace
     constexpr int Failure = 1;
     constexpr int BadUsage = 2;
     constexpr std::size_t ListedByDefault = 40;
+    constexpr std::size_t MaxDisassembled = 100000;
 
     constexpr std::string_view Usage = R"(Usage: client <command> [options] [argument]...
 
@@ -79,6 +89,19 @@ Commands:
                          TemplateManifest.xml, with its archive, file, name and behaviors
   template --list [text] print every template id the manifest lists with its archive and
                          entry, or those holding the text, marking each the install lacks
+  strings <text>...      print every string the client program holds with the text, with
+                         its address and each instruction that reads it; --list prints
+                         only the strings
+  xrefs <address>...     print every instruction that reads, calls or jumps to an address,
+                         0x hex, or to each string holding the text given, and its function
+  disasm <address>...    print the function an address is in, or each function that reads
+                         a string holding the text given, in Intel syntax, naming the
+                         strings, imports, handlers and behavior classes it reaches
+  decompile <address>... print the same functions as C, decompiled by your own Ghidra and
+                         kept, so asking again is instant
+  functions <name>...    print the functions that log under a name holding the text, such
+                         as CoreObject::OnPostLoad, or the names the function holding an
+                         address logs under, found from the client's own log lines
   behaviors <name>...    print the class the client program builds for a behavior it
                          registers, and where it found each link
   behaviors --list [text] print every behavior the client program registers
@@ -112,6 +135,14 @@ Options:
                        the class a block and type stand for wherever they appear in a
                        core blob, such as 115:9="class WizClientObjectItem"; repeatable,
                        and it takes the place of the world database's row for that pair
+  --derived            with types, print every class derived from each class named
+  --flag <name>        with types, print only the properties that carry a property flag,
+                       such as ObjectName, of the classes found
+  --ghidra <dir>       the Ghidra install decompile runs (default: AMBROSE_GHIDRA_DIR)
+  --ghidra-project <file>
+                       the Ghidra project decompile reads, its .gpr file (default:
+                       AMBROSE_GHIDRA_PROJECT, else one the tool makes in the Ambrose data
+                       folder by importing and analyzing the client program, once)
   --world-db <info>    the world database, host;port;user;password;database, whose
                        server_class and core_object_type rows join what the dump says
                        (default: AMBROSE_WORLD_DATABASE_INFO)
@@ -139,6 +170,10 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         bool List = false;
         bool All = false;
         bool Trailing = false;
+        bool Derived = false;
+        std::optional<std::string> Flag;
+        std::optional<std::string> Ghidra;
+        std::optional<std::string> GhidraProject;
         std::optional<uint32> Flags;
         std::optional<uint32> Mask;
         bool Help = false;
@@ -184,6 +219,15 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                 parsed.List = true;
             else if (arg == "--trailing")
                 parsed.Trailing = true;
+            else if (arg == "--derived")
+                parsed.Derived = true;
+            else if (arg == "--flag" || arg == "--ghidra" || arg == "--ghidra-project")
+            {
+                std::optional<std::string> const given = value(arg);
+                if (!given)
+                    return std::nullopt;
+                (arg == "--flag" ? parsed.Flag : arg == "--ghidra" ? parsed.Ghidra : parsed.GhidraProject) = *given;
+            }
             else if (arg == "--pair")
             {
                 std::optional<std::string> const given = value(arg);
@@ -276,32 +320,9 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         text += fmt::format("  id {} offset {} hash {}", property.Id, property.Offset, property.Hash);
         if (property.Flags != 0)
         {
-            static constexpr std::pair<PropertyFlag, std::string_view> Named[] = {
-                { PropertyFlag::Save, "Save" },
-                { PropertyFlag::Copy, "Copy" },
-                { PropertyFlag::Public, "Public" },
-                { PropertyFlag::Transmit, "Transmit" },
-                { PropertyFlag::AuthorityTransmit, "AuthorityTransmit" },
-                { PropertyFlag::Persistent, "Persistent" },
-                { PropertyFlag::Deprecated, "Deprecated" },
-                { PropertyFlag::NoScript, "NoScript" },
-                { PropertyFlag::DirtyEncode, "DirtyEncode" },
-                { PropertyFlag::Blob, "Blob" },
-                { PropertyFlag::Immutable, "Immutable" },
-                { PropertyFlag::FileName, "FileName" },
-                { PropertyFlag::Color, "Color" },
-                { PropertyFlag::Bits, "Bits" },
-                { PropertyFlag::Enum, "Enum" },
-                { PropertyFlag::Localized, "Localized" },
-                { PropertyFlag::StringKey, "StringKey" },
-                { PropertyFlag::ObjectId, "ObjectId" },
-                { PropertyFlag::ReferenceId, "ReferenceId" },
-                { PropertyFlag::ObjectName, "ObjectName" },
-                { PropertyFlag::HasBaseClass, "HasBaseClass" },
-            };
             std::string names;
             uint32 known = 0;
-            for (auto const& [flag, name] : Named)
+            for (auto const& [flag, name] : PropertyFlags::Names)
                 if (property.HasFlag(flag))
                 {
                     names += names.empty() ? "" : "|";
@@ -389,6 +410,61 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         return std::nullopt;
     }
 
+    int RunTypeQuery(Arguments const& arguments, TypeCatalog const& catalog, std::optional<PropertyFlag> flag)
+    {
+        int status = Success;
+        for (std::string const& subject : arguments.Subjects)
+        {
+            std::vector<ClassInfo const*> classes;
+            if (arguments.Derived)
+            {
+                ClassInfo const* base = catalog.FindClass(subject);
+                if (base == nullptr && !subject.starts_with("class "))
+                    base = catalog.FindClass("class " + subject);
+                if (base == nullptr)
+                {
+                    std::cerr << fmt::format("{}: the type dump holds no class by that name\n", subject);
+                    status = Failure;
+                    continue;
+                }
+                for (ClassInfo const* const info : catalog.GetClasses())
+                    if (info != nullptr && info != base && info->IsA(*base))
+                        classes.push_back(info);
+            }
+            else
+            {
+                std::string const wanted = Ambrose::ToLower(subject);
+                for (ClassInfo const* const info : catalog.GetClasses())
+                    if (info != nullptr && Ambrose::ToLower(info->Name).find(wanted) != std::string::npos)
+                        classes.push_back(info);
+            }
+            std::sort(classes.begin(), classes.end(), [](ClassInfo const* left, ClassInfo const* right) { return left->Name < right->Name; });
+            std::size_t properties = 0;
+            for (ClassInfo const* const info : classes)
+            {
+                if (!flag)
+                {
+                    std::cout << info->Name << "\n";
+                    continue;
+                }
+                for (PropertyInfo const& property : info->Properties)
+                    if (property.HasFlag(*flag))
+                    {
+                        std::cout << fmt::format("{}  {}\n", info->Name, property.Name);
+                        ++properties;
+                    }
+            }
+            if (flag)
+                std::cerr << fmt::format("client: {} properties of the {} classes {} carry {}\n", properties, classes.size(),
+                    arguments.Derived ? fmt::format("derived from {}", subject) : fmt::format("holding {}", subject), *arguments.Flag);
+            else
+                std::cerr << fmt::format("client: {} classes derive from {}\n", classes.size(), subject);
+            if (classes.empty() || (flag && properties == 0))
+                status = Failure;
+        }
+        return status;
+    }
+
     int RunTypes(Arguments const& arguments, TypeCatalog const& catalog, std::filesystem::path const& clientDir)
     {
         if (arguments.Subjects.empty())
@@ -396,6 +472,19 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             std::cerr << "client types needs a name, part of one, or a hash\n";
             return BadUsage;
         }
+        std::optional<PropertyFlag> flag;
+        if (arguments.Flag)
+        {
+            flag = PropertyFlags::FromName(*arguments.Flag);
+            if (!flag)
+            {
+                std::cerr << fmt::format("there is no property flag {}; the flags are {}\n", *arguments.Flag,
+                    fmt::join(PropertyFlags::Names | std::views::transform([](auto const& named) { return named.second; }), ", "));
+                return BadUsage;
+            }
+        }
+        if (arguments.Derived || flag)
+            return RunTypeQuery(arguments, catalog, flag);
 
         int status = Success;
         for (std::string const& subject : arguments.Subjects)
@@ -1053,6 +1142,437 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         return status;
     }
 
+    std::optional<uint64> AddressOf(std::string_view text)
+    {
+        if (!text.starts_with("0x") && !text.starts_with("0X"))
+            return std::nullopt;
+        return Ambrose::StringTo<uint64>(text.substr(2), 16);
+    }
+
+    struct ClientProgram
+    {
+        std::unique_ptr<PeImage> Image;
+        std::unique_ptr<CodeIndex> Code;
+        std::unique_ptr<ProgramStrings> Strings;
+        std::vector<FunctionLogNames> Named;
+        std::unordered_map<uint64, std::size_t> NamedAt;
+
+        std::vector<std::string> const* NamesOf(uint64 function) const
+        {
+            auto const found = NamedAt.find(function);
+            return found == NamedAt.end() ? nullptr : &Named[found->second].Names;
+        }
+    };
+
+    std::filesystem::path LogNameCachePath(std::filesystem::path const& dataFolder, std::string_view revision)
+    {
+        return dataFolder / "functions" / (std::string(revision) + ".json");
+    }
+
+    constexpr uint32 LogNameFinderVersion = 1;
+
+    std::vector<FunctionLogNames> ReadLogNameCache(std::filesystem::path const& path)
+    {
+        std::vector<FunctionLogNames> named;
+        std::ifstream stream(path, std::ios::binary);
+        if (!stream)
+            return named;
+        nlohmann::json document;
+        try
+        {
+            stream >> document;
+        }
+        catch (std::exception const&)
+        {
+            return named;
+        }
+        if (!document.is_object() || !document.contains("finder") || document["finder"] != LogNameFinderVersion || !document.contains("functions") || !document["functions"].is_array())
+            return named;
+        for (nlohmann::json const& entry : document["functions"])
+        {
+            if (!entry.is_object() || !entry.contains("function") || !entry.contains("names") || !entry["names"].is_array())
+                return {};
+            named.push_back({ entry["function"].get<uint64>(), entry["names"].get<std::vector<std::string>>() });
+        }
+        return named;
+    }
+
+    void WriteLogNameCache(std::filesystem::path const& path, std::vector<FunctionLogNames> const& named)
+    {
+        std::error_code code;
+        std::filesystem::create_directories(path.parent_path(), code);
+        if (code)
+            return;
+        nlohmann::json list = nlohmann::json::array();
+        for (FunctionLogNames const& function : named)
+            list.push_back({ { "function", function.Function }, { "names", function.Names } });
+        nlohmann::json const document = { { "finder", LogNameFinderVersion }, { "functions", std::move(list) } };
+        std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+        if (!stream)
+            return;
+        stream << document.dump(1, '\t');
+        if (stream.good())
+            std::cerr << fmt::format("client: wrote the names {} functions of this install's client program log under to {}, so every later question reads it instead of the program\n",
+                named.size(), ConfigMgr::PathToUtf8(path));
+    }
+
+    void LoadLogNames(ClientProgram& program, std::filesystem::path const& dataFolder, std::string const& revision)
+    {
+        if (!revision.empty())
+            program.Named = ReadLogNameCache(LogNameCachePath(dataFolder, revision));
+        if (program.Named.empty())
+        {
+            program.Named = LogNames::Find(*program.Image, *program.Code);
+            if (!revision.empty() && !program.Named.empty())
+                WriteLogNameCache(LogNameCachePath(dataFolder, revision), program.Named);
+        }
+        for (std::size_t index = 0; index < program.Named.size(); ++index)
+            program.NamedAt.emplace(program.Named[index].Function, index);
+    }
+
+    struct StringReader
+    {
+        uint64 Target = 0;
+        CodeReference Reference;
+    };
+
+    struct FunctionSubject
+    {
+        uint64 Function = 0;
+        std::string Why;
+    };
+
+    std::string FunctionText(ClientProgram const& program, std::optional<uint64> function)
+    {
+        if (!function)
+            return "no function the exception table lists";
+        std::vector<std::string> const* const names = program.NamesOf(*function);
+        return names == nullptr ? fmt::format("function 0x{:x}", *function) : fmt::format("function 0x{:x}, which logs as {}", *function, fmt::join(*names, " and "));
+    }
+
+    std::vector<StringReader> ReadersOf(ClientProgram const& program, ProgramString const& string)
+    {
+        std::vector<StringReader> readers;
+        for (uint64 target = string.Address; target < string.Address + string.Bytes; ++target)
+            for (CodeReference const& reference : program.Code->References(target))
+                readers.push_back({ target, reference });
+        return readers;
+    }
+
+    std::string SiteText(ClientProgram const& program, CodeReference const& reference)
+    {
+        if (reference.Pointer)
+        {
+            uint64 const base = program.Image->GetImageBase();
+            PeSection const* const section = reference.Site >= base ? program.Image->SectionOfRva(static_cast<uint32>(reference.Site - base)) : nullptr;
+            return fmt::format("a pointer to it in {}", section != nullptr ? section->Name : std::string("the image"));
+        }
+        std::vector<DecodedInstruction> const decoded = program.Code->Decode(reference.Site, 15, 1, true);
+        std::string const text = decoded.empty() ? std::string("(no instruction decodes there)") : decoded.front().Text;
+        return fmt::format("{}  in {}", text, FunctionText(program, reference.Function));
+    }
+
+    std::unordered_map<uint64, std::string> KnownNames(ClientProgram const& program, std::filesystem::path const& dataFolder, std::string const& revision)
+    {
+        std::unordered_map<uint64, std::string> names;
+        for (FunctionLogNames const& function : program.Named)
+            names.emplace(function.Function, fmt::format("logs as {}", fmt::join(function.Names, " and ")));
+        if (revision.empty())
+            return names;
+        for (MessageHandlerRegistration const& registration : ReadHandlerCache(HandlerCachePath(dataFolder, revision)))
+            names.insert_or_assign(registration.Address, fmt::format("{}::{}", registration.Owner, registration.Handler));
+        for (BehaviorFactory const& factory : ReadBehaviorCache(BehaviorCachePath(dataFolder, revision)))
+        {
+            names.insert_or_assign(factory.Create, fmt::format("the create function of the {} factory", factory.Behavior));
+            names.insert_or_assign(factory.GetType, fmt::format("{}::GetType", factory.ClassName));
+            names.insert_or_assign(factory.ObjectVtable, fmt::format("the vtable of {}", factory.ClassName));
+            names.insert_or_assign(factory.FactoryVtable, fmt::format("the vtable of the {} factory", factory.Behavior));
+        }
+        return names;
+    }
+
+    int RunStrings(Arguments const& arguments, ClientProgram const& program)
+    {
+        int status = Success;
+        for (std::string const& subject : arguments.Subjects)
+        {
+            std::vector<ProgramString const*> const matches = program.Strings->Find(subject);
+            std::size_t const shown = arguments.All ? matches.size() : std::min(matches.size(), ListedByDefault);
+            for (std::size_t index = 0; index < shown; ++index)
+            {
+                ProgramString const& string = *matches[index];
+                std::cout << fmt::format("0x{:x}  {}\n", string.Address, CodeAnnotator::Quote(string, ProgramStrings::MaximumLength));
+                if (arguments.List)
+                    continue;
+                std::vector<StringReader> const readers = ReadersOf(program, string);
+                if (readers.empty())
+                    std::cout << "  nothing in the code reads it\n";
+                for (StringReader const& reader : readers)
+                    std::cout << fmt::format("  0x{:x}{}  {}\n", reader.Reference.Site,
+                        reader.Target == string.Address ? std::string() : fmt::format(" reads from +{}", reader.Target - string.Address), SiteText(program, reader.Reference));
+            }
+            if (shown < matches.size())
+                std::cout << fmt::format("... {} more; pass --all to print them\n", matches.size() - shown);
+            std::cerr << fmt::format("client: {} of the {} strings in the client program hold {}\n", matches.size(), program.Strings->Size(), subject);
+            if (matches.empty())
+                status = Failure;
+        }
+        return status;
+    }
+
+    int RunFunctions(Arguments const& arguments, ClientProgram const& program)
+    {
+        int status = Success;
+        for (std::string const& subject : arguments.Subjects)
+        {
+            if (std::optional<uint64> const address = AddressOf(subject))
+            {
+                std::optional<uint64> const function = program.Code->FunctionStart(*address);
+                std::vector<std::string> const* const names = function ? program.NamesOf(*function) : nullptr;
+                if (names == nullptr)
+                {
+                    std::cerr << fmt::format("{}: {} logs under no name\n", subject, FunctionText(program, function));
+                    status = Failure;
+                    continue;
+                }
+                for (std::string const& name : *names)
+                    std::cout << fmt::format("0x{:x}  {}\n", *function, name);
+                continue;
+            }
+            std::string const wanted = Ambrose::ToLower(subject);
+            std::vector<std::pair<std::string_view, uint64>> matches;
+            for (FunctionLogNames const& function : program.Named)
+                for (std::string const& name : function.Names)
+                    if (Ambrose::ToLower(name).find(wanted) != std::string::npos)
+                        matches.emplace_back(name, function.Function);
+            std::sort(matches.begin(), matches.end());
+            std::size_t const shown = arguments.All ? matches.size() : std::min(matches.size(), ListedByDefault);
+            for (std::size_t index = 0; index < shown; ++index)
+                std::cout << fmt::format("0x{:x}  {}\n", matches[index].second, matches[index].first);
+            if (shown < matches.size())
+                std::cout << fmt::format("... {} more; pass --all to print them\n", matches.size() - shown);
+            std::cerr << fmt::format("client: {} of the names the {} functions that log use hold {}\n", matches.size(), program.Named.size(), subject);
+            if (matches.empty())
+                status = Failure;
+        }
+        return status;
+    }
+
+    int RunXrefs(Arguments const& arguments, ClientProgram const& program, CodeAnnotator const& names)
+    {
+        int status = Success;
+        for (std::string const& subject : arguments.Subjects)
+        {
+            std::vector<std::pair<std::string, std::vector<StringReader>>> groups;
+            if (std::optional<uint64> const address = AddressOf(subject))
+            {
+                std::vector<StringReader> readers;
+                for (CodeReference const& reference : program.Code->References(*address))
+                    readers.push_back({ *address, reference });
+                std::string const described = names.Describe(*address);
+                groups.emplace_back(fmt::format("0x{:x}{}", *address, described.empty() ? std::string() : "  " + described), std::move(readers));
+            }
+            else
+            {
+                std::vector<ProgramString const*> const matches = program.Strings->Find(subject);
+                std::size_t const shown = arguments.All ? matches.size() : std::min(matches.size(), ListedByDefault);
+                for (std::size_t index = 0; index < shown; ++index)
+                    groups.emplace_back(fmt::format("0x{:x}  {}", matches[index]->Address, CodeAnnotator::Quote(*matches[index])), ReadersOf(program, *matches[index]));
+                if (matches.empty())
+                {
+                    std::cerr << fmt::format("{}: the client program holds no string with that text; name an address as 0x hex\n", subject);
+                    status = Failure;
+                }
+                else if (shown < matches.size())
+                    std::cerr << fmt::format("client: {} more strings hold {}; pass --all to follow them too\n", matches.size() - shown, subject);
+            }
+            for (auto const& [header, readers] : groups)
+            {
+                std::cout << header << "\n";
+                if (readers.empty())
+                    std::cout << "  nothing in the code reads, calls or jumps to it\n";
+                for (StringReader const& reader : readers)
+                    std::cout << fmt::format("  0x{:x}  {}\n", reader.Reference.Site, SiteText(program, reader.Reference));
+            }
+        }
+        return status;
+    }
+
+    std::vector<FunctionSubject> FunctionsFor(Arguments const& arguments, ClientProgram const& program, int& status)
+    {
+        std::vector<FunctionSubject> functions;
+        auto const add = [&functions](uint64 function, std::string why)
+        {
+            if (std::none_of(functions.begin(), functions.end(), [function](FunctionSubject const& known) { return known.Function == function; }))
+                functions.push_back({ function, std::move(why) });
+        };
+        for (std::string const& subject : arguments.Subjects)
+        {
+            if (std::optional<uint64> const address = AddressOf(subject))
+            {
+                std::optional<uint64> const start = program.Code->FunctionStart(*address);
+                add(start.value_or(*address), start && *start != *address ? fmt::format("which holds 0x{:x}", *address) : std::string());
+                continue;
+            }
+            std::vector<ProgramString const*> const matches = program.Strings->Find(subject);
+            std::size_t readerless = 0;
+            std::size_t added = 0;
+            for (ProgramString const* const string : matches)
+            {
+                for (StringReader const& reader : ReadersOf(program, *string))
+                {
+                    if (!reader.Reference.Function)
+                    {
+                        ++readerless;
+                        continue;
+                    }
+                    if (!arguments.All && added == ListedByDefault)
+                        break;
+                    add(*reader.Reference.Function, fmt::format("which reads {}", CodeAnnotator::Quote(*string, 80)));
+                    ++added;
+                }
+            }
+            if (matches.empty())
+            {
+                std::cerr << fmt::format("{}: the client program holds no string with that text; name an address as 0x hex\n", subject);
+                status = Failure;
+            }
+            else if (added == 0)
+            {
+                std::cerr << fmt::format("{}: {} string(s) hold the text, but no function the exception table lists reads them{}\n", subject, matches.size(),
+                    readerless == 0 ? std::string() : fmt::format("; {} read(s) sit outside any", readerless));
+                status = Failure;
+            }
+        }
+        return functions;
+    }
+
+    int RunDisasm(Arguments const& arguments, ClientProgram const& program, CodeAnnotator const& names)
+    {
+        int status = Success;
+        for (FunctionSubject const& subject : FunctionsFor(arguments, program, status))
+        {
+            std::vector<DecodedInstruction> const instructions = program.Code->Disassemble(subject.Function, MaxDisassembled);
+            std::string const name = names.NameOf(subject.Function);
+            std::cout << fmt::format("function 0x{:x}{}{}, {} instruction(s)\n", subject.Function, name.empty() ? std::string() : ", which " + name,
+                subject.Why.empty() ? std::string() : ", " + subject.Why, instructions.size());
+            if (instructions.empty())
+            {
+                std::cerr << fmt::format("0x{:x}: no instruction decodes there\n", subject.Function);
+                status = Failure;
+            }
+            for (DecodedInstruction const& instruction : instructions)
+            {
+                std::string const note = names.Describe(instruction);
+                std::cout << fmt::format("  0x{:x}  {}{}\n", instruction.Address, instruction.Text, note.empty() ? std::string() : "  ; " + note);
+            }
+        }
+        return status;
+    }
+
+    int RunDecompile(Arguments const& arguments, ClientProgram const& program, std::filesystem::path const& dataFolder, std::string const& revision)
+    {
+        int status = Success;
+        std::vector<FunctionSubject> const subjects = FunctionsFor(arguments, program, status);
+        if (subjects.empty())
+            return Failure;
+        std::optional<std::string> const install = arguments.Ghidra ? arguments.Ghidra : Ambrose::GetEnv("AMBROSE_GHIDRA_DIR");
+        if (!install || install->empty())
+        {
+            std::cerr << "client decompile runs your own Ghidra; name the folder it is unpacked in with --ghidra or AMBROSE_GHIDRA_DIR\n";
+            return Failure;
+        }
+        std::string const sha256 = Hex::Encode(SHA256::GetDigestOf(program.Image->GetBytes()));
+        std::string const folder = revision.empty() ? "client-" + sha256.substr(0, 16) : revision;
+        GhidraSettings settings;
+        settings.Install = LogConfig::Utf8Path(*install);
+        settings.Program = LogConfig::Utf8Path(*arguments.Client) / "Bin" / "WizardGraphicalClient.exe";
+        settings.ProgramSha256 = sha256;
+        settings.WorkFolder = dataFolder / "ghidra" / "scripts";
+        settings.CacheFolder = dataFolder / "decompiled" / sha256;
+        std::optional<std::string> const named = arguments.GhidraProject ? arguments.GhidraProject : Ambrose::GetEnv("AMBROSE_GHIDRA_PROJECT");
+        if (named && !named->empty())
+        {
+            std::optional<GhidraProject> const project = GhidraProject::FromPath(LogConfig::Utf8Path(*named));
+            if (!project)
+            {
+                std::cerr << fmt::format("{} names no Ghidra project; name its .gpr file\n", *named);
+                return BadUsage;
+            }
+            settings.Project = *project;
+        }
+        else
+        {
+            settings.Project = { dataFolder / "ghidra" / ConfigMgr::PathFromUtf8(folder), folder };
+            settings.CreateProject = true;
+        }
+
+        std::vector<uint64> functions;
+        for (FunctionSubject const& subject : subjects)
+            functions.push_back(subject.Function);
+        bool const importing = !settings.Project.Exists() && settings.CreateProject;
+        if (importing)
+            std::cerr << fmt::format("client: importing and analyzing the client program into a Ghidra project of its own at {}, which takes a long while, once for this build\n",
+                ConfigMgr::PathToUtf8(settings.Project.File()));
+        GhidraDecompiler decompiler(settings);
+        std::string error;
+        std::vector<DecompiledFunction> const results = decompiler.Decompile(functions, [importing](std::string_view line)
+        {
+            if (line.find("ERROR") != std::string_view::npos || (importing && line.find("REPORT") != std::string_view::npos))
+                std::cerr << "ghidra: " << line << "\n";
+        }, error);
+        if (results.empty())
+        {
+            std::cerr << fmt::format("client: {}\n", error);
+            return Failure;
+        }
+        for (std::size_t index = 0; index < results.size(); ++index)
+        {
+            DecompiledFunction const& result = results[index];
+            if (!result.Ok())
+            {
+                std::cerr << fmt::format("0x{:x}: {}\n", subjects[index].Function, result.Error);
+                status = Failure;
+                continue;
+            }
+            std::vector<std::string> const* const logged = program.NamesOf(result.Address);
+            std::cout << fmt::format("// function 0x{:x}, {}{}{}\n{}\n\n", result.Address, result.Name,
+                logged == nullptr ? std::string() : fmt::format(", which logs as {}", fmt::join(*logged, " and ")), subjects[index].Why.empty() ? std::string() : ", " + subjects[index].Why,
+                result.Code);
+        }
+        return status;
+    }
+
+    int RunProgram(Arguments const& arguments, std::string const& command, LocalClientSystem const& system)
+    {
+        std::filesystem::path const path = LogConfig::Utf8Path(*arguments.Client) / "Bin" / "WizardGraphicalClient.exe";
+        std::string error;
+        ClientProgram program;
+        program.Image = PeImage::Load(path, error);
+        if (!program.Image)
+        {
+            std::cerr << fmt::format("{}: {}\n", ConfigMgr::PathToUtf8(path), error);
+            return Failure;
+        }
+        program.Code = std::make_unique<CodeIndex>(*program.Image);
+        program.Strings = std::make_unique<ProgramStrings>(*program.Image);
+        std::string revision;
+        if (std::optional<ClientInstall> const install = ClientInstall::Inspect(system, LogConfig::Utf8Path(*arguments.Client)))
+            revision = install->Revision;
+        std::filesystem::path const dataFolder = ClientLocator::GetDataFolder(system);
+        LoadLogNames(program, dataFolder, revision);
+        if (command == "functions")
+            return RunFunctions(arguments, program);
+        if (command == "strings")
+            return RunStrings(arguments, program);
+        if (command == "decompile")
+            return RunDecompile(arguments, program, dataFolder, revision);
+        CodeAnnotator const names(*program.Image, KnownNames(program, dataFolder, revision));
+        if (command == "xrefs")
+            return RunXrefs(arguments, program, names);
+        return RunDisasm(arguments, program, names);
+    }
+
     int RunWad(Arguments const& arguments, KiwadArchive const& archive, TypeCatalogPtr const& catalog);
 
     int ListTemplates(Arguments const& arguments, TemplateManifest const& manifest, std::filesystem::path const& gameData)
@@ -1234,7 +1754,7 @@ int main(int argc, char** argv)
     }
 
     if (command != "types" && command != "messages" && command != "handlers" && command != "behaviors" && command != "template" && command != "wad" && command != "lang"
-        && command != "core")
+        && command != "core" && command != "strings" && command != "xrefs" && command != "disasm" && command != "decompile" && command != "functions")
     {
         std::cerr << fmt::format("there is no command {}\n{}", arguments->Command, Usage);
         return BadUsage;
@@ -1338,6 +1858,8 @@ int main(int argc, char** argv)
         std::cerr << "client needs an install; name one with --client or AMBROSE_CLIENT_DIR\n";
         return Failure;
     }
+    if (command == "strings" || command == "xrefs" || command == "disasm" || command == "decompile" || command == "functions")
+        return RunProgram(*arguments, command, system);
     std::filesystem::path wad = LogConfig::Utf8Path(arguments->Wad);
     if (!wad.has_parent_path())
         wad = LogConfig::Utf8Path(*arguments->Client) / "Data" / "GameData" / wad;
