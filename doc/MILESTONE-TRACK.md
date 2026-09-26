@@ -121,7 +121,9 @@ Everything not in the table above, including every milestone whose dependencies 
 | 3.26 | Unblocked by the design system landing, and next in the maintainer's own queue after the terminal dashboard |
 | 17.12 | Held with phase 17 for the panel session, which consumes it. The registry already has Set, Reset, Get, List, Describe and History; its batch route needs an all-or-nothing SetMany that validates every key before persisting any |
 | 17.47 | Kept for the maintainer's panel session, beside the roles it builds on |
-| 5.01 | Taken back by the maintainer's world session on 2026-09-25: it is the root of the character and journal menus the maintainer wants next, with 8.04 spells, 7.01 and then 8.06 items, and 5.02 through 6.01, 6.03 and 6.04 to 8.01 vitals all starting there |
+| 8.04 | Being built now by the maintainer's world session, with 9.02: spells are the first of the character and journal menus the maintainer wants next |
+| 9.02 | Being built now by the maintainer's world session with 8.04, since spell and sigil templates are found the same way |
+| 5.02 | Kept for the maintainer's world session: it starts the chain through 6.01, 6.03 and 6.04 to 8.01 vitals behind the same menus |
 
 ## In flight
 
