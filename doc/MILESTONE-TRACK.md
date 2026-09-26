@@ -123,8 +123,8 @@ Everything not in the table above, including every milestone whose dependencies 
 | 3.26 | Unblocked by the design system landing, and next in the maintainer's own queue after the terminal dashboard |
 | 17.12 | Held with phase 17 for the panel session, which consumes it. The registry already has Set, Reset, Get, List, Describe and History; its batch route needs an all-or-nothing SetMany that validates every key before persisting any |
 | 17.47 | Kept for the maintainer's panel session, beside the roles it builds on |
-| 8.04 | Being built now by the maintainer's world session, with 9.02: spells are the first of the character and journal menus the maintainer wants next |
-| 9.02 | Being built now by the maintainer's world session with 8.04, since spell and sigil templates are found the same way |
+| 8.04 | Built on 2026-09-26 by the maintainer's world session, 9 of 12 checks. Left: the game master's real-client check, which waits on 6.04's in-game commands, and the two WIZ-9 checks that 8.05's spellbook earns, which the world session is building now |
+| 9.02 | Built on 2026-09-26 by the maintainer's world session, 6 of 7 checks. Left: its real-client check, which waits on 6.04 |
 | 5.02 | Kept for the maintainer's world session: it starts the chain through 6.01, 6.03 and 6.04 to 8.01 vitals behind the same menus |
 | 4.08 | Taken over by the maintainer's world session on 2026-09-26 for 5.02, which spawns from its zone_object rows and needs every eligible object: the writer skips an object it cannot read without a word, so WC_Hub writes 177 rows for 183 objects, and spawn data is not extracted. MeruneFleuruwu's decoding of every zone, with real positions and display keys, is in the tree and is what it builds on |
 | 6.09 | Taken over by the maintainer's world session on 2026-09-26, because it is the only road to the journal's inventory, through 6.10, 7.01, 8.06 and 8.08. MeruneFleuruwu's sweep and its two measurable checks are in the tree; left is the oracle that names the 104 unknown classes |
