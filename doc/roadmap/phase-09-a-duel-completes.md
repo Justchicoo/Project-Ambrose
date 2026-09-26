@@ -39,9 +39,9 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Acceptance**
 
-- [ ] Ordinals equal the name-sorted index: MSG_ALLOWLEAVEPVP=1, MSG_COMBATACTIONS=2, last = MSG_UPDATEDUELTIMER (corrected; the plan said MSG_SETSTATUS)
-- [ ] MSG_COMBATMOVE and MSG_COMBATPHASEFORSPECTATORS byte round-trip
-- [ ] MSG_COMBATMOVE rejected when not in world
+- [x] Ordinals equal the name-sorted index: MSG_ALLOWLEAVEPVP=1, MSG_COMBATACTIONS=2, last = MSG_UPDATEDUELTIMER (corrected; the plan said MSG_SETSTATUS) (GameMessageTableClientTest.EveryWorldMessageHasExactlyOneRuleAndTheEntryChatterIsHandled, which checks all 36 service-51 orders against the name-sorted tags of the r806919 install)
+- [x] MSG_COMBATMOVE and MSG_COMBATPHASEFORSPECTATORS byte round-trip (WizCombatMessagesTest.CombatMoveAndSpectatorPhaseRoundTripTheirWireFields)
+- [x] MSG_COMBATMOVE rejected when not in world (WizCombatMessagesTest.CombatMoveRequiresInWorldAndLogsItsDecodedWireFields, which fails when the rule also accepts a connected session)
 
 ### Detailed spec from CMB-1: WizCombat protocol surface and dispatch stubs
 
@@ -61,10 +61,10 @@ All 36 service-51 messages and the combat WIZARD/GAME messages encode and decode
 
 **Acceptance**
 
-- [ ] Unit test: the ordinal of every service-51 message equals its index in the name-sorted list; spot checks MSG_ALLOWLEAVEPVP=1, MSG_COMBATACTIONS=2, MSG_UPDATEDUELTIMER=last
-- [ ] Unit test: byte round-trip of MSG_COMBATMOVE (MoveType UBYT, SpellSelection UBYT, SpellTarget UINT, TimeLeft INT, ShadowPactTarget INT, SelectedTieredSpellID INT) and MSG_COMBATPHASEFORSPECTATORS (8 STR names), with NOXFER fields skipped
-- [ ] Unit test: dispatch table rejects MSG_COMBATMOVE from a session not in world
-- [ ] Real client: nothing visible yet; the server log shows a decoded MSG_COMBATAFK or MSG_COMBATMOVE when forced from a test harness
+- [x] Unit test: the ordinal of every service-51 message equals its index in the name-sorted list; spot checks MSG_ALLOWLEAVEPVP=1, MSG_COMBATACTIONS=2, MSG_UPDATEDUELTIMER=last (GameMessageTableClientTest.EveryWorldMessageHasExactlyOneRuleAndTheEntryChatterIsHandled)
+- [x] Unit test: byte round-trip of MSG_COMBATMOVE (MoveType UBYT, SpellSelection UBYT, SpellTarget UINT, TimeLeft INT, ShadowPactTarget INT, SelectedTieredSpellID INT) and MSG_COMBATPHASEFORSPECTATORS (8 STR names), with NOXFER fields skipped (WizCombatMessagesTest.CombatMoveAndSpectatorPhaseRoundTripTheirWireFields)
+- [x] Unit test: dispatch table rejects MSG_COMBATMOVE from a session not in world (WizCombatMessagesTest.CombatMoveRequiresInWorldAndLogsItsDecodedWireFields)
+- [x] Real client: nothing visible yet; the server log shows a decoded MSG_COMBATAFK or MSG_COMBATMOVE when forced from a test harness (WizCombatMessagesTest.CombatMoveRequiresInWorldAndLogsItsDecodedWireFields forces MSG_COMBATMOVE over a loopback session and finds `decoded MSG_COMBATMOVE` with every field in the log, the definitions at the orders GameMessageTableClientTest.EveryWorldMessageHasExactlyOneRuleAndTheEntryChatterIsHandled confirms against the r806919 install)
 
 **Risks**
 

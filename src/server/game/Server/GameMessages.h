@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, the note the client sends once it has loaded that zone, naming it by the string hash of its path, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; and the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits.
+ * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; and the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits.
  */
 
 #ifndef AMBROSE_GAMEMESSAGES_H
@@ -16,6 +16,7 @@ namespace GameMessages
 {
     inline constexpr uint8 GameService = 5;
     inline constexpr uint8 WizardService = 12;
+    inline constexpr uint8 CombatService = 51;
     inline constexpr uint8 Wizard2Service = 53;
     inline constexpr uint8 Wizard3Service = 56;
 
@@ -150,6 +151,134 @@ namespace GameMessages
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("ExcludeOriginator", &Jump::ExcludeOriginator) };
+        }
+    };
+
+    struct CombatMove
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_COMBATMOVE";
+
+        uint8 MoveType = 0;
+        uint8 SpellSelection = 0;
+        uint32 SpellTarget = 0;
+        int32 TimeLeft = 0;
+        int32 ShadowPactTarget = 0;
+        int32 SelectedTieredSpellId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("MoveType", &CombatMove::MoveType), DmlField("SpellSelection", &CombatMove::SpellSelection), DmlField("SpellTarget", &CombatMove::SpellTarget),
+                DmlField("TimeLeft", &CombatMove::TimeLeft), DmlField("ShadowPactTarget", &CombatMove::ShadowPactTarget), DmlField("SelectedTieredSpellID", &CombatMove::SelectedTieredSpellId) };
+        }
+    };
+
+    struct CombatDraw
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_COMBATDRAW";
+
+        static constexpr auto Fields()
+        {
+            return std::tuple<>{};
+        }
+    };
+
+    struct CombatAFK
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_COMBATAFK";
+
+        uint64 DuelId = 0;
+        uint8 IsCombatAFK = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("DuelID", &CombatAFK::DuelId), DmlField("IsCombatAFK", &CombatAFK::IsCombatAFK) };
+        }
+    };
+
+    struct CombatVictory
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_COMBATVICTORY";
+
+        static constexpr auto Fields()
+        {
+            return std::tuple<>{};
+        }
+    };
+
+    struct PetWillCast
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_PETWILLCAST";
+
+        std::string PetCastingSpell;
+        int32 Target = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("PetCastingSpell", &PetWillCast::PetCastingSpell), DmlField("Target", &PetWillCast::Target) };
+        }
+    };
+
+    struct DismissSummon
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_DISMISS_SUMMON";
+
+        uint32 Subcircle = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Subcircle", &DismissSummon::Subcircle) };
+        }
+    };
+
+    struct CombatCheat
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_COMBATCHEAT";
+
+        uint32 CheatFlags = 0;
+        float MaycastChance = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("CheatFlags", &CombatCheat::CheatFlags), DmlField("MaycastChance", &CombatCheat::MaycastChance) };
+        }
+    };
+
+    struct CombatPhaseForSpectators
+    {
+        static constexpr uint8 ServiceId = CombatService;
+        static constexpr std::string_view Tag = "MSG_COMBATPHASEFORSPECTATORS";
+
+        uint64 DuelId = 0;
+        uint8 NewPhase = 0;
+        uint8 Time = 0;
+        std::string ParticipantName1;
+        std::string ParticipantName2;
+        std::string ParticipantName3;
+        std::string ParticipantName4;
+        std::string ParticipantName5;
+        std::string ParticipantName6;
+        std::string ParticipantName7;
+        std::string ParticipantName8;
+        uint32 Subcircles = 0;
+        uint32 TeamName0 = 0;
+        uint32 TeamName1 = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("DuelID", &CombatPhaseForSpectators::DuelId), DmlField("NewPhase", &CombatPhaseForSpectators::NewPhase),
+                DmlField("Time", &CombatPhaseForSpectators::Time), DmlField("ParticipantName1", &CombatPhaseForSpectators::ParticipantName1),
+                DmlField("ParticipantName2", &CombatPhaseForSpectators::ParticipantName2), DmlField("ParticipantName3", &CombatPhaseForSpectators::ParticipantName3),
+                DmlField("ParticipantName4", &CombatPhaseForSpectators::ParticipantName4), DmlField("ParticipantName5", &CombatPhaseForSpectators::ParticipantName5),
+                DmlField("ParticipantName6", &CombatPhaseForSpectators::ParticipantName6), DmlField("ParticipantName7", &CombatPhaseForSpectators::ParticipantName7),
+                DmlField("ParticipantName8", &CombatPhaseForSpectators::ParticipantName8), DmlField("Subcircles", &CombatPhaseForSpectators::Subcircles),
+                DmlField("TeamName0", &CombatPhaseForSpectators::TeamName0), DmlField("TeamName1", &CombatPhaseForSpectators::TeamName1) };
         }
     };
 

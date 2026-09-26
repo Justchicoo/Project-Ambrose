@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks the game message table against the user's own client install: its declarations resolve, every GAME, WIZARD, WIZARD2 and WIZARD3 message has exactly one rule, named for it or standing for the rest of its service, the requests and notes a client sends as it enters are handled, MSG_PETHATCHREADYSTATUS, which the XML defines twice, is one message at one order, and every WIZARD order is the 1-based place of its tag in the tags sorted without repeats, which puts MSG_ADDSPELLTOBOOK at 10 and MSG_UPDATEMANA at 233.
+ * Checks the game message table against the user's own client install: its declarations resolve, every GAME, WIZARD, DOODLEDOUG_MESSAGES, WIZARD2 and WIZARD3 message has exactly one rule, named for it or standing for the rest of its service, the requests and notes a client sends as it enters are handled, MSG_PETHATCHREADYSTATUS, which the XML defines twice, is one message at one order, and the WIZARD and combat orders are the 1-based places of their tags sorted without repeats.
  */
 
 #include "Environment.h"
@@ -56,7 +56,7 @@ TEST(GameMessageTableClientTest, EveryWorldMessageHasExactlyOneRuleAndTheEntryCh
     ASSERT_TRUE(table.Validate(*loaded.Catalog, errors)) << (errors.empty() ? std::string() : errors.front());
 
     auto const& protocols = loaded.Catalog->GetDefinitions().GetProtocols();
-    for (uint8 const service : { GameMessages::GameService, GameMessages::WizardService, GameMessages::Wizard2Service, GameMessages::Wizard3Service })
+    for (uint8 const service : { GameMessages::GameService, GameMessages::WizardService, GameMessages::CombatService, GameMessages::Wizard2Service, GameMessages::Wizard3Service })
     {
         auto const protocol = protocols.find(service);
         ASSERT_NE(protocol, protocols.end()) << "service " << unsigned{ service };
@@ -85,6 +85,33 @@ TEST(GameMessageTableClientTest, EveryWorldMessageHasExactlyOneRuleAndTheEntryCh
     ASSERT_NE(hatch, nullptr);
     EXPECT_EQ(hatch->Definition->Order, 122u);
     EXPECT_EQ(hatch->Definition->RecordCount, 2u) << "the XML defines it twice, and the two records are one message";
+
+    ProtocolDef const* const combat = loaded.Catalog->GetDefinitions().FindService(GameMessages::CombatService);
+    ASSERT_NE(combat, nullptr);
+    EXPECT_EQ(combat->ProtocolType, "DOODLEDOUG_MESSAGES");
+    ASSERT_EQ(combat->Messages.size(), 36u);
+
+    std::vector<std::string> combatTags;
+    for (MessageDef const& message : combat->Messages)
+        combatTags.push_back(message.Tag);
+    std::sort(combatTags.begin(), combatTags.end());
+    combatTags.erase(std::unique(combatTags.begin(), combatTags.end()), combatTags.end());
+    EXPECT_EQ(combatTags.size(), 36u);
+    for (MessageDef const& message : combat->Messages)
+    {
+        auto const place = std::lower_bound(combatTags.begin(), combatTags.end(), message.Tag);
+        ASSERT_NE(place, combatTags.end());
+        EXPECT_EQ(message.Order, static_cast<uint32>(place - combatTags.begin() + 1)) << message.Tag;
+    }
+    MessageInfoPtr const allowLeave = loaded.Registry.Find(GameMessages::CombatService, "MSG_ALLOWLEAVEPVP");
+    MessageInfoPtr const actions = loaded.Registry.Find(GameMessages::CombatService, "MSG_COMBATACTIONS");
+    MessageInfoPtr const duelTimer = loaded.Registry.Find(GameMessages::CombatService, "MSG_UPDATEDUELTIMER");
+    ASSERT_NE(allowLeave, nullptr);
+    ASSERT_NE(actions, nullptr);
+    ASSERT_NE(duelTimer, nullptr);
+    EXPECT_EQ(allowLeave->Definition->Order, 1u);
+    EXPECT_EQ(actions->Definition->Order, 2u);
+    EXPECT_EQ(duelTimer->Definition->Order, 36u);
 }
 
 TEST(GameMessageTableClientTest, WizardOrdersAreThePlacesOfTheirTagsSortedWithoutRepeats)

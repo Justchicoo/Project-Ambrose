@@ -77,6 +77,14 @@ public:
     void HandleLogPatchClientPatchTime(GameMessages::LogPatchClientPatchTime& message);
     void HandleQuestFinderOption(GameMessages::QuestFinderOption& message);
 
+    void HandleCombatMove(GameMessages::CombatMove& message);
+    void HandleCombatDraw(GameMessages::CombatDraw& message);
+    void HandleCombatAFK(GameMessages::CombatAFK& message);
+    void HandleCombatVictory(GameMessages::CombatVictory& message);
+    void HandlePetWillCast(GameMessages::PetWillCast& message);
+    void HandleDismissSummon(GameMessages::DismissSummon& message);
+    void HandleCombatCheat(GameMessages::CombatCheat& message);
+
     void ProcessCallbacks();
 
     uint64 GetUnhandledMessageCount() const noexcept { return _unhandled.load(std::memory_order_relaxed); }
