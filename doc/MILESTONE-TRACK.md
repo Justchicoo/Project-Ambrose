@@ -43,6 +43,8 @@ If a hold is in the way of something you want to build, say so in the Discord. H
 
 If you go quiet for two weeks the row goes back to **Open now**, with whatever you pushed left in place, so somebody else can carry it.
 
+The maintainer's sessions may also take a milestone over when the roadmap needs it sooner, for example when it blocks the milestone they are building or a check needs the maintainer's own machines. You hear it in one message on your pull request, and whatever of your work the landing uses keeps your name on the commit.
+
 ## What finishing one means
 
 A milestone is finished when **every acceptance check in its phase file is ticked**, in the same commit as the code that earns them, and not before. Most milestones carry two lists: the short one under the milestone heading and the full one at the end of the detailed spec. Both are the same checks in different detail, and both get ticked.

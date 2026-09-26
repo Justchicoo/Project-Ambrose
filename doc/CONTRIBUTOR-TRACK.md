@@ -259,6 +259,8 @@ An item stays listed until its pull request is merged. Ask before starting somet
 
 Notes, proposals and guides are read by the agents building the milestones they touch, and cited in the milestone that uses them. A tool stays yours in `contrib/tools/`, and if the project later needs it in the servers, it is rebuilt inside `src/` under the architecture's rules, with your note kept. Scenarios, SQL and fuzz seeds are used where they are. Everything merged is MIT, as LICENSE says.
 
+The maintainer's sessions may take an item over when a milestone they are building needs it now. You hear it on your pull request, and whatever of your work is used keeps your name on the commit.
+
 ### Started, still open
 
 These carry a first delivery and stay listed above because the item is not what landed: C-01 has its `zone_teleport` table (#55) and no rows; C-11 has its seed folder's README (#56) and no seeds; F-12 has a finding that Ambrose's launcher applies its options and leaves the install untouched (#53), not yet what each of the client's own options does.
