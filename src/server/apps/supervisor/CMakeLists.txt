@@ -15,4 +15,7 @@ target_link_libraries(supervision PUBLIC ambrose-compile-options database PRIVAT
 
 add_executable(supervisor "${CMAKE_CURRENT_SOURCE_DIR}/Main.cpp")
 target_link_libraries(supervisor PRIVATE ambrose-compile-options supervision)
+if(WIN32)
+    target_link_libraries(supervisor PRIVATE advapi32 shell32)
+endif()
 ambrose_copy_conf_dist(supervisor)

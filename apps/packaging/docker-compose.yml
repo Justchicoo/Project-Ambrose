@@ -6,12 +6,13 @@ services:
     image: mariadb:11.7
     restart: unless-stopped
     environment:
-      MARIADB_DATABASE: "${MARIADB_DATABASE:-ambrose}"
-      MARIADB_USER: "${MARIADB_USER:-ambrose}"
+      MARIADB_DATABASE: ambrose_login
+      MARIADB_USER: ambrose
       MARIADB_PASSWORD: "${MARIADB_PASSWORD:?Set MARIADB_PASSWORD in .env}"
       MARIADB_ROOT_PASSWORD: "${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in .env}"
     volumes:
       - mariadb-data:/var/lib/mysql
+      - ./database-init.sql:/docker-entrypoint-initdb.d/ambrose.sql:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -20,15 +21,15 @@ services:
   ambrose:
     build:
       context: ../..
-      dockerfile: apps/packaging/ambrose-dockerfile.txt
+      dockerfile: apps/packaging/Dockerfile
     restart: unless-stopped
     depends_on:
       database:
         condition: service_healthy
     ports:
-      - "${ADMIN_BIND:-127.0.0.1}:12020:12020"
-      - "${PANEL_BIND:-127.0.0.1}:12080:12080"
-      - "${GAME_BIND:-127.0.0.1}:12343:12343"
+      - "${LOGIN_BIND:-127.0.0.1}:12000:12000"
+      - "${GAME_BIND:-127.0.0.1}:12333:12333"
+      - "${PATCH_BIND:-127.0.0.1}:12500:12500"
     volumes:
       - ambrose-config:/var/lib/ambrose/config
       - ambrose-data:/var/lib/ambrose/data
@@ -37,6 +38,7 @@ services:
       - "${AMBROSE_CLIENT_DIR:?Set AMBROSE_CLIENT_DIR to a client install}:/var/lib/ambrose/client:ro"
     environment:
       AMBROSE_CLIENT_DIR: /var/lib/ambrose/client
+      MARIADB_PASSWORD: "${MARIADB_PASSWORD:?Set MARIADB_PASSWORD in .env}"
     healthcheck:
       test: ["CMD", "/opt/ambrose/bin/supervisor", "--config", "/var/lib/ambrose/config/supervisor.conf", "--check"]
       interval: 15s
