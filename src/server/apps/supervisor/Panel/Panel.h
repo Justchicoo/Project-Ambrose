@@ -93,7 +93,6 @@ private:
     AdminResponse WhoAmI(AdminRequest const& request);
     AdminResponse PanelSettingsGet(AdminRequest const& request);
     AdminResponse PanelSettingsUpdate(AdminRequest const& request);
-    AdminResponse PanelMailTest(AdminRequest const& request);
     std::optional<PanelUser> UserOf(AdminRequest const& request);
     nlohmann::json UserAnswer(PanelUser const& user);
     std::optional<AdminResponse> Throttle(AdminRequest const& request, uint32 cost);

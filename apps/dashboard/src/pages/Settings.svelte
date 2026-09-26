@@ -6,10 +6,9 @@
     import { Input } from "$lib/components/ui/input/index.js";
     import { Label } from "$lib/components/ui/label/index.js";
     import { ApiError } from "$lib/api.svelte.js";
-    import { panelSettings, testPanelMail, updatePanelSettings } from "$lib/supervision.svelte.js";
+    import { panelSettings, updatePanelSettings } from "$lib/supervision.svelte.js";
     import type { InferOutput } from "valibot";
     import { PanelSettingsAnswer } from "$lib/schemas.js";
-    import MailIcon from "@lucide/svelte/icons/mail";
     import SaveIcon from "@lucide/svelte/icons/save";
     import PageHeader from "../components/PageHeader.svelte";
     import StatusBadge from "../components/StatusBadge.svelte";
@@ -53,15 +52,6 @@
             failure = problem instanceof ApiError ? problem.message : "The panel settings could not be saved";
         } finally {
             busy = false;
-        }
-    }
-
-    async function sendTest() {
-        try {
-            await testPanelMail();
-            notice = "A test message was sent to your signed-in address.";
-        } catch (problem) {
-            failure = problem instanceof ApiError ? problem.message : "The mail test failed";
         }
     }
 </script>
@@ -118,11 +108,6 @@
                         </div>
                     {/each}
                 </Card.Content>
-                {#if group.id === "mail"}
-                    <Card.Footer>
-                        <Button variant="outline" onclick={() => void sendTest()}><MailIcon />Send test to me</Button>
-                    </Card.Footer>
-                {/if}
             </Card.Root>
         </Tabs.Content>
     {/each}

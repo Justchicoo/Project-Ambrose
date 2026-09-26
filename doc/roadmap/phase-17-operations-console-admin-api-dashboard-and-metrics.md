@@ -964,10 +964,10 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 **Acceptance**
 
 - [ ] The mail test reaches only the signed-in user's address, and a bad SMTP password shows the server's error
-- [ ] The saved SMTP password never appears in any response, log or audit row
-- [ ] With `AMBROSE_PANEL_TRUSTED_PROXIES` set, the key shows as locked and a live edit is refused naming the layer
+- [x] The saved SMTP password never appears in any response, log or audit row [PanelSettingsTest.KeepsSavedSecretsOutOfAnswersLogsAndAuditRows]
+- [x] With `AMBROSE_PANEL_TRUSTED_PROXIES` set, the key shows as locked and a live edit is refused naming the layer [PanelSettingsTest.KeepsTrustedProxiesLockedToTheEnvironmentLayer]
 - [ ] With the captcha on and its provider unreachable, sign-in after repeated failures is refused with a clear error rather than allowed through
-- [ ] A user without `panel.settings` gets 403 on every group and sees no page in navigation
+- [x] A user without `panel.settings` gets 403 on every group and sees no page in navigation [PanelSettingsTest.RequiresPanelSettingsForEveryGroupAndBothMethods; routes.test.ts keeps panel settings hidden without panel.settings]
 
 ## 17.36 Personal API keys
 

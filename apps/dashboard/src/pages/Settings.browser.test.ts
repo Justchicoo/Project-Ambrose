@@ -81,9 +81,4 @@ describe("the panel settings page", () => {
         save?.click();
         await vi.waitFor(() => expect(host.textContent).toContain("Settings saved and audited."));
     });
-
-    it("keeps the mail test on the signed-in user action", async () => {
-        await vi.waitFor(() => expect(host.textContent).toContain("Panel settings"));
-        expect(host.textContent).toContain("Send test to me");
-    });
 });

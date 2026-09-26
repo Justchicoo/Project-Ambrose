@@ -298,9 +298,8 @@ void Panel::RegisterSignIn()
     routes.AddOpen("DELETE", "/api/panel/session", [this](AdminRequest const& request) { return SignOut(request); });
     routes.AddOpen("GET", "/api/panel/me", [this](AdminRequest const& request) { return WhoAmI(request); });
     routes.AddOpen("GET", "/api/panel/permissions", [](AdminRequest const&) { return AdminResponse::Json(200, PanelPermissions::CatalogJson()); });
-    routes.AddGuarded("GET", "/api/panel/settings", "settings.read", [this](AdminRequest const& request) { return PanelSettingsGet(request); });
-    routes.AddGuarded("PATCH", "/api/panel/settings", "settings.edit", [this](AdminRequest const& request) { return PanelSettingsUpdate(request); });
-    routes.AddGuarded("POST", "/api/panel/settings/mail-test", "settings.edit", [this](AdminRequest const& request) { return PanelMailTest(request); });
+    routes.AddGuarded("GET", "/api/panel/settings", "panel.settings", [this](AdminRequest const& request) { return PanelSettingsGet(request); });
+    routes.AddGuarded("PATCH", "/api/panel/settings", "panel.settings", [this](AdminRequest const& request) { return PanelSettingsUpdate(request); });
 }
 
 AdminResponse Panel::PanelSettingsGet(AdminRequest const& request)
@@ -330,17 +329,6 @@ AdminResponse Panel::PanelSettingsUpdate(AdminRequest const& request)
     if (!Record(event, {}, error))
         return AdminResponse::Problem(503, "audit_unavailable", error);
     return PanelSettingsGet(request);
-}
-
-AdminResponse Panel::PanelMailTest(AdminRequest const& request)
-{
-    std::optional<PanelUser> const user = UserOf(request);
-    if (!user)
-        return AdminResponse::Problem(403, "forbidden", "A signed-in panel user is required");
-    std::string error;
-    if (!_settings.TestMail(user->Email, error))
-        return AdminResponse::Problem(422, "mail_test_failed", error);
-    return AdminResponse::Json(200, "{\"sent\":true}");
 }
 
 std::optional<PanelUser> Panel::UserOf(AdminRequest const& request)

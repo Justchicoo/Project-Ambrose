@@ -78,10 +78,6 @@ export function updatePanelSettings(values: Record<string, string>) {
     return request("PATCH", "api/panel/settings", PanelSettingsAnswer, { values });
 }
 
-export function testPanelMail() {
-    return request("POST", "api/panel/settings/mail-test", null);
-}
-
 export function clientDataOf(app: string, signal?: AbortSignal) {
     return request("GET", pathFor(app, "client"), ClientAnswer, undefined, signal);
 }

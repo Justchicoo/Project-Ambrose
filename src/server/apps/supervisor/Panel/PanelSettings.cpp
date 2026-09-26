@@ -191,14 +191,3 @@ bool PanelSettings::Update(nlohmann::json const& values, int64 userId, std::stri
     }
     return true;
 }
-
-bool PanelSettings::TestMail(std::string_view address, std::string& error) const
-{
-    if (address.empty() || address.find('@') == std::string_view::npos)
-    {
-        error = "the signed-in user's email address is not configured";
-        return false;
-    }
-    error = "SMTP delivery is not available until the supervisor mail transport is enabled";
-    return false;
-}

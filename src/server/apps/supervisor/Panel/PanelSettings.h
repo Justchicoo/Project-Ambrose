@@ -23,7 +23,6 @@ public:
 
     nlohmann::json Answer(std::string_view group, std::string& error) const;
     bool Update(nlohmann::json const& values, int64 userId, std::string& error);
-    bool TestMail(std::string_view address, std::string& error) const;
 
 private:
     PanelStore& _store;
