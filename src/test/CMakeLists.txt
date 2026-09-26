@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, with the launcher's and the client-image library's own tests joining it when those libraries are built so one executable holds them, and outside the login server's and the supervisor's folders unless their libraries are built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, hands the tests the path of the generated design token stylesheet so the terminal header can be checked against it and the path of doc/config/settings.md so the settings page can be checked against its declarations, links the Windows security API the admin token permission checks read, registers each test with CTest, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable, the supervisor and the bindecode, client, dbimport, extractor, launcher, localetool, schemaprobe and typeextract tools.
+# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, with the launcher's and the client-image library's own tests joining it when those libraries are built so one executable holds them, and outside the login server's and the supervisor's folders unless their libraries are built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, hands the tests the path of the generated design token stylesheet so the terminal header can be checked against it and the path of doc/config/settings.md so the settings page can be checked against its declarations, links the Windows security API the admin token permission checks read, registers each test with CTest, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable, the supervisor and the bindecode, client, dbimport, extractor, launcher, localetool, schemaprobe and typeextract tools, labelling `client` every tool test that reads the install when AMBROSE_CLIENT_DIR names one, as the client tests are, so one label selects or skips everything that does.
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
@@ -100,43 +100,43 @@ endforeach()
 if(TARGET bindecode)
     add_test(NAME BinDecode
         COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:bindecode> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/bindecode -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/BinDecodeTest.cmake")
-    set_tests_properties(BinDecode PROPERTIES SKIP_REGULAR_EXPRESSION "bindecode test skipped")
+    set_tests_properties(BinDecode PROPERTIES SKIP_REGULAR_EXPRESSION "bindecode test skipped" LABELS client)
 endif()
 
 if(TARGET schemaprobe)
     add_test(NAME SchemaProbe
         COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:schemaprobe> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/schemaprobe -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/SchemaProbeTest.cmake")
-    set_tests_properties(SchemaProbe PROPERTIES SKIP_REGULAR_EXPRESSION "schemaprobe test skipped")
+    set_tests_properties(SchemaProbe PROPERTIES SKIP_REGULAR_EXPRESSION "schemaprobe test skipped" LABELS client)
 endif()
 
 if(TARGET client)
     add_test(NAME ClientTool
         COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:client> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/clienttool -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/ClientToolTest.cmake")
-    set_tests_properties(ClientTool PROPERTIES SKIP_REGULAR_EXPRESSION "client tool test skipped")
+    set_tests_properties(ClientTool PROPERTIES SKIP_REGULAR_EXPRESSION "client tool test skipped" LABELS client)
 endif()
 
 if(TARGET extractor)
     add_test(NAME Extractor
         COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:extractor> -DDBIMPORT=$<$<TARGET_EXISTS:dbimport>:$<TARGET_FILE:dbimport>> -DGAMESERVER=$<$<TARGET_EXISTS:gameserver>:$<TARGET_FILE:gameserver>> -DUNIT_TESTS=$<TARGET_FILE:unit_tests> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/extractor -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/ExtractorTest.cmake")
-    set_tests_properties(Extractor PROPERTIES SKIP_REGULAR_EXPRESSION "extractor test skipped")
+    set_tests_properties(Extractor PROPERTIES SKIP_REGULAR_EXPRESSION "extractor test skipped" LABELS client)
 endif()
 
 if(TARGET launcher)
     add_test(NAME Launcher
         COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:launcher> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/launcher -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/LauncherTest.cmake")
-    set_tests_properties(Launcher PROPERTIES SKIP_REGULAR_EXPRESSION "launcher test skipped")
+    set_tests_properties(Launcher PROPERTIES SKIP_REGULAR_EXPRESSION "launcher test skipped" LABELS client)
 endif()
 
 if(TARGET localetool)
     add_test(NAME LocaleTool
         COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:localetool> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/localetool -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/LocaleToolTest.cmake")
-    set_tests_properties(LocaleTool PROPERTIES SKIP_REGULAR_EXPRESSION "localetool test skipped")
+    set_tests_properties(LocaleTool PROPERTIES SKIP_REGULAR_EXPRESSION "localetool test skipped" LABELS client)
 endif()
 
 if(TARGET typeextract)
     add_test(NAME TypeExtract
         COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:typeextract> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/typeextract -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/TypeExtractTest.cmake")
-    set_tests_properties(TypeExtract PROPERTIES SKIP_REGULAR_EXPRESSION "typeextract test skipped")
+    set_tests_properties(TypeExtract PROPERTIES SKIP_REGULAR_EXPRESSION "typeextract test skipped" LABELS client)
 endif()
 
 if(TARGET dbimport)
