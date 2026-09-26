@@ -149,7 +149,9 @@ The client is mounted read-only. Configuration, data, logs and backups are
 named volumes, and the container health check runs the supervisor's
 `--check` path without starting child apps. Import
 `apps/packaging/pterodactyl-egg.json` into an existing Pterodactyl panel; its
-startup line waits for `[server.supervisor] supervisor ready` and its stop command is
-the panel's normal `shutdown` command. The egg installer builds the selected
-source ref in Pterodactyl's Ubuntu yolk, so the selected client install must be
-available at the configured client path.
+startup line waits for `supervisor ready` and its stop command is the panel's
+normal `shutdown` command. Both packaging paths create configuration files
+with mode `0640`; keep their owning user and group arranged so the supervisor
+can read them. The egg installer builds the selected source ref in
+Pterodactyl's Ubuntu yolk, so the selected client install must be available at
+the configured client path.

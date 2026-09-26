@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string_view>
 #include <system_error>
 #include <utility>
@@ -30,7 +31,6 @@
 
 namespace
 {
-#ifndef _WIN32
     std::string SystemdQuote(std::string_view value)
     {
         std::string escaped = "\"";
@@ -43,7 +43,6 @@ namespace
         escaped += '"';
         return escaped;
     }
-#endif
 
 #ifdef _WIN32
     std::function<int(std::vector<std::string> const&)> ServiceRunner;
@@ -122,7 +121,7 @@ namespace
             ServiceStatus.dwCurrentState = SERVICE_RUNNING;
             ServiceStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN;
             SetServiceStatus(ServiceStatusHandle, &ServiceStatus);
-            ServiceExitCode = ServiceRunner(arguments);
+            ServiceExitCode = ServiceRunner(SupervisorService::ArgumentsWithoutServiceFlag(arguments));
         }
         ServiceStatus.dwCurrentState = SERVICE_STOPPED;
         ServiceStatus.dwWin32ExitCode = ServiceExitCode == 0 ? NO_ERROR : ERROR_SERVICE_SPECIFIC_ERROR;
@@ -134,6 +133,68 @@ namespace
 
 namespace SupervisorService
 {
+    std::vector<std::string> ArgumentsWithoutServiceFlag(std::vector<std::string> const& arguments)
+    {
+        std::vector<std::string> normal;
+        normal.reserve(arguments.size());
+        for (std::string const& argument : arguments)
+            if (argument != "--service")
+                normal.push_back(argument);
+        return normal;
+    }
+
+    std::string BuildSystemdUnitText(std::string_view executable, std::string_view config)
+    {
+        return "[Unit]\nDescription=Project Ambrose Supervisor\nAfter=network-online.target\nWants=network-online.target\n\n"
+            "[Service]\nType=simple\nUser=ambrose\nGroup=ambrose\n"
+            "ExecStart=" + SystemdQuote(executable) + " --config " + SystemdQuote(config) + "\n"
+            "Restart=on-failure\nRestartSec=5\nKillSignal=SIGTERM\nTimeoutStopSec=90s\nNoNewPrivileges=true\nProtectSystem=strict\nReadWritePaths=/etc/ambrose /var/lib/ambrose /var/log/ambrose\n\n"
+            "[Install]\nWantedBy=multi-user.target\n";
+    }
+
+    bool SetConfigValue(std::string& contents, std::string_view key, std::string_view value)
+    {
+        std::ostringstream rewritten;
+        std::size_t start = 0;
+        bool found = false;
+        while (start < contents.size())
+        {
+            std::size_t const newline = contents.find('\n', start);
+            std::size_t const end = newline == std::string::npos ? contents.size() : newline;
+            std::string_view line(contents.data() + start, end - start);
+            bool const carriageReturn = !line.empty() && line.back() == '\r';
+            if (carriageReturn)
+                line.remove_suffix(1);
+
+            std::size_t const first = line.find_first_not_of(" \t");
+            std::size_t const equals = line.find('=');
+            std::size_t nameEnd = equals;
+            while (equals != std::string_view::npos && nameEnd > first
+                && (line[nameEnd - 1] == ' ' || line[nameEnd - 1] == '\t'))
+                --nameEnd;
+            bool const matches = first != std::string_view::npos
+                && equals != std::string_view::npos
+                && line.substr(first, nameEnd - first) == key;
+            if (matches)
+            {
+                rewritten << line.substr(0, first) << key << " = " << value;
+                found = true;
+            }
+            else
+                rewritten << line;
+            if (carriageReturn)
+                rewritten << '\r';
+            if (newline != std::string::npos)
+                rewritten << '\n';
+            start = newline == std::string::npos ? contents.size() : newline + 1;
+        }
+        if (contents.empty())
+            return false;
+        if (found)
+            contents = rewritten.str();
+        return found;
+    }
+
     int Install(std::vector<std::string> const& arguments)
     {
 #ifdef _WIN32
@@ -194,14 +255,31 @@ namespace SupervisorService
                 return 1;
             }
             std::ifstream source(config);
+            if (!source)
+            {
+                std::cerr << "supervisor: cannot read the distributed supervisor configuration\n";
+                return 1;
+            }
             std::string contents((std::istreambuf_iterator<char>(source)), std::istreambuf_iterator<char>());
             source.close();
-            std::size_t const panel = contents.find("Panel.Enable = 0");
-            if (panel != std::string::npos)
-                contents.replace(panel, std::string("Panel.Enable = 0").size(), "Panel.Enable = 1");
+            if (!SetConfigValue(contents, "Panel.Enable", "1"))
+            {
+                std::cerr << "supervisor: the supervisor configuration has no Panel.Enable setting\n";
+                return 1;
+            }
             std::ofstream configured(config, std::ios::trunc);
+            if (!configured)
+            {
+                std::cerr << "supervisor: cannot rewrite the supervisor configuration\n";
+                return 1;
+            }
             configured << contents;
             configured.close();
+            if (!configured)
+            {
+                std::cerr << "supervisor: cannot finish writing the supervisor configuration\n";
+                return 1;
+            }
         }
         std::filesystem::create_directories(directory / L"logs", error);
         if (error)
@@ -322,39 +400,74 @@ namespace SupervisorService
                 }
             }
             std::ifstream source(config);
+            if (!source)
+            {
+                std::cerr << "supervisor: cannot read the distributed supervisor configuration\n";
+                return 1;
+            }
             std::string contents((std::istreambuf_iterator<char>(source)), std::istreambuf_iterator<char>());
             source.close();
-            auto replace = [&contents](std::string const& before, std::string const& after)
+            auto replace = [&contents](std::string_view key, std::string_view value)
             {
-                std::size_t const position = contents.find(before);
-                if (position != std::string::npos)
-                    contents.replace(position, before.size(), after);
+                return SetConfigValue(contents, key, value);
             };
-            replace("LogsDir = logs", "LogsDir = /var/log/ambrose");
-            replace("Supervisor.StateFile =", "Supervisor.StateFile = /var/lib/ambrose/supervisor/state.json");
-            replace("Supervisor.OutputDir =", "Supervisor.OutputDir = /var/lib/ambrose/supervisor/output");
-            replace("Supervisor.HistoryFile =", "Supervisor.HistoryFile = /var/lib/ambrose/supervisor/history.bin");
-            replace("Panel.StoreFile =", "Panel.StoreFile = /var/lib/ambrose/panel.sqlite");
-            replace("Panel.Enable = 0", "Panel.Enable = 1");
+            bool configuredAll = true;
+            configuredAll = replace("LogsDir", "/var/log/ambrose") && configuredAll;
+            configuredAll = replace("Supervisor.StateFile", "/var/lib/ambrose/supervisor/state.json") && configuredAll;
+            configuredAll = replace("Supervisor.OutputDir", "/var/lib/ambrose/supervisor/output") && configuredAll;
+            configuredAll = replace("Supervisor.HistoryFile", "/var/lib/ambrose/supervisor/history.bin") && configuredAll;
+            configuredAll = replace("Panel.StoreFile", "/var/lib/ambrose/panel.sqlite") && configuredAll;
+            configuredAll = replace("Panel.Enable", "1") && configuredAll;
             for (std::string_view const name : { "loginserver", "gameserver", "patchserver" })
             {
                 std::filesystem::path const appConfig = configDirectory / (std::string(name) + ".conf");
-                replace("App." + std::string(name) + ".Config = " + std::string(name) + ".conf",
-                    "App." + std::string(name) + ".Config = " + ConfigMgr::PathToUtf8(appConfig));
-                replace("App." + std::string(name) + ".WorkingDirectory =",
-                    "App." + std::string(name) + ".WorkingDirectory = /var/lib/ambrose");
+                configuredAll = replace("App." + std::string(name) + ".Config", ConfigMgr::PathToUtf8(appConfig)) && configuredAll;
+                configuredAll = replace("App." + std::string(name) + ".WorkingDirectory", "/var/lib/ambrose") && configuredAll;
                 std::ifstream appSource(appConfig);
+                if (!appSource)
+                {
+                    std::cerr << "supervisor: cannot read " << appConfig << '\n';
+                    return 1;
+                }
                 std::string appContents((std::istreambuf_iterator<char>(appSource)), std::istreambuf_iterator<char>());
                 appSource.close();
-                std::size_t const logs = appContents.find("LogsDir = logs");
-                if (logs != std::string::npos)
-                    appContents.replace(logs, std::string("LogsDir = logs").size(), "LogsDir = /var/log/ambrose");
+                if (!SetConfigValue(appContents, "LogsDir", "/var/log/ambrose"))
+                {
+                    std::cerr << "supervisor: " << appConfig << " has no LogsDir setting\n";
+                    return 1;
+                }
                 std::ofstream appOutput(appConfig, std::ios::trunc);
+                if (!appOutput)
+                {
+                    std::cerr << "supervisor: cannot rewrite " << appConfig << '\n';
+                    return 1;
+                }
                 appOutput << appContents;
+                appOutput.close();
+                if (!appOutput)
+                {
+                    std::cerr << "supervisor: cannot finish writing " << appConfig << '\n';
+                    return 1;
+                }
+            }
+            if (!configuredAll)
+            {
+                std::cerr << "supervisor: the supervisor configuration is missing a required setting\n";
+                return 1;
             }
             std::ofstream configured(config, std::ios::trunc);
+            if (!configured)
+            {
+                std::cerr << "supervisor: cannot rewrite the supervisor configuration\n";
+                return 1;
+            }
             configured << contents;
             configured.close();
+            if (!configured)
+            {
+                std::cerr << "supervisor: cannot finish writing the supervisor configuration\n";
+                return 1;
+            }
         }
         for (std::string_view const name : { "loginserver", "gameserver", "patchserver" })
         {
@@ -381,6 +494,20 @@ namespace SupervisorService
             std::cerr << "supervisor: could not set service directory ownership\n";
             return 1;
         }
+        if (chmod(config.c_str(), 0640) != 0)
+        {
+            std::cerr << "supervisor: could not restrict supervisor.conf permissions\n";
+            return 1;
+        }
+        for (std::string_view const name : { "loginserver", "gameserver", "patchserver" })
+        {
+            std::filesystem::path const appConfig = configDirectory / (std::string(name) + ".conf");
+            if (chown(appConfig.c_str(), 0, account->pw_gid) != 0 || chmod(appConfig.c_str(), 0640) != 0)
+            {
+                std::cerr << "supervisor: could not restrict " << appConfig << " permissions\n";
+                return 1;
+            }
+        }
         std::filesystem::path const unit = "/etc/systemd/system/ambrose.service";
         std::ofstream output(unit, std::ios::trunc);
         if (!output)
@@ -388,12 +515,13 @@ namespace SupervisorService
             std::cerr << "supervisor: cannot write " << unit << '\n';
             return 1;
         }
-        output << "[Unit]\nDescription=Project Ambrose Supervisor\nAfter=network-online.target\nWants=network-online.target\n\n"
-                  "[Service]\nType=simple\nUser=ambrose\nGroup=ambrose\n"
-               << "ExecStart=" << SystemdQuote(executable.string()) << " --config " << SystemdQuote(config.string()) << "\n"
-                  "Restart=on-failure\nRestartSec=5\nKillSignal=SIGTERM\nTimeoutStopSec=90s\nNoNewPrivileges=true\nProtectSystem=strict\nReadWritePaths=/etc/ambrose /var/lib/ambrose /var/log/ambrose\n\n"
-                  "[Install]\nWantedBy=multi-user.target\n";
+        output << BuildSystemdUnitText(ConfigMgr::PathToUtf8(executable), ConfigMgr::PathToUtf8(config));
         output.close();
+        if (!output)
+        {
+            std::cerr << "supervisor: cannot finish writing " << unit << '\n';
+            return 1;
+        }
         if (std::system("systemctl daemon-reload") != 0 || std::system("systemctl enable ambrose.service") != 0)
         {
             std::cerr << "supervisor: systemd registration failed\n";
@@ -447,7 +575,7 @@ namespace SupervisorService
     int Run(std::vector<std::string> const& arguments, std::function<int(std::vector<std::string> const&)> runner, std::function<void()> stop)
     {
 #ifdef _WIN32
-        ServiceRunner = std::move(runner);
+        ServiceRunner = runner;
         ServiceStop = std::move(stop);
         SERVICE_TABLE_ENTRYW table[] = { { const_cast<LPWSTR>(L"AmbroseSupervisor"), ServiceMain }, { nullptr, nullptr } };
         if (StartServiceCtrlDispatcherW(table))
@@ -457,11 +585,6 @@ namespace SupervisorService
 #else
         static_cast<void>(stop);
 #endif
-        std::vector<std::string> normal;
-        normal.reserve(arguments.size());
-        for (std::string const& argument : arguments)
-            if (argument != "--service")
-                normal.push_back(argument);
-        return runner(normal);
+        return runner(ArgumentsWithoutServiceFlag(arguments));
     }
 }

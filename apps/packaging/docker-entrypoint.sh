@@ -3,6 +3,7 @@
 # Creates first-start configuration from the mounted client and starts the supervisor in the foreground for Docker lifecycle handling.
 
 set -eu
+umask 027
 
 config_dir=/var/lib/ambrose/config
 db_user=ambrose
@@ -48,5 +49,7 @@ sed -i \
     -e 's#^App.gameserver.WorkingDirectory =.*#App.gameserver.WorkingDirectory = /var/lib/ambrose#' \
     -e 's#^App.patchserver.WorkingDirectory =.*#App.patchserver.WorkingDirectory = /var/lib/ambrose#' \
     "$config_dir/supervisor.conf"
+
+chmod 0640 "$config_dir/supervisor.conf" "$config_dir/loginserver.conf" "$config_dir/gameserver.conf" "$config_dir/patchserver.conf"
 
 exec /opt/ambrose/bin/supervisor --config "$config_dir/supervisor.conf"

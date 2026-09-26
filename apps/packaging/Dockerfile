@@ -5,8 +5,8 @@ FROM ubuntu:24.04 AS build
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential cmake ninja-build git pkg-config curl zip unzip tar \
-    && git clone --depth 1 https://github.com/microsoft/vcpkg.git /opt/vcpkg \
+    && apt-get install -y --no-install-recommends build-essential cmake ninja-build git pkg-config curl zip unzip tar ca-certificates \
+    && git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg \
     && /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics \
     && rm -rf /var/lib/apt/lists/*
 ENV VCPKG_ROOT=/opt/vcpkg
