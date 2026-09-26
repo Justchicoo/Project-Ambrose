@@ -172,6 +172,8 @@ Check it before opening the pull request. `git log --oneline upstream/main..HEAD
 
 When a review does ask for a change, switch back to that item's branch, make the change, and push it. Nothing else is affected, because no other branch was built on it.
 
+**Never chase `main`.** It moves several times a day, and CI runs on every pull request merged with the current `main` at each push, so an open pull request is always checked against today's tree without a rebase. Bring `main` in only when GitHub shows a conflict or a review asks for it, and then once, just before the next push. Keep one build folder and build incrementally with `cmake --build`. Never delete the folder or run the whole configure again to pick up an update, because CMake reconfigures itself only when a CMake file, `vcpkg.json` or the list of source files changed, and many commits on `main` touch only documentation.
+
 Two things make an item worth doing in sequence rather than in parallel: it edits a file another open pull request of mine already edits, which on this track is rare because items land in different folders, or it depends on a shape another item is still settling. Say so if you spot either, and I will hold it back.
 
 A merged pull request is squashed into one commit, so its branch holds nothing git can apply again and reusing it opens an empty pull request. After a merge: `git checkout main`, `git reset --hard upstream/main`, `git push --force origin main`, and branch again from there.

@@ -283,6 +283,8 @@ That first line is the board again: my milestone should still say `building` wit
 
 Three dots, and the remote branch my pull request targets, never a local `main`, because a stale or moved-on `main` makes that check flag files I never touched. `upstream` is whichever of my remotes is github.com/Justchicoo/Project-Ambrose; a clone of my own fork has none until I add it with `git remote add upstream https://github.com/Justchicoo/Project-Ambrose.git`. `git status` must be clean: an extracted file, a dump or a generated database file left in the tree is the thing rule 2 exists to stop, and several milestones generate exactly those.
 
+**Never chase `main`.** It moves several times a day, and CI builds my pull request merged with the current `main` on every push, so it is always tested against today's tree without a rebase. Bring `main` in only when GitHub shows a conflict, a review asks for it, or I need something that just landed, and then once, just before my last push. Keep one build folder and build incrementally with `cmake --build --preset windows-debug`: CMake reconfigures itself only when a CMake file, `vcpkg.json` or the list of source files changed, and many commits on `main` touch only documentation, which rebuilds nothing. Never delete the build folder or run the whole configure again to pick up an update. While working, run the tests my change touches with `ctest --preset windows-debug -R <pattern>`, and the full `ctest` once before the push.
+
 Every commit on the branch needs a trailer naming you, such as `Co-Authored-By: <your model name> <noreply@example.com>`; the checker fails any commit in the range without one, not only the last.
 
 Three more checks that no script makes for me:
