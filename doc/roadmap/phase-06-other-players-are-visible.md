@@ -401,7 +401,7 @@ Players leave the world cleanly on logout, crash or server stop, their position 
 **Acceptance**
 
 - [x] Lists 1451865413 (7094), 520243970 (6875), 1120896859 (5567), 829470368 (5473). `schemaprobe` against the pinned install lists all four with exactly those instance counts, each under m_behaviors
-- [ ] 520243970 gets m_behaviorName, m_npcProximity, m_questList, m_personaName
+- [x] 520243970 gets m_behaviorName, m_npcProximity, m_questList, m_personaName. `BindFileClientTest.EachPropertyOfAnUnknownClassIsListedAndTheOracleNamesTheNpcBehaviors` on the pinned install: the sweep lists the five properties every one of the 6875 NPC behaviors holds, and the property oracle, from the dump's own 641 types and 4758 names, names four of them m_behaviorName:std::string, m_npcProximity:float, m_questList:std::string and m_personaName:std::string
 - [x] Full Root.wad under 5 minutes. 173088 entries read and 134635 of 134640 BINd files decoded in 32.5 seconds, 361 MiB peak
 
 ### Detailed spec from OBJ-11: Schema probe tool for classes missing from the dump
@@ -412,17 +412,17 @@ Unknown class and property hashes found in client data can be named and typed by
 
 - src/tools/schemaprobe: sweeps Root.wad and zone WADs, collects unknown class hashes with instance counts, paths, parent property, and each property's hash and bit-size distribution
 - Oracle matching: tests each unknown property hash against every (known property name x known type string) pair from the registry, plus a user-supplied candidate list; tests candidate class names against the class hash
-- Output: a report and a draft schema in our own format for OBJ-12
+- Output: a report and a draft schema in our own format for OBJ-12, each unknown class with every property its objects hold, their bit sizes and the oracle's names, and a draft of the properties the oracle names one way only; headerless versionable objects such as a zone's gamedata.bin are swept too, and the oracle lives in src/server/shared/ObjectProperty/PropertyOracle; classes are named from the client program's strings through client-image's ProgramStrings::ClassNames
 
 **Acceptance**
 
-- [ ] Client-gated run lists at least the top unknowns found in my sweep: 1451865413 (7094 instances), 520243970 (6875), 1120896859 (5567), 829470368 (5473), all under ObjectData m_behaviors, plus Result/Requirement subclasses under ResultList.m_results and RequirementList.m_requirements
-- [ ] For 520243970, the oracle names m_behaviorName:std::string, m_npcProximity:float, m_questList:std::string and m_personaName:std::string (I reproduced this in Python)
-- [ ] Report runtime on the full Root.wad stays under 5 minutes
+- [x] Client-gated run lists at least the top unknowns found in my sweep: 1451865413 (7094 instances), 520243970 (6875), 1120896859 (5567), 829470368 (5473), all under ObjectData m_behaviors, plus Result/Requirement subclasses under ResultList.m_results and RequirementList.m_requirements. `schemaprobe` against the pinned install on 2026-09-26 lists 104 unknown classes with every property each holds, the four with exactly those instance counts under m_behaviors, and 57 result and requirement classes under m_results and m_requirements; `BindFileClientTest` holds the NPC behavior's count and one of each kind
+- [x] For 520243970, the oracle names m_behaviorName:std::string, m_npcProximity:float, m_questList:std::string and m_personaName:std::string (I reproduced this in Python). `BindFileClientTest.EachPropertyOfAnUnknownClassIsListedAndTheOracleNamesTheNpcBehaviors` on the pinned install: the sweep lists the five properties every one of the 6875 NPC behaviors holds, and the property oracle, from the dump's own 641 types and 4758 names, names four of them m_behaviorName:std::string, m_npcProximity:float, m_questList:std::string and m_personaName:std::string
+- [x] Report runtime on the full Root.wad stays under 5 minutes. 32.5 seconds in an optimized build, as the short list records, and 2 minutes 14 seconds in a Debug build with every unknown class's properties listed and named
 
 **Risks**
 
-- Class names cannot be recovered from hashes by brute force. Simple name variants of known classes found none, so some classes may stay anonymous (hash-named) while still being decodable
+- Settled: class names come from the client program's own strings rather than brute force. Read as class names, as they stand or with class or struct before them, they name 101 of the 110 unknown classes Root.wad and the Commons' and Ravenwood's archives hold, such as class QuestingBehaviorTemplate for 520243970; the other nine stay hash-named and decode all the same. `SchemaProbeTest.cmake` holds WC_Hub's class MinigameSigilInfo
 
 ## 6.10 Supplemental server-side schemas (OBJ-12)
 

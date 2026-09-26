@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the versionable ObjectProperty format on classes the test invents, against bytes the test assembles itself: a literal object byte for byte, unknown properties skipped and unknown nested classes skipped and reported with their paths, compact lengths in their 7-bit and 31-bit forms for strings, wide strings and lists, enums and flag integers carried as option names, values that do not fit their declared size, properties the mask does not select and objects of the wrong class resynchronized at their property's end and reported, impossible object and property sizes refused where they are the object's own and reported where a property holds them, the decode limits including the objects and depth of default inline objects, clean dirty-encoded properties left out, compact lengths in the compact format, and whole trees round-tripping in every mode.
+ * Tests the versionable ObjectProperty format on classes the test invents, against bytes the test assembles itself: a literal object byte for byte, unknown properties skipped and unknown nested classes skipped and reported with their paths, each with every property it holds by hash and size, compact lengths in their 7-bit and 31-bit forms for strings, wide strings and lists, enums and flag integers carried as option names, values that do not fit their declared size, properties the mask does not select and objects of the wrong class resynchronized at their property's end and reported, impossible object and property sizes refused where they are the object's own and reported where a property holds them, the decode limits including the objects and depth of default inline objects, clean dirty-encoded properties left out, compact lengths in the compact format, and whole trees round-tripping in every mode.
  */
 
 #include "BitWriter.h"
@@ -349,7 +349,7 @@ TEST_F(VersionableDecodeTest, UnknownPropertiesAndNestedClassesAreSkippedAndRepo
     EXPECT_EQ(*mainItem->Get("m_id")->GetIf<uint32>(), 0u);
     EXPECT_EQ(*decoded.Object->Get("m_note")->GetIf<std::string>(), "box");
 
-    ASSERT_EQ(decoded.Issues.size(), 3u);
+    ASSERT_EQ(decoded.Issues.size(), 4u);
     EXPECT_EQ(decoded.Issues[0].Kind, DecodeIssueKind::UnknownProperty);
     EXPECT_EQ(decoded.Issues[0].Hash, 0xDEADBEEFu);
     EXPECT_EQ(decoded.Issues[0].Bits, 64u);
@@ -360,10 +360,17 @@ TEST_F(VersionableDecodeTest, UnknownPropertiesAndNestedClassesAreSkippedAndRepo
     EXPECT_EQ(decoded.Issues[1].Bits, 96u);
     EXPECT_EQ(decoded.Issues[1].Path, "class TestBox.m_items[1]");
     EXPECT_EQ(decoded.Issues[1].Detail, "names class hash 305419896, which the type dump does not list");
-    EXPECT_EQ(decoded.Issues[2].Kind, DecodeIssueKind::UnknownClass);
-    EXPECT_EQ(decoded.Issues[2].Bits, 0u);
-    EXPECT_EQ(decoded.Issues[2].Path, "class TestBox.m_main");
+    EXPECT_EQ(decoded.Issues[2].Kind, DecodeIssueKind::UnknownClassProperty) << "the unknown object's own property, which a schema probe names";
+    EXPECT_EQ(decoded.Issues[2].Hash, 0x0BADF00Du);
+    EXPECT_EQ(decoded.Issues[2].Owner, UnknownHash);
+    EXPECT_EQ(decoded.Issues[2].Bits, 32u);
+    EXPECT_EQ(decoded.Issues[2].Path, "class TestBox.m_items[1]");
+    EXPECT_EQ(decoded.Issues[2].Detail, "holds property hash 195948557 in class hash 305419896, which the type dump does not list");
+    EXPECT_EQ(decoded.Issues[3].Kind, DecodeIssueKind::UnknownClass);
+    EXPECT_EQ(decoded.Issues[3].Bits, 0u);
+    EXPECT_EQ(decoded.Issues[3].Path, "class TestBox.m_main");
     EXPECT_EQ(ObjectSerializer::GetIssueName(decoded.Issues[1].Kind), "unknown class");
+    EXPECT_EQ(ObjectSerializer::GetIssueName(decoded.Issues[2].Kind), "property of an unknown class");
 }
 
 TEST_F(VersionableDecodeTest, LengthsOf128OrMoreTakeThe31BitForm)

@@ -1793,6 +1793,15 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         return status;
     }
 
+    void ReportIssues(std::string_view name, std::vector<DecodeIssue> const& issues)
+    {
+        for (DecodeIssue const& issue : issues)
+            std::cerr << fmt::format("{}: {} at {}{}{}\n", name, ObjectSerializer::GetIssueName(issue.Kind), issue.Path.empty() ? std::string("the root") : issue.Path,
+                issue.Hash == 0 ? std::string() : fmt::format(", hash {}", issue.Hash), issue.Detail.empty() ? std::string() : ": " + issue.Detail);
+        if (!issues.empty())
+            std::cerr << fmt::format("client: {} read with {} part(s) skipped, each named above and left out of what is printed\n", name, issues.size());
+    }
+
     int RunWad(Arguments const& arguments, KiwadArchive const& archive, TypeCatalogPtr const& catalog)
     {
         if (arguments.List)
@@ -1825,6 +1834,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                 if (result.Ok())
                 {
                     std::cout << PropertyJson::Dump(result.Decoded.Object.get(), 2) << "\n";
+                    ReportIssues(name, result.Decoded.Issues);
                     continue;
                 }
                 SerializerOptions options;
@@ -1838,6 +1848,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                 if (raw.Ok())
                 {
                     std::cout << PropertyJson::Dump(raw.Object.get(), 2) << "\n";
+                    ReportIssues(name, raw.Issues);
                     continue;
                 }
             }

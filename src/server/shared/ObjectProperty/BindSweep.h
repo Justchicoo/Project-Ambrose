@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Sweeps every BINd file in a KIWAD archive on several threads and reports how many decode, every file that does not, the classes the type dump does not list and every other kind of issue, each grouped by hash with how often and in how many files it appears and where it first does.
+ * Sweeps every BINd file in a KIWAD archive on several threads, and every entry that is a versionable object with no BINd header, such as a zone's gamedata.bin, and reports how many decode, every file that does not, the classes the type dump does not list with each property an object of one holds, by hash and size, and every other kind of issue, each grouped by hash with how often and in how many files it appears and where it first does.
  */
 
 #ifndef AMBROSE_BINDSWEEP_H
@@ -44,14 +44,28 @@ struct BindSweepIssue
     std::map<uint64, uint64> BitSizes;
 };
 
+struct BindSweepClassProperty
+{
+    uint32 Owner = 0;
+    uint32 Hash = 0;
+    uint64 Count = 0;
+    uint64 Files = 0;
+    std::string FirstFile;
+    std::string FirstPath;
+    std::map<uint64, uint64> BitSizes;
+};
+
 struct BindSweepReport
 {
     uint64 Entries = 0;
     uint64 Files = 0;
     uint64 Decoded = 0;
+    uint64 Headerless = 0;
+    uint64 HeaderlessDecoded = 0;
     uint64 ReadErrors = 0;
     std::vector<BindSweepFailure> Failures;
     std::vector<BindSweepUnknownClass> UnknownClasses;
+    std::vector<BindSweepClassProperty> ClassProperties;
     std::vector<BindSweepIssue> Issues;
 };
 

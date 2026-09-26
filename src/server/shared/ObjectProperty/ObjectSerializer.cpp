@@ -36,6 +36,7 @@ namespace
     constexpr uint64 ShortLengthCeiling = uint64{ 1 } << 7;
     constexpr uint64 CompactLengthCeiling = uint64{ 1 } << 31;
     constexpr std::size_t ExcerptBytes = 64;
+    constexpr std::size_t PropertyHeaderBits = 64;
 
     struct LimitsStore
     {
@@ -187,15 +188,11 @@ namespace
             result.Header = _header;
             result.StreamFlags = _streamFlags;
             result.UnknownCore = _unknownCore;
+            result.Issues = std::move(_issues);
             if (_status == SerializerStatus::Ok)
-            {
                 result.Object = std::move(object);
-                result.Issues = std::move(_issues);
-            }
             else
-            {
                 result.Detail = fmt::format("{} {}", _failurePath, _failure);
-            }
             return result;
         }
 
@@ -224,11 +221,28 @@ namespace
             return true;
         }
 
-        bool Report(DecodeIssueKind kind, uint32 hash, uint64 bits, std::string path, std::string detail)
+        bool Report(DecodeIssueKind kind, uint32 hash, uint64 bits, std::string path, std::string detail, uint32 owner = 0)
         {
             if (!Charge(sizeof(DecodeIssue) + path.size() + detail.size()))
                 return false;
-            _issues.push_back(DecodeIssue{ kind, hash, bits, std::move(path), std::move(detail) });
+            _issues.push_back(DecodeIssue{ kind, hash, bits, std::move(path), std::move(detail), owner });
+            return true;
+        }
+
+        bool ReportUnknownProperties(uint32 owner, std::size_t objectEnd, std::string const& path)
+        {
+            while (objectEnd - _reader.GetBitPosition() >= PropertyHeaderBits)
+            {
+                std::size_t const start = _reader.GetBitPosition();
+                uint32 const size = _reader.Read<uint32>();
+                uint32 const hash = _reader.Read<uint32>();
+                if (_reader.Failed() || size < PropertyHeaderBits || size > objectEnd - start)
+                    return true;
+                if (!Report(DecodeIssueKind::UnknownClassProperty, hash, size - PropertyHeaderBits, path,
+                        fmt::format("holds property hash {} in class hash {}, which the type dump does not list", hash, owner), owner))
+                    return false;
+                _reader.SeekBit(start + size);
+            }
             return true;
         }
 
@@ -335,11 +349,18 @@ namespace
             if (!type)
             {
                 std::string what = fmt::format("names class hash {}, which the type dump does not list", hash);
-                if (!_versionable || depth == 1)
+                if (!_versionable)
                     return Fail(SerializerStatus::UnknownClass, what);
+                std::string const path = _path.Format(_root);
+                if (depth == 1)
+                {
+                    if (!ReportUnknownProperties(hash, objectEnd, path))
+                        return false;
+                    return Fail(SerializerStatus::UnknownClass, what);
+                }
                 skipped = true;
                 std::size_t const bits = objectEnd - _reader.GetBitPosition();
-                if (!Report(DecodeIssueKind::UnknownClass, hash, bits, _path.Format(_root), std::move(what)))
+                if (!Report(DecodeIssueKind::UnknownClass, hash, bits, path, std::move(what)) || !ReportUnknownProperties(hash, objectEnd, path))
                     return false;
                 _reader.SeekBit(objectEnd);
                 return true;
@@ -1424,6 +1445,7 @@ std::string_view ObjectSerializer::GetIssueName(DecodeIssueKind kind) noexcept
     switch (kind)
     {
         case DecodeIssueKind::UnknownClass: return "unknown class";
+        case DecodeIssueKind::UnknownClassProperty: return "property of an unknown class";
         case DecodeIssueKind::UnknownProperty: return "unknown property";
         case DecodeIssueKind::SizeMismatch: return "size mismatch";
         case DecodeIssueKind::UnsupportedType: return "unsupported type";

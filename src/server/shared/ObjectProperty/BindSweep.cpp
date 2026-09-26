@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Hands out the archive's entries to worker threads one index at a time, running on the calling thread and whichever workers could be started; each worker reads its entry through the archive's own lock, skips anything that is not a BINd file, decodes the rest in parallel and keeps its own tallies, which are merged in entry order afterwards so the report is the same however the work was split; an entry that throws is counted as unreadable or failed without letting the exception leave its thread, and issues are grouped by kind and hash, counted once per use and once per file with the first file, path and detail they appear with, a root class that stops a file from decoding included among the unknown classes.
+ * Hands out the archive's entries to worker threads one index at a time, running on the calling thread and whichever workers could be started; each worker reads its entry through the archive's own lock, skips anything that is neither a BINd file nor a versionable object whose first word names a class the dump lists, decodes the rest in parallel and keeps its own tallies, which are merged in entry order afterwards so the report is the same however the work was split; an entry that throws is counted as unreadable or failed without letting the exception leave its thread, and issues are grouped by kind and hash, counted once per use and once per file with the first file, path and detail they appear with, a root class that stops a file from decoding included among the unknown classes, and each property of an unknown class grouped by the class and its own hash.
  */
 
 #include "BindSweep.h"
 #include "KiwadArchive.h"
+#include "ObjectSerializer.h"
 
 #include <algorithm>
 #include <atomic>
@@ -13,6 +14,7 @@
 #include <map>
 #include <new>
 #include <set>
+#include <span>
 #include <thread>
 #include <utility>
 
@@ -40,14 +42,18 @@ namespace
     };
 
     using IssueKey = std::pair<DecodeIssueKind, uint32>;
+    using PropertyKey = std::pair<uint32, uint32>;
 
     struct Tally
     {
         uint64 Files = 0;
         uint64 Decoded = 0;
+        uint64 Headerless = 0;
+        uint64 HeaderlessDecoded = 0;
         uint64 ReadErrors = 0;
         std::vector<std::pair<std::size_t, BindSweepFailure>> Failures;
         std::map<uint32, Use> Classes;
+        std::map<PropertyKey, Use> ClassProperties;
         std::map<IssueKey, Use> Issues;
     };
 
@@ -83,6 +89,53 @@ namespace
             into.BitSizes[bits] += count;
     }
 
+    bool IsHeaderlessObject(std::span<uint8 const> bytes, TypeCatalog const& catalog)
+    {
+        if (bytes.size() < 8)
+            return false;
+        uint32 const hash = static_cast<uint32>(bytes[0]) | static_cast<uint32>(bytes[1]) << 8 | static_cast<uint32>(bytes[2]) << 16 | static_cast<uint32>(bytes[3]) << 24;
+        ClassInfo const* const type = catalog.FindClass(hash);
+        return type != nullptr && type->Kind == ClassKind::PropertyClass;
+    }
+
+    DecodeResult DecodeHeaderless(TypeCatalogPtr const& catalog, std::span<uint8 const> bytes, SerializerLimits const& limits)
+    {
+        SerializerOptions options;
+        options.Versionable = true;
+        options.Flags = SerializerFlag::None;
+        options.Mask = 0;
+        options.Limits = limits;
+        options.AllowNullRoot = false;
+        options.AllowTrailingBytes = false;
+        return ObjectSerializer::Decode(catalog, bytes, options);
+    }
+
+    void CountIssues(Tally& tally, std::size_t index, std::vector<DecodeIssue> const& issues)
+    {
+        std::set<IssueKey> seen;
+        std::set<PropertyKey> seenProperties;
+        for (DecodeIssue const& issue : issues)
+        {
+            if (issue.Kind == DecodeIssueKind::UnknownClassProperty)
+            {
+                PropertyKey const key{ issue.Owner, issue.Hash };
+                Use& use = tally.ClassProperties[key];
+                Count(use, index, issue.Path, issue.Detail, seenProperties.insert(key).second);
+                CountBits(use, issue.Bits);
+                continue;
+            }
+            IssueKey const key{ issue.Kind, issue.Hash };
+            bool const newInFile = seen.insert(key).second;
+            if (issue.Kind == DecodeIssueKind::UnknownClass)
+                Count(tally.Classes[issue.Hash], index, issue.Path, issue.Detail, newInFile);
+            else
+            {
+                Count(tally.Issues[key], index, issue.Path, issue.Detail, newInFile);
+                CountBits(tally.Issues[key], issue.Bits);
+            }
+        }
+    }
+
     void SweepEntry(KiwadArchive const& archive, TypeCatalogPtr const& catalog, SerializerLimits const& limits, std::size_t index, Tally& tally, Stage& stage)
     {
         KiwadEntry const& entry = archive.GetEntries()[index];
@@ -95,6 +148,19 @@ namespace
         }
         if (!BindFile::IsBind(read.Data))
         {
+            if (!IsHeaderlessObject(read.Data, *catalog))
+            {
+                stage = Stage::Done;
+                return;
+            }
+            ++tally.Headerless;
+            stage = Stage::Counted;
+            DecodeResult const decoded = DecodeHeaderless(catalog, read.Data, limits);
+            CountIssues(tally, index, decoded.Issues);
+            if (decoded.Ok())
+                ++tally.HeaderlessDecoded;
+            else
+                tally.Failures.emplace_back(index, BindSweepFailure{ entry.Name, BindStatus::Ok, decoded.Status, 0, decoded.Detail });
             stage = Stage::Done;
             return;
         }
@@ -104,26 +170,17 @@ namespace
         if (!result.Ok())
         {
             if (result.Decoded.Status == SerializerStatus::UnknownClass && result.RootClassHash != 0)
+            {
                 Count(tally.Classes[result.RootClassHash], index, RootPath, result.Detail, true);
+                CountIssues(tally, index, result.Decoded.Issues);
+            }
             tally.Failures.emplace_back(index, BindSweepFailure{ entry.Name, result.Status, result.Decoded.Status, result.RootClassHash, result.Detail });
             stage = Stage::Done;
             return;
         }
         ++tally.Decoded;
         stage = Stage::Decoded;
-        std::set<IssueKey> seen;
-        for (DecodeIssue const& issue : result.Decoded.Issues)
-        {
-            IssueKey const key{ issue.Kind, issue.Hash };
-            bool const newInFile = seen.insert(key).second;
-            if (issue.Kind == DecodeIssueKind::UnknownClass)
-                Count(tally.Classes[issue.Hash], index, issue.Path, issue.Detail, newInFile);
-            else
-            {
-                Count(tally.Issues[key], index, issue.Path, issue.Detail, newInFile);
-                CountBits(tally.Issues[key], issue.Bits);
-            }
-        }
+        CountIssues(tally, index, result.Decoded.Issues);
         stage = Stage::Done;
     }
 
@@ -196,15 +253,20 @@ BindSweepReport BindSweep::Run(KiwadArchive const& archive, TypeCatalogPtr const
     report.Entries = entries.size();
     std::vector<std::pair<std::size_t, BindSweepFailure>> failures;
     std::map<uint32, Use> classes;
+    std::map<PropertyKey, Use> properties;
     std::map<IssueKey, Use> issues;
     for (Tally& tally : tallies)
     {
         report.Files += tally.Files;
         report.Decoded += tally.Decoded;
+        report.Headerless += tally.Headerless;
+        report.HeaderlessDecoded += tally.HeaderlessDecoded;
         report.ReadErrors += tally.ReadErrors;
         std::move(tally.Failures.begin(), tally.Failures.end(), std::back_inserter(failures));
         for (auto& [hash, use] : tally.Classes)
             Merge(classes[hash], std::move(use));
+        for (auto& [key, use] : tally.ClassProperties)
+            Merge(properties[key], std::move(use));
         for (auto& [key, use] : tally.Issues)
             Merge(issues[key], std::move(use));
     }
@@ -213,6 +275,8 @@ BindSweepReport BindSweep::Run(KiwadArchive const& archive, TypeCatalogPtr const
         report.Failures.push_back(std::move(failure.second));
     for (auto& [hash, use] : classes)
         report.UnknownClasses.push_back(BindSweepUnknownClass{ hash, use.Count, use.Files, entries[use.FirstEntry].Name, std::move(use.FirstPath) });
+    for (auto& [key, use] : properties)
+        report.ClassProperties.push_back(BindSweepClassProperty{ key.first, key.second, use.Count, use.Files, entries[use.FirstEntry].Name, std::move(use.FirstPath), std::move(use.BitSizes) });
     for (auto& [key, use] : issues)
         report.Issues.push_back(BindSweepIssue{ key.first, key.second, use.Count, use.Files, entries[use.FirstEntry].Name, std::move(use.FirstPath), std::move(use.FirstDetail), std::move(use.BitSizes) });
     std::sort(report.UnknownClasses.begin(), report.UnknownClasses.end(), [](BindSweepUnknownClass const& left, BindSweepUnknownClass const& right)

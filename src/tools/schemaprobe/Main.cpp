@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * schemaprobe entry point: sweeps the user's own Root.wad or every GameData WAD, reports unknown classes and properties with counts, paths and bit-width distributions, matches hashes against the loaded registry and candidate names, and writes a draft schema report in JSON.
+ * schemaprobe entry point: sweeps the user's own Root.wad or every GameData WAD, BINd files and headerless versionable objects such as a zone's gamedata.bin alike, reports unknown classes with each property an object of one holds and unknown properties, with counts, paths and bit-width distributions, names each unknown class from the client program's own strings read as class names and each property hash through the property oracle from every type and name the loaded registry lists and any candidates given, and writes the report with a draft schema of every property the oracle names one way only, in JSON.
  */
 
 #include "BindSweep.h"
@@ -9,6 +9,9 @@
 #include "KiwadArchive.h"
 #include "Log.h"
 #include "LogConfig.h"
+#include "PeImage.h"
+#include "ProgramStrings.h"
+#include "PropertyOracle.h"
 #include "StringHash.h"
 #include "TypeRegistry.h"
 
@@ -25,6 +28,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace
@@ -41,6 +45,7 @@ namespace
         std::vector<std::string> Wads;
         std::vector<std::string> Candidates;
         std::optional<std::string> Output;
+        std::optional<std::string> Program;
         bool AllWads = false;
         bool Help = false;
         unsigned Threads = 0;
@@ -56,7 +61,7 @@ namespace
                 parsed.Help = true;
             else if (arg == "--all-wads")
                 parsed.AllWads = true;
-            else if (arg == "--client" || arg == "--type-dump" || arg == "--wad" || arg == "--candidate" || arg == "--output" || arg == "--threads")
+            else if (arg == "--client" || arg == "--type-dump" || arg == "--wad" || arg == "--candidate" || arg == "--output" || arg == "--threads" || arg == "--program")
             {
                 if (index + 1 >= args.size())
                 {
@@ -79,6 +84,8 @@ namespace
                     parsed.Candidates.push_back(value);
                 else if (arg == "--output")
                     parsed.Output = value;
+                else if (arg == "--program")
+                    parsed.Program = value;
                 else if (auto const threads = Ambrose::StringTo<unsigned>(value); threads && *threads > 0 && *threads <= BindSweep::MaxThreads)
                     parsed.Threads = *threads;
                 else
@@ -123,7 +130,9 @@ namespace
         return paths;
     }
 
-    std::vector<std::string> ClassMatches(TypeCatalog const& catalog, uint32 hash, std::vector<std::string> const& candidates)
+    using ClassNameIndex = std::unordered_map<uint32, std::vector<std::string>>;
+
+    std::vector<std::string> ClassMatches(TypeCatalog const& catalog, uint32 hash, std::vector<std::string> const& candidates, ClassNameIndex const& program)
     {
         std::vector<std::string> matches;
         for (ClassInfo const* type : catalog.GetClasses())
@@ -132,6 +141,10 @@ namespace
         for (std::string const& candidate : candidates)
             if (StringHash::KiStringHash(candidate) == hash)
                 matches.push_back(candidate);
+        if (auto const named = program.find(hash); named != program.end())
+            for (std::string const& name : named->second)
+                if (std::find(matches.begin(), matches.end(), name) == matches.end())
+                    matches.push_back(name);
         return matches;
     }
 
@@ -170,6 +183,27 @@ namespace
         }
     }
 
+    void Merge(BindSweepClassProperty& into, BindSweepClassProperty const& item)
+    {
+        if (into.Hash == 0)
+            into = item;
+        else
+        {
+            into.Count += item.Count;
+            into.Files += item.Files;
+            for (auto const& [bits, count] : item.BitSizes)
+                into.BitSizes[bits] += count;
+        }
+    }
+
+    Json Guesses(std::vector<PropertyGuess> const& guesses)
+    {
+        Json list = Json::array();
+        for (PropertyGuess const& guess : guesses)
+            list.push_back(fmt::format("{}:{}{}", guess.Type, guess.Name, guess.Known ? " (known)" : ""));
+        return list;
+    }
+
     void Merge(BindSweepIssue& into, BindSweepIssue const& item)
     {
         if (into.Hash == 0)
@@ -199,7 +233,7 @@ int main(int argc, char** argv)
         }
         if (arguments->Help)
         {
-            std::cout << "Usage: schemaprobe --client <dir> --type-dump <file> [--wad <file>] [--all-wads] [--candidate <class-or-type:name>] [--output <file>] [--threads <count>]\n";
+            std::cout << "Usage: schemaprobe --client <dir> --type-dump <file> [--wad <file>] [--all-wads] [--candidate <class-or-type:name>] [--program <exe>] [--output <file>] [--threads <count>]\n";
             return Success;
         }
         if (!arguments->Client)
@@ -216,12 +250,44 @@ int main(int argc, char** argv)
         if (!registry.LoadFromFile(LogConfig::Utf8Path(*arguments->TypeDump)))
             return Failure;
         TypeCatalogPtr const catalog = registry.GetCatalog();
-        Json report{ { "tool", "schemaprobe" }, { "client", *arguments->Client }, { "wads", Json::array() }, { "unknown_classes", Json::array() }, { "unknown_properties", Json::array() } };
+        std::vector<std::string> classCandidates;
+        std::vector<std::string> extraNames;
+        std::vector<std::string> extraTypes;
+        for (std::string const& candidate : arguments->Candidates)
+        {
+            std::size_t const separator = candidate.rfind(':');
+            if (separator != std::string::npos && separator > 0 && candidate[separator - 1] != ':')
+            {
+                extraTypes.push_back(candidate.substr(0, separator));
+                extraNames.push_back(candidate.substr(separator + 1));
+            }
+            else if (candidate.starts_with("m_"))
+                extraNames.push_back(candidate);
+            else
+                classCandidates.push_back(candidate);
+        }
+        PropertyOracle const oracle(*catalog, extraNames, extraTypes);
+        std::filesystem::path const programPath = arguments->Program ? LogConfig::Utf8Path(*arguments->Program) : LogConfig::Utf8Path(*arguments->Client) / "Bin" / "WizardGraphicalClient.exe";
+        ClassNameIndex programNames;
+        std::size_t programStrings = 0;
+        if (std::unique_ptr<PeImage> const image = PeImage::Load(programPath, error))
+        {
+            ProgramStrings const strings(*image);
+            programStrings = strings.Size();
+            programNames = strings.ClassNames();
+        }
+        else
+            std::cerr << fmt::format("schemaprobe: {} cannot be read, so no class is named from the client program's strings: {}\n", ConfigMgr::PathToUtf8(programPath), error);
+        Json report{ { "tool", "schemaprobe" }, { "client", *arguments->Client }, { "wads", Json::array() }, { "unknown_classes", Json::array() }, { "unknown_properties", Json::array() },
+            { "draft_schema", Json::array() } };
         std::map<uint32, BindSweepUnknownClass> classes;
+        std::map<std::pair<uint32, uint32>, BindSweepClassProperty> classProperties;
         std::map<uint32, BindSweepIssue> properties;
         uint64 entries = 0;
         uint64 files = 0;
         uint64 decoded = 0;
+        uint64 headerless = 0;
+        uint64 headerlessDecoded = 0;
         for (std::filesystem::path const& path : FindWads(*arguments))
         {
             std::unique_ptr<KiwadArchive> archive = KiwadArchive::Open(path, error);
@@ -234,9 +300,14 @@ int main(int argc, char** argv)
             entries += sweep.Entries;
             files += sweep.Files;
             decoded += sweep.Decoded;
-            report["wads"].push_back({ { "path", ConfigMgr::PathToUtf8(path) }, { "entries", sweep.Entries }, { "bind_files", sweep.Files }, { "decoded", sweep.Decoded }, { "failed", sweep.Failures.size() }, { "unreadable", sweep.ReadErrors } });
+            headerless += sweep.Headerless;
+            headerlessDecoded += sweep.HeaderlessDecoded;
+            report["wads"].push_back({ { "path", ConfigMgr::PathToUtf8(path) }, { "entries", sweep.Entries }, { "bind_files", sweep.Files }, { "decoded", sweep.Decoded },
+                { "headerless", sweep.Headerless }, { "headerless_decoded", sweep.HeaderlessDecoded }, { "failed", sweep.Failures.size() }, { "unreadable", sweep.ReadErrors } });
             for (BindSweepUnknownClass const& item : sweep.UnknownClasses)
                 Merge(classes[item.Hash], item);
+            for (BindSweepClassProperty const& item : sweep.ClassProperties)
+                Merge(classProperties[{ item.Owner, item.Hash }], item);
             for (BindSweepIssue const& item : sweep.Issues)
                 Merge(properties[item.Hash], item);
         }
@@ -247,7 +318,24 @@ int main(int argc, char** argv)
         for (BindSweepUnknownClass const& item : sortedClasses)
         {
             uint32 const hash = item.Hash;
-            report["unknown_classes"].push_back({ { "hash", hash }, { "count", item.Count }, { "files", item.Files }, { "first_file", item.FirstFile }, { "first_path", item.FirstPath }, { "matches", ClassMatches(*catalog, hash, arguments->Candidates) } });
+            Json members = Json::array();
+            Json draft = Json::array();
+            Json unresolved = Json::array();
+            for (auto const& [key, property] : classProperties)
+            {
+                if (key.first != hash)
+                    continue;
+                std::vector<PropertyGuess> const guesses = oracle.Guess(property.Hash);
+                members.push_back({ { "hash", property.Hash }, { "count", property.Count }, { "files", property.Files }, { "bit_sizes", Bits(property.BitSizes) },
+                    { "guesses", Guesses(guesses) } });
+                if (guesses.size() == 1)
+                    draft.push_back({ { "hash", property.Hash }, { "name", guesses.front().Name }, { "type", guesses.front().Type } });
+                else
+                    unresolved.push_back(property.Hash);
+            }
+            report["unknown_classes"].push_back({ { "hash", hash }, { "count", item.Count }, { "files", item.Files }, { "first_file", item.FirstFile }, { "first_path", item.FirstPath },
+                { "matches", ClassMatches(*catalog, hash, classCandidates, programNames) }, { "properties", std::move(members) } });
+            report["draft_schema"].push_back({ { "class_hash", hash }, { "properties", std::move(draft) }, { "unresolved", std::move(unresolved) } });
         }
         std::vector<BindSweepIssue> sortedProperties;
         for (auto const& [hash, item] : properties)
@@ -257,9 +345,11 @@ int main(int argc, char** argv)
         for (BindSweepIssue const& item : sortedProperties)
         {
             uint32 const hash = item.Hash;
-            report["unknown_properties"].push_back({ { "hash", hash }, { "count", item.Count }, { "files", item.Files }, { "first_file", item.FirstFile }, { "first_path", item.FirstPath }, { "bit_sizes", Bits(item.BitSizes) }, { "matches", PropertyMatches(*catalog, hash, arguments->Candidates) } });
+            report["unknown_properties"].push_back({ { "hash", hash }, { "count", item.Count }, { "files", item.Files }, { "first_file", item.FirstFile }, { "first_path", item.FirstPath },
+                { "bit_sizes", Bits(item.BitSizes) }, { "matches", PropertyMatches(*catalog, hash, arguments->Candidates) }, { "guesses", Guesses(oracle.Guess(hash)) } });
         }
-        report["summary"] = { { "entries", entries }, { "bind_files", files }, { "decoded", decoded } };
+        report["summary"] = { { "entries", entries }, { "bind_files", files }, { "decoded", decoded }, { "headerless", headerless }, { "headerless_decoded", headerlessDecoded },
+            { "oracle_names", oracle.GetNameCount() }, { "oracle_types", oracle.GetTypeCount() }, { "program_strings", programStrings } };
         std::string const text = report.dump(2) + '\n';
         if (arguments->Output)
         {

@@ -5,6 +5,7 @@
 
 #include "ProgramStrings.h"
 #include "PeImage.h"
+#include "StringHash.h"
 #include "StringUtil.h"
 
 #include <algorithm>
@@ -129,4 +130,22 @@ std::optional<ProgramString> ProgramStrings::ReadAt(PeImage const& image, uint64
     if (unit >= minimumLength && unit < units && UnitAt(bytes, unit) == 0)
         return ProgramString{ address, static_cast<uint32>(2 * unit), true, std::move(text) };
     return std::nullopt;
+}
+
+std::unordered_map<uint32, std::vector<std::string>> ProgramStrings::ClassNames() const
+{
+    std::unordered_map<uint32, std::vector<std::string>> names;
+    for (ProgramString const& string : _strings)
+    {
+        if (string.Text.empty())
+            continue;
+        for (std::string_view const prefix : { std::string_view(), std::string_view("class "), std::string_view("struct ") })
+        {
+            std::string name = std::string(prefix) + string.Text;
+            std::vector<std::string>& bucket = names[StringHash::KiStringHash(name)];
+            if (std::find(bucket.begin(), bucket.end(), name) == bucket.end())
+                bucket.push_back(std::move(name));
+        }
+    }
+    return names;
 }

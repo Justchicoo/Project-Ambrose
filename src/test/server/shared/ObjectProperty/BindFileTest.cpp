@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests BINd files on classes the test invents: the header bytes of plain and compressed files, both read back to the object written with the file's own flags, dirty-encoded properties at their default left out unless forced, a file whose root class is unknown refused while naming the hash, issues passed through, and files that are not BINd, end inside their header, carry unknown flags, would inflate past the limit, hold a corrupt zlib stream or hold no object refused with their status; also sweeps a synthetic archive of good, unknown-class, unknown-property, broken and non-BINd entries on several threads and checks the report is complete, grouped and in entry order.
+ * Tests BINd files on classes the test invents: the header bytes of plain and compressed files, both read back to the object written with the file's own flags, dirty-encoded properties at their default left out unless forced, a file whose root class is unknown refused while naming the hash, issues passed through, and files that are not BINd, end inside their header, carry unknown flags, would inflate past the limit, hold a corrupt zlib stream or hold no object refused with their status; also sweeps a synthetic archive of good, unknown-class, unknown-property, broken and non-BINd entries and a versionable object with no BINd header on several threads and checks the report is complete, grouped and in entry order, with each property of an unknown class listed under it.
  */
 
 #include "BindFile.h"
@@ -9,6 +9,7 @@
 #include "KiwadArchive.h"
 #include "KiwadBuilder.h"
 #include "LogTestDirectory.h"
+#include "ObjectSerializer.h"
 #include "StringHash.h"
 #include "TypeRegistry.h"
 
@@ -17,6 +18,7 @@
 
 #include <fstream>
 #include <string>
+#include <algorithm>
 #include <vector>
 
 namespace
@@ -255,6 +257,12 @@ TEST_F(BindFileTest, ASweepReportsEveryFileInEntryOrderOnAnyThreadCount)
         }
     }
 
+    SerializerOptions headerlessOptions;
+    headerlessOptions.Versionable = true;
+    headerlessOptions.Mask = BindFile::SaveMask;
+    EncodeResult const headerless = ObjectSerializer::Encode(_manifest.get(), headerlessOptions);
+    ASSERT_TRUE(headerless.Ok()) << headerless.Detail;
+
     KiwadBuilder builder(2);
     for (int copy = 0; copy < 20; ++copy)
     {
@@ -267,6 +275,7 @@ TEST_F(BindFileTest, ASweepReportsEveryFileInEntryOrderOnAnyThreadCount)
     builder.Add("Broken.xml", broken, false);
     builder.Add("OddA.xml", oddProperty, true);
     builder.Add("OddB.xml", oddProperty, false);
+    builder.Add("gamedata.bin", headerless.Bytes, true);
     LogTestDirectory directory;
     std::filesystem::path const path = directory.Path() / "Sweep.wad";
     std::vector<uint8> const archiveBytes = builder.Build();
@@ -281,9 +290,11 @@ TEST_F(BindFileTest, ASweepReportsEveryFileInEntryOrderOnAnyThreadCount)
     for (unsigned const threads : { 1u, 3u, 16u })
     {
         BindSweepReport const report = BindSweep::Run(*archive, _catalog, threads);
-        EXPECT_EQ(report.Entries, 65u) << threads;
+        EXPECT_EQ(report.Entries, 66u) << threads;
         EXPECT_EQ(report.Files, 45u) << threads;
         EXPECT_EQ(report.Decoded, 43u) << threads;
+        EXPECT_EQ(report.Headerless, 1u) << threads << ": the object with no BINd header is read too";
+        EXPECT_EQ(report.HeaderlessDecoded, 1u) << threads;
         EXPECT_EQ(report.ReadErrors, 0u) << threads;
         ASSERT_EQ(report.Failures.size(), 2u) << threads;
         EXPECT_EQ(report.Failures[0].File, "Root.xml");
@@ -306,5 +317,20 @@ TEST_F(BindFileTest, ASweepReportsEveryFileInEntryOrderOnAnyThreadCount)
         EXPECT_EQ(report.Issues[0].FirstPath, "class FileManifest.m_entries[0]");
         ASSERT_EQ(report.Issues[0].BitSizes.size(), 1u);
         EXPECT_EQ(report.Issues[0].BitSizes.at(32), 4u);
+
+        auto const property = [&report](uint32 hash)
+        {
+            return std::find_if(report.ClassProperties.begin(), report.ClassProperties.end(),
+                [hash](BindSweepClassProperty const& item) { return item.Owner == UnknownHash && item.Hash == hash; });
+        };
+        auto const id = property(StringHash::PropertyHash("unsigned int", "m_id"));
+        ASSERT_NE(id, report.ClassProperties.end()) << threads << ": the unknown child's own m_id is listed under its class";
+        EXPECT_EQ(id->Count, 1u);
+        EXPECT_EQ(id->FirstFile, "Nested.xml");
+        EXPECT_EQ(id->FirstPath, "class FileEntry.m_child");
+        EXPECT_EQ(id->BitSizes.at(32), 1u);
+        auto const entries = property(StringHash::PropertyHash("class FileEntry", "m_entries"));
+        ASSERT_NE(entries, report.ClassProperties.end()) << threads << ": an unknown root's properties are listed although the file does not decode";
+        EXPECT_EQ(entries->FirstFile, "Root.xml");
     }
 }

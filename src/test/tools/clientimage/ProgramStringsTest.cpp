@@ -1,17 +1,19 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the program string scan over a PeBuilder image: ASCII and UTF-16LE strings in data sections are found by text whatever its case, with their addresses, while a run shorter than the minimum, one with no terminator and text inside a code section are not strings; an address inside a string finds it; and ReadAt reads from any address to the terminator, a suffix the linker shares among them, refusing code and text too short.
+ * Tests the program string scan over a PeBuilder image: ASCII and UTF-16LE strings in data sections are found by text whatever its case, with their addresses, while a run shorter than the minimum, one with no terminator and text inside a code section are not strings; an address inside a string finds it; and ReadAt reads from any address to the terminator, a suffix the linker shares among them, refusing code and text too short; and every string read as a class name is found by the hash the type system keys that class by.
  */
 
 #include "PeBuilder.h"
 #include "PeImage.h"
 #include "ProgramStrings.h"
+#include "StringHash.h"
 
 #include <gtest/gtest.h>
 
 #include <algorithm>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace
@@ -134,4 +136,17 @@ TEST_F(ProgramStringsTest, ReadAtReadsFromAnyAddressToTheTerminator)
     EXPECT_FALSE(ProgramStrings::ReadAt(*_image, Base + _text + 0x10, 2)) << "code is not text";
     EXPECT_FALSE(ProgramStrings::ReadAt(*_image, Rdata(0x71), 2));
     EXPECT_FALSE(ProgramStrings::ReadAt(*_image, Base - 1, 2));
+}
+
+TEST_F(ProgramStringsTest, EveryStringReadAsAClassNameIsFoundByItsClassHash)
+{
+    std::unordered_map<uint32, std::vector<std::string>> const names = _strings->ClassNames();
+    auto const named = names.find(StringHash::KiStringHash("class CoreObject::OnPostLoad"));
+    ASSERT_NE(named, names.end());
+    EXPECT_EQ(named->second, std::vector<std::string>{ "class CoreObject::OnPostLoad" });
+    EXPECT_NE(names.find(StringHash::KiStringHash("struct Hello World")), names.end()) << "a wide string names a class too";
+    EXPECT_EQ(names.find(StringHash::KiStringHash("class abc")), names.end()) << "a run too short to be a string names nothing";
+    auto const plain = names.find(StringHash::KiStringHash("CoreObject::OnPostLoad"));
+    ASSERT_NE(plain, names.end()) << "a string the program writes with its keyword already in place is taken as it stands";
+    EXPECT_EQ(plain->second, std::vector<std::string>{ "CoreObject::OnPostLoad" });
 }

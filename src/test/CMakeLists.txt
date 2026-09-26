@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, with the launcher's and the client-image library's own tests joining it when those libraries are built so one executable holds them, and outside the login server's and the supervisor's folders unless their libraries are built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, hands the tests the path of the generated design token stylesheet so the terminal header can be checked against it and the path of doc/config/settings.md so the settings page can be checked against its declarations, links the Windows security API the admin token permission checks read, registers each test with CTest, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable, the supervisor and the bindecode, dbimport, extractor, launcher, localetool and typeextract tools.
+# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, with the launcher's and the client-image library's own tests joining it when those libraries are built so one executable holds them, and outside the login server's and the supervisor's folders unless their libraries are built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, hands the tests the path of the generated design token stylesheet so the terminal header can be checked against it and the path of doc/config/settings.md so the settings page can be checked against its declarations, links the Windows security API the admin token permission checks read, registers each test with CTest, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable, the supervisor and the bindecode, client, dbimport, extractor, launcher, localetool, schemaprobe and typeextract tools.
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
@@ -101,6 +101,12 @@ if(TARGET bindecode)
     add_test(NAME BinDecode
         COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:bindecode> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/bindecode -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/BinDecodeTest.cmake")
     set_tests_properties(BinDecode PROPERTIES SKIP_REGULAR_EXPRESSION "bindecode test skipped")
+endif()
+
+if(TARGET schemaprobe)
+    add_test(NAME SchemaProbe
+        COMMAND "${CMAKE_COMMAND}" -DAPP=$<TARGET_FILE:schemaprobe> -DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/schemaprobe -P "${CMAKE_CURRENT_SOURCE_DIR}/apps/SchemaProbeTest.cmake")
+    set_tests_properties(SchemaProbe PROPERTIES SKIP_REGULAR_EXPRESSION "schemaprobe test skipped")
 endif()
 
 if(TARGET client)
