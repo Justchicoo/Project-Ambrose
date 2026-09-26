@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks what the sampler promises: the first reading of a process writes everything but the processor share, because a share needs two readings, the second works the share out against the time that actually passed rather than the time a round was meant to take, an app with no process is skipped so its graph carries a gap rather than zeroes, an app that stops and starts again is measured against its new process rather than against a total that belongs to the old one, every app is written under its own name, a round costs few enough microseconds per app to sit on a timer beside twenty of them, the series a graph would draw for a process holding half a core agrees within fifteen points with what that process measured on its own clock, which is wide enough that a machine busy building something else does not fail it and narrow enough that a share worked out per machine rather than per core still does, and an app that stops leaves a gap at the end of its own graph while the app beside it goes on being written.
+ * Checks what the sampler promises: the first reading of a process writes everything but the processor share, because a share needs two readings, the second works the share out against the time that actually passed rather than the time a round was meant to take, an app with no process is skipped so its graph carries a gap rather than zeroes, an app that stops and starts again is measured against its new process rather than against a total that belongs to the old one, every app is written under its own name, a round costs few enough microseconds per app to sit on a timer beside twenty of them, judged by the median of two hundred rounds timed one by one so the few a busy machine preempts are not counted as the sampler's own work, the series a graph would draw for a process holding half a core agrees within fifteen points with what that process measured on its own clock, which is wide enough that a machine busy building something else does not fail it and narrow enough that a share worked out per machine rather than per core still does, and an app that stops leaves a gap at the end of its own graph while the app beside it goes on being written.
  */
 
 #include "ChildProcess.h"
@@ -9,9 +9,11 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <numeric>
 #include <optional>
 #include <thread>
 #include <string>
@@ -176,18 +178,25 @@ TEST(ResourceSamplerTest, ARoundIsCheapEnoughToSitOnATimerBesideTwentyApps)
         apps.push_back(Running("app" + std::to_string(at), at + 1));
 
     sampler.Sample(apps, 0);
-    constexpr int Rounds = 200;
-    auto const started = std::chrono::steady_clock::now();
-    for (int round = 1; round <= Rounds; ++round)
-        sampler.Sample(apps, round * 5000);
-    auto const took = std::chrono::steady_clock::now() - started;
+    constexpr std::size_t Rounds = 200;
+    std::vector<double> rounds;
+    rounds.reserve(Rounds);
+    for (std::size_t round = 1; round <= Rounds; ++round)
+    {
+        auto const started = std::chrono::steady_clock::now();
+        sampler.Sample(apps, static_cast<int64>(round) * 5000);
+        rounds.push_back(std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - started).count());
+    }
 
-    double const microseconds = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(took).count());
-    double const perRound = microseconds / Rounds;
+    double const mean = std::accumulate(rounds.begin(), rounds.end(), 0.0) / static_cast<double>(Rounds);
+    auto const middle = rounds.begin() + static_cast<std::ptrdiff_t>(Rounds / 2);
+    std::nth_element(rounds.begin(), middle, rounds.end());
+    double const perRound = *middle;
     double const perApp = perRound / static_cast<double>(apps.size());
     std::cout << "[ SAMPLER  ] " << perApp << " microseconds per app per sample, " << perRound
-              << " microseconds for a round of " << apps.size() << " apps" << std::endl;
-    EXPECT_LT(perRound, 1000.0) << "a round of twenty apps costs " << perRound
+              << " microseconds for the median round of " << apps.size() << " apps, " << mean << " on average over " << Rounds
+              << " rounds" << std::endl;
+    EXPECT_LT(perRound, 1000.0) << "the median round of twenty apps costs " << perRound
                                 << " microseconds, which is more than a millisecond of work per round";
 }
 
