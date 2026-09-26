@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables and the level and stat tables after the world database takes one, loads the character name tables and the level and stat tables when the world database is open and, when either set is empty, extracts it from the install and loads it again, automatically in auto mode, after a yes in ask mode and never in off mode, registering the level and stat sets as reload targets, loads the zones, the named places inside them and the objects placed in them and registers each as a reload target, refusing to start when they cannot be read, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close, after every wizard still in the world has left it and so been saved. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits, template cache or realm heartbeat is applied on the world thread. It reads the template manifest before the player's template, both reload targets.
+ * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables and the level and stat tables after the world database takes one, loads the character name tables and the level and stat tables when the world database is open and, when either set is empty, extracts it from the install and loads it again, automatically in auto mode, after a yes in ask mode and never in off mode, registering the level and stat sets as reload targets, loads the zones, the named places inside them and the objects placed in them and registers each as a reload target, refusing to start when they cannot be read, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close, after every wizard still in the world has left it and so been saved. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits, template cache or realm heartbeat is applied on the world thread. It reads the template manifest before the player's template and then every spell and sigil, each a reload target.
  */
 
 #include "TypeDumpCache.h"
@@ -15,6 +15,8 @@
 #include "MapMgr.h"
 #include "ObjectSchemaMgr.h"
 #include "ObjectTemplateMgr.h"
+#include "SigilMgr.h"
+#include "SpellMgr.h"
 #include "ZoneMgr.h"
 #include "CharacterNameScript.h"
 #include "LevelExtractor.h"
@@ -193,7 +195,7 @@ namespace
                 return false;
             }
             _settingsSubscription = sSettings.Subscribe([this](SettingChange const& change) { ApplySetting(change); });
-            if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup))
+            if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup) || !LoadSpells(setup) || !LoadSigils(setup))
             {
                 _databases.Close();
                 return false;
@@ -360,6 +362,42 @@ namespace
                 return false;
             }
             return true;
+        }
+
+        bool LoadSigils(ClientSetupResult const& setup)
+        {
+            sSigilMgr.RegisterReloadTargets();
+            if (!setup.Install || !sTypeRegistry.IsLoaded())
+            {
+                LOG_WARN("server.gameserver", "No Wizard101 install or type dump is in use, so no sigil is read");
+                return true;
+            }
+            sSigilMgr.SetInstall(setup.Install->Root);
+            std::vector<std::string> errors;
+            if (sSigilMgr.Load(errors))
+                return true;
+            for (std::string const& problem : errors)
+                LOG_ERROR("server.gameserver", "Sigils: {}", problem);
+            LOG_ERROR("server.gameserver", "Cannot read the sigils from {}", ClientLocator::PathText(setup.Install->Root));
+            return false;
+        }
+
+        bool LoadSpells(ClientSetupResult const& setup)
+        {
+            sSpellMgr.RegisterReloadTargets();
+            if (!setup.Install || !sTypeRegistry.IsLoaded())
+            {
+                LOG_WARN("server.gameserver", "No Wizard101 install or type dump is in use, so no spell is read");
+                return true;
+            }
+            sSpellMgr.SetInstall(setup.Install->Root);
+            std::vector<std::string> errors;
+            if (sSpellMgr.Load(errors))
+                return true;
+            for (std::string const& problem : errors)
+                LOG_ERROR("server.gameserver", "Spells: {}", problem);
+            LOG_ERROR("server.gameserver", "Cannot read the spells from {}", ClientLocator::PathText(setup.Install->Root));
+            return false;
         }
 
         bool LoadObjectTemplates(ClientSetupResult const& setup)

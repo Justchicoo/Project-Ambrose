@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The built-in typed views game code reads client objects through: character creation info, core, client and wizard client objects, the core template every template derives from, game object and wizard item templates, the template manifest and its locations, requirement lists and named effects.
+ * The built-in typed views game code reads client objects through: character creation info, core, client and wizard client objects, the core template every template derives from, game object and wizard item templates, the template manifest and its locations, spell templates with their effects and pip ranks, sigils with their circles and a combat sigil's scalars and limits, requirement lists and named effects.
  */
 
 #ifndef AMBROSE_OBJECTVIEWS_H
@@ -237,6 +237,231 @@ public:
     decltype(auto) GetId() const noexcept { return Read<Id>(); }
 
     AMBROSE_TYPED_VIEW(TemplateLocationView)
+};
+
+class SpellTemplateView : public TypedView<SpellTemplateView>
+{
+public:
+    enum Field : std::size_t { Name, Description, DisplayName, SpellBase, Effects, MagicSchoolName, TypeName, TrainingCost, Accuracy, PvP, PvE, Treasure, SpellSourceType,
+        LevelRestriction, SpellRank, SecondarySchoolName, RequiredSchoolName, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<std::string>(Name, "std::string", "m_name"),
+        ViewField::Of<std::string>(Description, "std::string", "m_description"),
+        ViewField::Of<std::string>(DisplayName, "std::string", "m_displayName"),
+        ViewField::Of<std::string>(SpellBase, "std::string", "m_spellBase"),
+        ViewField::Of<PropertyValue::List>(Effects, "class SharedPointer<class SpellEffect>", "m_effects"),
+        ViewField::Of<std::string>(MagicSchoolName, "std::string", "m_sMagicSchoolName"),
+        ViewField::Of<std::string>(TypeName, "std::string", "m_sTypeName"),
+        ViewField::Of<int32>(TrainingCost, "int", "m_trainingCost"),
+        ViewField::Of<int32>(Accuracy, "int", "m_accuracy"),
+        ViewField::Of<bool>(PvP, "bool", "m_PvP"),
+        ViewField::Of<bool>(PvE, "bool", "m_PvE"),
+        ViewField::Of<bool>(Treasure, "bool", "m_Treasure"),
+        ViewField::Of<int64>(SpellSourceType, "enum SpellTemplate::kSpellSourceType", "m_spellSourceType"),
+        ViewField::Of<int32>(LevelRestriction, "int", "m_levelRestriction"),
+        ViewField::Of<PropertyObjectPtr>(SpellRank, "class SharedPointer<class SpellRank>", "m_spellRank"),
+        ViewField::Of<std::string>(SecondarySchoolName, "std::string", "m_secondarySchoolName"),
+        ViewField::Of<std::string>(RequiredSchoolName, "std::string", "m_requiredSchoolName"),
+    } };
+    static constexpr ViewDefinition Definition{ "SpellTemplateView", "class SpellTemplate", Fields };
+
+    decltype(auto) GetName() const noexcept { return Read<Name>(); }
+    decltype(auto) GetDescription() const noexcept { return Read<Description>(); }
+    decltype(auto) GetDisplayName() const noexcept { return Read<DisplayName>(); }
+    decltype(auto) GetSpellBase() const noexcept { return Read<SpellBase>(); }
+    decltype(auto) GetEffects() const noexcept { return Read<Effects>(); }
+    decltype(auto) GetMagicSchoolName() const noexcept { return Read<MagicSchoolName>(); }
+    decltype(auto) GetTypeName() const noexcept { return Read<TypeName>(); }
+    decltype(auto) GetTrainingCost() const noexcept { return Read<TrainingCost>(); }
+    decltype(auto) GetAccuracy() const noexcept { return Read<Accuracy>(); }
+    decltype(auto) IsPvP() const noexcept { return Read<PvP>(); }
+    decltype(auto) IsPvE() const noexcept { return Read<PvE>(); }
+    decltype(auto) IsTreasure() const noexcept { return Read<Treasure>(); }
+    decltype(auto) GetSpellSourceType() const noexcept { return Read<SpellSourceType>(); }
+    decltype(auto) GetLevelRestriction() const noexcept { return Read<LevelRestriction>(); }
+    decltype(auto) GetSpellRank() const noexcept { return Read<SpellRank>(); }
+    decltype(auto) GetSecondarySchoolName() const noexcept { return Read<SecondarySchoolName>(); }
+    decltype(auto) GetRequiredSchoolName() const noexcept { return Read<RequiredSchoolName>(); }
+
+    AMBROSE_TYPED_VIEW(SpellTemplateView)
+};
+
+class SpellEffectView : public TypedView<SpellEffectView>
+{
+public:
+    enum Field : std::size_t { EffectType, EffectParam, Disposition, DamageTypeName, DamageType, PipNum, ActNum, EffectTarget, NumRounds, ParamPerRound, HealModifier,
+        SpellTemplateId, EnchantmentSpellTemplateId, Cloaked, ArmorPiercingParam, ChancePerTarget, Rank, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<int64>(EffectType, "enum SpellEffect::kSpellEffects", "m_effectType"),
+        ViewField::Of<int32>(EffectParam, "int", "m_effectParam"),
+        ViewField::Of<int64>(Disposition, "enum SpellEffect::kHangingDisposition", "m_disposition"),
+        ViewField::Of<std::string>(DamageTypeName, "std::string", "m_sDamageType"),
+        ViewField::Of<uint32>(DamageType, "unsigned int", "m_damageType"),
+        ViewField::Of<int32>(PipNum, "int", "m_pipNum"),
+        ViewField::Of<int32>(ActNum, "int", "m_actNum"),
+        ViewField::Of<int64>(EffectTarget, "enum SpellEffect::kEffectTarget", "m_effectTarget"),
+        ViewField::Of<int32>(NumRounds, "int", "m_numRounds"),
+        ViewField::Of<int32>(ParamPerRound, "int", "m_paramPerRound"),
+        ViewField::Of<float>(HealModifier, "float", "m_healModifier"),
+        ViewField::Of<uint32>(SpellTemplateId, "unsigned int", "m_spellTemplateID"),
+        ViewField::Of<uint32>(EnchantmentSpellTemplateId, "unsigned int", "m_enchantmentSpellTemplateID"),
+        ViewField::Of<bool>(Cloaked, "bool", "m_cloaked"),
+        ViewField::Of<int32>(ArmorPiercingParam, "int", "m_armorPiercingParam"),
+        ViewField::Of<int32>(ChancePerTarget, "int", "m_chancePerTarget"),
+        ViewField::Of<int32>(Rank, "int", "m_rank"),
+    } };
+    static constexpr ViewDefinition Definition{ "SpellEffectView", "class SpellEffect", Fields };
+
+    decltype(auto) GetEffectType() const noexcept { return Read<EffectType>(); }
+    decltype(auto) GetEffectParam() const noexcept { return Read<EffectParam>(); }
+    decltype(auto) GetDisposition() const noexcept { return Read<Disposition>(); }
+    decltype(auto) GetDamageTypeName() const noexcept { return Read<DamageTypeName>(); }
+    decltype(auto) GetDamageType() const noexcept { return Read<DamageType>(); }
+    decltype(auto) GetPipNum() const noexcept { return Read<PipNum>(); }
+    decltype(auto) GetActNum() const noexcept { return Read<ActNum>(); }
+    decltype(auto) GetEffectTarget() const noexcept { return Read<EffectTarget>(); }
+    decltype(auto) GetNumRounds() const noexcept { return Read<NumRounds>(); }
+    decltype(auto) GetParamPerRound() const noexcept { return Read<ParamPerRound>(); }
+    decltype(auto) GetHealModifier() const noexcept { return Read<HealModifier>(); }
+    decltype(auto) GetSpellTemplateId() const noexcept { return Read<SpellTemplateId>(); }
+    decltype(auto) GetEnchantmentSpellTemplateId() const noexcept { return Read<EnchantmentSpellTemplateId>(); }
+    decltype(auto) IsCloaked() const noexcept { return Read<Cloaked>(); }
+    decltype(auto) GetArmorPiercingParam() const noexcept { return Read<ArmorPiercingParam>(); }
+    decltype(auto) GetChancePerTarget() const noexcept { return Read<ChancePerTarget>(); }
+    decltype(auto) GetRank() const noexcept { return Read<Rank>(); }
+
+    AMBROSE_TYPED_VIEW(SpellEffectView)
+};
+
+class SpellRankView : public TypedView<SpellRankView>
+{
+public:
+    enum Field : std::size_t { Rank, BalancePips, DeathPips, FirePips, IcePips, LifePips, MythPips, StormPips, ShadowPips, XPipSpell, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<uint8>(Rank, "unsigned char", "m_spellRank"),
+        ViewField::Of<uint8>(BalancePips, "unsigned char", "m_balancePips"),
+        ViewField::Of<uint8>(DeathPips, "unsigned char", "m_deathPips"),
+        ViewField::Of<uint8>(FirePips, "unsigned char", "m_firePips"),
+        ViewField::Of<uint8>(IcePips, "unsigned char", "m_icePips"),
+        ViewField::Of<uint8>(LifePips, "unsigned char", "m_lifePips"),
+        ViewField::Of<uint8>(MythPips, "unsigned char", "m_mythPips"),
+        ViewField::Of<uint8>(StormPips, "unsigned char", "m_stormPips"),
+        ViewField::Of<uint8>(ShadowPips, "unsigned char", "m_shadowPips"),
+        ViewField::Of<bool>(XPipSpell, "bool", "m_xPipSpell"),
+    } };
+    static constexpr ViewDefinition Definition{ "SpellRankView", "class SpellRank", Fields };
+
+    decltype(auto) GetRank() const noexcept { return Read<Rank>(); }
+    decltype(auto) GetBalancePips() const noexcept { return Read<BalancePips>(); }
+    decltype(auto) GetDeathPips() const noexcept { return Read<DeathPips>(); }
+    decltype(auto) GetFirePips() const noexcept { return Read<FirePips>(); }
+    decltype(auto) GetIcePips() const noexcept { return Read<IcePips>(); }
+    decltype(auto) GetLifePips() const noexcept { return Read<LifePips>(); }
+    decltype(auto) GetMythPips() const noexcept { return Read<MythPips>(); }
+    decltype(auto) GetStormPips() const noexcept { return Read<StormPips>(); }
+    decltype(auto) GetShadowPips() const noexcept { return Read<ShadowPips>(); }
+    decltype(auto) IsXPipSpell() const noexcept { return Read<XPipSpell>(); }
+
+    AMBROSE_TYPED_VIEW(SpellRankView)
+};
+
+class SigilTemplateView : public TypedView<SigilTemplateView>
+{
+public:
+    enum Field : std::size_t { SigilName, SigilType, UseState, SubCircles, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<std::string>(SigilName, "std::string", "m_sigilName"),
+        ViewField::Of<std::string>(SigilType, "std::string", "m_sigilType"),
+        ViewField::Of<bool>(UseState, "bool", "m_useState"),
+        ViewField::Of<PropertyValue::List>(SubCircles, "class SigilSubCircle*", "m_subCircles"),
+    } };
+    static constexpr ViewDefinition Definition{ "SigilTemplateView", "class SigilTemplate", Fields };
+
+    decltype(auto) GetSigilName() const noexcept { return Read<SigilName>(); }
+    decltype(auto) GetSigilType() const noexcept { return Read<SigilType>(); }
+    decltype(auto) IsUseState() const noexcept { return Read<UseState>(); }
+    decltype(auto) GetSubCircles() const noexcept { return Read<SubCircles>(); }
+
+    AMBROSE_TYPED_VIEW(SigilTemplateView)
+};
+
+class CombatSigilTemplateView : public TypedView<CombatSigilTemplateView>
+{
+public:
+    enum Field : std::size_t { EngageRadius, BattlefieldEffects, ShadowThresholdType, ShadowThresholdFactor, ShadowPipRatingFactor, ScalarDamagePvP, ScalarResistPvP, ScalarPiercePvP, ScalarDamagePvE, ScalarResistPvE,
+        ScalarPiercePvE, DamageLimitPvP, DK0PvP, DN0PvP, ResistLimitPvP, RK0PvP, RN0PvP, DamageLimitPvE, DK0PvE, DN0PvE, ResistLimitPvE, RK0PvE, RN0PvE, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<float>(EngageRadius, "float", "m_engageRadius"),
+        ViewField::Of<PropertyValue::List>(BattlefieldEffects, "class SharedPointer<class SpellEffect>", "m_battlefieldEffects"),
+        ViewField::Of<int64>(ShadowThresholdType, "enum kShadow_Threshold_Type", "m_shadowThresholdType"),
+        ViewField::Of<float>(ShadowThresholdFactor, "float", "m_shadowThresholdFactor"),
+        ViewField::Of<float>(ShadowPipRatingFactor, "float", "m_shadowPipRatingFactor"),
+        ViewField::Of<float>(ScalarDamagePvP, "float", "m_scalarDamagePvP"),
+        ViewField::Of<float>(ScalarResistPvP, "float", "m_scalarResistPvP"),
+        ViewField::Of<float>(ScalarPiercePvP, "float", "m_scalarPiercePvP"),
+        ViewField::Of<float>(ScalarDamagePvE, "float", "m_scalarDamagePvE"),
+        ViewField::Of<float>(ScalarResistPvE, "float", "m_scalarResistPvE"),
+        ViewField::Of<float>(ScalarPiercePvE, "float", "m_scalarPiercePvE"),
+        ViewField::Of<float>(DamageLimitPvP, "float", "m_damageLimitPvP"),
+        ViewField::Of<float>(DK0PvP, "float", "m_dK0PvP"),
+        ViewField::Of<float>(DN0PvP, "float", "m_dN0PvP"),
+        ViewField::Of<float>(ResistLimitPvP, "float", "m_resistLimitPvP"),
+        ViewField::Of<float>(RK0PvP, "float", "m_rK0PvP"),
+        ViewField::Of<float>(RN0PvP, "float", "m_rN0PvP"),
+        ViewField::Of<float>(DamageLimitPvE, "float", "m_damageLimitPvE"),
+        ViewField::Of<float>(DK0PvE, "float", "m_dK0PvE"),
+        ViewField::Of<float>(DN0PvE, "float", "m_dN0PvE"),
+        ViewField::Of<float>(ResistLimitPvE, "float", "m_resistLimitPvE"),
+        ViewField::Of<float>(RK0PvE, "float", "m_rK0PvE"),
+        ViewField::Of<float>(RN0PvE, "float", "m_rN0PvE"),
+    } };
+    static constexpr ViewDefinition Definition{ "CombatSigilTemplateView", "class CombatSigilTemplate", Fields };
+
+    decltype(auto) GetEngageRadius() const noexcept { return Read<EngageRadius>(); }
+    decltype(auto) GetBattlefieldEffects() const noexcept { return Read<BattlefieldEffects>(); }
+    decltype(auto) GetShadowThresholdType() const noexcept { return Read<ShadowThresholdType>(); }
+    decltype(auto) GetShadowThresholdFactor() const noexcept { return Read<ShadowThresholdFactor>(); }
+    decltype(auto) GetShadowPipRatingFactor() const noexcept { return Read<ShadowPipRatingFactor>(); }
+    decltype(auto) GetScalarDamagePvP() const noexcept { return Read<ScalarDamagePvP>(); }
+    decltype(auto) GetScalarResistPvP() const noexcept { return Read<ScalarResistPvP>(); }
+    decltype(auto) GetScalarPiercePvP() const noexcept { return Read<ScalarPiercePvP>(); }
+    decltype(auto) GetScalarDamagePvE() const noexcept { return Read<ScalarDamagePvE>(); }
+    decltype(auto) GetScalarResistPvE() const noexcept { return Read<ScalarResistPvE>(); }
+    decltype(auto) GetScalarPiercePvE() const noexcept { return Read<ScalarPiercePvE>(); }
+    decltype(auto) GetDamageLimitPvP() const noexcept { return Read<DamageLimitPvP>(); }
+    decltype(auto) GetDK0PvP() const noexcept { return Read<DK0PvP>(); }
+    decltype(auto) GetDN0PvP() const noexcept { return Read<DN0PvP>(); }
+    decltype(auto) GetResistLimitPvP() const noexcept { return Read<ResistLimitPvP>(); }
+    decltype(auto) GetRK0PvP() const noexcept { return Read<RK0PvP>(); }
+    decltype(auto) GetRN0PvP() const noexcept { return Read<RN0PvP>(); }
+    decltype(auto) GetDamageLimitPvE() const noexcept { return Read<DamageLimitPvE>(); }
+    decltype(auto) GetDK0PvE() const noexcept { return Read<DK0PvE>(); }
+    decltype(auto) GetDN0PvE() const noexcept { return Read<DN0PvE>(); }
+    decltype(auto) GetResistLimitPvE() const noexcept { return Read<ResistLimitPvE>(); }
+    decltype(auto) GetRK0PvE() const noexcept { return Read<RK0PvE>(); }
+    decltype(auto) GetRN0PvE() const noexcept { return Read<RN0PvE>(); }
+
+    AMBROSE_TYPED_VIEW(CombatSigilTemplateView)
+};
+
+class SigilSubCircleView : public TypedView<SigilSubCircleView>
+{
+public:
+    enum Field : std::size_t { LocationType, LocationPreference, Rotation, Radius, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<std::string>(LocationType, "std::string", "m_locationType"),
+        ViewField::Of<std::string>(LocationPreference, "std::string", "m_locationPreference"),
+        ViewField::Of<float>(Rotation, "float", "m_rotation"),
+        ViewField::Of<float>(Radius, "float", "m_radius"),
+    } };
+    static constexpr ViewDefinition Definition{ "SigilSubCircleView", "class SigilSubCircle", Fields };
+
+    decltype(auto) GetLocationType() const noexcept { return Read<LocationType>(); }
+    decltype(auto) GetLocationPreference() const noexcept { return Read<LocationPreference>(); }
+    decltype(auto) GetRotation() const noexcept { return Read<Rotation>(); }
+    decltype(auto) GetRadius() const noexcept { return Read<Radius>(); }
+
+    AMBROSE_TYPED_VIEW(SigilSubCircleView)
 };
 
 class RequirementListView : public TypedView<RequirementListView>

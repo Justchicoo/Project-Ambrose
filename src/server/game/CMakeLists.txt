@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Adds the game layer's libraries: globals, shared by every game system, scripting, which holds the hooks content scripts hang off, the game's own session with its message handlers and the world that owns and drains it, chat, which holds the command tree and judges a command against its caller, and accounts and characters, each built on the database layer, which the login server links on their own.
+# Adds the game layer's libraries: globals, shared by every game system, scripting, which holds the hooks content scripts hang off, the game's own session with its message handlers and the world that owns and drains it, chat, which holds the command tree and judges a command against its caller, accounts and characters, each built on the database layer, which the login server links on their own, spells, every spell the install holds, read through the template store, and combat, starting with its sigils.
 add_subdirectory(Globals)
 add_subdirectory(Entities)
 add_subdirectory(Scripting)
@@ -11,3 +11,5 @@ add_subdirectory(Accounts)
 add_subdirectory(Chat)
 add_subdirectory(Characters)
 add_subdirectory(Movement)
+add_subdirectory(Spells)
+add_subdirectory(Combat)
