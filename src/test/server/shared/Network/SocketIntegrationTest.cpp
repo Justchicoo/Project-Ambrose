@@ -25,6 +25,7 @@
 #include <set>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 
 namespace
 {
@@ -160,13 +161,16 @@ namespace
 
 TEST_F(SocketIntegrationTest, ManyClientsSendFragmentedFramesInOrder)
 {
+    constexpr std::size_t ClientCount = 200;
     SocketMgr<CountingSocket> manager;
     std::string error;
-    ASSERT_TRUE(manager.StartNetwork(LoopbackSettings(4), error)) << error;
+    NetworkSettings settings = LoopbackSettings(4);
+    settings.MaxConnectionsPerIP = ClientCount;
+    settings.AcceptRatePerSecond = ClientCount;
+    ASSERT_TRUE(manager.StartNetwork(settings, error)) << error;
     uint16 const port = manager.GetPort();
     ASSERT_NE(port, 0);
 
-    constexpr std::size_t ClientCount = 200;
     std::vector<asio::ip::tcp::socket> clients;
     std::vector<std::vector<uint8>> streams;
     std::vector<std::size_t> offsets(ClientCount, 0);
@@ -451,13 +455,115 @@ TEST_F(SocketIntegrationTest, SettingsChangeLiveWithoutDroppingSessions)
     manager.StopNetwork();
 }
 
+TEST_F(SocketIntegrationTest, SendQueueHighWaterUpdatesConnectedSockets)
+{
+    std::weak_ptr<CountingSocket> created;
+    SocketMgr<CountingSocket> manager([&](asio::ip::tcp::socket&& socket, FrameLimits const& limits)
+    {
+        auto instance = std::make_shared<CountingSocket>(std::move(socket), limits);
+        created = instance;
+        return instance;
+    });
+    NetworkSettings settings = LoopbackSettings(1);
+    std::string error;
+    ASSERT_TRUE(manager.StartNetwork(settings, error)) << error;
+
+    asio::ip::tcp::socket client(_clientContext);
+    client.connect(Endpoint(manager.GetPort()));
+    ASSERT_TRUE(WaitFor([&] { return manager.GetConnectionCount() == 1; }));
+    std::shared_ptr<CountingSocket> socket = created.lock();
+    ASSERT_TRUE(socket);
+
+    NetworkSettings updated = manager.GetSettings();
+    updated.Limits.MaxSendQueueBytes = NetworkSettings::MinSendQueueBytes + 4096;
+    ASSERT_TRUE(manager.ApplySettings(updated, error)) << error;
+    EXPECT_TRUE(WaitFor([&] { return socket->GetMaxQueuedBytes() == updated.Limits.MaxSendQueueBytes; }));
+
+    client.close();
+    socket.reset();
+    EXPECT_TRUE(WaitFor([&] { return manager.GetConnectionCount() == 0; }));
+}
+
+TEST_F(SocketIntegrationTest, PerIpConnectionLimitIsReleasedWhenTheSocketCloses)
+{
+    NetworkSettings settings = LoopbackSettings(2);
+    settings.MaxConnectionsPerIP = 1;
+    SocketMgr<CountingSocket> manager;
+    std::string error;
+    ASSERT_TRUE(manager.StartNetwork(settings, error)) << error;
+
+    asio::ip::tcp::socket first(_clientContext);
+    first.connect(Endpoint(manager.GetPort()));
+    ASSERT_TRUE(WaitFor([&] { return manager.GetConnectionCount() == 1; }));
+
+    asio::ip::tcp::socket rejected(_clientContext);
+    rejected.connect(Endpoint(manager.GetPort()));
+    std::error_code ignored;
+    rejected.non_blocking(true, ignored);
+    EXPECT_TRUE(WaitFor([&]
+    {
+        std::array<uint8, 1> byte{};
+        std::error_code readError;
+        rejected.read_some(asio::buffer(byte), readError);
+        return readError == asio::error::eof || readError == asio::error::connection_reset;
+    }, std::chrono::seconds(5)));
+    EXPECT_EQ(manager.GetConnectionCount(), 1u);
+
+    first.close();
+    EXPECT_TRUE(WaitFor([&] { return manager.GetConnectionCount() == 0; }));
+
+    asio::ip::tcp::socket next(_clientContext);
+    next.connect(Endpoint(manager.GetPort()));
+    EXPECT_TRUE(WaitFor([&] { return manager.GetConnectionCount() == 1; }));
+
+    next.close();
+    EXPECT_TRUE(WaitFor([&] { return manager.GetConnectionCount() == 0; }));
+}
+
+TEST_F(SocketIntegrationTest, PerIpAcceptRateLimitRefillsAfterOneSecond)
+{
+    NetworkSettings settings = LoopbackSettings(2);
+    settings.MaxConnectionsPerIP = 10;
+    settings.AcceptRatePerSecond = 1;
+    SocketMgr<CountingSocket> manager;
+    std::string error;
+    ASSERT_TRUE(manager.StartNetwork(settings, error)) << error;
+
+    asio::ip::tcp::socket first(_clientContext);
+    first.connect(Endpoint(manager.GetPort()));
+    ASSERT_TRUE(WaitFor([&] { return manager.GetConnectionCount() == 1; }));
+
+    asio::ip::tcp::socket rejected(_clientContext);
+    rejected.connect(Endpoint(manager.GetPort()));
+    std::error_code ignored;
+    rejected.non_blocking(true, ignored);
+    EXPECT_TRUE(WaitFor([&]
+    {
+        std::array<uint8, 1> byte{};
+        std::error_code readError;
+        rejected.read_some(asio::buffer(byte), readError);
+        return readError == asio::error::eof || readError == asio::error::connection_reset;
+    }, std::chrono::seconds(5)));
+
+    first.close();
+    EXPECT_TRUE(WaitFor([&] { return manager.GetConnectionCount() == 0; }));
+    std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+
+    asio::ip::tcp::socket next(_clientContext);
+    next.connect(Endpoint(manager.GetPort()));
+    EXPECT_TRUE(WaitFor([&] { return manager.GetConnectionCount() == 1; }));
+
+    next.close();
+    EXPECT_TRUE(WaitFor([&] { return manager.GetConnectionCount() == 0; }));
+}
+
 TEST(NetworkSettingsTest, LoadsAndClampsConfigValues)
 {
     LogTestDirectory directory;
     std::filesystem::path const file = directory.Path() / "network.conf";
     {
         std::ofstream stream(file);
-        stream << "BindIP = 127.0.0.1\nWorldServerPort = 13000\nNetwork.Threads = 900\nNetwork.MaxFrameSize = 10\nNetwork.MaxDmlMessages = 0\nNetwork.LongFrameLength = HeaderAndBody\nNetwork.OutKBuff = 65536\nNetwork.TcpNoDelay = 0\nNetwork.MaxSendQueueBytes = 1024\n";
+        stream << "BindIP = 127.0.0.1\nWorldServerPort = 13000\nNetwork.Threads = 900\nNetwork.MaxFrameSize = 10\nNetwork.MaxDmlMessages = 0\nNetwork.LongFrameLength = HeaderAndBody\nNetwork.OutKBuff = 65536\nNetwork.TcpNoDelay = 0\nNetwork.SendQueueHighWater = 1024\nNetwork.MaxConnectionsPerIP = 200000\nNetwork.AcceptRatePerSecond = 0\n";
     }
     ConfigMgr config;
     ASSERT_TRUE(config.LoadInitial(file).Succeeded());
@@ -472,8 +578,12 @@ TEST(NetworkSettingsTest, LoadsAndClampsConfigValues)
     EXPECT_EQ(settings.OutKBuff, 65536);
     EXPECT_FALSE(settings.TcpNoDelay);
     EXPECT_EQ(settings.Limits.MaxSendQueueBytes, NetworkSettings::MinSendQueueBytes);
-    ASSERT_EQ(problems.size(), 4u);
-    EXPECT_EQ(problems.back(), "Network.MaxSendQueueBytes = 1024 is outside 1048576-1073741824; using 1048576");
+    ASSERT_EQ(problems.size(), 6u);
+    EXPECT_EQ(problems[3], "Network.SendQueueHighWater = 1024 is outside 1048576-1073741824; using 1048576");
+    EXPECT_EQ(problems[4], "Network.MaxConnectionsPerIP = 200000 is outside 1-100000; using 100000");
+    EXPECT_EQ(problems[5], "Network.AcceptRatePerSecond = 0 is outside 1-100000; using 1");
+    EXPECT_EQ(settings.MaxConnectionsPerIP, NetworkSettings::MaxPerIPLimit);
+    EXPECT_EQ(settings.AcceptRatePerSecond, 1u);
 
     std::filesystem::path const empty = directory.Path() / "empty.conf";
     {
@@ -490,6 +600,8 @@ TEST(NetworkSettingsTest, LoadsAndClampsConfigValues)
     EXPECT_EQ(fallback.Limits.MaxFrameSize, FrameLimits::DefaultMaxFrameSize);
     EXPECT_EQ(fallback.Limits.LongLength, LongFrameLength::BodyOnly);
     EXPECT_EQ(fallback.Limits.MaxSendQueueBytes, FrameLimits::DefaultMaxSendQueueBytes);
+    EXPECT_EQ(fallback.MaxConnectionsPerIP, NetworkSettings::DefaultMaxConnectionsPerIP);
+    EXPECT_EQ(fallback.AcceptRatePerSecond, NetworkSettings::DefaultAcceptRatePerSecond);
     EXPECT_TRUE(fallback.TcpNoDelay);
     ASSERT_EQ(problems.size(), 1u);
     EXPECT_NE(problems.front().find("Sideways"), std::string::npos);

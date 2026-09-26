@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Token bucket rate limiter with a replaceable time source for deterministic tests.
+ * Token bucket rate limiter with live limits and a replaceable time source for deterministic tests.
  */
 
 #ifndef AMBROSE_TOKENBUCKET_H
@@ -22,6 +22,8 @@ public:
     bool TryConsume(uint32 tokens = 1);
     double GetAvailableTokens();
     uint32 GetCapacity() const;
+    double GetTokensPerSecond() const;
+    void SetLimits(uint32 capacity, double tokensPerSecond);
 
 private:
     void Refill();

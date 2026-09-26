@@ -772,9 +772,9 @@ In big or busy zones each client gets only objects and players within range, wit
 **Acceptance**
 
 - [ ] 10-minute fuzz: no crash, no allocation above MaxFrameSize
-- [ ] 10k frames/s flooder disconnected within 1 s
-- [ ] A never-reading client disconnected at the high-water mark
-- [ ] Changing Network.RateLimit.PerSecond applies to connected sessions from the next frame
+- [x] 10k frames/s flooder disconnected within 1 s [SessionBaseTest.FrameFloodDisconnectsWithoutStallingAnotherSession: 10,000-frame stream closed within 1 s; survivor handled within 500 ms]
+- [x] A never-reading client disconnected at the high-water mark [OutboundMessagesTest.AClientThatStopsReadingIsClosedAtTheSendQueueLimit]
+- [x] Changing Network.RateLimit.PerSecond applies to connected sessions from the next frame [SessionBaseTest.LoweringTheFrameRateAppliesToTheNextInboundFrame]
 
 ### Detailed spec from NET-11: Network hardening
 
@@ -796,9 +796,9 @@ Malformed, oversized or abusive traffic can't crash or stall a server and is dis
 **Acceptance**
 
 - [ ] Fuzz run of 10 minutes on the frame and decode paths has no crash, no ASan report and no allocation above MaxFrameSize
-- [ ] A test client flooding 10k frames/s is disconnected within 1s, and other sessions show no latency spike above a threshold in the integration test
-- [ ] A test client that never reads is disconnected when its send queue passes the high-water mark
-- [ ] Integration test: lowering Network.RateLimit.PerSecond while a client is connected throttles that client from the next frame without a restart
+- [x] A test client flooding 10k frames/s is disconnected within 1s, and other sessions show no latency spike above a threshold in the integration test [SessionBaseTest.FrameFloodDisconnectsWithoutStallingAnotherSession: 10,000-frame stream closed within 1 s; survivor handled within 500 ms]
+- [x] A test client that never reads is disconnected when its send queue passes the high-water mark [OutboundMessagesTest.AClientThatStopsReadingIsClosedAtTheSendQueueLimit]
+- [x] Integration test: lowering Network.RateLimit.PerSecond while a client is connected throttles that client from the next frame without a restart [SessionBaseTest.LoweringTheFrameRateAppliesToTheNextInboundFrame]
 
 **Risks**
 

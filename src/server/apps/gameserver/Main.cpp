@@ -592,6 +592,16 @@ namespace
                 _context->SetSettings(SessionSettings::Load(Config(), &problems));
                 for (std::string const& problem : problems)
                     LOG_WARN("server.gameserver", "{}", problem);
+                if (_sockets && key.starts_with("Network."))
+                {
+                    problems.clear();
+                    NetworkSettings const settings = NetworkSettings::Load(Config(), "WorldServerPort", DefaultWorldPort, &problems);
+                    std::string error;
+                    if (!_sockets->ApplySettings(settings, error))
+                        LOG_WARN("server.gameserver", "Cannot apply network settings: {}", error);
+                    for (std::string const& problem : problems)
+                        LOG_WARN("server.gameserver", "{}", problem);
+                }
             }
         }
 

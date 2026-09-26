@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A client session over one socket: sends SessionOffer at once, waits for a matching SessionAccept, answers and sends keepalives, hands DML messages to the app, encodes declared messages against the live definitions straight into their frames, and tracks its status, protocol strikes, ping budget, the messages it has already been reported for sending before the server handles them, and queued inbound work.
+ * A client session over one socket: sends SessionOffer at once, waits for a matching SessionAccept, applies live frame-rate limits, answers and sends keepalives, hands DML messages to the app, encodes declared messages against the live definitions straight into their frames, and tracks its status, protocol strikes, ping budget, the messages it has already been reported for sending before the server handles them, and queued inbound work.
  */
 
 #ifndef AMBROSE_SESSIONBASE_H
@@ -62,6 +62,7 @@ public:
     uint32 GetStrikes() const noexcept { return _strikes.load(std::memory_order_relaxed); }
     bool IsKicked() const noexcept { return _kicked.load(std::memory_order_relaxed); }
     bool AddStrike(std::string_view reason);
+    uint32 GetRateLimitViolations() const noexcept { return _rateLimitViolations.load(std::memory_order_relaxed); }
     void Kick(std::string_view reason);
     bool AllowDropLog();
     bool FirstNotHandled(uint8 serviceId, uint8 order);
@@ -109,10 +110,12 @@ private:
     std::mutex _budgetMutex;
     TokenBucket _dropBudget;
     TokenBucket _pingBudget;
+    TokenBucket _frameBudget;
     std::vector<uint16> _reportedNotHandled;
     uint16 _sessionId = 0;
     std::atomic<SessionStatus> _status{ SessionStatus::Connected };
     std::atomic<uint32> _strikes{ 0 };
+    std::atomic<uint32> _rateLimitViolations{ 0 };
     std::atomic<bool> _kicked{ false };
     mutable std::mutex _inboundMutex;
     std::deque<std::pair<std::function<void()>, std::size_t>> _inbound;
