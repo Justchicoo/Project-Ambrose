@@ -17,6 +17,7 @@
 #include "PanelSignIn.h"
 #include "PanelUsers.h"
 #include "PanelStore.h"
+#include "PanelSettings.h"
 #include "Types.h"
 
 #include <nlohmann/json_fwd.hpp>
@@ -64,6 +65,7 @@ public:
     std::string LinkFor(std::string_view token) const;
 
     PanelStore& Store() { return _store; }
+    PanelSettings& Settings() { return _settings; }
     PanelUsers& Users() { return _users; }
     PanelSessions& Sessions() { return _sessions; }
     PanelErrors& Errors() { return _errors; }
@@ -89,6 +91,8 @@ private:
     AdminResponse SignIn(AdminRequest const& request);
     AdminResponse SignOut(AdminRequest const& request);
     AdminResponse WhoAmI(AdminRequest const& request);
+    AdminResponse PanelSettingsGet(AdminRequest const& request);
+    AdminResponse PanelSettingsUpdate(AdminRequest const& request);
     std::optional<PanelUser> UserOf(AdminRequest const& request);
     nlohmann::json UserAnswer(PanelUser const& user);
     std::optional<AdminResponse> Throttle(AdminRequest const& request, uint32 cost);
@@ -96,6 +100,7 @@ private:
     Log& _log;
     std::filesystem::path _dataFolder;
     PanelStore _store;
+    PanelSettings _settings;
     PanelUsers _users;
     PanelSessions _sessions;
     PanelErrors _errors;

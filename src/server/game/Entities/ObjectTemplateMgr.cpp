@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the manifest from a Root.wad opened afresh, so a reload sees the file as it is now, and when it swaps a manifest in closes every archive held open for templates but that Root.wad, which it keeps for the templates Root.wad holds; decodes a template from the archive its manifest entry names as any class derived from CoreTemplate, since recipes, spells and quests are templates as much as game objects are, its behaviors read through the CoreTemplate view and each named by m_behaviorName, a null entry kept as an empty name and an entry whose name is empty left out, as CoreObjectFactory::AddBehavior gives the first an empty slot and the second none, its name the GameObjectTemplate's m_objectName or else whichever property its class flags ObjectName, and says which step failed and why when one does; the player's template must be a GameObjectTemplate, since a wizard is built from its behaviors. The cache keeps a template only under the manifest it was decoded under, so a decode that finishes after a reload is handed to its caller but not kept, counts a template's memory as the values its object holds, keeps no template larger than the whole budget, and drops the least recently used first. The player's template is read again from its archive opened afresh whenever it reloads, rather than taken from the cache or an archive already open, so it reads the file as it is now.
+ * Reads the manifest from a Root.wad opened afresh, so a reload sees the file as it is now, and when it swaps a manifest in closes every archive held open for templates but that Root.wad, which it keeps for the templates Root.wad holds; decodes a template from the archive its manifest entry names as any class derived from CoreTemplate, since recipes, spells and quests are templates as much as game objects are, its behaviors read through the CoreTemplate view and each named by m_behaviorName, a null entry kept as an empty name and an entry whose name is empty left out, as CoreObjectFactory::AddBehavior gives the first an empty slot and the second none, its name the GameObjectTemplate's m_objectName, a SpellTemplate's m_name or else whichever property its class flags ObjectName, and says which step failed and why when one does; the player's template must be a GameObjectTemplate, since a wizard is built from its behaviors. The cache keeps a template only under the manifest it was decoded under, so a decode that finishes after a reload is handed to its caller but not kept, counts a template's memory as the values its object holds, keeps no template larger than the whole budget, and drops the least recently used first. The player's template is read again from its archive opened afresh whenever it reloads, rather than taken from the cache or an archive already open, so it reads the file as it is now.
  */
 
 #include "ObjectTemplateMgr.h"
@@ -44,6 +44,8 @@ namespace
     {
         if (std::optional<GameObjectTemplateView> const view = GameObjectTemplateView::From(object))
             return view->GetObjectName();
+        if (std::optional<SpellTemplateView> const spell = SpellTemplateView::From(object))
+            return spell->GetName();
         std::vector<PropertyInfo> const& properties = object.GetClass().Properties;
         for (std::size_t ordinal = 0; ordinal < properties.size(); ++ordinal)
         {

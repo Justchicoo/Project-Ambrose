@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Draining is what this adds to a session, and dispatching what it can answer: the world calls DrainQueue on its own thread and the queued work runs there, bounded so one talkative client cannot hold the tick, and every handler is written knowing it runs on that thread and nowhere else. MSG_ATTACH is taken as soon as a client connects, because a client that has not attached has nothing else to say, and the key it carries is spent before the client is let in: the spend is one conditional update, so two clients holding the same key cannot both win it, and a spend that changed no row is read back only to say why, because the reason a client was turned away is worth knowing while the reason it was let in is not. A refused attach is told once and the socket closed behind it, and a session that was let in gives its wizard back when it goes. Entering the world is refused with MSG_ATTACHFAILED, the reason logged, when the wizard is missing, deleted or another account's, when its stats cannot be read or its school has no level table, when its zone is one this server cannot load, when the instance has no mobile id left, or when its object cannot be built; the stats are read through the wizard's own row, so a failed read is never mistaken for a wizard with no stats yet, whose save would then write over what it has; the object is encoded with the transmit mask the owner's own object is read with, and CriticalObjects is sent empty, which the client reads as no critical objects rather than a list to deserialize.
+ * Draining is what this adds to a session, and dispatching what it can answer: the world calls DrainQueue on its own thread and the queued work runs there, bounded so one talkative client cannot hold the tick, and every handler is written knowing it runs on that thread and nowhere else. MSG_ATTACH is taken as soon as a client connects, because a client that has not attached has nothing else to say, and the key it carries is spent before the client is let in: the spend is one conditional update, so two clients holding the same key cannot both win it, and a spend that changed no row is read back only to say why, because the reason a client was turned away is worth knowing while the reason it was let in is not. A refused attach is told once and the socket closed behind it, and a session that was let in gives its wizard back when it goes. Entering the world is refused with MSG_ATTACHFAILED, the reason logged, when the wizard is missing, deleted or another account's, when its stats or spellbook cannot be read or its school has no level table, when its zone is one this server cannot load, when the instance has no mobile id left, or when its object cannot be built; the stats are read through the wizard's own row, so a failed read is never mistaken for a wizard with no stats yet, whose save would then write over what it has; a spell it knows that the spells this server holds do not name is left out of its book and named, and stays in its rows; the object is encoded with the transmit mask the owner's own object is read with, and CriticalObjects is sent empty, which the client reads as no critical objects rather than a list to deserialize.
  */
 
 #include "GameSession.h"
@@ -19,11 +19,13 @@
 #include "PlayerLevelMgr.h"
 #include "PlayerObjectBuilder.h"
 #include "Settings.h"
+#include "SpellMgr.h"
 #include "StringHash.h"
 #include "StringUtil.h"
 #include "ZoneMgr.h"
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <chrono>
 #include <utility>
@@ -261,14 +263,36 @@ void GameSession::LoadStats(LoginKeyClaim const& claim, CharacterSummary charact
             RefuseEntry(claim, fmt::format("wizard {}'s stats cannot be read from the characters database", character.Guid));
             return;
         }
-        std::optional<CharacterStats> stored = CharacterRepository::ReadStats(*result);
+        LoadSpells(claim, character, CharacterRepository::ReadStats(*result));
+    }));
+}
+
+void GameSession::LoadSpells(LoginKeyClaim const& claim, CharacterSummary character, std::optional<CharacterStats> stored)
+{
+    CharacterRepository::Statement statement = CharacterDatabase.IsOpen() ? CharacterRepository::PrepareLoadSpells(character.Guid) : nullptr;
+    if (!statement)
+    {
+        RefuseEntry(claim, "the characters database is not open");
+        return;
+    }
+    _queryCallbacks.AddCallback(CharacterDatabase.AsyncQuery(std::move(statement), MakeCompletionHandler()).WithPreparedCallback(
+        [this, claim, character = std::move(character), stored = std::move(stored)](PreparedQueryResult result)
+    {
+        if (!IsOpen() || IsKicked())
+            return;
+        if (!result)
+        {
+            RefuseEntry(claim, fmt::format("wizard {}'s spellbook cannot be read from the characters database", character.Guid));
+            return;
+        }
+        std::vector<CharacterSpell> spells = CharacterRepository::ReadSpells(*result);
         std::shared_ptr<GameSession> const self = SharedSelf();
-        if (!QueueInbound([self, claim, character, stored = std::move(stored)] { self->EnterWorld(claim, character, stored); }))
+        if (!QueueInbound([self, claim, character, stored, spells = std::move(spells)] { self->EnterWorld(claim, character, stored, spells); }))
             RefuseEntry(claim, "its queue of work is full");
     }));
 }
 
-void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character, std::optional<CharacterStats> const& stored)
+void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character, std::optional<CharacterStats> const& stored, std::vector<CharacterSpell> const& spells)
 {
     std::string problem;
     std::optional<PlayerStats> stats = PlayerStats::Create(character, stored, *sPlayerLevelMgr.GetLevels(), *sPlayerLevelMgr.GetStats(), problem);
@@ -303,11 +327,18 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     _worldGuid = character.Guid;
     placement.MobileId = *mobileId;
 
+    PlayerSpellbook spellbook = PlayerSpellbook::FromStored(spells);
+    std::vector<uint32> missing;
+    std::vector<SpellTracker> const trackers = spellbook.Track(*sSpellMgr.GetSpells(), missing);
+    if (!missing.empty())
+        LOG_WARN("server.gamesession", "Session {} left {} spell(s) wizard {} knows out of its spellbook, since the spells this server holds do not name them: {}", GetSessionId(),
+            missing.size(), character.Guid, fmt::join(missing, ", "));
+
     TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
     CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
     std::shared_ptr<BehaviorClientClasses const> const behaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
     std::shared_ptr<ObjectTemplate const> const playerTemplate = sObjectTemplateMgr.GetPlayer();
-    PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, character, *stats, placement, problem);
+    PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, character, *stats, trackers, placement, problem);
     ObjectField const* const field = ObjectFields::Find("MSG_LOGINCOMPLETE", "Data");
     EncodeResult const data = player && field ? CoreObjectSerializer::EncodeField(*field, *player, *types) : EncodeResult{};
     if (!player || !field || !data.Ok())
@@ -331,6 +362,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     SetCharacterName(sCharacterNameMgr.FormatName(character.NameIndices, character.Appearance.Gender).value_or(std::string()));
     _stats = std::move(stats);
     _statsRevision = stored ? stored->Revision : 0;
+    _spellbook = std::move(spellbook);
     _movement.Reset({ placement.X, placement.Y, placement.Z, placement.Yaw }, 0);
     _characterRevision = character.StateRevision;
     SendDmlMessage(complete);
@@ -338,9 +370,9 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     LOG_DEBUG("server.gamesession", "Session {} sent MSG_LOGINCOMPLETE: zone {}, id {}, dynamic zone {} in process {}, server time {}, realm {}, permissions {:#x}, CSR {}, test server {}, critical objects {}",
         GetSessionId(), complete.ZoneName, complete.ZoneId, complete.DynamicZoneId, complete.DynamicServerProcId, complete.ServerTime, complete.RealmName, complete.Permissions,
         complete.IsCsr, complete.TestServer, complete.CriticalObjects.empty() ? "none" : "a list");
-    LOG_INFO("server.gamesession", "Session {} put wizard {} in {} instance {} at ({}, {}, {}) with mobile id {}, level {} with {} of {} health and {} of {} mana, and sent its {}-byte object",
+    LOG_INFO("server.gamesession", "Session {} put wizard {} in {} instance {} at ({}, {}, {}) with mobile id {}, level {} with {} of {} health and {} of {} mana and {} spell(s) in its book, and sent its {}-byte object",
         GetSessionId(), character.Guid, character.Zone, map.GetDynamicZoneId(), placement.X, placement.Y, placement.Z, placement.MobileId, _stats->GetLevel(), _stats->GetHitpoints(),
-        _stats->GetMaxHitpoints(), _stats->GetMana(), _stats->GetMaxMana(), data.Bytes.size());
+        _stats->GetMaxHitpoints(), _stats->GetMana(), _stats->GetMaxMana(), trackers.size(), data.Bytes.size());
 }
 
 void GameSession::HandleClientZoned(GameMessages::ClientZoned& message)
@@ -383,6 +415,52 @@ void GameSession::SaveStats()
         CharacterDatabase.Execute(std::move(statement));
 }
 
+SpellbookChange GameSession::LearnSpell(uint32 spellId)
+{
+    if (!_spellbook)
+        return SpellbookChange::NotInWorld;
+    std::shared_ptr<SpellStore const> const spells = sSpellMgr.GetSpells();
+    SpellInfo const* const spell = spells->Find(spellId);
+    if (!spell)
+        return SpellbookChange::NoSuchSpell;
+    std::optional<CharacterSpell> const row = _spellbook->Learn(spellId);
+    if (!row)
+        return SpellbookChange::AlreadyKnown;
+    SaveSpell(*row);
+    GameMessages::AddSpellToBook added;
+    added.SpellId = static_cast<int32>(spellId);
+    SendDmlMessage(added);
+    LOG_INFO("server.gamesession", "Session {} taught wizard {} {} ({}), and its spellbook holds {} spell(s)", GetSessionId(), _worldGuid, spell->Name, spellId,
+        _spellbook->GetSpells().size());
+    return SpellbookChange::Learned;
+}
+
+SpellbookChange GameSession::UnlearnSpell(uint32 spellId)
+{
+    if (!_spellbook)
+        return SpellbookChange::NotInWorld;
+    std::optional<CharacterSpell> const row = _spellbook->Unlearn(spellId);
+    if (!row)
+        return SpellbookChange::NotKnown;
+    SaveSpell(*row);
+    GameMessages::RemoveSpellFromBook removed;
+    removed.SpellId = static_cast<int32>(spellId);
+    SendDmlMessage(removed);
+    LOG_INFO("server.gamesession", "Session {} took spell {} from wizard {}, and its spellbook holds {} spell(s)", GetSessionId(), spellId, _worldGuid, _spellbook->GetSpells().size());
+    return SpellbookChange::Unlearned;
+}
+
+void GameSession::SaveSpell(CharacterSpell const& spell)
+{
+    CharacterRepository::Statement statement = CharacterDatabase.IsOpen() ? CharacterRepository::PrepareSaveSpell(_worldGuid, spell) : nullptr;
+    if (!statement)
+    {
+        LOG_ERROR("server.gamesession", "Session {} could not write spell {} of wizard {}'s spellbook, since the characters database is not open", GetSessionId(), spell.SpellId, _worldGuid);
+        return;
+    }
+    CharacterDatabase.Execute(std::move(statement));
+}
+
 void GameSession::SavePosition(PlayerPosition const& position)
 {
     if (!CharacterDatabase.IsOpen())
@@ -401,6 +479,7 @@ void GameSession::LeaveWorld()
         SaveStats();
         _stats.reset();
     }
+    _spellbook.reset();
     if (std::optional<PlayerPosition> const moved = _movement.TakeWrite())
         SavePosition(*moved);
     if (!_mapId)

@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs the client tool to check its usage text and that bad usage exits 2, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install and type dump, that types prints a class the dump holds with its hash, messages prints what the client's own XML says a message carries under its protocol, service and order, handlers names the class in the client program that handles MSG_TIMEDACCESSPASSES and its function, wad prints a BINd entry as JSON, template names the archive and class of the template an id names and its list finds a recipe in the World-Part.wad its piped path names, types lists the template classes that name themselves by an ObjectName property, strings finds a log message in the client program with the function that reads it, xrefs finds that read, disasm prints the function naming the message it reads, functions finds that function by the name it logs under, decompile prints it as C when AMBROSE_GHIDRA_DIR and AMBROSE_GHIDRA_PROJECT name a Ghidra install and project, and wad reads a zone's gamedata.bin, which carries a versionable object with no BINd header, into a WizZoneData holding the zone's name and its real locations, each a LocationTemplate with a name and a place, rather than the empty lists a wrong property mask gives; it reports itself skipped when the client checks cannot run.
+# Runs the client tool to check its usage text and that bad usage exits 2, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install and type dump, that types prints a class the dump holds with its hash, messages prints what the client's own XML says a message carries under its protocol, service and order, handlers names the class in the client program that handles MSG_TIMEDACCESSPASSES and its function, wad prints a BINd entry as JSON, template names the archive and class of the template an id names and its list finds a recipe in the World-Part.wad its piped path names, types lists the template classes that name themselves by an ObjectName property, strings finds a log message in the client program with the function that reads it, xrefs finds that read, disasm prints the function naming the message it reads, functions finds that function by the name it logs under, vtable prints the table of the class a behavior is built as with the slots only it holds and finds a runtime library class by its run-time type information, decompile prints it as C when AMBROSE_GHIDRA_DIR and AMBROSE_GHIDRA_PROJECT name a Ghidra install and project, and wad reads a zone's gamedata.bin, which carries a versionable object with no BINd header, into a WizZoneData holding the zone's name and its real locations, each a LocationTemplate with a name and a place, rather than the empty lists a wrong property mask gives; it reports itself skipped when the client checks cannot run.
 if(NOT APP OR NOT WORKDIR)
     message(FATAL_ERROR "APP and WORKDIR must be set")
 endif()
@@ -11,7 +11,7 @@ if(NOT helpResult EQUAL 0 OR NOT helpOutput MATCHES "Usage: client" OR NOT helpO
     message(FATAL_ERROR "client --help exited ${helpResult}: ${helpOutput}${helpError}")
 endif()
 
-foreach(arguments IN ITEMS "" "--bogus" "types" "messages" "wad" "template" "strings" "xrefs" "disasm" "decompile" "functions")
+foreach(arguments IN ITEMS "" "--bogus" "types" "messages" "wad" "template" "strings" "xrefs" "disasm" "decompile" "functions" "vtable")
     execute_process(COMMAND "${APP}" ${arguments} RESULT_VARIABLE usageResult OUTPUT_VARIABLE usageOutput ERROR_VARIABLE usageError TIMEOUT 30)
     if(NOT usageResult EQUAL 2)
         message(FATAL_ERROR "client with arguments '${arguments}' exited ${usageResult} instead of 2: ${usageOutput}${usageError}")
@@ -86,6 +86,16 @@ endif()
 execute_process(COMMAND "${APP}" functions CoreObjectFactory::AddBehavior RESULT_VARIABLE functionsResult OUTPUT_VARIABLE functionsOutput ERROR_VARIABLE functionsError TIMEOUT 600)
 if(NOT functionsResult EQUAL 0 OR NOT functionsOutput MATCHES "0x${addBehavior}  CoreObjectFactory::AddBehavior\n")
     message(FATAL_ERROR "client functions did not find the function by the name it logs under (${functionsResult}): ${functionsOutput}${functionsError}")
+endif()
+
+execute_process(COMMAND "${APP}" vtable ClientSpellbookBehavior RESULT_VARIABLE vtableResult OUTPUT_VARIABLE vtableOutput ERROR_VARIABLE vtableError TIMEOUT 600)
+if(NOT vtableResult EQUAL 0 OR NOT vtableOutput MATCHES "the vtable of ClientSpellbookBehavior, [0-9]+ slot\\(s\\)" OR NOT vtableOutput MATCHES "ClientSpellbookBehavior::GetType"
+    OR NOT vtableOutput MATCHES "only this table holds it")
+    message(FATAL_ERROR "client vtable did not print the spellbook behavior's table (${vtableResult}): ${vtableOutput}${vtableError}")
+endif()
+execute_process(COMMAND "${APP}" vtable "std::bad_alloc" RESULT_VARIABLE rttiResult OUTPUT_VARIABLE rttiOutput ERROR_VARIABLE rttiError TIMEOUT 600)
+if(NOT rttiResult EQUAL 0 OR NOT rttiOutput MATCHES "its run-time type information names std::bad_alloc")
+    message(FATAL_ERROR "client vtable did not find a class by its run-time type information (${rttiResult}): ${rttiOutput}${rttiError}")
 endif()
 
 if(NOT "$ENV{AMBROSE_GHIDRA_DIR}" STREQUAL "" AND NOT "$ENV{AMBROSE_GHIDRA_PROJECT}" STREQUAL "")

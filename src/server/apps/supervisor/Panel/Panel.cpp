@@ -33,7 +33,7 @@ namespace
 }
 
 Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path configFolder)
-    : _log(log), _dataFolder(std::move(dataFolder)), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
+    : _log(log), _dataFolder(std::move(dataFolder)), _store(), _settings(_store), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
 {
     _listener.Routes().SetThrottle([this](AdminRequest const& request, uint32 cost) { return Throttle(request, cost); });
     _listener.SetSessionSource(&_sessions);
@@ -298,6 +298,37 @@ void Panel::RegisterSignIn()
     routes.AddOpen("DELETE", "/api/panel/session", [this](AdminRequest const& request) { return SignOut(request); });
     routes.AddOpen("GET", "/api/panel/me", [this](AdminRequest const& request) { return WhoAmI(request); });
     routes.AddOpen("GET", "/api/panel/permissions", [](AdminRequest const&) { return AdminResponse::Json(200, PanelPermissions::CatalogJson()); });
+    routes.AddGuarded("GET", "/api/panel/settings", "panel.settings", [this](AdminRequest const& request) { return PanelSettingsGet(request); });
+    routes.AddGuarded("PATCH", "/api/panel/settings", "panel.settings", [this](AdminRequest const& request) { return PanelSettingsUpdate(request); });
+}
+
+AdminResponse Panel::PanelSettingsGet(AdminRequest const& request)
+{
+    std::string error;
+    nlohmann::json const answer = _settings.Answer(request.Query("group"), error);
+    return error.empty() ? AdminResponse::Json(200, answer.dump()) : AdminResponse::Problem(503, "settings_unavailable", error);
+}
+
+AdminResponse Panel::PanelSettingsUpdate(AdminRequest const& request)
+{
+    std::optional<PanelUser> const user = UserOf(request);
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json() : nlohmann::json::parse(request.Body, nullptr, false);
+    if (!user || !body.is_object() || !body.contains("values"))
+        return AdminResponse::Invalid("Updating panel settings takes a values object", { { "values", "Give the settings to change" } });
+    std::string error;
+    if (!_settings.Update(body["values"], user->Id, error))
+        return AdminResponse::Problem(409, "settings_refused", error);
+    AuditEvent event;
+    event.Name = "panel:settings.changed";
+    event.Actor = AuditActor::User;
+    event.ActorId = std::to_string(user->Id);
+    event.ActorName = user->Username;
+    event.Address = request.RemoteAddress;
+    event.Properties = "{\"changed\":true}";
+    event.On("panel_user", std::to_string(user->Id), user->Username);
+    if (!Record(event, {}, error))
+        return AdminResponse::Problem(503, "audit_unavailable", error);
+    return PanelSettingsGet(request);
 }
 
 std::optional<PanelUser> Panel::UserOf(AdminRequest const& request)

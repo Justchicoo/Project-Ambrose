@@ -18,4 +18,6 @@ target_link_libraries(scripts
         chat
         world
         zones
+        spells
+        combat
         globals)

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Loads the user's own r806919 type dump, when AMBROSE_TYPE_DUMP_PATH names it, into a registry with every built-in typed view, checks each binds, builds a view over a default object of each view's class and reads every accessor, and checks views over a derived object, the core template view over game object, item and recipe templates alike, and refusals over an unrelated one.
+ * Loads the user's own r806919 type dump, when AMBROSE_TYPE_DUMP_PATH names it, into a registry with every built-in typed view, checks each binds, builds a view over a default object of each view's class and reads every accessor, and checks views over a derived object, the core template view over game object, item and recipe templates alike, the spell views over a tiered spell and every kind of effect, the tiered spell view over a tiered spell and not a plain one, the tiered group info views, the spellbook behavior and its spell tracker, the sigil views over PvP and minigame sigils, and refusals over an unrelated one.
  */
 
 #include "Environment.h"
@@ -21,7 +21,7 @@ TEST(TypedViewClientTest, EveryBuiltInViewBindsAgainstR806919AndReadsEveryField)
     ASSERT_TRUE(registry.LoadFromFile(LogConfig::Utf8Path(*path))) << (registry.GetErrors().empty() ? std::string() : registry.GetErrors().front());
     TypeCatalogPtr const catalog = registry.GetCatalog();
     std::vector<ViewDefinition const*> const views = sTypedViewRegistry.GetViews();
-    ASSERT_EQ(views.size(), 11u);
+    ASSERT_EQ(views.size(), 23u);
     for (ViewDefinition const* view : views)
     {
         ViewBinding const* const binding = catalog->FindView(*view);
@@ -140,6 +140,97 @@ TEST(TypedViewClientTest, EveryBuiltInViewBindsAgainstR806919AndReadsEveryField)
     ASSERT_TRUE(locationView);
     EXPECT_EQ(locationView->GetFilename(), "ObjectData/Hat.xml");
     EXPECT_EQ(locationView->GetId(), 0u);
+
+    PropertyObjectPtr const spell = create("class SpellTemplate");
+    ASSERT_TRUE(spell);
+    std::optional<SpellTemplateView> const spellView = SpellTemplateView::From(*spell);
+    ASSERT_TRUE(spellView);
+    EXPECT_TRUE(spellView->GetName().empty());
+    EXPECT_TRUE(spellView->GetEffects().empty());
+    EXPECT_TRUE(spellView->GetMagicSchoolName().empty());
+    EXPECT_EQ(spellView->GetAccuracy(), 0);
+    EXPECT_FALSE(spellView->IsTreasure());
+    EXPECT_EQ(spellView->GetSpellRank(), nullptr);
+    EXPECT_TRUE(CoreTemplateView::From(*spell)) << "a spell is a template";
+    PropertyObjectPtr const tiered = create("class TieredSpellTemplate");
+    ASSERT_TRUE(tiered);
+    EXPECT_TRUE(SpellTemplateView::From(*tiered)) << "a tiered spell reads through the spell view";
+    std::optional<TieredSpellTemplateView> const tieredView = TieredSpellTemplateView::From(*tiered);
+    ASSERT_TRUE(tieredView);
+    EXPECT_FALSE(tieredView->IsRetired());
+    EXPECT_FALSE(TieredSpellTemplateView::From(*spell)) << "a plain spell is not tiered";
+
+    PropertyObjectPtr const groups = create("class TieredSpellGroupInfoList");
+    ASSERT_TRUE(groups);
+    std::optional<TieredSpellGroupInfoListView> const groupsView = TieredSpellGroupInfoListView::From(*groups);
+    ASSERT_TRUE(groupsView);
+    EXPECT_TRUE(groupsView->GetGroups().empty());
+    PropertyObjectPtr const group = create("class TieredSpellGroupInfo");
+    ASSERT_TRUE(group);
+    std::optional<TieredSpellGroupInfoView> const groupView = TieredSpellGroupInfoView::From(*group);
+    ASSERT_TRUE(groupView);
+    EXPECT_TRUE(groupView->GetSpellName().empty());
+    EXPECT_EQ(groupView->GetData(), nullptr);
+    PropertyObjectPtr const groupData = create("class TieredSpellGroupInfoData");
+    ASSERT_TRUE(groupData);
+    std::optional<TieredSpellGroupInfoDataView> const groupDataView = TieredSpellGroupInfoDataView::From(*groupData);
+    ASSERT_TRUE(groupDataView);
+    EXPECT_EQ(groupDataView->GetGroupIndex(), 0);
+    EXPECT_TRUE(groupDataView->GetTierOneSpellName().empty());
+
+    PropertyObjectPtr const spellbook = create("class ClientSpellbookBehavior");
+    ASSERT_TRUE(spellbook);
+    std::optional<ClientSpellbookBehaviorView> const spellbookView = ClientSpellbookBehaviorView::From(*spellbook);
+    ASSERT_TRUE(spellbookView);
+    EXPECT_EQ(spellbookView->GetBehaviorTemplateNameId(), 0u);
+    EXPECT_TRUE(spellbookView->GetSpells().empty());
+    PropertyObjectPtr const tracker = create("class SpellIDTracker");
+    ASSERT_TRUE(tracker);
+    std::optional<SpellIDTrackerView> const trackerView = SpellIDTrackerView::From(*tracker);
+    ASSERT_TRUE(trackerView);
+    EXPECT_EQ(trackerView->GetSpellId(), 0u);
+    EXPECT_FALSE(trackerView->GetIsRetired());
+    EXPECT_EQ(trackerView->GetTieredSpellGroupIndex(), 0);
+
+    PropertyObjectPtr const spellEffect = create("class RandomSpellEffect");
+    ASSERT_TRUE(spellEffect);
+    std::optional<SpellEffectView> const spellEffectView = SpellEffectView::From(*spellEffect);
+    ASSERT_TRUE(spellEffectView) << "every kind of effect reads through the effect view";
+    EXPECT_EQ(spellEffectView->GetEffectType(), 0);
+    EXPECT_EQ(spellEffectView->GetEffectParam(), 0);
+    EXPECT_TRUE(spellEffectView->GetDamageTypeName().empty());
+    EXPECT_EQ(spellEffectView->GetEffectTarget(), 0);
+    EXPECT_EQ(spellEffectView->GetSpellTemplateId(), 0u);
+    EXPECT_FALSE(SpellEffectView::From(*spell));
+
+    PropertyObjectPtr const rank = create("class SpellRank");
+    ASSERT_TRUE(rank);
+    std::optional<SpellRankView> const rankView = SpellRankView::From(*rank);
+    ASSERT_TRUE(rankView);
+    EXPECT_EQ(rankView->GetRank(), 0);
+    EXPECT_EQ(rankView->GetShadowPips(), 0);
+    EXPECT_FALSE(rankView->IsXPipSpell());
+
+    PropertyObjectPtr const sigil = create("class PvPCombatSigilTemplate");
+    ASSERT_TRUE(sigil);
+    std::optional<SigilTemplateView> const sigilView = SigilTemplateView::From(*sigil);
+    ASSERT_TRUE(sigilView) << "a PvP sigil reads through the sigil view";
+    EXPECT_TRUE(sigilView->GetSigilName().empty());
+    EXPECT_TRUE(sigilView->GetSubCircles().empty());
+    std::optional<CombatSigilTemplateView> const combatView = CombatSigilTemplateView::From(*sigil);
+    ASSERT_TRUE(combatView) << "a PvP sigil is a combat sigil";
+    EXPECT_EQ(combatView->GetDamageLimitPvE(), 0.0f);
+    EXPECT_TRUE(combatView->GetBattlefieldEffects().empty());
+    PropertyObjectPtr const minigame = create("class MinigameSigilTemplate");
+    ASSERT_TRUE(minigame);
+    EXPECT_TRUE(SigilTemplateView::From(*minigame));
+    EXPECT_FALSE(CombatSigilTemplateView::From(*minigame)) << "a minigame sigil has no combat limits";
+    PropertyObjectPtr const circle = create("class SigilSubCircle");
+    ASSERT_TRUE(circle);
+    std::optional<SigilSubCircleView> const circleView = SigilSubCircleView::From(*circle);
+    ASSERT_TRUE(circleView);
+    EXPECT_TRUE(circleView->GetLocationType().empty());
+    EXPECT_EQ(circleView->GetRadius(), 0.0f);
 
     PropertyObjectPtr const requirements = create("class RequirementList");
     ASSERT_TRUE(requirements);

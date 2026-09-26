@@ -9,25 +9,17 @@
 #include "DisconnectReason.h"
 #include "GameSession.h"
 #include "ScriptMgr.h"
-#include "StringUtil.h"
 #include "World.h"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
 namespace
 {
-    bool IsInWorld(GameSession const& session)
-    {
-        SessionStatus const status = session.GetStatus();
-        return session.IsOpen() && !session.IsKicked() && (status == SessionStatus::LoggedIn || status == SessionStatus::InWorld);
-    }
-
     class MiscCommands : public CommandScript
     {
     public:
@@ -49,17 +41,7 @@ namespace
                 return false;
             }
             std::string const target = fmt::format("{}", fmt::join(arguments, " "));
-            std::optional<uint64> const id = Ambrose::StringTo<uint64>(target, 10);
-            std::string const name = Ambrose::ToLower(target);
-            std::vector<std::shared_ptr<GameSession>> found;
-            for (std::shared_ptr<GameSession> const& session : sWorld.GetSessions())
-            {
-                if (!IsInWorld(*session))
-                    continue;
-                std::string const shown = session->GetCharacterName();
-                if ((id && session->GetCharacterId() == *id) || (!shown.empty() && Ambrose::ToLower(shown) == name))
-                    found.push_back(session);
-            }
+            std::vector<std::shared_ptr<GameSession>> const found = sWorld.FindInWorld(target);
             if (found.empty())
             {
                 caller.Reply(fmt::format("No wizard in the world has the character id or name {}", target));

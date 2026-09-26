@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Binds wizard fields to the characters statements and reads joined character and appearance rows back field by field; refuses a zero guid or account, a character already marked deleted, and text that is not UTF-8, holds control characters or is too long, before touching the database; treats a commit whose reply was lost as done when the stored character matches; and tells soft deletion, restoring and the online flag apart by the rows each update changed. A stats write older than the row it would replace changes nothing, which the statement itself decides, so it is not an error. A stats row with a negative amount or vital, or a potion charge that is not a finite number of zero or more, is refused before it is written, A stats read that finds the wizard but no row loads as having none, and one that finds no wizard is told apart from both.
+ * Binds wizard fields to the characters statements and reads joined character and appearance rows back field by field; refuses a zero guid or account, a character already marked deleted, and text that is not UTF-8, holds control characters or is too long, before touching the database; treats a commit whose reply was lost as done when the stored character matches; and tells soft deletion, restoring and the online flag apart by the rows each update changed. A stats write older than the row it would replace changes nothing, which the statement itself decides, so it is not an error. A stats row with a negative amount or vital, or a potion charge that is not a finite number of zero or more, is refused before it is written, A stats read that finds the wizard but no row loads as having none, and one that finds no wizard is told apart from both; a spellbook read does the same, a wizard with no spell rows reading as one row of nothing. A spell row for spell 0 is refused, since no spell's name hashes to it.
  */
 
 #include "CharacterRepository.h"
@@ -372,6 +372,63 @@ CharacterRepository::Statement CharacterRepository::PrepareSavePosition(uint64 g
     statement->SetData(5, guid);
     statement->SetData(6, revision);
     return statement;
+}
+
+CharacterSpellsLoad CharacterRepository::LoadSpells(uint64 guid)
+{
+    Statement const statement = PrepareLoadSpells(guid);
+    if (!statement)
+        return {};
+    PreparedQueryResult result;
+    if (!CharacterDatabase.TryQuery(*statement, result))
+        return {};
+    if (!result)
+        return { CharacterOpResult::NotFound, {} };
+    return { CharacterOpResult::Ok, ReadSpells(*result) };
+}
+
+CharacterOpResult CharacterRepository::SaveSpell(uint64 guid, CharacterSpell const& spell)
+{
+    if (guid == 0 || spell.SpellId == 0)
+        return CharacterOpResult::InvalidData;
+    Statement const statement = PrepareSaveSpell(guid, spell);
+    if (!statement)
+        return CharacterOpResult::DatabaseError;
+    return CharacterDatabase.DirectExecute(*statement) ? CharacterOpResult::Ok : CharacterOpResult::DatabaseError;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareLoadSpells(uint64 guid)
+{
+    Statement statement = Prepare(CHAR_SEL_CHARACTER_SPELLS);
+    if (statement)
+        statement->SetData(0, guid);
+    return statement;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareSaveSpell(uint64 guid, CharacterSpell const& spell)
+{
+    Statement statement = Prepare(CHAR_REP_CHARACTER_SPELL);
+    if (!statement)
+        return statement;
+    statement->SetData(0, guid);
+    statement->SetData(1, spell.SpellId);
+    statement->SetData(2, static_cast<uint8>(spell.Known ? 1 : 0));
+    statement->SetData(3, spell.Learned);
+    statement->SetData(4, spell.Revision);
+    return statement;
+}
+
+std::vector<CharacterSpell> CharacterRepository::ReadSpells(PreparedResultSet& result)
+{
+    std::vector<CharacterSpell> spells;
+    do
+    {
+        Field const* const row = result.Fetch();
+        if (row[0].Get<uint32>() == 0)
+            continue;
+        spells.push_back({ row[1].Get<uint32>(), row[2].Get<uint32>() != 0, row[3].Get<uint64>(), row[4].Get<uint64>() });
+    } while (result.NextRow());
+    return spells;
 }
 
 CharacterRepository::Statement CharacterRepository::PrepareLoadStats(uint64 guid)

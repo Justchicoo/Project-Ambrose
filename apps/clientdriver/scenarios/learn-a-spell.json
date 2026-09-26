@@ -1,0 +1,458 @@
+{
+  "title": "A game master teaches a wizard Fire Cat, which its spellbook takes at once and keeps across a relog, and takes it back",
+  "include": "parts/common.json",
+  "notes": [
+    "A level 5 Fire wizard with no spell enters Ravenwood, and the game server logs that its book is empty.",
+    "The run opens the spellbook with P, the key the client's own InputBindings.xml gives ToggleDeckConfig, turns to its Fire page",
+    "and shoots it. Opening the spellbook sends MSG_CANSEETIEREDSPELLGROUPS, which asks which tiered spell groups the wizard may",
+    "upgrade; that waits for the milestone that answers tiered spells, so the run allows it.",
+    "'learn \"Fire Cat\" <wizard>' on the game server console teaches the spell: the server writes its character_spell row",
+    "and sends MSG_ADDSPELLTOBOOK with Fire Cat's template id, the hash of its name, and the book is shot again without a relog.",
+    "Learning it a second time is refused, so nothing is sent that the client would add twice.",
+    "The client is then quit and started again; the wizard must enter with Fire Cat in the player object's spellbook, which",
+    "the client builds its book from, and the book is shot a third time. 'unlearn' sends MSG_REMOVESPELLFROMBOOK and the",
+    "last shot shows the book without it. The client must never fail to load an object or to find a spell it is sent.",
+    "No card shows on any page of the Spell Deck for this wizard, a plain Ice spell no more than Fire Cat, and the deck page",
+    "on its left is empty: the wizard has no deck yet, which 8.10 equips and 8.11 fills, so the shots record the Fire page as it",
+    "stands and the check that Fire Cat shows on it is run again then."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Ravenwood",
+    "zone_display": "Ravenwood",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    },
+    "level": 5,
+    "experience": 900
+  },
+  "steps": [
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server decodes the authentication message field by field",
+      "pattern": "sent MSG_USER_AUTHEN_V3: version (W\\.\\d+\\.\\d+\\.\\d+), revision \\S+, data revision \\S+, locale \\S+, machine [0-9A-F]+,",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server lists the wizard the run made",
+      "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "shot",
+      "name": "the wizard on the character selection screen",
+      "file": "character-selection"
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server sends the wizard its object",
+      "pattern": "put wizard \\d+ in (\\S+) instance \\d+ at .* and sent its \\d+-byte object",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "expect": "WizardCity/WC_Ravenwood",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the client loading the zone",
+      "file": "loading-the-zone"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard \\d+ stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Ravenwood",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the wizard standing in Ravenwood",
+      "file": "standing-in-ravenwood"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server answers the timed access passes",
+      "pattern": "Session \\d+ asked for its timed access passes and was told it has none",
+      "timeout": 60,
+      "from": "start"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server answers the subscriber-only items",
+      "pattern": "Session \\d+ asked which items only subscribers may use and was told none",
+      "timeout": 60,
+      "from": "start"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server takes the end of shopping",
+      "pattern": "Session \\d+ is done shopping, transaction \\d+",
+      "timeout": 60,
+      "from": "start"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server takes the screen the client runs at",
+      "pattern": "Session \\d+ runs its client at (\\d+x\\d+)",
+      "timeout": 60,
+      "from": "start",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard enters knowing no spell",
+      "pattern": "put wizard \\d+ in \\S+ instance .* mana and (\\d+) spell\\(s\\) in its book",
+      "timeout": 10,
+      "from": "start",
+      "expect": "0",
+      "record": true
+    },
+    {
+      "action": "key",
+      "name": "open the spellbook (before)",
+      "vk": "0x50"
+    },
+    {
+      "action": "click",
+      "name": "turn to the Fire page (before)",
+      "target": "spellbook_fire"
+    },
+    {
+      "action": "shot",
+      "name": "the spellbook before the wizard learns anything",
+      "file": "spellbook-before",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "close the spellbook (before)",
+      "vk": "0x50"
+    },
+    {
+      "action": "game_command",
+      "name": "a game master teaches the wizard Fire Cat by its name",
+      "command": "learn \"Fire Cat\" {wizard_guid}",
+      "pattern": "learned Fire Cat \\(template 103007158\\), which its spellbook shows now and keeps",
+      "timeout": 30
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server sends Fire Cat to the spellbook",
+      "pattern": "taught wizard \\d+ Fire Cat \\(103007158\\), and its spellbook holds (\\d+) spell\\(s\\)",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "game_command",
+      "name": "teaching it Fire Cat again adds nothing",
+      "command": "learn \"Fire Cat\" {wizard_guid}",
+      "pattern": "already knows Fire Cat",
+      "timeout": 30
+    },
+    {
+      "action": "key",
+      "name": "open the spellbook (with fire cat)",
+      "vk": "0x50"
+    },
+    {
+      "action": "click",
+      "name": "turn to the Fire page (with fire cat)",
+      "target": "spellbook_fire"
+    },
+    {
+      "action": "shot",
+      "name": "the Fire page once Fire Cat is learned, without relogging",
+      "file": "spellbook-with-fire-cat",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "close the spellbook (with fire cat)",
+      "vk": "0x50"
+    },
+    {
+      "action": "restart_client",
+      "name": "quit the client and start it again",
+      "timeout": 240
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up, again",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen, again",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in, again",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server decodes the authentication message field by field, again",
+      "pattern": "sent MSG_USER_AUTHEN_V3: version (W\\.\\d+\\.\\d+\\.\\d+), revision \\S+, data revision \\S+, locale \\S+, machine [0-9A-F]+,",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password, again",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted, again",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server lists the wizard the run made, again",
+      "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads, again",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen, again",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play, again",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard enters again knowing Fire Cat",
+      "pattern": "put wizard \\d+ in \\S+ instance .* mana and (\\d+) spell\\(s\\) in its book",
+      "timeout": 120,
+      "fail": "cannot enter the world",
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard stands in the world again",
+      "pattern": "loaded (\\S+), and wizard \\d+ stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Ravenwood"
+    },
+    {
+      "action": "key",
+      "name": "open the spellbook (after relog)",
+      "vk": "0x50"
+    },
+    {
+      "action": "click",
+      "name": "turn to the Fire page (after relog)",
+      "target": "spellbook_fire"
+    },
+    {
+      "action": "shot",
+      "name": "the Fire page after relogging",
+      "file": "spellbook-after-relog",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "close the spellbook (after relog)",
+      "vk": "0x50"
+    },
+    {
+      "action": "game_command",
+      "name": "a game master takes Fire Cat back",
+      "command": "unlearn \"Fire Cat\" {wizard_guid}",
+      "pattern": "no longer knows Fire Cat",
+      "timeout": 30
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server takes Fire Cat out of the spellbook",
+      "pattern": "took spell 103007158 from wizard \\d+, and its spellbook holds (\\d+) spell\\(s\\)",
+      "timeout": 30,
+      "expect": "0",
+      "record": true
+    },
+    {
+      "action": "key",
+      "name": "open the spellbook (after unlearn)",
+      "vk": "0x50"
+    },
+    {
+      "action": "click",
+      "name": "turn to the Fire page (after unlearn)",
+      "target": "spellbook_fire"
+    },
+    {
+      "action": "shot",
+      "name": "the Fire page once Fire Cat is unlearned",
+      "file": "spellbook-after-unlearn",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "close the spellbook (after unlearn)",
+      "vk": "0x50"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard is still connected at the next keepalive",
+      "pattern": "Session \\d+ keepalive from the client",
+      "timeout": 90,
+      "fail": "Closing session \\d+"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the client loaded every object and found every spell the server sent",
+      "side": "client",
+      "pattern": "LoadObject Failed|LoadObject tried to read more data|couldn't find spell with template id"
+    }
+  ],
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CANSEETIEREDSPELLGROUPS",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_PLAYERWIZBANG",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ]
+}

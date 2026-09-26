@@ -68,4 +68,11 @@ describe("what a path shows", () => {
         expect(navigation(everything).some((route) => route.path === "denied")).toBe(false);
         expect(navigation(everything)).toHaveLength(routes.filter((route) => route.nav).length);
     });
+
+    it("keeps panel settings hidden from users without panel.settings", () => {
+        const appSettingsOnly = new Set(["settings.read", "settings.edit"]);
+        expect(resolve("settings", appSettingsOnly).kind).toBe("refused");
+        expect(navigation(appSettingsOnly).some((route) => route.path === "settings")).toBe(false);
+        expect(navigation(new Set()).some((route) => route.path === "settings")).toBe(false);
+    });
 });

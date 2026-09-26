@@ -27,7 +27,7 @@
 
 The roadmap critic flagged these. Resolve each one before or while implementing the milestones it names.
 
-- **Oversized.** 8.04 SpellMgr decoding all 18173 Spells entries (M). Same corpus-triage problem.
+- **Oversized, resolved.** 8.04 SpellMgr decoding all 18173 Spells entries (M). Same corpus-triage problem. Resolved on 2026-09-26: all 18173 decode with no failure, so there was no corpus to triage, and they load in half a second on every hardware thread.
 
 ## 8.01 Live vitals, gold, potions (WIZ-6)
 
@@ -187,10 +187,10 @@ A wizard can have its primary school set and change or pick a secondary school o
 
 **Acceptance**
 
-- [ ] 18173 Spells entries decode, or failures listed by class
-- [ ] 'Fire Cat - Amulet' has kDamage, Fire, kEnemySingle
-- [ ] Name-hash and id lookups agree; '.spell info Fire Cat' prints school, rank, accuracy, effects
-- [ ] `.spell reload` with a decode failure keeps the old templates and lists every failure
+- [x] 18173 Spells entries decode, or failures listed by class
+- [x] 'Fire Cat - Amulet' has kDamage, Fire, kEnemySingle
+- [x] Name-hash and id lookups agree; '.spell info Fire Cat' prints school, rank, accuracy, effects
+- [x] `.spell reload` with a decode failure keeps the old templates and lists every failure
 
 ### Detailed spec from CMB-2: SpellMgr and SigilMgr: load spell and sigil templates from the client
 
@@ -198,12 +198,12 @@ The game server holds every SpellTemplate and CombatSigilTemplate in memory, loo
 
 **Deliverables**
 
-- src/server/game/Spells/SpellMgr.{h,cpp} (sSpellMgr): loads Spells/**/*.xml from the user's Root.wad and indexes by the TemplateManifest.xml template id and by m_name
-- src/server/game/Combat/SigilMgr.{h,cpp} (sSigilMgr): loads Sigils/*.xml CombatSigilTemplate and PvPCombatSigilTemplate
-- src/server/scripts/Commands/cs_spell.cpp: .spell info <name|id>, .spell reload; cs_sigil.cpp: .sigil reload
-- Both managers are 4.15 reload targets: a reload builds the new template set off to the side, validates it, and swaps it atomically, a failure keeps the old set and reports every error, and duels in progress keep the snapshot they started with
-- src/test/server/game/Spells/SpellMgrTest.cpp (skipped when no client path is configured)
-- conf/dist gameserver.conf.dist: ClientDataDir
+- src/server/game/Spells/SpellMgr.{h,cpp} (sSpellMgr): loads every template TemplateManifest.xml lists under Spells/ into typed spell records (SpellInfo) on every hardware thread, through the template folder reader src/server/game/Entities/TemplateFolder, and indexes them by template id, which is the hash of m_name, and by name, through NameKeyedTemplates, as Spells and sigils in doc/ARCHITECTURE.md records
+- src/server/game/Combat/SigilMgr.{h,cpp} (sSigilMgr): loads every sigil under Sigils/, combat, PvP, battleground, dynamic and minigame alike, into typed sigil records (SigilInfo), a combat sigil with its scalars and limits
+- src/server/scripts/Commands/cs_spell.cpp: .spell info <name|id>, .spell reload; cs_sigil.cpp: .sigil info <name|id>, .sigil reload
+- Both managers are 4.15 reload targets, spells and sigils, which follow templates: a reload builds the new template set off to the side, validates it, and swaps it atomically, a failure keeps the old set and reports every error, and duels in progress keep the snapshot they started with
+- src/test/server/game/Spells/SpellMgrTest.cpp and src/test/server/game/Combat/SigilMgrTest.cpp on an install the test builds, with src/test/mocks/TemplateDumpFixtures, and src/test/client/SpellMgrClientTest.cpp and SigilMgrClientTest.cpp on the user's own
+- conf/dist gameserver.conf.dist: ClientDir, which the servers already read, names the install
 
 **Data sources**
 
@@ -214,16 +214,16 @@ The game server holds every SpellTemplate and CombatSigilTemplate in memory, loo
 
 **Acceptance**
 
-- [ ] Test (with a client install): 18173 Spells entries decode with 0 failures, or failures are listed by class name and fixed by teaching the registry
-- [ ] Test: 'Fire Cat - Amulet' resolves with an effect of type kDamage, damage type Fire, target kEnemySingle
-- [ ] Test: Sigils/CombatSigil8Actor.xml has 8 SigilSubCircle entries (4 MonsterCircle, 4 PlayerCircle) and non-zero PvE damage/resist limit fields
-- [ ] GM in a real client types .spell info Fire Cat and gets chat output with school, pip rank, accuracy and effects
-- [ ] Test: a `.spell reload` or `.sigil reload` that hits a decode failure keeps the old templates serving and lists every error
+- [x] Test (with a client install): 18173 Spells entries decode with 0 failures, or failures are listed by class name and fixed by teaching the registry. `SpellMgrClientTest.EverySpellUnderSpellsLoadsWithNoFailure` on r806919: all 18173 load with 106729 effects and no failure, in 531 ms on 16 threads in an optimized build
+- [x] Test: 'Fire Cat - Amulet' resolves with an effect of type kDamage, damage type Fire, target kEnemySingle. `SpellMgrClientTest.FireCatAmuletDealsFireDamageToOneEnemy`: template 957065192, Fire, accuracy 75, rank 1, its damage chosen by a RandomSpellEffect among kDamage Fire effects on kEnemySingle
+- [x] Test: Sigils/CombatSigil8Actor.xml has 8 SigilSubCircle entries (4 MonsterCircle, 4 PlayerCircle) and non-zero PvE damage/resist limit fields. `SigilMgrClientTest.CombatSigil8ActorPlacesFourMonstersAndFourPlayersWithPvELimits`: PvE damage limit 2.76 (k0 275) and resist limit 1.25 (k0 120)
+- [ ] GM in a real client types .spell info Fire Cat and gets chat output with school, pip rank, accuracy and effects. Waits for 6.04, which carries a GM's chat commands to the game server; the same command answers on the game server's console with the lines a GM will be sent: school Fire, rank 1, accuracy 75%, type Damage, then the random effect and its five kDamage Fire amounts on kEnemySingle
+- [x] Test: a `.spell reload` or `.sigil reload` that hits a decode failure keeps the old templates serving and lists every error. `SpellMgrTest.AReloadThatMeetsFailingSpellsKeepsTheSetServingAndNamesEachWayTheyFail` and `SigilMgrTest.AReloadThatMeetsFailingSigilsKeepsTheSetServingAndNamesEachFailure`: files of another class and files that do not decode are each named, the set that was serving goes on serving, and on the real game server both reloads succeed
 
 **Risks**
 
-- The Spells BINd entries I sampled are raw ObjectProperty after the header, not zlib at offset 13 as the task notes say; the reader must handle both
-- Polymorphic effect lists (RandomSpellEffect, ConditionalSpellEffect with RequirementList) need every subclass registered
+- Settled: the BINd reader handles the Spells entries as they are, and all 18173 decode
+- Settled: the type dump holds all eleven SpellEffect subclasses, and every effect list decodes through the one effect view, as Spells and sigils in doc/ARCHITECTURE.md records
 
 ### Detailed spec from WIZ-9: Spell template extractor and spellbook
 
@@ -231,8 +231,8 @@ A wizard owns a persistent set of known spells that show up in the in-game spell
 
 **Deliverables**
 
-- src/tools/extractor/SpellExtractor: Root.wad Spells/**.xml (18173 entries) -> world.spell_template (template id, name, name hash, school, pip cost, treasure flag, display key)
-- src/server/game/Spells/SpellMgr (sSpellMgr): lookup by template id and by name hash
+- src/tools/extractor/SpellExtractor and world.spell_template: not built. Spells are read from the install at run time and never stored, as World threads, zone data and extracted tables in doc/ARCHITECTURE.md settles, and nothing queries them relationally yet
+- src/server/game/Spells/SpellMgr (sSpellMgr): lookup by template id and by name hash, which are one number for a spell
 - data/sql/updates/db_characters: character_spell
 - ClientSpellbookBehavior (m_spellIDList) built into the player object
 - SPELLLIST, ADDSPELLTOBOOK and REMOVESPELLFROMBOOK senders; a LearnSpell API for quests and results
@@ -251,14 +251,14 @@ A wizard owns a persistent set of known spells that show up in the in-game spell
 
 **Acceptance**
 
-- [ ] Unit test: the name-hash lookup returns the same template as the id lookup for a fixture spell
-- [ ] Unit test: learning a known spell twice does not duplicate it
-- [ ] Real client: '.learn Fire Cat' makes Fire Cat appear on the Fire page of the spellbook without relogging, and it is still there after relogging. '.unlearn' removes it.
+- [x] Unit test: the name-hash lookup returns the same template as the id lookup for a fixture spell. `SpellMgrTest.EverySpellUnderSpellsIsReadAndFoundByIdByNameAndBySearch`, and `SpellMgrClientTest.EverySpellIsFoundByTheHashOfItsNameAsByItsId` for all 18173 of r806919's spells
+- [x] Unit test: learning a known spell twice does not duplicate it. `PlayerSpellbookTest.LearningASpellItKnowsDoesNotAddItTwice`: a second learn gives nothing to write or send, which matters because the client's own ClientSpellbookBehavior::AddSpell (0x142101b60) appends without looking; the real-client run's second learn was answered 'already knows Fire Cat'
+- [ ] Real client: '.learn Fire Cat' makes Fire Cat appear on the Fire page of the spellbook without relogging, and it is still there after relogging. '.unlearn' removes it. 8.05 built the spellbook, and the check waits for a deck, as 8.05 records
 
 **Risks**
 
-- Whether ADDSPELLTOBOOK SpellID is the template id or the spell-name hash is unverified. The reference passes the template id there but name hashes in the treasure and exclusion messages.
-- The SPELLLIST Data format is not reverse-engineered.
+- Settled: a spell's template id is the hash of its name, so ADDSPELLTOBOOK's SpellID is both, as Spells and sigils in doc/ARCHITECTURE.md records.
+- Settled in 8.05: the client reads SPELLLIST's Data into the wizard's own ClientSpellbookBehavior with the mask Save|Public, which leaves out m_spellIDList, so a spellbook travels in the player object instead, as Spellbook in doc/ARCHITECTURE.md records.
 
 ## 8.05 Spellbook (WIZ-9)
 
@@ -270,7 +270,7 @@ A wizard owns a persistent set of known spells that show up in the in-game spell
 
 **Acceptance**
 
-- [ ] Learning twice does not duplicate
+- [x] Learning twice does not duplicate
 - [ ] Real client: '.learn Fire Cat' appears on the Fire page and survives relog; '.unlearn' removes
 
 ### Detailed spec from WIZ-9: Spell template extractor and spellbook
@@ -279,12 +279,12 @@ A wizard owns a persistent set of known spells that show up in the in-game spell
 
 **Deliverables**
 
-- src/tools/extractor/SpellExtractor: Root.wad Spells/**.xml (18173 entries) -> world.spell_template (template id, name, name hash, school, pip cost, treasure flag, display key)
-- src/server/game/Spells/SpellMgr (sSpellMgr): lookup by template id and by name hash
-- data/sql/updates/db_characters: character_spell
-- ClientSpellbookBehavior (m_spellIDList) built into the player object
-- SPELLLIST, ADDSPELLTOBOOK and REMOVESPELLFROMBOOK senders; a LearnSpell API for quests and results
-- cs_learn.cpp: .learn <spell>, .unlearn <spell>
+- src/tools/extractor/SpellExtractor and world.spell_template: not built, as 8.04 settles. Spells are read from the install at run time, each tiered one with the group TieredSpellsGroupInfo.xml files it under and its retired flag, which is what a spellbook's tracker needs
+- src/server/game/Spells/SpellMgr (sSpellMgr): lookup by template id and by name hash, which are one number for a spell, built in 8.04
+- data/sql/updates/db_characters: character_spell, a row for each spell a wizard has learned, kept with known set to 0 once unlearned and written under the spellbook's revision, through CharacterRepository
+- ClientSpellbookBehavior (m_spellIDList) built into the player object: src/server/game/Spells/PlayerSpellbook holds the book on the world thread and fills a SpellIDTracker for each spell as the client's own AddSpell does, and PlayerObjectBuilder writes them
+- ADDSPELLTOBOOK and REMOVESPELLFROMBOOK senders, and no SPELLLIST sender, since the client loads SPELLLIST with a mask that leaves the list out; GameSession::LearnSpell and UnlearnSpell are the API quests and results use, and World::RunFor hands a change from another thread to the world thread
+- cs_learn.cpp: learn <spell> <wizard>, unlearn <spell> <wizard>, the spell by template id or name and the wizard by character id or name; a console hands the command its words as it split them, so a quoted spell name keeps its spaces
 
 **Client messages:** MSG_SPELLLIST, MSG_ADDSPELLTOBOOK, MSG_REMOVESPELLFROMBOOK
 
@@ -294,19 +294,20 @@ A wizard owns a persistent set of known spells that show up in the in-game spell
 
 **Database tables**
 
-- world.spell_template
-- characters.character_spell
+- world.spell_template: not made, as 8.04 settles
+- characters.character_spell (data/sql/updates/db_characters/2026_09_26_00.sql)
 
 **Acceptance**
 
-- [ ] Unit test: the name-hash lookup returns the same template as the id lookup for a fixture spell
-- [ ] Unit test: learning a known spell twice does not duplicate it
-- [ ] Real client: '.learn Fire Cat' makes Fire Cat appear on the Fire page of the spellbook without relogging, and it is still there after relogging. '.unlearn' removes it.
+- [x] Unit test: the name-hash lookup returns the same template as the id lookup for a fixture spell. Earned in 8.04: `SpellMgrTest.EverySpellUnderSpellsIsReadAndFoundByIdByNameAndBySearch`, and `SpellMgrClientTest.EverySpellIsFoundByTheHashOfItsNameAsByItsId` for all 18173 of r806919's spells
+- [x] Unit test: learning a known spell twice does not duplicate it. `PlayerSpellbookTest.LearningASpellItKnowsDoesNotAddItTwice`: a second learn gives nothing to write or send, which matters because the client's own ClientSpellbookBehavior::AddSpell (0x142101b60) appends without looking; the real-client run's second learn was answered 'already knows Fire Cat'
+- [ ] Real client: '.learn Fire Cat' makes Fire Cat appear on the Fire page of the spellbook without relogging, and it is still there after relogging. '.unlearn' removes it. Waits for a deck. The client driver's learn-a-spell.json on r806919 (run 20260926-122731) proves the rest, with the command given on the game server's console as `learn "Fire Cat" <wizard>`, which a game master's chat line reaches once 6.04 carries it: the server sent MSG_ADDSPELLTOBOOK with Fire Cat's template id and the client took it, a second learn was refused as already known, the wizard entered again after a relog with Fire Cat in its book, and `unlearn` sent MSG_REMOVESPELLFROMBOOK; the client never failed to load an object or find a spell it was sent. But no card shows on any page of the Spell Deck for that wizard, a plain Ice spell no more than Fire Cat, and the deck page on its left is empty: it has no deck, which 8.10 equips and 8.11 fills, and the check is run again then
 
 **Risks**
 
-- Whether ADDSPELLTOBOOK SpellID is the template id or the spell-name hash is unverified. The reference passes the template id there but name hashes in the treasure and exclusion messages.
-- The SPELLLIST Data format is not reverse-engineered.
+- Settled: ADDSPELLTOBOOK's SpellID is the template id, which is the hash of the spell's name, as Spells and sigils in doc/ARCHITECTURE.md records.
+- Settled: SPELLLIST's Data is the wizard's ClientSpellbookBehavior, read with the mask Save|Public, which cannot carry m_spellIDList because it is not Public. `SpellbookClientTest.TrackersTravelInTheTransmitFormAndNotInTheMaskSpellListIsReadWith` holds both halves on r806919's own classes, as Spellbook in doc/ARCHITECTURE.md records.
+- Found: the Spell Deck window, which P opens, shows no card for a wizard without a deck. Its right page lists the spells for the tab chosen, and its left page is the deck's own cards, and for a wizard that knows Fire Cat and Legion Shield but has no deck, every page of the list shows only empty slots and the deck page its empty art. Opening the window also sends MSG_CANSEETIEREDSPELLGROUPS, which asks which tiered spell groups the wizard may upgrade and is answered with a TieredSpellGroupVisibility; that is Spellwrighting's, a later milestone's, and 8.05 leaves it unhandled.
 
 ## 8.06 Item template extractor, core rows (WIZ-10 part 1)
 

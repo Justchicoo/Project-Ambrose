@@ -13,6 +13,7 @@
 #include "ProgramStrings.h"
 #include "PropertyFlags.h"
 #include "SHA256.h"
+#include "VirtualTables.h"
 #include "BlobEnvelope.h"
 #include "CoreObjectSerializer.h"
 #include "DatabaseEnv.h"
@@ -69,6 +70,8 @@ namespace
     constexpr int BadUsage = 2;
     constexpr std::size_t ListedByDefault = 40;
     constexpr std::size_t MaxDisassembled = 100000;
+    constexpr std::size_t ShortBodyBytes = 64;
+    constexpr std::size_t ShortBodyInstructions = 4;
 
     constexpr std::string_view Usage = R"(Usage: client <command> [options] [argument]...
 
@@ -102,6 +105,10 @@ Commands:
   functions <name>...    print the functions that log under a name holding the text, such
                          as CoreObject::OnPostLoad, or the names the function holding an
                          address logs under, found from the client's own log lines
+  vtable <address>...    print a virtual table slot by slot, from its address, 0x hex, or
+                         from the class it belongs to, a behavior's class or the name the
+                         program's run-time type information gives, naming each function,
+                         showing the short ones and marking the slots only it holds
   behaviors <name>...    print the class the client program builds for a behavior it
                          registers, and where it found each link
   behaviors --list [text] print every behavior the client program registers
@@ -1543,6 +1550,123 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         return status;
     }
 
+    void FindBehaviors(ClientProgram const& program, std::filesystem::path const& dataFolder, std::string const& revision)
+    {
+        if (revision.empty() || !ReadBehaviorCache(BehaviorCachePath(dataFolder, revision)).empty())
+            return;
+        std::vector<BehaviorFactory> const factories = BehaviorFactories::Find(*program.Image, *program.Code);
+        if (!factories.empty())
+            WriteBehaviorCache(BehaviorCachePath(dataFolder, revision), factories);
+    }
+
+    std::string ShortBody(ClientProgram const& program, CodeAnnotator const& names, uint64 function)
+    {
+        std::vector<DecodedInstruction> const instructions = program.Code->Decode(function, ShortBodyBytes, ShortBodyInstructions, true);
+        if (!instructions.empty() && instructions.front().Kind == InstructionKind::Jump && instructions.front().BranchTarget)
+        {
+            std::string const name = names.NameOf(*instructions.front().BranchTarget);
+            return fmt::format("{}{}", instructions.front().Text, name.empty() ? std::string() : " (" + name + ")");
+        }
+        std::vector<std::string> texts;
+        for (DecodedInstruction const& instruction : instructions)
+        {
+            texts.push_back(instruction.Text);
+            if (instruction.Kind == InstructionKind::Return)
+                return fmt::format("{}", fmt::join(texts, "; "));
+        }
+        return {};
+    }
+
+    std::string TableEndText(VirtualTable const& table)
+    {
+        switch (table.End)
+        {
+            case VirtualTableEnd::NotAPointer:
+                return "where the relocation table lists no pointer";
+            case VirtualTableEnd::NotCode:
+                return "at a pointer that leads out of code, such as the next table's type information";
+            case VirtualTableEnd::NextTable:
+                return "where code loads the next table by its own address";
+            case VirtualTableEnd::Limit:
+                return fmt::format("cut at {} slots", VirtualTables::MaxSlots);
+        }
+        return {};
+    }
+
+    bool HasTypeDescriptor(ClientProgram const& program, std::string_view name)
+    {
+        std::string_view const plain = name.starts_with("class ") ? name.substr(6) : name.starts_with("struct ") ? name.substr(7) : name;
+        if (plain.empty() || plain.find("::") != std::string_view::npos)
+            return false;
+        for (std::string_view const prefix : { std::string_view(".?AV"), std::string_view(".?AU") })
+        {
+            std::string const decorated = fmt::format("{}{}@@", prefix, plain);
+            for (ProgramString const* const string : program.Strings->Find(decorated))
+                if (Ambrose::ToLower(string->Text) == Ambrose::ToLower(decorated))
+                    return true;
+        }
+        return false;
+    }
+
+    int RunVtable(Arguments const& arguments, ClientProgram const& program, CodeAnnotator const& names, std::vector<BehaviorFactory> const& factories)
+    {
+        VirtualTables const tables(*program.Image, *program.Code);
+        int status = Success;
+        for (std::string const& subject : arguments.Subjects)
+        {
+            std::vector<VirtualTable> found;
+            if (std::optional<uint64> const address = AddressOf(subject))
+            {
+                if (std::optional<VirtualTable> table = tables.Read(*address))
+                    found.push_back(std::move(*table));
+                else
+                {
+                    std::cerr << fmt::format("0x{:x}: no pointer the relocation table lists into code sits there, so no virtual table starts there\n", *address);
+                    status = Failure;
+                    continue;
+                }
+            }
+            else
+            {
+                std::string const wanted = Ambrose::ToLower(subject);
+                for (BehaviorFactory const& factory : factories)
+                {
+                    std::string const className = Ambrose::ToLower(factory.ClassName);
+                    if (factory.ObjectVtable == 0 || (className != wanted && className != "class " + wanted && Ambrose::ToLower(factory.Behavior) != wanted))
+                        continue;
+                    if (std::optional<VirtualTable> table = tables.Read(factory.ObjectVtable))
+                        found.push_back(std::move(*table));
+                }
+                if (found.empty())
+                    found = tables.FindByClass(subject);
+                if (found.empty())
+                {
+                    std::cerr << fmt::format("{}: {}; name a table's address as 0x hex\n", subject, HasTypeDescriptor(program, subject)
+                        ? "the program keeps a type descriptor for that class, but no virtual table points to it, as with a class built without run-time type information"
+                        : "neither a behavior's class nor a class the program keeps run-time type information for has that name");
+                    status = Failure;
+                    continue;
+                }
+            }
+            for (VirtualTable const& table : found)
+            {
+                std::string const name = names.NameOf(table.Address);
+                std::cout << fmt::format("0x{:x}{}, {} slot(s), ending {}\n", table.Address, name.empty() ? std::string() : "  " + name, table.Slots.size(), TableEndText(table));
+                if (!table.Decorated.empty())
+                    std::cout << fmt::format("  its run-time type information names {} ({}), at offset {} of the object\n", table.ClassName, table.Decorated, table.ObjectOffset);
+                for (std::size_t index = 0; index < table.Slots.size(); ++index)
+                {
+                    VirtualSlot const& slot = table.Slots[index];
+                    std::string const function = names.NameOf(slot.Target);
+                    std::string const body = ShortBody(program, names, slot.Target);
+                    std::cout << fmt::format("  [{:>3}] +0x{:<4x} 0x{:x}{}{}; {}\n", index, index * 8, slot.Target, function.empty() ? std::string() : "  " + function,
+                        body.empty() ? std::string() : "  { " + body + " }", slot.Holders <= 1 ? std::string("only this table holds it") : fmt::format("{} pointers hold it", slot.Holders));
+                }
+            }
+        }
+        return status;
+    }
+
     int RunProgram(Arguments const& arguments, std::string const& command, LocalClientSystem const& system)
     {
         std::filesystem::path const path = LogConfig::Utf8Path(*arguments.Client) / "Bin" / "WizardGraphicalClient.exe";
@@ -1567,7 +1691,11 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             return RunStrings(arguments, program);
         if (command == "decompile")
             return RunDecompile(arguments, program, dataFolder, revision);
+        if (command == "vtable")
+            FindBehaviors(program, dataFolder, revision);
         CodeAnnotator const names(*program.Image, KnownNames(program, dataFolder, revision));
+        if (command == "vtable")
+            return RunVtable(arguments, program, names, ReadBehaviorCache(BehaviorCachePath(dataFolder, revision)));
         if (command == "xrefs")
             return RunXrefs(arguments, program, names);
         return RunDisasm(arguments, program, names);
@@ -1754,7 +1882,7 @@ int main(int argc, char** argv)
     }
 
     if (command != "types" && command != "messages" && command != "handlers" && command != "behaviors" && command != "template" && command != "wad" && command != "lang"
-        && command != "core" && command != "strings" && command != "xrefs" && command != "disasm" && command != "decompile" && command != "functions")
+        && command != "core" && command != "strings" && command != "xrefs" && command != "disasm" && command != "decompile" && command != "functions" && command != "vtable")
     {
         std::cerr << fmt::format("there is no command {}\n{}", arguments->Command, Usage);
         return BadUsage;
@@ -1858,7 +1986,7 @@ int main(int argc, char** argv)
         std::cerr << "client needs an install; name one with --client or AMBROSE_CLIENT_DIR\n";
         return Failure;
     }
-    if (command == "strings" || command == "xrefs" || command == "disasm" || command == "decompile" || command == "functions")
+    if (command == "strings" || command == "xrefs" || command == "disasm" || command == "decompile" || command == "functions" || command == "vtable")
         return RunProgram(*arguments, command, system);
     std::filesystem::path wad = LogConfig::Utf8Path(arguments->Wad);
     if (!wad.has_parent_path())

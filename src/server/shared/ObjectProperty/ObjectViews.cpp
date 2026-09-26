@@ -16,6 +16,18 @@ void ObjectViews::RegisterAll(TypedViewRegistry& registry)
     registry.Add(WizItemTemplateView::Definition);
     registry.Add(TemplateManifestView::Definition);
     registry.Add(TemplateLocationView::Definition);
+    registry.Add(SpellTemplateView::Definition);
+    registry.Add(SpellEffectView::Definition);
+    registry.Add(SpellRankView::Definition);
+    registry.Add(TieredSpellTemplateView::Definition);
+    registry.Add(TieredSpellGroupInfoListView::Definition);
+    registry.Add(TieredSpellGroupInfoView::Definition);
+    registry.Add(TieredSpellGroupInfoDataView::Definition);
+    registry.Add(ClientSpellbookBehaviorView::Definition);
+    registry.Add(SpellIDTrackerView::Definition);
+    registry.Add(SigilTemplateView::Definition);
+    registry.Add(CombatSigilTemplateView::Definition);
+    registry.Add(SigilSubCircleView::Definition);
     registry.Add(RequirementListView::Definition);
     registry.Add(NamedEffectView::Definition);
 }
