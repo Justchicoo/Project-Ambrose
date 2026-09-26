@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Finds, with no per-revision addresses, the client's C and C++ initializer tables from its CRT startup, its type map by scanning the emulated heap for map nodes whose type name hashes to their key, the Type constructor and PropertyList initializer by voting over call sites, and RaceManager's race adder from its strings; a vote without a clear winner is an error.
+ * Finds the client's C and C++ initializer tables, scans its emulated heap for the type map, votes on the Type constructor and PropertyList initializer, derives Type and std::string layout from chosen constructor values, and locates RaceManager's race adder; a vote without a clear winner is an error.
  */
 
 #ifndef AMBROSE_CLIENTDISCOVERY_H
@@ -35,6 +35,13 @@ struct DiscoveryVote
     uint64 RunnerUpVotes = 0;
 };
 
+struct ConstructedTypeSample
+{
+    uint64 Address = 0;
+    std::string Name;
+    uint32 Hash = 0;
+};
+
 namespace ClientDiscovery
 {
     inline constexpr uint64 MinimumWinnerVotes = 20;
@@ -45,6 +52,7 @@ namespace ClientDiscovery
     std::optional<InitializerTable> FindCInitializerTable(PeImage const& image, CodeIndex const& code, std::string& error);
     std::optional<uint64> FindTypeMapHead(Machine const& machine, GuestHeap const& heap, ClientLayout const& layout, std::string& error);
     std::optional<std::vector<uint64>> WalkTypeMap(Machine const& machine, uint64 head, ClientLayout const& layout, std::string& error);
+    bool DeriveConstructedTypeLayout(Machine const& machine, GuestHeap const& heap, std::span<ConstructedTypeSample const> samples, ClientLayout& layout, std::string& error);
     std::optional<DiscoveryVote> FindTypeConstructor(Machine const& machine, CodeIndex const& code, std::span<uint64 const> types, std::string& error);
     std::optional<DiscoveryVote> FindPropertyListInitializer(Machine const& machine, CodeIndex const& code, std::span<uint64 const> types, ClientLayout const& layout, std::string& error);
     std::optional<uint64> FindRaceAdder(CodeIndex const& code, std::string& error);

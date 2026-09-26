@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the extraction's checks that need no client: installs whose revision is missing or cannot name a dump file refused before anything loads, plain revisions and the default output path refused for bad revisions and empty or relative data folders, enum eRace properties that lack a race from Races.xml named with the race, and dumps the server's type loader refuses reported with its errors, capped.
+ * Tests extraction metadata and checks that need no client: invalid installs and dump paths are refused, type-layout evidence is explicit, strict mode names unresolved fields, race options are validated, and dump-loader errors are reported with a cap.
  */
 
 #include "ClientLocator.h"
@@ -140,6 +140,29 @@ TEST(TypeExtractionTest, LayoutEvidenceNamesEveryFieldAndStrictModeDoesNotAssume
     EXPECT_FALSE(result.Succeeded());
     EXPECT_NE(result.Error.find("WizardGraphicalClient.exe was not found"), std::string::npos) << result.Error;
     EXPECT_EQ(result.LayoutEvidence.size(), evidence.size());
+}
+
+TEST(TypeExtractionTest, StrictLayoutRefusalNamesTheFirstUnresolvedFieldAndDoesNotWriteADump)
+{
+    ClientLayout layout;
+    layout.ConfirmDerived("std::string.size", "synthetic constructor sample");
+    layout.ConfirmDerived("std::string.capacity", "synthetic constructor sample");
+    layout.ConfirmDerived("std::string.inline_capacity", "synthetic constructor sample");
+    layout.ConfirmDerived("std::string.object_size", "synthetic constructor sample");
+    layout.ConfirmDerived("Type.name", "synthetic constructor sample");
+    layout.ConfirmDerived("Type.hash", "synthetic constructor sample");
+
+    std::string error;
+    EXPECT_FALSE(TypeExtraction::RequireDerivedLayout(layout, error));
+    EXPECT_EQ(error, "the client layout could not be derived: std::map.node.left");
+
+    TypeExtractionResult result;
+    result.Error = error;
+    LogTestDirectory directory;
+    std::filesystem::path const output = directory.Path() / "strict-layout.json";
+    EXPECT_FALSE(TypeExtraction::SaveDump(result, output, error));
+    EXPECT_EQ(error, "the client layout could not be derived: std::map.node.left");
+    EXPECT_FALSE(std::filesystem::exists(output));
 }
 
 TEST(TypeExtractionTest, DefaultOutputPathNeedsAPlainRevisionAndAnAbsoluteDataFolder)

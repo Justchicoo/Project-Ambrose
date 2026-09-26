@@ -208,7 +208,10 @@ validation or writing fails, or input ends with --exit-when-input-ends, 2 on bad
             say(fmt::format("stubbed {} ({} calls)", call, count));
         if (!result.Succeeded())
         {
-            std::cerr << "typeextract: " << result.Error << "\n";
+            std::string saveError;
+            if (TypeExtraction::SaveDump(result, {}, saveError))
+                saveError = "an unsuccessful extraction was incorrectly accepted for writing";
+            std::cerr << "typeextract: " << saveError << "\n";
             return Failure;
         }
         say(fmt::format("{} classes and {} properties from {} in {} ms (load {} ms, initializers {} ms, discovery {} ms, getters, races and walk {} ms; {} of {} lazy getters ran, {} faulted, {} races, {} MiB of guest heap)",
@@ -221,7 +224,7 @@ validation or writing fails, or input ends with --exit-when-input-ends, 2 on bad
             std::cerr << fmt::format("typeextract: the revision {} and the Ambrose data folder {} cannot name the output file, so name it with --out\n", result.Metadata.Revision, ClientLocator::PathText(dataFolder));
             return Failure;
         }
-        if (!TypeDumpWriter::Save(*out, TypeDumpWriter::ToJson(result.Dump, result.Metadata), error))
+        if (!TypeExtraction::SaveDump(result, *out, error))
         {
             std::cerr << "typeextract: " << error << "\n";
             return Failure;

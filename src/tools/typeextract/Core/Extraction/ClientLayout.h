@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Field offsets of the client engine's Type, PropertyList, Property, container and enum option objects and of the MSVC runtime's std::string and std::map node, as found in r801440 and r806919, which the extraction reads and its validation checks.
+ * Default client engine and MSVC runtime layout values, with per-field evidence recording which offsets runtime probes derive and which remain assumed.
  */
 
 #ifndef AMBROSE_CLIENTLAYOUT_H
@@ -9,6 +9,7 @@
 #include "Types.h"
 
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -114,6 +115,14 @@ struct ClientLayout
                 item.ConfirmedBy = found->second;
             }
         return evidence;
+    }
+
+    std::optional<std::string> FirstUnresolvedField() const
+    {
+        for (ClientLayoutEvidence const& item : Evidence())
+            if (item.Status != "derived")
+                return item.Field;
+        return std::nullopt;
     }
 };
 
