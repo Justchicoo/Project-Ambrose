@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a spell and each of its effects through the spell views, finding an effect's own effects in any object or list it holds, and one level inside an object it holds that is not an effect, the way a conditional element holds its effect behind its requirements, down to MaxEffectDepth; and describes a spell in lines: its name and where it comes from, then its school, rank, pips, accuracy and type, then each effect indented under the one that holds it, its type, target and disposition named through the enum options the catalog gives SpellEffect.
+ * Reads a spell and each of its effects through the spell views, finding an effect's own effects in any object or list it holds, and one level inside an object it holds that is not an effect, the way a conditional element holds its effect behind its requirements, down to MaxEffectDepth; a tiered spell's retired flag through the tiered spell view; and describes a spell in lines: its name and where it comes from, with its tiered spell group, then its school, rank, pips, accuracy and type, then each effect indented under the one that holds it, its type, target and disposition named through the enum options the catalog gives SpellEffect.
  */
 
 #include "SpellInfo.h"
@@ -182,6 +182,11 @@ std::optional<SpellInfo> SpellInfo::Read(PropertyObject const& object, uint32 te
     spell.Treasure = view->IsTreasure();
     spell.PvP = view->IsPvP();
     spell.PvE = view->IsPvE();
+    if (std::optional<TieredSpellTemplateView> const tiered = TieredSpellTemplateView::From(object))
+    {
+        spell.Tiered = true;
+        spell.Retired = tiered->IsRetired();
+    }
     if (std::optional<SpellRankView> const rank = SpellRankView::From(view->GetSpellRank()))
         spell.Pips = { rank->GetRank(), rank->GetBalancePips(), rank->GetDeathPips(), rank->GetFirePips(), rank->GetIcePips(), rank->GetLifePips(), rank->GetMythPips(),
             rank->GetStormPips(), rank->GetShadowPips(), rank->IsXPipSpell() };
@@ -209,7 +214,12 @@ std::vector<std::string> SpellInfo::Describe(TypeCatalog const* catalog) const
             names = { effect->FindProperty("m_effectType"), effect->FindProperty("m_effectTarget"), effect->FindProperty("m_disposition") };
 
     std::vector<std::string> lines;
-    lines.push_back(fmt::format("{}, template {}, {}, a {}", Name, TemplateId, File, ShortClass(Class)));
+    std::string tiered;
+    if (Tiered)
+        tiered = TieredGroupIndex == NoTieredGroup ? ", in no tiered spell group" : fmt::format(", in tiered spell group {}", TieredGroupIndex);
+    if (Retired)
+        tiered += ", retired";
+    lines.push_back(fmt::format("{}, template {}, {}, a {}{}", Name, TemplateId, File, ShortClass(Class), tiered));
     std::string pips = fmt::format("rank {}{}", Pips.Rank, Pips.X ? " X" : "");
     std::pair<char const*, uint8> const schoolPips[] = { { "balance", Pips.Balance }, { "death", Pips.Death }, { "fire", Pips.Fire }, { "ice", Pips.Ice }, { "life", Pips.Life },
         { "myth", Pips.Myth }, { "storm", Pips.Storm }, { "shadow", Pips.Shadow } };

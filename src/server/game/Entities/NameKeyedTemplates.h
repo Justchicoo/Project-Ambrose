@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One generation of the records made from a family of templates the client keys by the string hash of their names, as it keys spells and sigils: checked whole when built, since a record whose template id is not its name's hash is one the client cannot find and no id may appear twice, with each fault named up to MaxReportedErrors and the rest counted; found by id, by exact name through that hash as the client finds it, by name whatever its case, where two names differing only in case keep the lower id, and searched by the text a name holds. A record gives its TemplateId, Name and File.
+ * One generation of the records made from a family of templates the client keys by the string hash of their names, as it keys spells and sigils: checked whole when built, since a record whose template id is not its name's hash is one the client cannot find and no id may appear twice, with each fault named up to MaxReportedErrors and the rest counted; found by id, by exact name through that hash as the client finds it, by name whatever its case, where two names differing only in case keep the lower id, by whichever of id or name a command was given, and searched by the text a name holds. A record gives its TemplateId, Name and File.
  */
 
 #ifndef AMBROSE_NAMEKEYEDTEMPLATES_H
@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -81,6 +82,14 @@ public:
             return hashed;
         auto const folded = _byFoldedName.find(Ambrose::ToLower(name));
         return folded == _byFoldedName.end() ? nullptr : &_records[folded->second];
+    }
+
+    Record const* FindByIdOrName(std::string_view text) const
+    {
+        if (std::optional<uint32> const id = Ambrose::StringTo<uint32>(text))
+            if (Record const* const found = Find(*id))
+                return found;
+        return FindByName(text);
     }
 
     std::vector<Record const*> Search(std::string_view text) const

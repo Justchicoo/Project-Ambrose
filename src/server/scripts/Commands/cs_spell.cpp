@@ -9,7 +9,6 @@
 #include "ReloadMgr.h"
 #include "ScriptMgr.h"
 #include "SpellMgr.h"
-#include "StringUtil.h"
 #include "TypeRegistry.h"
 
 #include <fmt/format.h>
@@ -17,7 +16,6 @@
 
 #include <algorithm>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -55,11 +53,7 @@ namespace
                 return false;
             }
             std::string const wanted = fmt::format("{}", fmt::join(arguments, " "));
-            SpellInfo const* spell = nullptr;
-            if (std::optional<uint32> const id = Ambrose::StringTo<uint32>(wanted))
-                spell = spells->Find(*id);
-            if (spell == nullptr)
-                spell = spells->FindByName(wanted);
+            SpellInfo const* const spell = spells->FindByIdOrName(wanted);
             if (spell == nullptr)
             {
                 std::vector<SpellInfo const*> const matches = spells->Search(wanted);

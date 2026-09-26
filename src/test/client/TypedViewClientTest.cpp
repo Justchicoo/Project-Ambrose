@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Loads the user's own r806919 type dump, when AMBROSE_TYPE_DUMP_PATH names it, into a registry with every built-in typed view, checks each binds, builds a view over a default object of each view's class and reads every accessor, and checks views over a derived object, the core template view over game object, item and recipe templates alike, the spell views over a tiered spell and every kind of effect, the sigil views over PvP and minigame sigils, and refusals over an unrelated one.
+ * Loads the user's own r806919 type dump, when AMBROSE_TYPE_DUMP_PATH names it, into a registry with every built-in typed view, checks each binds, builds a view over a default object of each view's class and reads every accessor, and checks views over a derived object, the core template view over game object, item and recipe templates alike, the spell views over a tiered spell and every kind of effect, the tiered spell view over a tiered spell and not a plain one, the tiered group info views, the spellbook behavior and its spell tracker, the sigil views over PvP and minigame sigils, and refusals over an unrelated one.
  */
 
 #include "Environment.h"
@@ -21,7 +21,7 @@ TEST(TypedViewClientTest, EveryBuiltInViewBindsAgainstR806919AndReadsEveryField)
     ASSERT_TRUE(registry.LoadFromFile(LogConfig::Utf8Path(*path))) << (registry.GetErrors().empty() ? std::string() : registry.GetErrors().front());
     TypeCatalogPtr const catalog = registry.GetCatalog();
     std::vector<ViewDefinition const*> const views = sTypedViewRegistry.GetViews();
-    ASSERT_EQ(views.size(), 17u);
+    ASSERT_EQ(views.size(), 23u);
     for (ViewDefinition const* view : views)
     {
         ViewBinding const* const binding = catalog->FindView(*view);
@@ -155,6 +155,42 @@ TEST(TypedViewClientTest, EveryBuiltInViewBindsAgainstR806919AndReadsEveryField)
     PropertyObjectPtr const tiered = create("class TieredSpellTemplate");
     ASSERT_TRUE(tiered);
     EXPECT_TRUE(SpellTemplateView::From(*tiered)) << "a tiered spell reads through the spell view";
+    std::optional<TieredSpellTemplateView> const tieredView = TieredSpellTemplateView::From(*tiered);
+    ASSERT_TRUE(tieredView);
+    EXPECT_FALSE(tieredView->IsRetired());
+    EXPECT_FALSE(TieredSpellTemplateView::From(*spell)) << "a plain spell is not tiered";
+
+    PropertyObjectPtr const groups = create("class TieredSpellGroupInfoList");
+    ASSERT_TRUE(groups);
+    std::optional<TieredSpellGroupInfoListView> const groupsView = TieredSpellGroupInfoListView::From(*groups);
+    ASSERT_TRUE(groupsView);
+    EXPECT_TRUE(groupsView->GetGroups().empty());
+    PropertyObjectPtr const group = create("class TieredSpellGroupInfo");
+    ASSERT_TRUE(group);
+    std::optional<TieredSpellGroupInfoView> const groupView = TieredSpellGroupInfoView::From(*group);
+    ASSERT_TRUE(groupView);
+    EXPECT_TRUE(groupView->GetSpellName().empty());
+    EXPECT_EQ(groupView->GetData(), nullptr);
+    PropertyObjectPtr const groupData = create("class TieredSpellGroupInfoData");
+    ASSERT_TRUE(groupData);
+    std::optional<TieredSpellGroupInfoDataView> const groupDataView = TieredSpellGroupInfoDataView::From(*groupData);
+    ASSERT_TRUE(groupDataView);
+    EXPECT_EQ(groupDataView->GetGroupIndex(), 0);
+    EXPECT_TRUE(groupDataView->GetTierOneSpellName().empty());
+
+    PropertyObjectPtr const spellbook = create("class ClientSpellbookBehavior");
+    ASSERT_TRUE(spellbook);
+    std::optional<ClientSpellbookBehaviorView> const spellbookView = ClientSpellbookBehaviorView::From(*spellbook);
+    ASSERT_TRUE(spellbookView);
+    EXPECT_EQ(spellbookView->GetBehaviorTemplateNameId(), 0u);
+    EXPECT_TRUE(spellbookView->GetSpells().empty());
+    PropertyObjectPtr const tracker = create("class SpellIDTracker");
+    ASSERT_TRUE(tracker);
+    std::optional<SpellIDTrackerView> const trackerView = SpellIDTrackerView::From(*tracker);
+    ASSERT_TRUE(trackerView);
+    EXPECT_EQ(trackerView->GetSpellId(), 0u);
+    EXPECT_FALSE(trackerView->GetIsRetired());
+    EXPECT_EQ(trackerView->GetTieredSpellGroupIndex(), 0);
 
     PropertyObjectPtr const spellEffect = create("class RandomSpellEffect");
     ASSERT_TRUE(spellEffect);

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests what a command is allowed to be and who is allowed to run it: a line is split into the deepest command that matches and the arguments left over, an account below a command's level is told there is no such command and the command does not run, a command_security row raising a level refuses somebody who could run it before, a group named on its own lists only what its caller may see, a console and a chat line each reach only the commands offered to them, the prefix a client types is taken off before the words are read while a console that types none is still understood, a command marked sensitive is described for the log without its arguments while an ordinary one keeps them, and the commands the scripts actually ship are found by the names an operator would type.
+ * Tests what a command is allowed to be and who is allowed to run it: a line is split into the deepest command that matches and the arguments left over, an account below a command's level is told there is no such command and the command does not run, a command_security row raising a level refuses somebody who could run it before, a group named on its own lists only what its caller may see, a console and a chat line each reach only the commands offered to them, the prefix a client types is taken off before the words are read while a console that types none is still understood, the words a console has already split reach the command as they are, a quoted word with its spaces, and are refused when too long, a command marked sensitive is described for the log without its arguments while an ordinary one keeps them, and the commands the scripts actually ship are found by the names an operator would type.
  */
 
 #include "AccountMgr.h"
@@ -166,6 +166,18 @@ TEST_F(CommandMgrTest, AConsoleAndAChatLineReachOnlyWhatIsOfferedToThem)
     EXPECT_TRUE(std::none_of(forConsole.begin(), forConsole.end(), [](std::string const& line) { return line.rfind("gm ", 0) == 0; }));
     std::vector<std::string> const inGame = sCommandMgr.Describe(SEC_GAMEMASTER, false);
     EXPECT_TRUE(std::any_of(inGame.begin(), inGame.end(), [](std::string const& line) { return line.rfind("gm on", 0) == 0; }));
+}
+
+TEST_F(CommandMgrTest, WordsAConsoleHasSplitReachTheCommandAsTheyAre)
+{
+    RecordingCaller console(SEC_CONSOLE, true);
+    EXPECT_EQ(sCommandMgr.Execute(console, std::vector<std::string>{ "character", "gold", "Fire Cat", "555" }), CommandResult::Ran);
+    EXPECT_EQ(Ran, (std::vector<std::string>{ "character gold [Fire Cat] [555]" })) << "a word with a space in it is not split again";
+    Ran.clear();
+    EXPECT_EQ(sCommandMgr.Execute(console, std::vector<std::string>{ "character", "gold", "say \"it\"" }), CommandResult::Ran);
+    EXPECT_EQ(Ran, (std::vector<std::string>{ "character gold [say \"it\"]" })) << "nor loses the quotes it holds";
+    EXPECT_EQ(sCommandMgr.Execute(console, std::vector<std::string>{}), CommandResult::Empty);
+    EXPECT_EQ(sCommandMgr.Execute(console, std::vector<std::string>{ "character", std::string(CommandMgr::MaxCommandBytes, 'a') }), CommandResult::Refused);
 }
 
 TEST_F(CommandMgrTest, ALineLongerThanACommandMayBeIsRefusedBeforeItIsLookedUp)

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used, even after its row is gone; and a wizard's stats row, missing until the first save, saved and replaced whole with full health and mana kept as full, a write older than the row changing nothing, refused with a negative amount, and read as no wizard for a guid that has none; and a wizard's position written under the revision of its row, a late older write changing nothing and a position that is not a number refused.
+ * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used, even after its row is gone; and a wizard's stats row, missing until the first save, saved and replaced whole with full health and mana kept as full, a write older than the row changing nothing, refused with a negative amount, and read as no wizard for a guid that has none; a wizard's position written under the revision of its row, a late older write changing nothing and a position that is not a number refused; and a wizard's spellbook rows, none until it learns a spell, read in the order learned, an unlearned spell kept as a row that says so, a late older write changing nothing, spell 0 refused, and read as no wizard for a guid that has none.
  */
 
 #include "CharacterRepository.h"
@@ -175,6 +175,8 @@ TEST(CharacterRepositoryTest, AClosedCharactersDatabaseIsReportedAsAnError)
     EXPECT_FALSE(CharacterRepository::GetMaxGuid());
     EXPECT_EQ(CharacterRepository::LoadStats(1).Result, CharacterOpResult::DatabaseError);
     EXPECT_EQ(CharacterRepository::SaveStats(1, CharacterStats{}), CharacterOpResult::DatabaseError);
+    EXPECT_EQ(CharacterRepository::LoadSpells(1).Result, CharacterOpResult::DatabaseError);
+    EXPECT_EQ(CharacterRepository::SaveSpell(1, CharacterSpell{ 5, true, 1, 1 }), CharacterOpResult::DatabaseError);
     EXPECT_EQ(CharacterRepository::GetResultName(CharacterOpResult::NotFound), "no such character");
 }
 
@@ -418,4 +420,37 @@ TEST_F(CharacterRepositoryDatabaseTest, APositionWriteOlderThanTheRowChangesNoth
     EXPECT_EQ(CharacterRepository::SavePosition(401, std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f, 0.0f, 9), CharacterOpResult::InvalidData);
     EXPECT_EQ(CharacterRepository::SavePosition(0, 0.0f, 0.0f, 0.0f, 0.0f, 9), CharacterOpResult::InvalidData);
     EXPECT_EQ(CharacterRepository::Load(401).Character->StateRevision, 3u);
+}
+
+TEST_F(CharacterRepositoryDatabaseTest, AWizardsSpellbookRowsReadInTheOrderLearnedAndALateOlderWriteChangesNothing)
+{
+    std::mt19937 random(20260927);
+    ASSERT_EQ(CharacterRepository::Create(MakeCharacter(random, 501, 7, 1800000501)), CharacterOpResult::Ok);
+    CharacterSpellsLoad const none = CharacterRepository::LoadSpells(501);
+    ASSERT_EQ(none.Result, CharacterOpResult::Ok);
+    EXPECT_TRUE(none.Spells.empty()) << "a wizard that has learned nothing has no rows";
+    EXPECT_EQ(CharacterRepository::LoadSpells(999).Result, CharacterOpResult::NotFound);
+
+    constexpr uint32 FireCat = 103007158;
+    constexpr uint32 Amulet = 957065192;
+    constexpr uint32 High = 4000000000u;
+    ASSERT_EQ(CharacterRepository::SaveSpell(501, { Amulet, true, 2, 2 }), CharacterOpResult::Ok);
+    ASSERT_EQ(CharacterRepository::SaveSpell(501, { FireCat, true, 1, 1 }), CharacterOpResult::Ok);
+    ASSERT_EQ(CharacterRepository::SaveSpell(501, { High, true, 3, 3 }), CharacterOpResult::Ok);
+    EXPECT_EQ(CharacterRepository::LoadSpells(501).Spells, (std::vector<CharacterSpell>{ { FireCat, true, 1, 1 }, { Amulet, true, 2, 2 }, { High, true, 3, 3 } }))
+        << "in the order learned, whatever order the writes landed in, an id above INT_MAX kept whole";
+
+    ASSERT_EQ(CharacterRepository::SaveSpell(501, { FireCat, false, 0, 4 }), CharacterOpResult::Ok);
+    ASSERT_EQ(CharacterRepository::SaveSpell(501, { FireCat, true, 1, 1 }), CharacterOpResult::Ok);
+    std::vector<CharacterSpell> const unlearned = CharacterRepository::LoadSpells(501).Spells;
+    ASSERT_EQ(unlearned.size(), 3u);
+    EXPECT_EQ(unlearned.front(), (CharacterSpell{ FireCat, false, 0, 4 })) << "the unlearn stays although the older learn landed after it";
+
+    ASSERT_EQ(CharacterRepository::SaveSpell(501, { FireCat, true, 5, 5 }), CharacterOpResult::Ok);
+    EXPECT_EQ(CharacterRepository::LoadSpells(501).Spells.back(), (CharacterSpell{ FireCat, true, 5, 5 })) << "learned again, it goes to the end of the book";
+
+    EXPECT_EQ(CharacterRepository::SaveSpell(501, { 0, true, 6, 6 }), CharacterOpResult::InvalidData);
+    EXPECT_EQ(CharacterRepository::SaveSpell(0, { FireCat, true, 6, 6 }), CharacterOpResult::InvalidData);
+    EXPECT_EQ(CharacterRepository::SaveSpell(999, { FireCat, true, 6, 6 }), CharacterOpResult::DatabaseError) << "a spell row needs its wizard";
+    EXPECT_EQ(CharacterRepository::LoadSpells(501).Spells.size(), 3u);
 }

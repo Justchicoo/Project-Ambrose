@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A spell as the server uses it, read once from the SpellTemplate the user's install holds through its typed views: its name, which the client hashes into its template id, its school, type, accuracy, costs and flags, the pips its rank takes of each school, and its effects as a tree, since a random, conditional, variable or shadow effect holds the effects it chooses among and a conditional one holds each behind a requirement. An effect keeps its type, target and disposition as the numbers the client's enums give them, whose names the type dump holds, and a spell is described in lines naming them through the catalog in use.
+ * A spell as the server uses it, read once from the SpellTemplate the user's install holds through its typed views: its name, which the client hashes into its template id, its school, type, accuracy, costs and flags, whether it is tiered and retired and the tiered spell group the client files it under, the pips its rank takes of each school, and its effects as a tree, since a random, conditional, variable or shadow effect holds the effects it chooses among and a conditional one holds each behind a requirement. An effect keeps its type, target and disposition as the numbers the client's enums give them, whose names the type dump holds, and a spell is described in lines naming them through the catalog in use.
  */
 
 #ifndef AMBROSE_SPELLINFO_H
@@ -59,6 +59,7 @@ struct SpellEffectInfo
 struct SpellInfo
 {
     static constexpr std::size_t MaxEffectDepth = 16;
+    static constexpr int32 NoTieredGroup = -1;
 
     uint32 TemplateId = 0;
     std::string Class;
@@ -78,6 +79,9 @@ struct SpellInfo
     bool Treasure = false;
     bool PvP = false;
     bool PvE = false;
+    bool Tiered = false;
+    bool Retired = false;
+    int32 TieredGroupIndex = NoTieredGroup;
     SpellPips Pips;
     std::vector<SpellEffectInfo> Effects;
 

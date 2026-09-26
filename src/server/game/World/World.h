@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The game's update loop and the sessions it owns, of which a command may take a copy to act on: one thread calls Update, which is the world thread from then on, and everything the world touches happens there, so a session's queued work is drained on it rather than on the network thread that read the message; the tick carries every script's OnUpdate after the sessions have been drained, so a script sees the state the messages of that tick left behind.
+ * The game's update loop and the sessions it owns, of which a command may take a copy to act on, finding the wizards in the world by character id or by name and handing work for one to the world thread: one thread calls Update, which is the world thread from then on, and everything the world touches happens there, so a session's queued work is drained on it rather than on the network thread that read the message; the tick carries every script's OnUpdate after the sessions have been drained, so a script sees the state the messages of that tick left behind.
  */
 
 #ifndef AMBROSE_WORLD_H
@@ -10,8 +10,10 @@
 
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <mutex>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -29,7 +31,11 @@ public:
     void RemoveSession(GameSession const* session);
     std::size_t GetSessionCount() const;
     std::vector<std::shared_ptr<GameSession>> GetSessions() const;
+    std::vector<std::shared_ptr<GameSession>> FindInWorld(std::string_view characterIdOrName) const;
+    bool RunFor(std::shared_ptr<GameSession> const& session, std::function<void(GameSession&)> work, std::chrono::milliseconds timeout) const;
     void Clear();
+
+    static constexpr std::chrono::seconds CommandTimeout{ 5 };
 
     void Update(std::chrono::milliseconds diff);
 

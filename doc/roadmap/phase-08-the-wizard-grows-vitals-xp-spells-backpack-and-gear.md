@@ -252,13 +252,13 @@ A wizard owns a persistent set of known spells that show up in the in-game spell
 **Acceptance**
 
 - [x] Unit test: the name-hash lookup returns the same template as the id lookup for a fixture spell. `SpellMgrTest.EverySpellUnderSpellsIsReadAndFoundByIdByNameAndBySearch`, and `SpellMgrClientTest.EverySpellIsFoundByTheHashOfItsNameAsByItsId` for all 18173 of r806919's spells
-- [ ] Unit test: learning a known spell twice does not duplicate it. 8.05 builds the spellbook it checks
-- [ ] Real client: '.learn Fire Cat' makes Fire Cat appear on the Fire page of the spellbook without relogging, and it is still there after relogging. '.unlearn' removes it. 8.05 builds the spellbook it checks
+- [x] Unit test: learning a known spell twice does not duplicate it. `PlayerSpellbookTest.LearningASpellItKnowsDoesNotAddItTwice`: a second learn gives nothing to write or send, which matters because the client's own ClientSpellbookBehavior::AddSpell (0x142101b60) appends without looking; the real-client run's second learn was answered 'already knows Fire Cat'
+- [ ] Real client: '.learn Fire Cat' makes Fire Cat appear on the Fire page of the spellbook without relogging, and it is still there after relogging. '.unlearn' removes it. 8.05 built the spellbook, and the check waits for a deck, as 8.05 records
 
 **Risks**
 
 - Settled: a spell's template id is the hash of its name, so ADDSPELLTOBOOK's SpellID is both, as Spells and sigils in doc/ARCHITECTURE.md records.
-- Found for 8.05: the client reads SPELLLIST's Data into the wizard's own ClientSpellbookBehavior, whose m_spellIDList holds a SpellIDTracker for each spell with its id, whether it is retired and its tiered spell group index (WizardClientModules::MSG_SpellList at 0x1421e43f0).
+- Settled in 8.05: the client reads SPELLLIST's Data into the wizard's own ClientSpellbookBehavior with the mask Save|Public, which leaves out m_spellIDList, so a spellbook travels in the player object instead, as Spellbook in doc/ARCHITECTURE.md records.
 
 ## 8.05 Spellbook (WIZ-9)
 
@@ -270,7 +270,7 @@ A wizard owns a persistent set of known spells that show up in the in-game spell
 
 **Acceptance**
 
-- [ ] Learning twice does not duplicate
+- [x] Learning twice does not duplicate
 - [ ] Real client: '.learn Fire Cat' appears on the Fire page and survives relog; '.unlearn' removes
 
 ### Detailed spec from WIZ-9: Spell template extractor and spellbook
@@ -279,12 +279,12 @@ A wizard owns a persistent set of known spells that show up in the in-game spell
 
 **Deliverables**
 
-- src/tools/extractor/SpellExtractor: Root.wad Spells/**.xml (18173 entries) -> world.spell_template (template id, name, name hash, school, pip cost, treasure flag, display key)
-- src/server/game/Spells/SpellMgr (sSpellMgr): lookup by template id and by name hash
-- data/sql/updates/db_characters: character_spell
-- ClientSpellbookBehavior (m_spellIDList) built into the player object
-- SPELLLIST, ADDSPELLTOBOOK and REMOVESPELLFROMBOOK senders; a LearnSpell API for quests and results
-- cs_learn.cpp: .learn <spell>, .unlearn <spell>
+- src/tools/extractor/SpellExtractor and world.spell_template: not built, as 8.04 settles. Spells are read from the install at run time, each tiered one with the group TieredSpellsGroupInfo.xml files it under and its retired flag, which is what a spellbook's tracker needs
+- src/server/game/Spells/SpellMgr (sSpellMgr): lookup by template id and by name hash, which are one number for a spell, built in 8.04
+- data/sql/updates/db_characters: character_spell, a row for each spell a wizard has learned, kept with known set to 0 once unlearned and written under the spellbook's revision, through CharacterRepository
+- ClientSpellbookBehavior (m_spellIDList) built into the player object: src/server/game/Spells/PlayerSpellbook holds the book on the world thread and fills a SpellIDTracker for each spell as the client's own AddSpell does, and PlayerObjectBuilder writes them
+- ADDSPELLTOBOOK and REMOVESPELLFROMBOOK senders, and no SPELLLIST sender, since the client loads SPELLLIST with a mask that leaves the list out; GameSession::LearnSpell and UnlearnSpell are the API quests and results use, and World::RunFor hands a change from another thread to the world thread
+- cs_learn.cpp: learn <spell> <wizard>, unlearn <spell> <wizard>, the spell by template id or name and the wizard by character id or name; a console hands the command its words as it split them, so a quoted spell name keeps its spaces
 
 **Client messages:** MSG_SPELLLIST, MSG_ADDSPELLTOBOOK, MSG_REMOVESPELLFROMBOOK
 
@@ -294,19 +294,20 @@ A wizard owns a persistent set of known spells that show up in the in-game spell
 
 **Database tables**
 
-- world.spell_template
-- characters.character_spell
+- world.spell_template: not made, as 8.04 settles
+- characters.character_spell (data/sql/updates/db_characters/2026_09_26_00.sql)
 
 **Acceptance**
 
-- [ ] Unit test: the name-hash lookup returns the same template as the id lookup for a fixture spell
-- [ ] Unit test: learning a known spell twice does not duplicate it
-- [ ] Real client: '.learn Fire Cat' makes Fire Cat appear on the Fire page of the spellbook without relogging, and it is still there after relogging. '.unlearn' removes it.
+- [x] Unit test: the name-hash lookup returns the same template as the id lookup for a fixture spell. Earned in 8.04: `SpellMgrTest.EverySpellUnderSpellsIsReadAndFoundByIdByNameAndBySearch`, and `SpellMgrClientTest.EverySpellIsFoundByTheHashOfItsNameAsByItsId` for all 18173 of r806919's spells
+- [x] Unit test: learning a known spell twice does not duplicate it. `PlayerSpellbookTest.LearningASpellItKnowsDoesNotAddItTwice`: a second learn gives nothing to write or send, which matters because the client's own ClientSpellbookBehavior::AddSpell (0x142101b60) appends without looking; the real-client run's second learn was answered 'already knows Fire Cat'
+- [ ] Real client: '.learn Fire Cat' makes Fire Cat appear on the Fire page of the spellbook without relogging, and it is still there after relogging. '.unlearn' removes it. Waits for a deck. The client driver's learn-a-spell.json on r806919 (run 20260926-122731) proves the rest, with the command given on the game server's console as `learn "Fire Cat" <wizard>`, which a game master's chat line reaches once 6.04 carries it: the server sent MSG_ADDSPELLTOBOOK with Fire Cat's template id and the client took it, a second learn was refused as already known, the wizard entered again after a relog with Fire Cat in its book, and `unlearn` sent MSG_REMOVESPELLFROMBOOK; the client never failed to load an object or find a spell it was sent. But no card shows on any page of the Spell Deck for that wizard, a plain Ice spell no more than Fire Cat, and the deck page on its left is empty: it has no deck, which 8.10 equips and 8.11 fills, and the check is run again then
 
 **Risks**
 
-- Whether ADDSPELLTOBOOK SpellID is the template id or the spell-name hash is unverified. The reference passes the template id there but name hashes in the treasure and exclusion messages.
-- The SPELLLIST Data format is not reverse-engineered.
+- Settled: ADDSPELLTOBOOK's SpellID is the template id, which is the hash of the spell's name, as Spells and sigils in doc/ARCHITECTURE.md records.
+- Settled: SPELLLIST's Data is the wizard's ClientSpellbookBehavior, read with the mask Save|Public, which cannot carry m_spellIDList because it is not Public. `SpellbookClientTest.TrackersTravelInTheTransmitFormAndNotInTheMaskSpellListIsReadWith` holds both halves on r806919's own classes, as Spellbook in doc/ARCHITECTURE.md records.
+- Found: the Spell Deck window, which P opens, shows no card for a wizard without a deck. Its right page lists the spells for the tab chosen, and its left page is the deck's own cards, and for a wizard that knows Fire Cat and Legion Shield but has no deck, every page of the list shows only empty slots and the deck page its empty art. Opening the window also sends MSG_CANSEETIEREDSPELLGROUPS, which asks which tiered spell groups the wizard may upgrade and is answered with a TieredSpellGroupVisibility; that is Spellwrighting's, a later milestone's, and 8.05 leaves it unhandled.
 
 ## 8.06 Item template extractor, core rows (WIZ-10 part 1)
 

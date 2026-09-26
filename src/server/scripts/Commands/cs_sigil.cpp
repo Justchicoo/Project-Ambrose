@@ -9,14 +9,12 @@
 #include "ReloadMgr.h"
 #include "ScriptMgr.h"
 #include "SigilMgr.h"
-#include "StringUtil.h"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
 #include <algorithm>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -54,11 +52,7 @@ namespace
                 return false;
             }
             std::string const wanted = fmt::format("{}", fmt::join(arguments, " "));
-            SigilInfo const* sigil = nullptr;
-            if (std::optional<uint32> const id = Ambrose::StringTo<uint32>(wanted))
-                sigil = sigils->Find(*id);
-            if (sigil == nullptr)
-                sigil = sigils->FindByName(wanted);
+            SigilInfo const* const sigil = sigils->FindByIdOrName(wanted);
             if (sigil == nullptr)
             {
                 std::vector<SigilInfo const*> const matches = sigils->Search(wanted);

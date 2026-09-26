@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Makes the player object from the catalog's own classes and defaults and sets only what the stored wizard decides: a behavior the template names that behavior_client_class does not know refuses the build rather than being guessed or dropped, because the client reads the behaviors by position and one missing slot shifts every later one, and a slot the template itself leaves empty stays empty; the school behavior and the stats come from the wizard's stats, with its level as the highest on the account, and every other field keeps the class's default.
+ * Makes the player object from the catalog's own classes and defaults and sets only what the stored wizard decides: a behavior the template names that behavior_client_class does not know refuses the build rather than being guessed or dropped, because the client reads the behaviors by position and one missing slot shifts every later one, and a slot the template itself leaves empty stays empty; the school behavior and the stats come from the wizard's stats, with its level as the highest on the account, the spellbook holds a SpellIDTracker for each spell the wizard knows, which the client's spellbook reads when the object arrives, and every other field keeps the class's default.
  */
 
 #include "PlayerObjectBuilder.h"
@@ -22,7 +22,26 @@ namespace
         return object;
     }
 
-    bool FillBehavior(PropertyObject& behavior, CharacterSummary const& character, PlayerStats const& stats, std::string& problem)
+    bool FillSpellbook(PropertyObject& behavior, std::vector<SpellTracker> const& spells, std::string& problem)
+    {
+        PropertyValue::List trackers;
+        trackers.reserve(spells.size());
+        for (SpellTracker const& spell : spells)
+        {
+            PropertyObjectPtr tracker = Create(behavior.GetCatalog(), "class SpellIDTracker", problem);
+            if (!tracker)
+                return false;
+            PropertyFiller(*tracker, problem)
+                .Set("m_spellID", spell.SpellId)
+                .Set("m_isRetired", spell.Retired)
+                .Set("m_tieredSpellGroupIndex", spell.TieredGroupIndex);
+            trackers.emplace_back(std::move(tracker));
+        }
+        PropertyFiller(behavior, problem).Set("m_spellIDList", std::move(trackers));
+        return problem.empty();
+    }
+
+    bool FillBehavior(PropertyObject& behavior, CharacterSummary const& character, PlayerStats const& stats, std::vector<SpellTracker> const& spells, std::string& problem)
     {
         std::string_view const name = behavior.GetClass().Name;
         if (name == "class WizardCharacterBehavior")
@@ -49,12 +68,14 @@ namespace
         }
         if (name == "class ClientMagicSchoolBehavior")
             return stats.WriteSchool(behavior, problem);
+        if (name == "class ClientSpellbookBehavior")
+            return FillSpellbook(behavior, spells, problem);
         return true;
     }
 }
 
 PropertyObjectPtr PlayerObjectBuilder::Build(TypeCatalogPtr const& catalog, CoreObjectTypeTable const& types, BehaviorClientClasses const& behaviors, ObjectTemplate const& playerTemplate,
-    CharacterSummary const& character, PlayerStats const& stats, PlayerPlacement const& placement, std::string& problem)
+    CharacterSummary const& character, PlayerStats const& stats, std::vector<SpellTracker> const& spells, PlayerPlacement const& placement, std::string& problem)
 {
     problem.clear();
     if (!catalog)
@@ -101,7 +122,7 @@ PropertyObjectPtr PlayerObjectBuilder::Build(TypeCatalogPtr const& catalog, Core
             continue;
         }
         PropertyObjectPtr behavior = Create(catalog, *row->ClassName, problem);
-        if (!behavior || !FillBehavior(*behavior, character, stats, problem))
+        if (!behavior || !FillBehavior(*behavior, character, stats, spells, problem))
             return nullptr;
         inactive.emplace_back(std::move(behavior));
     }

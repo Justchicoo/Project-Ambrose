@@ -556,11 +556,10 @@ namespace
                 Commands().Register({ name, "", line.find(" - ") == std::string::npos ? std::string() : line.substr(line.find(" - ") + 3), false,
                     [name](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
                     {
-                        std::string line = name;
-                        for (std::string const& argument : arguments)
-                            line += " " + argument;
+                        std::vector<std::string> words = CommandMgr::Split(name);
+                        words.insert(words.end(), arguments.begin(), arguments.end());
                         ConsoleCaller caller([&reply](std::string_view text) { reply(text); });
-                        return sCommandMgr.Execute(caller, line) != CommandResult::Empty;
+                        return sCommandMgr.Execute(caller, std::move(words)) != CommandResult::Empty;
                     } });
             }
         }

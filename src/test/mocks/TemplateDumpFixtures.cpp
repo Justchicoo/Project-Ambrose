@@ -138,7 +138,33 @@ namespace TemplateDumpFixtures
         conditional["m_elements"] = Property("class SharedPointer<class ConditionalSpellElement>", "m_elements", 17, "List");
         AddClass(classes, "class ConditionalSpellEffect", Json::array({ "SpellEffect", "PropertyClass" }), conditional);
         AddClass(classes, "class SpellTemplate", Json::array({ "CoreTemplate", "PropertyClass" }), SpellProperties());
-        AddClass(classes, "class TieredSpellTemplate", Json::array({ "SpellTemplate", "CoreTemplate", "PropertyClass" }), SpellProperties());
+        Json tiered = SpellProperties();
+        tiered["m_retired"] = Property("bool", "m_retired", 18);
+        AddClass(classes, "class TieredSpellTemplate", Json::array({ "SpellTemplate", "CoreTemplate", "PropertyClass" }), tiered);
+        Json data = Json::object();
+        data["m_tsGroupIndex"] = Property("int", "m_tsGroupIndex", 0);
+        data["m_tsGroupTierOneSpellName"] = Property("std::string", "m_tsGroupTierOneSpellName", 1);
+        AddClass(classes, "class TieredSpellGroupInfoData", Json::array({ "PropertyClass" }), data);
+        Json info = Json::object();
+        info["m_spellName"] = Property("std::string", "m_spellName", 0);
+        info["m_theTieredSpellGroupInfoData"] = Property("class SharedPointer<class TieredSpellGroupInfoData>", "m_theTieredSpellGroupInfoData", 1);
+        AddClass(classes, "class TieredSpellGroupInfo", Json::array({ "PropertyClass" }), info);
+        Json list = Json::object();
+        list["m_tieredSpellGroupInfoList"] = Property("class SharedPointer<class TieredSpellGroupInfo>", "m_tieredSpellGroupInfoList", 0, "List");
+        AddClass(classes, "class TieredSpellGroupInfoList", Json::array({ "PropertyClass" }), list);
+    }
+
+    void AddSpellbookClasses(Json& classes)
+    {
+        Json tracker = Json::object();
+        tracker["m_spellID"] = Property("unsigned int", "m_spellID", 0);
+        tracker["m_isRetired"] = Property("bool", "m_isRetired", 1);
+        tracker["m_tieredSpellGroupIndex"] = Property("int", "m_tieredSpellGroupIndex", 2);
+        AddClass(classes, "class SpellIDTracker", Json::array({ "PropertyClass" }), tracker);
+        Json behavior = Json::object();
+        behavior["m_behaviorTemplateNameID"] = Property("unsigned int", "m_behaviorTemplateNameID", 0);
+        behavior["m_spellIDList"] = Property("class SharedPointer<class SpellIDTracker>", "m_spellIDList", 1, "List");
+        AddClass(classes, "class ClientSpellbookBehavior", Json::array({ "PropertyClass" }), behavior);
     }
 
     void AddSigilClasses(Json& classes)

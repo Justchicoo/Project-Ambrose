@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Every spell the user's install holds (sSpellMgr), read from the templates TemplateManifest.xml lists under Spells/ through the template store's manifest, decoded once on every hardware thread into typed spell records and swapped in as one checked set through the reload target spells, which follows templates. A set that fails to load keeps the one serving and reports every spell that failed, grouped by what went wrong, and a caller holds the set it was given for as long as it needs it.
+ * Every spell the user's install holds (sSpellMgr), read from the templates TemplateManifest.xml lists under Spells/ through the template store's manifest, decoded once on every hardware thread into typed spell records, each tiered one given the group TieredSpellsGroupInfo.xml files it under, and swapped in as one checked set through the reload target spells, which follows templates. A set that fails to load keeps the one serving and reports every spell that failed, grouped by what went wrong, and a caller holds the set it was given for as long as it needs it.
  */
 
 #ifndef AMBROSE_SPELLMGR_H

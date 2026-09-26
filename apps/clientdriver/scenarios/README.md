@@ -30,8 +30,9 @@ client and local server.
 | Walking in the Commons | [`enter-the-commons.json`](./enter-the-commons.json) | The same entry for a wizard saved in WizardCity/WC_Hub with no position, placed at the zone's Start, with the fields MSG_LOGINCOMPLETE carried recorded, and a held W that moves the view far more than the same time idle, which is the player controlling the wizard. |
 | Walking away and back | [`walk-and-return.json`](./walk-and-return.json) | The Commons entry, a walk with W, then the client quits and is started again under the same guard; the game server writes where the wizard stood as it leaves, and the second login must put the wizard back at exactly that place, which differs from the zone's Start it first stood at. |
 | A wizard's stats | [`wizard-stats.json`](./wizard-stats.json) | A level 5 Fire wizard seeded with 900 experience, 1234 gold, 300 health and 10 mana enters Ravenwood; the game server logs the stats it built from the database and the level tables, and the run shoots the HUD, then the backpack and the character stats opened with the keys the client's own InputBindings.xml gives them. |
+| Learning a spell | [`learn-a-spell.json`](./learn-a-spell.json) | A Fire wizard with an empty spellbook enters Ravenwood; `learn "Fire Cat" <wizard>` on the game server console sends MSG_ADDSPELLTOBOOK and a second learn is refused, the spellbook opened with P is shot on its Fire page before and after, the client is quit and started again and the wizard must enter knowing Fire Cat, and `unlearn` sends MSG_REMOVESPELLFROMBOOK before a last shot. The Spell Deck shows no card for a wizard without a deck, so the Fire page stays empty until 8.10 and 8.11 give it one. |
 
-All five require the game server as well as the login server; the driver starts one of its own.
+All six require the game server as well as the login server; the driver starts one of its own.
 
 ## Listing and running
 

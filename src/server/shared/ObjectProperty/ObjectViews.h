@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The built-in typed views game code reads client objects through: character creation info, core, client and wizard client objects, the core template every template derives from, game object and wizard item templates, the template manifest and its locations, spell templates with their effects and pip ranks, sigils with their circles and a combat sigil's scalars and limits, requirement lists and named effects.
+ * The built-in typed views game code reads client objects through: character creation info, core, client and wizard client objects, the core template every template derives from, game object and wizard item templates, the template manifest and its locations, spell templates with their effects and pip ranks, a tiered spell's retired flag and the group each tiered spell belongs to, the spellbook behavior and the tracker it keeps for each spell, sigils with their circles and a combat sigil's scalars and limits, requirement lists and named effects.
  */
 
 #ifndef AMBROSE_OBJECTVIEWS_H
@@ -363,6 +363,100 @@ public:
     decltype(auto) IsXPipSpell() const noexcept { return Read<XPipSpell>(); }
 
     AMBROSE_TYPED_VIEW(SpellRankView)
+};
+
+class TieredSpellTemplateView : public TypedView<TieredSpellTemplateView>
+{
+public:
+    enum Field : std::size_t { Retired, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<bool>(Retired, "bool", "m_retired"),
+    } };
+    static constexpr ViewDefinition Definition{ "TieredSpellTemplateView", "class TieredSpellTemplate", Fields };
+
+    decltype(auto) IsRetired() const noexcept { return Read<Retired>(); }
+
+    AMBROSE_TYPED_VIEW(TieredSpellTemplateView)
+};
+
+class TieredSpellGroupInfoListView : public TypedView<TieredSpellGroupInfoListView>
+{
+public:
+    enum Field : std::size_t { Groups, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<PropertyValue::List>(Groups, "class SharedPointer<class TieredSpellGroupInfo>", "m_tieredSpellGroupInfoList"),
+    } };
+    static constexpr ViewDefinition Definition{ "TieredSpellGroupInfoListView", "class TieredSpellGroupInfoList", Fields };
+
+    decltype(auto) GetGroups() const noexcept { return Read<Groups>(); }
+
+    AMBROSE_TYPED_VIEW(TieredSpellGroupInfoListView)
+};
+
+class TieredSpellGroupInfoView : public TypedView<TieredSpellGroupInfoView>
+{
+public:
+    enum Field : std::size_t { SpellName, Data, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<std::string>(SpellName, "std::string", "m_spellName"),
+        ViewField::Of<PropertyObjectPtr>(Data, "class SharedPointer<class TieredSpellGroupInfoData>", "m_theTieredSpellGroupInfoData"),
+    } };
+    static constexpr ViewDefinition Definition{ "TieredSpellGroupInfoView", "class TieredSpellGroupInfo", Fields };
+
+    decltype(auto) GetSpellName() const noexcept { return Read<SpellName>(); }
+    decltype(auto) GetData() const noexcept { return Read<Data>(); }
+
+    AMBROSE_TYPED_VIEW(TieredSpellGroupInfoView)
+};
+
+class TieredSpellGroupInfoDataView : public TypedView<TieredSpellGroupInfoDataView>
+{
+public:
+    enum Field : std::size_t { GroupIndex, TierOneSpellName, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<int32>(GroupIndex, "int", "m_tsGroupIndex"),
+        ViewField::Of<std::string>(TierOneSpellName, "std::string", "m_tsGroupTierOneSpellName"),
+    } };
+    static constexpr ViewDefinition Definition{ "TieredSpellGroupInfoDataView", "class TieredSpellGroupInfoData", Fields };
+
+    decltype(auto) GetGroupIndex() const noexcept { return Read<GroupIndex>(); }
+    decltype(auto) GetTierOneSpellName() const noexcept { return Read<TierOneSpellName>(); }
+
+    AMBROSE_TYPED_VIEW(TieredSpellGroupInfoDataView)
+};
+
+class ClientSpellbookBehaviorView : public TypedView<ClientSpellbookBehaviorView>
+{
+public:
+    enum Field : std::size_t { BehaviorTemplateNameId, Spells, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<uint32>(BehaviorTemplateNameId, "unsigned int", "m_behaviorTemplateNameID"),
+        ViewField::Of<PropertyValue::List>(Spells, "class SharedPointer<class SpellIDTracker>", "m_spellIDList"),
+    } };
+    static constexpr ViewDefinition Definition{ "ClientSpellbookBehaviorView", "class ClientSpellbookBehavior", Fields };
+
+    decltype(auto) GetBehaviorTemplateNameId() const noexcept { return Read<BehaviorTemplateNameId>(); }
+    decltype(auto) GetSpells() const noexcept { return Read<Spells>(); }
+
+    AMBROSE_TYPED_VIEW(ClientSpellbookBehaviorView)
+};
+
+class SpellIDTrackerView : public TypedView<SpellIDTrackerView>
+{
+public:
+    enum Field : std::size_t { SpellId, IsRetired, TieredSpellGroupIndex, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<uint32>(SpellId, "unsigned int", "m_spellID"),
+        ViewField::Of<bool>(IsRetired, "bool", "m_isRetired"),
+        ViewField::Of<int32>(TieredSpellGroupIndex, "int", "m_tieredSpellGroupIndex"),
+    } };
+    static constexpr ViewDefinition Definition{ "SpellIDTrackerView", "class SpellIDTracker", Fields };
+
+    decltype(auto) GetSpellId() const noexcept { return Read<SpellId>(); }
+    decltype(auto) GetIsRetired() const noexcept { return Read<IsRetired>(); }
+    decltype(auto) GetTieredSpellGroupIndex() const noexcept { return Read<TieredSpellGroupIndex>(); }
+
+    AMBROSE_TYPED_VIEW(SpellIDTrackerView)
 };
 
 class SigilTemplateView : public TypedView<SigilTemplateView>

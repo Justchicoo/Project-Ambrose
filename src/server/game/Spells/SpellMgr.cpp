@@ -1,13 +1,16 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the spells through the template folder reader, each decoded template read into a spell record at its own position, then builds the set, which checks that each spell's id is the hash of its name, before swapping it in and logging how many spells and effects it holds and how long they took.
+ * Reads the spells through the template folder reader, each decoded template read into a spell record at its own position, and the tiered spell groups from Root.wad as the install holds them now, a file that does not read failing the set like a spell that does not, then gives each tiered spell its group and builds the set, which checks that each spell's id is the hash of its name, before swapping it in and logging how many spells and effects it holds and how long they took.
  */
 
 #include "SpellMgr.h"
+#include "ConfigMgr.h"
+#include "KiwadArchive.h"
 #include "Log.h"
 #include "ObjectTemplateMgr.h"
 #include "ReloadMgr.h"
 #include "TemplateFolder.h"
+#include "TieredSpellGroups.h"
 
 #include <fmt/format.h>
 
@@ -82,10 +85,30 @@ bool SpellMgr::Load(std::vector<std::string>& errors)
     if (!read)
         return false;
 
+    std::string error;
+    std::filesystem::path const rootWad = gameData / TemplateManifest::RootArchive;
+    std::shared_ptr<KiwadArchive const> const root = KiwadArchive::Open(rootWad, error);
+    if (!root)
+    {
+        errors.push_back(fmt::format("{} cannot be opened for the tiered spell groups: {}", ConfigMgr::PathToUtf8(rootWad), error));
+        return false;
+    }
+    std::optional<TieredSpellGroups> const groups = TieredSpellGroups::Read(*root, catalog, errors);
+    if (!groups)
+        return false;
+
     std::vector<SpellInfo> spells;
     spells.reserve(decoded.size());
+    std::size_t tiered = 0;
     for (std::optional<SpellInfo>& spell : decoded)
+    {
+        if (spell->Tiered)
+        {
+            spell->TieredGroupIndex = groups->Find(spell->Name).value_or(SpellInfo::NoTieredGroup);
+            ++tiered;
+        }
         spells.push_back(std::move(*spell));
+    }
     std::shared_ptr<SpellStore const> store = SpellStore::Build(std::move(spells), errors);
     if (!store)
         return false;
@@ -95,7 +118,8 @@ bool SpellMgr::Load(std::vector<std::string>& errors)
     std::size_t const count = store->Size();
     _spells.Replace(std::move(store));
     auto const took = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started);
-    LOG_INFO(SpellLog, "Read {} spells with {} effects from {} in {} ms on {} thread(s)", count, effects, Folder, took.count(), threads);
+    LOG_INFO(SpellLog, "Read {} spells with {} effects from {}, {} of them tiered with {} named in {} tiered spell groups, in {} ms on {} thread(s)", count, effects, Folder, tiered,
+        groups->Size(), groups->CountGroups(), took.count(), threads);
     return true;
 }
 

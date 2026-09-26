@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the spell manager on an install the test builds through a type dump it writes: every template the manifest lists under Spells/ is read, and no other, found by template id, by exact name through its hash and by name whatever its case, and searched by the text a name holds; a spell's effects come out as a tree, a random effect holding the effects it chooses among and a conditional one its effect behind its requirements; a spell whose id is not the hash of its name is refused; a reload that meets spells that fail keeps the set serving and names each way they fail once with how many more fail it; and a spell is described by its school, rank, accuracy and effects.
+ * Tests the spell manager on an install the test builds through a type dump it writes: every template the manifest lists under Spells/ is read, and no other, found by template id, by exact name through its hash and by name whatever its case, and searched by the text a name holds; a spell's effects come out as a tree, a random effect holding the effects it chooses among and a conditional one its effect behind its requirements; a tiered spell carries the group TieredSpellsGroupInfo.xml names for it, or none, and its retired flag, and a group file that is missing or names a spell twice fails the set; a spell whose id is not the hash of its name is refused; a reload that meets spells that fail keeps the set serving and names each way they fail once with how many more fail it; and a spell is described by its school, rank, accuracy and effects, a tiered one with its group.
  */
 
 #include "LogTestDirectory.h"
@@ -11,6 +11,7 @@
 #include "SpellMgr.h"
 #include "StringHash.h"
 #include "TemplateDumpFixtures.h"
+#include "TieredSpellGroups.h"
 #include "TypeRegistry.h"
 #include "TypedView.h"
 
@@ -57,6 +58,10 @@ namespace
             _views.Add(SpellTemplateView::Definition);
             _views.Add(SpellEffectView::Definition);
             _views.Add(SpellRankView::Definition);
+            _views.Add(TieredSpellTemplateView::Definition);
+            _views.Add(TieredSpellGroupInfoListView::Definition);
+            _views.Add(TieredSpellGroupInfoView::Definition);
+            _views.Add(TieredSpellGroupInfoDataView::Definition);
             sReloadMgr.Clear();
             sObjectTemplateMgr.Clear();
             sTypeRegistry.Clear();
@@ -94,7 +99,8 @@ namespace
         {
             Locations locations;
             for (auto const& [path, bytes] : files)
-                locations.emplace_back(_ids.at(path), path);
+                if (auto const id = _ids.find(path); id != _ids.end())
+                    locations.emplace_back(id->second, path);
             TemplateDumpFixtures::WriteRoot(GameData(), _catalog, locations, files);
         }
 
@@ -109,11 +115,40 @@ namespace
             Entries spells{ { "Spells/Fire Cat.xml", Spell("class TieredSpellTemplate", "Fire Cat", "Fire", 75, 1, std::move(cat)) },
                 { "Spells/Fire Cat - Amulet.xml", Spell("class SpellTemplate", "Fire Cat - Amulet", "Fire", 75, 1, std::move(amulet)) },
                 { "Spells/Life/Guarded Heal.xml", Spell("class SpellTemplate", "Guarded Heal", "Life", 90, 2, std::move(heal)) },
-                { "ObjectData/Not A Spell.xml", Spell("class SpellTemplate", "Not A Spell", "Fire", 0, 0, {}) } };
+                { "Spells/Tiered Spells/Retired Bolt.xml", Spell("class TieredSpellTemplate", "Retired Bolt", "Storm", 70, 1, {}, true) },
+                { "ObjectData/Not A Spell.xml", Spell("class SpellTemplate", "Not A Spell", "Fire", 0, 0, {}) },
+                { "TieredSpellsGroupInfo.xml", GroupInfo({ { "Fire Cat", 4 }, { "Fire Cat - T02", 4 }, { "Storm Shark", 9 } }) } };
             _ids = { { "Spells/Fire Cat.xml", StringHash::KiStringHash("Fire Cat") }, { "Spells/Fire Cat - Amulet.xml", StringHash::KiStringHash("Fire Cat - Amulet") },
-                { "Spells/Life/Guarded Heal.xml", StringHash::KiStringHash("Guarded Heal") }, { "ObjectData/Not A Spell.xml", 7 }, { "Spells/Broken One.xml", 100 },
+                { "Spells/Life/Guarded Heal.xml", StringHash::KiStringHash("Guarded Heal") },
+                { "Spells/Tiered Spells/Retired Bolt.xml", StringHash::KiStringHash("Retired Bolt") }, { "ObjectData/Not A Spell.xml", 7 }, { "Spells/Broken One.xml", 100 },
                 { "Spells/Broken Two.xml", 101 }, { "Spells/Garbage.xml", 102 } };
             return spells;
+        }
+
+        Entries WithGroupInfo(Entries files, std::vector<uint8> groupInfo)
+        {
+            std::erase_if(files, [](auto const& file) { return file.first == TieredSpellGroups::Entry; });
+            if (!groupInfo.empty())
+                files.emplace_back(std::string(TieredSpellGroups::Entry), std::move(groupInfo));
+            return files;
+        }
+
+        std::vector<uint8> GroupInfo(std::vector<std::pair<std::string, int32>> const& groups)
+        {
+            PropertyValue::List infos;
+            for (auto const& [name, index] : groups)
+            {
+                PropertyObjectPtr data = PropertyObject::Create(_catalog, "class TieredSpellGroupInfoData");
+                EXPECT_EQ(data->Set("m_tsGroupIndex", index), PropertySetResult::Ok);
+                EXPECT_EQ(data->Set("m_tsGroupTierOneSpellName", name.substr(0, name.find(" - "))), PropertySetResult::Ok);
+                PropertyObjectPtr info = PropertyObject::Create(_catalog, "class TieredSpellGroupInfo");
+                EXPECT_EQ(info->Set("m_spellName", name), PropertySetResult::Ok);
+                EXPECT_EQ(info->Set("m_theTieredSpellGroupInfoData", std::move(data)), PropertySetResult::Ok);
+                infos.emplace_back(std::move(info));
+            }
+            PropertyObjectPtr list = PropertyObject::Create(_catalog, "class TieredSpellGroupInfoList");
+            EXPECT_EQ(list->Set("m_tieredSpellGroupInfoList", std::move(infos)), PropertySetResult::Ok);
+            return WriteBind(list);
         }
 
         std::vector<uint8> Manifest(Locations const& locations)
@@ -155,7 +190,8 @@ namespace
             return conditional;
         }
 
-        std::vector<uint8> Spell(std::string const& className, std::string const& name, std::string const& school, int32 accuracy, uint8 rank, PropertyValue::List effects)
+        std::vector<uint8> Spell(std::string const& className, std::string const& name, std::string const& school, int32 accuracy, uint8 rank, PropertyValue::List effects,
+            bool retired = false)
         {
             PropertyObjectPtr spell = PropertyObject::Create(_catalog, className);
             EXPECT_TRUE(spell) << className;
@@ -167,6 +203,10 @@ namespace
             EXPECT_EQ(pips->Set("m_spellRank", rank), PropertySetResult::Ok);
             EXPECT_EQ(spell->Set("m_spellRank", std::move(pips)), PropertySetResult::Ok);
             EXPECT_EQ(spell->Set("m_effects", std::move(effects)), PropertySetResult::Ok);
+            if (retired)
+            {
+                EXPECT_EQ(spell->Set("m_retired", true), PropertySetResult::Ok);
+            }
             return WriteBind(spell);
         }
 
@@ -183,7 +223,7 @@ TEST_F(SpellMgrTest, EverySpellUnderSpellsIsReadAndFoundByIdByNameAndBySearch)
     std::vector<std::string> errors;
     ASSERT_TRUE(_spells.Load(errors)) << errors.front();
     std::shared_ptr<SpellStore const> const spells = _spells.GetSpells();
-    ASSERT_EQ(spells->Size(), 3u) << "a template outside Spells/ is not a spell the manager reads";
+    ASSERT_EQ(spells->Size(), 4u) << "a template outside Spells/ is not a spell the manager reads";
     SpellInfo const* const cat = spells->Find(StringHash::KiStringHash("Fire Cat"));
     ASSERT_NE(cat, nullptr);
     EXPECT_EQ(cat->Name, "Fire Cat");
@@ -233,6 +273,50 @@ TEST_F(SpellMgrTest, ASpellsEffectsAreATreeAndOnesBehindRequirementsAreMarked)
     EXPECT_EQ(heal->Pips.Rank, 2);
 }
 
+TEST_F(SpellMgrTest, ATieredSpellCarriesTheGroupItsFileNamesAndItsRetiredFlag)
+{
+    std::vector<std::string> errors;
+    ASSERT_TRUE(_spells.Load(errors)) << errors.front();
+    std::shared_ptr<SpellStore const> const spells = _spells.GetSpells();
+    SpellInfo const* const cat = spells->FindByName("Fire Cat");
+    ASSERT_NE(cat, nullptr);
+    EXPECT_TRUE(cat->Tiered);
+    EXPECT_FALSE(cat->Retired);
+    EXPECT_EQ(cat->TieredGroupIndex, 4);
+    SpellInfo const* const bolt = spells->FindByName("Retired Bolt");
+    ASSERT_NE(bolt, nullptr);
+    EXPECT_TRUE(bolt->Tiered);
+    EXPECT_TRUE(bolt->Retired);
+    EXPECT_EQ(bolt->TieredGroupIndex, SpellInfo::NoTieredGroup) << "a tiered spell the file does not name is in no group";
+    SpellInfo const* const amulet = spells->FindByName("Fire Cat - Amulet");
+    ASSERT_NE(amulet, nullptr);
+    EXPECT_FALSE(amulet->Tiered);
+    EXPECT_EQ(amulet->TieredGroupIndex, SpellInfo::NoTieredGroup) << "only a tiered spell is looked up, as the client looks it up";
+    EXPECT_EQ(cat->Describe(_catalog.get()).front(), fmt::format("Fire Cat, template {}, Spells/Fire Cat.xml, a TieredSpellTemplate, in tiered spell group 4", cat->TemplateId));
+    EXPECT_EQ(bolt->Describe(_catalog.get()).front(),
+        fmt::format("Retired Bolt, template {}, Spells/Tiered Spells/Retired Bolt.xml, a TieredSpellTemplate, in no tiered spell group, retired", bolt->TemplateId));
+}
+
+TEST_F(SpellMgrTest, AGroupFileThatIsMissingOrNamesASpellTwiceFailsTheSet)
+{
+    sObjectTemplateMgr.RegisterReloadTargets();
+    _spells.RegisterReloadTargets();
+    ASSERT_TRUE(sReloadMgr.Reload(SpellMgr::Target).Ok);
+
+    WriteRoot(WithGroupInfo(GoodSpells(), {}));
+    ASSERT_TRUE(sReloadMgr.Reload(ObjectTemplateMgr::ManifestTarget).Ok);
+    ReloadOutcome const missing = sReloadMgr.Reload(SpellMgr::Target);
+    EXPECT_FALSE(missing.Ok);
+    EXPECT_TRUE(Holds(missing.Errors, "TieredSpellsGroupInfo.xml cannot be read"));
+
+    WriteRoot(WithGroupInfo(GoodSpells(), GroupInfo({ { "Fire Cat", 4 }, { "Fire Cat", 5 } })));
+    ASSERT_TRUE(sReloadMgr.Reload(ObjectTemplateMgr::ManifestTarget).Ok);
+    ReloadOutcome const twice = sReloadMgr.Reload(SpellMgr::Target);
+    EXPECT_FALSE(twice.Ok);
+    EXPECT_TRUE(Holds(twice.Errors, "TieredSpellsGroupInfo.xml names Fire Cat twice, in groups 4 and 5"));
+    EXPECT_EQ(_spells.GetSpells()->FindByName("Fire Cat")->TieredGroupIndex, 4) << "the set that was serving goes on serving";
+}
+
 TEST_F(SpellMgrTest, ASpellWhoseIdIsNotTheHashOfItsNameIsRefused)
 {
     std::vector<SpellInfo> spells(2);
@@ -257,7 +341,7 @@ TEST_F(SpellMgrTest, AReloadThatMeetsFailingSpellsKeepsTheSetServingAndNamesEach
     _spells.RegisterReloadTargets();
     ReloadOutcome const first = sReloadMgr.Reload(SpellMgr::Target);
     ASSERT_TRUE(first.Ok) << first.Errors.front();
-    ASSERT_EQ(_spells.GetSpells()->Size(), 3u);
+    ASSERT_EQ(_spells.GetSpells()->Size(), 4u);
 
     Entries files = GoodSpells();
     files.emplace_back("Spells/Broken One.xml", Manifest({}));
@@ -270,8 +354,8 @@ TEST_F(SpellMgrTest, AReloadThatMeetsFailingSpellsKeepsTheSetServingAndNamesEach
     ASSERT_EQ(broken.Errors.size(), 3u);
     EXPECT_TRUE(Holds(broken.Errors, "Spells/Broken One.xml is a class TemplateManifest, which is not a SpellTemplate; 1 more fail the same way, such as Spells/Broken Two.xml"));
     EXPECT_TRUE(Holds(broken.Errors, "Spells/Garbage.xml in Root.wad does not read"));
-    EXPECT_TRUE(Holds(broken.Errors, "3 of the 6 spells under Spells/ fail to load"));
-    EXPECT_EQ(_spells.GetSpells()->Size(), 3u) << "the set that was serving goes on serving";
+    EXPECT_TRUE(Holds(broken.Errors, "3 of the 7 spells under Spells/ fail to load"));
+    EXPECT_EQ(_spells.GetSpells()->Size(), 4u) << "the set that was serving goes on serving";
     EXPECT_NE(_spells.GetSpells()->FindByName("Fire Cat"), nullptr);
 }
 

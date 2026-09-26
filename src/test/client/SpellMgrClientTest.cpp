@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads every spell of the user's own r806919 install through the spell manager, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: all 18173 templates the manifest lists under Spells/ load with no failure, each one's template id the hash of its name, so the name-hash and id lookups agree for every spell; Fire Cat - Amulet deals Fire damage to one enemy through the random effect that chooses its amount; and Fire Cat is described by its school, rank, accuracy and effects, the damage it deals chosen among five amounts by a random effect.
+ * Reads every spell of the user's own r806919 install through the spell manager, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: all 18173 templates the manifest lists under Spells/ load with no failure, each one's template id the hash of its name, so the name-hash and id lookups agree for every spell; Fire Cat - Amulet deals Fire damage to one enemy through the random effect that chooses its amount; and Fire Cat is described by its school, rank, accuracy and effects, the damage it deals chosen among five amounts by a random effect, and filed with the twelve tiers above it under tiered spell group 4, not retired, while its amulet is no tiered spell.
  */
 
 #include "Environment.h"
@@ -128,10 +128,34 @@ TEST_F(SpellMgrClientTest, FireCatIsDescribedByItsSchoolRankAccuracyAndEffects)
     for (std::string const& line : lines)
         std::cout << line << "\n";
     ASSERT_GE(lines.size(), 3u);
-    EXPECT_EQ(lines[0], "Fire Cat, template 103007158, Spells/Tiered Spells/Fire Cat.xml, a TieredSpellTemplate");
+    EXPECT_EQ(lines[0], "Fire Cat, template 103007158, Spells/Tiered Spells/Fire Cat.xml, a TieredSpellTemplate, in tiered spell group 4");
     EXPECT_NE(lines[1].find("school Fire"), std::string::npos) << lines[1];
     EXPECT_NE(lines[1].find("rank 1"), std::string::npos) << lines[1];
     EXPECT_NE(lines[1].find("accuracy"), std::string::npos) << lines[1];
     EXPECT_NE(lines[2].find("a RandomSpellEffect of:"), std::string::npos) << lines[2] << " is the random effect that chooses Fire Cat's damage";
     EXPECT_NE(std::find(lines.begin(), lines.end(), "    kDamage 80 Fire to kEnemySingle"), lines.end()) << "the least it can deal, under the random effect";
+}
+
+TEST_F(SpellMgrClientTest, FireCatIsATieredSpellInGroupFourLikeEveryTierAboveIt)
+{
+    std::shared_ptr<SpellStore const> const spells = s_spells->GetSpells();
+    SpellInfo const* const cat = spells->FindByName("Fire Cat");
+    ASSERT_NE(cat, nullptr);
+    EXPECT_TRUE(cat->Tiered);
+    EXPECT_FALSE(cat->Retired);
+    EXPECT_EQ(cat->TieredGroupIndex, 4) << "TieredSpellsGroupInfo.xml files Fire Cat under group 4";
+    std::size_t tiers = 0;
+    for (SpellInfo const& spell : spells->GetAll())
+    {
+        if (!spell.File.starts_with("Spells/Tiered Spells/Fire Cat - T"))
+            continue;
+        ++tiers;
+        EXPECT_TRUE(spell.Tiered) << spell.Name;
+        EXPECT_EQ(spell.TieredGroupIndex, 4) << spell.Name;
+    }
+    EXPECT_EQ(tiers, 12u) << "Fire Cat's higher tiers are spells of their own, while its tiered treasure cards and pet spells are plain ones";
+    SpellInfo const* const amulet = spells->FindByName("Fire Cat - Amulet");
+    ASSERT_NE(amulet, nullptr);
+    EXPECT_FALSE(amulet->Tiered);
+    EXPECT_EQ(amulet->TieredGroupIndex, SpellInfo::NoTieredGroup);
 }

@@ -32,6 +32,7 @@
   "targets": {
     "login_reconnect": {"at": [771, 428], "presses": "the button of the refused-login dialog that reconnects"},
     "charselect_play": {"at": [640, 689], "presses": "the button of the character selection screen that plays the chosen wizard"},
+    "spellbook_fire": {"at": [398, 141], "presses": "the Fire tab along the top of the spellbook P opens"},
     "charselect_new": {"at": [946, 689], "presses": "the button of the character selection screen that starts a new wizard"},
     "dialog_next": {"at": [806, 697], "presses": "the button that moves a creation dialogue on"},
     "test_skip": {"at": [405, 605], "presses": "the button that skips the sorting test"},

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Ambrose-authored LOGIN, GAME, WIZARD and WIZARD2 message definitions for login and game server tests: the authentication requests and replies, the AFK and shutdown messages with their field layouts, the character list request and its replies, the character pick and where it sends the client, the GAME attach, its refusal, the moves, movement states and jumps a client sends, and the login completion that hands the client its object, which the game server sends and the login server never accepts, the WIZARD requests and notes a client sends as it enters with the replies that answer them, at the orders the r806919 client gives them, and the WIZARD2 note the client sends once it has loaded its zone.
+ * Ambrose-authored LOGIN, GAME, WIZARD and WIZARD2 message definitions for login and game server tests: the authentication requests and replies, the AFK and shutdown messages with their field layouts, the character list request and its replies, the character pick and where it sends the client, the GAME attach, its refusal, the moves, movement states and jumps a client sends, and the login completion that hands the client its object, which the game server sends and the login server never accepts, the WIZARD requests and notes a client sends as it enters with the replies that answer them, and the spell the game server adds to a wizard's spellbook or takes from it, at the orders the r806919 client gives them, and the WIZARD2 note the client sends once it has loaded its zone.
  */
 
 #ifndef AMBROSE_LOGINMESSAGEFIXTURES_H
@@ -55,6 +55,7 @@ namespace LoginMessageFixtures
     inline constexpr std::string_view WizardXml = R"(<?xml version="1.0" ?>
 <FixtureWizardMessages>
 <_ProtocolInfo><RECORD><ServiceID TYPE="UBYT">12</ServiceID><ProtocolType TYPE="STR">WIZARD</ProtocolType></RECORD></_ProtocolInfo>
+<MSG_ADDSPELLTOBOOK><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">10</_MsgOrder><SpellID TYPE="INT"></SpellID></RECORD></MSG_ADDSPELLTOBOOK>
 <MSG_CROWNBALANCE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">41</_MsgOrder><Failure TYPE="UBYT">0</Failure><TotalCrowns TYPE="INT">0</TotalCrowns><CharacterID TYPE="GID"></CharacterID><CacheBalanceForCSSegmentation TYPE="UBYT">0</CacheBalanceForCSSegmentation></RECORD></MSG_CROWNBALANCE>
 <MSG_DONESHOPPING><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">50</_MsgOrder><TransactionID TYPE="GID"></TransactionID></RECORD></MSG_DONESHOPPING>
 <MSG_GETSUBSCRIBERONLYITEMS><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">64</_MsgOrder></RECORD></MSG_GETSUBSCRIBERONLYITEMS>
@@ -62,6 +63,7 @@ namespace LoginMessageFixtures
 <MSG_LOGCLIENTRESOLUTION><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">87</_MsgOrder><ScreenWidth TYPE="UINT"></ScreenWidth><ScreenHeight TYPE="UINT"></ScreenHeight><FullScreen TYPE="UBYT"></FullScreen><ClassicMode TYPE="UBYT"></ClassicMode></RECORD></MSG_LOGCLIENTRESOLUTION>
 <MSG_LOGPATCHCLIENTPATCHTIME><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">89</_MsgOrder><PatchClientPatchTime TYPE="UINT"></PatchClientPatchTime></RECORD></MSG_LOGPATCHCLIENTPATCHTIME>
 <MSG_QUESTFINDEROPTION><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">145</_MsgOrder><Enable TYPE="UBYT"></Enable></RECORD></MSG_QUESTFINDEROPTION>
+<MSG_REMOVESPELLFROMBOOK><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">155</_MsgOrder><SpellID TYPE="INT"></SpellID></RECORD></MSG_REMOVESPELLFROMBOOK>
 <MSG_SUBSCRIBERONLYITEMS><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">211</_MsgOrder><Data TYPE="STR"></Data></RECORD></MSG_SUBSCRIBERONLYITEMS>
 <MSG_TIMEDACCESSPASSES><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">212</_MsgOrder><Data TYPE="STR"></Data></RECORD></MSG_TIMEDACCESSPASSES>
 </FixtureWizardMessages>

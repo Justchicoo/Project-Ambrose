@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The prefix a client types is taken off first, so a console and a chat line reach the same table. A line is split on spaces with quoted words kept whole, then walked down the tree taking the longest run of words that names a command, so 'character gold 500' finds the gold command inside character and leaves 500 as its argument rather than guessing where the name ends. A command the caller may not run is answered exactly as one that does not exist, and a group named on its own lists what is under it that the caller may actually see.
+ * The prefix a client types is taken off first, so a console and a chat line reach the same table. A line is split on spaces with quoted words kept whole, and the words a console has already split are taken as they are, so a quoted word keeps its spaces rather than being joined and split again; either is then walked down the tree taking the longest run of words that names a command, so 'character gold 500' finds the gold command inside character and leaves 500 as its argument rather than guessing where the name ends. A command the caller may not run is answered exactly as one that does not exist, and a group named on its own lists what is under it that the caller may actually see.
  */
 
 #include "CommandMgr.h"
@@ -248,8 +248,29 @@ CommandResult CommandMgr::Execute(CommandCaller& caller, std::string_view line) 
         caller.Reply(fmt::format("That command is longer than the {} bytes a command may be", MaxCommandBytes));
         return CommandResult::Refused;
     }
-
     std::vector<std::string> words;
+    {
+        std::lock_guard const lock(_mutex);
+        words = Split(Unprefixed(line, _prefix));
+    }
+    return Dispatch(caller, std::move(words));
+}
+
+CommandResult CommandMgr::Execute(CommandCaller& caller, std::vector<std::string> words) const
+{
+    std::size_t bytes = 0;
+    for (std::string const& word : words)
+        bytes += word.size() + 1;
+    if (bytes > MaxCommandBytes + 1)
+    {
+        caller.Reply(fmt::format("That command is longer than the {} bytes a command may be", MaxCommandBytes));
+        return CommandResult::Refused;
+    }
+    return Dispatch(caller, std::move(words));
+}
+
+CommandResult CommandMgr::Dispatch(CommandCaller& caller, std::vector<std::string> words) const
+{
     Node const* node = nullptr;
     std::size_t used = 0;
     std::vector<std::string> arguments;
@@ -260,7 +281,6 @@ CommandResult CommandMgr::Execute(CommandCaller& caller, std::string_view line) 
     bool logging = false;
     {
         std::lock_guard const lock(_mutex);
-        words = Split(Unprefixed(line, _prefix));
         if (words.empty())
             return CommandResult::Empty;
         node = Find(words, used);
