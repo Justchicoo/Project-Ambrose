@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Ambrose-authored LOGIN, GAME, WIZARD and WIZARD2 message definitions for login and game server tests: the authentication requests and replies, the AFK and shutdown messages with their field layouts, the character list request and its replies, the character pick and where it sends the client, the GAME attach, its refusal, the moves, movement states and jumps a client sends, and the login completion that hands the client its object, which the game server sends and the login server never accepts, the WIZARD requests and notes a client sends as it enters with the replies that answer them, at the orders the r806919 client gives them, and the WIZARD2 note the client sends once it has loaded its zone.
+ * Ambrose-authored LOGIN, GAME, WIZARD, WIZARD2 and WizCombat message definitions for login and game server tests: the authentication requests and replies, the AFK and shutdown messages with their field layouts, the character list request and its replies, the character pick and where it sends the client, the GAME attach, its refusal, the moves, movement states and jumps a client sends, and the login completion that hands the client its object, which the game server sends and the login server never accepts, the WIZARD requests and notes a client sends as it enters with the replies that answer them, at the orders the r806919 client gives them, the WIZARD2 note the client sends once it has loaded its zone, and the service-51 catalog plus the two tested wire layouts.
  */
 
 #ifndef AMBROSE_LOGINMESSAGEFIXTURES_H
@@ -74,10 +74,53 @@ namespace LoginMessageFixtures
 </FixtureWizard2Messages>
 )";
 
+    inline constexpr std::string_view WizCombatXml = R"(<?xml version="1.0" ?>
+<FixtureWizCombatMessages>
+<_ProtocolInfo><RECORD><ServiceID TYPE="UBYT">51</ServiceID><ProtocolType TYPE="STR">DOODLEDOUG_MESSAGES</ProtocolType></RECORD></_ProtocolInfo>
+<MSG_ALLOWLEAVEPVP><RECORD></RECORD></MSG_ALLOWLEAVEPVP>
+<MSG_COMBATACTIONS><RECORD></RECORD></MSG_COMBATACTIONS>
+<MSG_COMBATADD><RECORD></RECORD></MSG_COMBATADD>
+<MSG_COMBATAFK><RECORD><DuelID TYPE="GID"></DuelID><IsCombatAFK TYPE="UBYT"></IsCombatAFK></RECORD></MSG_COMBATAFK>
+<MSG_COMBATCHEAT><RECORD><CheatFlags TYPE="UINT"></CheatFlags><MaycastChance TYPE="FLT"></MaycastChance></RECORD></MSG_COMBATCHEAT>
+<MSG_COMBATDRAW><RECORD></RECORD></MSG_COMBATDRAW>
+<MSG_COMBATFLEE><RECORD></RECORD></MSG_COMBATFLEE>
+<MSG_COMBATHAND><RECORD></RECORD></MSG_COMBATHAND>
+<MSG_COMBATHEALTH><RECORD></RECORD></MSG_COMBATHEALTH>
+<MSG_COMBATLOADED><RECORD></RECORD></MSG_COMBATLOADED>
+<MSG_COMBATMATCHRESULT><RECORD></RECORD></MSG_COMBATMATCHRESULT>
+<MSG_COMBATMOVE><RECORD><_MsgName TYPE="STR" NOXFER="TRUE">MSG_COMBATMOVE</_MsgName><_MsgDescription TYPE="STR" NOXFER="TRUE">Combat move fixture metadata.</_MsgDescription><_MsgHandler TYPE="STR" NOXFER="TRUE">MSG_CombatMove</_MsgHandler><MoveType TYPE="UBYT"></MoveType><SpellSelection TYPE="UBYT"></SpellSelection><SpellTarget TYPE="UINT"></SpellTarget><TimeLeft TYPE="INT"></TimeLeft><ShadowPactTarget TYPE="INT"></ShadowPactTarget><SelectedTieredSpellID TYPE="INT"></SelectedTieredSpellID></RECORD></MSG_COMBATMOVE>
+<MSG_COMBATMOVESELECTION><RECORD></RECORD></MSG_COMBATMOVESELECTION>
+<MSG_COMBATPAUSED><RECORD></RECORD></MSG_COMBATPAUSED>
+<MSG_COMBATPHASE><RECORD></RECORD></MSG_COMBATPHASE>
+<MSG_COMBATPHASEFORSPECTATORS><RECORD><_MsgName TYPE="STR" NOXFER="TRUE">MSG_COMBATPHASEFORSPECTATORS</_MsgName><_MsgDescription TYPE="STR" NOXFER="TRUE">Spectator phase fixture metadata.</_MsgDescription><_MsgHandler TYPE="STR" NOXFER="TRUE">MSG_CombatPhaseForSpectators</_MsgHandler><DuelID TYPE="GID"></DuelID><NewPhase TYPE="UBYT"></NewPhase><Time TYPE="UBYT"></Time><ParticipantName1 TYPE="STR"></ParticipantName1><ParticipantName2 TYPE="STR"></ParticipantName2><ParticipantName3 TYPE="STR"></ParticipantName3><ParticipantName4 TYPE="STR"></ParticipantName4><ParticipantName5 TYPE="STR"></ParticipantName5><ParticipantName6 TYPE="STR"></ParticipantName6><ParticipantName7 TYPE="STR"></ParticipantName7><ParticipantName8 TYPE="STR"></ParticipantName8><Subcircles TYPE="UINT"></Subcircles><TeamName0 TYPE="UINT"></TeamName0><TeamName1 TYPE="UINT"></TeamName1></RECORD></MSG_COMBATPHASEFORSPECTATORS>
+<MSG_COMBATPIPS><RECORD></RECORD></MSG_COMBATPIPS>
+<MSG_COMBATREMOVE><RECORD></RECORD></MSG_COMBATREMOVE>
+<MSG_COMBATREVEALHANGING><RECORD></RECORD></MSG_COMBATREVEALHANGING>
+<MSG_COMBATSTATS><RECORD></RECORD></MSG_COMBATSTATS>
+<MSG_COMBATUPFIRST><RECORD></RECORD></MSG_COMBATUPFIRST>
+<MSG_COMBATVICTORY><RECORD></RECORD></MSG_COMBATVICTORY>
+<MSG_DISMISS_SUMMON><RECORD><Subcircle TYPE="UINT"></Subcircle></RECORD></MSG_DISMISS_SUMMON>
+<MSG_DUEL><RECORD></RECORD></MSG_DUEL>
+<MSG_ENDDUEL><RECORD></RECORD></MSG_ENDDUEL>
+<MSG_PETWILLCAST><RECORD><PetCastingSpell TYPE="STR"></PetCastingSpell><Target TYPE="INT"></Target></RECORD></MSG_PETWILLCAST>
+<MSG_SETDUELTIMER><RECORD></RECORD></MSG_SETDUELTIMER>
+<MSG_SETPLANNINGPHASETIMER><RECORD></RECORD></MSG_SETPLANNINGPHASETIMER>
+<MSG_SETST><RECORD></RECORD></MSG_SETST>
+<MSG_SETST2><RECORD></RECORD></MSG_SETST2>
+<MSG_SETSTATUS><RECORD></RECORD></MSG_SETSTATUS>
+<MSG_SHOWCOMBATUI><RECORD></RECORD></MSG_SHOWCOMBATUI>
+<MSG_SHOWPETCARD><RECORD></RECORD></MSG_SHOWPETCARD>
+<MSG_SIGILSPELL><RECORD></RECORD></MSG_SIGILSPELL>
+<MSG_UPDATECOMBATPARTICIPANT><RECORD></RECORD></MSG_UPDATECOMBATPARTICIPANT>
+<MSG_UPDATEDUELTIMER><RECORD></RECORD></MSG_UPDATEDUELTIMER>
+</FixtureWizCombatMessages>
+)";
+
     inline bool AddTo(MessageDefinitionSet& definitions, bool withGame = false)
     {
         return definitions.Add(LoginXml, "FixtureLoginMessages.xml")
-            && (!withGame || (definitions.Add(GameXml, "FixtureGameMessages.xml") && definitions.Add(WizardXml, "FixtureWizardMessages.xml") && definitions.Add(Wizard2Xml, "FixtureWizard2Messages.xml")))
+            && (!withGame || (definitions.Add(GameXml, "FixtureGameMessages.xml") && definitions.Add(WizardXml, "FixtureWizardMessages.xml") && definitions.Add(Wizard2Xml, "FixtureWizard2Messages.xml")
+                && definitions.Add(WizCombatXml, "FixtureWizCombatMessages.xml")))
             && BaseMessageFixtures::AddTo(definitions);
     }
 }
