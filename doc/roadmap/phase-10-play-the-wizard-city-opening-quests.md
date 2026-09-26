@@ -844,7 +844,7 @@ NPCs with path data walk their routes on the server, and every client sees the s
 
 **Deliverables**
 
-- zone_extractor: decode pathData.xml (PathManager::PathTemplateList, 0x3B6A23E8) and pathNodeData.bin into world.zone_path and world.zone_path_node
+- extractor zones: decode pathData.xml (PathManager::PathTemplateList, 0x3B6A23E8) and pathNodeData.bin into world.zone_path and world.zone_path_node
 - src/server/game/Movement/PathMovementGenerator.h/.cpp: node-to-node travel at PathMovementBehaviorTemplate m_movementSpeed * m_movementScale, with loop, ping-pong and wait handling per path data
 - Relays MSG_SERVERMOVE plus MSG_MOVESTATE to viewers only, paused when no player is in the Map
 - `.reload zone_path` as a 4.15 target: builds zone_path and zone_path_node off to the side, validates them, and swaps them; an NPC on a changed path continues from its next node on the new path, and a failure keeps the old paths and reports every error

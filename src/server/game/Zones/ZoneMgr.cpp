@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the three zone tables into stores that are swapped in whole. A location or an object naming a zone no template knows is a refusal with that row named rather than a row quietly dropped, because a place nothing can load is how a wizard ends up nowhere, and the refusal leaves the rows already serving in place. Coordinates come out of the JSON the extractor wrote, [x,y,z] for a place, and a direction is taken only as far as its shape allows: one number is a yaw, three are the pitch, yaw and roll the extractor writes for an euler, and four are a quaternion whose yaw is left unanswered rather than converted through a convention this project has not established. Only the first few problems of a build are reported, because a table that is wrong is usually wrong in every row and an operator needs the shape of it rather than all of it.
+ * Reads the three zone tables into stores that are swapped in whole. A location or an object naming a zone no template knows is a refusal with that row named rather than a row quietly dropped, because a place nothing can load is how a wizard ends up nowhere, and the refusal leaves the rows already serving in place; so is an object whose loading type is none the client has. Only the first few problems of a build are reported, because a table that is wrong is usually wrong in every row and an operator needs the shape of it rather than all of it.
  */
 
 #include "ZoneMgr.h"
@@ -10,7 +10,6 @@
 #include "WorldDatabase.h"
 
 #include <fmt/format.h>
-#include <nlohmann/json.hpp>
 
 #include <chrono>
 #include <utility>
@@ -18,54 +17,6 @@
 namespace
 {
     constexpr char const* ZoneLog = "server.zones";
-
-    bool Numbers(std::string_view text, std::vector<double>& into)
-    {
-        nlohmann::json const held = nlohmann::json::parse(text, nullptr, false);
-        if (held.is_number())
-        {
-            into.push_back(held.get<double>());
-            return true;
-        }
-        if (!held.is_array())
-            return false;
-        for (nlohmann::json const& value : held)
-        {
-            if (!value.is_number())
-                return false;
-            into.push_back(value.get<double>());
-        }
-        return true;
-    }
-
-    bool ReadPoint(Field const& field, float& x, float& y, float& z)
-    {
-        if (field.IsNull())
-            return true;
-        std::vector<double> parts;
-        if (!Numbers(field.Get<std::string>(), parts) || parts.size() < 3)
-            return false;
-        x = static_cast<float>(parts[0]);
-        y = static_cast<float>(parts[1]);
-        z = static_cast<float>(parts[2]);
-        return true;
-    }
-
-    bool ReadYaw(Field const& field, std::optional<float>& yaw)
-    {
-        if (field.IsNull())
-            return true;
-        std::vector<double> parts;
-        if (!Numbers(field.Get<std::string>(), parts))
-            return false;
-        if (parts.size() == 1)
-            yaw = static_cast<float>(parts[0]);
-        else if (parts.size() == 3)
-            yaw = static_cast<float>(parts[1]);
-        else if (parts.size() != 4)
-            return false;
-        return true;
-    }
 
     void Report(std::vector<std::string>& errors, std::string problem)
     {
@@ -230,16 +181,10 @@ ZoneLocations ZoneMgr::ReadLocations(PreparedResultSet* result, ZoneTemplates co
             Report(errors, fmt::format("zone_location row {} of zone {} has no name", id, zone));
             continue;
         }
-        if (!ReadPoint(row[3], location.X, location.Y, location.Z))
-        {
-            Report(errors, fmt::format("zone_location row {} of zone {} has a location this server cannot read", id, zone));
-            continue;
-        }
-        if (!ReadYaw(row[4], location.Yaw))
-        {
-            Report(errors, fmt::format("zone_location row {} of zone {} has a direction this server cannot read", id, zone));
-            continue;
-        }
+        location.X = row[3].Get<float>();
+        location.Y = row[4].Get<float>();
+        location.Z = row[5].Get<float>();
+        location.Yaw = row[6].Get<float>();
         byZone[zone].push_back(std::move(location));
     } while (result->NextRow());
     return ZoneLocations(std::move(byZone));
@@ -262,26 +207,25 @@ ZoneObjects ZoneMgr::ReadObjects(PreparedResultSet* result, ZoneTemplates const&
         }
         ZoneObjectSpawn object;
         object.Id = id;
-        object.ObjectId = row[2].Get<uint32>();
-        if (!row[3].IsNull())
-            object.TemplateId = row[3].Get<uint64>();
-        if (!ReadPoint(row[4], object.X, object.Y, object.Z))
+        object.ClassName = row[2].Get<std::string>();
+        object.TemplateId = row[3].Get<uint64>();
+        object.ObjectId = row[4].Get<uint32>();
+        object.Position = { row[5].Get<float>(), row[6].Get<float>(), row[7].Get<float>() };
+        object.Orientation = { row[8].Get<float>(), row[9].Get<float>(), row[10].Get<float>() };
+        object.Scale = row[11].Get<float>();
+        object.Tag = row[12].Get<std::string>();
+        object.StartState = row[13].Get<std::string>();
+        object.OverrideName = row[14].Get<std::string>();
+        object.GlobalDynamic = row[15].Get<uint8>() != 0;
+        object.Undetectable = row[16].Get<uint8>() != 0;
+        uint8 const loading = row[17].Get<uint8>();
+        if (loading > static_cast<uint8>(ZoneObjectLoading::DynamicServer))
         {
-            Report(errors, fmt::format("zone_object row {} of zone {} has a location this server cannot read", id, zone));
+            Report(errors, fmt::format("zone_object row {} of zone {} has loading type {}, which the client does not have", id, zone, loading));
             continue;
         }
-        if (!ReadYaw(row[5], object.Yaw))
-        {
-            Report(errors, fmt::format("zone_object row {} of zone {} has an orientation this server cannot read", id, zone));
-            continue;
-        }
-        if (!row[6].IsNull())
-            object.Scale = row[6].Get<float>();
-        object.Tag = row[7].Get<std::string>();
-        if (!row[8].IsNull())
-            object.StartState = row[8].Get<int64>();
-        if (!row[9].IsNull())
-            object.LoadingType = row[9].Get<int64>();
+        object.Loading = static_cast<ZoneObjectLoading>(loading);
+        object.HasSpawnRequirements = row[18].Get<uint8>() != 0;
         byZone[zone].push_back(std::move(object));
     } while (result->NextRow());
     return ZoneObjects(std::move(byZone));

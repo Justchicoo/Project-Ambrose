@@ -10,6 +10,7 @@
 
 #include <fmt/format.h>
 
+#include <optional>
 #include <utility>
 
 namespace
@@ -92,13 +93,19 @@ PropertyObjectPtr PlayerObjectBuilder::Build(TypeCatalogPtr const& catalog, Core
     PropertyObjectPtr gameStats = Create(catalog, StatsClass, problem);
     if (!player || !gameStats)
         return nullptr;
-    CoreObjectType const* const pair = types.FindByClass(player->GetClass().Hash);
-    if (!pair)
+    std::optional<CoreObjectHeader> const header = playerTemplate.Object ? types.HeaderFor(playerTemplate.Object->GetClass(), playerTemplate.TemplateId) : std::nullopt;
+    if (!header)
     {
-        problem = fmt::format("core_object_type gives {} no block and type, so the client could not create it", PlayerClass);
+        problem = fmt::format("core_template_type gives the player's template class {} no core type, so the client could not create the player from it",
+            playerTemplate.Object ? playerTemplate.Object->GetClass().Name : std::string("(none)"));
         return nullptr;
     }
-    player->SetCoreHeader(CoreObjectHeader{ pair->Block, pair->Type, playerTemplate.TemplateId });
+    if (!types.Builds(header->Block, player->GetClass().Hash))
+    {
+        problem = fmt::format("the player's template gives core type {}, which core_object_type does not say builds {}", header->Block, PlayerClass);
+        return nullptr;
+    }
+    player->SetCoreHeader(*header);
 
     PropertyValue::List inactive;
     inactive.reserve(playerTemplate.Behaviors.size());

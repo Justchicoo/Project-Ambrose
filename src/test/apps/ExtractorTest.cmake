@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs the extractor to check its usage text, that bad usage, including an option given as another option's value and a command named twice, exits 2, that a missing world database is reported before anything is searched, that a missing install, type dump or database exits 1 with the reason, that on a machine holding a synthetic install AMBROSE_SETUP_MODE=off prints the find and the flag to pass while auto uses it and reports why no type dump could be built from it, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install, that a dry run prints every locale's four human table sizes and the seven schools, a levels dry run prints every level table and school, and a bad database is refused, --sql writes the script, and with AMBROSE_TEST_DB a world database dbimport creates is filled twice with the names and levels in one run, passes a dry run's table check, and loads in the game server with every name, school and level; it reports itself skipped when the client checks cannot run.
+# Runs the extractor to check its usage text, that bad usage, including an option given as another option's value and a command named twice, exits 2, that a missing world database is reported before anything is searched, that a missing install, type dump or database exits 1 with the reason, that on a machine holding a synthetic install AMBROSE_SETUP_MODE=off prints the find and the flag to pass while auto uses it and reports why no type dump could be built from it, and, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name the user's own install, that a dry run prints every locale's four human table sizes and the seven schools, a levels dry run prints every level table and school, a zones dry run prints how many zones, places and placed objects it read, and a bad database is refused, --sql writes the script, and with AMBROSE_TEST_DB a world database dbimport creates is filled twice with the names and levels in one run, passes a dry run's table check, and loads in the game server with every name, school and level; it reports itself skipped when the client checks cannot run.
 if(NOT APP OR NOT WORKDIR)
     message(FATAL_ERROR "APP and WORKDIR must be set")
 endif()
@@ -13,7 +13,7 @@ file(WRITE "${synthetic}/Bin/revision.dat" "r999999999.Synthetic_1_0\n")
 set(machineEnv "ProgramData=${machine}/drive_c/ProgramData" "WINEPREFIX=${machine}" "LOCALAPPDATA=${WORKDIR}/data" "XDG_DATA_HOME=${WORKDIR}/data" --unset=AMBROSE_CLIENT_DIR --unset=AMBROSE_TYPE_DUMP_PATH --unset=AMBROSE_WORLD_DATABASE_INFO)
 
 execute_process(COMMAND "${APP}" --help RESULT_VARIABLE helpResult OUTPUT_VARIABLE helpOutput ERROR_VARIABLE helpError TIMEOUT 30)
-if(NOT helpResult EQUAL 0 OR NOT helpOutput MATCHES "Usage: extractor" OR NOT helpOutput MATCHES "--world-db" OR NOT helpOutput MATCHES "levels  every school's base stats")
+if(NOT helpResult EQUAL 0 OR NOT helpOutput MATCHES "Usage: extractor" OR NOT helpOutput MATCHES "--world-db" OR NOT helpOutput MATCHES "levels  every school's base stats" OR NOT helpOutput MATCHES "zones   every zone's settings")
     message(FATAL_ERROR "extractor --help exited ${helpResult}: ${helpOutput}${helpError}")
 endif()
 
@@ -76,6 +76,12 @@ foreach(expected IN ITEMS "player_level_stats: 1267 rows for 7 schools" "with le
         "m_maxSchoolLevel 180" "magic_xp_encounter_factor: 3 rows" "stat_effect_config: 39 rows" "stat_crit_block_band: 114 rows" "stat_pip_conversion_band: 7 rows" "dry run: nothing was written")
     if(NOT levelsResult EQUAL 0 OR NOT levelsOutput MATCHES "${expected}")
         message(FATAL_ERROR "extractor --dry-run levels exited ${levelsResult} without '${expected}': ${levelsOutput}${levelsError}")
+    endif()
+endforeach()
+execute_process(COMMAND "${APP}" --dry-run zones RESULT_VARIABLE zonesResult OUTPUT_VARIABLE zonesOutput ERROR_VARIABLE zonesError TIMEOUT 900)
+foreach(expected IN ITEMS "zone_template: [0-9]+ rows from [0-9]+ archives" "zone_location: [0-9]+ rows" "zone_object: [0-9]+ rows" "dry run: nothing was written")
+    if(NOT zonesResult EQUAL 0 OR NOT zonesOutput MATCHES "${expected}")
+        message(FATAL_ERROR "extractor --dry-run zones exited ${zonesResult} without '${expected}': ${zonesOutput}${zonesError}")
     endif()
 endforeach()
 execute_process(COMMAND "${APP}" --dry-run --world-db "not a connection" names RESULT_VARIABLE dryDatabaseResult ERROR_VARIABLE dryDatabaseError TIMEOUT 600)

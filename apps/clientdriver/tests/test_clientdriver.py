@@ -424,12 +424,45 @@ class WorldEntryTests(TemporaryFolder):
         self.assertIn("LoginServerPort=12100", login.overrides())
         self.assertTrue(login.log.path.endswith("Login.log"))
 
-    def test_the_zone_rows_are_cached_by_revision_outside_the_repository(self):
+    def test_the_zone_rows_are_cached_by_revision_and_layout_outside_the_repository(self):
         path = zones.cache_path("r806919.Wizard_1_610")
-        self.assertTrue(path.endswith(os.path.join("clientdriver", "zones", "r806919.Wizard_1_610.sql")))
+        self.assertTrue(path.endswith(os.path.join("clientdriver", "zones", f"r806919.Wizard_1_610.v{zones.LAYOUT}.sql")))
         self.assertFalse(os.path.abspath(path).startswith(os.path.abspath(paths.REPOSITORY)))
         with self.assertRaises(StepFailed):
             zones.ensure(self.folder, self.folder, "")
+
+    def test_the_extractor_s_script_is_applied_statement_by_statement_without_its_header_comment(self):
+        script = os.path.join(self.folder, "zones.sql")
+        with open(script, "w", encoding="utf-8") as handle:
+            handle.write("-- Written by the Project Ambrose extractor from your own Wizard101 install.\n"
+                         "START TRANSACTION;\nDELETE FROM `zone_object`;\n\nINSERT INTO `zone_object` (`id`) VALUES (1), (2);\nCOMMIT;\n")
+        ran = []
+
+        class Cursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def execute(self, statement):
+                ran.append(statement)
+
+        class Connection:
+            def cursor(self):
+                return Cursor()
+
+            def commit(self):
+                ran.append("committed")
+
+            def close(self):
+                pass
+
+        scratch = database.Scratch("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose_driver_run")
+        with mock.patch.object(scratch, "_connect", return_value=Connection()):
+            said = scratch.apply_sql("world", script)
+        self.assertEqual(ran, ["START TRANSACTION;", "DELETE FROM `zone_object`;", "INSERT INTO `zone_object` (`id`) VALUES (1), (2);", "COMMIT;", "committed"])
+        self.assertIn("applied 4 statement(s)", said)
 
     def test_a_copied_wizard_unpacks_its_name_indices_and_keeps_only_appearance_columns(self):
         row = {"name_indices": (3 << 24) | (100 << 16) | (248 << 8) | 27, "school_id": 2343174, "level": 3, "world": 0,

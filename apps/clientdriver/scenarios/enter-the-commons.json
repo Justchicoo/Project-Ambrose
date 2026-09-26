@@ -1,9 +1,14 @@
 {
-  "title": "Log in with a wizard already made, play it in the Commons, and walk it",
+  "title": "Log in with a wizard already made, play it in the Commons among its objects, and walk it",
   "include": "parts/common.json",
   "notes": [
     "The same entry as enter-world.json, for a wizard saved in WizardCity/WC_Hub with no position of its own,",
     "so the game server puts it at the zone's Start, and it records the fields MSG_LOGINCOMPLETE carried.",
+    "Making the Commons' public instance fills it with every object the zone's data marks as the server's to",
+    "send, and the run records how many that is and how many the client waits for before it leaves the",
+    "loading screen; MSG_LOGINCOMPLETE names those, and every object follows as its own MSG_NEWOBJECT. The",
+    "client must load each one without a LoadObject failure, and the loading screen must end. On r806919 the",
+    "Commons' data marks 123 of its 177 placed objects as the server's to send, one of them critical.",
     "Once the wizard stands in the Commons the run holds W, the client's walk key, and passes only if that",
     "changes far more of the view than the same time with no key does, which is the player controlling the",
     "wizard. The client moves it on its own and reports each move in MSG_CLIENTMOVE, which the game server",
@@ -131,8 +136,18 @@
     },
     {
       "action": "wait_game_log",
+      "name": "the Commons' instance is filled with the objects the server sends",
+      "pattern": "(\\d+) objects spawned in WizardCity/WC_Hub, \\d+ of them critical",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "from": "start",
+      "record": true,
+      "expect": "123"
+    },
+    {
+      "action": "wait_game_log",
       "name": "the game server sends the wizard its object",
-      "pattern": "put wizard \\d+ in (\\S+) instance \\d+ at .* and sent its \\d+-byte object",
+      "pattern": "put wizard \\d+ in (\\S+) instance \\d+ at .* and sent its \\d+-byte object and the zone's \\d+ object\\(s\\)",
       "timeout": 60,
       "fail": "cannot enter the world",
       "expect": "WizardCity/WC_Hub",
@@ -154,7 +169,7 @@
     {
       "action": "wait_game_log",
       "name": "the game server says what MSG_LOGINCOMPLETE carried",
-      "pattern": "sent MSG_LOGINCOMPLETE: zone (\\S+), id \\d+, dynamic zone \\d+ in process \\d+, server time \\d+, realm .+, permissions 0x[0-9a-f]+, CSR \\d, test server \\d, critical objects none",
+      "pattern": "sent MSG_LOGINCOMPLETE: zone (\\S+), id \\d+, dynamic zone \\d+ in process \\d+, server time \\d+, realm .+, permissions 0x[0-9a-f]+, CSR \\d, test server \\d, critical objects (?:none|a list)",
       "timeout": 30,
       "from": "start",
       "expect": "WizardCity/WC_Hub",

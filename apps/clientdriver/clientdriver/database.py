@@ -98,7 +98,7 @@ class Scratch:
                 pending = []
                 for line in handle:
                     line = line.strip()
-                    if not line:
+                    if not line or line.startswith("--"):
                         continue
                     pending.append(line)
                     if len(pending) >= batch:

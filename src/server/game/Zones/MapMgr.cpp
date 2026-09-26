@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Makes instances with a dynamic zone id taken from a counter that skips any id a running instance still holds and never hands out zero, keeps the public instance of each zone findable by its path, and on each tick takes down every instance whose take-down time has passed, forgetting it as the public instance of its zone so the next wizard to arrive is given a fresh one. With no clock or settings handed in it reads the steady clock and the shipped defaults.
+ * Makes instances with a dynamic zone id taken from a counter that skips any id a running instance still holds and never hands out zero, keeps the public instance of each zone findable by its path, and on each tick takes down every instance whose take-down time has passed, forgetting it as the public instance of its zone so the next wizard to arrive is given a fresh one. With no clock or settings handed in it reads the steady clock and the shipped defaults, and with no populator an instance holds no objects. Clearing it forgets which problems were logged.
  */
 
 #include "MapMgr.h"
+#include "Log.h"
 
 #include <utility>
 
@@ -25,6 +26,11 @@ void MapMgr::SetClock(ClockReader clock)
     _clock = std::move(clock);
 }
 
+void MapMgr::SetObjectPopulator(ObjectPopulator populator)
+{
+    _populator = std::move(populator);
+}
+
 MapMgr::Clock::time_point MapMgr::Now() const
 {
     return _clock ? _clock() : Clock::now();
@@ -43,7 +49,18 @@ Map& MapMgr::Make(std::string_view zonePath, bool isPublic)
     auto made = std::make_unique<Map>(id, std::string(zonePath), isPublic);
     Map& map = *made;
     _maps.emplace(id, std::move(made));
+    if (_populator)
+        Populate(map, Now(), Settings().MobileIdReleaseDelay);
     return map;
+}
+
+MapObjectChanges MapMgr::Populate(Map& map, Clock::time_point now, std::chrono::milliseconds releaseDelay)
+{
+    MapObjectChanges changes = _populator(map, now, releaseDelay);
+    for (MapObjectProblem const& problem : changes.Problems)
+        if (_reported.insert(problem.Text).second)
+            LOG_WARN("server.zones", "{}", problem.Text);
+    return changes;
 }
 
 Map& MapMgr::FindOrCreatePublic(std::string_view zonePath)
@@ -103,6 +120,22 @@ std::vector<uint32> MapMgr::Update()
     return removed;
 }
 
+std::vector<MapObjectChanges> MapMgr::RefreshObjects()
+{
+    std::vector<MapObjectChanges> changed;
+    if (!_populator)
+        return changed;
+    Clock::time_point const now = Now();
+    std::chrono::milliseconds const releaseDelay = Settings().MobileIdReleaseDelay;
+    for (auto const& [id, map] : _maps)
+    {
+        MapObjectChanges changes = Populate(*map, now, releaseDelay);
+        if (changes.Changed())
+            changed.push_back(std::move(changes));
+    }
+    return changed;
+}
+
 std::size_t MapMgr::GetMapCount() const noexcept
 {
     return _maps.size();
@@ -115,4 +148,6 @@ void MapMgr::Clear()
     _nextDynamicZoneId = 1;
     _settings = nullptr;
     _clock = nullptr;
+    _populator = nullptr;
+    _reported.clear();
 }

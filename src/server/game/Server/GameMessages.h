@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; and the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits.
+ * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, each object of that zone the server sends it, as the enveloped CoreObject Data the client builds it from, and the id of one that leaves its view, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; and the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits.
  */
 
 #ifndef AMBROSE_GAMEMESSAGES_H
@@ -94,6 +94,32 @@ namespace GameMessages
                 DmlField("HourOffset", &LoginComplete::HourOffset), DmlField("DisableBeastmoonGroups", &LoginComplete::DisableBeastmoonGroups),
                 DmlField("PickUpAllEnabled", &LoginComplete::PickUpAllEnabled), DmlField("SegmentedMessage", &LoginComplete::SegmentedMessage),
                 DmlField("LastSegment", &LoginComplete::LastSegment) };
+        }
+    };
+
+    struct NewObject
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_NEWOBJECT";
+
+        std::string Data;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Data", &NewObject::Data) };
+        }
+    };
+
+    struct RemoveObject
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_REMOVEOBJECT";
+
+        uint64 GameObjectId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GameObjectID", &RemoveObject::GameObjectId) };
         }
     };
 

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * An instance of any property class from the loaded type dump: values stored by property ordinal, read and written by name, hash or ordinal, with list elements and child objects edited in place, every write checked against the property's kind, container, bit width, class, catalog and ownership and taking the offered value only when it succeeds, built with the dump's defaults, deep-cloned and compared exactly, carrying the CoreObject header a game object is created from when it has one, its block, type and template id, and keeping the catalog it was built from alive, with blank construction and direct value access reserved for the serializers that fill every value themselves.
+ * An instance of any property class from the loaded type dump: values stored by property ordinal, read and written by name, hash or ordinal, with list elements and child objects edited in place, every write checked against the property's kind, container, bit width, class, catalog and ownership and taking the offered value only when it succeeds, built with the dump's defaults, deep-cloned and compared exactly, carrying the CoreObject header a game object is created from when it has one, its block, which is the core type the client builds it by, the type of its template and the template id, a block of zero meaning a plain class hash follows, and keeping the catalog it was built from alive, with blank construction and direct value access reserved for the serializers that fill every value themselves.
  */
 
 #ifndef AMBROSE_PROPERTYOBJECT_H
@@ -20,7 +20,7 @@ struct CoreObjectHeader
     uint8 Type = 0;
     uint32 TemplateId = 0;
 
-    bool IsPlain() const noexcept { return Block == 0 && Type == 0; }
+    bool IsPlain() const noexcept { return Block == 0; }
     bool operator==(CoreObjectHeader const&) const = default;
 };
 

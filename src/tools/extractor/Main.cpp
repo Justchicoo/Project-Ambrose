@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * extractor entry point: silences the log, reads its arguments and environment as UTF-8, refuses an option value that is itself an option and a command named twice, checks the world database, --sql and --dry-run before anything is searched, then when no install or type dump is named follows AMBROSE_SETUP_MODE: auto uses the newest install found and the type dump built from it, ask offers the finds and a build, off prints them with the flag to pass; opens the user's own Root.wad and a type dump bound to the views of every command named, extracts for each command in turn, the character names, disallowed names, schools and creation options for names and the level, school and stat tables for levels, prints their counts and the problems found, then replaces every command's world tables in one transaction, writes the SQL to a file, or on a dry run writes nothing and checks the world tables of any database it was given; exits 0 on success, 1 when the install, dump, data or database fails, and 2 on bad usage.
+ * extractor entry point: silences the log, reads its arguments and environment as UTF-8, refuses an option value that is itself an option and a command named twice, checks the world database, --sql and --dry-run before anything is searched, then when no install or type dump is named follows AMBROSE_SETUP_MODE: auto uses the newest install found and the type dump built from it, ask offers the finds and a build, off prints them with the flag to pass; opens the user's own Root.wad and a type dump bound to the views of every command named, extracts for each command in turn, the character names, disallowed names, schools and creation options for names, the level, school and stat tables for levels and every zone's settings, locations and placed objects from its own archive for zones, prints their counts, the problems found and the zone parts a type dump could not describe, then replaces every command's world tables in one transaction, writes the SQL to a file, or on a dry run writes nothing and checks the world tables of any database it was given; exits 0 on success, 1 when the install, dump, data or database fails, and 2 on bad usage.
  */
 
 #include "CharacterNameExtractor.h"
@@ -16,6 +16,9 @@
 #include "LogConfig.h"
 #include "NameViews.h"
 #include "TypedView.h"
+#include "ZoneExtractor.h"
+#include "ZoneScript.h"
+#include "ZoneViews.h"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -49,6 +52,8 @@ Commands:
   levels  every school's base stats and experience for each level, the magic
           schools and their badges, the level each mob rank stands for, and the
           stat settings with their crit, block and pip conversion bands
+  zones   every zone's settings, named locations and placed objects, read from
+          the gamedata.bin of each zone's own archive
 
 Options:
   --client <dir>      the install holding Data/GameData (default: AMBROSE_CLIENT_DIR)
@@ -128,7 +133,7 @@ database fails, 2 on bad usage.
         std::set<std::string> named;
         for (std::string const& word : parsed.Words)
         {
-            if (word != "names" && word != "levels")
+            if (word != "names" && word != "levels" && word != "zones")
                 error = fmt::format("unknown command '{}'", word);
             else if (!named.insert(word).second)
                 error = fmt::format("{} is named twice", word);
@@ -198,6 +203,21 @@ database fails, 2 on bad usage.
         std::cout << fmt::format("stat_effect_config: {} rows\n", extraction.Stats.Settings.size());
         std::cout << fmt::format("stat_crit_block_band: {} rows\n", extraction.Stats.CritAndBlock.size());
         std::cout << fmt::format("stat_pip_conversion_band: {} rows\n", extraction.Stats.PipConversion.size());
+    }
+
+    void PrintCounts(ZoneExtraction const& extraction)
+    {
+        std::cout << fmt::format("zone_template: {} rows from {} archives\n", extraction.Zones.size(), extraction.Archives);
+        std::cout << fmt::format("zone_location: {} rows\n", extraction.GetLocationCount());
+        std::cout << fmt::format("zone_object: {} rows, {} object list entries left out\n", extraction.GetObjectCount(), extraction.GetSkippedObjectCount());
+        std::map<uint32, std::size_t> wholeByClass;
+        std::map<uint32, std::size_t> partsByClass;
+        for (SkippedZonePart const& part : extraction.Skipped)
+            ++(part.WholeObject ? wholeByClass : partsByClass)[part.ClassHash];
+        for (auto const& [hash, count] : wholeByClass)
+            std::cout << fmt::format("  {} entries of class hash {}, which the type dump does not list\n", count, hash);
+        for (auto const& [hash, count] : partsByClass)
+            std::cout << fmt::format("  {} parts of kept entries of class hash {}, which the type dump does not list\n", count, hash);
     }
 
     template<typename Script, typename Extraction>
@@ -273,11 +293,14 @@ database fails, 2 on bad usage.
         std::vector<std::string> const& commands = arguments->Words;
         bool const names = std::find(commands.begin(), commands.end(), "names") != commands.end();
         bool const levels = std::find(commands.begin(), commands.end(), "levels") != commands.end();
+        bool const zones = std::find(commands.begin(), commands.end(), "zones") != commands.end();
         TypedViewRegistry views;
         if (names)
             NameViews::RegisterAll(views);
         if (levels)
             LevelViews::RegisterAll(views);
+        if (zones)
+            ZoneViews::RegisterAll(views);
         TypeRegistry registry(&views);
         if (!registry.LoadFromFile(LogConfig::Utf8Path(*arguments->TypeDump)))
         {
@@ -292,8 +315,10 @@ database fails, 2 on bad usage.
         {
             if (command == "names")
                 Collect<CharacterNameScript>(CharacterNameExtractor::Extract(*archive, registry.GetCatalog()), extracted);
-            else
+            else if (command == "levels")
                 Collect<LevelScript>(LevelExtractor::Extract(*archive, registry.GetCatalog()), extracted);
+            else
+                Collect<ZoneScript>(ZoneExtractor::Extract(rootWad.parent_path(), registry.GetCatalog()), extracted);
         }
         if (extracted.ErrorCount != 0)
         {

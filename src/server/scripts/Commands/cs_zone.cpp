@@ -64,9 +64,8 @@ namespace
                 caller.Reply(fmt::format("{} in {} gives {}", wanted, arguments[0], ZoneMgr::GetLookupName(place.Result)));
                 return false;
             }
-            caller.Reply(fmt::format("{} in {} is {} at {:.3f}, {:.3f}, {:.3f}, {}", wanted, arguments[0],
-                ZoneMgr::GetLookupName(place.Result), place.Location.X, place.Location.Y, place.Location.Z,
-                place.Location.Yaw ? fmt::format("facing {:.3f}", *place.Location.Yaw) : std::string("facing nothing it says")));
+            caller.Reply(fmt::format("{} in {} is {} at {:.3f}, {:.3f}, {:.3f}, facing {:.3f}", wanted, arguments[0],
+                ZoneMgr::GetLookupName(place.Result), place.Location.X, place.Location.Y, place.Location.Z, place.Location.Yaw));
             return true;
         }
     };

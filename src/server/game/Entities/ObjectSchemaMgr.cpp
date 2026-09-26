@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads server_class with its bases and properties into the type dump's own raw shape, a class keyed by its hash as the dump keys it, and hands it to the type registry, which checks every hash and rebuilds its catalog with it; reads core_object_type and behavior_client_class into tables checked against the catalog then in use, where a class must be listed, a game object's must be a CoreObject and a behavior's a BehaviorInstance, so a row the client would never accept is refused with its name before anything is swapped. A base list with a gap or a class named twice is a refusal too, because either means a row was lost or doubled rather than meant.
+ * Reads server_class with its bases and properties into the type dump's own raw shape, a class keyed by its hash as the dump keys it, and hands it to the type registry, which checks every hash and rebuilds its catalog with it; reads core_object_type with core_template_type in one snapshot, and behavior_client_class, into tables checked against the catalog then in use, where a class must be listed, a game object's must be a CoreObject, a template class a CoreTemplate and a behavior's a BehaviorInstance, so a row the client would never accept is refused with its name before anything is swapped. A base list with a gap or a class named twice is a refusal too, because either means a row was lost or doubled rather than meant.
  */
 
 #include "ObjectSchemaMgr.h"
@@ -100,12 +100,28 @@ namespace
         {
             Field const* const row = result->Fetch();
             CoreObjectType type;
-            type.Block = row[0].Get<uint8>();
-            type.Type = row[1].Get<uint8>();
-            type.ClassName = row[2].Get<std::string>();
+            type.CoreType = row[0].Get<uint8>();
+            type.ClassName = row[1].Get<std::string>();
             types.push_back(std::move(type));
         } while (result->NextRow());
         return types;
+    }
+
+    std::vector<CoreTemplateType> ReadCoreTemplateTypes(PreparedResultSet* result)
+    {
+        std::vector<CoreTemplateType> templates;
+        if (!result || result->GetRowCount() == 0)
+            return templates;
+        do
+        {
+            Field const* const row = result->Fetch();
+            CoreTemplateType entry;
+            entry.TemplateClass = row[0].Get<std::string>();
+            entry.CoreType = row[1].Get<uint8>();
+            entry.TemplateType = row[2].Get<uint8>();
+            templates.push_back(std::move(entry));
+        } while (result->NextRow());
+        return templates;
     }
 
     std::vector<BehaviorClientClass> ReadBehaviorClientClasses(PreparedResultSet* result)
@@ -186,6 +202,7 @@ void ObjectSchemaMgr::RegisterReloadTargets()
 {
     RegisterClassReloadTarget();
     sReloadMgr.Register(std::string(CoreObjectTypeTarget), [this](std::vector<std::string>& errors) { return LoadCoreObjectTypes(errors); }, { std::string(ClassTarget) });
+    sReloadMgr.Register(std::string(CoreTemplateTypeTarget), [this](std::vector<std::string>& errors) { return LoadCoreObjectTypes(errors); }, { std::string(ClassTarget) });
     sReloadMgr.Register(std::string(BehaviorTarget), [this](std::vector<std::string>& errors) { return LoadBehaviorClientClasses(errors); }, { std::string(ClassTarget) });
 }
 
@@ -216,16 +233,23 @@ bool ObjectSchemaMgr::LoadCoreObjectTypes(std::vector<std::string>& errors)
     TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
     if (!catalog)
     {
-        errors.emplace_back("no type dump is loaded, so the classes core_object_type names cannot be checked");
+        errors.emplace_back("no type dump is loaded, so the classes core_object_type and core_template_type name cannot be checked");
         return false;
     }
-    auto const statement = WorldDatabase.IsOpen() ? WorldDatabase.GetPreparedStatement(WORLD_SEL_CORE_OBJECT_TYPES) : nullptr;
-    if (!statement)
+    auto const types = WorldDatabase.IsOpen() ? WorldDatabase.GetPreparedStatement(WORLD_SEL_CORE_OBJECT_TYPES) : nullptr;
+    auto const templates = WorldDatabase.IsOpen() ? WorldDatabase.GetPreparedStatement(WORLD_SEL_CORE_TEMPLATE_TYPES) : nullptr;
+    if (!types || !templates)
     {
         errors.emplace_back("the world database is not open, so the core object types cannot be read");
         return false;
     }
-    CoreObjectTypeTablePtr table = CoreObjectTypeTable::Build(ReadCoreObjectTypes(WorldDatabase.Query(*statement).get()), *catalog, errors);
+    std::vector<PreparedQueryResult> results;
+    if (!WorldDatabase.QuerySnapshot({ types.get(), templates.get() }, results))
+    {
+        errors.emplace_back("core_object_type and core_template_type cannot be read from the world database");
+        return false;
+    }
+    CoreObjectTypeTablePtr table = CoreObjectTypeTable::Build(ReadCoreObjectTypes(results[0].get()), ReadCoreTemplateTypes(results[1].get()), *catalog, errors);
     if (!table)
         return false;
     _coreObjectTypes.Replace(std::move(table));

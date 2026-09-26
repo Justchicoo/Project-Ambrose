@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests what the zone stores promise. Without a database: a place asked for by name is the place that comes back, a name the zone does not hold falls back to its Start rather than to nothing, a zone with no Start and no such name says so instead of guessing, a path no template holds is a typed refusal rather than an empty answer, and what an operator is shown about a zone names its counts. With AMBROSE_TEST_DB set, against a real world database: the three tables load into the stores, a location whose zone no template holds fails the build with that row named and leaves the rows already serving exactly where they were, and editing a row and reloading that target alone returns the new coordinates with nothing restarted.
+ * Tests what the zone stores promise. Without a database: a place asked for by name is the place that comes back, facing the way its data says, a name the zone does not hold falls back to its Start rather than to nothing, a zone with no Start and no such name says so instead of guessing, a path no template holds is a typed refusal rather than an empty answer, and what an operator is shown about a zone names its counts. With AMBROSE_TEST_DB set, against a real world database: the three tables load into the stores with an object's class, orientation vector and loading type as its row gives them, a location whose zone no template holds fails the build with that row named and leaves the rows already serving exactly where they were, an object with a loading type the client does not have fails the build the same way, and editing a row and reloading that target alone returns the new coordinates with nothing restarted.
  */
 
 #include "DBUpdater.h"
@@ -44,7 +44,7 @@ namespace
         std::map<std::string, std::vector<ZoneLocation>, std::less<>> byZone;
         byZone[Hub] = {
             ZoneLocation{ 1, "Start", 10.0f, 20.0f, 30.0f, 1.5f },
-            ZoneLocation{ 2, "Door_Ravenwood", -5.0f, 0.0f, 3.0f, std::nullopt },
+            ZoneLocation{ 2, "Door_Ravenwood", -5.0f, 0.0f, 3.0f, -0.75f },
         };
         byZone[Ravenwood] = { ZoneLocation{ 3, "Door_Hub", 7.0f, 8.0f, 9.0f, 0.25f } };
         return ZoneLocations(std::move(byZone));
@@ -61,13 +61,12 @@ TEST(ZoneMgrTest, APlaceAskedForByNameIsThePlaceThatComesBack)
     EXPECT_FLOAT_EQ(start.Location.X, 10.0f);
     EXPECT_FLOAT_EQ(start.Location.Y, 20.0f);
     EXPECT_FLOAT_EQ(start.Location.Z, 30.0f);
-    ASSERT_TRUE(start.Location.Yaw.has_value());
-    EXPECT_FLOAT_EQ(*start.Location.Yaw, 1.5f);
+    EXPECT_FLOAT_EQ(start.Location.Yaw, 1.5f);
 
     ZonePlace const door = locations.Find(Hub, "Door_Ravenwood");
     ASSERT_TRUE(door.Found());
     EXPECT_EQ(door.Result, ZoneLookup::Ok);
-    EXPECT_FALSE(door.Location.Yaw.has_value()) << "a place whose direction the data does not give faces nothing rather than north";
+    EXPECT_FLOAT_EQ(door.Location.Yaw, -0.75f);
 }
 
 TEST(ZoneMgrTest, ANameTheZoneDoesNotHoldFallsBackToItsStart)
@@ -138,8 +137,10 @@ namespace
             _open = true;
 
             Insert(fmt::format("INSERT INTO `zone_template` (`zone_path`, `display_name_key`, `soft_limit`) VALUES ('{}', 'WizardCity_WC_Hub', 50)", Hub));
-            Insert(fmt::format("INSERT INTO `zone_location` (`zone_path`, `name`, `location`, `direction`) VALUES ('{}', 'Start', '[10,20,30]', '1.5')", Hub));
-            Insert(fmt::format("INSERT INTO `zone_object` (`zone_path`, `object_id`, `template_id`, `location`, `orientation`, `scale`, `zone_tag`) VALUES ('{}', 7, 4242, '[1,2,3]', '[0,0.5,0]', 1.25, 'Hub')", Hub));
+            Insert(fmt::format("INSERT INTO `zone_location` (`zone_path`, `name`, `position_x`, `position_y`, `position_z`, `direction`) VALUES ('{}', 'Start', 10, 20, 30, 1.5)", Hub));
+            Insert(fmt::format("INSERT INTO `zone_object` (`zone_path`, `class_name`, `object_id`, `template_id`, `position_x`, `position_y`, `position_z`, `orientation_x`, `orientation_y`, "
+                "`orientation_z`, `scale`, `zone_tag`, `start_state`, `loading_type`, `spawn_requirements`) VALUES ('{}', 'class CoreObjectInfo', 7, 4242, 1, 2, 3, 0, 0, 0.5, 1.25, 'Hub', 'Idle', 3, "
+                "X'00')", Hub));
             sReloadMgr.Clear();
             sZoneMgr.Clear();
             sZoneMgr.RegisterReloadTargets();
@@ -182,18 +183,23 @@ TEST_F(ZoneMgrDatabaseTest, TheThreeTablesLoadIntoTheirStores)
     ASSERT_TRUE(start.Found());
     EXPECT_FLOAT_EQ(start.Location.X, 10.0f);
     EXPECT_FLOAT_EQ(start.Location.Z, 30.0f);
-    ASSERT_TRUE(start.Location.Yaw.has_value());
-    EXPECT_FLOAT_EQ(*start.Location.Yaw, 1.5f);
+    EXPECT_FLOAT_EQ(start.Location.Yaw, 1.5f);
 
     std::vector<ZoneObjectSpawn> const* const objects = sZoneMgr.GetObjects()->In(Hub);
     ASSERT_NE(objects, nullptr);
     ASSERT_EQ(objects->size(), 1u);
-    EXPECT_EQ(objects->front().ObjectId, 7u);
-    ASSERT_TRUE(objects->front().TemplateId.has_value());
-    EXPECT_EQ(*objects->front().TemplateId, 4242u);
-    ASSERT_TRUE(objects->front().Yaw.has_value());
-    EXPECT_FLOAT_EQ(*objects->front().Yaw, 0.5f) << "three numbers are the pitch, yaw and roll the extractor writes";
-    EXPECT_EQ(objects->front().Tag, "Hub");
+    ZoneObjectSpawn const& object = objects->front();
+    EXPECT_EQ(object.ClassName, "class CoreObjectInfo");
+    EXPECT_EQ(object.ObjectId, 7u);
+    EXPECT_EQ(object.TemplateId, 4242u);
+    EXPECT_EQ(object.Position, (PropertyTypes::Vector3D{ 1.0f, 2.0f, 3.0f }));
+    EXPECT_EQ(object.Orientation, (PropertyTypes::Vector3D{ 0.0f, 0.0f, 0.5f })) << "the orientation is the vector the zone data gives, which is what the client is sent";
+    EXPECT_FLOAT_EQ(object.Scale, 1.25f);
+    EXPECT_EQ(object.Tag, "Hub");
+    EXPECT_EQ(object.StartState, "Idle");
+    EXPECT_EQ(object.Loading, ZoneObjectLoading::DynamicServer);
+    EXPECT_TRUE(object.IsSentByServer());
+    EXPECT_TRUE(object.HasSpawnRequirements);
 
     std::optional<std::string> const described = sZoneMgr.Describe(Hub);
     ASSERT_TRUE(described);
@@ -207,7 +213,7 @@ TEST_F(ZoneMgrDatabaseTest, ARowNamingAZoneNoTemplateHoldsFailsTheBuildAndKeepsW
 {
     ASSERT_TRUE(sZoneMgr.LoadAll().Loaded);
     ASSERT_TRUE(WorldDatabase.DirectExecute("SET FOREIGN_KEY_CHECKS = 0"));
-    Insert(fmt::format("INSERT INTO `zone_location` (`zone_path`, `name`, `location`) VALUES ('{}', 'Start', '[1,1,1]')", Ravenwood));
+    Insert(fmt::format("INSERT INTO `zone_location` (`zone_path`, `name`, `position_x`, `position_y`, `position_z`) VALUES ('{}', 'Start', 1, 1, 1)", Ravenwood));
 
     ReloadOutcome const outcome = sReloadMgr.Reload(ZoneMgr::LocationTarget);
     EXPECT_FALSE(outcome.Ok);
@@ -220,10 +226,22 @@ TEST_F(ZoneMgrDatabaseTest, ARowNamingAZoneNoTemplateHoldsFailsTheBuildAndKeepsW
     EXPECT_EQ(sZoneMgr.GetLocations()->Count(), 1u);
 }
 
+TEST_F(ZoneMgrDatabaseTest, AnObjectWithALoadingTypeTheClientDoesNotHaveFailsTheBuild)
+{
+    ASSERT_TRUE(sZoneMgr.LoadAll().Loaded);
+    Insert(fmt::format("INSERT INTO `zone_object` (`zone_path`, `class_name`, `object_id`, `template_id`, `loading_type`) VALUES ('{}', 'class CoreObjectInfo', 8, 4243, 7)", Hub));
+
+    ReloadOutcome const outcome = sReloadMgr.Reload(ZoneMgr::ObjectTarget);
+    EXPECT_FALSE(outcome.Ok);
+    ASSERT_FALSE(outcome.Errors.empty());
+    EXPECT_NE(outcome.Errors.front().find("loading type 7"), std::string::npos) << outcome.Errors.front();
+    EXPECT_EQ(sZoneMgr.GetObjects()->Count(), 1u) << "a build that failed leaves the objects already loaded where they were";
+}
+
 TEST_F(ZoneMgrDatabaseTest, EditingARowAndReloadingThatTargetReturnsTheNewCoordinates)
 {
     ASSERT_TRUE(sZoneMgr.LoadAll().Loaded);
-    ASSERT_TRUE(WorldDatabase.DirectExecute(fmt::format("UPDATE `zone_location` SET `location` = '[99,98,97]' WHERE `zone_path` = '{}' AND `name` = 'Start'", Hub)));
+    ASSERT_TRUE(WorldDatabase.DirectExecute(fmt::format("UPDATE `zone_location` SET `position_x` = 99, `position_y` = 98, `position_z` = 97 WHERE `zone_path` = '{}' AND `name` = 'Start'", Hub)));
 
     ZonePlace const before = sZoneMgr.FindPlace(Hub, "Start");
     ASSERT_TRUE(before.Found());

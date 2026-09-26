@@ -1,30 +1,35 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds the core object table a pair at a time, naming every pair that is plain, repeats, names a class the catalog does not list or a class that is not a CoreObject, and every class given two pairs, and hands back no table unless every row passed; the encode and decode calls bind the table into the serializer's options and leave the rest to it.
+ * Builds the core object table a row at a time, naming every core type that is the plain byte or repeats, every class the catalog does not list or that is not a CoreObject, and every template class that is not a CoreTemplate, repeats or gives a core type no row builds, and hands back no table unless every row passed; the header an object made from a template carries is that template class's core type and template type with the template's id. The encode and decode calls bind the table into the serializer's options and leave the rest to it.
  */
 
 #include "CoreObjectSerializer.h"
 
 #include <fmt/format.h>
 
+#include <algorithm>
 #include <utility>
 
-std::shared_ptr<CoreObjectTypeTable const> CoreObjectTypeTable::Build(std::vector<CoreObjectType> types, TypeCatalog const& catalog, std::vector<std::string>& errors)
+std::shared_ptr<CoreObjectTypeTable const> CoreObjectTypeTable::Build(std::vector<CoreObjectType> types, std::vector<CoreTemplateType> templates, TypeCatalog const& catalog,
+    std::vector<std::string>& errors)
 {
     std::size_t const before = errors.size();
     ClassInfo const* const core = catalog.FindClass(CoreObjectClass);
     if (!core)
         errors.push_back(fmt::format("the type dump does not list {}, so no class can be checked to be a game object", CoreObjectClass));
+    ClassInfo const* const coreTemplate = catalog.FindClass(CoreTemplateClass);
+    if (!coreTemplate && !templates.empty())
+        errors.push_back(fmt::format("the type dump does not list {}, so no class can be checked to be a template", CoreTemplateClass));
     std::shared_ptr<CoreObjectTypeTable> table(new CoreObjectTypeTable());
     table->_types.reserve(types.size());
     for (CoreObjectType& entry : types)
     {
-        std::string const where = fmt::format("block {} type {}", entry.Block, entry.Type);
-        if (entry.Block == 0 && entry.Type == 0)
+        if (entry.CoreType == 0)
         {
-            errors.push_back(fmt::format("{} is the pair that says a plain class hash follows, so it cannot stand for {}", where, entry.ClassName));
+            errors.push_back(fmt::format("core type 0 is the byte that says a plain class hash follows, so it cannot stand for {}", entry.ClassName));
             continue;
         }
+        std::string const where = fmt::format("core type {}", entry.CoreType);
         ClassInfo const* const type = catalog.FindClass(entry.ClassName);
         if (!type)
         {
@@ -38,37 +43,83 @@ std::shared_ptr<CoreObjectTypeTable const> CoreObjectTypeTable::Build(std::vecto
         }
         entry.ClassName = type->Name;
         entry.ClassHash = type->Hash;
-        std::size_t const index = table->_types.size();
-        uint16 const key = PairKey(entry.Block, entry.Type);
-        if (auto const [existing, inserted] = table->_byPair.emplace(key, index); !inserted)
+        if (auto const [existing, inserted] = table->_byCoreType.emplace(entry.CoreType, table->_types.size()); !inserted)
         {
             errors.push_back(fmt::format("{} is listed for both {} and {}", where, table->_types[existing->second].ClassName, entry.ClassName));
             continue;
         }
-        if (auto const [existing, inserted] = table->_byClass.emplace(entry.ClassHash, index); !inserted)
+        table->_types.push_back(std::move(entry));
+    }
+    table->_templates.reserve(templates.size());
+    for (CoreTemplateType& entry : templates)
+    {
+        ClassInfo const* const type = catalog.FindClass(entry.TemplateClass);
+        if (!type)
         {
-            table->_byPair.erase(key);
-            CoreObjectType const& first = table->_types[existing->second];
-            errors.push_back(fmt::format("{} is given both block {} type {} and {}", entry.ClassName, first.Block, first.Type, where));
+            errors.push_back(fmt::format("template class {} is not listed in the type dump", entry.TemplateClass));
             continue;
         }
-        table->_types.push_back(std::move(entry));
+        if (type->Kind != ClassKind::PropertyClass || (coreTemplate && !type->IsA(*coreTemplate)))
+        {
+            errors.push_back(fmt::format("{} is not a {}", type->Name, CoreTemplateClass));
+            continue;
+        }
+        if (!table->_byCoreType.contains(entry.CoreType))
+        {
+            errors.push_back(fmt::format("{} gives core type {}, which no row says a class for", type->Name, entry.CoreType));
+            continue;
+        }
+        entry.TemplateClass = type->Name;
+        entry.TemplateClassHash = type->Hash;
+        if (auto const [existing, inserted] = table->_byTemplateClass.emplace(entry.TemplateClassHash, table->_templates.size()); !inserted)
+        {
+            errors.push_back(fmt::format("{} is listed twice", type->Name));
+            continue;
+        }
+        table->_templates.push_back(std::move(entry));
     }
     if (errors.size() != before)
         return nullptr;
     return table;
 }
 
-CoreObjectType const* CoreObjectTypeTable::Find(uint8 block, uint8 type) const noexcept
+CoreObjectType const* CoreObjectTypeTable::Find(uint8 coreType) const noexcept
 {
-    auto const found = _byPair.find(PairKey(block, type));
-    return found == _byPair.end() ? nullptr : &_types[found->second];
+    auto const found = _byCoreType.find(coreType);
+    return found == _byCoreType.end() ? nullptr : &_types[found->second];
 }
 
-CoreObjectType const* CoreObjectTypeTable::FindByClass(uint32 classHash) const noexcept
+bool CoreObjectTypeTable::Builds(uint8 coreType, uint32 classHash) const noexcept
 {
-    auto const found = _byClass.find(classHash);
-    return found == _byClass.end() ? nullptr : &_types[found->second];
+    CoreObjectType const* const found = Find(coreType);
+    return found && found->ClassHash == classHash;
+}
+
+bool CoreObjectTypeTable::IsCoreClass(uint32 classHash) const noexcept
+{
+    return std::any_of(_types.begin(), _types.end(), [classHash](CoreObjectType const& type) { return type.ClassHash == classHash; });
+}
+
+CoreTemplateType const* CoreObjectTypeTable::FindTemplate(ClassInfo const& templateClass) const noexcept
+{
+    auto const found = _byTemplateClass.find(templateClass.Hash);
+    return found == _byTemplateClass.end() ? nullptr : &_templates[found->second];
+}
+
+bool CoreObjectTypeTable::IsTemplatePair(uint8 coreType, uint8 templateType) const noexcept
+{
+    return std::any_of(_templates.begin(), _templates.end(), [coreType, templateType](CoreTemplateType const& entry)
+    {
+        return entry.CoreType == coreType && entry.TemplateType == templateType;
+    });
+}
+
+std::optional<CoreObjectHeader> CoreObjectTypeTable::HeaderFor(ClassInfo const& templateClass, uint32 templateId) const noexcept
+{
+    CoreTemplateType const* const entry = FindTemplate(templateClass);
+    if (!entry)
+        return std::nullopt;
+    return CoreObjectHeader{ entry->CoreType, entry->TemplateType, templateId };
 }
 
 EncodeResult CoreObjectSerializer::Encode(PropertyObject const& object, CoreObjectTypeTable const& types, SerializerOptions options)

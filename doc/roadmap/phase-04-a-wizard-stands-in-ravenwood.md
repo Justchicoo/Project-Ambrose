@@ -374,7 +374,7 @@ The gameserver accepts a client only with a valid, unexpired, single-use key iss
 
 - [x] 3356 zone WADs with gamedata.bin, 0 decode failures targeted (a full run over the pinned install: 3589 zone WADs scanned, 3356 with gamedata.bin, 3356 decoded, 0 failed, in 33 seconds)
 - [x] WC_Hub display key 'WizardZone_TheCommons'; locations include 'Start', 'Target location (WC_Hub Street1 Exit)' (the written zone_template row carries that key, and the 31 zone_location rows include all three named ones with positions)
-- [ ] WC_Ravenwood yields 97 CoreObjectInfo incl. templates 38232, 38230, 81102, 1451035, 39088
+- [ ] WC_Ravenwood yields 97 CoreObjectInfo incl. templates 38232, 38230, 81102, 1451035, 39088 (2026-09-26, 5.02: `extractor zones` reads all 97 entries and writes 93 rows holding all five templates; the other 4 are sigils, whose classes the client's type dump does not describe, so they are left out and counted by class until the server's own class tables describe them in 6.10, `ZoneExtractorClientTest.RavenwoodHoldsItsObjectsPlacesAndTeachers`)
 - [x] Idempotent rerun; git status clean (two runs produce byte-identical SQL, and git status shows nothing extracted into the tree)
 
 ### Detailed spec from WLD-2: Zone extractor part 1: WizZoneData to world DB
@@ -403,7 +403,7 @@ Every zone's metadata, named locations and static object placements exist as wor
 - [x] Running the extractor over r806919 reports 3356 zone WADs with gamedata.bin and lists each decode failure by name, target 0 (3356 of 3589 carry gamedata.bin, all 3356 decode, none fails)
 - [x] zone_template row for WizardCity/WC_Hub has display name key 'WizardZone_TheCommons' plus farClip, healingPerMinute, soft/hard limit and noMounts filled (display_name_key WizardZone_TheCommons, far_clip 24500, healing_per_minute 20, soft_limit 50, hard_limit 100, no_mounts 0)
 - [x] zone_location for WC_Hub contains 'Start', 'Target location (WC_Hub Street1 Exit)' and 'Target location(WC_Hub Ravenwood)' with position and direction (all three present among 31 rows, none with a null location or direction)
-- [ ] zone_object for WC_Hub has one row per m_objectList entry with templateID, location, orientation, scale, zoneTag, startState, loadingType and a nullable serialized spawnRequirements column
+- [ ] zone_object for WC_Hub has one row per m_objectList entry with templateID, location, orientation, scale, zoneTag, startState, loadingType and a nullable serialized spawnRequirements column (2026-09-26, 5.02: every column is there and typed, and 177 of the 183 entries have their row; the other 6 are MinigameSigilInfo entries, which wait for 6.10 like Ravenwood's, `ZoneExtractorClientTest.TheCommonsHoldsItsObjectsAndPlaces`)
 - [x] Re-running is idempotent (same row counts), and git status shows no extracted files (two runs hash identically and the tree stays clean)
 
 **Risks**

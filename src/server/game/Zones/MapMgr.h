@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Every running zone instance (sMapMgr): the public instance of a zone is found or made by its path, a private one is made on request, and each is given a dynamic zone id no other running instance holds. An instance whose last wizard left is taken down on the first tick after its delay has passed. The delays are read from the settings each time they are needed, the unload delay when an instance empties and the mobile id delay when an id is given back, so changing either applies to the next one with nothing restarted. The clock and the settings are handed in, so a test can move time and change a setting between two steps without a server running. Only the world thread touches it.
+ * Every running zone instance (sMapMgr): the public instance of a zone is found or made by its path, a private one is made on request, and each is given a dynamic zone id no other running instance holds. An instance whose last wizard left is taken down on the first tick after its delay has passed. The delays are read from the settings each time they are needed, the unload delay when an instance empties and the mobile id delay when an id is given back, so changing either applies to the next one with nothing restarted. The clock and the settings are handed in, so a test can move time and change a setting between two steps without a server running, and so is what fills an instance with its zone's objects: it runs when an instance is made and again on each refresh, which hands back what changed in every instance whose objects did so the wizards in it can be told, and each problem it reports is logged once for as long as the manager runs, however many instances of the zone and refreshes meet it again. Only the world thread touches it.
  */
 
 #ifndef AMBROSE_MAPMGR_H
 #define AMBROSE_MAPMGR_H
 
 #include "Map.h"
+#include "MapObjectSpawner.h"
 #include "Types.h"
 
 #include <chrono>
@@ -15,6 +16,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -34,6 +36,7 @@ public:
     using Clock = Map::Clock;
     using SettingsReader = std::function<MapSettings()>;
     using ClockReader = std::function<Clock::time_point()>;
+    using ObjectPopulator = std::function<MapObjectChanges(Map&, Clock::time_point, std::chrono::milliseconds)>;
 
     static MapMgr& Instance();
 
@@ -42,6 +45,7 @@ public:
 
     void SetSettingsReader(SettingsReader reader);
     void SetClock(ClockReader clock);
+    void SetObjectPopulator(ObjectPopulator populator);
 
     Map& FindOrCreatePublic(std::string_view zonePath);
     Map& CreatePrivate(std::string_view zonePath);
@@ -52,6 +56,7 @@ public:
     bool RemovePlayer(Map& map, uint64 characterGuid);
 
     std::vector<uint32> Update();
+    std::vector<MapObjectChanges> RefreshObjects();
     std::size_t GetMapCount() const noexcept;
     void Clear();
 
@@ -59,6 +64,7 @@ private:
     MapMgr();
 
     Map& Make(std::string_view zonePath, bool isPublic);
+    MapObjectChanges Populate(Map& map, Clock::time_point now, std::chrono::milliseconds releaseDelay);
     Clock::time_point Now() const;
     MapSettings Settings() const;
 
@@ -67,6 +73,8 @@ private:
     uint32 _nextDynamicZoneId = 1;
     SettingsReader _settings;
     ClockReader _clock;
+    ObjectPopulator _populator;
+    std::set<std::string, std::less<>> _reported;
 };
 
 #define sMapMgr MapMgr::Instance()

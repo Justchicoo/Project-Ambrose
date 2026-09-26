@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, each session is then given the tick's time, which is how one that never attaches is closed, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone. A wizard is in the world from the moment its session is sent its object until it is kicked or its socket closes, and work for one from another thread is queued on its session and waited for, run at once when the caller is the world thread itself, which could never wait on its own tick.
+ * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, each session is then given the tick's time, which is how one that never attaches is closed, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone; after the instances are looked after, each is brought in line with its zone's objects, and the wizards in an instance whose objects changed are told which left and which came. A wizard is in the world from the moment its session is sent its object until it is kicked or its socket closes, and work for one from another thread is queued on its session and waited for, run at once when the caller is the world thread itself, which could never wait on its own tick.
  */
 
 #include "World.h"
@@ -151,6 +151,10 @@ void World::Update(std::chrono::milliseconds diff)
 
     for (uint32 const taken : sMapMgr.Update())
         LOG_DEBUG("server.world", "Took down zone instance {}, empty for longer than its unload delay", taken);
+    for (MapObjectChanges const& changes : sMapMgr.RefreshObjects())
+        for (std::shared_ptr<GameSession> const& session : sessions)
+            if (session->IsOpen() && session->GetMapId() == changes.DynamicZoneId)
+                session->SendObjectChanges(changes);
 
     sScriptMgr.OnWorldUpdate(diff);
 
