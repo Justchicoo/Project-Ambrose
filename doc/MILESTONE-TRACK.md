@@ -113,7 +113,6 @@ Everything not in the table above, including every milestone whose dependencies 
 | 3.23 | Next in the maintainer's own queue |
 | 4.02 | Held by the panel session, which needs it for the panel's roles. It is built and passes every automated check; its one real-client check waits on another milestone rather than on anybody's time |
 | 5.03 | The maintainer's world session: it shares `Player.SaveInterval` and the save on logout with 5.05, so the two are built back to back |
-| 5.04 | Built but for one check, a reload reaching the next login, which closes with 5.05, being built now by the maintainer's world session |
 | 4.06 | Built but for one check, a bad key refused with MSG_ATTACHFAILED on a real client, which is next in the maintainer's world session |
 | 4.11 | Being built now, and the world entry after it runs through the same files |
 | 16.11 | Overlaps the type extraction already built in 3.21 and is being rethought |
