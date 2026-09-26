@@ -1,12 +1,26 @@
 /*
  * Project Ambrose by Imjustchico
- * Field offsets of the client engine's Type, PropertyList, Property, container and enum option objects and of the MSVC runtime's std::string and std::map node, as found in r801440 and r806919, which the extraction reads and its validation checks.
+ * Default client engine and MSVC runtime layout values, with per-field evidence recording which offsets runtime probes derive and which remain assumed.
  */
 
 #ifndef AMBROSE_CLIENTLAYOUT_H
 #define AMBROSE_CLIENTLAYOUT_H
 
 #include "Types.h"
+
+#include <map>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+struct ClientLayoutEvidence
+{
+    std::string Field;
+    uint64 Value = 0;
+    std::string Status;
+    std::string ConfirmedBy;
+};
 
 struct ClientLayout
 {
@@ -49,6 +63,67 @@ struct ClientLayout
 
     uint64 ContainerNameSlot = 1;
     uint64 ContainerDynamicSlot = 4;
+
+    std::map<std::string, std::string> DerivedFields;
+
+    void ConfirmDerived(std::string field, std::string confirmedBy)
+    {
+        DerivedFields.insert_or_assign(std::move(field), std::move(confirmedBy));
+    }
+
+    std::vector<ClientLayoutEvidence> Evidence() const
+    {
+        std::vector<ClientLayoutEvidence> evidence = {
+            { "std::string.size", StringSize, "assumed", "MSVC x64 std::string reference layout" },
+            { "std::string.capacity", StringCapacity, "assumed", "MSVC x64 std::string reference layout" },
+            { "std::string.inline_capacity", StringInlineCapacity, "assumed", "MSVC x64 std::string reference layout" },
+            { "std::string.object_size", StringObjectSize, "assumed", "MSVC x64 std::string reference layout" },
+            { "std::map.node.left", MapNodeLeft, "assumed", "MSVC x64 std::map reference layout" },
+            { "std::map.node.parent", MapNodeParent, "assumed", "MSVC x64 std::map reference layout" },
+            { "std::map.node.right", MapNodeRight, "assumed", "MSVC x64 std::map reference layout" },
+            { "std::map.node.color", MapNodeColor, "assumed", "MSVC x64 std::map reference layout" },
+            { "std::map.node.is_nil", MapNodeIsNil, "assumed", "MSVC x64 std::map reference layout" },
+            { "std::map.node.key", MapNodeKey, "assumed", "MSVC x64 std::map reference layout" },
+            { "std::map.node.value", MapNodeValue, "assumed", "MSVC x64 std::map reference layout" },
+            { "Type.name", TypeName, "assumed", "r801440/r806919 reference layout" },
+            { "Type.hash", TypeHash, "assumed", "r801440/r806919 reference layout" },
+            { "Type.pointer", TypePointer, "assumed", "r801440/r806919 reference layout" },
+            { "Type.property_list", TypePropertyList, "assumed", "r801440/r806919 reference layout" },
+            { "PropertyList.singleton", ListSingleton, "assumed", "r801440/r806919 reference layout" },
+            { "PropertyList.base", ListBase, "assumed", "r801440/r806919 reference layout" },
+            { "PropertyList.properties", ListProperties, "assumed", "r801440/r806919 reference layout" },
+            { "PropertyList.name", ListName, "assumed", "r801440/r806919 reference layout" },
+            { "PropertyList.entry_size", ListEntrySize, "assumed", "r801440/r806919 reference layout" },
+            { "Property.container", PropertyContainer, "assumed", "r801440/r806919 reference layout" },
+            { "Property.id", PropertyId, "assumed", "r801440/r806919 reference layout" },
+            { "Property.name", PropertyName, "assumed", "r801440/r806919 reference layout" },
+            { "Property.hash", PropertyHash, "assumed", "r801440/r806919 reference layout" },
+            { "Property.offset", PropertyOffset, "assumed", "r801440/r806919 reference layout" },
+            { "Property.type", PropertyType, "assumed", "r801440/r806919 reference layout" },
+            { "Property.flags", PropertyFlags, "assumed", "r801440/r806919 reference layout" },
+            { "Property.options", PropertyOptions, "assumed", "r801440/r806919 reference layout" },
+            { "EnumOption.size", OptionSize, "assumed", "r801440/r806919 reference layout" },
+            { "EnumOption.value", OptionValue, "assumed", "r801440/r806919 reference layout" },
+            { "EnumOption.name", OptionName, "assumed", "r801440/r806919 reference layout" },
+            { "Container.name_slot", ContainerNameSlot, "assumed", "r801440/r806919 reference layout" },
+            { "Container.dynamic_slot", ContainerDynamicSlot, "assumed", "r801440/r806919 reference layout" }
+        };
+        for (ClientLayoutEvidence& item : evidence)
+            if (auto const found = DerivedFields.find(item.Field); found != DerivedFields.end())
+            {
+                item.Status = "derived";
+                item.ConfirmedBy = found->second;
+            }
+        return evidence;
+    }
+
+    std::optional<std::string> FirstUnresolvedField() const
+    {
+        for (ClientLayoutEvidence const& item : Evidence())
+            if (item.Status != "derived")
+                return item.Field;
+        return std::nullopt;
+    }
 };
 
 #endif

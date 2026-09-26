@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs a whole extraction: refuses an install whose revision cannot name a dump file, loads the install's client program and runtime, runs its C and C++ initializers and lazy getters, counting the getters that fault, adds its races, walks and validates the type map, checks that every enum eRace property received every race and that the server's type loader accepts the dump, and gathers the revision, executable hash, timings and discoveries; also names the default output file.
+ * Runs a whole extraction: refuses an install whose revision cannot name a dump file, loads the install's client program and runtime, derives Type and std::string layout from values passed to the client's constructor, runs its initializers and lazy getters, adds its races, validates the type map and server catalog, and reports per-field evidence, timings, counts and discoveries.
  */
 
 #include "TypeExtraction.h"
@@ -11,6 +11,7 @@
 #include "GuestProcess.h"
 #include "KiwadArchive.h"
 #include "SHA256.h"
+#include "StringHash.h"
 #include "TypeWalker.h"
 #include "WindowsApi.h"
 
@@ -24,13 +25,17 @@
 #include <chrono>
 #include <cstddef>
 #include <exception>
+#include <limits>
+#include <set>
 #include <string_view>
+#include <type_traits>
 #include <unordered_set>
 
 namespace
 {
     constexpr std::string_view ExecutableName = "WizardGraphicalClient.exe";
     constexpr std::string_view RaceFile = "Races.xml";
+    constexpr uint64 TypeConstructorProbeBudget = 50000000;
 
     using Clock = std::chrono::steady_clock;
 
@@ -63,6 +68,42 @@ namespace
         machine.WriteU64(object + layout.StringSize, text.size());
         machine.WriteU64(object + layout.StringCapacity, std::max<uint64>(text.size(), layout.StringInlineCapacity));
         return object;
+    }
+
+    bool ProbeTypeLayout(GuestProcess& process, uint64 constructor, ClientLayout& layout, std::string& error)
+    {
+        std::array<std::string_view, 2> const names = {
+            "AmbroseProbe",
+            "AmbroseTypeLayoutConstructorProbeWithAllocatedStorage"
+        };
+        std::vector<ConstructedTypeSample> samples;
+        samples.reserve(names.size());
+        for (std::string_view const name : names)
+        {
+            uint32 const hash = StringHash::KiStringHash(name);
+            uint64 const object = process.GetHeap().Allocate(0x200, true);
+            uint64 const nameAddress = process.StoreCString(name);
+            try
+            {
+                process.Call(constructor, { object, nameAddress, hash }, TypeConstructorProbeBudget);
+            }
+            catch (EmulationError const& failure)
+            {
+                error = fmt::format("Type.name could not be derived: the constructor probe failed: {}", failure.what());
+                return false;
+            }
+            samples.push_back({ object, std::string(name), hash });
+        }
+        ClientLayout candidate = layout;
+        if (!ClientDiscovery::DeriveConstructedTypeLayout(process.GetMachine(), process.GetHeap(), samples, candidate, error))
+            return false;
+        layout = std::move(candidate);
+        return true;
+    }
+
+    bool UsesReferenceTypeLayout(std::string_view revision)
+    {
+        return revision == "r801440" || revision == "r806919.Wizard_1_610";
     }
 
     std::vector<std::string> ReadRaces(std::filesystem::path const& client, std::string& error)
@@ -123,7 +164,14 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
         return fail(fmt::format("{} names the revision {} in Bin/revision.dat, which cannot name a dump file: only letters, digits, '.', '_' and '-' are allowed", ClientLocator::PathText(options.ClientDir), install->Revision));
     result.Metadata.Revision = install->Revision;
     result.Metadata.Extractor = std::string(ExtractorName);
-
+    ClientLayout layout = options.Layout;
+    result.LayoutEvidence = layout.Evidence();
+    auto reportLayout = [&]()
+    {
+        result.LayoutEvidence = layout.Evidence();
+        for (ClientLayoutEvidence const& evidence : result.LayoutEvidence)
+            result.Discovered.push_back(fmt::format("layout {} = {:#x} ({}, confirmed by {})", evidence.Field, evidence.Value, evidence.Status, evidence.ConfirmedBy));
+    };
     try
     {
         Clock::time_point phase = Clock::now();
@@ -188,10 +236,10 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
         result.Stats.InitializeMilliseconds = Milliseconds(phase);
 
         phase = Clock::now();
-        std::optional<uint64> const head = ClientDiscovery::FindTypeMapHead(machine, process.GetHeap(), options.Layout, error);
+        std::optional<uint64> const head = ClientDiscovery::FindTypeMapHead(machine, process.GetHeap(), layout, error);
         if (!head)
             return fail(fmt::format("the type map was not found: {}", error));
-        std::optional<std::vector<uint64>> types = ClientDiscovery::WalkTypeMap(machine, *head, options.Layout, error);
+        std::optional<std::vector<uint64>> types = ClientDiscovery::WalkTypeMap(machine, *head, layout, error);
         if (!types)
             return fail(fmt::format("the type map could not be walked: {}", error));
         result.Discovered.push_back(fmt::format("type map at {:#x} with {} types after the initializers", *head, types->size()));
@@ -200,7 +248,34 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
         if (!constructor)
             return fail(fmt::format("the Type constructor was not found: {}", error));
         result.Discovered.push_back(fmt::format("Type constructor at {} ({} votes, runner-up {} votes)", process.DescribeAddress(constructor->Winner), constructor->WinnerVotes, constructor->RunnerUpVotes));
-        std::optional<DiscoveryVote> const listInitializer = ClientDiscovery::FindPropertyListInitializer(machine, code, *types, options.Layout, error);
+        auto deriveTypeLayout = [&]()
+        {
+            if (!ProbeTypeLayout(process, constructor->Winner, layout, error))
+            {
+                result.Discovered.push_back(fmt::format("layout derivation unavailable: {}", error));
+                return false;
+            }
+            for (ClientLayoutEvidence const& evidence : layout.Evidence())
+                if (evidence.Status == "derived" && (evidence.Field == "Type.name" || evidence.Field == "Type.hash"
+                    || evidence.Field.starts_with("std::string.")))
+                    result.Discovered.push_back(fmt::format("layout derivation: {} at {:#x} ({})",
+                        evidence.Field, evidence.Value, evidence.ConfirmedBy));
+            return true;
+        };
+        bool const referenceLayout = UsesReferenceTypeLayout(result.Metadata.Revision);
+        if (options.RequireDerivedLayout || !referenceLayout)
+        {
+            if (!deriveTypeLayout())
+                return fail(fmt::format("the client layout could not be derived: {}", error));
+            if (options.RequireDerivedLayout)
+            {
+                reportLayout();
+                if (!RequireDerivedLayout(layout, error))
+                    return fail(error);
+            }
+        }
+
+        std::optional<DiscoveryVote> const listInitializer = ClientDiscovery::FindPropertyListInitializer(machine, code, *types, layout, error);
         if (!listInitializer)
             return fail(fmt::format("the PropertyList initializer was not found: {}", error));
         result.Discovered.push_back(fmt::format("PropertyList initializer at {} ({} votes, runner-up {} votes)", process.DescribeAddress(listInitializer->Winner), listInitializer->WinnerVotes, listInitializer->RunnerUpVotes));
@@ -263,7 +338,7 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
         {
             try
             {
-                std::array<uint64, 1> const arguments{ StoreStdString(process, options.Layout, race) };
+                std::array<uint64, 1> const arguments{ StoreStdString(process, layout, race) };
                 process.Call(*raceAdder, arguments, options.RaceBudget);
             }
             catch (std::exception const& failure)
@@ -273,11 +348,17 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
         }
         result.Stats.Races = races.size();
 
-        types = ClientDiscovery::WalkTypeMap(machine, *head, options.Layout, error);
+        types = ClientDiscovery::WalkTypeMap(machine, *head, layout, error);
         if (!types)
             return fail(fmt::format("the type map could not be walked: {}", error));
+        if (!options.RequireDerivedLayout && !referenceLayout)
+        {
+            reportLayout();
+            if (!RequireDerivedLayout(layout, error))
+                return fail(error);
+        }
         progress(fmt::format("reading and checking {} types", types->size()));
-        TypeWalker walker(process, options.Layout);
+        TypeWalker walker(process, layout);
         TypeWalkResult walk = walker.Walk(*types);
         result.Stats.WalkMilliseconds = Milliseconds(phase);
         result.Stats.Classes = walk.Dump.Classes.size();
@@ -309,6 +390,12 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
         progress("building the server's type catalog from the dump");
         if (!CheckCatalog(result.Dump, result.Metadata.ExecutableSha256, error))
             return fail(error);
+
+        if (!options.RequireDerivedLayout && referenceLayout)
+        {
+            deriveTypeLayout();
+            reportLayout();
+        }
     }
     catch (std::exception const& failure)
     {
@@ -316,6 +403,29 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
     }
     result.Stats.TotalMilliseconds = Milliseconds(started);
     return result;
+}
+
+bool TypeExtraction::RequireDerivedLayout(ClientLayout const& layout, std::string& error)
+{
+    std::optional<std::string> const unresolved = layout.FirstUnresolvedField();
+    if (!unresolved)
+    {
+        error.clear();
+        return true;
+    }
+    error = fmt::format("the client layout could not be derived: {}", *unresolved);
+    return false;
+}
+
+bool TypeExtraction::SaveDump(TypeExtractionResult const& result, std::filesystem::path const& path, std::string& error)
+{
+    if (!result.Succeeded())
+    {
+        error = result.Error;
+        return false;
+    }
+    error.clear();
+    return TypeDumpWriter::Save(path, TypeDumpWriter::ToJson(result.Dump, result.Metadata), error);
 }
 
 bool TypeExtraction::IsPlainRevision(std::string_view revision)

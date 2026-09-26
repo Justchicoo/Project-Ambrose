@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests runtime discovery over synthetic heaps and code: the type map head among decoy nodes, an in-order walk that refuses cycles, and the Type constructor and PropertyList initializer votes with clear and unclear winners.
+ * Tests runtime discovery over synthetic heaps and code: a map head among decoy nodes, cycle refusal, constructor and initializer votes, and Type and string fields derived from chosen values at non-default offsets.
  */
 
 #include "ClientDiscovery.h"
@@ -151,4 +151,48 @@ TEST(ClientDiscoveryRuntimeTest, TheConstructorAndListInitializerWinTheirVotes)
     std::vector<uint64> const few(types.begin(), types.begin() + 5);
     EXPECT_FALSE(ClientDiscovery::FindPropertyListInitializer(h.machine, index, few, {}, error));
     EXPECT_NE(error.find("no clear winner"), std::string::npos) << error;
+}
+
+TEST(ClientDiscoveryRuntimeTest, ConstructorChosenValuesLocateTypeAndStringFieldsAwayFromDefaults)
+{
+    Heap h;
+    std::vector<ConstructedTypeSample> samples;
+    auto makeType = [&](std::string name, uint32 hash, bool inlineName)
+    {
+        uint64 const type = h.heap.Allocate(0x80, true);
+        uint64 const nameField = type + 0x20;
+        std::vector<uint8> bytes(name.begin(), name.end());
+        bytes.push_back(0);
+        if (inlineName)
+        {
+            bytes.resize(8, 0);
+            h.machine.Write(nameField, bytes);
+        }
+        else
+        {
+            uint64 const storage = h.heap.Allocate(bytes.size(), true);
+            h.machine.Write(storage, bytes);
+            h.machine.WriteU64(nameField, storage);
+        }
+        h.machine.WriteU64(nameField + 0x08, name.size());
+        h.machine.WriteU64(nameField + 0x10, inlineName ? 7 : name.size());
+        h.machine.WriteU64(nameField + 0x40, name.size());
+        h.machine.WriteU32(type + 0x38, hash);
+        h.machine.WriteU32(type + 0x70, hash);
+        samples.push_back({ type, std::move(name), hash });
+    };
+    makeType("Tiny", 0xA17B23C1, true);
+    makeType("LongConstructorProbeName", 0x5C4D2E19, false);
+
+    ClientLayout layout;
+    std::string error;
+    ASSERT_TRUE(ClientDiscovery::DeriveConstructedTypeLayout(h.machine, h.heap, samples, layout, error)) << error;
+
+    EXPECT_EQ(layout.TypeName, 0x20u);
+    EXPECT_EQ(layout.TypeHash, 0x38u);
+    EXPECT_EQ(layout.StringSize, 0x08u);
+    EXPECT_EQ(layout.StringCapacity, 0x10u);
+    EXPECT_EQ(layout.StringInlineCapacity, 7u);
+    EXPECT_EQ(layout.StringObjectSize, 0x18u);
+    EXPECT_EQ(layout.FirstUnresolvedField(), "std::map.node.left");
 }

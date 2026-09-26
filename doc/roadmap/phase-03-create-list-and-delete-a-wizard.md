@@ -1177,6 +1177,6 @@ Added on 2026-09-23 at the maintainer's direction, whose point is that a server 
 
 - [ ] Deriving the layout against the pinned install reproduces the written offsets for r801440 and r806919 exactly, field by field
 - [ ] An extraction using derived offsets produces a dump identical to the one the written offsets produce, on the same install
-- [ ] A structure the derivation cannot place stops the extraction naming the field, and no dump is written
-- [ ] The extraction report says, for every offset, whether it was derived or assumed and what confirmed it
+- [x] A structure the derivation cannot place stops the extraction naming the field, and no dump is written (TypeExtractionTest.StrictLayoutRefusalNamesTheFirstUnresolvedFieldAndDoesNotWriteADump; strict r806919 run exited 1 naming `std::map.node.left` and created no output file)
+- [x] The extraction report says, for every offset, whether it was derived or assumed and what confirmed it (normal r806919 extraction reported all 33 fields, with Type and std::string fields derived and all other fields assumed; 6,986 classes, 49,465 properties, 0 differences from the saved baseline)
 - [ ] Client-gated: a client other than the pinned one extracts without its offsets being added to the tool by hand, or fails naming exactly which field it could not place

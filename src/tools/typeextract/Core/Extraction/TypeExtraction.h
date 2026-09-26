@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds a format v2 type dump from the user's own install without launching the game: refuses an install whose revision cannot name a dump file, loads WizardGraphicalClient.exe and its runtime into the emulator, runs every C++ initializer, discovers and runs the lazy type and property list getters, adds each race from Root.wad's Races.xml through the client's race adder, walks and validates the type map, checks that every enum eRace property holds every race and that the server's type loader builds a catalog from the dump, and reports progress, timings, counts, faulted getters, problems and any Windows function the client called that the layer lacks.
+ * Builds a format v2 type dump from the user's own install without launching the game: derives Type and std::string layout from values passed to the client's constructor, refuses strict extraction while any field remains assumed, runs initializers and lazy getters, adds the races from Root.wad through the client's race adder, validates the dump and reports per-field evidence and extraction results.
  */
 
 #ifndef AMBROSE_TYPEEXTRACTION_H
@@ -28,6 +28,7 @@ struct TypeExtractionOptions
     uint64 GetterBudget = 50000000;
     uint64 RaceBudget = 200000000;
     std::function<void(std::string_view)> Progress;
+    bool RequireDerivedLayout = false;
 };
 
 struct TypeExtractionStats
@@ -59,6 +60,7 @@ struct TypeExtractionResult
     std::map<std::string, std::vector<std::string>> ProblemSamples;
     std::map<std::string, uint64> UnhandledApiCalls;
     std::vector<std::string> Discovered;
+    std::vector<ClientLayoutEvidence> LayoutEvidence;
 
     bool Succeeded() const noexcept { return Error.empty(); }
 };
@@ -70,6 +72,8 @@ namespace TypeExtraction
     inline constexpr std::size_t MaxListedLoaderErrors = 20;
 
     TypeExtractionResult Extract(TypeExtractionOptions const& options);
+    bool RequireDerivedLayout(ClientLayout const& layout, std::string& error);
+    bool SaveDump(TypeExtractionResult const& result, std::filesystem::path const& path, std::string& error);
     bool IsPlainRevision(std::string_view revision);
     std::optional<std::filesystem::path> DefaultOutputPath(std::filesystem::path const& dataFolder, std::string_view revision);
     bool CheckRaces(TypeDumpLoader::RawDump const& dump, std::span<std::string const> races, std::string& error);

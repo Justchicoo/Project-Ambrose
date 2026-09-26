@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The discovery steps that read the emulated process: the type map head found from heap nodes whose type name hashes to their key, an in-order walk of that map, and the votes for the Type constructor and PropertyList initializer.
+ * The discovery steps that read the emulated process: the type map head found from heap nodes whose type name hashes to their key, an in-order walk of that map, Type and std::string fields matched against values supplied to the Type constructor, and votes for the Type constructor and PropertyList initializer.
  */
 
 #include "ClientDiscovery.h"
@@ -13,7 +13,10 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <array>
+#include <limits>
 #include <map>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -39,6 +42,41 @@ namespace
         for (int i = 3; i >= 0; --i)
             value = (value << 8) | bytes[offset + static_cast<uint64>(i)];
         return value;
+    }
+
+    std::optional<uint64> TryReadU64(Machine const& machine, uint64 address)
+    {
+        std::array<uint8, sizeof(uint64)> bytes{};
+        if (!machine.TryRead(address, bytes))
+            return std::nullopt;
+        uint64 value = 0;
+        for (std::size_t index = bytes.size(); index-- > 0;)
+            value = (value << 8) | bytes[index];
+        return value;
+    }
+
+    enum class StringRepresentation
+    {
+        Inline,
+        Allocated
+    };
+
+    std::optional<StringRepresentation> MatchConstructedString(Machine const& machine, GuestHeap const& heap, uint64 address, std::string_view expected)
+    {
+        std::vector<uint8> const value(expected.begin(), expected.end());
+        std::vector<uint8> terminated = value;
+        terminated.push_back(0);
+        std::vector<uint8> observed(terminated.size());
+        if (machine.TryRead(address, observed) && observed == terminated)
+            return StringRepresentation::Inline;
+
+        std::optional<uint64> const pointer = TryReadU64(machine, address);
+        std::optional<uint64> const allocationSize = pointer ? heap.SizeOf(*pointer) : std::nullopt;
+        if (!pointer || !allocationSize || *allocationSize < terminated.size())
+            return std::nullopt;
+        if (!machine.TryRead(*pointer, observed) || observed != terminated)
+            return std::nullopt;
+        return StringRepresentation::Allocated;
     }
 
     std::optional<DiscoveryVote> Elect(std::map<uint64, uint64> const& votes, std::string_view what, std::string& error)
@@ -166,6 +204,176 @@ std::optional<std::vector<uint64>> ClientDiscovery::WalkTypeMap(Machine const& m
         return std::nullopt;
     }
     return types;
+}
+
+bool ClientDiscovery::DeriveConstructedTypeLayout(Machine const& machine, GuestHeap const& heap, std::span<ConstructedTypeSample const> samples, ClientLayout& layout, std::string& error)
+{
+    if (samples.size() < 2)
+    {
+        error = "Type.name needs short and allocated constructor samples";
+        return false;
+    }
+
+    uint64 maxOffset = std::numeric_limits<uint64>::max();
+    for (ConstructedTypeSample const& sample : samples)
+    {
+        std::optional<uint64> const size = heap.SizeOf(sample.Address);
+        if (!size || *size < sizeof(uint32))
+        {
+            error = "Type.hash could not be placed in a constructor sample";
+            return false;
+        }
+        maxOffset = std::min(maxOffset, *size - sizeof(uint32));
+    }
+
+    std::set<uint64> hashOffsets;
+    for (uint64 offset = 0; offset <= maxOffset; offset += sizeof(uint32))
+    {
+        bool matches = true;
+        for (ConstructedTypeSample const& sample : samples)
+        {
+            std::array<uint8, sizeof(uint32)> bytes{};
+            if (!machine.TryRead(sample.Address + offset, bytes) || Get32(std::vector<uint8>(bytes.begin(), bytes.end()), 0) != sample.Hash)
+            {
+                matches = false;
+                break;
+            }
+        }
+        if (matches)
+            hashOffsets.insert(offset);
+    }
+
+    std::set<uint64> nameOffsets;
+    for (uint64 offset = 0; offset <= maxOffset; offset += sizeof(uint64))
+    {
+        if (offset + sizeof(uint64) * 2 > maxOffset + sizeof(uint32))
+            continue;
+        bool matches = true;
+        bool sawInline = false;
+        bool sawAllocated = false;
+        for (ConstructedTypeSample const& sample : samples)
+        {
+            std::optional<StringRepresentation> const representation =
+                MatchConstructedString(machine, heap, sample.Address + offset, sample.Name);
+            if (!representation)
+            {
+                matches = false;
+                break;
+            }
+            sawInline = sawInline || *representation == StringRepresentation::Inline;
+            sawAllocated = sawAllocated || *representation == StringRepresentation::Allocated;
+        }
+        if (matches && sawInline && sawAllocated)
+            nameOffsets.insert(offset);
+    }
+    if (nameOffsets.empty())
+    {
+        error = "Type.name has no matching offsets for the chosen inline and allocated names";
+        return false;
+    }
+    std::set<std::array<uint64, 5>> candidates;
+    uint64 const smallestObjectSize = maxOffset + sizeof(uint32);
+    for (uint64 const nameOffset : nameOffsets)
+    {
+        if (nameOffset > smallestObjectSize || smallestObjectSize - nameOffset < sizeof(uint64))
+            continue;
+        uint64 const maxStringOffset = smallestObjectSize - nameOffset - sizeof(uint64);
+        std::set<uint64> sizeOffsets;
+        for (uint64 offset = 0; offset <= maxStringOffset; offset += sizeof(uint64))
+        {
+            bool lengthsMatch = true;
+            for (ConstructedTypeSample const& sample : samples)
+            {
+                std::optional<uint64> const observed = TryReadU64(machine, sample.Address + nameOffset + offset);
+                if (!observed || *observed != sample.Name.size())
+                {
+                    lengthsMatch = false;
+                    break;
+                }
+            }
+            if (lengthsMatch)
+                sizeOffsets.insert(offset);
+        }
+
+        for (uint64 const sizeOffset : sizeOffsets)
+        {
+            for (uint64 capacityOffset = 0; capacityOffset <= maxStringOffset; capacityOffset += sizeof(uint64))
+            {
+                if (capacityOffset <= sizeOffset || capacityOffset - sizeOffset < sizeof(uint64))
+                    continue;
+                bool capacitiesMatch = true;
+                bool sawInline = false;
+                bool sawAllocated = false;
+                std::optional<uint64> candidateInlineCapacity;
+                for (ConstructedTypeSample const& sample : samples)
+                {
+                    std::optional<uint64> const observed = TryReadU64(machine, sample.Address + nameOffset + capacityOffset);
+                    std::optional<StringRepresentation> const representation =
+                        MatchConstructedString(machine, heap, sample.Address + nameOffset, sample.Name);
+                    if (!observed || !representation)
+                    {
+                        capacitiesMatch = false;
+                        break;
+                    }
+                    if (*representation == StringRepresentation::Inline)
+                    {
+                        sawInline = true;
+                        if (*observed <= sample.Name.size() || *observed > MaxTypeNameLength
+                            || (candidateInlineCapacity && *candidateInlineCapacity != *observed))
+                            capacitiesMatch = false;
+                        candidateInlineCapacity = *observed;
+                    }
+                    else
+                    {
+                        sawAllocated = true;
+                        if (*observed < sample.Name.size() || *observed > MaxTypeNameLength)
+                            capacitiesMatch = false;
+                    }
+                }
+                if (!capacitiesMatch || !sawInline || !sawAllocated || !candidateInlineCapacity)
+                    continue;
+                bool allocatedLonger = false;
+                for (ConstructedTypeSample const& sample : samples)
+                {
+                    std::optional<StringRepresentation> const representation =
+                        MatchConstructedString(machine, heap, sample.Address + nameOffset, sample.Name);
+                    if (representation == StringRepresentation::Allocated && sample.Name.size() > *candidateInlineCapacity)
+                        allocatedLonger = true;
+                }
+                uint64 const hashOffset = nameOffset + capacityOffset + sizeof(uint64);
+                if (allocatedLonger && hashOffsets.contains(hashOffset))
+                    candidates.insert({ nameOffset, sizeOffset, capacityOffset, *candidateInlineCapacity, hashOffset });
+            }
+        }
+    }
+    if (candidates.size() != 1)
+    {
+        std::string details;
+        for (auto const& [nameOffset, sizeOffset, capacityOffset, inlineCapacity, hashOffset] : candidates)
+        {
+            if (!details.empty())
+                details += "; ";
+            details += fmt::format("Type.name {:#x}, std::string.size {:#x}, std::string.capacity {:#x}, inline capacity {}, Type.hash {:#x}",
+                nameOffset, sizeOffset, capacityOffset, inlineCapacity, hashOffset);
+        }
+        error = fmt::format("Type.name and its std::string fields have {} complete matches for the chosen constructor values: {}", candidates.size(), details);
+        return false;
+    }
+    auto const [nameOffset, sizeOffset, capacityOffset, inlineCapacity, hashOffset] = *candidates.begin();
+
+    layout.TypeName = nameOffset;
+    layout.TypeHash = hashOffset;
+    layout.StringSize = sizeOffset;
+    layout.StringCapacity = capacityOffset;
+    layout.StringInlineCapacity = inlineCapacity;
+    layout.StringObjectSize = capacityOffset + sizeof(uint64);
+    layout.ConfirmDerived("Type.name", fmt::format("matched {} names supplied to the Type constructor in inline and allocated form", samples.size()));
+    layout.ConfirmDerived("Type.hash", fmt::format("matched {} chosen hashes immediately after the constructed std::string object", samples.size()));
+    layout.ConfirmDerived("std::string.size", fmt::format("matched the lengths of {} names supplied to the Type constructor", samples.size()));
+    layout.ConfirmDerived("std::string.capacity", fmt::format("matched inline and allocated capacities for {} constructor samples", samples.size()));
+    layout.ConfirmDerived("std::string.inline_capacity", "matched the constructor's inline short name and separately allocated long name");
+    layout.ConfirmDerived("std::string.object_size", "the constructor placed Type.hash immediately after the independently matched string object");
+    return true;
 }
 
 std::optional<DiscoveryVote> ClientDiscovery::FindTypeConstructor(Machine const& machine, CodeIndex const& code, std::span<uint64 const> types, std::string& error)
