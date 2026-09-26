@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests admin API routing without sockets: authentication runs before the table, a wrong token is rate limited while the right one still answers, a request naming no caller address is refused, an oversized body is refused before the handler, a known method and path reaches its handler, another method answers 405, an unknown path answers 404, a handler that throws becomes a 500 problem, a host header is read down to its name and only an IP address, localhost or an allowed name is answered, every answer carries a request id and the security headers with the id in any error body, a 422 names each field, paths outside /api and public routes need no token, and a browser session authenticates by cookie with its origin and CSRF token checked where a request changes something or upgrades, and that a route ships only when it says which permission it needs or that any signed-in member may call it, that one naming a permission nothing holds is never registered, and that a route without its permission answers 403 while one in a scope the caller cannot see answers 404 saying nothing about what was wanted.
+ * Tests admin API routing without sockets: authentication runs before the table, a wrong token is rate limited while the right one still answers, a request naming no caller address is refused, an oversized body is refused before the handler, a known method and path reaches its handler, another method answers 405, an unknown path answers 404, a handler that throws becomes a 500 problem, a host header is read down to its name and only an IP address, localhost or an allowed name is answered, every answer carries a request id and the security headers with the id in any error body, a 422 names each field, paths outside /api and public routes need no token, and a browser session authenticates by cookie with its origin and CSRF token checked where a request changes something or upgrades, and that a route ships only when it says which permission it needs or that any signed-in member may call it, that one naming a permission nothing holds is never served and is kept among the refused routes, and that a route without its permission answers 403 while one in a scope the caller cannot see answers 404 saying nothing about what was wanted.
  */
 
 #include "AdminAuth.h"
@@ -329,8 +329,11 @@ TEST(AdminRouterTest, EveryRouteSaysWhatItNeedsOrItIsNotServed)
     EXPECT_TRUE(routes.RouteProblems().empty());
 
     routes.AddGuarded("POST", "/api/reveal", "settings.secrets.read", [](AdminRequest const&) { return AdminResponse::Json(200, "{}"); });
-    EXPECT_FALSE(routes.Has("POST", "/api/reveal")) << "a route asking for a key nothing holds is not registered at all";
-    EXPECT_TRUE(routes.RouteProblems().empty()) << "and so there is nothing left to report about it";
+    EXPECT_FALSE(routes.Has("POST", "/api/reveal")) << "a route asking for a key nothing holds is not served";
+    EXPECT_TRUE(routes.RouteProblems().empty()) << "and does not stop the listener opening";
+    std::vector<std::string> const refused = routes.RefusedRoutes();
+    ASSERT_EQ(refused.size(), 1u) << "but it is kept, so a key named differently from the catalog's cannot lose a page unseen";
+    EXPECT_NE(refused[0].find("POST /api/reveal asks for settings.secrets.read"), std::string::npos) << refused[0];
 
     routes.Add("GET", "/api/quiet", [](AdminRequest const&) { return AdminResponse::Json(200, "{}"); });
     std::vector<std::string> const problems = routes.RouteProblems();

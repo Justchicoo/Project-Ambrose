@@ -73,7 +73,7 @@ std::string AdminActivityView::ActivityJson(std::filesystem::path const& file, s
 
 void AdminActivityView::Register(AdminRouter& router, std::filesystem::path auditFile)
 {
-    router.AddGuarded("GET", "/api/activity", "audit.read", [file = std::move(auditFile)](AdminRequest const& request)
+    router.AddGuarded("GET", "/api/activity", "activity.read", [file = std::move(auditFile)](AdminRequest const& request)
     {
         std::string_view const asked = request.Query("limit");
         if (asked.empty())

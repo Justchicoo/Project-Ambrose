@@ -61,8 +61,8 @@ public:
     void Shutdown();
     void Register(AdminRouter& router, std::function<AdminStatusSnapshot()> self);
     std::vector<std::pair<std::string, std::string>> CollectErrorReports();
-    static std::string_view PermissionFor(std::string_view tail) noexcept;
-    std::optional<AdminResponse> Refuse(AdminRequest const& request, std::string_view permission) const;
+    static std::optional<std::string_view> PermissionFor(std::string_view method, std::string_view tail) noexcept;
+    static std::optional<AdminResponse> Refuse(AdminRequest const& request, std::string_view permission, AdminRouter const& router);
 
     PowerResult Power(std::string_view name, PowerAction action, uint32 countdownSeconds);
     std::vector<AppSnapshot> Snapshots() const;
@@ -74,8 +74,8 @@ public:
     static std::string OutputJson(std::string_view name, OutputRun run, std::vector<OutputLine> const& lines);
 
 private:
-    AdminResponse Answer(AdminRequest const& request);
-    AdminResponse PowerRoute(ManagedApp& app, AdminRequest const& request);
+    AdminResponse Answer(AdminRequest const& request, AdminRouter const& router);
+    AdminResponse PowerRoute(ManagedApp& app, AdminRequest const& request, AdminRouter const& router);
     AdminResponse Relay(ManagedApp& app, AdminRequest const& request, std::string_view path);
     ManagedApp* Find(std::string_view name) const;
 
@@ -83,7 +83,6 @@ private:
     ChildBreakSender _sendBreak;
     std::unique_ptr<SupervisorState> _state;
     mutable std::shared_mutex _mutex;
-    AdminRouter* _routes = nullptr;
     std::vector<std::unique_ptr<ManagedApp>> _apps;
 };
 

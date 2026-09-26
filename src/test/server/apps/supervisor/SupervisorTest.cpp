@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached.
+ * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant.
  */
 
 #include "AdminAuth.h"
@@ -383,4 +383,27 @@ TEST(SupervisorTest, TheRoutesListEveryAppPowerItAndSayWhyARelayCannotReachIt)
     ASSERT_EQ(stop.Status, 202) << stop.Body;
     EXPECT_EQ(nlohmann::json::parse(stop.Body)["accepted"], true);
     EXPECT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Offline; }));
+}
+
+TEST(SupervisorTest, EachListenerJudgesTheRequestsThatCameInOnIt)
+{
+    Rig rig(ServerScript());
+    ASSERT_TRUE(rig.Open());
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Running; }));
+    AdminAuth auth(10, 1.0);
+    auth.SetToken(Token);
+    AdminRouter admin(auth);
+    AdminRouter panel(auth);
+    panel.SetPermissionCheck([](AdminRequest const&, std::string_view) { return PermissionVerdict::Forbidden; });
+    AdminStatusSnapshot self;
+    self.App.Name = "supervisor";
+    self.App.Role = "supervisor";
+    rig.Instance().Register(admin, [self] { return self; });
+    rig.Instance().Register(panel, [self] { return self; });
+
+    AdminResponse const relayed = admin.Dispatch(Request("GET", "/api/apps/helper/api/status"));
+    EXPECT_EQ(relayed.Status, 503) << "the token on the supervisor's own listener reaches the relay, which then says why the app cannot answer: " << relayed.Body;
+    EXPECT_EQ(admin.Dispatch(Request("POST", "/api/apps/helper/power", "{\"action\":\"start\"}")).Status, 409) << "and may ask for power";
+    EXPECT_EQ(panel.Dispatch(Request("GET", "/api/apps/helper/api/status")).Status, 403) << "while the panel's own check still refuses its caller";
+    EXPECT_EQ(panel.Dispatch(Request("POST", "/api/apps/helper/power", "{\"action\":\"start\"}")).Status, 403);
 }

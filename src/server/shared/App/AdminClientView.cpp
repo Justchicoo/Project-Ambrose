@@ -70,7 +70,7 @@ std::string AdminClientView::ClientJson(ClientSetupResult const& setup)
 
 void AdminClientView::Register(AdminRouter& router, Source source)
 {
-    router.AddGuarded("GET", "/api/client", "client.read", [source = std::move(source)](AdminRequest const&)
+    router.AddGuarded("GET", "/api/client", "clientdata.read", [source = std::move(source)](AdminRequest const&)
     {
         return AdminResponse::Json(200, ClientJson(source()));
     });

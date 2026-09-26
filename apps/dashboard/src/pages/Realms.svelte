@@ -4,12 +4,26 @@
     import * as Table from "$lib/components/ui/table/index.js";
     import { ApiError } from "$lib/api.svelte.js";
     import { live } from "$lib/status.svelte.js";
-    import { realmsOf, servedBy, supervised, supervisorServes } from "$lib/supervision.svelte.js";
+    import { candidates, realmsOf, servingApps } from "$lib/supervision.svelte.js";
     import type { RealmsAnswer } from "$lib/schemas.js";
     import PageHeader from "../components/PageHeader.svelte";
     import StatusBadge from "../components/StatusBadge.svelte";
 
-    const choices = $derived(supervisorServes() ? [servedBy(), ...supervised().map((app) => app.name)] : [servedBy()]);
+    let serving = $state<string[] | null>(null);
+    const asked = $derived(candidates().join(","));
+    $effect(() => {
+        void asked;
+        const controller = new AbortController();
+        void (async () => {
+            try {
+                serving = await servingApps("realms", controller.signal);
+            } catch {
+                if (!controller.signal.aborted) serving = [];
+            }
+        })();
+        return () => controller.abort();
+    });
+    const choices = $derived(serving ?? []);
     let chosen = $state("");
     let answer = $state<RealmsAnswer | null>(null);
     let failure = $state("");
@@ -47,6 +61,14 @@
 </script>
 
 <PageHeader title="Realms and zones" description="Where a player may be sent, and whether it is still answering." />
+
+{#if serving !== null && serving.length === 0}
+    <Card.Root class="mb-4">
+        <Card.Content class="py-4 text-sm text-muted-foreground"
+            >No server under this panel keeps the realm list. The login server keeps it, and none is running here.</Card.Content
+        >
+    </Card.Root>
+{/if}
 
 {#if failure !== ""}
     <Card.Root class="mb-4">

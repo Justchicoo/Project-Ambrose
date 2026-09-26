@@ -128,14 +128,14 @@ std::string AdminMetricsView::MetricsJson()
 
 void AdminMetricsView::Register(AdminRouter& router)
 {
-    router.AddGuarded("GET", "/metrics", "status.read", [](AdminRequest const&)
+    router.AddGuarded("GET", "/metrics", "metrics.read", [](AdminRequest const&)
     {
         AdminResponse answer = AdminResponse::Json(200, Ambrose::MetricRegistry::Expose(Everything()));
         answer.ContentType = "text/plain; version=0.0.4; charset=utf-8";
         return answer;
     });
 
-    router.AddGuarded("GET", "/api/metrics", "status.read", [](AdminRequest const&)
+    router.AddGuarded("GET", "/api/metrics", "metrics.read", [](AdminRequest const&)
     {
         return AdminResponse::Json(200, MetricsJson());
     });

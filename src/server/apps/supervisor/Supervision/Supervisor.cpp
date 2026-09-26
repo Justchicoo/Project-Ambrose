@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps the apps behind a shared lock that only starting and stopping the supervisor takes alone, so a request always finds a whole list; the saved state and each app's output live under the data folder unless Supervisor.StateFile or Supervisor.OutputDir says otherwise; a power request names its action and, for a stop or restart, a countdown, and anything else in it is refused field by field; a relayed request keeps its method, path, body and request id, sessions stay the supervisor's own and are never relayed, and an app that is not running or has its admin API off is answered 503 with the reason.
+ * Keeps the apps behind a shared lock that only starting and stopping the supervisor takes alone, so a request always finds a whole list; the saved state and each app's output live under the data folder unless Supervisor.StateFile or Supervisor.OutputDir says otherwise; a power request names its action and, for a stop or restart, a countdown, and anything else in it is refused field by field; a relayed request keeps its method, path, body and request id and is let through only for a method and path whose permission the relay knows, the same one the app's own route asks for, so a caller who could not reach a route on the app cannot reach it through the supervisor and a path the relay does not know is answered as absent, each judged by the listener the request came in on, since the admin token on the supervisor's own API and a panel user's session on the panel are different callers; sessions stay the supervisor's own and are never relayed, and an app that is not running or has its admin API off is answered 503 with the reason.
  */
 
 #include "Supervisor.h"
@@ -230,31 +230,53 @@ std::string Supervisor::OutputJson(std::string_view name, OutputRun run, std::ve
 
 void Supervisor::Register(AdminRouter& router, std::function<AdminStatusSnapshot()> self)
 {
-    _routes = &router;
     router.AddGuarded("GET", "/api/apps", "status.read", [this, self](AdminRequest const&) { return AdminResponse::Json(200, AppsJson(self(), Snapshots())); });
     router.AddGuarded("GET", "/api/supervisor", "status.read", [this](AdminRequest const&) { return AdminResponse::Json(200, SupervisionJson(Snapshots())); });
     for (char const* method : { "GET", "POST", "PUT", "PATCH", "DELETE" })
-        router.AddGuardedPrefix(method, "/api/apps/", "status.read", [this](AdminRequest const& request) { return Answer(request); });
+        router.AddGuardedPrefix(method, "/api/apps/", "status.read", [this, &router](AdminRequest const& request) { return Answer(request, router); });
 }
 
-std::string_view Supervisor::PermissionFor(std::string_view tail) noexcept
+std::optional<std::string_view> Supervisor::PermissionFor(std::string_view method, std::string_view tail) noexcept
 {
+    bool const read = method == "GET";
     if (tail == "/api/command")
-        return "console.write";
-    if (tail.starts_with("/api/logs"))
-        return "console.read";
-    if (tail.starts_with("/api/settings"))
-        return "settings.read";
-    if (tail.starts_with("/api/database"))
-        return "database.read";
-    return "status.read";
+        return method == "POST" ? std::optional<std::string_view>("console.write") : std::nullopt;
+    if (tail.starts_with("/api/logs/after/"))
+        return read ? std::optional<std::string_view>("console.read") : std::nullopt;
+    if (tail == "/api/settings")
+        return read ? std::optional<std::string_view>("settings.read") : method == "PATCH" || method == "PUT" ? std::optional<std::string_view>("settings.edit") : std::nullopt;
+    if (tail == "/api/database" || tail == "/api/database/updates")
+        return read ? std::optional<std::string_view>("database.read") : std::nullopt;
+    if (tail == "/api/database/apply")
+        return method == "POST" ? std::optional<std::string_view>("updates.apply") : std::nullopt;
+    if (tail == "/api/database/reload")
+        return method == "POST" ? std::optional<std::string_view>("reload.run") : std::nullopt;
+    if (tail == "/api/reload")
+        return read ? std::optional<std::string_view>("reload.read") : std::nullopt;
+    if (tail.starts_with("/api/reload/"))
+        return method == "POST" ? std::optional<std::string_view>("reload.run") : std::nullopt;
+    if (tail == "/api/shutdown")
+        return method == "POST" ? std::optional<std::string_view>("power.stop") : std::nullopt;
+    if (!read)
+        return std::nullopt;
+    if (tail == "/api/realms")
+        return "realms.read";
+    if (tail == "/api/players")
+        return "players.read";
+    if (tail == "/api/client")
+        return "clientdata.read";
+    if (tail == "/api/activity")
+        return "activity.read";
+    if (tail == "/api/metrics" || tail == "/metrics")
+        return "metrics.read";
+    if (tail == "/api/status" || tail == "/api/apps" || tail == "/api/errors")
+        return "status.read";
+    return std::nullopt;
 }
 
-std::optional<AdminResponse> Supervisor::Refuse(AdminRequest const& request, std::string_view permission) const
+std::optional<AdminResponse> Supervisor::Refuse(AdminRequest const& request, std::string_view permission, AdminRouter const& router)
 {
-    if (_routes == nullptr)
-        return std::nullopt;
-    switch (_routes->MayI(request, permission))
+    switch (router.MayI(request, permission))
     {
         case PermissionVerdict::Allowed:
             return std::nullopt;
@@ -266,7 +288,7 @@ std::optional<AdminResponse> Supervisor::Refuse(AdminRequest const& request, std
     return std::nullopt;
 }
 
-AdminResponse Supervisor::Answer(AdminRequest const& request)
+AdminResponse Supervisor::Answer(AdminRequest const& request, AdminRouter const& router)
 {
     constexpr std::string_view Prefix = "/api/apps/";
     std::string_view const rest = std::string_view(request.Path).substr(Prefix.size());
@@ -295,23 +317,26 @@ AdminResponse Supervisor::Answer(AdminRequest const& request)
     {
         if (method != "POST")
             return only("POST");
-        return PowerRoute(*app, request);
+        return PowerRoute(*app, request, router);
     }
-    if (std::optional<AdminResponse> refused = Refuse(request, tail == "/output/current" || tail == "/output/previous" ? "console.read" : PermissionFor(tail)))
-        return std::move(*refused);
     if (tail == "/output/current" || tail == "/output/previous")
     {
+        if (std::optional<AdminResponse> refused = Refuse(request, "console.read", router))
+            return std::move(*refused);
         if (method != "GET")
             return only("GET");
         OutputRun const run = tail == "/output/current" ? OutputRun::Current : OutputRun::Previous;
         return AdminResponse::Json(200, OutputJson(name, run, app->Output(run, 0)));
     }
-    if (tail == "/metrics" || tail.starts_with("/api/"))
-        return Relay(*app, request, tail);
-    return AdminResponse::Problem(404, "not_found", fmt::format("The supervisor has nothing at {}", request.Path));
+    std::optional<std::string_view> const permission = PermissionFor(method, tail);
+    if (!permission)
+        return AdminResponse::Problem(404, "not_found", fmt::format("The supervisor relays nothing at {} {}", method, request.Path));
+    if (std::optional<AdminResponse> refused = Refuse(request, *permission, router))
+        return std::move(*refused);
+    return Relay(*app, request, tail);
 }
 
-AdminResponse Supervisor::PowerRoute(ManagedApp& app, AdminRequest const& request)
+AdminResponse Supervisor::PowerRoute(ManagedApp& app, AdminRequest const& request, AdminRouter const& router)
 {
     nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
     if (!body.is_object())
@@ -345,7 +370,7 @@ AdminResponse Supervisor::PowerRoute(ManagedApp& app, AdminRequest const& reques
     }
     if (!fields.empty())
         return AdminResponse::Invalid("The power request has problems", std::move(fields));
-    if (std::optional<AdminResponse> refused = Refuse(request, std::string("power.") + std::string(ManagedApp::ActionName(action))))
+    if (std::optional<AdminResponse> refused = Refuse(request, std::string("power.") + std::string(ManagedApp::ActionName(action)), router))
         return std::move(*refused);
     PowerResult const result = app.Power(action, seconds);
     if (!result.Accepted)

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, opens the admin API with the app's own routes and the live log stream already in it before the app starts, keeping a generated token in the data folder or, where the machine names none, beside the config file, and refuses to run when its binding is unsafe, stops gracefully on signals, requests, the shutdown command or POST /api/shutdown, now or after a delay either can cancel, with the reason logged when the delay runs out, answers GET /api/settings with the options the app declares restart-required, moves the one lifecycle state the console and the admin API both read, tells an app whether it runs only to check its start, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use, and registers the config reload target before the app starts and the messages one when the app names the install its definitions come from, which it only knows once it has started. An app that reads live settings declares them as soon as its configuration loads, so nothing reads one undeclared, opens them over its own database once that is open, re-resolves them when the configuration changes, and hands their changes to subscribers at the top of each tick.
+ * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, opens the admin API with the app's own routes and the live log stream already in it before the app starts, keeping a generated token in the data folder or, where the machine names none, beside the config file, and refuses to run when its binding is unsafe, stops gracefully on signals, requests, the shutdown command or POST /api/shutdown, now or after a delay either can cancel, with the reason logged when the delay runs out, answers GET /api/settings with the options the app declares restart-required, moves the one lifecycle state the console and the admin API both read, tells an app whether it runs only to check its start, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use, and registers the config reload target before the app starts and the messages one when the app names the install its definitions come from, which it only knows once it has started. An app that reads live settings declares them as soon as its configuration loads, so nothing reads one undeclared, opens them over its own database once that is open, re-resolves them when the configuration changes, and hands their changes to subscribers at the top of each tick. GET /api/client is served only once the app has said which client install it runs on, so an app that runs on none answers that it has no such page rather than that its install is missing.
  */
 
 #include "ServerApp.h"
@@ -10,7 +10,6 @@
 #include "AdminMetricsView.h"
 #include "AdminCommand.h"
 #include "AdminConfigView.h"
-#include "AdminRealmsView.h"
 #include "AdminReloadView.h"
 #include "AdminServer.h"
 #include "ListenerSettings.h"
@@ -372,6 +371,9 @@ void ServerApp::SetMessageSource(std::filesystem::path clientRoot)
 void ServerApp::SetClientSetup(ClientSetupResult setup)
 {
     _clientSetup = std::move(setup);
+    _usesClient = true;
+    if (_admin)
+        AdminClientView::Register(_admin->Routes(), [this]() -> ClientSetupResult const& { return _clientSetup; });
 }
 
 void ServerApp::RegisterReloadTargets()
@@ -409,10 +411,10 @@ void ServerApp::RegisterStandardRoutes(AdminRouter& routes)
     AdminStatus::Register(routes, [this] { return BuildStatus(); });
     AdminConfigView::Register(routes, _config, GetRestartRequiredOptions());
     AdminReloadView::Register(routes);
-    AdminRealmsView::Register(routes);
     AdminMetricsView::Register(routes);
     AdminActivityView::Register(routes, CommandAuditFile());
-    AdminClientView::Register(routes, [this]() -> ClientSetupResult const& { return _clientSetup; });
+    if (_usesClient)
+        AdminClientView::Register(routes, [this]() -> ClientSetupResult const& { return _clientSetup; });
     AdminCommand::Register(routes, _commands, _info.Name, CommandAuditFile());
     routes.AddGuarded("POST", "/api/shutdown", "power.stop", [this](AdminRequest const& request)
     {

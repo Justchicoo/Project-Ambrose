@@ -94,9 +94,12 @@ AdminRouter::AdminRouter(AdminAuth& auth) : _auth(auth)
 void AdminRouter::Put(std::string method, std::string path, Handler handler, RouteAccess access, bool prefix, uint32 cost, std::string permission)
 {
     std::unique_lock const lock(_mutex);
-    if (access == RouteAccess::Permission && _known && !_known(permission))
-        return;
     std::string const upper = Ambrose::ToUpper(method);
+    if (access == RouteAccess::Permission && _known && !_known(permission))
+    {
+        _refused.push_back(upper + " " + path + (prefix ? "*" : "") + " asks for " + permission + ", which the catalog does not hold");
+        return;
+    }
     auto const existing = std::find_if(_routes.begin(), _routes.end(), [&](Route const& route) { return route.Method == upper && route.Path == path && route.Prefix == prefix; });
     if (existing != _routes.end())
     {
@@ -141,6 +144,14 @@ std::vector<std::string> AdminRouter::RouteProblems() const
     }
     std::sort(problems.begin(), problems.end());
     return problems;
+}
+
+std::vector<std::string> AdminRouter::RefusedRoutes() const
+{
+    std::shared_lock const lock(_mutex);
+    std::vector<std::string> refused = _refused;
+    std::sort(refused.begin(), refused.end());
+    return refused;
 }
 
 void AdminRouter::AddGuarded(std::string method, std::string path, std::string permission, Handler handler)

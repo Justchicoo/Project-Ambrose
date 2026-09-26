@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The admin API's route table and front door: every request gets a request id that its answer and any error body carry, keeping one a caller such as the supervisor sent when it has the same form, so one id names the request in both logs, a host that is no IP address, localhost or a name the operator allows is refused so a page elsewhere cannot rebind a name onto this listener, paths outside /api that no route claims go to the panel's files without a token, so a route a scraper expects at a fixed place such as /metrics is still served and still guarded, public routes such as signing in run without one, a route may answer every path under a prefix when no exact route claims it, the longest prefix first, and every other path needs the bearer token or a browser session whose unsafe requests and socket upgrades name this listener's own origin and carry the session's CSRF token, with every answer stamped with the panel's security headers and every error handed to a log.
+ * The admin API's route table and front door: every request gets a request id that its answer and any error body carry, keeping one a caller such as the supervisor sent when it has the same form, so one id names the request in both logs, a host that is no IP address, localhost or a name the operator allows is refused so a page elsewhere cannot rebind a name onto this listener, paths outside /api that no route claims go to the panel's files without a token, so a route a scraper expects at a fixed place such as /metrics is still served and still guarded, public routes such as signing in run without one, a route may answer every path under a prefix when no exact route claims it, the longest prefix first, and every other path needs the bearer token or a browser session whose unsafe requests and socket upgrades name this listener's own origin and carry the session's CSRF token, with every answer stamped with the panel's security headers and every error handed to a log. A route that asks for a permission the listener's catalog does not hold is not served, and is kept among the refused routes so the listener can say which pages it left out rather than losing them unseen.
  */
 
 #ifndef AMBROSE_ADMINROUTER_H
@@ -107,6 +107,7 @@ public:
     void AddOpenPrefix(std::string method, std::string prefix, Handler handler);
     void SetPermissionKnown(Known known);
     std::vector<std::string> RouteProblems() const;
+    std::vector<std::string> RefusedRoutes() const;
     void AddCosting(std::string method, std::string path, std::string permission, uint32 cost, Handler handler);
     void AddOpenCosting(std::string method, std::string path, uint32 cost, Handler handler);
     void SetThrottle(Throttle throttle);
@@ -170,6 +171,7 @@ private:
     Throttle _throttle;
     mutable std::shared_mutex _mutex;
     std::vector<Route> _routes;
+    std::vector<std::string> _refused;
     Handler _files;
     std::vector<std::string> _allowedHosts;
     AdminBrowserAccess _browser;

@@ -1,9 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * What the panel asks about one app: running a command on it, the supervisor's own routes for power and captured output, and the app's own routes for its status, settings and databases, sent through the supervisor's relay when the supervisor served this panel and straight to the app when the app served it itself, so every page reads the same way whichever is in front of it.
+ * What the panel asks about one app: running a command on it, the supervisor's own routes for power and captured output, and the app's own routes for its status, settings and databases, sent through the supervisor's relay when the supervisor served this panel and straight to the app when the app served it itself, so every page reads the same way whichever is in front of it. A page about something only some apps keep, such as the realm list the login server holds, asks each app once and offers only those that answer, because an app answering that it has no such page is not an app with an empty one; an app run without an admin API has no pages at all and is never offered, while one that is only stopped still is, so its page can say so.
  */
 
-import { request } from "./api.svelte";
+import { ApiError, request } from "./api.svelte";
 import { live } from "./status.svelte";
 import {
     CommandAnswer,
@@ -44,6 +44,32 @@ export function supervised(): AppEntry[] {
 
 export function appNamed(name: string): AppEntry | undefined {
     return live.apps.find((app) => app.name === name);
+}
+
+export function candidates(): string[] {
+    if (!supervisorServes()) return [servedBy()];
+    return [
+        servedBy(),
+        ...supervised()
+            .filter((app) => app.supervision?.admin.enabled !== false)
+            .map((app) => app.name),
+    ];
+}
+
+export async function servingApps(path: string, signal?: AbortSignal): Promise<string[]> {
+    const found = await Promise.all(
+        candidates().map(async (name) => {
+            try {
+                await request("GET", pathFor(name, path), null, undefined, signal);
+                return name;
+            } catch (problem) {
+                if (problem instanceof DOMException && problem.name === "AbortError") throw problem;
+                if (problem instanceof ApiError && (problem.status === 404 || problem.code === "app_admin_off")) return null;
+                return name;
+            }
+        }),
+    );
+    return found.filter((name): name is string => name !== null);
 }
 
 export function pathFor(app: string, path: string): string {

@@ -4,13 +4,13 @@
     import * as Table from "$lib/components/ui/table/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
     import { ApiError } from "$lib/api.svelte.js";
-    import { reloadTargetsOf, runReload, servedBy, supervised, supervisorServes } from "$lib/supervision.svelte.js";
+    import { candidates, reloadTargetsOf, runReload } from "$lib/supervision.svelte.js";
     import type { ReloadAnswer } from "$lib/schemas.js";
     import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
     import PageHeader from "../components/PageHeader.svelte";
     import StatusBadge from "../components/StatusBadge.svelte";
 
-    const choices = $derived(supervisorServes() ? [servedBy(), ...supervised().map((app) => app.name)] : [servedBy()]);
+    const choices = $derived(candidates());
     let chosen = $state("");
     let answer = $state<ReloadAnswer | null>(null);
     let failure = $state("");

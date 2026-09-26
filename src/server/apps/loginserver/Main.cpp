@@ -29,6 +29,7 @@
 #include "LoginShutdown.h"
 #include "MessageRegistry.h"
 #include "NetworkSettings.h"
+#include "AdminRealmsView.h"
 #include "OnlinePlayersView.h"
 #include "ObjectSchemaMgr.h"
 #include "ObjectSerializer.h"
@@ -101,6 +102,7 @@ namespace
         {
             _databaseView.Register(admin.Routes());
             OnlinePlayersView::Register(admin.Routes());
+            AdminRealmsView::Register(admin.Routes());
         }
 
         bool LoadCreationRows()

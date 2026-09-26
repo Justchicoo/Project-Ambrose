@@ -4,12 +4,26 @@
     import * as Table from "$lib/components/ui/table/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
     import { ApiError } from "$lib/api.svelte.js";
-    import { clientDataOf, servedBy, supervised, supervisorServes } from "$lib/supervision.svelte.js";
+    import { candidates, clientDataOf, servingApps } from "$lib/supervision.svelte.js";
     import type { ClientAnswer } from "$lib/schemas.js";
     import PageHeader from "../components/PageHeader.svelte";
     import StatusBadge from "../components/StatusBadge.svelte";
 
-    const choices = $derived(supervisorServes() ? [servedBy(), ...supervised().map((app) => app.name)] : [servedBy()]);
+    let serving = $state<string[] | null>(null);
+    const asked = $derived(candidates().join(","));
+    $effect(() => {
+        void asked;
+        const controller = new AbortController();
+        void (async () => {
+            try {
+                serving = await servingApps("client", controller.signal);
+            } catch {
+                if (!controller.signal.aborted) serving = [];
+            }
+        })();
+        return () => controller.abort();
+    });
+    const choices = $derived(serving ?? []);
     let chosen = $state("");
     let answer = $state<ClientAnswer | null>(null);
     let failure = $state("");
@@ -38,6 +52,14 @@
 </script>
 
 <PageHeader title="Client data" description="The install and type data this app is running on." />
+
+{#if serving !== null && serving.length === 0}
+    <Card.Root class="mb-4">
+        <Card.Content class="py-4 text-sm text-muted-foreground"
+            >No server under this panel runs on a client install. The login and game servers do, and neither is running here.</Card.Content
+        >
+    </Card.Root>
+{/if}
 
 {#if choices.length > 1}
     <div class="mb-4 flex flex-wrap gap-2">

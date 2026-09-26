@@ -4,12 +4,12 @@
     import * as Table from "$lib/components/ui/table/index.js";
     import { ApiError } from "$lib/api.svelte.js";
     import { live } from "$lib/status.svelte.js";
-    import { metricsOf, servedBy, supervised, supervisorServes } from "$lib/supervision.svelte.js";
+    import { candidates, metricsOf } from "$lib/supervision.svelte.js";
     import type { MetricFamily, MetricSeries, MetricsAnswer } from "$lib/schemas.js";
     import PageHeader from "../components/PageHeader.svelte";
     import StatusBadge from "../components/StatusBadge.svelte";
 
-    const choices = $derived(supervisorServes() ? [servedBy(), ...supervised().map((app) => app.name)] : [servedBy()]);
+    const choices = $derived(candidates());
     let chosen = $state("");
     let answer = $state<MetricsAnswer | null>(null);
     let failure = $state("");

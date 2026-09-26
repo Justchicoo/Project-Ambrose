@@ -92,12 +92,12 @@ std::string AdminGraphsView::RangeJson(Ambrose::SeriesStore const& store, std::s
 
 void AdminGraphsView::Register(AdminRouter& router, std::function<Ambrose::SeriesStore const&()> source)
 {
-    router.AddGuarded("GET", "/api/graphs", "status.read", [source](AdminRequest const&)
+    router.AddGuarded("GET", "/api/graphs", "metrics.read", [source](AdminRequest const&)
     {
         return AdminResponse::Json(200, SubjectsJson(source()));
     });
 
-    router.AddGuarded("GET", "/api/graphs/range", "status.read", [source](AdminRequest const& request)
+    router.AddGuarded("GET", "/api/graphs/range", "metrics.read", [source](AdminRequest const& request)
     {
         std::string const subject(request.Query("subject"));
         std::string const series(request.Query("series"));

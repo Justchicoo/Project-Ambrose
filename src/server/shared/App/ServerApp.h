@@ -122,6 +122,7 @@ private:
     uint64 _configSubscription = 0;
     std::filesystem::path _messageSource;
     ClientSetupResult _clientSetup;
+    bool _usesClient = false;
 
     bool IsStopping() const noexcept { return GetLifecycleState() == AppLifecycle::Stopping; }
     bool DeclareSettings();

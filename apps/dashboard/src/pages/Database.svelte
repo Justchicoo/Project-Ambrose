@@ -6,7 +6,7 @@
     import * as Table from "$lib/components/ui/table/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
     import { ApiError } from "$lib/api.svelte.js";
-    import { applyData, databasesOf, servedBy, supervised, supervisorServes, updatesOf } from "$lib/supervision.svelte.js";
+    import { applyData, candidates, databasesOf, servingApps, updatesOf } from "$lib/supervision.svelte.js";
     import type { DatabaseAnswer, DatabaseUpdatesAnswer, PendingUpdate } from "$lib/schemas.js";
     import PlayIcon from "@lucide/svelte/icons/play";
     import { toast } from "svelte-sonner";
@@ -25,7 +25,21 @@
         unconfigured: "unknown",
     };
 
-    const choices = $derived(supervisorServes() ? [servedBy(), ...supervised().map((app) => app.name)] : [servedBy()]);
+    let serving = $state<string[] | null>(null);
+    const asked = $derived(candidates().join(","));
+    $effect(() => {
+        void asked;
+        const controller = new AbortController();
+        void (async () => {
+            try {
+                serving = await servingApps("database", controller.signal);
+            } catch {
+                if (!controller.signal.aborted) serving = [];
+            }
+        })();
+        return () => controller.abort();
+    });
+    const choices = $derived(serving ?? []);
     let chosen = $state("");
     let databases = $state<DatabaseAnswer | null>(null);
     let updates = $state<DatabaseUpdatesAnswer | null>(null);
@@ -127,6 +141,12 @@
         {/if}
     {/snippet}
 </PageHeader>
+
+{#if serving !== null && serving.length === 0}
+    <Card.Root class="mb-4">
+        <Card.Content class="py-4 text-sm text-muted-foreground">No server under this panel opens a database.</Card.Content>
+    </Card.Root>
+{/if}
 
 {#if failure}
     <Card.Root class="shadow-xs">

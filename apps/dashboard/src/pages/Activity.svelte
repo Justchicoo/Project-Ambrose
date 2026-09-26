@@ -5,13 +5,13 @@
     import { Input } from "$lib/components/ui/input/index.js";
     import { ApiError } from "$lib/api.svelte.js";
     import { live } from "$lib/status.svelte.js";
-    import { activityOf, servedBy, supervised, supervisorServes } from "$lib/supervision.svelte.js";
+    import { activityOf, candidates } from "$lib/supervision.svelte.js";
     import type { ActivityAnswer } from "$lib/schemas.js";
     import SearchIcon from "@lucide/svelte/icons/search";
     import PageHeader from "../components/PageHeader.svelte";
     import StatusBadge from "../components/StatusBadge.svelte";
 
-    const choices = $derived(supervisorServes() ? [servedBy(), ...supervised().map((app) => app.name)] : [servedBy()]);
+    const choices = $derived(candidates());
     let chosen = $state("");
     let answer = $state<ActivityAnswer | null>(null);
     let failure = $state("");
