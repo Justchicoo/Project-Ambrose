@@ -486,7 +486,7 @@ def page(state, dark, light):
 <ul class="plain">{"".join(f'<li><span class="id">#{escape(row["number"])}</span> {escape(row["title"])}<span class="who">{escape(row["who"])}, {escape(row["kind"])}, updated {escape(row["updated"])} &middot; <a href="{escape(row["url"])}">open it</a></span></li>' for row in state["other_open_work"]) or "<li>No other pull request is open at this moment.</li>"}</ul>
 
 <h2>The phases</h2>
-<p class="note">Seventeen phases, built in order. A held phase is closed to outside work entirely, however ready a milestone inside it looks.</p>
+<p class="note">Seventeen phases, built in order. A held milestone is being built by the maintainer's own sessions; everything else that is ready is open.</p>
 <ul class="plain phases">{"".join(phase_row(phase, dark) for phase in state["phases"])}</ul>
 
 <h2>For your AI</h2>

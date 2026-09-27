@@ -41,7 +41,7 @@ In the phase file my milestone is a section headed `## <id> <title>`, and it hol
 - Tests are GoogleTest, in `src/test/` mirroring `src/`, in one executable run by CTest. A test that needs my installation carries the CTest label `client` and skips unless `AMBROSE_CLIENT_DIR` is set; one that needs my type dump reads `AMBROSE_TYPE_DUMP_PATH`; database tests run only when `AMBROSE_TEST_DB` holds a connection string such as `127.0.0.1;3306;root;root;ambrose_test`; most create uniquely named databases and drop them, and a few use the one the string names, which has to exist. `ctest` also runs the style and CI checks, so a green `ctest` is most of the review.
 - A running server logs each message it refused or did not handle under `network.opcode`, but only up to `Network.DroppedMessageBurst = 64` per session and `Network.DroppedMessagesPerSecond = 16`, after which it adds a strike instead, and `Network.MaxStrikes = 10` closes the connection. A quiet log is not proof of quiet traffic.
 
-## Hard rules. Breaking one closes the pull request, and each is there for a reason
+## Hard rules. Breaking one holds the pull request until it is fixed, never closes it, and each is there for a reason
 
 1. **Paths.** My branch is named `milestone/<id>-<short-name>` and that name is what lets CI accept a change under `src/`. I may change the source tree, `data/sql/updates/`, `apps/` and `doc/`, plus **my own phase file and no other**. I may not touch `.github/`, `apps/ci/`, `apps/codestyle/`, `apps/progress/`, `doc/progress/`, `doc/work/`, `packages/ui/src/tokens/`, `README.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `LICENSE`, `THIRD-PARTY-NOTICES.md`, `CMakePresets.json`, `vcpkg.json`, `.gitignore`, `doc/ROADMAP.md`, `doc/ARCHITECTURE.md`, `doc/REVIEWING.md`, `doc/CONTRIBUTOR-TRACK.md`, `doc/MILESTONE-TRACK.md`, `contrib/README.md`, `contrib/AI-START-HERE.md` or `contrib/AI-MILESTONES-HERE.md`. `python apps/ci/ci_contrib_paths.py --range upstream/main...HEAD --branch <my branch>` enforces exactly that. A new dependency in `vcpkg.json` is a proposal in the pull request, not a commit.
 2. **No game data in the repository, ever.** That rule is why this repository can exist in public. No file from the client, no extracted asset, no dump, no capture, no run of hex or base64 pasted from one. `apps/ci/ci_forbidden_files.py` refuses `.wad`, `.nif`, `.kf`, `.kfm`, `.pcap` and `.pcapng`, any file beginning `KIWAD` or `BINd`, any JSON holding both `classes` and `version`, client protocol XML, and anything over 1,000,000 bytes. Offsets, field names, sizes, counts and hashes are facts about the data and are welcome; the bytes are not. Code reads my own installation at run time, behind an environment variable, and skips when it is absent. That is the line.
@@ -258,7 +258,7 @@ If I can only build on one platform, say so and let the leg tell us, but expect 
 
 **Say when the work deviates from the deliverables.** Putting a file somewhere other than the deliverables list says is sometimes right, and a reviewer will keep it when the reason holds. LocationString landed in `shared/Util` rather than `game/Movement` because the login server needs it too, which was the better call, but it was left to the reviewer to work out whether it was deliberate. One sentence in the description settles it.
 
-**A closed pull request is not a rejected one.** When the work lands, the maintainer often commits it together with the acceptance ticks, the roadmap summary and the regenerated card in one commit, authored to me, and closes the pull request naming that commit. That keeps the repository's own checks green, which a bare merge would not. Look for the commit before assuming anything went wrong.
+**Closed with the label `landed` means it is in.** Nothing is closed for being unfinished. When the work ticks checks, the maintainer commits it with the acceptance ticks, the roadmap summary, the regenerated card and any fixes in one commit, authored to me, then labels the pull request `landed` and closes it naming that commit, which keeps the repository's own checks green where a bare merge would not. Work that ticks nothing is merged on GitHub and shows as merged. Either way the message says what was fixed on the way in, so my next one can carry it already.
 
 ## What the reviewer will do to your work, so nothing is a surprise
 
@@ -272,6 +272,23 @@ It is reviewed by running, never by reading, and by somebody who assumes the tes
 - Malformed input is fed to anything that parses: truncated, bit-flipped, and random bytes. Each should be refused by name rather than crashing.
 
 None of that is adversarial for its own sake. A test that cannot fail is worse than no test, because it makes the next change look safe.
+
+## Build what the milestone needs
+
+If the milestone rests on code that is missing, unfinished or wrong, build or fix it in the same pull request, anywhere a milestone branch may change, with a test, and say so in the description. A library it needs may be added to `vcpkg.json` with its notice in `THIRD-PARTY-NOTICES.md`. A milestone is never refused because something it needed was not there yet, and a sound pull request that moves the milestone forward lands, with anything small the review finds fixed by the maintainer on the way in.
+
+## Check it the way the reviewer does
+
+The review runs exactly these, so running them first means the review has little left to find. From the repository root, with my branch committed:
+
+```
+python apps/ci/ci_local.py --branch <my branch>
+cmake --build --preset windows-debug
+ctest --preset windows-debug -R "<every test a ticked check names>" --output-on-failure
+ctest --preset windows-debug -LE client -j 8 --output-on-failure
+```
+
+The first runs every step of CI's checks job, read from the same workflow file CI uses, over what my next push sends. On Linux or WSL the build is `cmake --preset linux-gcc -DAMBROSE_WARNINGS_AS_ERRORS=ON` then `cmake --build --preset linux-gcc-debug`, the leg CI builds for every milestone branch. A panel change also runs `npx vitest run --project dashboard` and `npx vitest run --project dashboard-browser`, and one the end-to-end specs cover runs `npx playwright test --project=e2e`. Then break the milestone's central claim on purpose, watch a test fail, and put it back: that is what the reviewer does next, and a test that cannot fail is the most common thing a review finds. A check that needs something I do not have, such as a real client or a second machine, stays unticked and is named in the pull request, and the maintainer runs it.
 
 ## When the review comes back
 

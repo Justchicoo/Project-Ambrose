@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks that a change stays inside the contributor track's own folders, exactly the ones doc/CONTRIBUTOR-TRACK.md's table names, so outside work cannot collide with a milestone in flight, and that a branch named for a milestone, which is allowed the source tree instead, is not one the maintainer holds, and keeps off the files that govern the project and out of every phase file but its own.
+# Checks that a change stays inside the contributor track's own folders, exactly the ones doc/CONTRIBUTOR-TRACK.md's table names, so outside work cannot collide with a milestone in flight, and that a branch named for a milestone, which is allowed the source tree instead, is not one the maintainer holds, and keeps off the files that govern the project and out of every phase file but its own; a milestone branch may add a dependency to vcpkg.json with its notice in THIRD-PARTY-NOTICES.md, which ci_dependency_notices.py checks, because building on a library is part of building a milestone.
 import argparse
 import json
 import os
@@ -47,7 +47,6 @@ RESERVED_FILES = (
     "CONTRIBUTING.md",
     "LICENSE",
     "README.md",
-    "THIRD-PARTY-NOTICES.md",
     "contrib/AI-MILESTONES-HERE.md",
     "contrib/AI-START-HERE.md",
     "contrib/README.md",
@@ -56,7 +55,6 @@ RESERVED_FILES = (
     "doc/MILESTONE-TRACK.md",
     "doc/REVIEWING.md",
     "doc/ROADMAP.md",
-    "vcpkg.json",
 )
 
 

@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
 import ci_build
 import ci_commit_trailer
 import ci_contrib_paths
+import ci_local
 import ci_dependency_notices
 import ci_findings
 import ci_forbidden_files
@@ -873,10 +874,24 @@ class MilestoneTrackTests(unittest.TestCase):
         self.assertEqual(ci_contrib_paths.check(paths), paths)
 
     def test_a_milestone_branch_keeps_off_the_files_the_maintainer_holds(self):
-        for path in ("README.md", "vcpkg.json", "doc/ROADMAP.md", "doc/MILESTONE-TRACK.md",
+        for path in ("README.md", "CMakePresets.json", "doc/ROADMAP.md", "doc/MILESTONE-TRACK.md",
                      "contrib/AI-MILESTONES-HERE.md", ".github/workflows/core-build.yml",
                      "apps/ci/ci_contrib_paths.py", "apps/progress/progress.py", "doc/progress/progress.svg"):
             self.assertEqual([entry[0] for entry in ci_contrib_paths.check_milestone([path], "4.04")], [path], path)
+
+    def test_a_milestone_branch_may_bring_a_library_with_its_notice(self):
+        self.assertEqual(ci_contrib_paths.check_milestone(["vcpkg.json", "THIRD-PARTY-NOTICES.md"], "4.04"), [])
+
+    def test_the_local_run_is_the_checks_job_step_for_step(self):
+        found = ci_local.steps(ROOT)
+        names = [name for name, _command in found]
+        for name in ("Codestyle", "Forbidden files", "Findings", "Contributor track paths", "Roadmap summary", "Commit trailers"):
+            self.assertIn(name, names)
+        paths = [command for name, command in found if name == "Contributor track paths"][0]
+        self.assertIsNone(ci_local.command_for("Contributor track paths", paths, "upstream/main", ""))
+        self.assertEqual(ci_local.command_for("Contributor track paths", paths, "upstream/main", "milestone/6.10-schemas"),
+                         'python apps/ci/ci_contrib_paths.py --range "upstream/main...HEAD" --branch "milestone/6.10-schemas"')
+        self.assertIn('--range "upstream/main..HEAD"', ci_local.command_for("Commit trailers", "python apps/ci/ci_commit_trailer.py --from-github-env", "upstream/main", ""))
 
     def test_a_milestone_branch_stays_inside_its_own_phase_file(self):
         other = "doc/roadmap/phase-05-the-zone-comes-alive-for-one-player.md"
