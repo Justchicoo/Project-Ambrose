@@ -120,11 +120,6 @@ namespace
             return LogRedaction::MaskSecretValue(declaration.Key, value);
         return std::string(value);
     }
-
-    std::string Empty(std::string text)
-    {
-        return text.empty() ? std::string("empty") : text;
-    }
 }
 
 Settings& Settings::Instance()
