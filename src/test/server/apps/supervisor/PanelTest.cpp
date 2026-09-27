@@ -17,12 +17,14 @@
 #include <fmt/format.h>
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <chrono>
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace
@@ -353,6 +355,154 @@ TEST_F(PanelTest, GatheringKeepsWhatAnAppReportedAndIgnoresAnAnswerItCannotRead)
     EXPECT_EQ(panel.GatherErrorsOnce(), 1u);
     EXPECT_EQ(panel.Errors().List(error).size(), 1u) << "the same report twice is still one group";
     EXPECT_EQ(panel.Errors().List(error)[0].TotalCount, 3u) << "and the count is not doubled by reading it again";
+    panel.Stop();
+}
+
+TEST_F(PanelTest, ErrorReportsPreviewPrivacyAndAuditExactlyTheSelectedGroups)
+{
+    Panel panel = Make();
+    std::string error;
+    ASSERT_TRUE(panel.Start(Configured("Panel.Enable = 1\nPanel.Port = 0\n"), error)) << error;
+    std::string const verifier(64, 'a');
+    std::string const secondVerifier(64, 'b');
+    std::string const renderedText = "Account.VerifierKeys=1:" + verifier + ",2:" + secondVerifier +
+        " Admin.Token=KnownSecret Login.Name=KnownAccountName";
+    std::string const context = nlohmann::json({
+        { "sequence", 77 },
+        { "time", "2026-09-27T00:00:00Z" },
+        { "epoch_ms", 1790467200000LL },
+        { "level", "warn" },
+        { "category", "server.database" },
+        { "message", renderedText }
+    }).dump();
+    panel.SetErrorSource([context, renderedText]
+    {
+        nlohmann::json const before = nlohmann::json::parse(context);
+        return std::vector<std::pair<std::string, std::string>>{
+            { "loginserver", nlohmann::json({
+                { "schema", 1 },
+                { "groups", nlohmann::json::array({
+                    {
+                        { "category", "server.database" }, { "file", "src/server/database/Pool.cpp" }, { "line", 42 },
+                        { "function", "Open" }, { "template", "could not open database" }, { "level", "error" },
+                        { "revision", "login-revision" }, { "count", 2 }, { "first_epoch_ms", 1000 },
+                        { "last_epoch_ms", 2000 },
+                        { "last_message", renderedText },
+                        { "context_before", nlohmann::json::array({ before }) }
+                    }
+                }) }
+            }).dump() },
+            { "gameserver", nlohmann::json({
+                { "schema", 1 },
+                { "groups", nlohmann::json::array({
+                    {
+                        { "category", "server.world" }, { "file", "src/server/game/World.cpp" }, { "line", 84 },
+                        { "function", "Load" }, { "template", "world load failed" }, { "level", "error" },
+                        { "revision", "game-revision" }, { "count", 1 }, { "first_epoch_ms", 3000 },
+                        { "last_epoch_ms", 4000 }, { "last_message", "Login.Name=KnownAccountName" },
+                        { "context_before", nlohmann::json::array() }
+                    }
+                }) }
+            }).dump() }
+        };
+    });
+    ASSERT_EQ(panel.GatherErrorsOnce(), 2u);
+
+    int64 ownerId = 0;
+    ASSERT_EQ(panel.Users().Create("report-owner", "a good long password", true, false, &ownerId, error), PanelUserResult::Ok) << error;
+    std::optional<PanelSessionOpened> const ownerSession = panel.Sessions().Open(ownerId, 1, "127.0.0.1", "test", error);
+    ASSERT_TRUE(ownerSession.has_value()) << error;
+    std::string const cookie = panel.Routes().GetBrowserAccess().CookieName + "=" + ownerSession->Secret;
+    std::string const csrf = ownerSession->Csrf;
+    AdminClient const client("127.0.0.1", panel.GetPort(), "");
+    auto const sendAsOwner = [&client, &cookie, &csrf](std::string method, std::string path, std::string body)
+    {
+        AdminClientRequest request{ std::move(method), std::move(path), std::move(body), "application/json", "" };
+        request.Headers.emplace_back("Cookie", cookie);
+        request.Headers.emplace_back("Origin", fmt::format("http://127.0.0.1:{}", client.GetPort()));
+        request.Headers.emplace_back("X-CSRF-Token", csrf);
+        return client.Send(request, std::chrono::seconds(10));
+    };
+
+    AdminClientResponse const listed = sendAsOwner("GET", "/api/panel/errors", "");
+    ASSERT_TRUE(listed.Answered) << listed.Error;
+    ASSERT_EQ(listed.Status, 200) << listed.Body;
+    nlohmann::json const listing = nlohmann::json::parse(listed.Body);
+    ASSERT_EQ(listing["groups"].size(), 2u);
+    std::vector<int64> ids;
+    for (nlohmann::json const& group : listing["groups"])
+        ids.push_back(group["id"].get<int64>());
+    ASSERT_EQ(ids.size(), 2u);
+    AdminClientResponse const cleared = sendAsOwner("POST", "/api/panel/errors/clear", nlohmann::json({ { "id", ids.front() } }).dump());
+    ASSERT_TRUE(cleared.Answered) << cleared.Error;
+    ASSERT_EQ(cleared.Status, 200) << cleared.Body;
+    AdminClientResponse const afterClear = sendAsOwner("GET", "/api/panel/errors", "");
+    ASSERT_TRUE(afterClear.Answered) << afterClear.Error;
+    ASSERT_EQ(afterClear.Status, 200) << afterClear.Body;
+    bool foundCleared = false;
+    nlohmann::json const afterClearListing = nlohmann::json::parse(afterClear.Body);
+    for (nlohmann::json const& group : afterClearListing["groups"])
+        if (group["id"] == ids.front())
+        {
+            EXPECT_FALSE(group["new_since_cleared"].get<bool>());
+            foundCleared = true;
+        }
+    EXPECT_TRUE(foundCleared);
+
+    std::string const payload = nlohmann::json({ { "groups", ids }, { "include_rendered", false } }).dump();
+    AdminClientResponse const preview = sendAsOwner("POST", "/api/panel/errors/report/preview", payload);
+    ASSERT_TRUE(preview.Answered) << preview.Error;
+    ASSERT_EQ(preview.Status, 200) << preview.Body;
+    nlohmann::json const previewDocument = nlohmann::json::parse(preview.Body);
+    nlohmann::json const safe = previewDocument["report"];
+    ASSERT_EQ(safe["groups"].size(), 2u);
+    EXPECT_EQ(safe["apps"]["loginserver"], "login-revision");
+    EXPECT_EQ(safe["apps"]["gameserver"], "game-revision");
+    bool foundLoginLocation = false;
+    bool foundGameLocation = false;
+    for (nlohmann::json const& group : safe["groups"])
+    {
+        if (group["app"] == "loginserver")
+        {
+            EXPECT_EQ(group["source"]["file"], "src/server/database/Pool.cpp");
+            EXPECT_EQ(group["source"]["line"], 42);
+            foundLoginLocation = true;
+        }
+        else if (group["app"] == "gameserver")
+        {
+            EXPECT_EQ(group["source"]["file"], "src/server/game/World.cpp");
+            EXPECT_EQ(group["source"]["line"], 84);
+            foundGameLocation = true;
+        }
+    }
+    EXPECT_TRUE(foundLoginLocation);
+    EXPECT_TRUE(foundGameLocation);
+    EXPECT_EQ(safe.dump().find(verifier), std::string::npos);
+    EXPECT_EQ(safe.dump().find(secondVerifier), std::string::npos);
+    EXPECT_EQ(safe.dump().find("KnownSecret"), std::string::npos);
+    EXPECT_EQ(safe.dump().find("KnownAccountName"), std::string::npos);
+    EXPECT_EQ(safe.dump().find("rendered_message"), std::string::npos);
+    EXPECT_EQ(safe.dump().find("log_lines_before"), std::string::npos);
+
+    std::string const renderedPayload = nlohmann::json({ { "groups", ids }, { "include_rendered", true } }).dump();
+    AdminClientResponse const rendered = sendAsOwner("POST", "/api/panel/errors/report/preview", renderedPayload);
+    ASSERT_TRUE(rendered.Answered) << rendered.Error;
+    ASSERT_EQ(rendered.Status, 200) << rendered.Body;
+    nlohmann::json const renderedDocument = nlohmann::json::parse(rendered.Body);
+    nlohmann::json const renderedReport = renderedDocument["report"];
+    EXPECT_NE(renderedReport.dump().find("rendered_message"), std::string::npos);
+    EXPECT_NE(renderedReport.dump().find("log_lines_before"), std::string::npos);
+    EXPECT_EQ(renderedReport.dump().find(verifier), std::string::npos) << "verifier values remain redacted even when rendered text is selected";
+    EXPECT_EQ(renderedReport.dump().find(secondVerifier), std::string::npos);
+    EXPECT_EQ(renderedReport.dump().find("KnownSecret"), std::string::npos) << "setting tokens remain redacted when rendered text is selected";
+
+    AdminClientResponse const created = sendAsOwner("POST", "/api/panel/errors/report", renderedPayload);
+    ASSERT_TRUE(created.Answered) << created.Error;
+    ASSERT_EQ(created.Status, 200) << created.Body;
+    nlohmann::json const createdDocument = nlohmann::json::parse(created.Body);
+    EXPECT_EQ(createdDocument["report"], renderedReport);
+    EXPECT_EQ(PanelAudit::Count(panel.Store(), "errors:report.created"), 1);
+    EXPECT_EQ(PanelAudit::Count(panel.Store(), "errors:group.cleared"), 1);
     panel.Stop();
 }
 

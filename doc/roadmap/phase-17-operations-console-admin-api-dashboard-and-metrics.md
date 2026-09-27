@@ -111,7 +111,7 @@
 | 17.103 | Item and currency ledger with anomaly rules | M | 17.25, 17.69, 8.08 |
 | 17.104 | Compensation grants and mass mail | M | 17.21, 17.33, 17.69, 8.08 |
 | 17.105 | Releases: the launcher and the panel as downloadable builds | M | 3.27, 17.24, 17.14 |
-| 17.106 | Error reports: source locations, grouping and a report file | M | 17.04, 17.08, 17.14 |
+| 17.106 | Error reports: source locations, grouping and a report file | L | 17.04, 17.08, 17.14 |
 | 17.107 | A value in a log line is a place you can go | M | 17.07, 17.76, 17.106 |
 | 17.108 | A panel nobody has to click past a warning to use | M | 17.14, 17.24 |
 | 17.109 | Plugins: what one is, and the tab that installs it | M | 17.101, 17.48, 17.18 |
@@ -2585,12 +2585,12 @@ Added on 2026-09-22 at the maintainer's direction: errors an operator meets shou
 
 **Acceptance**
 
-- [ ] An error logged in a test build appears on the page with its repository-relative file, line and function, and the build revision it came from
-- [ ] The same error logged three times is one group with a count of three, a different line is a different group, and a group survives a restart of the app and of the supervisor
-- [ ] A report built from groups of two apps names both apps' revisions and each group's location, and a known secret, a known account verifier and a known account name appear nowhere in its bytes while rendered text is left out
-- [ ] Ticking rendered messages shows them in the preview and puts exactly those lines in the file
-- [ ] The console and file log lines are byte for byte what they were before, and the stream's version-one fields are all still there
-- [ ] Creating a report writes an audit row
+- [x] An error logged in a test build appears on the page with its repository-relative file, line and function, and the build revision it came from [SLogSourceTest.ARecordCarriesTheFileLineAndFunctionOfItsCall; AdminStatusTest.TheErrorsRouteReportsAGroupPerPlaceAnErrorWasRaised; Errors.browser.test.ts]
+- [x] The same error logged three times is one group with a count of three, a different line is a different group, and a group survives a restart of the app and of the supervisor [LogErrorStoreTest.OneLineRaisedManyTimesIsOneGroupWithACount; LogErrorStoreTest.TheSameWordsFromDifferentPlacesAreDifferentGroups; PanelErrorsTest.ACountThatWentBackwardsIsAnAppThatRestarted; PanelErrorsTest.TheContextBeforeAnErrorSurvivesClosingAndReopeningThePanelStore]
+- [x] A report built from groups of two apps names both apps' revisions and each group's location, and a known secret, a known account verifier and a known account name appear nowhere in its bytes while rendered text is left out [PanelTest.ErrorReportsPreviewPrivacyAndAuditExactlyTheSelectedGroups]
+- [x] Ticking rendered messages shows them in the preview and puts exactly those lines in the file [Errors.browser.test.ts]
+- [x] The console and file log lines are byte for byte what they were before, and the stream's version-one fields are all still there [LogMessageTest.PrefixSegmentsFollowFlagsInFixedOrder; AppenderConsoleTest.RedirectedOutputKeepsTheFullDateAndTheUnpaddedCategory; SyncAndAsync/SLogFileTest.WritesServerLogInLogsDirWithPrefix/{false,true}; LogStreamServiceTest.ARecordCarriesWhereItWasWrittenAndWhatItWasWrittenFrom]
+- [x] Creating a report writes an audit row [PanelTest.ErrorReportsPreviewPrivacyAndAuditExactlyTheSelectedGroups]
 
 ## 17.107 A value in a log line is a place you can go
 

@@ -263,6 +263,69 @@ export const PanelSettingsAnswer = v.looseObject({
     ),
 });
 
+export const ErrorGroup = v.looseObject({
+    id: v.number(),
+    app: v.string(),
+    category: v.string(),
+    level: v.string(),
+    file: v.string(),
+    line: v.number(),
+    function: v.string(),
+    template: v.string(),
+    revision: v.string(),
+    count: v.number(),
+    total_count: v.number(),
+    first_epoch_ms: v.number(),
+    last_epoch_ms: v.number(),
+    last_message: v.string(),
+    context_before: v.array(LogRecord),
+    new_since_cleared: v.boolean(),
+});
+
+export const ErrorsAnswer = v.looseObject({
+    schema: v.number(),
+    groups: v.array(ErrorGroup),
+});
+
+export const ErrorClearAnswer = v.looseObject({
+    schema: v.number(),
+    cleared: v.boolean(),
+});
+
+export const ErrorReport = v.looseObject({
+    format: v.string(),
+    schema: v.number(),
+    product: v.looseObject({
+        name: v.string(),
+        version: v.string(),
+        commit: v.string(),
+        branch: v.string(),
+    }),
+    operating_system: v.string(),
+    apps: v.record(v.string(), v.string()),
+    groups: v.array(
+        v.looseObject({
+            app: v.string(),
+            revision: v.string(),
+            level: v.string(),
+            category: v.string(),
+            source: v.looseObject({ file: v.string(), line: v.number(), function: v.string() }),
+            template: v.string(),
+            count: v.number(),
+            total_count: v.number(),
+            first_epoch_ms: v.number(),
+            last_epoch_ms: v.number(),
+            rendered_message: v.optional(v.string()),
+            log_lines_before: v.optional(v.array(LogRecord)),
+        }),
+    ),
+});
+
+export const ErrorReportAnswer = v.looseObject({
+    schema: v.number(),
+    report: ErrorReport,
+});
+
 export const DatabaseAnswer = v.looseObject({
     schema: v.number(),
     databases: v.array(

@@ -8,6 +8,7 @@ import ActivityIcon from "@lucide/svelte/icons/activity";
 import ArchiveIcon from "@lucide/svelte/icons/archive";
 import ChartLineIcon from "@lucide/svelte/icons/chart-line";
 import DatabaseIcon from "@lucide/svelte/icons/database";
+import BugIcon from "@lucide/svelte/icons/bug";
 import FileTextIcon from "@lucide/svelte/icons/file-text";
 import GaugeIcon from "@lucide/svelte/icons/gauge";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
@@ -184,6 +185,15 @@ export const routes: Route[] = [
         nav: true,
         group: "Panel",
         view: { kind: "page", load: () => import("./pages/Activity.svelte") },
+    },
+    {
+        path: "errors",
+        title: "Error reports",
+        icon: BugIcon,
+        permission: "errors.read",
+        nav: true,
+        group: "Panel",
+        view: { kind: "page", load: () => import("./pages/Errors.svelte") },
     },
     { path: "denied", title: "Access denied", icon: LockIcon, permission: "none", nav: false, group: "Panel", view: { kind: "denied" } },
 ];

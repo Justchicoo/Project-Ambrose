@@ -27,6 +27,9 @@ import {
     SettingChangeAnswer,
     SettingHistoryAnswer,
     PanelSettingsAnswer,
+    ErrorsAnswer,
+    ErrorClearAnswer,
+    ErrorReportAnswer,
     type AppEntry,
 } from "./schemas";
 
@@ -119,6 +122,22 @@ export function panelSettings(signal?: AbortSignal) {
 
 export function updatePanelSettings(values: Record<string, string>) {
     return request("PATCH", "api/panel/settings", PanelSettingsAnswer, { values });
+}
+
+export function errors(signal?: AbortSignal) {
+    return request("GET", "api/panel/errors", ErrorsAnswer, undefined, signal);
+}
+
+export function clearErrorGroup(id: number) {
+    return request("POST", "api/panel/errors/clear", ErrorClearAnswer, { id });
+}
+
+export function previewErrorReport(groups: number[], includeRendered: boolean, signal?: AbortSignal) {
+    return request("POST", "api/panel/errors/report/preview", ErrorReportAnswer, { groups, include_rendered: includeRendered }, signal);
+}
+
+export function createErrorReport(groups: number[], includeRendered: boolean) {
+    return request("POST", "api/panel/errors/report", ErrorReportAnswer, { groups, include_rendered: includeRendered });
 }
 
 export function clientDataOf(app: string, signal?: AbortSignal) {

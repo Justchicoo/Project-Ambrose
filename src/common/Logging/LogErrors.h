@@ -25,6 +25,7 @@ struct LogErrorGroup
     std::string Revision;
     LogLevel Level = LogLevel::Error;
     uint64 Count = 0;
+    uint64 LastSequence = 0;
     std::chrono::system_clock::time_point FirstSeen;
     std::chrono::system_clock::time_point LastSeen;
 };

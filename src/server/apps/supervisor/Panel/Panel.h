@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The panel's own front door in the supervisor: a second listener with its own Panel options, its own token file and its own store, off unless Panel.Enable is set, holding its operators and their sessions, the counts a failed sign-in adds to, the cost-weighted limit every costly route is held to and the audit tables every change is recorded in, relayed settings changes, batches, reloads and secret reveals among them, bound to this machine unless a certificate and key are given or the operator opts into plain HTTP, serving the built dashboard at / and the panel's API under /api/panel/, and reloaded with the rest of the configuration so a bind it would not be allowed to keep is refused while the old one goes on serving.
+ * The panel's own front door in the supervisor: a second listener with its own Panel options, its own token file and its own store, off unless Panel.Enable is set, holding its operators and their sessions, the counts a failed sign-in adds to, the cost-weighted limit every costly route is held to and the audit tables every change is recorded in, relayed settings changes, batches, reloads, secret reveals and error report creation among them, bound to this machine unless a certificate and key are given or the operator opts into plain HTTP, serving the built dashboard at / and the panel's API under /api/panel/, and reloaded with the rest of the configuration so a bind it would not be allowed to keep is refused while the old one goes on serving.
  */
 
 #ifndef AMBROSE_PANEL_H
@@ -96,6 +96,8 @@ private:
     AdminResponse WhoAmI(AdminRequest const& request);
     AdminResponse PanelSettingsGet(AdminRequest const& request);
     AdminResponse PanelSettingsUpdate(AdminRequest const& request);
+    AdminResponse ClearError(AdminRequest const& request);
+    AdminResponse ErrorReport(AdminRequest const& request, bool create);
     std::optional<PanelUser> UserOf(AdminRequest const& request);
     nlohmann::json UserAnswer(PanelUser const& user);
     std::optional<AdminResponse> Throttle(AdminRequest const& request, uint32 cost);
