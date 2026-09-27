@@ -434,7 +434,7 @@ Unknown class and property hashes found in client data can be named and typed by
 
 - [x] A supplemental class extends a dump base and decodes. `TypeRegistryTest.ASupplementClassJoinsTheLoadedDumpInANewGeneration` round-trips a synthetic versionable object of the supplemental class and checks its inherited base relationship.
 - [x] A name/type not hashing to its declared hash is rejected. `TypeRegistryTest.ASupplementThatDoesNotHashIsRefusedAndTheCatalogKeepsServing` rejects the bad property hash and leaves the active catalog unchanged.
-- [ ] A failed `.reload server_class_schema` keeps the old registry. `ObjectSchemaMgrTest.AServerClassThatDoesNotHashFailsItsReloadWithTheCatalogUntouched` covers the bad-hash reload and the successful add-then-decode reload, but could not be run because the configured local MySQL test server was unreachable.
+- [x] A failed `.reload server_class_schema` keeps the old registry. `ObjectSchemaMgrTest.AServerClassThatDoesNotHashFailsItsReloadWithTheCatalogUntouched` passed against local MariaDB; it also verifies a corrected hash reloads and the added class decodes without restart.
 
 ### Detailed spec from OBJ-12: Supplemental server-side class schemas
 
@@ -451,8 +451,8 @@ Classes that exist in client data or server logic but not in the client dump dec
 
 - [x] Unit test: a supplemental class extends a dump base class and decodes a synthetic versionable blob. `TypeRegistryTest.ASupplementClassJoinsTheLoadedDumpInANewGeneration` passed.
 - [x] Unit test: a supplemental entry whose name and type do not hash to its declared property hash is rejected. `TypeRegistryTest.ASupplementThatDoesNotHashIsRefusedAndTheCatalogKeepsServing` passed.
-- [ ] Unit test: `.reload server_class_schema` with an added class decodes it without a restart, and a supplement with a bad hash keeps the old registry and reports the error. `ObjectSchemaMgrTest.AServerClassThatDoesNotHashFailsItsReloadWithTheCatalogUntouched` now checks decode after reload; it could not run because the configured local MySQL test server was unreachable.
-- [ ] Client-gated sweep: the unknown-class count from OBJ-6 drops for every class added; the sweep result is recorded. No client install or type dump was configured for this run, so no client-derived output was produced.
+- [x] Unit test: `.reload server_class_schema` with an added class decodes it without a restart, and a supplement with a bad hash keeps the old registry and reports the error. `ObjectSchemaMgrTest.AServerClassThatDoesNotHashFailsItsReloadWithTheCatalogUntouched` passed against local MariaDB.
+- [ ] Client-gated sweep: the unknown-class count from OBJ-6 drops for every class added; the sweep result is recorded. No sweep was run and no client-derived output was recorded.
 
 ## 6.11 Trigger/volume schemas and zone WAD sweep (WLD-3 part 1 + OBJ-18)
 
