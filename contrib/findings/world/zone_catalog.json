@@ -1,0 +1,27 @@
+{
+  "subject": "zone_catalog",
+  "area": "world",
+  "claim": "On r806919, the existing zone extractor reads 3,366 distinct zone paths from 3,599 GameData archives; each path has a unique KI string hash and a matching zone-data archive stem, and its first path component is the zone namespace.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Read Bin/revision.dat from your own install and confirm it reports r806919.Wizard_1_610.",
+    "Run the built extractor with --client <your install> --type-dump <your matching type dump> --dry-run zones and record its zone-template and archive counts.",
+    "Run contrib/tools/ambrose-zone-catalog/catalog.py with the same install, matching type dump and built extractor, redirecting its output to a file outside the repository.",
+    "Count distinct zone IDs in the private output and decode Root.wad's WorldHubZones.xml with bindecode to compare the mapped m_world values with the zone-path namespaces.",
+    "Use client types WizZoneData to inspect its properties and confirm whether it carries a separate m_world field."
+  ],
+  "evidence": [
+    "The extractor reported 3,366 zone_template rows from 3,599 archives, 9,874 locations, 67,386 decoded objects and no extraction errors; its dry run wrote nothing.",
+    "The private SQL export contained 3,366 unique zone paths. The KI string hashes of those paths were unique; the Commons and Ravenwood hashes were 1727411499 and 699201167, respectively.",
+    "ZoneExtractor checks that each zone path, with slashes replaced by hyphens, matches the GameData archive stem; ZoneExtractorClientTest.EveryZoneArchiveReadsAndNoTwoZonesSharePath passed.",
+    "The zone paths had 113 distinct first-component namespaces. WorldHubZones.xml carried 117 hub mappings across 114 distinct m_world names; two zone namespaces were not in that hub-world set.",
+    "The type dump lists m_zoneName on WizZoneData and does not list an m_world property."
+  ],
+  "disproof": "A repeat on r806919 that finds a duplicate zone hash, a zone path whose archive stem differs, an extractor error, or client data showing that a zone's first path component is not its world namespace would disprove this catalog.",
+  "confidence": "medium",
+  "submitted_by": "Copilot",
+  "submitted_on": "2026-09-27",
+  "status": "claimed",
+  "scope_note": "The companion tool emits the per-zone ID, path namespace and zone-data WAD catalog at runtime so no client-derived table is committed. The archive field names the GameData WAD containing gamedata.bin, not every asset WAD the zone may reference. The world field is the data's path namespace; WizZoneData has no separate world property, and the hub map does not explicitly associate every namespace."
+}
