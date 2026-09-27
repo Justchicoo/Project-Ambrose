@@ -20,6 +20,7 @@
 #include <optional>
 #include <random>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace
@@ -134,6 +135,25 @@ namespace
             ASSERT_TRUE(tables.Loaded) << (tables.Errors.empty() ? std::string() : tables.Errors.front());
         }
 
+        void ExpectVersionableRoundTrip(TypeCatalogPtr const& catalog, std::string_view className)
+        {
+            PropertyObjectPtr object = PropertyObject::Create(catalog, className);
+            ASSERT_TRUE(object);
+            ASSERT_EQ(object->Set("m_behaviorTemplateNameID", uint32{ 42 }), PropertySetResult::Ok);
+            SerializerOptions options;
+            options.Versionable = true;
+            EncodeResult const encoded = ObjectSerializer::Encode(object.get(), options);
+            ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
+            DecodeResult const decoded = ObjectSerializer::Decode(catalog, encoded.Bytes, options);
+            ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
+            ASSERT_TRUE(decoded.Object);
+            EXPECT_EQ(decoded.Object->GetClass().Name, className);
+            PropertyValue const* const value = decoded.Object->Get("m_behaviorTemplateNameID");
+            ASSERT_NE(value, nullptr);
+            ASSERT_NE(value->GetIf<uint32>(), nullptr);
+            EXPECT_EQ(*value->GetIf<uint32>(), 42u);
+        }
+
         TypedViewRegistry _views;
         TypeCatalogPtr _loaded;
         MySQLConnectionInfo _worldInfo;
@@ -178,6 +198,7 @@ TEST_F(ObjectSchemaMgrTest, TheServerClassJoinsTheCatalogAndTheTablesAreFoundBot
     ClassInfo const* const behavior = catalog->FindClass("class BehaviorInstance");
     ASSERT_NE(behavior, nullptr);
     EXPECT_TRUE(mobile->IsA(*behavior));
+    ExpectVersionableRoundTrip(catalog, "TestMobileBehavior");
     EXPECT_TRUE(sTypeRegistry.IsFromSupplement(mobile->Hash));
 
     CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
@@ -263,5 +284,7 @@ TEST_F(ObjectSchemaMgrTest, AServerClassThatDoesNotHashFailsItsReloadWithTheCata
     ReloadOutcome const added = sReloadMgr.Reload(ObjectSchemaMgr::ClassTarget);
     EXPECT_TRUE(added.Ok) << (added.Errors.empty() ? std::string() : added.Errors.front());
     EXPECT_EQ(sTypeRegistry.GetCatalog()->GetGeneration(), serving->GetGeneration() + 1);
-    EXPECT_NE(sTypeRegistry.GetCatalog()->FindClass("TestFishingBehavior"), nullptr) << "an added class decodes without a restart";
+    TypeCatalogPtr const updated = sTypeRegistry.GetCatalog();
+    EXPECT_NE(updated->FindClass("TestFishingBehavior"), nullptr) << "an added class decodes without a restart";
+    ExpectVersionableRoundTrip(updated, "TestFishingBehavior");
 }
