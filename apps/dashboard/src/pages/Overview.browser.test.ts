@@ -1,10 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the overview in a real browser from a live picture the test sets: a problem the build reports shows with the button that opens the page that fixes it, one the build does not report keeps its message but loses its button, a sample past its freshness budget says how old it is instead of passing as current, and an app that stopped answering reads as not answering.
+ * Tests the overview in a real browser: it reports live issues, freshness, tick subsystem budgets and unavailable timing, and downloads an on-demand world tick trace through the panel API.
  */
 
 import { flushSync, mount, unmount } from "svelte";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FreshnessMs, live } from "$lib/status.svelte";
 import type { Capabilities, Status } from "$lib/schemas";
 import Overview from "./Overview.svelte";
@@ -46,6 +46,74 @@ beforeEach(() => {
     live.receivedAt = now;
     live.now = now;
     live.connection = "live";
+    vi.stubGlobal("fetch", (path: string, init?: RequestInit) =>
+        Promise.resolve(
+            new Response(
+                JSON.stringify(
+                    path.includes("tick-profile/trace")
+                        ? { schema: 1, requested_seconds: 1, truncated: false, events: 2, trace: '{"traceEvents":[]}' }
+                        : path.endsWith("tick-profile")
+                          ? init?.method === "POST"
+                              ? { schema: 1, active: true, complete: false, truncated: false, requested_seconds: 1, events: 0 }
+                              : { schema: 1, active: false, complete: true, truncated: false, requested_seconds: 1, events: 2 }
+                          : {
+                                schema: 1,
+                                metrics: [
+                                    {
+                                        name: "ambrose_world_tick_subsystem_nanoseconds",
+                                        kind: "gauge",
+                                        series: [
+                                            { labels: { component: "network_drain" }, value: 15000000 },
+                                            { labels: { component: "movement" }, value: 0 },
+                                            { labels: { component: "database_waits" }, value: 0 },
+                                            { labels: { component: "combat" }, value: 0 },
+                                        ],
+                                    },
+                                    {
+                                        name: "ambrose_world_tick_subsystem_budget_nanoseconds",
+                                        kind: "gauge",
+                                        series: [{ labels: { component: "network_drain" }, value: 5000000 }],
+                                    },
+                                    {
+                                        name: "ambrose_world_tick_subsystem_available",
+                                        kind: "gauge",
+                                        series: [
+                                            { labels: { component: "network_drain" }, value: 1 },
+                                            {
+                                                labels: {
+                                                    component: "movement",
+                                                    reason: "Queued movement is not separately timed outside handler drain",
+                                                },
+                                                value: 0,
+                                            },
+                                            {
+                                                labels: {
+                                                    component: "database_waits",
+                                                    reason: "Database work runs on asynchronous workers outside the world tick",
+                                                },
+                                                value: 0,
+                                            },
+                                            {
+                                                labels: { component: "combat", reason: "Combat is not integrated into the world tick yet" },
+                                                value: 0,
+                                            },
+                                        ],
+                                    },
+                                    {
+                                        name: "ambrose_world_tick_subsystem_over_budget",
+                                        kind: "gauge",
+                                        series: [{ labels: { component: "network_drain" }, value: 1 }],
+                                    },
+                                ],
+                            },
+                ),
+                {
+                    status: path.endsWith("tick-profile") && init?.method === "POST" ? 202 : 200,
+                    headers: { "Content-Type": "application/json" },
+                },
+            ),
+        ),
+    );
     host = document.createElement("div");
     document.body.append(host);
     page = mount(Overview, { target: host });
@@ -55,6 +123,7 @@ beforeEach(() => {
 afterEach(() => {
     if (page) unmount(page);
     host.remove();
+    vi.unstubAllGlobals();
 });
 
 describe("the overview", () => {
@@ -85,5 +154,33 @@ describe("the overview", () => {
         flushSync();
         expect(host.textContent).toContain("Not answering");
         expect(host.textContent).not.toContain("Needs attention");
+    });
+
+    it("names the slow tick subsystem and shows an unlanded subsystem as unavailable", async () => {
+        await vi.waitFor(() => {
+            flushSync();
+            expect(host.textContent).toContain("Network queue drain");
+        });
+        expect(host.textContent).toContain("15.000 ms");
+        expect(host.textContent).toContain("Over budget");
+        expect(host.textContent).toContain("Database waits");
+        expect(host.textContent).toContain("Outside tick");
+        expect(host.textContent).toContain("Movement");
+        expect(host.textContent).toContain("Not separately measured");
+        expect(host.textContent).toContain("Combat");
+        expect(host.textContent).toContain("Not landed");
+    });
+
+    it("captures and downloads a Chrome trace for a bounded duration", async () => {
+        await vi.waitFor(() => {
+            flushSync();
+            expect(host.textContent).toContain("Capture trace");
+        });
+        const capture = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Capture trace"));
+        capture?.click();
+        await vi.waitFor(() => {
+            flushSync();
+            expect(host.textContent).toContain("Downloaded 2 Chrome trace events");
+        });
     });
 });

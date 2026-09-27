@@ -464,6 +464,23 @@ export const MetricsAnswer = v.looseObject({
     metrics: v.optional(v.array(MetricFamily), []),
 });
 
+export const TickProfileAnswer = v.looseObject({
+    schema: v.number(),
+    active: v.boolean(),
+    complete: v.boolean(),
+    truncated: v.boolean(),
+    requested_seconds: v.number(),
+    events: v.number(),
+});
+
+export const TickProfileTraceAnswer = v.looseObject({
+    schema: v.number(),
+    requested_seconds: v.number(),
+    truncated: v.boolean(),
+    events: v.number(),
+    trace: v.string(),
+});
+
 export const ActivityRow = v.looseObject({
     time: v.optional(v.string(), ""),
     epoch_ms: v.optional(v.number(), 0),
@@ -538,6 +555,8 @@ export type MetricBucket = v.InferOutput<typeof MetricBucket>;
 export type MetricSeries = v.InferOutput<typeof MetricSeries>;
 export type MetricFamily = v.InferOutput<typeof MetricFamily>;
 export type MetricsAnswer = v.InferOutput<typeof MetricsAnswer>;
+export type TickProfileAnswer = v.InferOutput<typeof TickProfileAnswer>;
+export type TickProfileTraceAnswer = v.InferOutput<typeof TickProfileTraceAnswer>;
 export type ActivityRow = v.InferOutput<typeof ActivityRow>;
 export type ActivityAnswer = v.InferOutput<typeof ActivityAnswer>;
 export type ClientAnswer = v.InferOutput<typeof ClientAnswer>;

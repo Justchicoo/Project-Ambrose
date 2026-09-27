@@ -2242,11 +2242,11 @@ Added on 2026-09-18 at the maintainer's direction. 17.01 shipped a console where
 
 **Acceptance**
 
-- [ ] A test that makes one subsystem slow shows that subsystem growing, and the parts sum to the tick time inside a stated tolerance
+- [x] A test that makes one subsystem slow shows that subsystem growing, and the parts sum to the tick time inside a stated tolerance (WorldTest.TickBreakdownNamesTheSlowSubsystemAndAddsToTheTick: an injected 15 ms queue delay identifies network_drain, and the subsystem nanoseconds sum to the tick histogram within 0.5 ms)
 - [ ] The accumulators cost nothing measurable while nothing subscribes, proved by a benchmark
-- [ ] A capture runs for the requested seconds, produces a file, and leaves nothing listening afterwards
+- [x] A capture runs for the requested seconds, produces a file, and leaves nothing listening afterwards (WorldTest.TickProfileIsBoundedTimedAndReadableAsAChromeTrace and WorldTest.TickProfileStopsAtItsEventBound; Overview.browser.test.ts downloads the Chrome trace; npm run test:browser -- --project dashboard-browser apps/dashboard/src/pages/Overview.browser.test.ts passed 6/6; capture uses the existing admin API and opens no listener)
 - [ ] A tick alert names the subsystem that grew
-- [ ] A subsystem whose milestone has not landed reads as unavailable naming it, never as zero
+- [x] A subsystem whose milestone has not landed reads as unavailable naming it, never as zero (WorldTest.TickBreakdownNamesTheSlowSubsystemAndAddsToTheTick verifies movement, database_waits and combat availability are false; Overview.browser.test.ts names each unavailable subsystem rather than showing 0; browser suite passed 6/6)
 
 ## 17.92 Per-session network quality and the player inspector
 
