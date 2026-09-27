@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What the panel asks about one app: running a command on it, the supervisor's own routes for power and captured output, and the app's own routes for its status, settings and databases, sent through the supervisor's relay when the supervisor served this panel and straight to the app when the app served it itself, so every page reads the same way whichever is in front of it. A page about something only some apps keep, such as the realm list the login server holds, asks each app once and offers only those that answer, because an app answering that it has no such page is not an app with an empty one; an app run without an admin API has no pages at all and is never offered, while one that is only stopped still is, so its page can say so.
+ * What the panel asks about one app: running a command on it, the supervisor's own routes for power and captured output, and the app's own routes for its status, settings with their changes, batches, history and reveals, and databases, sent through the supervisor's relay when the supervisor served this panel and straight to the app when the app served it itself, so every page reads the same way whichever is in front of it. A page about something only some apps keep, such as the realm list the login server holds, asks each app once and offers only those that answer, because an app answering that it has no such page is not an app with an empty one; an app run without an admin API has no pages at all and is never offered, while one that is only stopped still is, so its page can say so.
  */
 
 import { ApiError, request } from "./api.svelte";
@@ -24,6 +24,9 @@ import {
     ReloadAnswer,
     ReloadRunAnswer,
     SettingsAnswer,
+    SettingBatchAnswer,
+    SettingChangeAnswer,
+    SettingHistoryAnswer,
     PanelSettingsAnswer,
     type AppEntry,
 } from "./schemas";
@@ -97,8 +100,22 @@ export function commandHistory(app: string, signal?: AbortSignal) {
     return request("GET", `api/panel/apps/${encodeURIComponent(app)}/command-history`, CommandHistoryAnswer, undefined, signal);
 }
 
-export function settingsOf(app: string, signal?: AbortSignal) {
-    return request("GET", pathFor(app, "settings"), SettingsAnswer, undefined, signal);
+export function settingsOf(app: string, signal?: AbortSignal, reveal = false) {
+    return request("GET", pathFor(app, reveal ? "settings?reveal=1" : "settings"), SettingsAnswer, undefined, signal);
+}
+
+export type SettingValue = string | number | boolean;
+
+export function changeSetting(app: string, key: string, value: SettingValue, reason: string) {
+    return request("PUT", pathFor(app, `settings/${encodeURIComponent(key)}`), SettingChangeAnswer, { value, reason });
+}
+
+export function changeSettings(app: string, entries: { key: string; value: SettingValue }[], reason: string) {
+    return request("POST", pathFor(app, "settings/batch"), SettingBatchAnswer, { entries, reason });
+}
+
+export function settingHistory(app: string, key: string, signal?: AbortSignal) {
+    return request("GET", pathFor(app, `settings/${encodeURIComponent(key)}/history`), SettingHistoryAnswer, undefined, signal);
 }
 
 export function panelSettings(signal?: AbortSignal) {

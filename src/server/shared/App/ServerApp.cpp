@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, opens the admin API with the app's own routes and the live log stream already in it before the app starts, keeping a generated token in the data folder or, where the machine names none, beside the config file, and refuses to run when its binding is unsafe, stops gracefully on signals, requests, the shutdown command or POST /api/shutdown, now or after a delay either can cancel, with the reason logged when the delay runs out, answers GET /api/settings with the options the app declares restart-required, moves the one lifecycle state the console and the admin API both read, tells an app whether it runs only to check its start, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use, and registers the config reload target before the app starts and the messages one when the app names the install its definitions come from, which it only knows once it has started. An app that reads live settings declares them as soon as its configuration loads, so nothing reads one undeclared, opens them over its own database once that is open, re-resolves them when the configuration changes, and hands their changes to subscribers at the top of each tick. GET /api/client is served only once the app has said which client install it runs on, so an app that runs on none answers that it has no such page rather than that its install is missing.
+ * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, opens the admin API with the app's own routes and the live log stream already in it before the app starts, keeping a generated token in the data folder or, where the machine names none, beside the config file, and refuses to run when its binding is unsafe, stops gracefully on signals, requests, the shutdown command or POST /api/shutdown, now or after a delay either can cancel, with the reason logged when the delay runs out, answers GET /api/settings with the options the app declares restart-required and, for an app with live settings, their changes, batches and history, records each secret revealed to a caller in its activity record, announces every setting change as it is written and every reload's result on /api/events and stops announcing before the feed goes, moves the one lifecycle state the console and the admin API both read, with the start step its code last reported while it starts, tells an app whether it runs only to check its start, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use, and registers the config reload target before the app starts and the messages one when the app names the install its definitions come from, which it only knows once it has started. An app that reads live settings declares them as soon as its configuration loads, so nothing reads one undeclared, opens them over its own database once that is open, re-resolves them when the configuration changes, and hands their changes to subscribers at the top of each tick. GET /api/client is served only once the app has said which client install it runs on, so an app that runs on none answers that it has no such page rather than that its install is missing.
  */
 
 #include "ServerApp.h"
@@ -10,7 +10,9 @@
 #include "AdminMetricsView.h"
 #include "AdminCommand.h"
 #include "AdminConfigView.h"
+#include "AdminEvents.h"
 #include "AdminReloadView.h"
+#include "AdminSettingsView.h"
 #include "AdminServer.h"
 #include "ListenerSettings.h"
 #include "AppOptions.h"
@@ -25,17 +27,20 @@
 #include "GitRevision.h"
 #include "Log.h"
 #include "LogStream.h"
+#include "LogTimestamp.h"
 #include "MessageRegistry.h"
 #include "ReloadMgr.h"
 #include "Settings.h"
 #include "SettingsCommand.h"
 #include "SignalHandler.h"
+#include "StartProgress.h"
 #include "StringUtil.h"
 #include "TerminalConsoleInput.h"
 
 #include <asio/post.hpp>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <nlohmann/json.hpp>
 
@@ -310,6 +315,12 @@ bool ServerApp::StartAdminApi()
         health.Revision = GitRevision::GetHash();
         health.UptimeSeconds = static_cast<uint64>(GetUptime().count());
         health.State = LifecycleName(GetLifecycleState());
+        if (GetLifecycleState() == AppLifecycle::Starting)
+            if (std::optional<StartStep> const step = StartProgress::Current())
+            {
+                health.StartStage = step->Stage;
+                health.StartUntilEpochMs = std::chrono::duration_cast<std::chrono::milliseconds>(step->Until.time_since_epoch()).count();
+            }
         return health;
     });
     sAdminCapabilities.RegisterStandardProblems();
@@ -319,7 +330,8 @@ bool ServerApp::StartAdminApi()
     RegisterStandardRoutes(_admin->Routes());
     _logStream = std::make_unique<LogStreamService>(_log.GetStreamHub());
     _logStream->Start();
-    _admin->AddSocket(_logStream->MakeSocketRoute("/api/logs"));
+    _admin->AddSocket(_logStream->MakeSocketRoute("/api/logs", "console.read"));
+    StartEvents();
     _admin->Routes().AddGuardedPrefix("GET", "/api/logs/after/", "console.read", [this](AdminRequest const& request)
     {
         std::string_view tail(request.Path);
@@ -339,7 +351,66 @@ bool ServerApp::StartAdminApi()
     _err << _info.Name << ": " << error << "\n";
     _admin.reset();
     _logStream.reset();
+    StopEvents();
     return false;
+}
+
+void ServerApp::StartEvents()
+{
+    _events = std::make_unique<AdminEventHub>();
+    _eventStream = std::make_unique<AdminEventService>(*_events);
+    _eventStream->Start();
+    _admin->AddSocket(_eventStream->MakeSocketRoute("/api/events", "settings.read"));
+    _admin->Routes().AddGuardedPrefix("GET", "/api/events/after/", "settings.read", [this](AdminRequest const& request)
+    {
+        std::string_view tail(request.Path);
+        tail.remove_prefix(std::string_view("/api/events/after/").size());
+        std::optional<uint64> const after = Ambrose::StringTo<uint64>(tail);
+        if (!after)
+            return AdminResponse::Invalid("Reading events takes the sequence number to read after", { { "after", "Give a whole number, or 0 for everything kept" } });
+        return AdminResponse::Json(200, AdminEventService::BacklogJson(*_events, *after, LogBacklogPage));
+    });
+    AdminEventHub* const events = _events.get();
+    if (GetSettingApps() != 0)
+        _settingsWatch = sSettings.Watch([events](SettingChange const& change) { events->Announce("setting.changed", change.Key, AdminEventData::SettingChanged(sSettings, change)); });
+    _reloadObserver = sReloadMgr.Observe([events](ReloadOutcome const& outcome) { events->Announce("reload.result", outcome.Target, AdminEventData::ReloadResult(outcome)); });
+}
+
+void ServerApp::StopEvents()
+{
+    if (_settingsWatch != 0)
+        sSettings.Unwatch(std::exchange(_settingsWatch, 0));
+    if (_reloadObserver != 0)
+        sReloadMgr.Unobserve(std::exchange(_reloadObserver, 0));
+    if (_eventStream)
+        _eventStream->Stop();
+    _eventStream.reset();
+    _events.reset();
+}
+
+void ServerApp::OnSecretsRevealed(AdminRequest const& request, std::vector<std::string> const& keys)
+{
+    std::string const who = request.ActorName.empty() ? request.Principal : fmt::format("{} through {}", request.ActorName, request.Principal);
+    std::string const listed = fmt::format("{}", fmt::join(keys, ", "));
+    auto const now = std::chrono::system_clock::now();
+    nlohmann::json row;
+    row["kind"] = "secret.revealed";
+    row["time"] = std::string(LogTimestamp::FormatPrefix(now, true));
+    row["epoch_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    row["app"] = _info.Name;
+    row["who"] = who;
+    row["address"] = request.RemoteAddress;
+    row["request"] = request.Id;
+    row["command"] = "reveal " + listed;
+    row["level"] = 4;
+    row["confirmed"] = false;
+    row["ran"] = true;
+    row["refused"] = false;
+    row["reason"] = "";
+    row["keys"] = keys;
+    if (!AdminActivityView::Append(CommandAuditFile(), row.dump()))
+        AMBROSE_LOG(_log, LogLevel::Warn, "server.admin", "A reveal of {} could not be written to the record at {}", listed, ConfigMgr::PathToUtf8(CommandAuditFile()));
+    AMBROSE_LOG(_log, LogLevel::Info, "server.admin", "{} was shown the secret setting(s) {} (request {})", who.empty() ? std::string("an operator") : who, listed, request.Id);
 }
 
 std::filesystem::path ServerApp::CommandAuditFile() const
@@ -409,7 +480,11 @@ void ServerApp::RegisterReloadTargets()
 void ServerApp::RegisterStandardRoutes(AdminRouter& routes)
 {
     AdminStatus::Register(routes, [this] { return BuildStatus(); });
-    AdminConfigView::Register(routes, _config, GetRestartRequiredOptions());
+    bool const settings = GetSettingApps() != 0;
+    AdminConfigView::Register(routes, _config, GetRestartRequiredOptions(), settings ? &sSettings : nullptr,
+        [this](AdminRequest const& request, std::vector<std::string> const& keys) { OnSecretsRevealed(request, keys); });
+    if (settings)
+        AdminSettingsView::Register(routes, sSettings);
     AdminReloadView::Register(routes);
     AdminMetricsView::Register(routes);
     AdminActivityView::Register(routes, CommandAuditFile());
@@ -568,6 +643,7 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
     });
 #endif
 
+    StartProgress::Clear();
     if (!StartAdminApi())
     {
         LogLifecycle(LogLevel::Error, fmt::format("{} failed to start", _info.Name));
@@ -590,6 +666,7 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
             _admin->Stop();
         _admin.reset();
         _logStream.reset();
+        StopEvents();
         _work.reset();
         FinishShutdown();
         return stopped ? EXIT_SUCCESS : EXIT_FAILURE;
@@ -606,6 +683,7 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
     {
         if (GetUpdateInterval().count() > 0)
             ScheduleUpdate();
+        StartProgress::Clear();
         _lifecycle = AppLifecycle::Running;
         LogLifecycle(LogLevel::Info, fmt::format("{} ready", _info.Name));
         if (_stopRequested.load())
@@ -622,6 +700,7 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
         _admin->Stop();
     _admin.reset();
     _logStream.reset();
+    StopEvents();
     OnStop();
     LogLifecycle(LogLevel::Info, fmt::format("{} stopped", _info.Name));
     FinishShutdown();

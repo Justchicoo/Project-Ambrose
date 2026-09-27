@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the Panel options into a listener of the same shape as an app's admin API, opens the store before the listener so nothing serves without somewhere to write, names the certificate and key in Panel option names when the bind rule refuses them, and starts, reloads and stops the listener beside the supervisor's own; a reload that would leave the bind unsafe or the certificate unservable is refused and the old listener keeps serving. Signing in also says which role the operator holds and every permission that role allows, so the pages a person cannot use are never drawn for them and the panel never has to ask again what somebody is allowed to do. A route that asks for a permission the catalog does not hold is left out and named in a warning as the panel starts, so a misnamed key costs its page loudly rather than silently.
+ * Reads the Panel options into a listener of the same shape as an app's admin API, opens the store before the listener so nothing serves without somewhere to write, names the certificate and key in Panel option names when the bind rule refuses them, and starts, reloads and stops the listener beside the supervisor's own; a reload that would leave the bind unsafe or the certificate unservable is refused and the old listener keeps serving. Signing in also says which role the operator holds and every permission that role allows, so the pages a person cannot use are never drawn for them and the panel never has to ask again what somebody is allowed to do. A route that asks for a permission the catalog does not hold is left out and named in a warning as the panel starts, so a misnamed key costs its page loudly rather than silently. A settings change, batch or reload an app answered through the relay is recorded with who asked, from where, why and how it ended, refused ones too, and a read that showed a secret is recorded with the keys it showed, never a value.
  */
 
 #include "Panel.h"
@@ -517,6 +517,110 @@ AdminResponse Panel::PanelSettingsUpdate(AdminRequest const& request)
     if (event.Result == AuditResult::Refused)
         return AdminResponse::Problem(409, "settings_refused", event.Reason);
     return PanelSettingsGet(request);
+}
+
+std::string Panel::NameOf(AdminRequest const& request)
+{
+    if (std::optional<PanelUser> const user = UserOf(request))
+        return user->Username;
+    return request.Principal;
+}
+
+void Panel::RecordReveal(AdminRequest const& request, std::string_view app, std::vector<std::string> const& keys)
+{
+    if (keys.empty())
+        return;
+    AuditEvent event;
+    event.Name = "settings:secret.revealed";
+    event.Actor = request.Principal == "token" ? AuditActor::Token : AuditActor::User;
+    event.ActorId = request.Principal;
+    event.ActorName = NameOf(request);
+    event.Address = request.RemoteAddress;
+    event.UserAgent = request.UserAgent;
+    event.Node = std::string(app);
+    nlohmann::json properties;
+    properties["app"] = std::string(app);
+    properties["keys"] = keys;
+    properties["request"] = request.Id;
+    event.Properties = properties.dump();
+    event.On("app", std::string(app), std::string(app));
+    for (std::string const& key : keys)
+        event.On("setting", key, key);
+    std::string error;
+    if (!Record(event, {}, error))
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A reveal of secret settings on {} could not be recorded: {}", app, error);
+}
+
+void Panel::RecordRelayed(AdminRequest const& request, std::string_view app, std::string_view method, std::string_view path, int status, std::string const& body)
+{
+    std::string_view const bare = path.substr(0, path.find('?'));
+    nlohmann::json const answer = nlohmann::json::parse(body, nullptr, false);
+    if (method == "GET")
+    {
+        if (bare != "/api/settings" || status != 200 || !answer.is_object() || !answer.value("revealed", false) || !answer.contains("settings") || !answer["settings"].is_array())
+            return;
+        std::vector<std::string> keys;
+        for (nlohmann::json const& setting : answer["settings"])
+            if (setting.is_object() && setting.value("secret", false) && setting.contains("value") && setting["value"].is_string()
+                && !setting["value"].get_ref<std::string const&>().empty())
+                keys.push_back(setting.value("key", std::string()));
+        RecordReveal(request, app, keys);
+        return;
+    }
+
+    constexpr std::string_view SettingPrefix = "/api/settings/";
+    constexpr std::string_view ReloadPrefix = "/api/reload/";
+    nlohmann::json const sent = nlohmann::json::parse(request.Body, nullptr, false);
+    AuditEvent event;
+    std::vector<std::string> keys;
+    if (bare == "/api/settings/batch")
+    {
+        event.Name = "settings:batch.changed";
+        if (sent.is_object() && sent.contains("entries") && sent["entries"].is_array())
+            for (nlohmann::json const& entry : sent["entries"])
+                if (entry.is_object() && entry.contains("key") && entry["key"].is_string())
+                    keys.push_back(entry["key"].get<std::string>());
+    }
+    else if (bare.starts_with(SettingPrefix))
+    {
+        event.Name = "settings:setting.changed";
+        keys.emplace_back(bare.substr(SettingPrefix.size()));
+    }
+    else if (bare.starts_with(ReloadPrefix))
+        event.Name = "reload:target.run";
+    else
+        return;
+
+    event.Actor = request.Principal == "token" ? AuditActor::Token : AuditActor::User;
+    event.ActorId = request.Principal;
+    event.ActorName = NameOf(request);
+    event.Address = request.RemoteAddress;
+    event.UserAgent = request.UserAgent;
+    event.Node = std::string(app);
+    event.Result = status < 300 ? AuditResult::Succeeded : status < 500 ? AuditResult::Refused : AuditResult::Failed;
+    if (status >= 300 && answer.is_object() && answer.contains("message") && answer["message"].is_string())
+        event.Error = answer["message"].get<std::string>();
+    if (sent.is_object() && sent.contains("reason") && sent["reason"].is_string())
+        event.Reason = sent["reason"].get<std::string>();
+    nlohmann::json properties;
+    properties["app"] = std::string(app);
+    properties["status"] = status;
+    properties["request"] = request.Id;
+    if (!keys.empty())
+        properties["keys"] = keys;
+    if (bare.starts_with(ReloadPrefix))
+        properties["target"] = std::string(bare.substr(ReloadPrefix.size()));
+    if (answer.is_object() && answer.contains("changed") && answer["changed"].is_boolean())
+        properties["changed"] = answer["changed"].get<bool>();
+    event.Properties = properties.dump();
+    event.On("app", std::string(app), std::string(app));
+    for (std::string const& key : keys)
+        event.On("setting", key, key);
+    if (bare.starts_with(ReloadPrefix))
+        event.On("reload_target", std::string(bare.substr(ReloadPrefix.size())));
+    std::string error;
+    if (!Record(event, {}, error))
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "{} on {} could not be recorded: {}", event.Name, app, error);
 }
 
 std::optional<PanelUser> Panel::UserOf(AdminRequest const& request)

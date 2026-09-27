@@ -1,8 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks the reload an operator runs after the client's message definitions change, through the target a running app registers once it names the install it reads them from: the install is a Root.wad the test builds, a definition broken on disk refuses the reload with its error and leaves the generation that was serving, whose declared messages still encode, and once the file is mended the same reload takes a new generation.
+ * Checks the reload an operator runs after the client's message definitions change, through the target a running app registers once it names the install it reads them from: the install is a Root.wad the test builds, a definition broken on disk refuses the reload with its error and leaves the generation that was serving, whose declared messages still encode, and once the file is mended the same reload takes a new generation; run over the admin API, two broken definitions answer 409 naming both, the listing and the event feed report the same failure, and the old generation goes on serving.
  */
 
+#include "AdminServer.h"
+#include "AdminTestClient.h"
 #include "BaseMessageFixtures.h"
 #include "ByteBuffer.h"
 #include "ConfigMgr.h"
@@ -17,6 +19,8 @@
 #include "SessionBase.h"
 #include "SystemMessageRules.h"
 #include "SystemMessages.h"
+
+#include <nlohmann/json.hpp>
 
 #include <gtest/gtest.h>
 
@@ -71,6 +75,30 @@ namespace
 </FixtureExtendedBaseMessages>
 )";
 
+    std::string_view const TwoBrokenExtendedBase = R"(<?xml version="1.0" ?>
+<FixtureExtendedBaseMessages>
+<_ProtocolInfo><RECORD><ServiceID TYPE="UBYT">2</ServiceID><ProtocolType TYPE="STR">EXTENDEDBASE</ProtocolType></RECORD></_ProtocolInfo>
+<MSG_RAW_TEXT><RECORD><Message TYPE="STR"></Message></RECORD></MSG_RAW_TEXT>
+<MSG_SERVERMESSAGE><RECORD><Modal TYPE="NOTATYPE"></Modal><Message TYPE="WSTR"></Message></RECORD></MSG_SERVERMESSAGE>
+<MSG_FORCE_DISCONNECT><RECORD><Type TYPE="ALSONOTATYPE"></Type><TimeStamp TYPE="STR"></TimeStamp><Message TYPE="STR"></Message></RECORD></MSG_FORCE_DISCONNECT>
+</FixtureExtendedBaseMessages>
+)";
+
+    constexpr char const* AdminToken = "0123456789abcdef0123456789abcdef";
+
+    bool NamesBoth(nlohmann::json const& errors)
+    {
+        bool first = false;
+        bool second = false;
+        for (nlohmann::json const& error : errors)
+        {
+            std::string const text = error.get<std::string>();
+            first = first || (text.find("NOTATYPE") != std::string::npos && text.find("ALSONOTATYPE") == std::string::npos);
+            second = second || text.find("ALSONOTATYPE") != std::string::npos;
+        }
+        return first && second;
+    }
+
     class MessageReloadTest : public testing::Test
     {
     protected:
@@ -101,10 +129,10 @@ namespace
                 .write(reinterpret_cast<char const*>(archive.data()), static_cast<std::streamsize>(archive.size()));
         }
 
-        std::filesystem::path WriteConfig()
+        std::filesystem::path WriteConfig(std::string const& extra = {})
         {
             std::filesystem::path const file = _directory.Path() / "reloadserver.conf";
-            std::ofstream(file) << "LogsDir = logs\nAppender.Console = 1,3,0\nLogger.root = 3,Console\n";
+            std::ofstream(file) << "LogsDir = logs\nAppender.Console = 1,3,0\nLogger.root = 3,Console\n" << extra;
             return file;
         }
 
@@ -162,6 +190,67 @@ TEST_F(MessageReloadTest, ABrokenDefinitionKeepsTheServingGenerationAndAMendedOn
     ASSERT_TRUE(mended.Ok) << (mended.Errors.empty() ? std::string() : mended.Errors.front());
     EXPECT_GT(sMessageRegistry.GetGeneration(), serving);
     EXPECT_EQ(Encoded(u"Still here"), before);
+
+    app.RequestStop();
+    runner.join();
+    EXPECT_EQ(exitCode, EXIT_SUCCESS);
+}
+
+TEST_F(MessageReloadTest, ABrokenDefinitionReloadedOverTheAdminApiAnswersEveryErrorAndKeepsServing)
+{
+    MessageApp app({ "reloadserver", "reloadserver.conf" }, _config, _harness.GetLog(), _out, _err);
+    app.Install = _install;
+    std::filesystem::path const config = WriteConfig(std::string("Admin.Enable = 1\nAdmin.BindIP = 127.0.0.1\nAdmin.Port = 0\nAdmin.Token = ") + AdminToken + "\n");
+    int exitCode = -1;
+    std::thread runner([&] { exitCode = app.Run({ "reloadserver", "-c", ConfigMgr::PathToUtf8(config) }); });
+    ScopeExit const joinOnExit([&] { if (runner.joinable()) { app.RequestStop(); runner.join(); } });
+    auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (!app.IsReady() && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    ASSERT_TRUE(app.IsReady());
+    ASSERT_NE(app.GetAdminApi(), nullptr);
+    uint16 const port = app.GetAdminApi()->GetPort();
+    uint64 const serving = sMessageRegistry.GetGeneration();
+    uint64 const target = sReloadMgr.GetGeneration("messages");
+    std::vector<uint8> const before = Encoded(u"Still here");
+    ASSERT_FALSE(before.empty());
+
+    WriteRoot(TwoBrokenExtendedBase);
+    AdminTest::HttpReply const run = AdminTest::Ask(port, "POST", "/api/reload/messages", AdminToken);
+    ASSERT_EQ(run.Status, 409) << run.Body;
+    nlohmann::json const answer = nlohmann::json::parse(run.Body, nullptr, false);
+    ASSERT_TRUE(answer.is_object()) << run.Body;
+    EXPECT_EQ(answer["ok"], false);
+    ASSERT_EQ(answer["targets"].size(), 1u);
+    EXPECT_TRUE(NamesBoth(answer["targets"][0]["errors"])) << "every error is answered, not the first: " << run.Body;
+    EXPECT_EQ(answer["targets"][0]["generation"], target);
+    EXPECT_TRUE(answer["targets"][0]["finished_ms"].is_number_integer());
+
+    EXPECT_EQ(sMessageRegistry.GetGeneration(), serving) << "the generation that was serving goes on serving";
+    EXPECT_EQ(Encoded(u"Still here"), before);
+
+    nlohmann::json const listing = nlohmann::json::parse(AdminTest::Get(port, "/api/reload", AdminToken).Body, nullptr, false);
+    bool listed = false;
+    for (nlohmann::json const& entry : listing["targets"])
+        if (entry["target"] == "messages")
+        {
+            listed = true;
+            EXPECT_EQ(entry["ok"], false);
+            EXPECT_EQ(entry["generation"], target);
+            EXPECT_TRUE(NamesBoth(entry["errors"])) << entry.dump();
+        }
+    EXPECT_TRUE(listed);
+
+    nlohmann::json const events = nlohmann::json::parse(AdminTest::Get(port, "/api/events/after/0", AdminToken).Body, nullptr, false);
+    bool announced = false;
+    for (nlohmann::json const& event : events["records"])
+        if (event["kind"] == "reload.result" && event["subject"] == "messages")
+        {
+            announced = true;
+            EXPECT_EQ(event["data"]["ok"], false);
+            EXPECT_TRUE(NamesBoth(event["data"]["errors"])) << event.dump();
+        }
+    EXPECT_TRUE(announced) << "the event feed reports the failed reload: " << events.dump();
 
     app.RequestStop();
     runner.join();

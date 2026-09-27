@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel and the supervisor routes on its admin API, offers apps, start, stop, restart and kill on its console, and leaves the apps running when it stops so the next start takes them back.
+ * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel and the supervisor routes on its admin API, records relayed settings and reload answers and its own secret reveals in the panel's audit log, offers apps, start, stop, restart and kill on its console, and leaves the apps running when it stops so the next start takes them back.
  */
 
 #include "AdminGraphsView.h"
@@ -160,8 +160,16 @@ namespace
         }
 
     protected:
+        void OnSecretsRevealed(AdminRequest const& request, std::vector<std::string> const& keys) override
+        {
+            ServerApp::OnSecretsRevealed(request, keys);
+            _panel.RecordReveal(request, GetInfo().Name, keys);
+        }
+
         void OnAdminApiReady(AdminServer& admin) override
         {
+            _supervisor.SetRelayHooks({ [this](AdminRequest const& request) { return _panel.NameOf(request); },
+                [this](AdminRequest const& request, RelayedAnswer const& answer) { _panel.RecordRelayed(request, answer.App, answer.Method, answer.Path, answer.Status, answer.Body); } });
             _supervisor.Register(admin.Routes(), [this] { return BuildStatus(); });
             AdminGraphsView::Register(admin.Routes(), [this]() -> Ambrose::SeriesStore const& { return _history; });
         }

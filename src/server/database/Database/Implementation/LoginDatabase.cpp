@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Registers every login database statement with its name, SQL, and the connections that prepare it: the log sink, accounts, verifiers, security levels, locks, last logins, account, IP and machine bans, the one-query authentication lookup, hashed session keys, verifier resealing that never overwrites a changed password, an account's purchased character slots, the realms a player may be sent to, the row a gameserver adds for itself the first time it runs, which never overwrites one an operator has edited, and the beat each gameserver says it is alive with. It also registers the live settings statements: every persisted value, setting and removing one, writing a change's audit row, and reading a key's newest audit rows.
+ * Registers every login database statement with its name, SQL, and the connections that prepare it: the log sink, accounts, verifiers, security levels, locks, last logins, account, IP and machine bans, the one-query authentication lookup, hashed session keys, verifier resealing that never overwrites a changed password, an account's purchased character slots, the realms a player may be sent to, the row a gameserver adds for itself the first time it runs, which never overwrites one an operator has edited, and the beat each gameserver says it is alive with. It also registers the live settings statements: every persisted value, setting and removing one, writing a change's audit row, reading a key's newest audit rows, and which verifier keys stored verifiers still use.
  */
 
 #include "LoginDatabase.h"
@@ -51,4 +51,5 @@ void LoginDatabaseConnection::DoPrepareStatements()
     PrepareStatement(LOGIN_DEL_SETTING, "LOGIN_DEL_SETTING", "DELETE FROM `settings` WHERE `key` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_INS_SETTING_AUDIT, "LOGIN_INS_SETTING_AUDIT", "INSERT INTO `setting_audit` (`key`, `old_value`, `new_value`, `who`, `account_id`, `source`, `reason`, `created`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_SETTING_AUDIT, "LOGIN_SEL_SETTING_AUDIT", "SELECT `id`, `key`, `old_value`, `new_value`, `who`, `account_id`, `source`, `reason`, `created` FROM `setting_audit` WHERE `key` = ? ORDER BY `id` DESC LIMIT ?", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_SEL_VERIFIER_KEYS_IN_USE, "LOGIN_SEL_VERIFIER_KEYS_IN_USE", "SELECT `verifier_key_id`, COUNT(*) FROM `account` WHERE `verifier_key_id` <> 0 GROUP BY `verifier_key_id`", ConnectionFlags::Both);
 }

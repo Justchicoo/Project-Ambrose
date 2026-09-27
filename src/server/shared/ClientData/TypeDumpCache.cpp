@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps one type dump per client revision in the Ambrose data folder: names types/<revision>.json only for a plain revision and an absolute folder, reads the revision, executable SHA-256 and extractor from a dump's first bytes whatever order its root keys take, hashes the client program as a stream, and builds a missing or stale dump by running the type extractor, resolved against the working directory, and on Windows given .exe when only that file exists, to the one absolute path that is checked and run, on the install's absolute path with an input that ends when this process does, forwarding its output lines, while holding an operating system lock on a lock file beside the dump that the system releases however its holder ends. The holder writes its process id, time and host name into the lock file and afterwards removes that name only while it still names the file it locked, so it never removes another holder's file, and a caller that locks a file whose name was removed or replaced meanwhile tries again; other callers wait for the dump to become current or the lock to be released, however long the holder runs and whatever the file holds. A lock file that still cannot be opened after two seconds of tries fails naming why, a file system that cannot lock builds unlocked with a warning, a run with no exit code that still leaves a current dump is used with a warning, and every failure names its cause, including why no exit code was read.
+ * Keeps one type dump per client revision in the Ambrose data folder: names types/<revision>.json only for a plain revision and an absolute folder, reads the revision, executable SHA-256 and extractor from a dump's first bytes whatever order its root keys take, hashes the client program as a stream, and builds a missing or stale dump, reported as the step a starting server is on for the extractor's time, by running the type extractor, resolved against the working directory, and on Windows given .exe when only that file exists, to the one absolute path that is checked and run, on the install's absolute path with an input that ends when this process does, forwarding its output lines, while holding an operating system lock on a lock file beside the dump that the system releases however its holder ends. The holder writes its process id, time and host name into the lock file and afterwards removes that name only while it still names the file it locked, so it never removes another holder's file, and a caller that locks a file whose name was removed or replaced meanwhile tries again; other callers wait for the dump to become current or the lock to be released, however long the holder runs and whatever the file holds. A lock file that still cannot be opened after two seconds of tries fails naming why, a file system that cannot lock builds unlocked with a warning, a run with no exit code that still leaves a current dump is used with a warning, and every failure names its cause, including why no exit code was read.
  */
 
 #include "TypeDumpCache.h"
@@ -9,6 +9,7 @@
 #include "TypeRegistryBinary.h"
 #include "ConfigMgr.h"
 #include "SHA256.h"
+#include "StartProgress.h"
 #include "StringUtil.h"
 #include "Types.h"
 #include "Utf.h"
@@ -442,6 +443,8 @@ namespace
         std::filesystem::path _path;
     };
 
+    constexpr std::chrono::seconds ReportedMargin{ 60 };
+
     void Pause(TypeDumpCacheOptions const& options)
     {
         std::this_thread::sleep_for(std::max(options.LockPollInterval, MinimumPollInterval));
@@ -490,6 +493,8 @@ namespace
         };
         child.ShouldStop = options.ShouldStop;
 
+        StartProgress::Report(fmt::format("building the type dump for revision {}", install.Revision),
+            std::chrono::duration_cast<std::chrono::seconds>(options.Timeout) + ReportedMargin);
         SteadyClock::time_point const started = SteadyClock::now();
         ChildProcessResult const run = options.Run ? options.Run(child) : ChildProcess::Run(child);
         std::string const revision = install.Revision;
@@ -733,6 +738,8 @@ std::optional<std::filesystem::path> TypeDumpCache::Ensure(ClientInstall const& 
             if (!waitReported)
             {
                 report(false, fmt::format("Waiting for another process to build the type dump for revision {} (lock file {})", install.Revision, PathText(lockPath)));
+                StartProgress::Report(fmt::format("waiting for another process to build the type dump for revision {}", install.Revision),
+                    std::chrono::duration_cast<std::chrono::seconds>(options.Timeout) + ReportedMargin);
                 waitReported = true;
             }
         }

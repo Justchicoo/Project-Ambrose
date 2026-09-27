@@ -406,13 +406,13 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Acceptance**
 
-- [ ] An out-of-bounds PUT returns 422 and changes nothing
-- [ ] A PUT to a key set by an environment variable is refused and names the locking layer
-- [ ] A batch with one bad entry applies none
-- [ ] A change appears on a second dashboard within one second
-- [ ] A reload of a broken message definition returns every error while the old generation keeps serving
-- [ ] Reading `Account.VerifierKeys` without asking to reveal it returns a masked value, and its history shows masked old and new values
-- [ ] An events subscriber resuming after a sequence number receives exactly the missed events or a dropped marker, through the same test the 17.04 layer passes
+- [x] An out-of-bounds PUT returns 422 and changes nothing (AdminSettingsViewTest.AnOutOfBoundsPutAnswers422AndChangesNothing, which also has a PUT with a bad value and no reason name both in one answer, and SettingsTest.AWrongTypeOrOutOfBoundsValueIsRefusedNamingItAndNothingIsPersistedAuditedOrAnnounced; with the lower bound check removed the PUT answers 200)
+- [x] A PUT to a key set by an environment variable is refused and names the locking layer (AdminSettingsViewTest.APutToAKeyTheEnvironmentSetsIsRefusedNamingTheVariable: 409 `setting_locked` with layer `environment` and AMBROSE_WORLD_UPDATE_INTERVAL named, and layer `override` for a command-line override; with the lock check removed it answers 200)
+- [x] A batch with one bad entry applies none (SettingsTest.ABatchWithOneBadEntryAppliesNoneAndNamesEveryBadOne, SettingsTest.ABatchWhoseStoreFailsChangesNothingAndAGoodBatchIsOneCommitAnnouncedOnce and AdminSettingsViewTest.ABatchWithOneBadEntryAnswers422AndAppliesNone; SettingsStoreTest.ABatchTheDatabaseRefusesOneRowOfLeavesEveryRowUnwritten on MySQL 8, where the first row of a batch whose second row the database refuses is not kept)
+- [x] A change appears on a second dashboard within one second (AdminEventSocketTest.AChangeReachesASecondDashboardWithinOneSecond: two subscribers on a running app whose world ticks every five seconds, and the change made over HTTP reaches the second with its value, who and why in under a second; announced from the tick instead, it took 4995 ms)
+- [x] A reload of a broken message definition returns every error while the old generation keeps serving (MessageReloadTest.ABrokenDefinitionReloadedOverTheAdminApiAnswersEveryErrorAndKeepsServing: POST /api/reload/messages with two broken fields in two messages answers 409 naming both, GET /api/reload and the events feed report the same, and the message registry keeps its generation and encodes as before; AdminReloadViewTest covers the listing, unknown targets and all)
+- [x] Reading `Account.VerifierKeys` without asking to reveal it returns a masked value, and its history shows masked old and new values (AdminSettingsViewTest.VerifierKeysAreMaskedUnlessRevealedAndHistoryIsMasked, which also has `?reveal=1` with the right show it and record the reveal once, and without the right or a forwarded grant stay masked; SettingsTest.ASecretIsMaskedInEveryMessageLogLineAuditRowAndCommandAnswer and SettingsStoreTest.ASecretLongerThanTheOldColumnIsKeptWholeAndAuditedMasked keep it out of messages, the console and the audit table)
+- [x] An events subscriber resuming after a sequence number receives exactly the missed events or a dropped marker, through the same test the 17.04 layer passes (the cases in src/test/mocks/StreamLayerCases.h run for both feeds: AdminEventStreamTest.AResumeAfterNGetsExactlyTheEventsAfterN and AdminEventStreamTest.AResumeAfterAnEvictedSequenceGetsADroppedMarkerNamingTheMissedRange beside LogStreamServiceTest's cases of the same names, and AdminEventSocketTest.AResumeAfterNReceivesExactlyTheEventsAfterN over a real socket)
 
 ## 17.13 Dashboard settings editor and reload page
 

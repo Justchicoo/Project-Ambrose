@@ -5,6 +5,7 @@
 
 #include "AdminCommand.h"
 
+#include "AdminActivityView.h"
 #include "AdminRouter.h"
 #include "ConsoleCommandTable.h"
 #include "Log.h"
@@ -16,7 +17,6 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <fstream>
 
 namespace
 {
@@ -26,17 +26,8 @@ namespace
 
     void Append(std::filesystem::path const& file, nlohmann::json const& row)
     {
-        if (file.empty())
-            return;
-        std::error_code code;
-        std::filesystem::create_directories(file.parent_path(), code);
-        std::ofstream out(file, std::ios::app | std::ios::binary);
-        if (!out)
-        {
+        if (!file.empty() && !AdminActivityView::Append(file, row.dump()))
             LOG_WARN(CommandCategory, "A remote command could not be written to its record at {}", file.generic_string());
-            return;
-        }
-        out << row.dump() << '\n';
     }
 }
 

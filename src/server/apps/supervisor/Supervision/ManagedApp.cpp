@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs one app's controller: commands queue under a lock and run on the controller thread, which every tenth of a second reads the app's new output, notices its exit, looks for readiness while it starts and ends a start that runs past its timeout, escalates a stop that has not finished, and starts it again once a restart falls due; the app's admin API is found from the app's own config and token exactly as the app finds them, an adopted app with its admin API off counts as running at once because nothing else could say so, a process it would not take back is said so at the top of the run that replaces it, and a start that never became ready is recorded and not tried again until someone starts it.
+ * Runs one app's controller: commands queue under a lock and run on the controller thread, which every tenth of a second reads the app's new output, notices its exit, looks for readiness while it starts and ends a start that runs past its timeout and past the time any step the app reported asked for, naming that step, escalates a stop that has not finished, and starts it again once a restart falls due; the app's admin API is found from the app's own config and token exactly as the app finds them, an adopted app with its admin API off counts as running at once because nothing else could say so, a process it would not take back is said so at the top of the run that replaces it, and a start that never became ready is recorded and not tried again until someone starts it.
  */
 
 #include "ManagedApp.h"
@@ -14,6 +14,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <utility>
 
 namespace
@@ -219,6 +220,7 @@ void ManagedApp::Begin()
             _output.Attach();
             LoadAdmin();
             _startedAt = Clock::now();
+            _startGrantedUntil = {};
             _nextHealth = _startedAt;
             _watchStart = false;
             bool admin = false;
@@ -326,6 +328,7 @@ void ManagedApp::Launch()
     }
     _process = std::move(process);
     _startedAt = Clock::now();
+    _startGrantedUntil = {};
     _nextHealth = _startedAt + FirstHealthDelay;
     _stopRequested = false;
     _interrupted = false;
@@ -339,6 +342,8 @@ void ManagedApp::Launch()
         _view.Adopted = false;
         _view.StartedEpochMs = now;
         _view.ReadyEpochMs = 0;
+        _view.StartStage.clear();
+        _view.StartUntilEpochMs = 0;
         _view.Stop = StopMethod::None;
         _view.StopRequestedEpochMs = 0;
         _view.RestartEpochMs = 0;
@@ -528,8 +533,37 @@ void ManagedApp::CheckHealth()
     if (!answer.Answered || answer.Status != 200)
         return;
     nlohmann::json const body = nlohmann::json::parse(answer.Body, nullptr, false);
-    if (body.is_object() && body.value("state", std::string()) == "running")
+    if (!body.is_object())
+        return;
+    if (body.value("state", std::string()) == "running")
+    {
         MarkReady("its admin API reports it running");
+        return;
+    }
+    auto const start = body.find("start");
+    if (start == body.end() || !start->is_object() || !start->contains("stage") || !(*start)["stage"].is_string() || !start->contains("until_ms") || !(*start)["until_ms"].is_number_integer())
+        return;
+    std::string const stage = (*start)["stage"].get<std::string>();
+    int64 const until = (*start)["until_ms"].get<int64>();
+    int64 const remainingMs = std::clamp<int64>(until - NowEpochMs(), 0, std::chrono::duration_cast<std::chrono::milliseconds>(MaxStartGrant).count());
+    _startGrantedUntil = now + std::chrono::milliseconds(remainingMs);
+    bool changed = false;
+    {
+        std::lock_guard<std::mutex> const lock(_mutex);
+        changed = _view.StartStage != stage;
+        _view.StartStage = stage;
+        _view.StartUntilEpochMs = NowEpochMs() + remainingMs;
+    }
+    if (changed)
+        Note(fmt::format("{} is {}, which may take up to {} s more", _definition.Name, stage, (remainingMs + 999) / 1000));
+}
+
+std::string ManagedApp::StartLate(std::string const& stage) const
+{
+    if (stage.empty())
+        return fmt::format("did not become ready within {} s", _definition.StartTimeout.count());
+    return fmt::format("did not become ready: {} ran past the time it asked for, {} s after it started", stage,
+        std::chrono::duration_cast<std::chrono::seconds>(Clock::now() - _startedAt).count());
 }
 
 void ManagedApp::MarkReady(std::string const& reason)
@@ -540,6 +574,8 @@ void ManagedApp::MarkReady(std::string const& reason)
             return;
         _view.State = AppState::Running;
         _view.ReadyEpochMs = NowEpochMs();
+        _view.StartStage.clear();
+        _view.StartUntilEpochMs = 0;
     }
     Note(fmt::format("{} is ready: {}", _definition.Name, reason));
     FetchIdentity();
@@ -627,7 +663,7 @@ void ManagedApp::OnExit()
         else
         {
             ++_view.FailedStarts;
-            _view.Message = _startTimedOut ? fmt::format("It did not become ready within {} s", _definition.StartTimeout.count()) : "It exited before it was ready; start it again once the cause in its output is fixed";
+            _view.Message = _startTimedOut ? "It " + StartLate(_view.StartStage) : "It exited before it was ready; start it again once the cause in its output is fixed";
         }
         _view.State = AppState::Crashed;
         _view.RestartEpochMs = restart ? now + std::chrono::duration_cast<std::chrono::milliseconds>(RestartDelay).count() : 0;
@@ -653,14 +689,21 @@ void ManagedApp::Step()
             CheckReady(lines);
             if (GetState() == AppState::Starting)
                 CheckHealth();
-            if (GetState() == AppState::Starting && _watchStart && !_startTimedOut && Clock::now() - _startedAt >= _definition.StartTimeout)
+            Clock::time_point const now = Clock::now();
+            if (GetState() == AppState::Starting && _watchStart && !_startTimedOut && now - _startedAt >= _definition.StartTimeout && now >= _startGrantedUntil)
             {
                 _startTimedOut = true;
+                std::string stage;
+                {
+                    std::lock_guard<std::mutex> const lock(_mutex);
+                    stage = _view.StartStage;
+                }
+                std::string const late = StartLate(stage);
                 std::string error;
                 if (_process.EndTree(error))
-                    Note(fmt::format("{} did not become ready within {} s, so its process tree was ended", _definition.Name, _definition.StartTimeout.count()), true);
+                    Note(fmt::format("{} {}, so its process tree was ended", _definition.Name, late), true);
                 else
-                    Note(fmt::format("{} did not become ready within {} s, and its process tree could not be ended: {}", _definition.Name, _definition.StartTimeout.count(), error), true);
+                    Note(fmt::format("{} {}, and its process tree could not be ended: {}", _definition.Name, late, error), true);
             }
         }
         else if (state == AppState::Stopping)

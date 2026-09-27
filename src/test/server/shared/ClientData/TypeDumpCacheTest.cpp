@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the per-revision type dump cache in real temporary folders with a fake install and a fake extractor run: dumps are named only for plain revisions in an absolute data folder, headers parse with their root keys in any order, the client program hashes as a stream, a current dump is reused without running the extractor, a missing or stale one is rebuilt with the expected command naming the install's absolute path and an input that ends with this process, every failure names its cause, including why no exit code was read, a lock file that cannot be opened fails after a grace without running the extractor, a run with no exit code that left a current dump is used, a relative extractor is checked and run as one absolute path from the working directory, an install path that is not valid Unicode on Windows is refused before running, two callers at once run the extractor once, many callers never run it at the same time while the lock file is removed and created again, a held lock is waited on until the dump is current or the lock is released and is never taken over however long its build runs, a stop ends the wait, a lock file no process holds is taken at once whatever it names, even a running process on this machine, the holder writes its process id, time and host name into the lock file, a holder whose lock file was replaced leaves the new holder's file alone, and the default extractor sits beside the executable.
+ * Tests the per-revision type dump cache in real temporary folders with a fake install and a fake extractor run: dumps are named only for plain revisions in an absolute data folder, headers parse with their root keys in any order, the client program hashes as a stream, a current dump is reused without running the extractor, a missing or stale one is rebuilt with the expected command naming the install's absolute path and an input that ends with this process, reported as the step a start is on for the extractor's time, every failure names its cause, including why no exit code was read, a lock file that cannot be opened fails after a grace without running the extractor, a run with no exit code that left a current dump is used, a relative extractor is checked and run as one absolute path from the working directory, an install path that is not valid Unicode on Windows is refused before running, two callers at once run the extractor once, many callers never run it at the same time while the lock file is removed and created again, a held lock is waited on until the dump is current or the lock is released and is never taken over however long its build runs, a stop ends the wait, a lock file no process holds is taken at once whatever it names, even a running process on this machine, the holder writes its process id, time and host name into the lock file, a holder whose lock file was replaced leaves the new holder's file alone, and the default extractor sits beside the executable.
  */
 
 #include "ChildProcess.h"
@@ -10,6 +10,7 @@
 #include "SHA256.h"
 #include "ScopeExit.h"
 #include "StringUtil.h"
+#include "StartProgress.h"
 #include "TypeDumpCache.h"
 #include "Types.h"
 
@@ -384,6 +385,11 @@ TEST(TypeDumpCacheTest, AMissingOrStaleDumpIsRebuilt)
     EXPECT_TRUE(ConfigMgr::PathFromUtf8(harness.Seen->Arguments[1]).is_absolute());
     EXPECT_NE(harness.Seen->Arguments[1].find("Jos\xC3\xA9"), std::string::npos);
     EXPECT_EQ(harness.Seen->Timeout, std::chrono::milliseconds(42000));
+    std::optional<StartStep> const step = StartProgress::Current();
+    ASSERT_TRUE(step.has_value()) << "a server starting while the dump builds says so, so its supervisor waits for it";
+    EXPECT_NE(step->Stage.find("building the type dump for revision r806919.Wizard_1_610"), std::string::npos) << step->Stage;
+    EXPECT_GT(step->Until, std::chrono::system_clock::now() + std::chrono::seconds(42));
+    StartProgress::Clear();
     EXPECT_FALSE(harness.LockExists());
     EXPECT_TRUE(harness.Reported(false, "Building the type dump for revision r806919.Wizard_1_610"));
     EXPECT_TRUE(harness.Reported(false, "typeextract: extracting"));

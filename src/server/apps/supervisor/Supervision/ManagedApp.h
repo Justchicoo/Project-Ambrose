@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One app the supervisor runs: a controller thread of its own starts it with its config, its output going to the supervisor's files and its input a pipe, calls it ready when its admin API reports it running or, with the admin API off, when it prints its ready line, stops it by asking its admin API to shut down with the countdown, else by a shutdown line on its input, else by Ctrl+Break or SIGTERM to its group, interrupts it halfway through its stop timeout and ends its whole tree when the timeout passes, restarts it a second after it exits unexpectedly from running, records every exit with its code, saves its desired state and process identity whenever they change, and takes back the process an earlier supervisor started while that identity still matches.
+ * One app the supervisor runs: a controller thread of its own starts it with its config, its output going to the supervisor's files and its input a pipe, calls it ready when its admin API reports it running or, with the admin API off, when it prints its ready line, waits for as long as a start step the app reports asked for, stops it by asking its admin API to shut down with the countdown, else by a shutdown line on its input, else by Ctrl+Break or SIGTERM to its group, interrupts it halfway through its stop timeout and ends its whole tree when the timeout passes, restarts it a second after it exits unexpectedly from running, records every exit with its code, saves its desired state and process identity whenever they change, and takes back the process an earlier supervisor started while that identity still matches.
  */
 
 #ifndef AMBROSE_MANAGEDAPP_H
@@ -84,6 +84,8 @@ struct AppSnapshot
     bool Adopted = false;
     int64 StartedEpochMs = 0;
     int64 ReadyEpochMs = 0;
+    std::string StartStage;
+    int64 StartUntilEpochMs = 0;
     bool AdminEnabled = false;
     std::string AdminHost;
     uint16 AdminPort = 0;
@@ -115,6 +117,7 @@ public:
     static constexpr std::chrono::milliseconds FirstHealthDelay{ 200 };
     static constexpr std::chrono::milliseconds HealthInterval{ 500 };
     static constexpr std::chrono::milliseconds HealthTimeout{ 1000 };
+    static constexpr std::chrono::hours MaxStartGrant{ 6 };
     static constexpr std::chrono::milliseconds ShutdownRequestTimeout{ 5000 };
     static constexpr uint32 MaxCountdownSeconds = 86400;
     static constexpr std::size_t MaxExits = 20;
@@ -159,6 +162,7 @@ private:
     void CheckReady(std::vector<OutputLine> const& lines);
     void CheckHealth();
     void MarkReady(std::string const& reason);
+    std::string StartLate(std::string const& stage) const;
     void OnExit();
     void LoadAdmin();
     void FetchIdentity();
@@ -187,6 +191,7 @@ private:
 
     ChildProcessHandle _process;
     Clock::time_point _startedAt{};
+    Clock::time_point _startGrantedUntil{};
     Clock::time_point _nextHealth{};
     Clock::time_point _interruptAt{};
     Clock::time_point _endAt{};

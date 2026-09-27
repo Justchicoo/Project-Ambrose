@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The supervisor's apps and its admin routes: it builds each app from the definitions and the saved state, watches them until it stops, which leaves them running for the next supervisor to take back, answers GET /api/apps with itself and every app in the one list shape the panel reads, GET /api/supervisor with each app's state, exits and stop in progress, POST /api/apps/{name}/power to start, stop, restart or kill one with a countdown, GET /api/apps/{name}/output/current and /previous with its captured output, and relays any other /api/apps/{name}/api/... request to that app's own admin API with the app's token and the request's id, so the browser never talks to an app directly.
+ * The supervisor's apps and its admin routes: it builds each app from the definitions and the saved state, watches them until it stops, which leaves them running for the next supervisor to take back, answers GET /api/apps with itself and every app in the one list shape the panel reads, GET /api/supervisor with each app's state, exits and stop in progress, POST /api/apps/{name}/power to start, stop, restart or kill one with a countdown, GET /api/apps/{name}/output/current and /previous with its captured output, and relays any other /api/apps/{name}/api/... request to that app's own admin API with the app's token, the request's id and query, and for a settings route the caller's name and the rights they hold, so the app records who changed what and never grants more than the panel would, while a settings batch is charged its cost here and every relayed settings or reload answer is handed to the panel's record; the browser never talks to an app directly.
  */
 
 #ifndef AMBROSE_SUPERVISOR_H
@@ -48,6 +48,21 @@ struct SupervisorSettings
     static SupervisorSettings Load(ConfigMgr const& config, std::filesystem::path dataFolder, std::filesystem::path programFolder, std::filesystem::path workingFolder, std::vector<std::string>& problems);
 };
 
+struct RelayedAnswer
+{
+    std::string App;
+    std::string Method;
+    std::string Path;
+    int Status = 0;
+    std::string Body;
+};
+
+struct SupervisorRelayHooks
+{
+    std::function<std::string(AdminRequest const&)> NameOf;
+    std::function<void(AdminRequest const&, RelayedAnswer const&)> Relayed;
+};
+
 class Supervisor
 {
 public:
@@ -65,6 +80,10 @@ public:
     void Register(AdminRouter& router, std::function<AdminStatusSnapshot()> self);
     void SetAuditRecorder(SupervisorAuditRecorder recorder);
     void SetCommandContext(SupervisorCommandLevel level, SupervisorActorName actor);
+    void SetRelayHooks(SupervisorRelayHooks hooks);
+    static std::vector<std::pair<std::string, std::string>> ForwardedHeaders(AdminRequest const& request, AdminRouter const& router, std::string_view method, std::string_view tail,
+        std::string_view permission, std::string const& name);
+    static std::string QueryString(AdminRequest const& request);
     std::vector<std::pair<std::string, std::string>> CollectErrorReports();
     static std::optional<std::string_view> PermissionFor(std::string_view method, std::string_view tail) noexcept;
     static std::optional<AdminResponse> Refuse(AdminRequest const& request, std::string_view permission, AdminRouter const& router);
@@ -84,8 +103,9 @@ private:
     AdminResponse AnswerCore(AdminRequest const& request, AdminRouter const& router);
     AdminResponse Audited(AdminRequest const& request, std::string_view app, std::string_view action, std::function<AdminResponse()> operation);
     AdminResponse PowerRoute(ManagedApp& app, AdminRequest const& request, AdminRouter const& router);
-    AdminResponse Relay(ManagedApp& app, AdminRequest const& request, std::string_view path);
-    AdminResponse Forward(ManagedApp& app, AdminRequest const& request, std::string_view path, std::chrono::milliseconds timeout);
+    AdminResponse Relay(ManagedApp& app, AdminRequest const& request, std::string_view path, std::vector<std::pair<std::string, std::string>> headers = {});
+    AdminResponse Forward(ManagedApp& app, AdminRequest const& request, std::string_view path, std::chrono::milliseconds timeout,
+        std::vector<std::pair<std::string, std::string>> headers);
     ManagedApp* Find(std::string_view name) const;
 
     Log& _log;
@@ -96,6 +116,7 @@ private:
     SupervisorAuditRecorder _auditRecorder;
     SupervisorCommandLevel _commandLevel;
     SupervisorActorName _actorName;
+    SupervisorRelayHooks _hooks;
 };
 
 #endif

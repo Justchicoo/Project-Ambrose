@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The live settings registry (sSettings): every tunable value is declared once with its type, default, bounds, unit, category, description and apply mode, and resolves through the layers doc/config/README.md gives, the declaration, the shipped and local config files, the value persisted in the database the app owns, then an AMBROSE_ environment variable or a command-line override, which lock the key; the persisted values that pass their checks are also handed to ConfigMgr as its live layer, so every reader of an option sees a live value and every config change hook fires for it. Readers take one atomic snapshot, and a key the table declares but this app has not yet declared reads as its declared default; a set or reset is refused before anything is written when the key is unknown or locked or the value is of the wrong type or out of bounds, and otherwise is persisted and audited in one step before the snapshot moves; each change is queued once and handed to subscribers on the thread that dispatches them, the world thread on the game server.
+ * The live settings registry (sSettings): every tunable value is declared once with its type, default, bounds, unit, category, description and apply mode, and resolves through the layers doc/config/README.md gives, the declaration, the shipped and local config files, the value persisted in the database the app owns, then an AMBROSE_ environment variable or a command-line override, which lock the key; the persisted values that pass their checks are also handed to ConfigMgr as its live layer, so every reader of an option sees a live value and every config change hook fires for it. Readers take one atomic snapshot, and a key the table declares but this app has not yet declared reads as its declared default; a set, reset or batch is refused before anything is written when a key is unknown, named twice or locked, a value is of the wrong type or out of bounds, or a check registered for the key refuses it with the values proposed beside it in view, every problem of a batch being named, and otherwise is persisted and audited in one step, a batch in one transaction, before the snapshot moves; a secret is masked in every message and audit row; each change is queued once and handed to subscribers on the thread that dispatches them, the world thread on the game server, and handed at once to watchers on the thread that wrote it.
  */
 
 #ifndef AMBROSE_SETTINGS_H
@@ -17,6 +17,7 @@
 #include <mutex>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -46,10 +47,24 @@ enum class SettingLayer : uint8
 {
     Declared,
     Shipped,
+    ShippedModule,
     Config,
+    ModuleConfig,
     Live,
     Environment,
     Override
+};
+
+enum class SettingVisibility : uint8
+{
+    Normal,
+    Secret
+};
+
+enum class SettingEditClass : uint8
+{
+    Normal,
+    Restricted
 };
 
 namespace SettingApps
@@ -73,6 +88,8 @@ struct SettingDeclaration
     SettingApply Apply = SettingApply::Live;
     std::string RestartReason;
     uint8 Apps = 0;
+    SettingVisibility Visibility = SettingVisibility::Normal;
+    SettingEditClass Edit = SettingEditClass::Normal;
 };
 
 using SettingValue = std::variant<bool, int64, uint64, double, std::string>;
@@ -122,6 +139,9 @@ struct SettingChange
     std::string Key;
     std::string OldValue;
     std::string NewValue;
+    SettingAuthor Author;
+    std::string Reason;
+    int64 EpochSeconds = 0;
 };
 
 enum class SettingResult : uint8
@@ -132,6 +152,8 @@ enum class SettingResult : uint8
     WrongType,
     OutOfBounds,
     Locked,
+    Invalid,
+    Duplicate,
     NotStarted,
     StoreFailed
 };
@@ -144,6 +166,26 @@ struct SettingOutcome
     bool Ok() const noexcept { return Result == SettingResult::Ok; }
 };
 
+struct SettingProblem
+{
+    std::string Key;
+    SettingResult Result = SettingResult::Ok;
+    std::string Message;
+};
+
+struct SettingBatchOutcome
+{
+    SettingResult Result = SettingResult::Ok;
+    std::vector<SettingProblem> Problems;
+    std::vector<SettingChange> Changes;
+    std::vector<std::string> Unchanged;
+    std::string Message;
+
+    bool Ok() const noexcept { return Result == SettingResult::Ok || Result == SettingResult::Unchanged; }
+};
+
+using SettingEntry = std::pair<std::string, std::string>;
+
 class SettingStore
 {
 public:
@@ -151,17 +193,20 @@ public:
 
     virtual bool Load(std::map<std::string, std::string, std::less<>>& values, std::string& error) = 0;
     virtual bool Write(SettingWrite const& write, std::string& error) = 0;
+    virtual bool WriteMany(std::span<SettingWrite const> writes, std::string& error) = 0;
     virtual bool History(std::string const& key, std::size_t limit, std::vector<SettingAuditEntry>& entries, std::string& error) = 0;
 };
 
 class Settings
 {
 public:
-    static constexpr std::size_t MaxValueBytes = 1024;
+    static constexpr std::size_t MaxValueBytes = 65535;
     static constexpr std::size_t MaxReasonBytes = 255;
     static constexpr std::size_t HistoryLimit = 20;
 
     using ChangeHandler = std::function<void(SettingChange const&)>;
+    using ProposedValue = std::function<std::string(std::string_view key)>;
+    using Check = std::function<std::optional<std::string>(std::string_view value, ProposedValue const& proposed)>;
 
     static Settings& Instance();
 
@@ -186,10 +231,17 @@ public:
 
     SettingOutcome Set(std::string_view key, std::string_view value, SettingAuthor const& author, std::string_view reason);
     SettingOutcome Reset(std::string_view key, SettingAuthor const& author, std::string_view reason);
+    SettingBatchOutcome SetMany(std::span<SettingEntry const> entries, SettingAuthor const& author, std::string_view reason);
+    std::vector<SettingProblem> Validate(std::span<SettingEntry const> entries) const;
     bool History(std::string_view key, std::vector<SettingAuditEntry>& entries, std::string& error) const;
+    bool AddCheck(std::string key, Check check);
+    bool IsSecret(std::string_view key) const;
+    std::string Shown(std::string_view key, std::string_view value) const;
 
     uint64 Subscribe(ChangeHandler handler);
     void Unsubscribe(uint64 token);
+    uint64 Watch(ChangeHandler handler);
+    void Unwatch(uint64 token);
     std::size_t DispatchChanges();
     std::size_t GetPendingChangeCount() const;
 
@@ -198,6 +250,10 @@ public:
     static std::string_view TypeName(SettingType type) noexcept;
     static std::string_view ApplyName(SettingApply apply) noexcept;
     static std::string_view LayerName(SettingLayer layer) noexcept;
+    static std::string_view LayerCode(SettingLayer layer) noexcept;
+    static std::string_view VisibilityName(SettingVisibility visibility) noexcept;
+    static std::string_view EditClassName(SettingEditClass edit) noexcept;
+    static std::string_view ResultCode(SettingResult result) noexcept;
     static std::string DescribeBounds(SettingDeclaration const& declaration);
 
 private:
@@ -226,6 +282,8 @@ private:
     Resolved ResolveOne(Declared const& declared, std::map<std::string, std::string, std::less<>> const& persisted, std::vector<std::string>* warnings) const;
     std::optional<SettingOutcome> CheckValue(Declared const& declared, std::string_view text, SettingValue& parsed) const;
     std::optional<std::string> LockedBy(std::string_view key, Resolved const& current) const;
+    std::vector<SettingProblem> ValidateLocked(std::span<SettingEntry const> entries, std::map<std::string, std::string, std::less<>>& normalised) const;
+    void Notify(std::vector<SettingChange> const& changes);
     void Publish(std::map<std::string, Resolved, std::less<>> values, std::vector<SettingChange> changes);
     std::map<std::string, std::string> LiveValues() const;
     void PushLive(ConfigMgr* config, std::map<std::string, std::string> values);
@@ -243,9 +301,12 @@ private:
     std::shared_ptr<SettingStore> _store;
     ReloadableStore<Snapshot> _snapshot;
 
+    std::map<std::string, std::vector<Check>, std::less<>> _checks;
+
     mutable std::mutex _changeMutex;
     std::vector<SettingChange> _changes;
     std::map<uint64, ChangeHandler> _subscribers;
+    std::map<uint64, ChangeHandler> _watchers;
     uint64 _nextSubscriber = 1;
 
     mutable std::mutex _misuseMutex;

@@ -260,11 +260,16 @@ TEST_F(LogStreamSocketTest, ASensitiveCommandAndASecretSettingChangeStreamRedact
 
     AdminTest::SocketClient client;
     ASSERT_TRUE(Subscribe(client, running.Port(), "{}"));
+    std::vector<nlohmann::json> messages = ReadUntil(client, [](nlohmann::json const& message)
+    {
+        return message.value("type", "") == "record" && message.value("message", "").starts_with("Setting Admin.Token changed to");
+    });
     AMBROSE_LOG(log, LogLevel::Info, "stream.test", "the end of the redaction check");
+    std::vector<nlohmann::json> const rest = ReadUntil(client, [](nlohmann::json const& message) { return IsRecordSaying(message, "the end of the redaction check"); });
+    messages.insert(messages.end(), rest.begin(), rest.end());
 
     bool sawCommand = false;
     bool sawSetting = false;
-    std::vector<nlohmann::json> const messages = ReadUntil(client, [](nlohmann::json const& message) { return IsRecordSaying(message, "the end of the redaction check"); });
     for (nlohmann::json const& record : Records(messages))
     {
         std::string const text = record.value("message", "");

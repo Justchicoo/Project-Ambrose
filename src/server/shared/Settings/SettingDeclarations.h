@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Every live setting any app declares, in one table: each names the apps that read it, so an app declares only its own and doc/config/settings.md is written from the whole table.
+ * Every live setting any app declares, in one table: each names the apps that read it and whether it is secret or restricted, so an app declares only its own, doc/config/settings.md is written from the whole table, and which settings are secret is answered from it alone.
  */
 
 #ifndef AMBROSE_SETTINGDECLARATIONS_H
@@ -16,6 +16,7 @@ namespace SettingDeclarations
 {
     std::vector<SettingDeclaration> const& All();
     SettingDeclaration const* Find(std::string_view key);
+    bool IsSecret(std::string_view key);
     std::string RenderDocument();
 }
 

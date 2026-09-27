@@ -1,12 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * The table of live settings with the default, bounds and unit each reader already used, grouped by category, and the page doc/config/settings.md is: one table per category, with the apps that read each setting and when a change takes hold.
+ * The table of live settings with the default, bounds and unit each reader already used, grouped by category, and the page doc/config/settings.md is: one table per category, with the apps that read each setting, when a change takes hold and who may see and change it; the secrets are the table's secret settings and the options only config holds, the admin token and the database connection strings.
  */
 
 #include "SettingDeclarations.h"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
+
+#include "StringUtil.h"
 
 #include <algorithm>
 #include <map>
@@ -39,6 +41,23 @@ namespace
     SettingDeclaration Text(std::string key, std::string defaultValue, std::string maxBytes, std::string category, uint8 apps, SettingApply apply, std::string description)
     {
         return { std::move(key), SettingType::String, std::move(defaultValue), {}, std::move(maxBytes), {}, std::move(category), std::move(description), apply, {}, apps };
+    }
+
+    SettingDeclaration Secret(SettingDeclaration declaration)
+    {
+        declaration.Visibility = SettingVisibility::Secret;
+        return declaration;
+    }
+
+    SettingDeclaration Restricted(SettingDeclaration declaration)
+    {
+        declaration.Edit = SettingEditClass::Restricted;
+        return declaration;
+    }
+
+    bool EndsWithIgnoreCase(std::string_view text, std::string_view suffix)
+    {
+        return text.size() >= suffix.size() && Ambrose::EqualsIgnoreCase(text.substr(text.size() - suffix.size()), suffix);
     }
 
     std::vector<SettingDeclaration> Build()
@@ -107,6 +126,15 @@ namespace
             Float("Rate.Gold.Kill", "1", "0", "100", "times", "Rates", Game, Live, "Multiplies the gold a defeated creature drops."),
             Float("Rate.Drop.Item", "1", "0", "100", "times", "Rates", Game, Live, "Multiplies the chance of each item a defeated creature may drop."),
             Float("Rate.Respawn", "1", "0.1", "100", "times", "Rates", Game, Live, "Multiplies how long a defeated creature takes to return."),
+
+            Unsigned("Account.UsernameMinLength", "3", "1", "32", "characters", "Accounts", Login, NextUse, "The shortest username a new account may use."),
+            Unsigned("Account.PasswordMinLength", "4", "1", "128", "characters", "Accounts", Login, NextUse, "The fewest characters a new or changed password may have."),
+            Restricted(Secret(Text("Account.VerifierKeys", "", "65535", "Accounts", Login, NextUse,
+                "The AES-256 keys that seal stored password verifiers, written id:hex with ids 1 to 255 and 64 hex digits each, separated by commas; keep every key that still seals a stored verifier."))),
+            Restricted(Unsigned("Account.VerifierActiveKey", "0", "0", "255", "", "Accounts", Login, NextUse,
+                "The key id that seals new and changed verifiers, which Account.VerifierKeys must list; 0 stores them unencrypted and is refused while keys are listed.")),
+            Restricted(Flag("Account.AllowPlainVerifiers", "true", "Accounts", Login, NextUse,
+                "Whether an account whose verifier is still unencrypted may log in while a verifier key is active.")),
         };
         std::sort(table.begin(), table.end(), [](SettingDeclaration const& left, SettingDeclaration const& right) { return left.Key < right.Key; });
         return table;
@@ -122,6 +150,15 @@ namespace
         if (apps & SettingApps::Patch)
             names.push_back("patchserver");
         return fmt::format("{}", fmt::join(names, ", "));
+    }
+
+    std::string Access(SettingDeclaration const& declaration)
+    {
+        bool const secret = declaration.Visibility == SettingVisibility::Secret;
+        bool const restricted = declaration.Edit == SettingEditClass::Restricted;
+        if (secret && restricted)
+            return "secret, restricted";
+        return secret ? "secret" : restricted ? "restricted" : "normal";
     }
 
     std::string Cell(std::string_view text)
@@ -147,6 +184,21 @@ SettingDeclaration const* SettingDeclarations::Find(std::string_view key)
     return found != table.end() && found->Key == key ? &*found : nullptr;
 }
 
+bool SettingDeclarations::IsSecret(std::string_view key)
+{
+    static std::vector<std::string> const secrets = []
+    {
+        std::vector<std::string> keys;
+        for (SettingDeclaration const& declaration : All())
+            if (declaration.Visibility == SettingVisibility::Secret)
+                keys.push_back(declaration.Key);
+        return keys;
+    }();
+    if (Ambrose::EqualsIgnoreCase(key, "Admin.Token") || EndsWithIgnoreCase(key, "DatabaseInfo"))
+        return true;
+    return std::any_of(secrets.begin(), secrets.end(), [key](std::string const& secret) { return Ambrose::EqualsIgnoreCase(secret, key); });
+}
+
 std::string SettingDeclarations::RenderDocument()
 {
     std::map<std::string, std::vector<SettingDeclaration const*>> byCategory;
@@ -159,18 +211,21 @@ std::string SettingDeclarations::RenderDocument()
             "config value with `settings reset`. A change is checked against the type and bounds below, persisted in the `settings` table of the database the app owns "
             "(`characters` for the game server, `login` for the login server), and written to `setting_audit` with who made it and why. A setting also set by an "
             "`AMBROSE_` environment variable or a command-line override is locked and cannot be changed live. The layers are described in [README.md](README.md).\n\n";
-    page += "Applies says when a change takes hold: live at once, or from the next connection or operation that reads it.\n";
+    page += "Applies says when a change takes hold: live at once, or from the next connection or operation that reads it.\n\n";
+    page += "Access says who may see and change a setting over the admin API and the panel. A secret's value is shown masked, in `setting_audit` too, unless the caller asks "
+            "for it with the right to see secrets, and every such reveal is audited. A restricted setting is one whose wrong value stops the app or locks players out, so "
+            "changing it takes its own right besides the right to change settings.\n";
     for (auto const& [category, declarations] : byCategory)
     {
         page += fmt::format("\n## {}\n\n", category);
-        page += "| Key | Type | Default | Bounds | Applies | Apps | What it does |\n";
-        page += "|---|---|---|---|---|---|---|\n";
+        page += "| Key | Type | Default | Bounds | Applies | Apps | Access | What it does |\n";
+        page += "|---|---|---|---|---|---|---|---|\n";
         for (SettingDeclaration const* declaration : declarations)
         {
             std::string const bounds = Settings::DescribeBounds(*declaration);
             std::string const unitDefault = declaration->Unit.empty() || declaration->Default.empty() ? declaration->Default : fmt::format("{} {}", declaration->Default, declaration->Unit);
-            page += fmt::format("| `{}` | {} | {} | {} | {} | {} | {} |\n", declaration->Key, Settings::TypeName(declaration->Type), Cell(unitDefault),
-                bounds.empty() ? std::string("none") : Cell(bounds), Settings::ApplyName(declaration->Apply), AppsOf(declaration->Apps), Cell(declaration->Description));
+            page += fmt::format("| `{}` | {} | {} | {} | {} | {} | {} | {} |\n", declaration->Key, Settings::TypeName(declaration->Type), Cell(unitDefault),
+                bounds.empty() ? std::string("none") : Cell(bounds), Settings::ApplyName(declaration->Apply), AppsOf(declaration->Apps), Access(*declaration), Cell(declaration->Description));
         }
     }
     return page;

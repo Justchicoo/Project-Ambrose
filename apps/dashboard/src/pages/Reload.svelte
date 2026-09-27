@@ -45,7 +45,9 @@
             await runReload(app, target);
             failure = "";
         } catch (problem) {
-            failure = problem instanceof ApiError ? problem.message : `${target} could not be reloaded`;
+            if (problem instanceof ApiError && problem.status === 409)
+                failure = `${target === "all" ? "A target" : target} was not reloaded, and what was serving goes on serving; the list names every error it found`;
+            else failure = problem instanceof ApiError ? problem.message : `${target} could not be reloaded`;
         } finally {
             running = "";
             ran += 1;

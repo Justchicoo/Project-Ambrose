@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the commands used by process and supervisor tests, with an optional # prefix for command lines in a config file and key-value settings ignored by the test program.
+ * Runs process and supervisor test commands from arguments or a config file, ignoring settings except Helper.Script values and supporting # prefixed command lines when a config file also carries test-specific settings.
  */
 
 #include "ChildProcess.h"
@@ -233,10 +233,33 @@ int main(int argc, char** argv)
             if (!line.empty() && line.back() == '\r')
                 line.pop_back();
             if (!line.empty() && line.front() == '#')
-                line.erase(0, 1);
-            else if (line.find('=') != std::string::npos)
+            {
+                expanded.push_back(line.substr(1));
                 continue;
-            expanded.push_back(line);
+            }
+            std::size_t const equals = line.find('=');
+            if (equals == std::string::npos)
+            {
+                expanded.push_back(line);
+                continue;
+            }
+            std::string key = line.substr(0, equals);
+            while (!key.empty() && key.back() == ' ')
+                key.pop_back();
+            if (key != "Helper.Script")
+                continue;
+            std::string const words = line.substr(equals + 1);
+            std::size_t start = 0;
+            while (start < words.size())
+            {
+                std::size_t const space = words.find(' ', start);
+                std::string const word = words.substr(start, space == std::string::npos ? std::string::npos : space - start);
+                if (!word.empty())
+                    expanded.push_back(word);
+                if (space == std::string::npos)
+                    break;
+                start = space + 1;
+            }
         }
         expanded.insert(expanded.end(), arguments.begin() + 3, arguments.end());
         arguments = std::move(expanded);

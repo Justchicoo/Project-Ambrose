@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Declares, resolves, sets and announces live settings: a declaration is checked whole before it is taken, a value is parsed by the declared type and held to the declared bounds whichever layer it comes from, a config or persisted value that fails is reported and the layer below it used, so a value a newer binary no longer accepts never stops an app from starting; a set or reset holds one lock from the check through the write to the store to the new snapshot, so two edits of one key cannot interleave, and a change is queued once for the dispatching thread.
+ * Declares, resolves, sets and announces live settings: a declaration is checked whole before it is taken, a value is parsed by the declared type and held to the declared bounds whichever layer it comes from, a config or persisted value that fails is reported and the layer below it used, so a value a newer binary no longer accepts never stops an app from starting; a set, reset or batch holds one lock from the check through the write to the store to the new snapshot, so two edits of one key cannot interleave, a batch checks every entry before writing any and writes them in one store call, a secret's value is shown only as its mask in messages, log lines and the audit rows the store keeps, and a change is queued once for the dispatching thread and told to watchers as soon as the write's locks are let go.
  */
 
 #include "Settings.h"
 #include "ConfigMgr.h"
 #include "Log.h"
+#include "LogRedaction.h"
 #include "SettingDeclarations.h"
 #include "StringUtil.h"
 
@@ -82,11 +83,13 @@ namespace
         switch (kind)
         {
             case ConfigSourceKind::Default:
-            case ConfigSourceKind::ModuleDefault:
                 return SettingLayer::Shipped;
+            case ConfigSourceKind::ModuleDefault:
+                return SettingLayer::ShippedModule;
             case ConfigSourceKind::Config:
-            case ConfigSourceKind::ModuleConfig:
                 return SettingLayer::Config;
+            case ConfigSourceKind::ModuleConfig:
+                return SettingLayer::ModuleConfig;
             case ConfigSourceKind::Live:
                 return SettingLayer::Live;
             case ConfigSourceKind::Environment:
@@ -109,6 +112,13 @@ namespace
                 return fmt::format(", which applies after a restart because {}", declaration.RestartReason);
         }
         return {};
+    }
+
+    std::string ShownFor(SettingDeclaration const& declaration, std::string_view value)
+    {
+        if (declaration.Visibility == SettingVisibility::Secret)
+            return LogRedaction::MaskSecretValue(declaration.Key, value);
+        return std::string(value);
     }
 }
 
@@ -201,8 +211,12 @@ std::string_view Settings::LayerName(SettingLayer layer) noexcept
             return "declared default";
         case SettingLayer::Shipped:
             return "shipped default";
+        case SettingLayer::ShippedModule:
+            return "shipped module default";
         case SettingLayer::Config:
             return "config";
+        case SettingLayer::ModuleConfig:
+            return "module config";
         case SettingLayer::Live:
             return "live";
         case SettingLayer::Environment:
@@ -211,6 +225,68 @@ std::string_view Settings::LayerName(SettingLayer layer) noexcept
             return "command-line override";
     }
     return "unknown";
+}
+
+std::string_view Settings::LayerCode(SettingLayer layer) noexcept
+{
+    switch (layer)
+    {
+        case SettingLayer::Declared:
+            return "declared";
+        case SettingLayer::Shipped:
+            return "default";
+        case SettingLayer::ShippedModule:
+            return "module_default";
+        case SettingLayer::Config:
+            return "config";
+        case SettingLayer::ModuleConfig:
+            return "module_config";
+        case SettingLayer::Live:
+            return "live";
+        case SettingLayer::Environment:
+            return "environment";
+        case SettingLayer::Override:
+            return "override";
+    }
+    return "config";
+}
+
+std::string_view Settings::VisibilityName(SettingVisibility visibility) noexcept
+{
+    return visibility == SettingVisibility::Secret ? "secret" : "normal";
+}
+
+std::string_view Settings::EditClassName(SettingEditClass edit) noexcept
+{
+    return edit == SettingEditClass::Restricted ? "restricted" : "normal";
+}
+
+std::string_view Settings::ResultCode(SettingResult result) noexcept
+{
+    switch (result)
+    {
+        case SettingResult::Ok:
+            return "ok";
+        case SettingResult::Unchanged:
+            return "unchanged";
+        case SettingResult::UnknownKey:
+            return "unknown";
+        case SettingResult::WrongType:
+            return "wrong_type";
+        case SettingResult::OutOfBounds:
+            return "out_of_bounds";
+        case SettingResult::Locked:
+            return "locked";
+        case SettingResult::Invalid:
+            return "invalid";
+        case SettingResult::Duplicate:
+            return "duplicate";
+        case SettingResult::NotStarted:
+            return "not_started";
+        case SettingResult::StoreFailed:
+            return "store_failed";
+    }
+    return "invalid";
 }
 
 std::string Settings::DescribeBounds(SettingDeclaration const& declaration)
@@ -339,9 +415,9 @@ std::optional<SettingOutcome> Settings::CheckValue(Declared const& declared, std
     std::optional<SettingValue> const value = Parse(declaration.Type, text);
     if (!value)
         return SettingOutcome{ SettingResult::WrongType, fmt::format("{} takes {}{}; '{}' is not one", declaration.Key, TypePhrase(declaration.Type),
-            bounds.empty() ? std::string() : " " + bounds, Ambrose::ForLog(text, 128)) };
+            bounds.empty() ? std::string() : " " + bounds, Ambrose::ForLog(ShownFor(declaration, text), 128)) };
     if ((declared.Min && Less(*value, *declared.Min)) || (declared.Max && Less(*declared.Max, *value)))
-        return SettingOutcome{ SettingResult::OutOfBounds, fmt::format("{} must be {}; {} is outside that", declaration.Key, bounds, Format(*value)) };
+        return SettingOutcome{ SettingResult::OutOfBounds, fmt::format("{} must be {}; {} is outside that", declaration.Key, bounds, ShownFor(declaration, Format(*value))) };
     parsed = *value;
     return std::nullopt;
 }
@@ -356,7 +432,7 @@ Settings::Resolved Settings::ResolveOne(Declared const& declared, std::map<std::
         if (std::optional<SettingOutcome> const refusal = CheckValue(declared, text, parsed))
         {
             if (warnings)
-                warnings->push_back(fmt::format("{} from {} is refused ({}); using {} from {}", key, origin, refusal->Message, resolved.Text, resolved.Origin));
+                warnings->push_back(fmt::format("{} from {} is refused ({}); using {} from {}", key, origin, refusal->Message, ShownFor(declared.Declaration, resolved.Text), resolved.Origin));
             return;
         }
         resolved = Resolved{ parsed, Format(parsed), layer, std::move(origin) };
@@ -437,24 +513,25 @@ void Settings::PushLive(ConfigMgr* config, std::map<std::string, std::string> va
 void Settings::Resolve()
 {
     std::vector<std::string> warnings;
+    std::vector<SettingChange> changes;
     {
         std::lock_guard const lock(_writeMutex);
         if (!_config)
             return;
         ReloadableStore<Snapshot>::Snapshot const current = _snapshot.Get();
         std::map<std::string, Resolved, std::less<>> values;
-        std::vector<SettingChange> changes;
         for (auto const& [key, declared] : _declared)
         {
             Resolved next = ResolveOne(declared, _persisted, &warnings);
             if (auto const before = current->Values.find(key); before != current->Values.end() && before->second.Text != next.Text)
-                changes.push_back({ key, before->second.Text, next.Text });
+                changes.push_back({ key, before->second.Text, next.Text, SettingAuthor{ {}, 0, "config" }, "the configuration changed", NowEpochSeconds() });
             values[key] = std::move(next);
         }
-        Publish(std::move(values), std::move(changes));
+        Publish(std::move(values), changes);
     }
     for (std::string const& warning : warnings)
         LOG_WARN(SettingsLog, "{}", warning);
+    Notify(changes);
 }
 
 void Settings::Clear()
@@ -465,12 +542,14 @@ void Settings::Clear()
         _persisted.clear();
         _config = nullptr;
         _store.reset();
+        _checks.clear();
         _snapshot.Replace(Snapshot{});
     }
     {
         std::lock_guard const lock(_changeMutex);
         _changes.clear();
         _subscribers.clear();
+        _watchers.clear();
     }
     std::lock_guard const lock(_misuseMutex);
     _misused.clear();
@@ -524,56 +603,184 @@ std::vector<SettingDeclaration> Settings::GetDeclarations() const
     return declarations;
 }
 
-SettingOutcome Settings::Set(std::string_view key, std::string_view value, SettingAuthor const& author, std::string_view reason)
+std::vector<SettingProblem> Settings::ValidateLocked(std::span<SettingEntry const> entries, std::map<std::string, std::string, std::less<>>& normalised) const
+{
+    std::vector<SettingProblem> problems;
+    ReloadableStore<Snapshot>::Snapshot const snapshot = _snapshot.Get();
+    std::set<std::string, std::less<>> named;
+    std::vector<std::string> accepted;
+    for (auto const& [key, value] : entries)
+    {
+        auto const declared = _declared.find(key);
+        if (declared == _declared.end())
+        {
+            problems.push_back({ key, SettingResult::UnknownKey, fmt::format("No setting is named {}", Ambrose::ForLog(key, 128)) });
+            continue;
+        }
+        if (!named.insert(declared->first).second)
+        {
+            problems.push_back({ key, SettingResult::Duplicate, fmt::format("{} is named more than once, so which value was meant is unclear", key) });
+            continue;
+        }
+        if (!_store)
+        {
+            problems.push_back({ key, SettingResult::NotStarted, fmt::format("{} cannot be set yet, because this app has not opened its settings", key) });
+            continue;
+        }
+        if (std::optional<std::string> locked = LockedBy(key, snapshot->Values.at(declared->first)))
+        {
+            problems.push_back({ key, SettingResult::Locked, std::move(*locked) });
+            continue;
+        }
+        SettingValue parsed;
+        if (std::optional<SettingOutcome> const refusal = CheckValue(declared->second, value, parsed))
+        {
+            problems.push_back({ key, refusal->Result, refusal->Message });
+            continue;
+        }
+        normalised[declared->first] = Format(parsed);
+        accepted.push_back(declared->first);
+    }
+    ProposedValue const proposed = [&normalised, &snapshot](std::string_view key) -> std::string
+    {
+        if (auto const found = normalised.find(key); found != normalised.end())
+            return found->second;
+        if (auto const current = snapshot->Values.find(key); current != snapshot->Values.end())
+            return current->second.Text;
+        SettingDeclaration const* const declaration = SettingDeclarations::Find(key);
+        return declaration ? declaration->Default : std::string();
+    };
+    for (std::string const& key : accepted)
+    {
+        auto const checks = _checks.find(key);
+        if (checks == _checks.end())
+            continue;
+        for (Check const& check : checks->second)
+        {
+            std::optional<std::string> refusal;
+            try
+            {
+                refusal = check(normalised.at(key), proposed);
+            }
+            catch (std::exception const& failure)
+            {
+                refusal = fmt::format("{} could not be checked: {}", key, failure.what());
+            }
+            if (refusal)
+                problems.push_back({ key, SettingResult::Invalid, std::move(*refusal) });
+        }
+    }
+    for (SettingProblem const& problem : problems)
+        normalised.erase(problem.Key);
+    return problems;
+}
+
+std::vector<SettingProblem> Settings::Validate(std::span<SettingEntry const> entries) const
+{
+    std::lock_guard const lock(_writeMutex);
+    std::map<std::string, std::string, std::less<>> normalised;
+    return ValidateLocked(entries, normalised);
+}
+
+SettingBatchOutcome Settings::SetMany(std::span<SettingEntry const> entries, SettingAuthor const& author, std::string_view reason)
 {
     std::lock_guard const push(_pushMutex);
-    SettingChange change;
-    SettingOutcome outcome;
+    SettingBatchOutcome outcome;
     std::map<std::string, std::string> live;
     ConfigMgr* config = nullptr;
     {
         std::lock_guard const lock(_writeMutex);
-        auto const declared = _declared.find(key);
-        if (declared == _declared.end())
-            return { SettingResult::UnknownKey, fmt::format("No setting is named {}", Ambrose::ForLog(key, 128)) };
-        if (!_store)
-            return { SettingResult::NotStarted, fmt::format("{} cannot be set yet, because this app has not opened its settings", key) };
+        if (entries.empty())
+        {
+            outcome.Result = SettingResult::Unchanged;
+            outcome.Message = "No setting was named, so nothing changed";
+            return outcome;
+        }
+        std::map<std::string, std::string, std::less<>> normalised;
+        outcome.Problems = ValidateLocked(entries, normalised);
+        if (!outcome.Problems.empty())
+        {
+            outcome.Result = outcome.Problems.front().Result;
+            outcome.Message = entries.size() == 1 ? outcome.Problems.front().Message
+                                                  : fmt::format("{} of the {} settings were refused, so none of them changed", outcome.Problems.size(), entries.size());
+            return outcome;
+        }
+
         ReloadableStore<Snapshot>::Snapshot const snapshot = _snapshot.Get();
-        Resolved const& current = snapshot->Values.at(declared->first);
-        if (std::optional<std::string> locked = LockedBy(key, current))
-            return { SettingResult::Locked, std::move(*locked) };
-        SettingValue parsed;
-        if (std::optional<SettingOutcome> refusal = CheckValue(declared->second, value, parsed))
-            return std::move(*refusal);
-        std::string const text = Format(parsed);
-        if (text == current.Text)
-            return { SettingResult::Unchanged, fmt::format("{} is already {}, from {}", key, text, current.Origin) };
-
-        SettingWrite write;
-        write.Key = declared->first;
-        write.Persisted = text;
-        write.OldValue = current.Text;
-        write.NewValue = text;
-        write.Author = author;
-        write.Reason = std::string(Ambrose::TruncateUtf8(Ambrose::Trim(reason), MaxReasonBytes));
-        write.EpochSeconds = NowEpochSeconds();
+        std::string const why(Ambrose::TruncateUtf8(Ambrose::Trim(reason), MaxReasonBytes));
+        int64 const now = NowEpochSeconds();
+        std::vector<SettingWrite> writes;
+        for (auto const& [key, value] : entries)
+        {
+            auto const declared = _declared.find(key);
+            std::string const& text = normalised.at(declared->first);
+            Resolved const& current = snapshot->Values.at(declared->first);
+            if (text == current.Text)
+            {
+                outcome.Unchanged.push_back(declared->first);
+                continue;
+            }
+            SettingWrite write;
+            write.Key = declared->first;
+            write.Persisted = text;
+            write.OldValue = ShownFor(declared->second.Declaration, current.Text);
+            write.NewValue = ShownFor(declared->second.Declaration, text);
+            write.Author = author;
+            write.Reason = why;
+            write.EpochSeconds = now;
+            writes.push_back(std::move(write));
+        }
+        if (writes.empty())
+        {
+            outcome.Result = SettingResult::Unchanged;
+            outcome.Message = entries.size() == 1 ? fmt::format("{} already holds that value", entries.front().first) : "Every setting already holds the value given, so nothing changed";
+            return outcome;
+        }
         std::string error;
-        if (!_store->Write(write, error))
-            return { SettingResult::StoreFailed, fmt::format("{} was not changed, because the settings table could not be written: {}", key, error) };
+        bool const written = writes.size() == 1 ? _store->Write(writes.front(), error) : _store->WriteMany(writes, error);
+        if (!written)
+        {
+            outcome.Result = SettingResult::StoreFailed;
+            outcome.Message = fmt::format("{} not changed, because the settings table could not be written: {}",
+                writes.size() == 1 ? writes.front().Key + " was" : std::string("Nothing was"), error);
+            return outcome;
+        }
 
-        _persisted[declared->first] = text;
+        for (SettingWrite const& write : writes)
+            _persisted[write.Key] = *write.Persisted;
         std::map<std::string, Resolved, std::less<>> values = snapshot->Values;
-        values[declared->first] = ResolveOne(declared->second, _persisted, nullptr);
-        change = { declared->first, current.Text, text };
-        outcome = { SettingResult::Ok, fmt::format("{} is now {}{}", key, text, ApplyNote(declared->second.Declaration)) };
-        Publish(std::move(values), { change });
+        for (SettingWrite const& write : writes)
+        {
+            values[write.Key] = ResolveOne(_declared.at(write.Key), _persisted, nullptr);
+            outcome.Changes.push_back({ write.Key, snapshot->Values.at(write.Key).Text, *write.Persisted, author, why, now });
+        }
+        outcome.Result = SettingResult::Ok;
+        outcome.Message = fmt::format("{} setting{} changed", outcome.Changes.size(), outcome.Changes.size() == 1 ? "" : "s");
+        Publish(std::move(values), outcome.Changes);
         live = LiveValues();
         config = _config;
     }
     PushLive(config, std::move(live));
-    LOG_INFO(SettingsLog, "{} set {} from {} to {} through {}{}", author.Who.empty() ? std::string("somebody unnamed") : author.Who, change.Key, change.OldValue, change.NewValue,
-        author.Source.empty() ? std::string("an unnamed source") : author.Source, reason.empty() ? std::string() : fmt::format(": {}", Ambrose::ForLog(reason, 255)));
+    for (SettingChange const& change : outcome.Changes)
+        LOG_INFO(SettingsLog, "{} set {} from {} to {} through {}{}", author.Who.empty() ? std::string("somebody unnamed") : author.Who, change.Key, Shown(change.Key, change.OldValue),
+            Shown(change.Key, change.NewValue), author.Source.empty() ? std::string("an unnamed source") : author.Source, reason.empty() ? std::string() : fmt::format(": {}", Ambrose::ForLog(reason, 255)));
+    Notify(outcome.Changes);
     return outcome;
+}
+
+SettingOutcome Settings::Set(std::string_view key, std::string_view value, SettingAuthor const& author, std::string_view reason)
+{
+    SettingEntry const entry{ std::string(key), std::string(value) };
+    SettingBatchOutcome const batch = SetMany(std::span<SettingEntry const>(&entry, 1), author, reason);
+    if (batch.Result != SettingResult::Ok && batch.Result != SettingResult::Unchanged)
+        return { batch.Result, batch.Message };
+    std::optional<SettingView> const view = Describe(key);
+    if (!view)
+        return { batch.Result, batch.Message };
+    std::string const shown = Shown(key, view->Value);
+    if (batch.Result == SettingResult::Unchanged)
+        return { SettingResult::Unchanged, fmt::format("{} is already {}, from {}", key, shown, view->Origin) };
+    return { SettingResult::Ok, fmt::format("{} is now {}{}", key, shown, ApplyNote(view->Declaration)) };
 }
 
 SettingOutcome Settings::Reset(std::string_view key, SettingAuthor const& author, std::string_view reason)
@@ -594,8 +801,9 @@ SettingOutcome Settings::Reset(std::string_view key, SettingAuthor const& author
         Resolved const& current = snapshot->Values.at(declared->first);
         if (std::optional<std::string> locked = LockedBy(key, current))
             return { SettingResult::Locked, std::move(*locked) };
+        SettingDeclaration const& declaration = declared->second.Declaration;
         if (!_persisted.contains(key))
-            return { SettingResult::Unchanged, fmt::format("{} has no live value to reset; it is {} from {}", key, current.Text, current.Origin) };
+            return { SettingResult::Unchanged, fmt::format("{} has no live value to reset; it is {} from {}", key, ShownFor(declaration, current.Text), current.Origin) };
 
         std::map<std::string, std::string, std::less<>> after = _persisted;
         after.erase(declared->first);
@@ -603,8 +811,8 @@ SettingOutcome Settings::Reset(std::string_view key, SettingAuthor const& author
 
         SettingWrite write;
         write.Key = declared->first;
-        write.OldValue = current.Text;
-        write.NewValue = next.Text;
+        write.OldValue = ShownFor(declaration, current.Text);
+        write.NewValue = ShownFor(declaration, next.Text);
         write.Author = author;
         write.Reason = std::string(Ambrose::TruncateUtf8(Ambrose::Trim(reason), MaxReasonBytes));
         write.EpochSeconds = NowEpochSeconds();
@@ -613,11 +821,11 @@ SettingOutcome Settings::Reset(std::string_view key, SettingAuthor const& author
             return { SettingResult::StoreFailed, fmt::format("{} was not reset, because the settings table could not be written: {}", key, error) };
 
         _persisted = std::move(after);
-        outcome = { SettingResult::Ok, fmt::format("{} is back to {} from {}{}", key, next.Text, next.Origin, ApplyNote(declared->second.Declaration)) };
+        outcome = { SettingResult::Ok, fmt::format("{} is back to {} from {}{}", key, ShownFor(declaration, next.Text), next.Origin, ApplyNote(declaration)) };
         std::vector<SettingChange> changes;
         if (next.Text != current.Text)
         {
-            change = SettingChange{ declared->first, current.Text, next.Text };
+            change = SettingChange{ declared->first, current.Text, next.Text, author, write.Reason, write.EpochSeconds };
             changes.push_back(*change);
         }
         std::map<std::string, Resolved, std::less<>> values = snapshot->Values;
@@ -628,8 +836,36 @@ SettingOutcome Settings::Reset(std::string_view key, SettingAuthor const& author
     }
     PushLive(config, std::move(live));
     LOG_INFO(SettingsLog, "{} reset {} through {}{}", author.Who.empty() ? std::string("somebody unnamed") : author.Who, key,
-        author.Source.empty() ? std::string("an unnamed source") : author.Source, change ? fmt::format(", from {} to {}", change->OldValue, change->NewValue) : std::string());
+        author.Source.empty() ? std::string("an unnamed source") : author.Source, change ? fmt::format(", from {} to {}", Shown(key, change->OldValue), Shown(key, change->NewValue)) : std::string());
+    if (change)
+        Notify({ *change });
     return outcome;
+}
+
+bool Settings::AddCheck(std::string key, Check check)
+{
+    if (!check)
+        return false;
+    std::lock_guard const lock(_writeMutex);
+    if (!_declared.contains(key) && !SettingDeclarations::Find(key))
+        return false;
+    _checks[std::move(key)].push_back(std::move(check));
+    return true;
+}
+
+bool Settings::IsSecret(std::string_view key) const
+{
+    {
+        std::lock_guard const lock(_writeMutex);
+        if (auto const declared = _declared.find(key); declared != _declared.end())
+            return declared->second.Declaration.Visibility == SettingVisibility::Secret;
+    }
+    return SettingDeclarations::IsSecret(key);
+}
+
+std::string Settings::Shown(std::string_view key, std::string_view value) const
+{
+    return IsSecret(key) ? LogRedaction::MaskSecretValue(key, value) : std::string(value);
 }
 
 bool Settings::History(std::string_view key, std::vector<SettingAuditEntry>& entries, std::string& error) const
@@ -664,6 +900,45 @@ void Settings::Unsubscribe(uint64 token)
 {
     std::lock_guard const lock(_changeMutex);
     _subscribers.erase(token);
+}
+
+uint64 Settings::Watch(ChangeHandler handler)
+{
+    std::lock_guard const lock(_changeMutex);
+    uint64 const token = _nextSubscriber++;
+    _watchers.emplace(token, std::move(handler));
+    return token;
+}
+
+void Settings::Unwatch(uint64 token)
+{
+    std::lock_guard const lock(_changeMutex);
+    _watchers.erase(token);
+}
+
+void Settings::Notify(std::vector<SettingChange> const& changes)
+{
+    if (changes.empty())
+        return;
+    std::vector<ChangeHandler> handlers;
+    {
+        std::lock_guard const lock(_changeMutex);
+        handlers.reserve(_watchers.size());
+        for (auto const& [token, handler] : _watchers)
+            handlers.push_back(handler);
+    }
+    for (SettingChange const& change : changes)
+        for (ChangeHandler const& handler : handlers)
+        {
+            try
+            {
+                handler(change);
+            }
+            catch (std::exception const& failure)
+            {
+                LOG_ERROR(SettingsLog, "A watcher of setting changes failed on {}: {}", change.Key, failure.what());
+            }
+        }
 }
 
 std::size_t Settings::DispatchChanges()

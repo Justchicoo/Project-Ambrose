@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The register of everything that can be rebuilt without stopping the server: each target says how to build itself again and which targets it must follow, and a reload runs them in that order, keeps what was already serving when a build fails, and reports every error it found rather than the first. A target that has never succeeded is still registered, because an operator needs to be told a thing exists and is broken rather than that it is missing.
+ * The register of everything that can be rebuilt without stopping the server: each target says how to build itself again and which targets it must follow, and a reload runs them in that order, keeps what was already serving when a build fails, and reports every error it found rather than the first, with when it finished, to the caller and to every observer. A target that has never succeeded is still registered, because an operator needs to be told a thing exists and is broken rather than that it is missing.
  */
 
 #ifndef AMBROSE_RELOADMGR_H
@@ -10,6 +10,7 @@
 #include "Types.h"
 
 #include <functional>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -23,12 +24,14 @@ struct ReloadOutcome
     bool Ok = false;
     uint64 Generation = 0;
     std::vector<std::string> Errors;
+    int64 FinishedEpochMs = 0;
 };
 
 class ReloadMgr
 {
 public:
     using Loader = std::function<bool(std::vector<std::string>&)>;
+    using Observer = std::function<void(ReloadOutcome const&)>;
 
     static ReloadMgr& Instance();
 
@@ -51,6 +54,9 @@ public:
     static std::vector<std::string> Describe(ReloadOutcome const& outcome);
     std::vector<std::string> DescribeTargets() const;
 
+    uint64 Observe(Observer observer);
+    void Unobserve(uint64 token);
+
 private:
     ReloadMgr() = default;
 
@@ -69,9 +75,13 @@ private:
 
     ReloadOutcome RunLocked(Target& target);
     std::vector<std::string> OrderLocked() const;
+    void Notify(std::vector<ReloadOutcome> const& outcomes);
 
     mutable std::mutex _mutex;
     std::unordered_map<std::string, Target> _targets;
+    mutable std::mutex _observerMutex;
+    std::map<uint64, Observer> _observers;
+    uint64 _nextObserver = 1;
 };
 
 #define sReloadMgr ReloadMgr::Instance()
