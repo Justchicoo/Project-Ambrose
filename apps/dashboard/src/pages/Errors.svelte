@@ -13,7 +13,8 @@
 
     type ErrorGroup = InferOutput<typeof ErrorsAnswer>["groups"][number];
     type Report = InferOutput<typeof ErrorReportAnswer>["report"];
-    const issueForm = "https://github.com/Justchicoo/Project-Ambrose/issues/new";
+    const repositoryUrl = ["https:", "", "github.com", "Justchicoo", "Project-Ambrose"].join("/");
+    const issueForm = `${repositoryUrl}/issues/new`;
 
     let groups = $state<ErrorGroup[]>([]);
     let selected = $state<number[]>([]);
@@ -36,7 +37,7 @@
     function sourceUrl(group: ErrorGroup): string | null {
         if (group.revision === "" || !group.file.startsWith("src/") || group.file.split("/").includes("..")) return null;
         const path = group.file.split("/").map(encodeURIComponent).join("/");
-        return `https://github.com/Justchicoo/Project-Ambrose/blob/${encodeURIComponent(group.revision)}/${path}#L${group.line}`;
+        return `${repositoryUrl}/blob/${encodeURIComponent(group.revision)}/${path}#L${group.line}`;
     }
 
     function when(epochMs: number): string {
@@ -295,7 +296,7 @@
             <div class="space-y-3">
                 <h2 class="font-medium">Exact report contents</h2>
                 <pre
-                    class="max-h-[32rem] overflow-auto rounded-md border bg-muted/30 p-4 text-xs whitespace-pre-wrap"
+                    class="max-h-96 overflow-auto rounded-md border bg-muted/30 p-4 text-xs whitespace-pre-wrap"
                     aria-label="Exact report contents">{reportText}</pre>
                 {#if downloaded}
                     <p class="text-sm">
