@@ -383,9 +383,8 @@ Every zone's metadata, named locations and static object placements exist as wor
 
 **Deliverables**
 
-- src/tools/zone_extractor: enumerates GameData/*.wad, maps zone path 'WizardCity/WC_Hub' <-> file 'WizardCity-WC_Hub.wad', decodes gamedata.bin as WizZoneData (client dump hash 0x4C9FDA76), writes SQL or loads through dbimport
+- `extractor zones` (src/tools/extractor over src/server/shared/ClientData/ZoneExtractor, in place of the separate zone_extractor since 5.02): enumerates GameData/*.wad, maps zone path 'WizardCity/WC_Hub' <-> file 'WizardCity-WC_Hub.wad', decodes gamedata.bin as WizZoneData (client dump hash 0x4C9FDA76), writes SQL or loads the world database
 - data/sql/base/db_world: schema only for zone_template, zone_location, zone_object
-- conf/dist/zone_extractor.conf.dist (GameData path, output mode)
 
 **Data sources**
 
@@ -554,8 +553,8 @@ Game objects for MSG_LOGINCOMPLETE and MSG_NEWOBJECT serialize with the block/ty
 **Deliverables**
 
 - src/server/shared/ObjectProperty/CoreObjectSerializer.h/.cpp: the object header is u8 block, u8 type, u32 template id. Block 0 and type 0 mean a plain class hash follows instead
-- A block/type table as a config/data table (not code constants): ClientObject 2/2, WizClientObject 104/2, WizClientObjectItem 115/9, WizClientPet 106/2, WizClientMount 108/2, ClientReagentItem 132/9, ClientRecipe 131/131 (from behavior study; each entry to be confirmed). It is the world database's core_object_type, which holds only the pairs a capture proves, 104/2 and 115/9, each with its evidence; the others join as a capture or the client proves them
-- `.reload core_object_type` once 4.15 lands: validates that every class resolves in the type registry and no block/type pair repeats, swaps the table, and keeps the old one on failure; objects already sent keep the prefix they were sent with
+- A block/type table as a config/data table (not code constants): ClientObject 2/2, WizClientObject 104/2, WizClientObjectItem 115/9, WizClientPet 106/2, WizClientMount 108/2, ClientReagentItem 132/9, ClientRecipe 131/131 (from behavior study; each entry to be confirmed). Since 5.02 the header is read as a core type, the template's type and the template id: the world database's core_object_type, keyed by core type, holds the class the client's own factory builds for each (2, 5 and 9 ClientObject, 104 WizClientObject, 115 WizClientObjectItem), and core_template_type the core type and template type each template class gives, each row with its evidence; the others join as a capture or the client proves them
+- `.reload core_object_type` once 4.15 lands: validates that every class resolves in the type registry, no core type repeats and every template class's core type is one the table builds, swaps the table, and keeps the old one on failure; objects already sent keep the prefix they were sent with
 - src/test/server/shared/ObjectProperty/CoreObjectSerializerTest.cpp
 
 **Acceptance**

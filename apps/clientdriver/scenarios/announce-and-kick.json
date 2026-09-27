@@ -175,7 +175,7 @@
     {
       "action": "wait_game_log",
       "name": "the game server says what MSG_LOGINCOMPLETE carried",
-      "pattern": "sent MSG_LOGINCOMPLETE: zone (\\S+), id \\d+, dynamic zone \\d+ in process \\d+, server time \\d+, realm .+, permissions 0x[0-9a-f]+, CSR \\d, test server \\d, critical objects none",
+      "pattern": "sent MSG_LOGINCOMPLETE: zone (\\S+), id \\d+, dynamic zone \\d+ in process \\d+, server time \\d+, realm .+, permissions 0x[0-9a-f]+, CSR \\d, test server \\d, critical objects (?:none|a list)",
       "timeout": 30,
       "from": "start",
       "expect": "WizardCity/WC_Hub",

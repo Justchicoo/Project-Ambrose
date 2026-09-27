@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, flags, loading type and spawn requirements, an entry of the missing class is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted.
+ * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, override name, global dynamic and undetectable flags, loading type and spawn requirements, which the zone manager reads back from the world database, an entry of the missing class is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted.
  */
 
 #include "DBUpdater.h"
@@ -110,6 +110,9 @@ namespace
         int64 Loading = 0;
         bool Requirements = false;
         bool UnknownRequirement = false;
+        std::string OverrideName = {};
+        bool GlobalDynamic = false;
+        bool Undetectable = false;
     };
 
     class ZoneExtractorTest : public testing::Test
@@ -123,7 +126,7 @@ namespace
             _reader = std::make_unique<TypeRegistry>(&_views);
             ASSERT_TRUE(_reader->LoadFromText(ZoneDump(false), "reader.json")) << _reader->GetErrors().front();
             _objects = {
-                { "class CoreObjectInfo", 4336, 114611, { -6094.86f, -1074.56f, 225.58f }, { 0.0f, 0.0f, 0.5387f }, "", 3, true, false },
+                { "class CoreObjectInfo", 4336, 114611, { -6094.86f, -1074.56f, 225.58f }, { 0.0f, 0.0f, 0.5387f }, "", 3, true, false, "Kiosk Keeper", true, true },
                 { Sigil, 4400, 114612, { 1.0f, 2.0f, 3.0f }, { 0.0f, 0.0f, 0.0f }, "", 3, false, false },
                 { "class PositionalSoundEmitterInfo", 2960, 0, { 4401.12f, 573.98f, -75.28f }, { 0.0f, 0.0f, 0.0f }, "Playing", 1, false, false },
                 { "class CoreObjectInfo", 1451035, 114613, { 10.0f, 20.0f, 30.0f }, { 0.1f, 0.2f, 1.25f }, "Idle", 3, true, true },
@@ -183,6 +186,9 @@ namespace
                 EXPECT_EQ(object->Set("m_zoneTag", fmt::format("tag {}", placed.ObjectId)), PropertySetResult::Ok);
                 EXPECT_EQ(object->Set("m_startState", placed.StartState), PropertySetResult::Ok);
                 EXPECT_EQ(object->Set("m_loadingType", placed.Loading), PropertySetResult::Ok);
+                EXPECT_EQ(object->Set("m_overrideName", placed.OverrideName), PropertySetResult::Ok);
+                EXPECT_EQ(object->Set("m_globalDynamic", placed.GlobalDynamic), PropertySetResult::Ok);
+                EXPECT_EQ(object->Set("m_bUndetectable", placed.Undetectable), PropertySetResult::Ok);
                 if (placed.Requirements)
                 {
                     EXPECT_EQ(object->Set("m_spawnRequirements", Requirements(placed.UnknownRequirement)), PropertySetResult::Ok);
@@ -259,6 +265,9 @@ TEST_F(ZoneExtractorTest, EachLocationAndEachEntryTheDumpDescribesBecomesARow)
     EXPECT_EQ(kiosk.Orientation, (PropertyTypes::Vector3D{ 0.0f, 0.0f, 0.5387f })) << "the orientation stays the vector the zone gives";
     EXPECT_EQ(kiosk.ZoneTag, "tag 114611");
     EXPECT_EQ(kiosk.LoadingType, 3);
+    EXPECT_EQ(kiosk.OverrideName, "Kiosk Keeper");
+    EXPECT_TRUE(kiosk.GlobalDynamic);
+    EXPECT_TRUE(kiosk.Undetectable);
     ASSERT_TRUE(kiosk.SpawnRequirements.has_value());
     SerializerOptions versionable;
     versionable.Versionable = true;
@@ -271,6 +280,9 @@ TEST_F(ZoneExtractorTest, EachLocationAndEachEntryTheDumpDescribesBecomesARow)
     EXPECT_EQ(emitter.StartState, "Playing") << "the start state is the name of a state, not a number";
     EXPECT_EQ(emitter.LoadingType, 1);
     EXPECT_FALSE(emitter.SpawnRequirements.has_value());
+    EXPECT_TRUE(emitter.OverrideName.empty());
+    EXPECT_FALSE(emitter.GlobalDynamic);
+    EXPECT_FALSE(emitter.Undetectable);
     EXPECT_EQ(zone.Objects[2].TemplateId, 1451035u);
     EXPECT_EQ(zone.Objects[2].StartState, "Idle");
 }
@@ -389,6 +401,9 @@ TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtr
         EXPECT_EQ(objects->at(0).Orientation, (PropertyTypes::Vector3D{ 0.0f, 0.0f, 0.5387f }));
         EXPECT_TRUE(objects->at(0).IsSentByServer());
         EXPECT_TRUE(objects->at(0).HasSpawnRequirements);
+        EXPECT_EQ(objects->at(0).OverrideName, "Kiosk Keeper");
+        EXPECT_TRUE(objects->at(0).GlobalDynamic);
+        EXPECT_TRUE(objects->at(0).Undetectable);
         EXPECT_EQ(objects->at(1).ClassName, "class PositionalSoundEmitterInfo");
         EXPECT_EQ(objects->at(1).Loading, ZoneObjectLoading::StaticClient);
         EXPECT_FALSE(objects->at(1).HasSpawnRequirements);
