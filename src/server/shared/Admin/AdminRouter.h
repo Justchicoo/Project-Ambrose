@@ -37,6 +37,7 @@ struct AdminRequest
     bool Upgrade = false;
     std::string Id;
     std::string Principal;
+    std::string ForwardedActor;
     std::optional<std::string> SessionCsrf;
     std::map<std::string, std::string, std::less<>> QueryValues;
 
@@ -88,6 +89,7 @@ public:
     using PermissionCheck = std::function<PermissionVerdict(AdminRequest const&, std::string_view permission)>;
     using ProblemLog = std::function<void(AdminRequest const&, AdminResponse const&)>;
     using Known = std::function<bool(std::string_view permission)>;
+    using PermissionResolver = std::function<std::string(AdminRequest const&)>;
 
     static constexpr std::string_view SecurityPolicy =
         "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; "
@@ -103,6 +105,7 @@ public:
     void Add(std::string method, std::string path, Handler handler);
     void AddGuarded(std::string method, std::string path, std::string permission, Handler handler);
     void AddGuardedPrefix(std::string method, std::string prefix, std::string permission, Handler handler);
+    void AddDynamicGuardedPrefix(std::string method, std::string prefix, std::string fallbackPermission, PermissionResolver resolver, Handler handler);
     void AddOpen(std::string method, std::string path, Handler handler);
     void AddOpenPrefix(std::string method, std::string prefix, Handler handler);
     void SetPermissionKnown(Known known);
@@ -153,6 +156,7 @@ private:
         bool Prefix = false;
         uint32 Cost = 0;
         std::string Permission;
+        PermissionResolver ResolvePermission = {};
 
         bool Public() const { return Access == RouteAccess::Public; }
     };

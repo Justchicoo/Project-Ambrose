@@ -118,6 +118,12 @@ export const CommandAnswer = v.looseObject({
     lines: v.array(v.string()),
 });
 
+export const CommandHistoryAnswer = v.looseObject({
+    schema: v.number(),
+    app: v.string(),
+    commands: v.array(v.string()),
+});
+
 export const Problem = v.looseObject({
     code: v.string(),
     message: v.string(),

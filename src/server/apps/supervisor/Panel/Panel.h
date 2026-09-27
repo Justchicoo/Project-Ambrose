@@ -79,10 +79,17 @@ public:
     AdminRouter& Routes() { return _listener.Routes(); }
 
     bool Record(AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error);
+    bool Record(AuditEvent& event, std::function<bool(AuditEvent& event, std::string& error)> const& change, std::string& error);
+    AdminResponse AuditRequest(AdminRequest const& request, std::string_view app, std::string_view action, std::function<AdminResponse()> operation);
+    uint8 CommandLevel(AdminRequest const& request);
+    std::string CommandActorName(AdminRequest const& request);
+    bool StoreCommandHistoryWithinAudit(AdminRequest const& request, std::string_view app, std::string_view command, std::string& error);
+    AdminResponse CommandHistoryGet(AdminRequest const& request);
 
 private:
     bool OpenStore(ConfigMgr const& config, std::string& error);
     void RegisterSignIn();
+    void RegisterCommandHistory();
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
     AdminResponse Probe(AdminRequest const& request);

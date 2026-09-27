@@ -175,6 +175,7 @@ namespace
         incoming.RemoteAddress = router.ResolveAddress(request.remote_ip_address, request.get_header_value("x-forwarded-for"));
         incoming.UserAgent = request.get_header_value("user-agent");
         incoming.Authorization = request.get_header_value("Authorization");
+        incoming.ForwardedActor = request.get_header_value("X-Ambrose-Panel-User");
         incoming.Body = request.body;
         incoming.Host = request.get_header_value("Host");
         incoming.Origin = request.get_header_value("Origin");

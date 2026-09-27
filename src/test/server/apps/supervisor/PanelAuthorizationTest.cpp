@@ -97,9 +97,10 @@ namespace
                     std::string error;
                     return _users->FindById(_helper, error);
                 },
-                [this](AdminRequest const&, std::string_view permission, std::string_view app, bool allowed)
+                [this](AdminRequest const&, std::string_view permission, std::string_view app, PermissionVerdict verdict)
                 {
-                    _recorded.push_back(std::string(permission) + " on " + std::string(app) + (allowed ? " allowed" : " refused"));
+                    _recorded.push_back(std::string(permission) + " on " + std::string(app)
+                        + (verdict == PermissionVerdict::Allowed ? " allowed" : " refused"));
                 });
         }
 

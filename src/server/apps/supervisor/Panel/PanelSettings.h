@@ -22,7 +22,7 @@ public:
     explicit PanelSettings(PanelStore& store) : _store(store) {}
 
     nlohmann::json Answer(std::string_view group, std::string& error) const;
-    bool Update(nlohmann::json const& values, int64 userId, std::string& error);
+    bool Update(nlohmann::json const& values, int64 userId, std::string& error, bool transactionAlreadyOpen = false);
 
 private:
     PanelStore& _store;

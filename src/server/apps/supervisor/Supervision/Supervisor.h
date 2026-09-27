@@ -27,6 +27,9 @@ class ConfigMgr;
 class Log;
 struct AdminRequest;
 struct AdminResponse;
+using SupervisorAuditRecorder = std::function<AdminResponse(AdminRequest const&, std::string_view, std::string_view, std::function<AdminResponse()>)>;
+using SupervisorCommandLevel = std::function<uint8(AdminRequest const&)>;
+using SupervisorActorName = std::function<std::string(AdminRequest const&)>;
 
 struct SupervisorSettings
 {
@@ -60,6 +63,8 @@ public:
     bool Start(ConfigMgr const& config, SupervisorSettings const& settings, bool watch, std::vector<std::string>& problems, std::string& error);
     void Shutdown();
     void Register(AdminRouter& router, std::function<AdminStatusSnapshot()> self);
+    void SetAuditRecorder(SupervisorAuditRecorder recorder);
+    void SetCommandContext(SupervisorCommandLevel level, SupervisorActorName actor);
     std::vector<std::pair<std::string, std::string>> CollectErrorReports();
     static std::optional<std::string_view> PermissionFor(std::string_view method, std::string_view tail) noexcept;
     static std::optional<AdminResponse> Refuse(AdminRequest const& request, std::string_view permission, AdminRouter const& router);
@@ -72,11 +77,15 @@ public:
     static std::string SupervisionJson(std::vector<AppSnapshot> const& snapshots);
     static std::string AppsJson(AdminStatusSnapshot const& self, std::vector<AppSnapshot> const& snapshots);
     static std::string OutputJson(std::string_view name, OutputRun run, std::vector<OutputLine> const& lines);
+    static std::string PrepareCommandRelayBody(std::string_view body, uint8 maximumLevel);
 
 private:
     AdminResponse Answer(AdminRequest const& request, AdminRouter const& router);
+    AdminResponse AnswerCore(AdminRequest const& request, AdminRouter const& router);
+    AdminResponse Audited(AdminRequest const& request, std::string_view app, std::string_view action, std::function<AdminResponse()> operation);
     AdminResponse PowerRoute(ManagedApp& app, AdminRequest const& request, AdminRouter const& router);
     AdminResponse Relay(ManagedApp& app, AdminRequest const& request, std::string_view path);
+    AdminResponse Forward(ManagedApp& app, AdminRequest const& request, std::string_view path, std::chrono::milliseconds timeout);
     ManagedApp* Find(std::string_view name) const;
 
     Log& _log;
@@ -84,6 +93,9 @@ private:
     std::unique_ptr<SupervisorState> _state;
     mutable std::shared_mutex _mutex;
     std::vector<std::unique_ptr<ManagedApp>> _apps;
+    SupervisorAuditRecorder _auditRecorder;
+    SupervisorCommandLevel _commandLevel;
+    SupervisorActorName _actorName;
 };
 
 #endif

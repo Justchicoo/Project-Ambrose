@@ -16,6 +16,7 @@
 #include <fmt/format.h>
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -82,10 +83,11 @@ TEST_F(PanelTest, OpensItsStoreAndAnswersItsOwnRoutesOnLoopback)
 
     ASSERT_TRUE(panel.Store().IsOpen());
     EXPECT_TRUE(std::filesystem::exists(_directory.Path() / "data" / "panel" / "panel.sqlite3"));
-    std::optional<PanelStore::Statement> tables = panel.Store().Prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('audit_event', 'audit_subject', 'panel_session')", error);
+    std::optional<PanelStore::Statement> tables = panel.Store().Prepare(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('audit_event', 'audit_subject', 'panel_session', 'panel_command_history')", error);
     ASSERT_TRUE(tables.has_value()) << error;
     ASSERT_TRUE(tables->Step(error)) << error;
-    EXPECT_EQ(tables->Int64(0), 3);
+    EXPECT_EQ(tables->Int64(0), 4);
     tables.reset();
 
     AdminClient const anonymous("127.0.0.1", panel.GetPort(), "");
@@ -224,6 +226,187 @@ TEST_F(PanelTest, AChangeWhoseRecordCannotBeWrittenIsNotApplied)
     EXPECT_EQ(rows->Int64(0), 1);
     rows.reset();
     EXPECT_EQ(PanelAudit::Count(panel.Store(), "panel:note.added"), 1);
+
+    ASSERT_TRUE(panel.Store().Execute("CREATE TRIGGER fail_audit BEFORE INSERT ON audit_event BEGIN SELECT RAISE(ABORT, 'forced audit failure'); END", error)) << error;
+    AuditEvent forced;
+    forced.Name = "panel:note.added";
+    bool changed = false;
+    EXPECT_FALSE(panel.Record(forced, [&](std::string& failure)
+    {
+        changed = true;
+        return panel.Store().Execute("INSERT INTO note (body) VALUES ('not kept')", failure);
+    }, error));
+    EXPECT_FALSE(changed);
+    rows = panel.Store().Prepare("SELECT COUNT(*) FROM note", error);
+    ASSERT_TRUE(rows.has_value()) << error;
+    ASSERT_TRUE(rows->Step(error)) << error;
+    EXPECT_EQ(rows->Int64(0), 1);
+}
+
+TEST_F(PanelTest, APanelRestartIsRecordedOnceWithItsUserAddressAppAndChainHash)
+{
+    Panel panel = Make();
+    std::string error;
+    ASSERT_TRUE(panel.Start(Configured("Panel.Enable = 1\nPanel.Port = 0\n"), error)) << error;
+    int64 userId = 0;
+    ASSERT_EQ(panel.Users().Create("operator", "a-long-test-password", false, false, &userId, error), PanelUserResult::Ok) << error;
+
+    AdminRequest request;
+    request.Method = "POST";
+    request.Path = "/api/apps/gameserver/power";
+    request.RemoteAddress = "203.0.113.18";
+    request.UserAgent = "panel test";
+    request.Principal = "user:" + std::to_string(userId);
+    AdminResponse const restarted = panel.AuditRequest(request, "gameserver", "app:power.restart", []
+    {
+        return AdminResponse::Json(202, R"({"accepted":true})");
+    });
+    ASSERT_EQ(restarted.Status, 202) << restarted.Body;
+    EXPECT_EQ(PanelAudit::Count(panel.Store(), "app:power.restart"), 1);
+
+    std::optional<PanelStore::Statement> row = panel.Store().Prepare(
+        "SELECT id, actor_type, actor_id, actor_name, address, result, chain_hash FROM audit_event WHERE name = 'app:power.restart'", error);
+    ASSERT_TRUE(row.has_value()) << error;
+    ASSERT_TRUE(row->Step(error)) << error;
+    int64 const eventId = row->Int64(0);
+    EXPECT_EQ(row->Text(1), "user");
+    EXPECT_EQ(row->Text(2), std::to_string(userId));
+    EXPECT_EQ(row->Text(3), "operator");
+    EXPECT_EQ(row->Text(4), "203.0.113.18");
+    EXPECT_EQ(row->Text(5), "succeeded");
+    EXPECT_EQ(row->Text(6).size(), 64u);
+    row.reset();
+
+    std::optional<PanelStore::Statement> subjects = panel.Store().Prepare(
+        "SELECT kind, subject_id FROM audit_subject WHERE event = ? ORDER BY position", error);
+    ASSERT_TRUE(subjects.has_value()) << error;
+    subjects->Bind(1, eventId);
+    ASSERT_TRUE(subjects->Step(error)) << error;
+    EXPECT_EQ(subjects->Text(0), "panel_user");
+    ASSERT_TRUE(subjects->Step(error)) << error;
+    EXPECT_EQ(subjects->Text(0), "app");
+    EXPECT_EQ(subjects->Text(1), "gameserver");
+    EXPECT_FALSE(subjects->Step(error));
+    EXPECT_TRUE(error.empty()) << error;
+}
+
+TEST_F(PanelTest, ARefusedOutOfScopeDangerousPermissionIsAuditedWithItsReason)
+{
+    Panel panel = Make();
+    std::string error;
+    ASSERT_TRUE(panel.Start(Configured("Panel.Enable = 1\nPanel.Port = 0\n"), error)) << error;
+    int64 userId = 0;
+    ASSERT_EQ(panel.Users().Create("viewer", "a-long-test-password", false, false, &userId, error), PanelUserResult::Ok) << error;
+
+    AdminRequest request;
+    request.Method = "POST";
+    request.Path = "/api/apps/gameserver/power";
+    request.RemoteAddress = "203.0.113.27";
+    request.Principal = "user:" + std::to_string(userId);
+    EXPECT_EQ(panel.Routes().MayI(request, "power.kill"), PermissionVerdict::OutOfScope);
+    EXPECT_EQ(PanelAudit::Count(panel.Store(), "app:permission.refused"), 1);
+
+    std::optional<PanelStore::Statement> row = panel.Store().Prepare(
+        "SELECT result, reason, properties FROM audit_event WHERE name = 'app:permission.refused'", error);
+    ASSERT_TRUE(row.has_value()) << error;
+    ASSERT_TRUE(row->Step(error)) << error;
+    EXPECT_EQ(row->Text(0), "refused");
+    EXPECT_NE(row->Text(1).find("no grant"), std::string::npos) << row->Text(1);
+    EXPECT_NE(row->Text(2).find("power.kill"), std::string::npos) << row->Text(2);
+}
+
+TEST_F(PanelTest, ARefusedCommandIsAuditedWithoutRunningIt)
+{
+    Panel panel = Make();
+    std::string error;
+    ASSERT_TRUE(panel.Start(Configured("Panel.Enable = 1\nPanel.Port = 0\n"), error)) << error;
+    int64 userId = 0;
+    ASSERT_EQ(panel.Users().Create("operator", "a-long-test-password", false, false, &userId, error), PanelUserResult::Ok) << error;
+
+    AdminRequest request;
+    request.Method = "POST";
+    request.Path = "/api/apps/gameserver/api/command";
+    request.RemoteAddress = "203.0.113.31";
+    request.Principal = "user:" + std::to_string(userId);
+    bool ran = false;
+    auto runAtLevel = [&ran](uint8 level)
+    {
+        if (level < 3)
+            return AdminResponse::Problem(409, "command_refused", "there is no such command");
+        ran = true;
+        return AdminResponse::Json(200, "{}");
+    };
+    AdminResponse const refused = panel.AuditRequest(request, "gameserver", "app:console.command", [&] { return runAtLevel(2); });
+
+    EXPECT_EQ(refused.Status, 409);
+    EXPECT_FALSE(ran);
+    EXPECT_EQ(PanelAudit::Count(panel.Store(), "app:console.command"), 1);
+    std::optional<PanelStore::Statement> row = panel.Store().Prepare(
+        "SELECT result, reason FROM audit_event WHERE name = 'app:console.command'", error);
+    ASSERT_TRUE(row.has_value()) << error;
+    ASSERT_TRUE(row->Step(error)) << error;
+    EXPECT_EQ(row->Text(0), "refused");
+    EXPECT_EQ(row->Text(1), "there is no such command");
+}
+
+TEST_F(PanelTest, StoppedAppAndInvalidTokenRelayFailuresRemainDistinctInTheAuditRecord)
+{
+    Panel panel = Make();
+    std::string error;
+    ASSERT_TRUE(panel.Start(Configured("Panel.Enable = 1\nPanel.Port = 0\n"), error)) << error;
+    int64 userId = 0;
+    ASSERT_EQ(panel.Users().Create("operator", "a-long-test-password", false, false, &userId, error), PanelUserResult::Ok) << error;
+    AdminRequest request;
+    request.Method = "POST";
+    request.Path = "/api/apps/gameserver/api/command";
+    request.Principal = "user:" + std::to_string(userId);
+
+    AdminResponse const stopped = panel.AuditRequest(request, "gameserver", "app:console.command", []
+    {
+        return AdminResponse::Problem(503, "app_not_running", "gameserver is offline");
+    });
+    AdminResponse const invalidToken = panel.AuditRequest(request, "gameserver", "app:console.command", []
+    {
+        return AdminResponse::Problem(502, "app_invalid_token", "gameserver refused the supervisor's app token");
+    });
+    EXPECT_EQ(nlohmann::json::parse(stopped.Body)["error"], "app_not_running");
+    EXPECT_EQ(nlohmann::json::parse(invalidToken.Body)["error"], "app_invalid_token");
+
+    std::optional<PanelStore::Statement> rows = panel.Store().Prepare(
+        "SELECT result, error FROM audit_event WHERE name = 'app:console.command' ORDER BY id", error);
+    ASSERT_TRUE(rows.has_value()) << error;
+    ASSERT_TRUE(rows->Step(error)) << error;
+    EXPECT_EQ(rows->Text(0), "failed");
+    EXPECT_EQ(nlohmann::json::parse(rows->Text(1))["error"], "app_not_running");
+    ASSERT_TRUE(rows->Step(error)) << error;
+    EXPECT_EQ(rows->Text(0), "failed");
+    EXPECT_EQ(nlohmann::json::parse(rows->Text(1))["error"], "app_invalid_token");
+    EXPECT_FALSE(rows->Step(error));
+    EXPECT_TRUE(error.empty()) << error;
+}
+
+TEST_F(PanelTest, CommandHistoryIsStoredPerUserAndReturnsOnlyTheRedactedCommand)
+{
+    Panel panel = Make();
+    std::string error;
+    ASSERT_TRUE(panel.Start(Configured("Panel.Enable = 1\nPanel.Port = 0\n"), error)) << error;
+    int64 userId = 0;
+    ASSERT_EQ(panel.Users().Create("operator", "a-long-test-password", false, false, &userId, error), PanelUserResult::Ok) << error;
+    AdminRequest request;
+    request.Path = "/api/panel/apps/gameserver/command-history";
+    request.Principal = "user:" + std::to_string(userId);
+    ASSERT_TRUE(panel.StoreCommandHistoryWithinAudit(request, "gameserver", "account create (arguments hidden)", error)) << error;
+    ASSERT_TRUE(panel.StoreCommandHistoryWithinAudit(request, "loginserver", "status", error)) << error;
+
+    AdminResponse const history = panel.CommandHistoryGet(request);
+    ASSERT_EQ(history.Status, 200) << history.Body;
+    nlohmann::json const answer = nlohmann::json::parse(history.Body);
+    ASSERT_EQ(answer["commands"].size(), 1u);
+    EXPECT_EQ(answer["commands"][0], "account create (arguments hidden)");
+    EXPECT_EQ(history.Body.find("hunter2"), std::string::npos);
+
+    request.Principal = "user:999999";
+    EXPECT_EQ(panel.CommandHistoryGet(request).Status, 403);
 }
 
 TEST_F(PanelTest, AForwardedHeaderChangesNothingWithNoTrustedProxies)

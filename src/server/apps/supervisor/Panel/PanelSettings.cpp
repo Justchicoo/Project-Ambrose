@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <map>
 #include <stdexcept>
+#include <vector>
 
 namespace
 {
@@ -136,22 +137,21 @@ nlohmann::json PanelSettings::Answer(std::string_view group, std::string& error)
     return nlohmann::json{ { "schema", 1 }, { "settings", std::move(settings) } };
 }
 
-bool PanelSettings::Update(nlohmann::json const& values, int64 userId, std::string& error)
+bool PanelSettings::Update(nlohmann::json const& values, int64 userId, std::string& error, bool transactionAlreadyOpen)
 {
+    error.clear();
     if (!values.is_object())
     {
         error = "settings must be an object";
         return false;
     }
-    if (!_store.Begin(error))
-        return false;
+    std::vector<std::pair<Definition const*, std::string>> validated;
     for (auto const& [key, raw] : values.items())
     {
         Definition const* definition = Find(key);
         if (!definition || definition->Locked || !raw.is_string())
         {
             error = definition && definition->Locked ? std::string(key) + " is locked by " + std::string(definition->Layer) : "unknown or invalid setting " + key;
-            _store.Rollback();
             return false;
         }
         std::string const value = raw.get<std::string>();
@@ -160,31 +160,55 @@ bool PanelSettings::Update(nlohmann::json const& values, int64 userId, std::stri
         if (!NumberInRange(value, *definition))
         {
             error = std::string(key) + " is outside its allowed range";
-            _store.Rollback();
             return false;
         }
+        validated.emplace_back(definition, value);
+    }
+    if (!transactionAlreadyOpen && !_store.Begin(error))
+        return false;
+    if (transactionAlreadyOpen && !_store.Execute("SAVEPOINT panel_settings_update", error))
+        return false;
+    auto const rollback = [&]
+    {
+        if (transactionAlreadyOpen)
+        {
+            std::string ignored;
+            _store.Execute("ROLLBACK TO SAVEPOINT panel_settings_update", ignored);
+            _store.Execute("RELEASE SAVEPOINT panel_settings_update", ignored);
+        }
+        else
+            _store.Rollback();
+    };
+    for (std::pair<Definition const*, std::string> const& setting : validated)
+    {
+        Definition const& definition = *setting.first;
         std::optional<PanelStore::Statement> write = _store.Prepare(
             "INSERT INTO panel_setting (key, group_name, value, secret, updated_epoch_ms, updated_by) VALUES (?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_epoch_ms = excluded.updated_epoch_ms, updated_by = excluded.updated_by",
             error);
         if (!write)
         {
-            _store.Rollback();
+            rollback();
             return false;
         }
-        write->Bind(1, key);
-        write->Bind(2, definition->Group);
-        write->Bind(3, value);
-        write->Bind(4, definition->Secret ? 1 : 0);
+        write->Bind(1, definition.Key);
+        write->Bind(2, definition.Group);
+        write->Bind(3, setting.second);
+        write->Bind(4, definition.Secret ? 1 : 0);
         write->Bind(5, PanelStore::NowEpochMs());
         write->Bind(6, userId);
         if (!write->Run(error))
         {
-            _store.Rollback();
+            rollback();
             return false;
         }
     }
-    if (!_store.Commit(error))
+    if (transactionAlreadyOpen && !_store.Execute("RELEASE SAVEPOINT panel_settings_update", error))
+    {
+        rollback();
+        return false;
+    }
+    if (!transactionAlreadyOpen && !_store.Commit(error))
     {
         _store.Rollback();
         return false;

@@ -22,6 +22,7 @@ struct AdminCommandOutcome
     bool Ran = false;
     bool Refused = false;
     bool NeedsConfirm = false;
+    std::string Command;
     std::string Reason;
     std::vector<std::string> Lines;
 };
@@ -33,13 +34,14 @@ public:
     static constexpr uint8 ConsoleLevel = 4;
 
     using Runner = std::function<AdminCommandOutcome(std::string const& line, uint8 level, bool confirmed)>;
+    using Describer = std::function<std::string(std::string_view line)>;
 
     AdminCommand() = delete;
 
     static bool IsDestructive(std::string_view line) noexcept;
     static AdminCommandOutcome RunThroughTable(ConsoleCommandTable const& table, std::string const& line, uint8 level, bool confirmed);
     static void Register(AdminRouter& router, ConsoleCommandTable const& table, std::string appName, std::filesystem::path auditFile);
-    static void Register(AdminRouter& router, Runner runner, ConsoleCommandTable const& table, std::string appName, std::filesystem::path auditFile);
+    static void Register(AdminRouter& router, Runner runner, ConsoleCommandTable const& table, std::string appName, std::filesystem::path auditFile, Describer describe = {});
 
     static std::vector<std::string> const& Fields();
 };

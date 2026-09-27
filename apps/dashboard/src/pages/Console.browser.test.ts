@@ -57,6 +57,7 @@ function runningApp(name: string): AppEntry {
 const sent: { method: string; path: string; body: Record<string, unknown> | undefined }[] = [];
 
 let printed: { seq: number; stream: string; text: string; epoch_ms: number | null }[] = [];
+let storedHistory: string[] = [];
 
 function answer(body: unknown, code = 200): Response {
     return new Response(JSON.stringify(body), { status: code, headers: { "Content-Type": "application/json" } });
@@ -97,10 +98,25 @@ function commandsSent() {
 beforeEach(() => {
     sent.length = 0;
     printed = [];
+    storedHistory = [];
     vi.stubGlobal("fetch", (path: string, options: RequestInit) => {
         const body = options.body ? (JSON.parse(String(options.body)) as Record<string, unknown>) : undefined;
         sent.push({ method: options.method ?? "GET", path, body });
         if (path.endsWith("/command")) {
+            if (body?.command === "account create bob hunter2") {
+                storedHistory = ["account create (arguments hidden)", ...storedHistory].slice(0, 50);
+                return Promise.resolve(
+                    answer({
+                        command: "account create (arguments hidden)",
+                        success: true,
+                        refused: false,
+                        needs_confirm: false,
+                        reason: "",
+                        request_id: "req-secret",
+                        lines: ["created"],
+                    }),
+                );
+            }
             if (body?.command === "shutdown" && body?.confirm !== true)
                 return Promise.resolve(
                     answer(
@@ -153,6 +169,7 @@ beforeEach(() => {
                 }),
             );
         }
+        if (path.endsWith("/command-history")) return Promise.resolve(answer({ schema: 1, app: "loginserver", commands: storedHistory }));
         return Promise.resolve(answer({}));
     });
     session.csrf = "token";
@@ -229,5 +246,35 @@ describe("the console asking before something that cannot be undone", () => {
         const body = host.textContent ?? "";
         const first = body.split("first line").length - 1;
         expect(first, "a line the console already holds must not be added again").toBe(1);
+    });
+
+    it("loads shared command history after reopening and only ever stores the redacted description", async () => {
+        open();
+        await type("account create bob hunter2");
+        expect(storedHistory).toEqual(["account create (arguments hidden)"]);
+        expect(host.textContent).not.toContain("hunter2");
+        expect(sent.some((one) => one.path.endsWith("/command-history"))).toBe(true);
+
+        if (page) unmount(page);
+        page = null;
+        host.remove();
+        localStorage.clear();
+        sessionStorage.clear();
+        open();
+        await vi.waitFor(() => {
+            flushSync();
+            expect(host.querySelector<HTMLInputElement>("input")?.disabled).toBe(false);
+        });
+
+        const input = host.querySelector<HTMLInputElement>("input");
+        expect(input).not.toBeNull();
+        await vi.waitFor(() => {
+            input?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+            flushSync();
+            expect(input?.value).toBe("account create (arguments hidden)");
+        });
+        expect(localStorage.length).toBe(0);
+        expect(sessionStorage.length).toBe(0);
+        expect(commandsSent()).toHaveLength(1);
     });
 });

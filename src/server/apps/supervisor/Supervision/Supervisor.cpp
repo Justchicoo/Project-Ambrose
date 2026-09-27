@@ -76,6 +76,24 @@ namespace
         return body;
     }
 
+    std::string AuditAction(AdminRequest const& request, std::string_view tail)
+    {
+        if (tail == "/power")
+        {
+            nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
+            if (body.is_object())
+                if (auto const action = body.find("action"); action != body.end() && action->is_string())
+                    if (std::optional<PowerAction> const parsed = ManagedApp::ParseAction(action->get<std::string>()))
+                        return "app:power." + std::string(ManagedApp::ActionName(*parsed));
+            return "app:power.refused";
+        }
+        if (tail == "/api/command")
+            return "app:console.command";
+        if (tail == "/api/shutdown")
+            return "app:power.stop";
+        return "app:api.change";
+    }
+
     std::filesystem::path ConfiguredPath(ConfigMgr const& config, std::string const& key, std::filesystem::path const& fallback, std::filesystem::path const& workingFolder)
     {
         std::filesystem::path const value = ConfigMgr::PathFromUtf8(Ambrose::Trim(config.GetOption<std::string>(key, "", true)));
@@ -228,12 +246,75 @@ std::string Supervisor::OutputJson(std::string_view name, OutputRun run, std::ve
     return body.dump();
 }
 
+std::string Supervisor::PrepareCommandRelayBody(std::string_view body, uint8 maximumLevel)
+{
+    nlohmann::json command = nlohmann::json::parse(body, nullptr, false);
+    if (!command.is_object())
+        return std::string(body);
+    for (auto field = command.begin(); field != command.end();)
+    {
+        std::string const key = Ambrose::ToLower(field.key());
+        if (key == "token" || key == "app_token" || key == "admin_token" || key == "authorization")
+            field = command.erase(field);
+        else
+            ++field;
+    }
+    auto const requested = command.find("level");
+    if (requested != command.end() && requested->is_number_unsigned() && requested->get<uint64>() <= 4)
+        command["level"] = std::min(maximumLevel, static_cast<uint8>(requested->get<uint64>()));
+    else if (requested == command.end())
+        command["level"] = maximumLevel;
+    return command.dump();
+}
+
 void Supervisor::Register(AdminRouter& router, std::function<AdminStatusSnapshot()> self)
 {
     router.AddGuarded("GET", "/api/apps", "status.read", [this, self](AdminRequest const&) { return AdminResponse::Json(200, AppsJson(self(), Snapshots())); });
     router.AddGuarded("GET", "/api/supervisor", "status.read", [this](AdminRequest const&) { return AdminResponse::Json(200, SupervisionJson(Snapshots())); });
+    auto const permission = [](AdminRequest const& request)
+    {
+        constexpr std::string_view Prefix = "/api/apps/";
+        std::string_view const rest = std::string_view(request.Path).substr(Prefix.size());
+        std::size_t const slash = rest.find('/');
+        std::string_view const tail = slash == std::string_view::npos ? std::string_view() : rest.substr(slash);
+        if (tail.empty() || tail == "/")
+            return std::string("status.read");
+        if (tail == "/power")
+        {
+            nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
+            if (body.is_object())
+                if (auto const action = body.find("action"); action != body.end() && action->is_string())
+                    if (std::optional<PowerAction> const parsed = ManagedApp::ParseAction(action->get<std::string>()))
+                        return std::string("power.") + std::string(ManagedApp::ActionName(*parsed));
+            return std::string("status.read");
+        }
+        if (tail == "/output/current" || tail == "/output/previous")
+            return std::string("console.read");
+        if (std::optional<std::string_view> const required = PermissionFor(Ambrose::ToUpper(request.Method), tail))
+            return std::string(*required);
+        return std::string("status.read");
+    };
     for (char const* method : { "GET", "POST", "PUT", "PATCH", "DELETE" })
-        router.AddGuardedPrefix(method, "/api/apps/", "status.read", [this, &router](AdminRequest const& request) { return Answer(request, router); });
+        router.AddDynamicGuardedPrefix(method, "/api/apps/", "status.read", permission,
+            [this, &router](AdminRequest const& request) { return Answer(request, router); });
+}
+
+void Supervisor::SetAuditRecorder(SupervisorAuditRecorder recorder)
+{
+    _auditRecorder = std::move(recorder);
+}
+
+void Supervisor::SetCommandContext(SupervisorCommandLevel level, SupervisorActorName actor)
+{
+    _commandLevel = std::move(level);
+    _actorName = std::move(actor);
+}
+
+AdminResponse Supervisor::Audited(AdminRequest const& request, std::string_view app, std::string_view action, std::function<AdminResponse()> operation)
+{
+    if (request.Method == "GET" || !_auditRecorder)
+        return operation();
+    return _auditRecorder(request, app, action, std::move(operation));
 }
 
 std::optional<std::string_view> Supervisor::PermissionFor(std::string_view method, std::string_view tail) noexcept
@@ -289,6 +370,17 @@ std::optional<AdminResponse> Supervisor::Refuse(AdminRequest const& request, std
 }
 
 AdminResponse Supervisor::Answer(AdminRequest const& request, AdminRouter const& router)
+{
+    constexpr std::string_view Prefix = "/api/apps/";
+    std::string_view const rest = std::string_view(request.Path).substr(Prefix.size());
+    std::size_t const slash = rest.find('/');
+    std::string_view const name = rest.substr(0, slash);
+    std::string_view const tail = slash == std::string_view::npos ? std::string_view() : rest.substr(slash);
+    std::string const action = AuditAction(request, tail);
+    return Audited(request, name, action, [this, &request, &router] { return AnswerCore(request, router); });
+}
+
+AdminResponse Supervisor::AnswerCore(AdminRequest const& request, AdminRouter const& router)
 {
     constexpr std::string_view Prefix = "/api/apps/";
     std::string_view const rest = std::string_view(request.Path).substr(Prefix.size());
@@ -432,9 +524,41 @@ AdminResponse Supervisor::Relay(ManagedApp& app, AdminRequest const& request, st
         return AdminResponse::Problem(503, "app_admin_off", fmt::format("The admin API of {} cannot be reached: {}", name, snapshot.AdminProblem.empty() ? std::string("it is not set up") : snapshot.AdminProblem));
     if (!snapshot.ProcessId)
         return AdminResponse::Problem(503, "app_not_running", fmt::format("{} is {}, so its admin API is not answering", name, ManagedApp::StateName(snapshot.State)));
-    AdminClientResponse const answer = admin->Send({ request.Method, std::string(path), request.Body, "application/json", request.Id }, RelayTimeout);
+    return Forward(app, request, path, RelayTimeout);
+}
+
+AdminResponse Supervisor::Forward(ManagedApp& app, AdminRequest const& request, std::string_view path, std::chrono::milliseconds timeout)
+{
+    std::string const& name = app.GetDefinition().Name;
+    AppSnapshot const snapshot = app.Snapshot();
+    std::optional<AdminClient> const admin = app.GetAdminClient();
+    if (!admin)
+        return AdminResponse::Problem(503, "app_admin_off", fmt::format("The admin API of {} cannot be reached: {}", name, snapshot.AdminProblem.empty() ? std::string("it is not set up") : snapshot.AdminProblem));
+    if (!snapshot.ProcessId)
+        return AdminResponse::Problem(503, "app_not_running", fmt::format("{} is {}, so its admin API is not answering", name, ManagedApp::StateName(snapshot.State)));
+
+    std::string body = request.Body;
+    std::vector<std::pair<std::string, std::string>> headers;
+    if (path == "/api/command")
+    {
+        uint8 const maximum = _commandLevel ? _commandLevel(request) : uint8(4);
+        body = PrepareCommandRelayBody(body, maximum);
+        if (_actorName)
+        {
+            std::string const actor = _actorName(request);
+            if (!actor.empty())
+                headers.emplace_back("X-Ambrose-Panel-User", actor);
+        }
+    }
+    AdminClientResponse const answer = admin->Send(
+        { request.Method, std::string(path), std::move(body), "application/json", request.Id, std::move(headers) }, timeout);
     if (!answer.Answered)
-        return AdminResponse::Problem(502, "app_unreachable", fmt::format("{} did not answer: {}", name, answer.Error));
+    {
+        std::string const code = answer.TimedOut ? "app_timeout" : "app_unreachable";
+        return AdminResponse::Problem(502, code, fmt::format("{} did not answer: {}", name, answer.Error));
+    }
+    if (answer.Status == 401 || answer.Status == 403)
+        return AdminResponse::Problem(502, "app_invalid_token", fmt::format("{} refused the supervisor's app token", name));
     AdminResponse response;
     response.Status = answer.Status;
     response.ContentType = answer.ContentType.empty() ? std::string("application/json") : answer.ContentType;

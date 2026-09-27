@@ -200,6 +200,17 @@ namespace
                 LOG_INFO("server.supervisor", "Starting with no history: {}", historyError);
             RegisterStandardRoutes(_panel.Routes());
             AdminGraphsView::Register(_panel.Routes(), [this]() -> Ambrose::SeriesStore const& { return _history; });
+            _supervisor.SetAuditRecorder([this](AdminRequest const& request, std::string_view app, std::string_view action, std::function<AdminResponse()> operation)
+            {
+                return _panel.AuditRequest(request, app, action, std::move(operation));
+            });
+            _supervisor.SetCommandContext([this](AdminRequest const& request)
+            {
+                return request.Principal == "token" ? uint8(4) : _panel.CommandLevel(request);
+            }, [this](AdminRequest const& request)
+            {
+                return _panel.CommandActorName(request);
+            });
             _supervisor.Register(_panel.Routes(), [this] { return BuildStatus(); });
             _panel.SetErrorSource([this]
             {
