@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The shapes the panel accepts from the admin API, checked at the boundary with Valibot: the session, the app list with what the supervisor knows about each app, the status, the capabilities, the captured output, a power answer, the settings an app has loaded and its databases with their update files, each loose so a field a newer server adds is kept rather than refused, since these schemas only ever gain fields.
+ * The shapes the panel accepts from the admin API, checked at the boundary with Valibot: the session, the app list with what the supervisor knows about each app, the status, the capabilities, the captured output, a power answer, the settings an app has loaded with their changes, batches, history and events and its databases with their update files, each loose so a field a newer server adds is kept rather than refused, since these schemas only ever gain fields.
  */
 
 import * as v from "valibot";
@@ -172,6 +172,7 @@ export const SettingsAnswer = v.looseObject({
     schema: v.number(),
     file: v.string(),
     revealed: v.optional(v.boolean(), false),
+    revealed_keys: v.optional(v.array(v.string()), []),
     settings: v.array(
         v.looseObject({
             key: v.string(),
@@ -198,6 +199,7 @@ export const SettingsAnswer = v.looseObject({
             visibility: v.optional(v.picklist(["normal", "secret"])),
             edit: v.optional(v.picklist(["normal", "restricted"])),
             persisted: v.optional(v.nullable(v.string())),
+            revealed: v.optional(v.boolean(), false),
         }),
     ),
 });
@@ -215,6 +217,7 @@ export const SettingChangeAnswer = v.looseObject({
 
 export const SettingBatchAnswer = v.looseObject({
     schema: v.number(),
+    dry_run: v.optional(v.boolean(), false),
     changed: v.array(v.looseObject({ key: v.string(), old: v.string(), new: v.string() })),
     unchanged: v.array(v.string()),
     message: v.string(),
@@ -236,6 +239,23 @@ export const SettingHistoryAnswer = v.looseObject({
             epoch_seconds: v.number(),
         }),
     ),
+});
+
+export const AdminEvent = v.looseObject({
+    type: v.literal("event"),
+    sequence: v.number(),
+    epoch_ms: v.number(),
+    kind: v.string(),
+    subject: v.string(),
+    data: v.looseObject({}),
+});
+
+export const EventsAnswer = v.looseObject({
+    schema: v.number(),
+    oldest: v.number(),
+    latest: v.number(),
+    dropped: v.nullable(v.looseObject({ from: v.number(), to: v.number(), count: v.number() })),
+    records: v.array(AdminEvent),
 });
 
 export const SettingProblem = v.looseObject({
@@ -520,6 +540,8 @@ export type SettingChangeAnswer = v.InferOutput<typeof SettingChangeAnswer>;
 export type SettingBatchAnswer = v.InferOutput<typeof SettingBatchAnswer>;
 export type SettingHistoryAnswer = v.InferOutput<typeof SettingHistoryAnswer>;
 export type SettingProblem = v.InferOutput<typeof SettingProblem>;
+export type AdminEvent = v.InferOutput<typeof AdminEvent>;
+export type EventsAnswer = v.InferOutput<typeof EventsAnswer>;
 export type DatabaseAnswer = v.InferOutput<typeof DatabaseAnswer>;
 export type DatabaseUpdatesAnswer = v.InferOutput<typeof DatabaseUpdatesAnswer>;
 export type DatabaseApplyAnswer = v.InferOutput<typeof DatabaseApplyAnswer>;

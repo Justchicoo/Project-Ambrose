@@ -4,7 +4,7 @@
  */
 
 import { expect, test, type Page } from "@playwright/test";
-import { app, built, startSupervisor, supervisor, token, type Panel } from "./panel-server";
+import { app, built, type Panel, port, startSupervisor, supervisor, token } from "./panel-server";
 
 test.skip(!app || !supervisor || !built, "needs the built panel, patchserver and supervisor");
 test.describe.configure({ mode: "serial" });
@@ -12,7 +12,7 @@ test.describe.configure({ mode: "serial" });
 let panel: Panel;
 
 test.beforeAll(async () => {
-    panel = await startSupervisor(12620, 12621);
+    panel = await startSupervisor(port(20), port(21));
 });
 
 test.afterAll(async () => {

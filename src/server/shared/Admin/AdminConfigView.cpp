@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds the settings answer from the config's own layers and the live settings registry: every loaded key and every declared setting in key order, a declared setting described by the registry that resolves it, each with its effective and shipped values, where each was read and the restart reason the app declared for it, which may be declared for every key under a prefix ending in a star, or none. A secret is masked the same way the log stream masks it unless the caller asked to see secrets and holds that right, which is decided per request, and the keys whose values were shown are handed to the recorder at that moment, so every reveal is audited when it happens and a read that shows nothing records nothing.
+ * Builds the settings answer from the config's own layers and the live settings registry: every loaded key and every declared setting in key order, a declared setting described by the registry that resolves it, each with its effective and shipped values, where each was read and the restart reason the app declared for it, which may be declared for every key under a prefix ending in a star, or none. A secret is masked the same way the log stream masks it unless the caller asked to see secrets, all of them or the keys it named, and holds that right, which is decided per request, and the keys whose values were shown are handed to the recorder at that moment, so every reveal is audited when it happens and a read that shows nothing records nothing.
  */
 
 #include "AdminConfigView.h"
 #include "AdminRouter.h"
 #include "LogRedaction.h"
 #include "Settings.h"
+#include "StringUtil.h"
 
 #include <nlohmann/json.hpp>
 
@@ -52,15 +53,31 @@ std::string_view AdminConfigView::LayerName(ConfigSourceKind kind) noexcept
     return "config";
 }
 
+std::optional<std::set<std::string, std::less<>>> AdminConfigView::RevealAsked(AdminRequest const& request)
+{
+    std::string_view const asked = Ambrose::Trim(request.Query("reveal"));
+    if (asked.empty() || asked == "0" || asked == "false")
+        return std::nullopt;
+    std::set<std::string, std::less<>> keys;
+    if (asked == "1" || asked == "true")
+        return keys;
+    for (std::string_view part : Ambrose::Tokenize(asked, ',', false))
+        if (std::string_view const key = Ambrose::Trim(part); !key.empty())
+            keys.emplace(key);
+    if (keys.empty())
+        return std::nullopt;
+    return keys;
+}
+
 bool AdminConfigView::AsksToReveal(AdminRequest const& request)
 {
-    std::string_view const asked = request.Query("reveal");
-    return asked == "1" || asked == "true";
+    return RevealAsked(request).has_value();
 }
 
 std::string AdminConfigView::SettingsJson(ConfigMgr const& config, std::span<RestartRequiredOption const> restartRequired, bool revealSecrets, Settings const* settings,
-    std::vector<std::string>* revealed)
+    std::vector<std::string>* revealed, std::set<std::string, std::less<>> const* only)
 {
+    std::vector<std::string> shownKeys;
     std::map<std::string, SettingView> declared;
     if (settings)
         for (SettingView& view : settings->List())
@@ -94,12 +111,13 @@ std::string AdminConfigView::SettingsJson(ConfigMgr const& config, std::span<Res
         if (!isDeclared && !effective)
             continue;
         bool const secret = isDeclared ? settings->IsSecret(key) : LogRedaction::IsSecretSetting(key);
+        bool const revealHere = revealSecrets && (!only || only->contains(key));
         bool shownWhole = false;
         auto const shown = [&](std::string const& value) -> std::string
         {
             if (!secret)
                 return value;
-            if (revealSecrets)
+            if (revealHere)
             {
                 shownWhole = shownWhole || !value.empty();
                 return value;
@@ -129,6 +147,7 @@ std::string AdminConfigView::SettingsJson(ConfigMgr const& config, std::span<Res
             entry["default_file"] = nullptr;
         }
         entry["secret"] = secret;
+        entry["revealed"] = secret && revealHere;
         std::optional<std::string> reason = restartReasonOf(key);
         if (!reason && isDeclared && view->second.Declaration.Apply == SettingApply::Restart)
             reason = view->second.Declaration.RestartReason;
@@ -154,15 +173,18 @@ std::string AdminConfigView::SettingsJson(ConfigMgr const& config, std::span<Res
             entry["edit"] = Settings::EditClassName(declaration.Edit);
             entry["persisted"] = setting.Persisted ? nlohmann::json(shown(*setting.Persisted)) : nlohmann::json(nullptr);
         }
-        if (shownWhole && revealed)
-            revealed->push_back(key);
+        if (shownWhole)
+            shownKeys.push_back(key);
         list.push_back(std::move(entry));
     }
     nlohmann::json body;
     body["schema"] = SchemaVersion;
     body["file"] = ConfigMgr::PathToUtf8(config.GetFilename());
     body["revealed"] = revealSecrets;
+    body["revealed_keys"] = shownKeys;
     body["settings"] = std::move(list);
+    if (revealed)
+        *revealed = std::move(shownKeys);
     return body.dump();
 }
 
@@ -170,9 +192,10 @@ void AdminConfigView::Register(AdminRouter& router, ConfigMgr const& config, std
 {
     router.AddGuarded("GET", "/api/settings", "settings.read", [&router, &config, restartRequired = std::move(restartRequired), settings, recorder = std::move(recorder)](AdminRequest const& request)
     {
-        bool const reveal = AsksToReveal(request) && router.Permits(request, "settings.secrets.read");
+        std::optional<std::set<std::string, std::less<>>> const asked = RevealAsked(request);
+        bool const reveal = asked && router.Permits(request, "settings.secrets.read");
         std::vector<std::string> revealed;
-        std::string body = SettingsJson(config, restartRequired, reveal, settings, &revealed);
+        std::string body = SettingsJson(config, restartRequired, reveal, settings, &revealed, asked && !asked->empty() ? &*asked : nullptr);
         if (!revealed.empty() && recorder)
             recorder(request, revealed);
         return AdminResponse::Json(200, std::move(body));

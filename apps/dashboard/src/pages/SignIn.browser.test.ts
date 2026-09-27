@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the sign-in page in a real browser against a stubbed server: a 422 marks the field it names beside the input and shows its request id, a field the form does not have is listed with the id, a wrong token is said above the form with its id, and the right token signs the browser in.
+ * Tests the sign-in page in a real browser against a stubbed server: a 422 marks the field it names beside the input and shows its request id, a field the form does not have is listed with the id, a wrong token is said above the form with its id, the right token signs the browser in, and a one-time owner link's token fills the form and leaves the address and the browser's history at once, so the page lands on the overview.
  */
 
 import { flushSync, mount, unmount } from "svelte";
@@ -120,6 +120,28 @@ describe("the sign-in page", () => {
         await submit("0123456789abcdef0123456789abcdef");
         expect(session.state).toBe("signed-in");
         expect(session.app).toBe("gameserver");
+    });
+
+    it("takes a one-time owner link's token out of the address as soon as it reads it", async () => {
+        if (page) unmount(page);
+        const before = window.location.href;
+        const routed: string[] = [];
+        const follow = () => routed.push(window.location.hash);
+        window.addEventListener("hashchange", follow);
+        try {
+            history.replaceState(null, "", `${window.location.pathname}${window.location.search}#claim?token=link-token-abc`);
+            session.panel = true;
+            session.needsOwner = true;
+            page = mount(SignIn, { target: host });
+            flushSync();
+            expect(host.querySelector<HTMLInputElement>("#sign-in-token")?.value).toBe("link-token-abc");
+            expect(window.location.hash).toBe("#overview");
+            expect(window.location.href).not.toContain("link-token-abc");
+            expect(routed).toEqual(["#overview"]);
+        } finally {
+            window.removeEventListener("hashchange", follow);
+            history.replaceState(null, "", before);
+        }
     });
 
     it("lets a password manager fill and paste into every field it asks a secret in", async () => {

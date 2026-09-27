@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the Panel options into a listener of the same shape as an app's admin API, opens the store before the listener so nothing serves without somewhere to write, names the certificate and key in Panel option names when the bind rule refuses them, and starts, reloads and stops the listener beside the supervisor's own; a reload that would leave the bind unsafe or the certificate unservable is refused and the old listener keeps serving. Signing in also says which role the operator holds and every permission that role allows, so the pages a person cannot use are never drawn for them and the panel never has to ask again what somebody is allowed to do. A route that asks for a permission the catalog does not hold is left out and named in a warning as the panel starts, so a misnamed key costs its page loudly rather than silently. A settings change, batch or reload an app answered through the relay is recorded with who asked, from where, why and how it ended, refused ones too, and a read that showed a secret is recorded with the keys it showed, never a value.
+ * Reads the Panel options into a listener of the same shape as an app's admin API, opens the store before the listener so nothing serves without somewhere to write, names the certificate and key in Panel option names when the bind rule refuses them, and starts, reloads and stops the listener beside the supervisor's own; a reload that would leave the bind unsafe or the certificate unservable is refused and the old listener keeps serving. Signing in also says which role the operator holds and every permission that role allows, so the pages a person cannot use are never drawn for them and the panel never has to ask again what somebody is allowed to do. A route that asks for a permission the catalog does not hold is left out and named in a warning as the panel starts, so a misnamed key costs its page loudly rather than silently. A settings change, reset, batch or reload an app answered through the relay is recorded, a dry run not being a change, with who asked, from where, why and how it ended, refused ones too, and a read that showed a secret is recorded with the keys it showed, never a value.
  */
 
 #include "Panel.h"
@@ -374,10 +374,17 @@ void Panel::RecordRelayed(AdminRequest const& request, std::string_view app, std
         if (bare != "/api/settings" || status != 200 || !answer.is_object() || !answer.value("revealed", false) || !answer.contains("settings") || !answer["settings"].is_array())
             return;
         std::vector<std::string> keys;
-        for (nlohmann::json const& setting : answer["settings"])
-            if (setting.is_object() && setting.value("secret", false) && setting.contains("value") && setting["value"].is_string()
-                && !setting["value"].get_ref<std::string const&>().empty())
-                keys.push_back(setting.value("key", std::string()));
+        if (answer.contains("revealed_keys") && answer["revealed_keys"].is_array())
+        {
+            for (nlohmann::json const& key : answer["revealed_keys"])
+                if (key.is_string())
+                    keys.push_back(key.get<std::string>());
+        }
+        else
+            for (nlohmann::json const& setting : answer["settings"])
+                if (setting.is_object() && setting.value("secret", false) && setting.contains("value") && setting["value"].is_string()
+                    && !setting["value"].get_ref<std::string const&>().empty())
+                    keys.push_back(setting.value("key", std::string()));
         RecordReveal(request, app, keys);
         return;
     }
@@ -389,6 +396,8 @@ void Panel::RecordRelayed(AdminRequest const& request, std::string_view app, std
     std::vector<std::string> keys;
     if (bare == "/api/settings/batch")
     {
+        if (auto const dry = sent.find("dry_run"); dry != sent.end() && dry->is_boolean() && dry->get<bool>())
+            return;
         event.Name = "settings:batch.changed";
         if (sent.is_object() && sent.contains("entries") && sent["entries"].is_array())
             for (nlohmann::json const& entry : sent["entries"])
@@ -397,7 +406,7 @@ void Panel::RecordRelayed(AdminRequest const& request, std::string_view app, std
     }
     else if (bare.starts_with(SettingPrefix))
     {
-        event.Name = "settings:setting.changed";
+        event.Name = method == "DELETE" ? "settings:setting.reset" : "settings:setting.changed";
         keys.emplace_back(bare.substr(SettingPrefix.size()));
     }
     else if (bare.starts_with(ReloadPrefix))

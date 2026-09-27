@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a change's body whole before anything is set, so a missing reason and a value out of bounds are both named in one answer, checks a restricted key's right before saying anything about its value, and hands the registry the change, whose own checks decide it; a batch is read and checked entry by entry, every refusal listed with its code, and applied through the registry's all-or-nothing batch. Every value in an answer passes through the registry's mask, and history is never revealed.
+ * Reads a change's, a reset's or a batch's body whole before anything is set, so a missing reason and a value out of bounds are both named in one answer, checks a restricted key's right before saying anything about its value, and hands the registry the change, whose own checks decide it; a batch is read and checked entry by entry, every refusal listed with its code, and applied through the registry's all-or-nothing batch, or only previewed on a dry run, which needs no reason and changes nothing. Every value in an answer passes through the registry's mask, and history is never revealed.
  */
 
 #include "AdminSettingsView.h"
@@ -225,9 +225,19 @@ AdminResponse AdminSettingsView::Batch(AdminRouter const& router, Settings& sett
             { { "entries", "List the settings to change, each with its key and value" }, { "reason", "Say why the settings change" } });
     std::vector<std::pair<std::string, std::string>> fields;
     for (auto const& [name, unused] : body.items())
-        if (name != "entries" && name != "reason")
-            fields.emplace_back(name, "A batch takes only entries and reason");
-    std::optional<std::string> const reason = ReasonText(body, fields);
+        if (name != "entries" && name != "reason" && name != "dry_run")
+            fields.emplace_back(name, "A batch takes only entries, reason and dry_run");
+    bool dryRun = false;
+    if (auto const asked = body.find("dry_run"); asked != body.end())
+    {
+        if (asked->is_boolean())
+            dryRun = asked->get<bool>();
+        else
+            fields.emplace_back("dry_run", "Give dry_run as true or false");
+    }
+    std::optional<std::string> reason;
+    if (!dryRun || body.contains("reason"))
+        reason = ReasonText(body, fields);
 
     std::size_t const most = std::max<std::size_t>(settings.GetDeclarations().size(), 1);
     std::vector<SettingEntry> entries;
@@ -271,9 +281,9 @@ AdminResponse AdminSettingsView::Batch(AdminRouter const& router, Settings& sett
         errors.push_back(ProblemJson(settings, problem));
     }
     if (!fields.empty())
-        return Refusal(fmt::format("None of the {} settings changed", entries.size()), std::move(fields), std::move(errors));
+        return Refusal(fmt::format("None of the {} settings {}", entries.size(), dryRun ? "would change" : "changed"), std::move(fields), std::move(errors));
 
-    SettingBatchOutcome const outcome = settings.SetMany(entries, AuthorOf(request), *reason);
+    SettingBatchOutcome const outcome = dryRun ? settings.Preview(entries) : settings.SetMany(entries, AuthorOf(request), *reason);
     if (!outcome.Problems.empty())
     {
         for (SettingProblem const& problem : outcome.Problems)
@@ -291,8 +301,45 @@ AdminResponse AdminSettingsView::Batch(AdminRouter const& router, Settings& sett
         changed.push_back({ { "key", change.Key }, { "old", settings.Shown(change.Key, change.OldValue) }, { "new", settings.Shown(change.Key, change.NewValue) } });
     nlohmann::json answer;
     answer["schema"] = SchemaVersion;
+    answer["dry_run"] = dryRun;
     answer["changed"] = std::move(changed);
     answer["unchanged"] = outcome.Unchanged;
+    answer["message"] = outcome.Message;
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse AdminSettingsView::Reset(AdminRouter const& router, Settings& settings, AdminRequest const& request, std::string_view key)
+{
+    std::optional<SettingView> const view = settings.Describe(key);
+    if (!view)
+        return AdminResponse::Problem(404, "setting_unknown", fmt::format("No setting is named {}", Ambrose::ForLog(key, 128)));
+    if (view->Declaration.Edit == SettingEditClass::Restricted && !router.Permits(request, RestrictedPermission))
+        return Forbidden(key);
+    nlohmann::json const body = request.Body.empty() ? nlohmann::json::object() : nlohmann::json::parse(request.Body, nullptr, false);
+    if (!body.is_object())
+        return AdminResponse::Invalid("A reset takes a JSON object with a reason", { { "reason", "Say why the setting goes back to its config value" } });
+    std::vector<std::pair<std::string, std::string>> fields;
+    for (auto const& [name, unused] : body.items())
+        if (name != "reason")
+            fields.emplace_back(name, "A reset takes only a reason");
+    std::optional<std::string> const reason = ReasonText(body, fields);
+    if (!fields.empty())
+        return AdminResponse::Invalid(fmt::format("{} was not reset", key), std::move(fields));
+
+    SettingOutcome const outcome = settings.Reset(key, AuthorOf(request), *reason);
+    if (outcome.Result == SettingResult::Locked)
+        return Locked(settings, { std::string(key), outcome.Result, outcome.Message });
+    if (!outcome.Ok() && outcome.Result != SettingResult::Unchanged)
+        return Answered(outcome.Result, outcome.Message);
+    std::optional<SettingView> const after = settings.Describe(key);
+    nlohmann::json answer;
+    answer["schema"] = SchemaVersion;
+    answer["key"] = std::string(key);
+    answer["changed"] = outcome.Result == SettingResult::Ok;
+    answer["value"] = after ? settings.Shown(key, after->Value) : std::string();
+    answer["layer"] = after ? Settings::LayerCode(after->Layer) : std::string_view("config");
+    answer["apply"] = after ? std::string(Settings::ApplyName(after->Declaration.Apply)) : std::string();
+    answer["restart_reason"] = after && after->Declaration.Apply == SettingApply::Restart ? nlohmann::json(after->Declaration.RestartReason) : nlohmann::json(nullptr);
     answer["message"] = outcome.Message;
     return AdminResponse::Json(200, answer.dump());
 }
@@ -327,6 +374,14 @@ void AdminSettingsView::Register(AdminRouter& router, Settings& settings)
         if (key.empty() || key.find('/') != std::string_view::npos)
             return AdminResponse::Problem(404, "not_found", "Change a setting at PUT /api/settings/<key>");
         return Put(router, settings, request, key);
+    });
+    router.AddGuardedPrefix("DELETE", std::string(SettingsPrefix), "settings.edit", [&router, &settings](AdminRequest const& request)
+    {
+        std::string_view key(request.Path);
+        key.remove_prefix(SettingsPrefix.size());
+        if (key.empty() || key.find('/') != std::string_view::npos)
+            return AdminResponse::Problem(404, "not_found", "Return a setting to its config value at DELETE /api/settings/<key>");
+        return Reset(router, settings, request, key);
     });
     router.AddGuardedPrefix("GET", std::string(SettingsPrefix), "settings.read", [&settings](AdminRequest const& request)
     {

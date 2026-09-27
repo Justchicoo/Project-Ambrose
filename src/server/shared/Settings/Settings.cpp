@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Declares, resolves, sets and announces live settings: a declaration is checked whole before it is taken, a value is parsed by the declared type and held to the declared bounds whichever layer it comes from, a config or persisted value that fails is reported and the layer below it used, so a value a newer binary no longer accepts never stops an app from starting; a set, reset or batch holds one lock from the check through the write to the store to the new snapshot, so two edits of one key cannot interleave, a batch checks every entry before writing any and writes them in one store call, a secret's value is shown only as its mask in messages, log lines and the audit rows the store keeps, and a change is queued once for the dispatching thread and told to watchers as soon as the write's locks are let go.
+ * Declares, resolves, sets and announces live settings: a declaration is checked whole before it is taken, a value is parsed by the declared type and held to the declared bounds whichever layer it comes from, a config or persisted value that fails is reported and the layer below it used, so a value a newer binary no longer accepts never stops an app from starting; a set, reset or batch holds one lock from the check through the write to the store to the new snapshot, so two edits of one key cannot interleave, a reset runs the key's registered checks on the value it would go back to, a batch checks every entry before writing any and writes them in one store call, and a preview checks a batch the same way under the same lock and reports what would change without writing anything, a secret's value is shown only as its mask in messages, log lines and the audit rows the store keeps, and a change is queued once for the dispatching thread and told to watchers as soon as the write's locks are let go.
  */
 
 #include "Settings.h"
@@ -641,16 +641,26 @@ std::vector<SettingProblem> Settings::ValidateLocked(std::span<SettingEntry cons
         normalised[declared->first] = Format(parsed);
         accepted.push_back(declared->first);
     }
+    std::vector<SettingProblem> refused = RunChecksLocked(accepted, normalised, *snapshot);
+    problems.insert(problems.end(), std::make_move_iterator(refused.begin()), std::make_move_iterator(refused.end()));
+    for (SettingProblem const& problem : problems)
+        normalised.erase(problem.Key);
+    return problems;
+}
+
+std::vector<SettingProblem> Settings::RunChecksLocked(std::span<std::string const> keys, std::map<std::string, std::string, std::less<>> const& normalised, Snapshot const& snapshot) const
+{
+    std::vector<SettingProblem> problems;
     ProposedValue const proposed = [&normalised, &snapshot](std::string_view key) -> std::string
     {
         if (auto const found = normalised.find(key); found != normalised.end())
             return found->second;
-        if (auto const current = snapshot->Values.find(key); current != snapshot->Values.end())
+        if (auto const current = snapshot.Values.find(key); current != snapshot.Values.end())
             return current->second.Text;
         SettingDeclaration const* const declaration = SettingDeclarations::Find(key);
         return declaration ? declaration->Default : std::string();
     };
-    for (std::string const& key : accepted)
+    for (std::string const& key : keys)
     {
         auto const checks = _checks.find(key);
         if (checks == _checks.end())
@@ -670,8 +680,6 @@ std::vector<SettingProblem> Settings::ValidateLocked(std::span<SettingEntry cons
                 problems.push_back({ key, SettingResult::Invalid, std::move(*refusal) });
         }
     }
-    for (SettingProblem const& problem : problems)
-        normalised.erase(problem.Key);
     return problems;
 }
 
@@ -680,6 +688,40 @@ std::vector<SettingProblem> Settings::Validate(std::span<SettingEntry const> ent
     std::lock_guard const lock(_writeMutex);
     std::map<std::string, std::string, std::less<>> normalised;
     return ValidateLocked(entries, normalised);
+}
+
+SettingBatchOutcome Settings::Preview(std::span<SettingEntry const> entries) const
+{
+    std::lock_guard const lock(_writeMutex);
+    SettingBatchOutcome outcome;
+    std::map<std::string, std::string, std::less<>> normalised;
+    outcome.Problems = ValidateLocked(entries, normalised);
+    if (!outcome.Problems.empty())
+    {
+        outcome.Result = outcome.Problems.front().Result;
+        outcome.Message = fmt::format("{} of the {} settings would be refused, so none of them would change", outcome.Problems.size(), entries.size());
+        return outcome;
+    }
+    ReloadableStore<Snapshot>::Snapshot const snapshot = _snapshot.Get();
+    for (auto const& [key, value] : entries)
+    {
+        auto const declared = _declared.find(key);
+        std::string const& text = normalised.at(declared->first);
+        std::string const& current = snapshot->Values.at(declared->first).Text;
+        if (text == current)
+            outcome.Unchanged.push_back(declared->first);
+        else
+        {
+            SettingChange change;
+            change.Key = declared->first;
+            change.OldValue = current;
+            change.NewValue = text;
+            outcome.Changes.push_back(std::move(change));
+        }
+    }
+    outcome.Result = outcome.Changes.empty() ? SettingResult::Unchanged : SettingResult::Ok;
+    outcome.Message = fmt::format("{} setting{} would change", outcome.Changes.size(), outcome.Changes.size() == 1 ? "" : "s");
+    return outcome;
 }
 
 SettingBatchOutcome Settings::SetMany(std::span<SettingEntry const> entries, SettingAuthor const& author, std::string_view reason)
@@ -808,6 +850,10 @@ SettingOutcome Settings::Reset(std::string_view key, SettingAuthor const& author
         std::map<std::string, std::string, std::less<>> after = _persisted;
         after.erase(declared->first);
         Resolved next = ResolveOne(declared->second, after, nullptr);
+        std::map<std::string, std::string, std::less<>> const proposed{ { declared->first, next.Text } };
+        std::vector<SettingProblem> refused = RunChecksLocked(std::span<std::string const>(&declared->first, 1), proposed, *snapshot);
+        if (!refused.empty())
+            return { SettingResult::Invalid, std::move(refused.front().Message) };
 
         SettingWrite write;
         write.Key = declared->first;

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests that the panel and the apps agree on what each admin route needs: every route an app or the supervisor serves asks for a permission the panel's catalog holds, so no page is lost from the panel unseen, the supervisor's relay asks the same permission the app's own route asks for, method by method, settings changes, batches, history and events included, and a write the relay does not know, or a sign-in, is never relayed at all; a settings relay names the caller and forwards only the rights they hold, and the query goes with it encoded.
+ * Tests that the panel and the apps agree on what each admin route needs: every route an app or the supervisor serves asks for a permission the panel's catalog holds, so no page is lost from the panel unseen, the supervisor's relay asks the same permission the app's own route asks for, method by method, settings changes, resets, batches, history and events included, and a write the relay does not know, or a sign-in, is never relayed at all; a settings relay names the caller and forwards only the rights they hold, and the query goes with it encoded.
  */
 
 #include "AdminActivityView.h"
@@ -135,7 +135,7 @@ TEST(PanelRoutesTest, AWriteTheRelayDoesNotKnowOrASignInIsNeverRelayed)
     EXPECT_FALSE(Supervisor::PermissionFor("GET", "/api/settings/batch").has_value());
     EXPECT_FALSE(Supervisor::PermissionFor("PUT", "/api/settings/").has_value()) << "a change names its key";
     EXPECT_FALSE(Supervisor::PermissionFor("PUT", "/api/settings/World.UpdateInterval/history").has_value());
-    EXPECT_FALSE(Supervisor::PermissionFor("DELETE", "/api/settings/World.UpdateInterval").has_value());
+    EXPECT_EQ(Supervisor::PermissionFor("DELETE", "/api/settings/World.UpdateInterval"), std::optional<std::string_view>("settings.edit"));
     EXPECT_FALSE(Supervisor::PermissionFor("POST", "/api/events/after/0").has_value());
 
     EXPECT_FALSE(Supervisor::PermissionFor("POST", "/api/session").has_value()) << "a sign-in stays the supervisor's own";

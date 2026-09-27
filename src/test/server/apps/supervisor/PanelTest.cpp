@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the panel's own listener and what it holds: it serves nothing until Panel.Enable is set, it opens its store with the panel tables before it listens, it answers its own routes on a loopback port with its own token, a bind beyond this machine with no certificate is refused with the Panel option names in the message, the plain-HTTP opt-in lifts that refusal, a certificate and key are served over TLS with the fingerprint the files hold, a route that declares a cost is held back with a retry hint while an uncosted route from the same caller still answers, one audit row records the throttling however many requests are refused in that minute, and a change whose audit row cannot be written is not applied, the plain-HTTP opt-in lets it reach beyond this machine with the risk said out loud, a reload that would leave the bind unsafe is refused while the old listener goes on serving, and a replaced certificate is served after a reload on the same port, and it refuses to start at all when a route says neither which permission it needs nor that any signed-in member may call it, or names a permission the catalog does not hold; and a relayed settings change, batch, reload or reveal is recorded with who, where, why and how it ended, a refused change too, but never a value.
+ * Tests the panel's own listener and what it holds: it serves nothing until Panel.Enable is set, it opens its store with the panel tables before it listens, it answers its own routes on a loopback port with its own token, a bind beyond this machine with no certificate is refused with the Panel option names in the message, the plain-HTTP opt-in lifts that refusal, a certificate and key are served over TLS with the fingerprint the files hold, a route that declares a cost is held back with a retry hint while an uncosted route from the same caller still answers, one audit row records the throttling however many requests are refused in that minute, and a change whose audit row cannot be written is not applied, the plain-HTTP opt-in lets it reach beyond this machine with the risk said out loud, a reload that would leave the bind unsafe is refused while the old listener goes on serving, and a replaced certificate is served after a reload on the same port, and it refuses to start at all when a route says neither which permission it needs nor that any signed-in member may call it, or names a permission the catalog does not hold; and a relayed settings change, reset, batch, reload or reveal is recorded with who, where, why and how it ended, a dry run not at all and a reveal naming a key with only the keys it showed, a refused change too, but never a value.
  */
 
 #include "AdminClient.h"
@@ -398,17 +398,31 @@ TEST_F(PanelTest, RelayedSettingsChangesReloadsAndRevealsAreRecordedWithoutTheir
     panel.RecordRelayed(request, "gameserver", "PUT", "/api/settings/World.UpdateInterval", 422, R"({"error":"invalid","message":"World.UpdateInterval was not changed"})");
     request.Body = R"({"reason":"tuning","entries":[{"key":"Rate.XP.Quest","value":2},{"key":"Rate.XP.Kill","value":3}]})";
     panel.RecordRelayed(request, "gameserver", "POST", "/api/settings/batch", 200, "{}");
+    request.Body = R"({"dry_run":true,"entries":[{"key":"Rate.XP.Quest","value":2}]})";
+    panel.RecordRelayed(request, "gameserver", "POST", "/api/settings/batch", 200, R"({"dry_run":true})");
+    request.Body = R"({"dry_run":"yes","reason":"x","entries":[{"key":"Rate.XP.Quest","value":2}]})";
+    EXPECT_NO_THROW(panel.RecordRelayed(request, "gameserver", "POST", "/api/settings/batch", 422, R"({"error":"invalid","message":"Give dry_run as true or false"})"));
+    request.Body = R"({"reason":"back to the file"})";
+    panel.RecordRelayed(request, "gameserver", "DELETE", "/api/settings/World.UpdateInterval", 200, R"({"changed":true})");
     request.Body.clear();
     panel.RecordRelayed(request, "gameserver", "POST", "/api/reload/messages", 409, R"({"ok":false})");
     panel.RecordRelayed(request, "loginserver", "GET", "/api/settings?reveal=1", 200,
         R"({"revealed":true,"settings":[{"key":"Account.VerifierKeys","secret":true,"value":"1:aaaaaaaa"},{"key":"LoginDatabaseInfo","secret":true,"value":""},{"key":"Login.Name","secret":false,"value":"Ambrose"}]})");
     panel.RecordRelayed(request, "loginserver", "GET", "/api/settings", 200, R"({"revealed":false,"settings":[]})");
+    panel.RecordRelayed(request, "loginserver", "GET", "/api/settings?reveal=Account.VerifierKeys", 200,
+        R"({"revealed":true,"revealed_keys":["Account.VerifierKeys"],"settings":[{"key":"Account.VerifierKeys","secret":true,"value":"1:bbbbbbbb"},{"key":"LoginDatabaseInfo","secret":true,"value":"127.0.0.1;3306;ambrose;***;x"}]})");
     panel.RecordRelayed(request, "loginserver", "GET", "/api/settings/Login.Name/history", 200, "{}");
 
     EXPECT_EQ(PanelAudit::Count(panel.Store(), "settings:setting.changed"), 2) << "a refused change is recorded as well as one that landed";
-    EXPECT_EQ(PanelAudit::Count(panel.Store(), "settings:batch.changed"), 1);
+    EXPECT_EQ(PanelAudit::Count(panel.Store(), "settings:batch.changed"), 2) << "a dry run changes nothing, so it is not recorded, but a batch refused for an unclear dry_run is";
+    std::optional<PanelStore::Statement> batches = panel.Store().Prepare("SELECT result, error FROM audit_event WHERE name = 'settings:batch.changed' AND result = ?1", error);
+    ASSERT_TRUE(batches.has_value()) << error;
+    batches->Bind(1, std::string(PanelAudit::ToString(AuditResult::Refused)));
+    ASSERT_TRUE(batches->Step(error)) << error;
+    EXPECT_EQ(batches->Text(1), "Give dry_run as true or false");
+    EXPECT_EQ(PanelAudit::Count(panel.Store(), "settings:setting.reset"), 1);
     EXPECT_EQ(PanelAudit::Count(panel.Store(), "reload:target.run"), 1);
-    EXPECT_EQ(PanelAudit::Count(panel.Store(), "settings:secret.revealed"), 1) << "only a read that showed a secret is a reveal";
+    EXPECT_EQ(PanelAudit::Count(panel.Store(), "settings:secret.revealed"), 2) << "only a read that showed a secret is a reveal";
 
     std::optional<PanelStore::Statement> rows = panel.Store().Prepare("SELECT result, reason, node, properties, error FROM audit_event WHERE name = 'settings:setting.changed' ORDER BY created_epoch_ms, event_id", error);
     ASSERT_TRUE(rows.has_value()) << error;
@@ -425,9 +439,15 @@ TEST_F(PanelTest, RelayedSettingsChangesReloadsAndRevealsAreRecordedWithoutTheir
 
     std::optional<PanelStore::Statement> reveal = panel.Store().Prepare("SELECT properties FROM audit_event WHERE name = 'settings:secret.revealed'", error);
     ASSERT_TRUE(reveal.has_value()) << error;
-    ASSERT_TRUE(reveal->Step(error)) << error;
-    std::string const properties = reveal->Text(0);
-    EXPECT_NE(properties.find("Account.VerifierKeys"), std::string::npos) << properties;
-    EXPECT_EQ(properties.find("LoginDatabaseInfo"), std::string::npos) << "an empty secret showed nothing: " << properties;
-    EXPECT_EQ(properties.find("aaaaaaaa"), std::string::npos) << properties;
+    std::size_t reveals = 0;
+    while (reveal->Step(error))
+    {
+        std::string const properties = reveal->Text(0);
+        EXPECT_NE(properties.find("Account.VerifierKeys"), std::string::npos) << properties;
+        EXPECT_EQ(properties.find("LoginDatabaseInfo"), std::string::npos) << "an empty secret and one not named showed nothing: " << properties;
+        EXPECT_EQ(properties.find("aaaaaaaa"), std::string::npos) << properties;
+        EXPECT_EQ(properties.find("bbbbbbbb"), std::string::npos) << properties;
+        ++reveals;
+    }
+    EXPECT_EQ(reveals, 2u);
 }

@@ -16,6 +16,7 @@ import HardDriveIcon from "@lucide/svelte/icons/hard-drive";
 import LockIcon from "@lucide/svelte/icons/lock";
 import ServerIcon from "@lucide/svelte/icons/server";
 import SettingsIcon from "@lucide/svelte/icons/settings";
+import SlidersHorizontalIcon from "@lucide/svelte/icons/sliders-horizontal";
 import ShieldIcon from "@lucide/svelte/icons/shield";
 import SquareTerminalIcon from "@lucide/svelte/icons/square-terminal";
 import UserIcon from "@lucide/svelte/icons/user";
@@ -103,6 +104,15 @@ export const routes: Route[] = [
         nav: true,
         group: "Servers",
         view: { kind: "page", load: () => import("./pages/Database.svelte") },
+    },
+    {
+        path: "config",
+        title: "Configuration",
+        icon: SlidersHorizontalIcon,
+        permission: "settings.read",
+        nav: true,
+        group: "Servers",
+        view: { kind: "page", load: () => import("./pages/Config.svelte") },
     },
     {
         path: "backups",

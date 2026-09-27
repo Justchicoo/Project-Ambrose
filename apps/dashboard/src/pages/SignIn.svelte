@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The page a signed-out browser sees, which asks for what the host it came from signs people in with: a panel with no operator yet asks for the token from the one-time link the supervisor printed and the name and password to make the owner with, a panel that has one asks for a name and password, and an app's own listener asks for its admin token, which is traded once for a session so nothing is kept in the browser; a field's own problem sits beside it, any other refusal sits above the form with its request id, and a session that has just ended says so. -->
+<!-- Project Ambrose by Imjustchico: The page a signed-out browser sees, which asks for what the host it came from signs people in with: a panel with no operator yet asks for the token from the one-time link the supervisor printed, which it takes out of the address and the browser's history as soon as it reads it so the page lands on the overview, and the name and password to make the owner with, a panel that has one asks for a name and password, and an app's own listener asks for its admin token, which is traded once for a session so nothing is kept in the browser; a field's own problem sits beside it, any other refusal sits above the form with its request id, and a session that has just ended says so. -->
 <script lang="ts">
     import * as Card from "$lib/components/ui/card/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
@@ -24,7 +24,11 @@
     const others = $derived(Object.entries(fields).filter(([field]) => !mine.has(field)));
 
     const linkFromTheStart = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("token") ?? "";
-    if (linkFromTheStart !== "") token = linkFromTheStart;
+    if (linkFromTheStart !== "") {
+        token = linkFromTheStart;
+        history.replaceState(history.state, "", `${window.location.pathname}${window.location.search}#overview`);
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+    }
 
     function describe(error: ApiError): string {
         if (error.code === "wrong_token") return "That is not this app's admin token.";

@@ -1,18 +1,18 @@
 /*
  * Project Ambrose by Imjustchico
- * The built panel loaded from the panel's own listener rather than an app's admin API: it signs in and reaches the overview with nothing written to the browser console, every request it makes goes back to the listener it came from, every response carries the policy, frame denial, nosniff and referrer headers, and the servers page reaches the app the supervisor runs through that listener rather than the app list of the supervisor alone.
+ * The built panel loaded from the panel's own listener rather than an app's admin API: its first operator is made from the link the supervisor printed and reaches the overview with nothing written to the browser console, every request it makes goes back to the listener it came from, every response carries the policy, frame denial, nosniff and referrer headers, and the servers page reaches the app the supervisor runs through that listener rather than the app list of the supervisor alone.
  */
 
 import { expect, test } from "@playwright/test";
-import { app, built, startPanelListener, supervisor, token, type Panel } from "./panel-server";
+import { app, built, operator, port, startPanelListener, supervisor, type PanelListener } from "./panel-server";
 
 test.skip(!supervisor || !app || !built, "needs the built panel, patchserver and supervisor");
 test.describe.configure({ mode: "serial" });
 
-let panel: Panel;
+let panel: PanelListener;
 
 test.beforeAll(async () => {
-    panel = await startPanelListener(12630, 12631, 12632);
+    panel = await startPanelListener(port(30), port(31), port(32));
 });
 
 test.afterAll(async () => {
@@ -33,9 +33,11 @@ test("the panel loads from its own listener with no console errors and no reques
         if (answer.status() >= 400) complaints.push(`${answer.status()} ${answer.url()}`);
     });
 
-    await page.goto(`${panel.url}/#overview`);
-    await page.getByLabel("Admin token").fill(token);
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.goto(`${panel.url}/#claim?token=${panel.claim}`);
+    await page.locator("#sign-in-token").fill(panel.claim);
+    await page.locator("#sign-in-username").fill(operator.name);
+    await page.locator("#sign-in-password").fill(operator.password);
+    await page.getByRole("button", { name: "Make me the owner" }).click();
     await expect(page.getByRole("heading", { name: "Overview", level: 1 })).toBeVisible();
 
     expect(complaints).toEqual([]);
@@ -59,7 +61,8 @@ test("every response from the panel listener carries its security headers", asyn
 
 test("the servers page reaches the app the supervisor runs through the panel listener", async ({ page }) => {
     await page.goto(`${panel.url}/#servers`);
-    await page.getByLabel("Admin token").fill(token);
+    await page.locator("#sign-in-username").fill(operator.name);
+    await page.locator("#sign-in-password").fill(operator.password);
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page.getByRole("heading", { name: "Servers", level: 1 })).toBeVisible();
 

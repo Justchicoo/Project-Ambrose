@@ -120,7 +120,6 @@ Everything not in the table above, including every milestone whose dependencies 
 | 16.11 | Overlaps the type extraction already built in 3.21 and is being rethought |
 | 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal, and nothing else left to build |
 | 3.26 | Unblocked by the design system landing, and next in the maintainer's own queue after the terminal dashboard |
-| 17.13 | Held with phase 17 for the panel session, which builds the settings editor and reload page on 17.12's settings API and events feed |
 | 17.47 | Kept for the maintainer's panel session, beside the roles it builds on |
 | 8.04 | Built on 2026-09-26 by the maintainer's world session, 10 of 12 checks. Left: the game master's real-client check, which waits on 6.04's in-game commands, and the real-client check that shows a spell in the Spell Deck, which waits on the deck 8.10 and 8.11 build |
 | 9.02 | Built on 2026-09-26 by the maintainer's world session, 6 of 7 checks. Left: its real-client check, which waits on 6.04 |

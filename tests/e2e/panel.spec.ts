@@ -4,7 +4,7 @@
  */
 
 import { expect, test, type Page } from "@playwright/test";
-import { app, built, startPanel, token, type Panel } from "./panel-server";
+import { app, built, port, startPanel, token, type Panel } from "./panel-server";
 
 test.skip(!app || !built, "needs the built panel and a built patchserver, or AMBROSE_PANEL_APP");
 test.describe.configure({ mode: "serial" });
@@ -12,7 +12,7 @@ test.describe.configure({ mode: "serial" });
 let panel: Panel;
 
 test.beforeAll(async () => {
-    panel = await startPanel(12610);
+    panel = await startPanel(port(10));
 });
 
 test.afterAll(async () => {
@@ -93,7 +93,7 @@ test("nothing in the browser holds the token or a server list", async ({ page })
 });
 
 test("a stopped app reads as not answering within five seconds and its figures go stale with their age", async ({ page }) => {
-    const doomed = await startPanel(12611);
+    const doomed = await startPanel(port(11));
     try {
         await signIn(page, doomed.url);
         await expect(page.getByText(/^Updated \d+ s ago$/).first()).toBeVisible();

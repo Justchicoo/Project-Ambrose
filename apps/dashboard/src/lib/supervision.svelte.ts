@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What the panel asks about one app: running a command on it, the supervisor's own routes for power and captured output, and the app's own routes for its status, settings with their changes, batches, history and reveals, and databases, sent through the supervisor's relay when the supervisor served this panel and straight to the app when the app served it itself, so every page reads the same way whichever is in front of it. A page about something only some apps keep, such as the realm list the login server holds, asks each app once and offers only those that answer, because an app answering that it has no such page is not an app with an empty one; an app run without an admin API has no pages at all and is never offered, while one that is only stopped still is, so its page can say so.
+ * What the panel asks about one app: running a command on it, the supervisor's own routes for power and captured output, and the app's own routes for its status, settings with their changes, resets, batches and their previews, history and reveals, the events it announces, and databases, sent through the supervisor's relay when the supervisor served this panel and straight to the app when the app served it itself, so every page reads the same way whichever is in front of it. A page about something only some apps keep, such as the realm list the login server holds, asks each app once and offers only those that answer, because an app answering that it has no such page is not an app with an empty one; an app run without an admin API has no pages at all and is never offered, while one that is only stopped still is, so its page can say so.
  */
 
 import { ApiError, request } from "./api.svelte";
@@ -26,6 +26,7 @@ import {
     SettingBatchAnswer,
     SettingChangeAnswer,
     SettingHistoryAnswer,
+    EventsAnswer,
     PanelSettingsAnswer,
     type AppEntry,
 } from "./schemas";
@@ -95,8 +96,14 @@ export function runCommand(app: string, command: string, confirm = false) {
     return request("POST", pathFor(app, "command"), CommandAnswer, confirm ? { command, confirm } : { command });
 }
 
-export function settingsOf(app: string, signal?: AbortSignal, reveal = false) {
-    return request("GET", pathFor(app, reveal ? "settings?reveal=1" : "settings"), SettingsAnswer, undefined, signal);
+export function settingsOf(app: string, signal?: AbortSignal, reveal?: string) {
+    return request(
+        "GET",
+        pathFor(app, reveal ? `settings?reveal=${encodeURIComponent(reveal)}` : "settings"),
+        SettingsAnswer,
+        undefined,
+        signal,
+    );
 }
 
 export type SettingValue = string | number | boolean;
@@ -107,6 +114,18 @@ export function changeSetting(app: string, key: string, value: SettingValue, rea
 
 export function changeSettings(app: string, entries: { key: string; value: SettingValue }[], reason: string) {
     return request("POST", pathFor(app, "settings/batch"), SettingBatchAnswer, { entries, reason });
+}
+
+export function resetSetting(app: string, key: string, reason: string) {
+    return request("DELETE", pathFor(app, `settings/${encodeURIComponent(key)}`), SettingChangeAnswer, { reason });
+}
+
+export function previewSettings(app: string, entries: { key: string; value: SettingValue }[]) {
+    return request("POST", pathFor(app, "settings/batch"), SettingBatchAnswer, { entries, dry_run: true });
+}
+
+export function eventsAfter(app: string, after: number, signal?: AbortSignal) {
+    return request("GET", pathFor(app, `events/after/${after}`), EventsAnswer, undefined, signal);
 }
 
 export function settingHistory(app: string, key: string, signal?: AbortSignal) {

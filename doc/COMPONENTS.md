@@ -124,7 +124,7 @@ If a behaviour exists nowhere above, a single Zag.js machine may be pulled for t
 | `npm run test` | The logic and token checks, then every story in Chromium and in WebKit with axe failing the run on an error |
 | `npm run test:canary` | **Has to fail.** It renders one deliberately unlabelled control, so a gate that quietly stopped checking is caught |
 | `npm run storybook:build` | The gallery builds as static files, which are never served to an operator |
-| `npm run e2e` | The built panel against a real browser: it loads from its own origin, reads the tokens and asks no other host for anything |
+| `npm run e2e` | The built panel against a real browser: it loads from its own origin, reads the tokens and asks no other host for anything. Its servers listen from `AMBROSE_E2E_PORT_BASE`, 12600 unless set, upward. With `AMBROSE_E2E_GAMESERVER_CONF` naming a game server config that holds its databases and client, the configuration run also drives a real gameserver from a phone-sized browser |
 | `npm run screenshots` | The pixel check. Run and re-baselined only inside the official Playwright container, never on the blocking path |
 
 ## Tokens and icons

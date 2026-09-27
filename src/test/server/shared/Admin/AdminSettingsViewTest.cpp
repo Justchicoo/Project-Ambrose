@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the settings API through the admin router over an in-memory store: an out-of-bounds PUT answers 422 and changes nothing, a PUT missing its reason with a bad value names both, a PUT to a key an environment variable or a command-line override sets answers 409 naming the layer and the variable, a batch with one bad entry answers 422 naming every bad one and applies none while a good batch lands in one commit, Account.VerifierKeys reads masked unless the caller asks with the right and every reveal is recorded, its history is masked even to a caller who may reveal, a restricted key needs its own right and a supervisor's forwarded grants narrow a token caller, a relayed change is attributed to the user the supervisor names, and bodies that are not a change are refused field by field.
+ * Tests the settings API through the admin router over an in-memory store: an out-of-bounds PUT answers 422 and changes nothing, a PUT missing its reason with a bad value names both, a PUT to a key an environment variable or a command-line override sets answers 409 naming the layer and the variable, a batch with one bad entry answers 422 naming every bad one and applies none while a good batch lands in one commit, Account.VerifierKeys reads masked unless the caller asks with the right and every reveal is recorded, its history is masked even to a caller who may reveal, a restricted key needs its own right and a supervisor's forwarded grants narrow a token caller, a relayed change is attributed to the user the supervisor names, bodies that are not a change are refused field by field, a reset returns a key to its config value with an audit row of its own, a reset a registered check refuses answers 422 and changes nothing, a dry run says what a batch would change or refuse and changes nothing, and a reveal naming one key shows and records only that one.
  */
 
 #include "AdminAuth.h"
@@ -319,4 +319,109 @@ TEST_F(AdminSettingsViewTest, AStoreThatFailsAnswers503AndAnUnopenedRegistrySays
     EXPECT_EQ(failed.Status, 503) << failed.Body;
     EXPECT_EQ(Json(failed)["error"], "settings_store_failed");
     EXPECT_EQ(_settings.Get<uint32>("World.UpdateInterval"), 50u);
+}
+
+TEST_F(AdminSettingsViewTest, AResetReturnsAKeyToItsConfigValueWithAnAuditRowOfItsOwn)
+{
+    Open("World.UpdateInterval = 50\n", SettingApps::Game, { { "AMBROSE_WORLD_HEARTBEAT", "30" } });
+    ASSERT_EQ(_routes.Dispatch(Request("PUT", "/api/settings/World.UpdateInterval", R"({"value":100,"reason":"faster"})")).Status, 200);
+    EXPECT_EQ(_routes.Dispatch(Request("DELETE", "/api/settings/World.UpdateInterval", "{}")).Status, 422) << "a reset needs a reason too";
+
+    AdminResponse const reset = _routes.Dispatch(Request("DELETE", "/api/settings/World.UpdateInterval", R"({"reason":"back to the file"})"));
+    ASSERT_EQ(reset.Status, 200) << reset.Body;
+    EXPECT_EQ(Json(reset)["value"], "50");
+    EXPECT_EQ(Json(reset)["layer"], "config");
+    EXPECT_EQ(Json(reset)["changed"], true);
+    EXPECT_EQ(_settings.Get<uint32>("World.UpdateInterval"), 50u);
+
+    nlohmann::json const rows = Json(_routes.Dispatch(Request("GET", "/api/settings/World.UpdateInterval/history")));
+    ASSERT_EQ(rows["entries"].size(), 2u);
+    EXPECT_EQ(rows["entries"][0]["old"], "100");
+    EXPECT_EQ(rows["entries"][0]["new"], "50");
+    EXPECT_EQ(rows["entries"][0]["reason"], "back to the file");
+
+    AdminResponse const again = _routes.Dispatch(Request("DELETE", "/api/settings/World.UpdateInterval", R"({"reason":"again"})"));
+    ASSERT_EQ(again.Status, 200);
+    EXPECT_EQ(Json(again)["changed"], false) << "a key with no live value has nothing to reset";
+    EXPECT_EQ(_routes.Dispatch(Request("DELETE", "/api/settings/World.Heartbeat", R"({"reason":"x"})")).Status, 409);
+    EXPECT_EQ(_routes.Dispatch(Request("DELETE", "/api/settings/No.Such.Setting", R"({"reason":"x"})")).Status, 404);
+}
+
+TEST_F(AdminSettingsViewTest, AResetARegisteredCheckRefusesAnswers422AndChangesNothing)
+{
+    Open("World.UpdateInterval = 50\n");
+    ASSERT_TRUE(_settings.AddCheck("World.UpdateInterval", [](std::string_view value, Settings::ProposedValue const&) -> std::optional<std::string>
+    {
+        if (value == "50")
+            return std::string("50 would drop a key a stored verifier still uses");
+        return std::nullopt;
+    }));
+    ASSERT_EQ(_routes.Dispatch(Request("PUT", "/api/settings/World.UpdateInterval", R"({"value":100,"reason":"faster"})")).Status, 200);
+    std::size_t const written = _store->Writes.size();
+
+    AdminResponse const refused = _routes.Dispatch(Request("DELETE", "/api/settings/World.UpdateInterval", R"({"reason":"back to the file"})"));
+    EXPECT_EQ(refused.Status, 422) << refused.Body;
+    EXPECT_EQ(Json(refused)["message"], "50 would drop a key a stored verifier still uses");
+    EXPECT_EQ(_settings.Get<uint32>("World.UpdateInterval"), 100u);
+    EXPECT_EQ(_store->Writes.size(), written) << "a refused reset writes no audit row";
+    EXPECT_EQ(Json(_routes.Dispatch(Request("GET", "/api/settings/World.UpdateInterval/history")))["entries"].size(), 1u);
+}
+
+TEST_F(AdminSettingsViewTest, ADryRunSaysWhatABatchWouldChangeOrRefuseAndChangesNothing)
+{
+    Open("World.UpdateInterval = 50\n");
+    AdminResponse const preview = _routes.Dispatch(Request("POST", "/api/settings/batch",
+        R"({"dry_run":true,"entries":[{"key":"World.UpdateInterval","value":100},{"key":"Rate.XP.Kill","value":1}]})"));
+    ASSERT_EQ(preview.Status, 200) << "a dry run needs no reason: " << preview.Body;
+    nlohmann::json const body = Json(preview);
+    EXPECT_EQ(body["dry_run"], true);
+    ASSERT_EQ(body["changed"].size(), 1u);
+    EXPECT_EQ(body["changed"][0]["key"], "World.UpdateInterval");
+    EXPECT_EQ(body["changed"][0]["old"], "50");
+    EXPECT_EQ(body["changed"][0]["new"], "100");
+    EXPECT_EQ(body["unchanged"], nlohmann::json::array({ "Rate.XP.Kill" }));
+
+    AdminResponse const refused = _routes.Dispatch(Request("POST", "/api/settings/batch",
+        R"({"dry_run":true,"entries":[{"key":"World.UpdateInterval","value":100},{"key":"Rate.XP.Quest","value":500}]})"));
+    ASSERT_EQ(refused.Status, 422) << refused.Body;
+    EXPECT_EQ(Json(refused)["errors"][0]["key"], "Rate.XP.Quest");
+    EXPECT_EQ(Json(refused)["errors"][0]["code"], "out_of_bounds");
+
+    AdminResponse const unclear = _routes.Dispatch(Request("POST", "/api/settings/batch", R"({"dry_run":"yes","reason":"x","entries":[{"key":"World.UpdateInterval","value":100}]})"));
+    EXPECT_EQ(unclear.Status, 422);
+    EXPECT_TRUE(Json(unclear)["fields"].contains("dry_run")) << unclear.Body;
+    EXPECT_FALSE(Json(unclear)["fields"].contains("reason")) << unclear.Body;
+    EXPECT_TRUE(_store->Writes.empty()) << "nothing a dry run looked at was written";
+    EXPECT_EQ(_settings.Get<uint32>("World.UpdateInterval"), 50u);
+    EXPECT_EQ(_settings.GetPendingChangeCount(), 0u);
+}
+
+TEST_F(AdminSettingsViewTest, ARevealNamingOneKeyShowsAndRecordsOnlyThatOne)
+{
+    Open("Account.VerifierKeys = " + FirstKey + "\nAccount.VerifierActiveKey = 1\nLoginDatabaseInfo = 127.0.0.1;3306;ambrose;hunter2;ambrose_login\n", SettingApps::Login);
+    AdminRequest asking = Request("GET", "/api/settings");
+    asking.QueryValues["reveal"] = "Account.VerifierKeys";
+    AdminResponse const answer = _routes.Dispatch(asking);
+    ASSERT_EQ(answer.Status, 200);
+    EXPECT_NE(answer.Body.find(std::string(64, 'a')), std::string::npos);
+    EXPECT_EQ(answer.Body.find("hunter2"), std::string::npos) << "a secret the caller did not name stays masked";
+    nlohmann::json const body = Json(answer);
+    EXPECT_EQ(body["revealed_keys"], nlohmann::json::array({ "Account.VerifierKeys" }));
+    for (nlohmann::json const& setting : body["settings"])
+    {
+        if (setting["key"] == "Account.VerifierKeys")
+        {
+            EXPECT_EQ(setting["revealed"], true);
+        }
+        if (setting["key"] == "LoginDatabaseInfo")
+        {
+            EXPECT_EQ(setting["revealed"], false);
+        }
+    }
+    ASSERT_EQ(_reveals.size(), 1u);
+    EXPECT_EQ(_reveals[0], (std::vector<std::string>{ "Account.VerifierKeys" }));
+
+    asking.QueryValues["reveal"] = "0";
+    EXPECT_EQ(_routes.Dispatch(asking).Body.find(std::string(64, 'a')), std::string::npos);
+    EXPECT_EQ(_reveals.size(), 1u);
 }

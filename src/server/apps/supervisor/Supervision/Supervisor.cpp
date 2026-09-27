@@ -261,7 +261,7 @@ std::optional<std::string_view> Supervisor::PermissionFor(std::string_view metho
         if (key.ends_with("/history") && key.size() > std::string_view("/history").size())
             return read ? std::optional<std::string_view>("settings.read") : std::nullopt;
         if (!key.empty() && key.find('/') == std::string_view::npos)
-            return method == "PUT" ? std::optional<std::string_view>("settings.edit") : std::nullopt;
+            return method == "PUT" || method == "DELETE" ? std::optional<std::string_view>("settings.edit") : std::nullopt;
         return std::nullopt;
     }
     if (tail.starts_with("/api/events/after/"))

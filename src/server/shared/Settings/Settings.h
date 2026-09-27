@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The live settings registry (sSettings): every tunable value is declared once with its type, default, bounds, unit, category, description and apply mode, and resolves through the layers doc/config/README.md gives, the declaration, the shipped and local config files, the value persisted in the database the app owns, then an AMBROSE_ environment variable or a command-line override, which lock the key; the persisted values that pass their checks are also handed to ConfigMgr as its live layer, so every reader of an option sees a live value and every config change hook fires for it. Readers take one atomic snapshot, and a key the table declares but this app has not yet declared reads as its declared default; a set, reset or batch is refused before anything is written when a key is unknown, named twice or locked, a value is of the wrong type or out of bounds, or a check registered for the key refuses it with the values proposed beside it in view, every problem of a batch being named, and otherwise is persisted and audited in one step, a batch in one transaction, before the snapshot moves; a secret is masked in every message and audit row; each change is queued once and handed to subscribers on the thread that dispatches them, the world thread on the game server, and handed at once to watchers on the thread that wrote it.
+ * The live settings registry (sSettings): every tunable value is declared once with its type, default, bounds, unit, category, description and apply mode, and resolves through the layers doc/config/README.md gives, the declaration, the shipped and local config files, the value persisted in the database the app owns, then an AMBROSE_ environment variable or a command-line override, which lock the key; the persisted values that pass their checks are also handed to ConfigMgr as its live layer, so every reader of an option sees a live value and every config change hook fires for it. Readers take one atomic snapshot, and a key the table declares but this app has not yet declared reads as its declared default; a set, reset or batch is refused before anything is written when a key is unknown, named twice or locked, a value is of the wrong type or out of bounds, or a check registered for the key refuses it with the values proposed beside it in view, every problem of a batch being named, which a preview reports as well with what the batch would change and without writing anything, and otherwise is persisted and audited in one step, a batch in one transaction, before the snapshot moves; a secret is masked in every message and audit row; each change is queued once and handed to subscribers on the thread that dispatches them, the world thread on the game server, and handed at once to watchers on the thread that wrote it.
  */
 
 #ifndef AMBROSE_SETTINGS_H
@@ -233,6 +233,7 @@ public:
     SettingOutcome Reset(std::string_view key, SettingAuthor const& author, std::string_view reason);
     SettingBatchOutcome SetMany(std::span<SettingEntry const> entries, SettingAuthor const& author, std::string_view reason);
     std::vector<SettingProblem> Validate(std::span<SettingEntry const> entries) const;
+    SettingBatchOutcome Preview(std::span<SettingEntry const> entries) const;
     bool History(std::string_view key, std::vector<SettingAuditEntry>& entries, std::string& error) const;
     bool AddCheck(std::string key, Check check);
     bool IsSecret(std::string_view key) const;
@@ -283,6 +284,7 @@ private:
     std::optional<SettingOutcome> CheckValue(Declared const& declared, std::string_view text, SettingValue& parsed) const;
     std::optional<std::string> LockedBy(std::string_view key, Resolved const& current) const;
     std::vector<SettingProblem> ValidateLocked(std::span<SettingEntry const> entries, std::map<std::string, std::string, std::less<>>& normalised) const;
+    std::vector<SettingProblem> RunChecksLocked(std::span<std::string const> keys, std::map<std::string, std::string, std::less<>> const& normalised, Snapshot const& snapshot) const;
     void Notify(std::vector<SettingChange> const& changes);
     void Publish(std::map<std::string, Resolved, std::less<>> values, std::vector<SettingChange> changes);
     std::map<std::string, std::string> LiveValues() const;

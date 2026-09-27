@@ -4,14 +4,14 @@
  */
 
 import { expect, test } from "@playwright/test";
-import { app, built, startPanel, type Panel } from "../e2e/panel-server";
+import { app, built, port, startPanel, type Panel } from "../e2e/panel-server";
 
 test.skip(!app || !built, "needs the built panel and a built patchserver, or AMBROSE_PANEL_APP");
 
 let panel: Panel;
 
 test.beforeAll(async () => {
-    panel = await startPanel(12620);
+    panel = await startPanel(port(20));
 });
 
 test.afterAll(async () => {
