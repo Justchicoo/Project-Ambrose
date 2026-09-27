@@ -320,7 +320,7 @@ namespace
                 }
                 if (header.IsPlain())
                     hash = header.TemplateId;
-                else if (CoreObjectType const* const named = _options.CoreObjects->Find(header.Block, header.Type))
+                else if (CoreObjectType const* const named = _options.CoreObjects->Find(header.Block))
                 {
                     hash = named->ClassHash;
                     core = header;
@@ -329,7 +329,7 @@ namespace
                 {
                     _unknownCore = header;
                     return Fail(SerializerStatus::UnknownClass,
-                        fmt::format("names core object block {} type {}, which the core object table does not list", header.Block, header.Type));
+                        fmt::format("names core type {} with template type {}, and the core object table does not say which class that core type builds", header.Block, header.Type));
                 }
             }
             else
@@ -930,19 +930,23 @@ namespace
         bool CoreHeaderOf(PropertyObject const& object, CoreObjectHeader& header)
         {
             ClassInfo const& type = object.GetClass();
-            CoreObjectType const* const listed = _options.CoreObjects->FindByClass(type.Hash);
             std::optional<CoreObjectHeader> const& carried = object.GetCoreHeader();
             if (!carried || carried->IsPlain())
             {
-                if (listed)
-                    return Fail(SerializerStatus::WrongClass, fmt::format("is a {}, which the core object table gives block {} and type {}, but carries no template id to write after them",
-                        type.Name, listed->Block, listed->Type));
+                if (_options.CoreObjects->IsCoreClass(type.Hash))
+                    return Fail(SerializerStatus::WrongClass, fmt::format("is a {}, which the client builds from a core type, but carries no core type and template id to write", type.Name));
                 header = {};
                 return true;
             }
-            if (!listed || listed->Block != carried->Block || listed->Type != carried->Type)
-                return Fail(SerializerStatus::WrongClass, fmt::format("is a {} but carries core object block {} and type {}, where the core object table gives {}", type.Name, carried->Block,
-                    carried->Type, listed ? fmt::format("block {} and type {}", listed->Block, listed->Type) : std::string("it none")));
+            if (!_options.CoreObjects->Builds(carried->Block, type.Hash))
+            {
+                CoreObjectType const* const built = _options.CoreObjects->Find(carried->Block);
+                return Fail(SerializerStatus::WrongClass, fmt::format("is a {} but carries core type {}, which the core object table {}", type.Name, carried->Block,
+                    built ? fmt::format("builds as {}", built->ClassName) : std::string("does not list")));
+            }
+            if (!_options.CoreObjects->IsTemplatePair(carried->Block, carried->Type))
+                return Fail(SerializerStatus::WrongClass, fmt::format("is a {} carrying core type {} and template type {}, which no template class gives together", type.Name, carried->Block,
+                    carried->Type));
             header = *carried;
             return true;
         }

@@ -473,7 +473,7 @@ Walk-in volumes and event triggers for every zone are decoded into typed world r
 **Deliverables**
 
 - src/server/shared/ObjectProperty: hand-authored schemas registered for WizZoneTriggers (0x06DAAC43), Trigger (0x068C265B), WizZoneVolumes (0x1B6EF770), Volume (0x1B7B55F6) and the Result/Requirement subclasses seen in triggers.xml, each name checked by recomputing its property-name hash
-- zone_extractor: BINd reader (magic 'BINd', uint32 flags=7, then class hash), decodes triggers.xml, volumes.xml and trigger_groups.xml
+- extractor zones: BINd reader (magic 'BINd', uint32 flags=7, then class hash), decodes triggers.xml, volumes.xml and trigger_groups.xml
 - data/sql/base/db_world: zone_volume, zone_trigger, zone_trigger_event, zone_trigger_result
 
 **Data sources**
@@ -537,7 +537,7 @@ Walk-in volumes and event triggers for every zone are decoded into typed world r
 **Deliverables**
 
 - src/server/shared/ObjectProperty: hand-authored schemas registered for WizZoneTriggers (0x06DAAC43), Trigger (0x068C265B), WizZoneVolumes (0x1B6EF770), Volume (0x1B7B55F6) and the Result/Requirement subclasses seen in triggers.xml, each name checked by recomputing its property-name hash
-- zone_extractor: BINd reader (magic 'BINd', uint32 flags=7, then class hash), decodes triggers.xml, volumes.xml and trigger_groups.xml
+- extractor zones: BINd reader (magic 'BINd', uint32 flags=7, then class hash), decodes triggers.xml, volumes.xml and trigger_groups.xml
 - data/sql/base/db_world: zone_volume, zone_trigger, zone_trigger_event, zone_trigger_result
 
 **Data sources**
@@ -643,7 +643,7 @@ Walking through a zone exit (e.g. WC_Hub -> Ravenwood) transfers the player to t
 - world.zone_teleport table: zone, trigger_name -> dest_zone, dest_location, transition_id, same_zone flag
 - `.reload zone_teleport` rebuilds the destination map off to the side, validates every destination zone and location, and swaps it; a failure keeps the old rows and reports every error
 - ResTeleport result handler: a same-zone destination uses WLD-12; otherwise WLD-13. When paired triggers share an event, only the first teleport in data order runs.
-- src/tools/zone_extractor --propose-teleports: suggests pairs by matching 'Target location (<SrcZone> <DstZone> Exit)'-style location names and 'TeleportTo<X>' trigger names across zones, and writes a review CSV. The opt-in --apply-proposals also writes the suggestions into the user's local world database as journaled edits exportable as a pending SQL update; proposals reach the repository only as rows a human has reviewed
+- src/tools/extractor zones --propose-teleports: suggests pairs by matching 'Target location (<SrcZone> <DstZone> Exit)'-style location names and 'TeleportTo<X>' trigger names across zones, and writes a review CSV. The opt-in --apply-proposals also writes the suggestions into the user's local world database as journaled edits exportable as a pending SQL update; proposals reach the repository only as rows a human has reviewed
 - data/sql/updates/db_world: hand-reviewed zone_teleport rows for the Wizard City starting area (WC_Hub <-> Ravenwood, Shopping District, Unicorn Way, Golem Court, Library)
 
 **Client messages:** MSG_ZONETRANSFERREQUEST, MSG_ZONETRANSFERACK, MSG_SERVERTRANSFER, MSG_SERVERTELEPORT, MSG_ENTERSTATE

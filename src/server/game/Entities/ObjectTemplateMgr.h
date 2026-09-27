@@ -90,6 +90,7 @@ public:
     std::shared_ptr<ObjectTemplate const> GetPlayer() const { return _player.Get(); }
     std::shared_ptr<TemplateManifest const> GetManifest() const { return _manifest.Get(); }
     TemplateCacheStats GetCacheStats() const;
+    uint64 GetGeneration() const noexcept { return _manifest.GetGeneration(); }
     void Clear();
 
     static std::optional<ObjectTemplate> Decode(TypeCatalogPtr const& catalog, uint32 templateId, TemplateLocation const& location, std::span<uint8 const> bytes, std::string& error);

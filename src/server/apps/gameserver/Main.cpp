@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables and the level and stat tables after the world database takes one, loads the character name tables and the level and stat tables when the world database is open and, when either set is empty, extracts it from the install and loads it again, automatically in auto mode, after a yes in ask mode and never in off mode, registering the level and stat sets as reload targets, loads the zones, the named places inside them and the objects placed in them and registers each as a reload target, refusing to start when they cannot be read, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close, after every wizard still in the world has left it and so been saved. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits, template cache or realm heartbeat is applied on the world thread. It reads the template manifest before the player's template and then every spell and sigil, each a reload target.
+ * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables and the level and stat tables after the world database takes one, loads the character name tables and the level and stat tables when the world database is open and, when either set is empty, extracts it from the install and loads it again, automatically in auto mode, after a yes in ask mode and never in off mode, registering the level and stat sets as reload targets, loads the zones, the named places inside them and the objects placed in them, extracting them from the install first when the world database holds none, the same way it does the level tables, with each extraction, each zone archive and each write to the world database reported as a start step with the time it may take, so a supervisor waits for a first run that is still working and ends only one that stalls, and registers each as a reload target, refusing to start when they cannot be read, has every zone instance filled with the objects its zone places that the server sends, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close, after every wizard still in the world has left it and so been saved. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits, template cache or realm heartbeat is applied on the world thread. It reads the template manifest before the player's template and then every spell and sigil, each a reload target.
  */
 
 #include "TypeDumpCache.h"
@@ -22,6 +22,10 @@
 #include "CharacterNameScript.h"
 #include "LevelExtractor.h"
 #include "LevelScript.h"
+#include "MapObjectSpawner.h"
+#include "ZoneExtractor.h"
+#include "ZoneScript.h"
+#include "StartProgress.h"
 #include "PlayerLevelMgr.h"
 #include "AccountMgr.h"
 #include "ClientSetup.h"
@@ -311,9 +315,12 @@ namespace
                 settings.MobileIdReleaseDelay = std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MobileIdReleaseDelay"));
                 return settings;
             });
+            sMapMgr.SetObjectPopulator(&MapObjectSpawner::PopulateFromWorld);
             if (WorldDatabase.IsOpen())
             {
-                ZoneLoadResult const zones = sZoneMgr.LoadAll();
+                ZoneLoadResult zones = sZoneMgr.LoadAll();
+                if (zones.Loaded && zones.Zones == 0 && ExtractZones(setup, *prompt))
+                    zones = sZoneMgr.LoadAll();
                 if (!zones.Loaded)
                 {
                     LOG_ERROR("server.gameserver", "Cannot load the zones from the world database");
@@ -321,7 +328,7 @@ namespace
                     return false;
                 }
                 if (zones.Zones == 0)
-                    LOG_WARN("server.gameserver", "The world database holds no zone, so there is nowhere to stand; run the zone extractor against your install");
+                    LOG_WARN("server.gameserver", "The world database holds no zone, so there is nowhere to stand; run the extractor's zones command against your install");
             }
 
             uint32 const realmId = Config().GetOption<uint32>("RealmID", 1, true);
@@ -491,6 +498,10 @@ namespace
             return false;
         }
 
+        static constexpr std::chrono::minutes ExtractionAllowance{ 5 };
+        static constexpr std::chrono::minutes ArchiveAllowance{ 2 };
+        static constexpr std::chrono::minutes WriteAllowance{ 15 };
+
         bool ConfirmExtraction(ClientSetupResult const& setup, SetupPrompt& prompt, std::string_view tables, std::string_view command)
         {
             if (!setup.Install || !setup.TypeDump)
@@ -520,6 +531,7 @@ namespace
         {
             if (!ConfirmExtraction(setup, prompt, "character name tables", "names"))
                 return false;
+            StartProgress::Report("extracting the character name tables", ExtractionAllowance);
             std::string const install = setup.Install->Describe();
             std::string error;
             std::optional<NameExtraction> const extraction = CharacterNameExtractor::ExtractFromInstall(setup.Install->Root, *setup.TypeDump, error);
@@ -535,6 +547,7 @@ namespace
                 return false;
             }
             std::optional<MySQLConnectionInfo> const world = MySQLConnectionInfo::Parse(Config().GetOption<std::string>("WorldDatabaseInfo", "", true), &error);
+            StartProgress::Report("writing the character name tables to the world database", WriteAllowance);
             if (!world || !CharacterNameScript::Build(*extraction).Apply(*world, error))
             {
                 LOG_ERROR("server.gameserver", "Cannot write the character name tables to the world database: {}", error);
@@ -571,6 +584,7 @@ namespace
         {
             if (!ConfirmExtraction(setup, prompt, "level or stat tables", "levels"))
                 return false;
+            StartProgress::Report("extracting the level and stat tables", ExtractionAllowance);
             std::string const install = setup.Install->Describe();
             std::string error;
             std::optional<LevelExtraction> const extraction = LevelExtractor::ExtractFromInstall(setup.Install->Root, *setup.TypeDump, error);
@@ -586,6 +600,7 @@ namespace
                 return false;
             }
             std::optional<MySQLConnectionInfo> const world = MySQLConnectionInfo::Parse(Config().GetOption<std::string>("WorldDatabaseInfo", "", true), &error);
+            StartProgress::Report("writing the level and stat tables to the world database", WriteAllowance);
             if (!world || !LevelScript::Build(*extraction).Apply(*world, error))
             {
                 LOG_ERROR("server.gameserver", "Cannot write the level and stat tables to the world database: {}", error);
@@ -593,6 +608,38 @@ namespace
             }
             LOG_INFO("server.gameserver", "Extracted {} level rows for {} schools, {} magic schools and {} stat settings from {}", extraction->Levels.Levels.size(), extraction->SchoolsWithTables.size(),
                 extraction->Levels.Schools.size(), extraction->Stats.Settings.size(), install);
+            return true;
+        }
+
+        bool ExtractZones(ClientSetupResult const& setup, SetupPrompt& prompt)
+        {
+            if (!ConfirmExtraction(setup, prompt, "zones", "zones"))
+                return false;
+            StartProgress::Report("extracting the zones", ExtractionAllowance);
+            std::string const install = setup.Install->Describe();
+            std::string error;
+            std::optional<ZoneExtraction> const extraction = ZoneExtractor::ExtractFromInstall(setup.Install->Root, *setup.TypeDump, error,
+                [](std::size_t, std::size_t) { StartProgress::Report("extracting the zones", ArchiveAllowance); });
+            if (!extraction)
+            {
+                LOG_ERROR("server.gameserver", "Cannot extract the zones: {}", error);
+                return false;
+            }
+            if (!extraction->Ok())
+            {
+                for (std::string const& problem : extraction->Errors)
+                    LOG_ERROR("server.gameserver", "Zone extraction: {}", problem);
+                return false;
+            }
+            std::optional<MySQLConnectionInfo> const world = MySQLConnectionInfo::Parse(Config().GetOption<std::string>("WorldDatabaseInfo", "", true), &error);
+            StartProgress::Report("writing the zones to the world database", WriteAllowance);
+            if (!world || !ZoneScript::Build(*extraction).Apply(*world, error))
+            {
+                LOG_ERROR("server.gameserver", "Cannot write the zones to the world database: {}", error);
+                return false;
+            }
+            LOG_INFO("server.gameserver", "Extracted {} zones with {} named places and {} placed objects from {}, leaving out {} object list entries of classes the type dump does not describe",
+                extraction->Zones.size(), extraction->GetLocationCount(), extraction->GetObjectCount(), install, extraction->GetSkippedObjectCount());
             return true;
         }
 

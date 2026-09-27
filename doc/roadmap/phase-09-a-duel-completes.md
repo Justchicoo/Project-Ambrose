@@ -180,7 +180,7 @@ Zone spawners create, despawn and respawn non-combat creatures and objects on ti
 
 **Deliverables**
 
-- zone_extractor: decode spawnData.xml (SpawnManager, 0x3752F969; SpawnObjectInfo with m_pathID, m_startNode, m_kStartNodeType, m_uniqueLoc) into world.zone_spawner and world.zone_spawner_entry
+- extractor zones: decode spawnData.xml (SpawnManager, 0x3752F969; SpawnObjectInfo with m_pathID, m_startNode, m_kStartNodeType, m_uniqueLoc) into world.zone_spawner and world.zone_spawner_entry
 - src/server/game/Zones/SpawnerMgr: respawn timers scaled by the live setting Rate.Respawn, max counts, ResSpawn/ResDespawn result handlers
 - `.reload zone_spawner` as a 4.15 target: rebuilds zone_spawner and zone_spawner_entry off to the side, validates them, swaps them, and reschedules live timers; a validation failure keeps the old spawners and reports every error
 - Despawn with effect: MSG_DELETEOBJECT carrying a wrapped DespawnInfo (m_killer, m_despawnEffect); plain despawn: MSG_REMOVEOBJECT

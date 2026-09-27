@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `handlers` says which classes in the client program handle a message and where, found the way the program registers them: each handler goes in under a debug name such as WizardGraphicalClient::MSG_TimedAccessPasses, with its plain name and a pointer to the function, so client-image finds the code that reads both names and the function address it loads, and the answer is written once per revision; a message nothing registers that way is one the client only sends or registers some other way, which the tool says rather than guessing which. `behaviors` says which class the client program builds for each behavior it registers, by following each behavior's name to the factory the program stores for it, the vtable that factory's create function gives the object and the class name its GetType registers, with the bases each GetType registers its class under, which is how a behavior a template names is known to become a given client class without a capture of it; when the dump does not list that class, the nearest base it does list is named, since that is the class whose properties the dump can describe. `template` prints the object template an id names, found through TemplateManifest.xml the way the client and the game server find it, in Root.wad or in the World-Part.wad a path written |World|Part|path names, with its file, archive, object name and behaviors, then the template itself, so a zone object's template id can be read without searching the manifest by hand; it reads them through the game server's own template store, and its list prints every id the manifest holds with the archive and entry it names, marking each the install lacks, which is how a streamed archive not yet fetched shows up. `strings`, `xrefs`, `disasm`, `functions` and `decompile` read the client program's code, so what the client does is asked of the tool rather than worked out by hand: `strings` finds the text the program holds with each instruction that reads it, `xrefs` every instruction and relocated pointer that reaches an address, `disasm` a function in Intel syntax with the strings, imports, handlers and behavior classes it reaches named, `functions` a function by the name its own log lines give it, and `decompile` a function as C through the user's own Ghidra, started directly with the Java Ghidra picks rather than through its launch scripts, over a project the tool makes once or one it is given, keeping each function's C so asking again takes seconds; the names functions log under are found once per revision and written to the Ambrose data folder. `types --derived` lists every class derived from one and `--flag` the properties that carry a property flag. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a block, a type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads the block and type pairs the world database's core_object_type holds when it is given the world database, and when a pair stands for a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --pair or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
+ * Asks the user's own Wizard101 install a question and prints the answer. One tool rather than one per question, because every one of them needs the same three things first, the install, its type dump and an archive out of it, and a question nobody can ask is a wall that stops a milestone rather than a gap in a list. `types` searches and prints the classes the dump holds, which is the only way to read it at all: it is keyed by hash, so no search of the file itself finds a name; given a hash the dump does not list, it reads the client program itself for a name that hashes to it, including the mangled form the runtime keeps class names in, where a leading AV or AU stands for class or struct, so an unknown class is reported by name rather than as a number nobody can act on. `messages` prints what the client says a message carries, read from the client's own XML rather than from anybody's notes, under the protocol, service and order the servers give it, worked out by the same definition code they load the XML with, so the numbers a capture or a log shows can be matched to a name without counting tags by hand. `handlers` says which classes in the client program handle a message and where, found the way the program registers them: each handler goes in under a debug name such as WizardGraphicalClient::MSG_TimedAccessPasses, with its plain name and a pointer to the function, so client-image finds the code that reads both names and the function address it loads, and the answer is written once per revision; a message nothing registers that way is one the client only sends or registers some other way, which the tool says rather than guessing which. `behaviors` says which class the client program builds for each behavior it registers, by following each behavior's name to the factory the program stores for it, the vtable that factory's create function gives the object and the class name its GetType registers, with the bases each GetType registers its class under, which is how a behavior a template names is known to become a given client class without a capture of it; when the dump does not list that class, the nearest base it does list is named, since that is the class whose properties the dump can describe. `template` prints the object template an id names, found through TemplateManifest.xml the way the client and the game server find it, in Root.wad or in the World-Part.wad a path written |World|Part|path names, with its file, archive, object name and behaviors, then the template itself, so a zone object's template id can be read without searching the manifest by hand; it reads them through the game server's own template store, and its list prints every id the manifest holds with the archive and entry it names, marking each the install lacks, which is how a streamed archive not yet fetched shows up. `strings`, `xrefs`, `disasm`, `functions` and `decompile` read the client program's code, so what the client does is asked of the tool rather than worked out by hand: `strings` finds the text the program holds with each instruction that reads it, `xrefs` every instruction and relocated pointer that reaches an address, `disasm` a function in Intel syntax with the strings, imports, handlers and behavior classes it reaches named, `functions` a function by the name its own log lines give it, and `decompile` a function as C through the user's own Ghidra, started directly with the Java Ghidra picks rather than through its launch scripts, over a project the tool makes once or one it is given, keeping each function's C so asking again takes seconds; the names functions log under are found once per revision and written to the Ambrose data folder. `types --derived` lists every class derived from one and `--flag` the properties that carry a property flag. `lang` prints the text behind a locale key, because most of the client's data carries an id where a person expects words, and searches the keys by the text they hold. `wad` lists and prints archive entries, BINd as JSON, an object stored with no BINd header as JSON too, which is how a zone's gamedata.bin is kept, and anything else as the text it holds. `core` prints a game object blob, what MSG_LOGINCOMPLETE and MSG_NEWOBJECT carry, whose every object opens with the client's CoreObject header, a core type, a template type and a template id, rather than a class hash; it opens the envelope itself when there is one, reads which class each core type builds from the world database's core_object_type when it is given the world database, and when a core type builds a class nobody has named yet it lists the classes the dump derives from CoreObject rather than guessing, so the one that decodes can be named with --core-type or, for the root, --as. Given the world database, every command also reads the classes its server_class tables describe for the dump, and types marks them as coming from there. Reading a headerless object needs no flag because it proves itself: the bytes decode only if they open with a class hash the dump knows and the whole object parses, so a wrong guess refuses rather than printing rubble. Each command is meant to grow and new ones to join them, so the next thing the client work needs is taught here rather than worked around where it was needed. What this install's messages carry is written once to the Ambrose data folder and read from there afterwards, and a type dump is read through the fast copy beside it, which is built once if it is not there, so asking a second question costs a fraction of the first rather than the same six seconds again.
  */
 
 #include "BehaviorFactories.h"
@@ -129,7 +129,7 @@ Options:
   --wad <file>         the archive wad reads (default: Root.wad)
   --locale <name>      the locale lang reads (default: en-US)
   --all                print every match rather than the first few
-  --as <class>         the class a game object's block and type stand for, such as
+  --as <class>         the class a game object's core type builds, such as
                        "class WizClientObject"
   --trailing           let core stop where the class ends and go on to read each object
                        that follows it the same way, as MSG_LOGINCOMPLETE's Data holds the
@@ -138,10 +138,10 @@ Options:
   --mask <n>           read core with this property flag mask rather than the one the
                        server sends a player's own object with, Transmit|AuthorityTransmit
                        (decimal or 0x hex)
-  --pair <b>:<t>=<class>
-                       the class a block and type stand for wherever they appear in a
-                       core blob, such as 115:9="class WizClientObjectItem"; repeatable,
-                       and it takes the place of the world database's row for that pair
+  --core-type <n>=<class>
+                       the class a core type builds wherever it opens an object in a
+                       core blob, such as 115="class WizClientObjectItem"; repeatable,
+                       and it takes the place of the world database's row for that type
   --derived            with types, print every class derived from each class named
   --flag <name>        with types, print only the properties that carry a property flag,
                        such as ObjectName, of the classes found
@@ -151,7 +151,8 @@ Options:
                        AMBROSE_GHIDRA_PROJECT, else one the tool makes in the Ambrose data
                        folder by importing and analyzing the client program, once)
   --world-db <info>    the world database, host;port;user;password;database, whose
-                       server_class and core_object_type rows join what the dump says
+                       server_class, core_object_type and core_template_type rows join
+                       what the dump says
                        (default: AMBROSE_WORLD_DATABASE_INFO)
   --flags <n>          read core with exactly these serializer flags rather than trying
                        the plain form and then a stream that opens with its own flags
@@ -170,7 +171,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         std::string Wad = "Root.wad";
         std::string Locale = "en-US";
         std::optional<std::string> As;
-        std::vector<std::string> Pairs;
+        std::vector<std::string> CoreTypes;
         std::optional<std::string> WorldDatabase;
         std::size_t From = 0;
         std::size_t Count = 0;
@@ -235,12 +236,12 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                     return std::nullopt;
                 (arg == "--flag" ? parsed.Flag : arg == "--ghidra" ? parsed.Ghidra : parsed.GhidraProject) = *given;
             }
-            else if (arg == "--pair")
+            else if (arg == "--core-type")
             {
                 std::optional<std::string> const given = value(arg);
                 if (!given)
                     return std::nullopt;
-                parsed.Pairs.push_back(*given);
+                parsed.CoreTypes.push_back(*given);
             }
             else if (arg == "--flags" || arg == "--mask")
             {
@@ -1023,21 +1024,18 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         std::vector<CoreObjectType> rows;
         CoreObjectTypeTablePtr const known = sObjectSchemaMgr.GetCoreObjectTypes();
         rows.assign(known->GetTypes().begin(), known->GetTypes().end());
-        for (std::string const& text : arguments.Pairs)
+        std::vector<CoreTemplateType> const templates(known->GetTemplates().begin(), known->GetTemplates().end());
+        for (std::string const& text : arguments.CoreTypes)
         {
-            std::size_t const colon = text.find(':');
             std::size_t const equals = text.find('=');
-            std::optional<uint8> const block = colon == std::string::npos ? std::nullopt : Ambrose::StringTo<uint8>(std::string_view(text).substr(0, colon));
-            std::optional<uint8> const type = colon == std::string::npos || equals == std::string::npos || equals < colon
-                ? std::nullopt
-                : Ambrose::StringTo<uint8>(std::string_view(text).substr(colon + 1, equals - colon - 1));
-            if (!block || !type || equals + 1 >= text.size())
+            std::optional<uint8> const coreType = equals == std::string::npos ? std::nullopt : Ambrose::StringTo<uint8>(std::string_view(text).substr(0, equals));
+            if (!coreType || *coreType == 0 || equals + 1 >= text.size())
             {
-                std::cerr << fmt::format("--pair {} is not <block>:<type>=<class>\n", text);
+                std::cerr << fmt::format("--core-type {} is not <core type>=<class>, with a core type from 1 to 255\n", text);
                 return BadUsage;
             }
-            std::erase_if(rows, [&](CoreObjectType const& row) { return row.Block == *block && row.Type == *type; });
-            rows.push_back({ *block, *type, text.substr(equals + 1) });
+            std::erase_if(rows, [&](CoreObjectType const& row) { return row.CoreType == *coreType; });
+            rows.push_back({ *coreType, text.substr(equals + 1) });
         }
         int status = Success;
         for (std::string const& subject : arguments.Subjects)
@@ -1069,12 +1067,16 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                     continue;
                 std::vector<CoreObjectType> table = rows;
                 uint8 const rootBlock = (*payload)[0];
-                uint8 const rootType = (*payload)[1];
-                bool const rootListed = std::any_of(table.begin(), table.end(), [&](CoreObjectType const& row) { return row.Block == rootBlock && row.Type == rootType; });
-                if (named && !rootListed && (rootBlock != 0 || rootType != 0))
-                    table.push_back({ rootBlock, rootType, named->Name });
+                bool const rootListed = std::any_of(table.begin(), table.end(), [&](CoreObjectType const& row) { return row.CoreType == rootBlock; });
+                if (named && !rootListed && rootBlock != 0)
+                    table.push_back({ rootBlock, named->Name });
+                std::vector<CoreTemplateType> kept;
+                std::copy_if(templates.begin(), templates.end(), std::back_inserter(kept), [&table](CoreTemplateType const& entry)
+                {
+                    return std::any_of(table.begin(), table.end(), [&entry](CoreObjectType const& row) { return row.CoreType == entry.CoreType; });
+                });
                 std::vector<std::string> tableErrors;
-                CoreObjectTypeTablePtr const types = CoreObjectTypeTable::Build(std::move(table), *catalog, tableErrors);
+                CoreObjectTypeTablePtr const types = CoreObjectTypeTable::Build(std::move(table), std::move(kept), *catalog, tableErrors);
                 if (!types)
                 {
                     for (std::string const& problem : tableErrors)
@@ -1109,8 +1111,8 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                 if (decoded.UnknownCore)
                 {
                     CoreObjectHeader const& missing = *decoded.UnknownCore;
-                    std::cerr << fmt::format("{}: an object in it names block {} type {}; pass --pair {}:{}=<class>{} with the class they stand for, one of those the dump derives from CoreObject:\n",
-                        subject, missing.Block, missing.Type, missing.Block, missing.Type, decoded.Header && decoded.Header->Block == missing.Block && decoded.Header->Type == missing.Type ? ", or --as <class>," : "");
+                    std::cerr << fmt::format("{}: an object in it names core type {} with template type {}; pass --core-type {}=<class>{} with the class that core type builds, one of those the dump derives from CoreObject:\n",
+                        subject, missing.Block, missing.Type, missing.Block, decoded.Header && decoded.Header->Block == missing.Block ? ", or --as <class>," : "");
                     if (ClassInfo const* const core = catalog->FindClass(CoreObjectTypeTable::CoreObjectClass))
                         for (ClassInfo const* const candidate : catalog->GetClasses())
                             if (candidate && candidate->Kind == ClassKind::PropertyClass && candidate != core && candidate->IsA(*core))

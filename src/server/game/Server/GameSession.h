@@ -12,6 +12,7 @@
 #include "CharacterSummary.h"
 #include "GameMessages.h"
 #include "LoginKeyValidator.h"
+#include "MapObjectSpawner.h"
 #include "PlayerMovement.h"
 #include "PlayerSpellbook.h"
 #include "PlayerStats.h"
@@ -63,6 +64,8 @@ public:
     void HandleClientMoveState(GameMessages::ClientMoveState& message);
     void HandleJump(GameMessages::Jump& message);
     void LeaveWorld();
+    std::optional<uint32> GetMapId() const noexcept { return _mapId; }
+    void SendObjectChanges(MapObjectChanges const& changes);
     PlayerStats const* GetStats() const noexcept { return _stats ? &*_stats : nullptr; }
     PlayerMovement const& GetMovement() const noexcept { return _movement; }
     PlayerSpellbook const* GetSpellbook() const noexcept { return _spellbook ? &*_spellbook : nullptr; }
@@ -98,6 +101,7 @@ private:
     SQLOperation::CompletionHandler MakeCompletionHandler();
     void Diagnose(LoginKeyClaim claim, int64 now);
     void AcceptAttach(LoginKeyClaim const& claim);
+    void SendMapObjects(Map const& map);
     void RefuseAttach(LoginKeyClaim const& claim, LoginKeyVerdict verdict);
     void LoadAccount(LoginKeyClaim const& claim);
     void LoadCharacter(LoginKeyClaim const& claim);

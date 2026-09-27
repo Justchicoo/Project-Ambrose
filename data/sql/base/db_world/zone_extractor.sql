@@ -1,5 +1,5 @@
 -- Project Ambrose by Imjustchico
--- Defines the world tables populated by zone_extractor from a user's local client install.
+-- Defines the world tables the extractor's zones command fills from a user's local client install.
 CREATE TABLE IF NOT EXISTS `zone_template` (
     `zone_path` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
     `display_name_key` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '',

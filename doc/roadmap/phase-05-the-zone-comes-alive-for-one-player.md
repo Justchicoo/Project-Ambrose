@@ -61,10 +61,10 @@ The server can fetch any client template by template id, backed by the TemplateM
 
 **Acceptance**
 
-- [ ] Real client: WC_Hub statues, kiosks and NPCs stand where retail has them, nothing at 0,0,0
-- [ ] A Critical object zone leaves the loading screen
-- [ ] Missing template logged once and skipped
-- [ ] Log '<n> objects spawned in WizardCity/WC_Hub' matches eligible rows
+- [x] Real client: WC_Hub statues, kiosks and NPCs stand where retail has them, nothing at 0,0,0
+- [x] A Critical object zone leaves the loading screen
+- [x] Missing template logged once and skipped
+- [x] Log '<n> objects spawned in WizardCity/WC_Hub' matches eligible rows
 
 ### Detailed spec from WLD-8: Static zone objects appear
 
@@ -72,11 +72,12 @@ NPCs, signs, doors and props from the zone data appear for a player entering a z
 
 **Deliverables**
 
-- src/server/game/Entities/GameObject.cpp: spawn every zone_object row whose template has a RenderBehaviorTemplate when the Map is created, skipping sigil/minigame info classes
-- Map::AddPlayer: send MSG_NEWOBJECT for each visible object to the entering player; Map::RemovePlayer: nothing for the leaver (the client tears down)
-- Critical objects: templates whose adjective list holds 'Critical' go into LOGINCOMPLETE.CriticalObjects
-- MSG_CLIENTZONED (service 53) handler marks the session in world, and object streaming waits for or follows it as the capture shows
-- On a successful '.reload zone_object', each live Map spawns objects for added rows and removes objects for deleted rows, sending MSG_NEWOBJECT and MSG_REMOVEOBJECT to players in it
+- src/server/game/Zones/MapObjectSpawner and src/server/game/Entities/ZoneObjectBuilder (built in place of the GameObject.cpp this spec first named): when sMapMgr makes an instance, every zone_object row whose loading type is DYNAMIC_SERVER becomes an object with a runtime global id, a permID, a mobile id from the instance's object range and its MSG_NEWOBJECT Data encoded once, built from its template as the class the client's own factory builds for the template's core type, with one behavior slot per template behavior. The client builds the static kinds from its own copy of the zone, and sigil entries are not extracted until 6.10, so neither needs a rule of its own
+- Map holds the objects; GameSession::EnterWorld sends MSG_LOGINCOMPLETE and then each object's MSG_NEWOBJECT, unwrapped, before the client says MSG_CLIENTZONED, because the client waits for the critical ones while it shows the loading screen; nothing is sent to a wizard who leaves (the client tears down)
+- Critical objects: templates whose adjective list holds 'Critical' go into LOGINCOMPLETE.CriticalObjects as an unwrapped CriticalObjectList
+- The world database's core_template_type gives the core type and template type of each template class, core_object_type the class each core type builds, and behavior_client_class the class the client builds for each behavior a template names
+- A reload of zone_object, the type catalog, the core type tables, the behavior classes or the template manifest reaches every live instance on the next tick: added and deleted rows come and go, an object whose sources now build it differently is replaced, and GameSession::SendObjectChanges sends MSG_REMOVEOBJECT and MSG_NEWOBJECT to the wizards in it
+- `extractor zones` replaces the separate zone extractor, and the game server runs the same extraction on its first start when its world database holds no zone
 - src/test/server/game/Zones/MapObjectSpawnTest.cpp
 
 **Client messages:** MSG_NEWOBJECT, MSG_LOGINCOMPLETE, MSG_CLIENTZONED
@@ -92,11 +93,11 @@ NPCs, signs, doors and props from the zone data appear for a player entering a z
 
 **Acceptance**
 
-- [ ] Real client: in WizardCity/WC_Hub, statues, kiosks and NPC models stand where they do on retail, and nothing floats at 0,0,0
-- [ ] Real client: entering a zone with a Critical object leaves the loading screen (it does not hang)
-- [ ] Unit: a zone_object with a missing template is logged once and skipped; the Map still loads
-- [ ] Unit: after '.reload zone_object' adds one row and deletes another, a live Map holds the new object and not the deleted one, with no restart; a reload that fails validation leaves the Map unchanged
-- [ ] Server log: '<n> objects spawned in WizardCity/WC_Hub' matches the count of eligible zone_object rows
+- [x] Real client: in WizardCity/WC_Hub, statues, kiosks and NPC models stand where they do on retail, and nothing floats at 0,0,0. Earned on 2026-09-26 by the client driver's enter-the-commons.json on r806919 (runs 20260926-194353 and, on the final build, 20260926-230736): the client loads every one of the 123 objects the Commons' instance sends without a LoadObject failure, and its screenshots show the Commons' NPCs, Abner K. Doodle, Penny Dreadful and The Professor among them, standing on the ground under their names. The server sends the objects the zone's data marks DYNAMIC_SERVER, because the client builds the static kinds from its own copy of the zone, and each keeps the position and orientation the data gives it (`MapObjectSpawnTest.ARowTheServerSendsBecomesAnObjectThatReadsBackAsItsTemplatesClass`). The ten objects the data itself places at the origin are four sets modeled in zone space, the Commons' signs, birthday streamers and fireworks and the Lunar New Year decorations, and six monthly event warp portals whose templates hold no model, which the client reports as having no animation. Like 93 of the 123, the portals carry spawn requirements, which WLD-19 evaluates, so until then everyone sees them, as the risk below says. The same run of enter-world.json (run 20260926-194655) shows Ravenwood's 40, Bartleby, Merle Ambrose and the school teachers among them.
+- [x] Real client: entering a zone with a Critical object leaves the loading screen (it does not hang). The same runs: the Commons' instance holds one object whose template's adjectives include Critical and Ravenwood's nine, MSG_LOGINCOMPLETE names them in a CriticalObjectList, and the client loads the zone and says so with MSG_CLIENTZONED. The first run showed that the client reads CriticalObjects and MSG_NEWOBJECT's Data unwrapped: its MSG_LoginComplete handler decompresses Data before loading it but hands CriticalObjects straight to the plain serializer, and its MSG_NewObject handler reads Data as it arrives, so an envelope made it read the envelope's size as a class hash and its zlib header as a template id. `MapObjectSpawnTest.TheCriticalObjectListIsItsClassAndTheIdsUnwrapped` and the header bytes the first test checks hold both.
+- [x] Unit: a zone_object with a missing template is logged once and skipped; the Map still loads. `MapObjectSpawnTest.ARowWhoseTemplateCannotBeReadIsReportedAndSkippedAndTheInstanceStillLoads`: a row naming a template the store cannot read is reported with its row and template, holds no mobile id, and the instance keeps its other object; `AMissingTemplateIsLoggedOnceHoweverManyInstancesAndRefreshesMeetIt`: two instances of the zone and a refresh meet the same missing template four times, and the log names it once.
+- [x] Unit: after '.reload zone_object' adds one row and deletes another, a live Map holds the new object and not the deleted one, with no restart; a reload that fails validation leaves the Map unchanged. `MapObjectSpawnTest.RowsAReloadAddsAndDeletesChangeTheLiveInstanceAndNothingElse`: the deleted row's object leaves and its mobile id cools, the added row's object arrives, and the row the reload did not touch keeps its object; `AnEditedRowIsReplacedAndTheSameRowsTwiceChangeNothing` and `ATemplateThatReloadsDifferentlyReplacesItsObjectAndOneThatReloadsTheSameKeepsIt` do the same for an edited row and for templates, which reload apart from the rows. A reload that fails keeps the rows being served (`ZoneMgrDatabaseTest.ARowNamingAZoneNoTemplateHoldsFailsTheBuildAndKeepsWhatWasServing`), and `AnInstanceHoldingTheServedGenerationIsLeftAsItIs` shows an instance that already holds what is served is left as it is. The world tick sends each change to the wizards in the instance as MSG_REMOVEOBJECT and MSG_NEWOBJECT.
+- [x] Server log: '<n> objects spawned in WizardCity/WC_Hub' matches the count of eligible zone_object rows. The Commons run's game server logs '123 objects spawned in WizardCity/WC_Hub, 1 of them critical', which the scenario expects, and `ZoneExtractorClientTest.TheCommonsHoldsItsObjectsAndPlaces` finds 123 of the Commons' 177 rows marked DYNAMIC_SERVER.
 
 **Risks**
 

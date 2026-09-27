@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the CoreObject form on classes the test invents: a ClientObject opens with block 2 type 2 and a WizClientObject with block 104 type 2, each followed by its template id and read back equal, while a nested behavior keeps the plain form, a nested item its own pair and a null its six zero bytes; the public mask leaves out what only the authority may see; an object whose header disagrees with the table, or that carries none where its class needs one, is refused; a pair nobody listed is named when read; the table refuses plain, repeated, unknown and non-CoreObject rows; and MSG_LOGINCOMPLETE's Data travels enveloped and cannot be read or written without the table.
+ * Tests the CoreObject form on classes the test invents: a ClientObject opens with core type 2 and template type 2 and a WizClientObject with 104 and 2, each followed by its template id and read back equal, while a nested behavior keeps the plain form, a nested item its own core type and template type and a null its six zero bytes; the public mask leaves out what only the authority may see; an object whose core type does not build its class, whose pair no template class gives, or that carries no header where its class needs one, is refused; a core type nobody listed is named when read; the table refuses plain and repeated core types, unknown and non-CoreObject classes, and template classes that are unknown, not templates, repeated or give a core type it does not build, while one class may stand behind several core types, and it answers the header a template class gives; and MSG_LOGINCOMPLETE's Data travels enveloped and cannot be read or written without the table.
  */
 
 #include "BlobEnvelope.h"
@@ -66,6 +66,10 @@ namespace
         Json mobile = instance;
         mobile["m_speed"] = Property("float", "m_speed", 1);
         AddClass(classes, "class TestMobileBehavior", Json::array({ "BehaviorInstance", "PropertyClass" }), mobile);
+        AddClass(classes, "class CoreTemplate", Json::array({ "PropertyClass" }), Json::object());
+        AddClass(classes, "class GameObjectTemplate", Json::array({ "CoreTemplate", "PropertyClass" }), Json::object());
+        AddClass(classes, "class WizGameObjectTemplate", Json::array({ "GameObjectTemplate", "CoreTemplate", "PropertyClass" }), Json::object());
+        AddClass(classes, "class WizItemTemplate", Json::array({ "CoreTemplate", "PropertyClass" }), Json::object());
 
         TypeRegistry registry;
         EXPECT_TRUE(registry.LoadFromText(Json{ { "version", 2 }, { "classes", classes } }.dump(), "core.json")) << (registry.GetErrors().empty() ? std::string() : registry.GetErrors().front());
@@ -90,7 +94,8 @@ namespace
             _catalog = LoadCatalog();
             ASSERT_TRUE(_catalog);
             std::vector<std::string> errors;
-            _types = CoreObjectTypeTable::Build({ { 2, 2, "class ClientObject" }, { 104, 2, "class WizClientObject" }, { 115, 9, "class WizClientObjectItem" } }, *_catalog, errors);
+            _types = CoreObjectTypeTable::Build({ { 2, "class ClientObject" }, { 104, "class WizClientObject" }, { 115, "class WizClientObjectItem" } },
+                { { "class GameObjectTemplate", 2, 2 }, { "class WizGameObjectTemplate", 104, 2 }, { "class WizItemTemplate", 115, 9 } }, *_catalog, errors);
             ASSERT_TRUE(_types) << (errors.empty() ? std::string() : errors.front());
         }
 
@@ -168,7 +173,7 @@ TEST_F(CoreObjectSerializerTest, AWizClientObjectOpensWith104TwoAndWhatItHoldsKe
     ASSERT_GE(encoded.Bytes.size(), 6u);
     EXPECT_EQ(std::vector<uint8>(encoded.Bytes.begin(), encoded.Bytes.begin() + 6), Header(104, 2, 1)) << "68 02 01000000, the header every accepted player object opens with";
     EXPECT_TRUE(Holds(encoded.Bytes, Header(0, 0, StringHash::KiStringHash("class TestMobileBehavior")))) << "a behavior is written plain";
-    EXPECT_TRUE(Holds(encoded.Bytes, Header(115, 9, 9001))) << "an item is written with its own pair and template";
+    EXPECT_TRUE(Holds(encoded.Bytes, Header(115, 9, 9001))) << "an item is written with its own core type, template type and template";
     EXPECT_TRUE(Holds(encoded.Bytes, Header(0, 0, 0))) << "a null is six zero bytes";
 
     DecodeResult const decoded = CoreObjectSerializer::Decode(_catalog, encoded.Bytes, *_types);
@@ -212,31 +217,36 @@ TEST_F(CoreObjectSerializerTest, ThePublicMaskLeavesOutWhatOnlyTheAuthoritySees)
     EXPECT_EQ(*shownDecoded.Object->Get("m_characterId")->GetIf<uint64>(), 1u);
 }
 
-TEST_F(CoreObjectSerializerTest, AnObjectMustCarryThePairTheTableGivesItsClass)
+TEST_F(CoreObjectSerializerTest, AnObjectMustCarryACoreTypeThatBuildsItsClassAndAPairATemplateGives)
 {
     PropertyObjectPtr const bare = PropertyObject::Create(_catalog, "class ClientObject");
     ASSERT_TRUE(bare);
     EncodeResult const missing = CoreObjectSerializer::Encode(*bare, *_types);
     EXPECT_EQ(missing.Status, SerializerStatus::WrongClass);
-    EXPECT_NE(missing.Detail.find("carries no template id"), std::string::npos) << missing.Detail;
+    EXPECT_NE(missing.Detail.find("carries no core type and template id"), std::string::npos) << missing.Detail;
 
     bare->SetCoreHeader(CoreObjectHeader{ 104, 2, 1 });
     EncodeResult const wrong = CoreObjectSerializer::Encode(*bare, *_types);
     EXPECT_EQ(wrong.Status, SerializerStatus::WrongClass);
-    EXPECT_NE(wrong.Detail.find("carries core object block 104 and type 2, where the core object table gives block 2 and type 2"), std::string::npos) << wrong.Detail;
+    EXPECT_NE(wrong.Detail.find("carries core type 104, which the core object table builds as class WizClientObject"), std::string::npos) << wrong.Detail;
+
+    bare->SetCoreHeader(CoreObjectHeader{ 2, 9, 1 });
+    EncodeResult const unpaired = CoreObjectSerializer::Encode(*bare, *_types);
+    EXPECT_EQ(unpaired.Status, SerializerStatus::WrongClass);
+    EXPECT_NE(unpaired.Detail.find("core type 2 and template type 9, which no template class gives together"), std::string::npos) << unpaired.Detail;
 
     PropertyObjectPtr const behavior = PropertyObject::Create(_catalog, "class TestMobileBehavior");
     ASSERT_TRUE(behavior);
     behavior->SetCoreHeader(CoreObjectHeader{ 2, 2, 5 });
     EncodeResult const unlisted = CoreObjectSerializer::Encode(*behavior, *_types);
     EXPECT_EQ(unlisted.Status, SerializerStatus::WrongClass);
-    EXPECT_NE(unlisted.Detail.find("where the core object table gives it none"), std::string::npos) << unlisted.Detail;
+    EXPECT_NE(unlisted.Detail.find("carries core type 2, which the core object table builds as class ClientObject"), std::string::npos) << unlisted.Detail;
 
     EncodeResult const plain = ObjectSerializer::Encode(bare.get());
     EXPECT_TRUE(plain.Ok()) << "without a table the object is written in the plain form and its header is not consulted";
 }
 
-TEST_F(CoreObjectSerializerTest, APairTheTableDoesNotListIsNamedWhenRead)
+TEST_F(CoreObjectSerializerTest, ACoreTypeTheTableDoesNotListIsNamedWhenRead)
 {
     std::vector<uint8> bytes = Header(9, 9, 1);
     DecodeResult const decoded = CoreObjectSerializer::Decode(_catalog, bytes, *_types);
@@ -252,26 +262,46 @@ TEST_F(CoreObjectSerializerTest, TheTableRefusesRowsTheClientCouldNeverMeanAndNa
 {
     std::vector<std::string> errors;
     CoreObjectTypeTablePtr const table = CoreObjectTypeTable::Build({
-        { 0, 0, "class ClientObject" },
-        { 2, 2, "class ClientObject" },
-        { 2, 2, "class WizClientObject" },
-        { 3, 3, "class ClientObject" },
-        { 4, 4, "class Nowhere" },
-        { 5, 5, "class TestMobileBehavior" } }, *_catalog, errors);
+        { 0, "class ClientObject" },
+        { 2, "class ClientObject" },
+        { 2, "class WizClientObject" },
+        { 3, "class ClientObject" },
+        { 4, "class Nowhere" },
+        { 5, "class TestMobileBehavior" } },
+        { { "class Missing", 2, 2 }, { "class ClientObject", 2, 2 }, { "class WizGameObjectTemplate", 104, 2 }, { "class GameObjectTemplate", 2, 2 }, { "class GameObjectTemplate", 3, 2 } },
+        *_catalog, errors);
     EXPECT_FALSE(table);
-    ASSERT_EQ(errors.size(), 5u);
-    EXPECT_NE(errors[0].find("block 0 type 0 is the pair that says a plain class hash follows"), std::string::npos) << errors[0];
-    EXPECT_NE(errors[1].find("block 2 type 2 is listed for both class ClientObject and class WizClientObject"), std::string::npos) << errors[1];
-    EXPECT_NE(errors[2].find("class ClientObject is given both block 2 type 2 and block 3 type 3"), std::string::npos) << errors[2];
-    EXPECT_NE(errors[3].find("names class Nowhere, which the type dump does not list"), std::string::npos) << errors[3];
-    EXPECT_NE(errors[4].find("names class TestMobileBehavior, which is not a class CoreObject"), std::string::npos) << errors[4];
+    ASSERT_EQ(errors.size(), 8u);
+    EXPECT_NE(errors[0].find("core type 0 is the byte that says a plain class hash follows"), std::string::npos) << errors[0];
+    EXPECT_NE(errors[1].find("core type 2 is listed for both class ClientObject and class WizClientObject"), std::string::npos) << errors[1];
+    EXPECT_NE(errors[2].find("names class Nowhere, which the type dump does not list"), std::string::npos) << errors[2];
+    EXPECT_NE(errors[3].find("names class TestMobileBehavior, which is not a class CoreObject"), std::string::npos) << errors[3];
+    EXPECT_NE(errors[4].find("template class class Missing is not listed in the type dump"), std::string::npos) << errors[4];
+    EXPECT_NE(errors[5].find("class ClientObject is not a class CoreTemplate"), std::string::npos) << errors[5];
+    EXPECT_NE(errors[6].find("class WizGameObjectTemplate gives core type 104, which no row says a class for"), std::string::npos) << errors[6];
+    EXPECT_NE(errors[7].find("class GameObjectTemplate is listed twice"), std::string::npos) << errors[7];
 
-    ASSERT_NE(_types->Find(104, 2), nullptr);
-    EXPECT_EQ(_types->Find(104, 2)->ClassName, "class WizClientObject");
-    ASSERT_NE(_types->FindByClass(StringHash::KiStringHash("class WizClientObjectItem")), nullptr);
-    EXPECT_EQ(_types->FindByClass(StringHash::KiStringHash("class WizClientObjectItem"))->Block, 115);
-    EXPECT_EQ(_types->Find(9, 9), nullptr);
+    std::vector<std::string> shared;
+    CoreObjectTypeTablePtr const several = CoreObjectTypeTable::Build({ { 2, "class ClientObject" }, { 5, "class ClientObject" }, { 9, "class ClientObject" } }, {}, *_catalog, shared);
+    ASSERT_TRUE(several) << "one class may stand behind several core types, as ClientObject does behind 2, 5 and 9: " << (shared.empty() ? std::string() : shared.front());
+    EXPECT_EQ(several->Count(), 3u);
+
+    ASSERT_NE(_types->Find(104), nullptr);
+    EXPECT_EQ(_types->Find(104)->ClassName, "class WizClientObject");
+    EXPECT_TRUE(_types->Builds(115, StringHash::KiStringHash("class WizClientObjectItem")));
+    EXPECT_FALSE(_types->Builds(2, StringHash::KiStringHash("class WizClientObjectItem")));
+    EXPECT_TRUE(_types->IsCoreClass(StringHash::KiStringHash("class ClientObject")));
+    EXPECT_FALSE(_types->IsCoreClass(StringHash::KiStringHash("class TestMobileBehavior")));
+    EXPECT_EQ(_types->Find(9), nullptr);
     EXPECT_EQ(_types->Count(), 3u);
+    EXPECT_TRUE(_types->IsTemplatePair(104, 2));
+    EXPECT_FALSE(_types->IsTemplatePair(104, 9));
+    ClassInfo const* const wizTemplate = _catalog->FindClass("class WizGameObjectTemplate");
+    ASSERT_NE(wizTemplate, nullptr);
+    EXPECT_EQ(_types->HeaderFor(*wizTemplate, 1), (CoreObjectHeader{ 104, 2, 1 })) << "the header an object made from the template carries";
+    ClassInfo const* const core = _catalog->FindClass("class CoreTemplate");
+    ASSERT_NE(core, nullptr);
+    EXPECT_FALSE(_types->HeaderFor(*core, 1).has_value()) << "a template class nobody listed gives no header";
 }
 
 TEST_F(CoreObjectSerializerTest, LoginCompleteDataTravelsEnvelopedAndNeedsTheTable)

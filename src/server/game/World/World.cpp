@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The first call to Update decides the world thread; each tick measures the session queue, session update, cleanup, zone instance and script call sites, publishes their latest values and budgets, and records bounded Chrome trace events only while an operator's on-demand capture is active.
+ * The world-thread tick owns sessions and zone refreshes, measures subsystem time, and captures bounded Chrome trace events only during an active operator-requested profile.
  */
 
 #include "World.h"
@@ -251,6 +251,10 @@ void World::Update(std::chrono::milliseconds diff)
     auto const zonesStarted = std::chrono::steady_clock::now();
     for (uint32 const taken : sMapMgr.Update())
         LOG_DEBUG("server.world", "Took down zone instance {}, empty for longer than its unload delay", taken);
+    for (MapObjectChanges const& changes : sMapMgr.RefreshObjects())
+        for (std::shared_ptr<GameSession> const& session : sessions)
+            if (session->IsOpen() && session->GetMapId() == changes.DynamicZoneId)
+                session->SendObjectChanges(changes);
     auto const zonesEnded = std::chrono::steady_clock::now();
     measured[3] = std::chrono::duration_cast<std::chrono::nanoseconds>(zonesEnded - zonesStarted);
     RecordProfileEvent("zone_instances", zonesStarted, zonesEnded);

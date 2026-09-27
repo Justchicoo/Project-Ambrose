@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the object a wizard stands in the world as, on classes the test lays out the way the client's are: it opens with the pair the core object table gives WizClientObject and the player's template id, carries the wizard's id, place, facing and mobile id, holds one behavior for each the template names in the template's order with an empty slot where the client takes one or the template itself leaves one, fills the look and name from the stored wizard, the school behavior and stats from its stats and the spellbook with a tracker for each spell it knows in the order it learned them, and reads back equal through the CoreObject form; a behavior nothing maps, and a template never read, are refused rather than guessed.
+ * Tests the object a wizard stands in the world as, on classes the test lays out the way the client's are: it opens with the core type and template type the player template's class gives, a core type that builds WizClientObject, and the player's template id, carries the wizard's id, place, facing and mobile id, holds one behavior for each the template names in the template's order with an empty slot where the client takes one or the template itself leaves one, fills the look and name from the stored wizard, the school behavior and stats from its stats and the spellbook with a tracker for each spell it knows in the order it learned them, and reads back equal through the CoreObject form; a behavior nothing maps, a template never read, a template class no row gives a core type and a core type that builds another class are refused rather than guessed.
  */
 
 #include "CharacterTypeFixtures.h"
@@ -72,6 +72,8 @@ namespace
             { "m_spellIDList", Property("class SharedPointer<class SpellIDTracker>", "m_spellIDList", 1, Spellbook, "List") } });
         AddClass(classes, "TestMobileBehavior", Json::array({ "BehaviorInstance", "PropertyClass" }), {
             { "m_behaviorTemplateNameID", Property("unsigned int", "m_behaviorTemplateNameID", 0, Local) } });
+        AddClass(classes, "class CoreTemplate", Json::array({ "PropertyClass" }), {});
+        AddClass(classes, "class WizGameObjectTemplate", Json::array({ "CoreTemplate", "PropertyClass" }), {});
 
         TypeRegistry registry;
         EXPECT_TRUE(registry.LoadFromText(dump.dump(), "player.json")) << (registry.GetErrors().empty() ? std::string() : registry.GetErrors().front());
@@ -86,7 +88,7 @@ namespace
             _catalog = LoadCatalog();
             ASSERT_TRUE(_catalog);
             std::vector<std::string> errors;
-            _types = CoreObjectTypeTable::Build({ { 104, 2, "class WizClientObject" } }, *_catalog, errors);
+            _types = CoreObjectTypeTable::Build({ { 104, "class WizClientObject" } }, { { "class WizGameObjectTemplate", 104, 2 } }, *_catalog, errors);
             ASSERT_TRUE(_types) << (errors.empty() ? std::string() : errors.front());
             _behaviors = BehaviorClientClasses::Build({
                 { "WizardCharacterBehavior", "class WizardCharacterBehavior", 0 },
@@ -98,6 +100,8 @@ namespace
             ASSERT_TRUE(_behaviors) << (errors.empty() ? std::string() : errors.front());
             _template.TemplateId = 1;
             _template.File = "ObjectData/PlayerObject.xml";
+            _template.Object = PropertyObject::Create(_catalog, "class WizGameObjectTemplate");
+            ASSERT_TRUE(_template.Object);
             _template.Behaviors = { "WizardCharacterBehavior", "BasicMobileBehavior", "PathMovementBehavior", "WizPlayerNameBehavior", "BasicMagicSchoolBehavior",
                 "BasicSpellbookBehavior" };
             _spells = { { 103007158, false, 4 }, { 957065192, false, SpellTracker::NoGroup }, { 402787217, true, 4 } };
@@ -247,5 +251,11 @@ TEST_F(PlayerObjectBuilderTest, ABehaviorNothingMapsAndATemplateNeverReadAreRefu
     EXPECT_NE(problem.find("has not been read from the install"), std::string::npos) << problem;
 
     EXPECT_FALSE(PlayerObjectBuilder::Build(_catalog, CoreObjectTypeTable(), *_behaviors, _template, _character, *_stats, _spells, _placement, problem));
-    EXPECT_NE(problem.find("core_object_type gives class WizClientObject no block and type"), std::string::npos) << problem;
+    EXPECT_NE(problem.find("core_template_type gives the player's template class class WizGameObjectTemplate no core type"), std::string::npos) << problem;
+
+    std::vector<std::string> errors;
+    CoreObjectTypeTablePtr const elsewhere = CoreObjectTypeTable::Build({ { 104, "class ClientObject" } }, { { "class WizGameObjectTemplate", 104, 2 } }, *_catalog, errors);
+    ASSERT_TRUE(elsewhere) << (errors.empty() ? std::string() : errors.front());
+    EXPECT_FALSE(PlayerObjectBuilder::Build(_catalog, *elsewhere, *_behaviors, _template, _character, *_stats, _spells, _placement, problem));
+    EXPECT_NE(problem.find("gives core type 104, which core_object_type does not say builds class WizClientObject"), std::string::npos) << problem;
 }

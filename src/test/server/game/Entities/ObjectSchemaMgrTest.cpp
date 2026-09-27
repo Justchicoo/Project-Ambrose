@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests what the world database's object schema tables promise, against a real world database when AMBROSE_TEST_DB is set and a small type dump the test writes: the updates create the tables with the rows that prove the player object, a server class joins the catalog in one build and extends a class the dump describes, the core object types and behavior classes load and are found both ways, a behavior with no class stands for an empty slot, a row naming a class nothing describes or one of the wrong kind fails its reload with the row named and keeps what was serving, and a server class whose property does not hash fails its reload with the catalog left as it was.
+ * Tests what the world database's object schema tables promise, against a real world database when AMBROSE_TEST_DB is set and a small type dump the test writes: the updates create the tables with the rows that prove the player object, a server class joins the catalog in one build and extends a class the dump describes, the core object types load with the template classes' pairs and give the player template's header, the behavior classes load and are found, a behavior with no class stands for an empty slot, a row naming a class nothing describes or one of the wrong kind, and a template class nothing describes, fails its reload with the row named and keeps what was serving, and a server class whose property does not hash fails its reload with the catalog left as it was.
  */
 
 #include "DBUpdater.h"
@@ -54,6 +54,8 @@ namespace
         instance["m_behaviorTemplateNameID"] = Property("unsigned int", "m_behaviorTemplateNameID", 0, Kept);
         AddClass(classes, "class BehaviorInstance", Json::array({ "PropertyClass" }), instance);
         AddClass(classes, "class TestAnimationBehavior", Json::array({ "BehaviorInstance", "PropertyClass" }), instance);
+        AddClass(classes, "class CoreTemplate", Json::array({ "PropertyClass" }), Json::object());
+        AddClass(classes, "class WizGameObjectTemplate", Json::array({ "CoreTemplate", "PropertyClass" }), Json::object());
         return Json{ { "version", 2 }, { "classes", classes } }.dump();
     }
 
@@ -109,6 +111,7 @@ namespace
         void UseTestRows()
         {
             Execute("DELETE FROM `behavior_client_class`");
+            Execute("DELETE FROM `core_template_type`");
             Execute("DELETE FROM `core_object_type`");
             Execute("DELETE FROM `server_class`");
             uint32 const hash = StringHash::KiStringHash("TestMobileBehavior");
@@ -116,7 +119,8 @@ namespace
             Execute(fmt::format("INSERT INTO `server_class_base` (`class_hash`, `position`, `base_name`) VALUES ({0}, 0, 'class BehaviorInstance'), ({0}, 1, 'class PropertyClass')", hash));
             Execute(fmt::format("INSERT INTO `server_class_property` (`class_hash`, `property_id`, `name`, `type`, `hash`, `offset`, `flags`) VALUES ({}, 0, 'm_behaviorTemplateNameID', 'unsigned int', {}, 104, 39)",
                 hash, StringHash::PropertyHash("unsigned int", "m_behaviorTemplateNameID")));
-            Execute("INSERT INTO `core_object_type` (`block`, `type`, `class_name`, `evidence`) VALUES (104, 2, 'class WizClientObject', 'test')");
+            Execute("INSERT INTO `core_object_type` (`core_type`, `class_name`, `evidence`) VALUES (104, 'class WizClientObject', 'test')");
+            Execute("INSERT INTO `core_template_type` (`template_class`, `core_type`, `template_type`, `evidence`) VALUES ('class WizGameObjectTemplate', 104, 2, 'test')");
             Execute("INSERT INTO `behavior_client_class` (`behavior_name`, `class_name`, `evidence`) VALUES ('BasicMobileBehavior', 'TestMobileBehavior', 'test'), ('AnimationBehavior', 'class TestAnimationBehavior', 'test'), ('PathMovementBehavior', NULL, 'test')");
         }
 
@@ -144,13 +148,23 @@ TEST_F(ObjectSchemaMgrTest, TheUpdatesCreateTheTablesWithTheRowsThatProveThePlay
     EXPECT_EQ(classes->Fetch()[0].Get<std::string>(), "BasicMobileBehavior");
     QueryResult const types = WorldDatabase.Query("SELECT COUNT(*) FROM `core_object_type`");
     ASSERT_TRUE(types);
-    EXPECT_EQ(types->Fetch()[0].Get<uint64>(), 2u);
+    EXPECT_EQ(types->Fetch()[0].Get<uint64>(), 5u) << "core types 2, 5 and 9 build ClientObject, 104 WizClientObject and 115 WizClientObjectItem";
+    QueryResult const templates = WorldDatabase.Query("SELECT `core_type`, `template_type` FROM `core_template_type` WHERE `template_class` = 'class WizGameObjectTemplate'");
+    ASSERT_TRUE(templates);
+    EXPECT_EQ(templates->Fetch()[0].Get<uint8>(), 104u);
+    EXPECT_EQ(templates->Fetch()[1].Get<uint8>(), 2u) << "the player template's class gives the 68 02 every accepted player object opens with";
     QueryResult const behaviors = WorldDatabase.Query("SELECT COUNT(*), SUM(`class_name` IS NULL) FROM `behavior_client_class`");
     ASSERT_TRUE(behaviors);
-    EXPECT_EQ(behaviors->Fetch()[0].Get<uint64>(), 39u) << "one row for every behavior PlayerObject.xml names";
-    EXPECT_EQ(behaviors->Fetch()[1].Get<uint64>(), 7u) << "the seven slots an accepted player object leaves empty";
-    EXPECT_FALSE(WorldDatabase.DirectExecute("INSERT INTO `core_object_type` (`block`, `type`, `class_name`, `evidence`) VALUES (0, 0, 'class ClientObject', 'test')"))
-        << "the plain pair cannot stand for a class";
+    EXPECT_EQ(behaviors->Fetch()[0].Get<uint64>(), 79u) << "one row for every behavior PlayerObject.xml names and the forty more the templates of zone objects name";
+    EXPECT_EQ(behaviors->Fetch()[1].Get<uint64>(), 17u) << "the seven slots an accepted player object leaves empty and ten a zone object's template names that the client builds nothing the dump describes for";
+    QueryResult const npc = WorldDatabase.Query("SELECT `class_name` FROM `behavior_client_class` WHERE `behavior_name` = 'NPCBehavior'");
+    ASSERT_TRUE(npc);
+    EXPECT_EQ(npc->Fetch()[0].Get<std::string>(), "class NPCBehavior");
+    QueryResult const deleted = WorldDatabase.Query("SELECT `class_name` IS NULL FROM `behavior_client_class` WHERE `behavior_name` = 'DeletedBehavior'");
+    ASSERT_TRUE(deleted);
+    EXPECT_EQ(deleted->Fetch()[0].Get<uint64>(), 1u) << "no factory is registered for it, so its slot is sent empty";
+    EXPECT_FALSE(WorldDatabase.DirectExecute("INSERT INTO `core_object_type` (`core_type`, `class_name`, `evidence`) VALUES (0, 'class ClientObject', 'test')"))
+        << "core type 0, the byte that says a plain class hash follows, cannot stand for a class";
 }
 
 TEST_F(ObjectSchemaMgrTest, TheServerClassJoinsTheCatalogAndTheTablesAreFoundBothWays)
@@ -168,9 +182,12 @@ TEST_F(ObjectSchemaMgrTest, TheServerClassJoinsTheCatalogAndTheTablesAreFoundBot
 
     CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
     ASSERT_EQ(types->Count(), 1u);
-    ASSERT_NE(types->Find(104, 2), nullptr);
-    EXPECT_EQ(types->Find(104, 2)->ClassName, "class WizClientObject");
-    EXPECT_NE(types->FindByClass(StringHash::KiStringHash("class WizClientObject")), nullptr);
+    ASSERT_NE(types->Find(104), nullptr);
+    EXPECT_EQ(types->Find(104)->ClassName, "class WizClientObject");
+    EXPECT_TRUE(types->IsCoreClass(StringHash::KiStringHash("class WizClientObject")));
+    ClassInfo const* const playerTemplate = catalog->FindClass("class WizGameObjectTemplate");
+    ASSERT_NE(playerTemplate, nullptr);
+    EXPECT_EQ(types->HeaderFor(*playerTemplate, 1), (CoreObjectHeader{ 104, 2, 1 }));
 
     std::shared_ptr<BehaviorClientClasses const> const behaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
     EXPECT_EQ(behaviors->Count(), 3u);
@@ -192,13 +209,23 @@ TEST_F(ObjectSchemaMgrTest, ARowNamingAClassNobodyDescribesFailsItsReloadAndKeep
     CoreObjectTypeTablePtr const serving = sObjectSchemaMgr.GetCoreObjectTypes();
     std::shared_ptr<BehaviorClientClasses const> const servingBehaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
 
-    Execute("INSERT INTO `core_object_type` (`block`, `type`, `class_name`, `evidence`) VALUES (7, 7, 'class Nowhere', 'test'), (8, 8, 'class TestAnimationBehavior', 'test')");
+    Execute("INSERT INTO `core_object_type` (`core_type`, `class_name`, `evidence`) VALUES (7, 'class Nowhere', 'test'), (8, 'class TestAnimationBehavior', 'test')");
     ReloadOutcome const types = sReloadMgr.Reload(ObjectSchemaMgr::CoreObjectTypeTarget);
     EXPECT_FALSE(types.Ok);
     ASSERT_EQ(types.Errors.size(), 2u);
-    EXPECT_NE(types.Errors[0].find("block 7 type 7 names class Nowhere, which the type dump does not list"), std::string::npos) << types.Errors[0];
-    EXPECT_NE(types.Errors[1].find("block 8 type 8 names class TestAnimationBehavior, which is not a class CoreObject"), std::string::npos) << types.Errors[1];
+    EXPECT_NE(types.Errors[0].find("core type 7 names class Nowhere, which the type dump does not list"), std::string::npos) << types.Errors[0];
+    EXPECT_NE(types.Errors[1].find("core type 8 names class TestAnimationBehavior, which is not a class CoreObject"), std::string::npos) << types.Errors[1];
     EXPECT_EQ(sObjectSchemaMgr.GetCoreObjectTypes(), serving);
+    Execute("DELETE FROM `core_object_type` WHERE `core_type` IN (7, 8)");
+
+    Execute("INSERT INTO `core_object_type` (`core_type`, `class_name`, `evidence`) VALUES (9, 'class ClientObject', 'test')");
+    Execute("INSERT INTO `core_template_type` (`template_class`, `core_type`, `template_type`, `evidence`) VALUES ('class Nowhere', 9, 9, 'test')");
+    ReloadOutcome const templates = sReloadMgr.Reload(ObjectSchemaMgr::CoreTemplateTypeTarget);
+    EXPECT_FALSE(templates.Ok);
+    ASSERT_EQ(templates.Errors.size(), 1u);
+    EXPECT_NE(templates.Errors[0].find("template class class Nowhere is not listed in the type dump"), std::string::npos) << templates.Errors[0];
+    EXPECT_EQ(sObjectSchemaMgr.GetCoreObjectTypes(), serving);
+    Execute("DELETE FROM `core_template_type` WHERE `template_class` = 'class Nowhere'");
 
     Execute("INSERT INTO `behavior_client_class` (`behavior_name`, `class_name`, `evidence`) VALUES ('WizardEquipmentBehavior', 'class WizClientObject', 'test')");
     ReloadOutcome const behaviors = sReloadMgr.Reload(ObjectSchemaMgr::BehaviorTarget);
@@ -207,7 +234,6 @@ TEST_F(ObjectSchemaMgrTest, ARowNamingAClassNobodyDescribesFailsItsReloadAndKeep
     EXPECT_NE(behaviors.Errors[0].find("behavior WizardEquipmentBehavior names class WizClientObject, which is not a class BehaviorInstance"), std::string::npos) << behaviors.Errors[0];
     EXPECT_EQ(sObjectSchemaMgr.GetBehaviorClientClasses(), servingBehaviors);
 
-    Execute("DELETE FROM `core_object_type` WHERE `block` IN (7, 8)");
     Execute("UPDATE `behavior_client_class` SET `class_name` = 'class TestAnimationBehavior' WHERE `behavior_name` = 'WizardEquipmentBehavior'");
     EXPECT_TRUE(sReloadMgr.Reload(ObjectSchemaMgr::CoreObjectTypeTarget).Ok);
     EXPECT_TRUE(sReloadMgr.Reload(ObjectSchemaMgr::BehaviorTarget).Ok);

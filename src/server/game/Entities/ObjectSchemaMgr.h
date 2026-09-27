@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What the world database knows about the client's object classes that the type dump cannot say (sObjectSchemaMgr): the classes the dump does not describe, which it hands to the type registry to rebuild its catalog with; the block and type each game object class is created with; and the class the client builds for each behavior a template names, or none where the client takes that behavior's slot empty. Each is read in one snapshot of its tables, built and checked off to the side against the catalog in use and swapped in whole, a build that fails keeps what was serving and names every row at fault, and each reloads alone, the core object types and behavior classes after the classes they may name.
+ * What the world database knows about the client's object classes that the type dump cannot say (sObjectSchemaMgr): the classes the dump does not describe, which it hands to the type registry to rebuild its catalog with; the class each core type builds and the core type and template type each template class gives, which together make the header a game object is created from; and the class the client builds for each behavior a template names, or none where the client takes that behavior's slot empty. Each is read in one snapshot of its tables, built and checked off to the side against the catalog in use and swapped in whole, a build that fails keeps what was serving and names every row at fault, and each reloads alone, the core object types and behavior classes after the classes they may name.
  */
 
 #ifndef AMBROSE_OBJECTSCHEMAMGR_H
@@ -60,6 +60,7 @@ class ObjectSchemaMgr
 public:
     static constexpr std::string_view ClassTarget = "server_class_schema";
     static constexpr std::string_view CoreObjectTypeTarget = "core_object_type";
+    static constexpr std::string_view CoreTemplateTypeTarget = "core_template_type";
     static constexpr std::string_view BehaviorTarget = "behavior_client_class";
     static constexpr std::string_view ClassSource = "the world database's server_class tables";
 
@@ -77,6 +78,8 @@ public:
 
     CoreObjectTypeTablePtr GetCoreObjectTypes() const { return _coreObjectTypes.Get(); }
     std::shared_ptr<BehaviorClientClasses const> GetBehaviorClientClasses() const { return _behaviors.Get(); }
+    uint64 GetCoreObjectTypeGeneration() const noexcept { return _coreObjectTypes.GetGeneration(); }
+    uint64 GetBehaviorGeneration() const noexcept { return _behaviors.GetGeneration(); }
     void Clear();
 
 private:
