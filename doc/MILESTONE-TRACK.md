@@ -124,9 +124,8 @@ Everything not in the table above, including every milestone whose dependencies 
 | 17.47 | Kept for the maintainer's panel session, beside the roles it builds on |
 | 8.04 | Built on 2026-09-26 by the maintainer's world session, 10 of 12 checks. Left: the game master's real-client check, which waits on 6.04's in-game commands, and the real-client check that shows a spell in the Spell Deck, which waits on the deck 8.10 and 8.11 build |
 | 9.02 | Built on 2026-09-26 by the maintainer's world session, 6 of 7 checks. Left: its real-client check, which waits on 6.04 |
-| 5.02 | Kept for the maintainer's world session: it starts the chain through 6.01, 6.03 and 6.04 to 8.01 vitals behind the same menus |
-| 4.08 | Taken over by the maintainer's world session on 2026-09-26 for 5.02, which spawns from its zone_object rows and needs every eligible object: the writer skips an object it cannot read without a word, so WC_Hub writes 177 rows for 183 objects, and spawn data is not extracted. MeruneFleuruwu's decoding of every zone, with real positions and display keys, is in the tree and is what it builds on |
-| 6.10 | The maintainer's world session, after 5.02: NPC objects do not need it, because the client leaves those server-only behaviors as empty slots too, and its rows are extracted from the user's install at first run rather than committed |
+| 4.08 | Taken over by the maintainer's world session on 2026-09-26. 5.02 moved its writer into `extractor zones`, which now writes a row for every entry whose class the type dump describes, with typed columns and the loading type. MeruneFleuruwu's decoding of every zone, with real positions and display keys, is what it builds on. Left: the four checks that count every entry, which wait on the sigils 6.10's class tables describe, and the spawn data the two integration tests read |
+| 6.10 | The maintainer's world session, next now that 5.02 has landed: NPC objects do not need it, because the client leaves those server-only behaviors as empty slots too, and its rows are extracted from the user's install at first run rather than committed |
 
 ## In flight
 
