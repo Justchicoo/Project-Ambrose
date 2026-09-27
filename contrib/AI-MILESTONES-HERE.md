@@ -13,8 +13,8 @@ Read this whole prompt before you answer. Then ask me the questions at the end, 
 
 ## Read these before you plan anything
 
-- **https://justchicoo.github.io/Project-Ambrose/state.json first, before anything else.** It is the project's live state, generated from the roadmap and the open pull requests, and it carries every milestone with a `status` of `landed`, `building`, `held`, `open`, `waiting` or `reserved`, plus what each needs, what it unlocks, who holds it and a `how_to_use` list of the rules. Fetch it, and take only a milestone whose status is `open`. If mine is anything else, stop and tell me what it says: a pull request for a held or claimed milestone is closed unread, and CI refuses the branch outright. The board a person reads is https://justchicoo.github.io/Project-Ambrose/ .
-- `doc/MILESTONE-TRACK.md` - the rulebook behind that state: how one is claimed, what finishing means, what a milestone branch may change, and how holds work. A hold can cover a whole phase, so a milestone with every dependency built can still be closed to me.
+- **https://justchicoo.github.io/Project-Ambrose/state.json first, before anything else.** It is the project's live state, generated from the roadmap and the open pull requests, and it carries every milestone with a `status` of `landed`, `building`, `held`, `open`, `waiting` or `reserved`, plus what each needs, what it unlocks, who holds it and a `how_to_use` list of the rules. Fetch it, and take only a milestone whose status is `open`. If mine is anything else, stop and tell me what it says: CI refuses a branch for a held milestone outright, and one somebody else is building would duplicate their work. The board a person reads is https://justchicoo.github.io/Project-Ambrose/ .
+- `doc/MILESTONE-TRACK.md` - the rulebook behind that state: how one is claimed, what finishing means, what a milestone branch may change, and how holds work. Since 2026-09-27 every milestone whose dependencies are built is open, in every phase including the panel, except the few a hold names because the maintainer's own sessions are building them right now, and those whose remaining checks need the maintainer's own client.
 - The phase file of my milestone, `doc/roadmap/phase-NN-*.md`, whole. Not only my milestone's section: the phase's **Review notes** at the top name faults the roadmap's own critic found, and the ones that name my milestone are mine to resolve.
 - `doc/ARCHITECTURE.md` - the layering, the folder each subsystem belongs to, the file-header form per file type, the SQL update convention, and the settled Decisions. It is long; read the parts my milestone lands in.
 - `CONTRIBUTING.md` and `doc/REVIEWING.md`. The second is the maintainer's own rulebook for judging this work, so it tells us exactly what will be checked and how.
@@ -173,7 +173,7 @@ AMBROSE_PANEL_API=https://127.0.0.1:12080 npm run dev --workspace apps/dashboard
 
 **7. My own client.** The `launcher` tool starts my own installation against my own login server, always with patching off, from a folder of its own, and never through KingsIsle's launcher: `launcher --client <the install folder>`. It needs Windows. With a login server running, that is the whole loop: my client reaches the login screen, authenticates against my server, and lands on character select.
 
-**What my milestone actually needs.** Ask me for only these. A milestone whose checks are unit tests needs nothing past step 1. Anything that stores something adds step 2. Anything reading the client's own archives, dumps or zones adds step 4 and my installation. A check marked Real client needs steps 5 and 7 and somebody at the keyboard, and a check marked Dev-gated may need a second machine or hardware I do not have, which stays unticked and is named in the pull request. Most panel milestones are held by the maintainer's own session. The ones the board lists as open were spared from that hold one at a time, and those are the milestones step 6 is for.
+**What my milestone actually needs.** Ask me for only these. A milestone whose checks are unit tests needs nothing past step 1. Anything that stores something adds step 2. Anything reading the client's own archives, dumps or zones adds step 4 and my installation. A check marked Real client needs steps 5 and 7 and somebody at the keyboard, and a check marked Dev-gated may need a second machine or hardware I do not have, which stays unticked and is named in the pull request. Panel milestones open like any other once they are ready; the few the maintainer's panel session is building carry a hold of their own, and the open ones are what step 6 is for.
 
 A branch named `milestone/<id>-<short-name>` builds the Linux GCC leg in CI by itself, so an open pull request tells us both whether it compiles there, and the maintainer adds a label for the Windows leg when it is worth one. The first run from a new contributor waits for a maintainer to approve it.
 
@@ -272,6 +272,16 @@ It is reviewed by running, never by reading, and by somebody who assumes the tes
 - Malformed input is fed to anything that parses: truncated, bit-flipped, and random bytes. Each should be refused by name rather than crashing.
 
 None of that is adversarial for its own sake. A test that cannot fail is worse than no test, because it makes the next change look safe.
+
+## When the review comes back
+
+The review is one message written for you to act on, and the newest one always carries the whole list. It merges only when it is good and moves the project forward, so treat every numbered item as required:
+
+1. Read the newest review message on the pull request whole. Each item names a file and line, what is wrong, the exact change, and the command or test that proves it.
+2. Make every change it lists, and nothing it does not ask for.
+3. Run every proving command it names and see each pass, then run the steps under "Before the pull request" below again.
+4. Update the ticks and the pull request description to match what is now true.
+5. Commit and push to the same branch. The pull request is rechecked from the start, and it merges once the recheck passes.
 
 ## Before the pull request
 

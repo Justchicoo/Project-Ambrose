@@ -2,30 +2,70 @@
   "schema": 1,
   "holds": [
     {
-      "scope": "phase:17",
-      "who": "the maintainer's panel session",
-      "what": "the operations panel, built milestone by milestone, with every later subsystem fitted into it",
-      "since": "2026-09-18",
-      "except": [
-        "17.10",
-        "17.23",
-        "17.35",
-        "17.49",
-        "17.91",
-        "17.106"
-      ]
-    },
-    {
-      "scope": "milestone:4.02",
-      "who": "the maintainer's panel session",
-      "what": "CommandMgr and security levels, which open 17.05 and the panel's roles straight after",
-      "since": "2026-09-22"
-    },
-    {
       "scope": "milestone:3.23",
       "who": "the maintainer's own machine",
       "what": "keeping up with KingsIsle's client revisions, which needs the pinned installation",
       "since": "2026-09-22"
+    },
+    {
+      "scope": "milestone:3.26",
+      "who": "the maintainer's panel session",
+      "what": "the launcher window, which the panel's own installable program shares",
+      "since": "2026-09-27"
+    },
+    {
+      "scope": "milestone:16.04",
+      "who": "the maintainer's world session",
+      "what": "decoding the client's patcher and building Ambrose's own, so panel, launcher, client and server all connect",
+      "since": "2026-09-27"
+    },
+    {
+      "scope": "milestone:16.05",
+      "who": "the maintainer's world session",
+      "what": "the patcher chain after 16.04",
+      "since": "2026-09-27"
+    },
+    {
+      "scope": "milestone:16.06",
+      "who": "the maintainer's world session",
+      "what": "the patcher chain after 16.05",
+      "since": "2026-09-27"
+    },
+    {
+      "scope": "milestone:16.08",
+      "who": "the maintainer's world session",
+      "what": "the patcher chain, once it is ready",
+      "since": "2026-09-27"
+    },
+    {
+      "scope": "milestone:16.13",
+      "who": "the maintainer's world session",
+      "what": "the patcher chain, once it is ready",
+      "since": "2026-09-27"
+    },
+    {
+      "scope": "milestone:17.18",
+      "who": "the maintainer's panel session",
+      "what": "file roots, the path jail and browsing, being built now",
+      "since": "2026-09-27"
+    },
+    {
+      "scope": "milestone:17.24",
+      "who": "the maintainer's panel session",
+      "what": "the panel as its own installable program",
+      "since": "2026-09-27"
+    },
+    {
+      "scope": "milestone:17.26",
+      "who": "the maintainer's panel session",
+      "what": "the panel event socket, being built now",
+      "since": "2026-09-27"
+    },
+    {
+      "scope": "milestone:17.47",
+      "who": "the maintainer's panel session",
+      "what": "two-factor sign-in, being built now",
+      "since": "2026-09-27"
     }
   ]
 }

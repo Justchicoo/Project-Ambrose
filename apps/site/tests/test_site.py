@@ -139,8 +139,10 @@ class BoardTests(unittest.TestCase):
         self.assertTrue(all("finishing it frees" in line for line in lines))
 
     def test_a_hold_nobody_has_moved_asks_to_be_checked(self):
-        later = NOW + datetime.timedelta(days=build.HOLD_REVIEW_DAYS + 1)
-        fresh = build.build_state(ROOT, {"pulls": [], "issues": []}, NOW)
+        newest = max(datetime.date.fromisoformat(entry["since"]) for entry in build.holds(ROOT))
+        start = datetime.datetime(newest.year, newest.month, newest.day, 23, 45, tzinfo=datetime.timezone.utc)
+        later = start + datetime.timedelta(days=build.HOLD_REVIEW_DAYS + 1)
+        fresh = build.build_state(ROOT, {"pulls": [], "issues": []}, start)
         aged = build.build_state(ROOT, {"pulls": [], "issues": []}, later)
         self.assertFalse(any(entry["needs_review"] for entry in fresh["holds"]))
         self.assertTrue(all(entry["needs_review"] for entry in aged["holds"]))

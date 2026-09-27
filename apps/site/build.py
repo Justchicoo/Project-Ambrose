@@ -45,7 +45,7 @@ STATUS_ORDER = ("landed", "building", "held", "open", "waiting", "reserved")
 HOW_TO_USE = [
     "This file is the live state of the project. Read it before claiming anything, and read it again before you push.",
     "Take a milestone only where status is 'open'. Anything 'held' is being built by the maintainer's own sessions, anything 'building' is somebody else's, and anything 'waiting' has a dependency that is not finished.",
-    "A hold can cover a whole phase. If phase 17 is held, every milestone in it is held, whatever its own row says, unless that hold names it under except, which is how one milestone is opened out of a held phase.",
+    "Every milestone whose dependencies are built is open unless a hold names it, because one of the maintainer's own sessions is building it right now, or its remaining checks need the maintainer's own client. A phase hold would close a whole phase; none is in force.",
     "Claim by opening a draft pull request from a branch named milestone/<id>-<short-name>, which is also what lets CI accept a change under src/. The board picks that up by itself.",
     "A milestone is finished only when every acceptance check in its phase file is ticked with the evidence that proved it. A check you cannot run stays unticked and is named in the pull request.",
     "A milestone carrying next_after is waiting on exactly that one milestone, so it is what to line up next rather than what to start. A hold carrying needs_review has not moved in weeks: ask in the Discord rather than assuming it is still held.",

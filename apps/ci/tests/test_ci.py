@@ -912,14 +912,14 @@ class MilestoneTrackTests(unittest.TestCase):
     def test_the_real_holds_stop_the_real_branches(self):
         kept = ci_contrib_paths.holds(ROOT)
         self.assertTrue(kept)
-        self.assertEqual(ci_contrib_paths.main(["--root", ROOT, "--paths", "src/x.cpp", "--branch", "milestone/17.09-metrics"]), 1)
+        self.assertEqual(ci_contrib_paths.main(["--root", ROOT, "--paths", "src/x.cpp", "--branch", "milestone/17.18-file-roots"]), 1)
         self.assertEqual(ci_contrib_paths.main(["--root", ROOT, "--paths", "src/x.cpp", "--branch", "milestone/4.04-world-wire-math"]), 0)
 
     def test_the_checker_and_the_board_read_the_same_holds(self):
         from_checker = ci_contrib_paths.holds(ROOT)
         from_board = board.holds(ROOT)
         self.assertEqual(len(from_checker), len(from_board))
-        for milestone in ("17.09", "4.02", "4.04", "1.06", "3.23"):
+        for milestone in ("17.09", "17.18", "4.02", "4.04", "1.06", "3.23"):
             checker = ci_contrib_paths.held_by(milestone, from_checker)
             board_side = board.hold_for(milestone, from_board)
             self.assertEqual(bool(checker), bool(board_side), milestone)

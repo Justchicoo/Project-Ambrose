@@ -18,16 +18,16 @@ This page stays the rulebook. The board is the live view of it, and where the tw
 
 ## Only the milestones named below
 
-**Open now** is the whole list. A milestone that is not in it is reserved, whatever its dependencies say, because it is being built right now, it is next in the maintainer's own queue, or its acceptance can only be run on the maintainer's machine. A pull request for a reserved milestone is closed, and that is a waste of your evening, so take one from the table or ask in the Discord for another to be opened.
+**Open now** is the whole list, and since 2026-09-27 it names every milestone whose dependencies are all built, in every phase including the panel, except two kinds: the few one of the maintainer's own sessions is building right now, which each carry a hold of their own, and those whose remaining checks can only be run with the maintainer's own game client or capture. A milestone goes into Open now as soon as it becomes ready. A pull request for a held milestone cannot pass its checks, so take one from the table, and ask in the Discord if the one you want is missing from it.
 
 `python apps/progress/ready.py` prints every milestone whose dependencies are all finished and marks each one from this document's tables, counting anything it does not name as reserved, so the tool and this page can never drift apart. `--open` narrows it to the ones nobody holds, `--blocked` says what is waiting and on what.
 
-## Holds, and why a whole phase can be closed
+## Holds
 
 `doc/work/holds.json` is where the maintainer's own sessions say what they are building. A hold names a scope, who holds it and what they are on, and it comes in two sizes:
 
 - `milestone:4.02` closes one milestone.
-- `phase:17` closes a whole phase, every milestone in it, however ready one of them looks on its own. The panel is built as one long thread of work, so a milestone taken out of the middle of it collides with something being built the same week.
+- `phase:17` would close a whole phase. None does: since 2026-09-27 every hold names one milestone that one of the maintainer's own sessions is building right now, so the rest of every phase, the panel included, is open as soon as it is ready.
 - A phase hold may carry `"except": ["17.10"]`, which opens exactly those milestones out of it. That is how a piece that collides with nothing gets handed out while the rest of the phase stays closed, and it is deliberate each time rather than a default. Only a phase hold may carry one, every id in it has to be a real milestone of that phase, and a milestone the same file also holds by name stays held, so an exception can never override a hold meant for it.
 
 A hold is not advice. `apps/ci/ci_contrib_paths.py` refuses a branch named for a held milestone and says who holds it, so a pull request for one cannot pass its checks, and the board never lists it as open. When a session finishes and moves on, the hold goes and whatever it covered becomes takeable in the next build of the board.
@@ -89,9 +89,9 @@ It refuses another phase's file, so a change that needs one is a change of scope
 
 doc/REVIEWING.md is the rulebook, and its first line applies hardest here: verified by running, never by reading. Expect the maintainer to build the branch, run its tests, run the ones it claims by name, and try the failure the code says it handles. A branch named for a milestone builds the Linux GCC leg in CI by itself, without waiting for a label, and the maintainer adds a `ci:` label for the Windows leg or the sanitizers when the change deserves them.
 
-While it is not ready, each review round is one message: what works and what was verified, then everything left before it merges, each item with how to fix it and how to check the fix, so the next push can be the one that merges. A long list says which items can follow in a second pull request on the same milestone.
+While it is not ready, each review round is one message written so your AI can act on it without guessing: what works and what was verified, then a numbered list of everything left before it merges, each item giving the file and line, what is wrong, the exact change, and the command or test that proves it passes, and last the line "push to the same branch and it will be rechecked". Every round restates the whole list, so the newest message is all your AI needs to read. Hand that message to your AI as it is, have it do every item and run every proving command, and push to the same branch. A long list says which items can follow in a second pull request on the same milestone.
 
-Then one of four things happens, each with one message saying which and why: it merges and the milestone is marked landed; it merges with the milestone left open because gated checks remain; it merges and the maintainer fixes what review found on `main`, with you kept as co-author; or it is closed with the reason and what would make it mergeable.
+It merges only when it is good and moves the project forward: correct, verified by running, within the rules, and earning at least one acceptance check with a test that was run, or fixing something real. Then it lands as one commit on `main` with you as its author, the milestone marked landed or, when gated checks remain, left open with what is left named. Anything short of that is not merged yet, however close: it stays open with the review's list, and after your push it is rechecked the same way and merges once it passes. Only typos and tick formatting are fixed on `main` instead of sent back. A pull request is closed only when it is for a milestone held by name or carries a file from the game client, and even then the message says what to take or do instead.
 
 ## Open now
 
@@ -101,6 +101,9 @@ Then one of four things happens, each with one message saying which and why: it 
 | 17.49 | Panel audit scope, app relay and command history | M | A build, Node 20+ and a browser. No MySQL or MariaDB: the supervisor keeps its own store | Nothing the panel does happens without a record written in the same transaction as the change, the browser never holds an app's token, and one command history follows a user between browsers. The permission catalog, roles and grants it depends on landed in 17.48 and the audit tables in 17.14, so this wires parts that already exist. All six checks run on your own machine. The level the relay passes is settled under Panel operations in doc/ARCHITECTURE.md. Spared from the phase hold on 2026-09-25 |
 | 17.91 | Tick breakdown and on-demand profiles | M | A build, Node 20+ and a browser | A slow tick says which subsystem took the time, published through the metrics registry 17.09 built and drawn under the graphs 17.19 built. Measure at the tick's own call sites in `src/server/game/World`: `GameSession` is still being changed for 4.06, 4.11 and 4.16, so leave it and `src/server/game/Handlers` alone. All five checks run on your own machine. The capture writes a Chrome trace event file with no profiler library, as Panel operations in doc/ARCHITECTURE.md settles. Spared from the phase hold on 2026-09-25 |
 | 17.106 | Error reports: source locations, grouping and a report file | L | A build, Node 20+ and a browser | An operator's errors reach the maintainer as a file naming the build, file and line each was raised at, so a bug report can be fixed without a screen share. It is large and it changes the logging macros every file uses, so read the note on macros with commas in contrib/AI-MILESTONES-HERE.md before touching them. All six checks run on your own machine. Spared from the phase hold on 2026-09-25 |
+| 6.01 | Whole-zone player broadcast | M | A build, MySQL or MariaDB, and two clients of my own for its real-client checks, which stay unticked without them | Players see each other appear, move and leave: the first milestone that makes the world shared, on the zone instances 5.02 fills with objects |
+| 6.10 | Supplemental server-side schemas | S | A build and my own install's type dump | Server-owned classes decode like dump classes, which the sigils 4.08 still counts and the NPC behaviours need; its rows are extracted from my own install at first run, never committed |
+| 17.28 | Launch and startup settings | M | A build, Node 20+ and a browser | Operators control how each app is launched, its build, overrides, timeouts, restart policy and resource limits, from the panel instead of service files, on the settings page 17.13 just landed |
 
 ## Reserved
 
@@ -114,17 +117,19 @@ Everything not in the table above, including every milestone whose dependencies 
 | 3.20 | Built but for one check, which has to be run on a real terminal against a real install |
 | 3.12 | Its remaining checks wait for 6.10 and for a real client session |
 | 3.23 | Next in the maintainer's own queue |
-| 4.02 | Held by the panel session, which needs it for the panel's roles. It is built and passes every automated check; its one real-client check waits on another milestone rather than on anybody's time |
+| 4.02 | Built and passing every automated check; its one real-client check needs the maintainer's own client |
 | 4.06 | Built but for one check, a bad key refused with MSG_ATTACHFAILED on a real client, which is next in the maintainer's world session |
 | 4.11 | Being built now, and the world entry after it runs through the same files |
 | 16.11 | Overlaps the type extraction already built in 3.21 and is being rethought |
 | 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal, and nothing else left to build |
-| 3.26 | Unblocked by the design system landing, and next in the maintainer's own queue after the terminal dashboard |
-| 17.47 | Kept for the maintainer's panel session, beside the roles it builds on |
+| 3.26 | Held by the maintainer's panel session: the panel's own installable program shares the launcher's window |
+| 17.47 | Being built now by the maintainer's panel session |
+| 17.18 | Being built now by the maintainer's panel session |
+| 17.26 | Being built now by the maintainer's panel session |
+| 17.24 | Held by the maintainer's panel session, which turns the panel into its own installable program on it |
 | 8.04 | Built on 2026-09-26 by the maintainer's world session, 10 of 12 checks. Left: the game master's real-client check, which waits on 6.04's in-game commands, and the real-client check that shows a spell in the Spell Deck, which waits on the deck 8.10 and 8.11 build |
 | 9.02 | Built on 2026-09-26 by the maintainer's world session, 6 of 7 checks. Left: its real-client check, which waits on 6.04 |
 | 4.08 | Taken over by the maintainer's world session on 2026-09-26. 5.02 moved its writer into `extractor zones`, which now writes a row for every entry whose class the type dump describes, with typed columns and the loading type. MeruneFleuruwu's decoding of every zone, with real positions and display keys, is what it builds on. Left: the four checks that count every entry, which wait on the sigils 6.10's class tables describe, and the spawn data the two integration tests read |
-| 6.10 | The maintainer's world session, next now that 5.02 has landed: NPC objects do not need it, because the client leaves those server-only behaviors as empty slots too, and its rows are extracted from the user's install at first run rather than committed |
 
 ## In flight
 
@@ -136,7 +141,6 @@ A row that says **before the reset** came from a pull request that was on the re
 | 17.23 | MeruneFleuruwu | [#9](https://github.com/Justchicoo/Project-Ambrose/pull/9) | Landed on 2026-09-25 with the Compose and time zone checks earned, after review added the type extractor and the SQL to the image and the egg, Python to their build, a health check that probes the login port and a .dockerignore. Left: the three Dev-gated checks, a reboot after `--install-service` on Windows and on Linux and the two Pterodactyl ones, which the maintainer runs on their own machines |
 | 17.35 | MeruneFleuruwu | [#8](https://github.com/Justchicoo/Project-Ambrose/pull/8) | Landed on 2026-09-26 with checks 2, 3 and 5 earned, the routes and the page under `panel.settings`. Left: an SMTP transport and the mail test that uses it (check 1), sealing the saved password at rest once the supervisor has a key, and the captcha at sign-in refusing when its provider cannot be reached (check 4) |
 | 16.03 | MeruneFleuruwu | [#6](https://github.com/Justchicoo/Project-Ambrose/pull/6) | The scanner is delivered and four checks are earned, two of them re-run by the maintainer on a real install rather than only in a fixture. Size, CRC, HeaderSize and HeaderCRC are right for 3589 of 3589 type 3 and 5 records, and a cached run is 194 seconds down to 1 with a byte-identical .bin. Left: package membership, 3820 of 3825, because `Windows/PatchClient/` is not matched and the manifest files scan themselves in; and four fields no check names, `TarFileName`, `CompressedHeaderSize`, the 40 type 5 WADs and the header fields on plain files |
-| 1.21 | MeruneFleuruwu | [#5](https://github.com/Justchicoo/Project-Ambrose/pull/5) | doc/PATCHING.md now matches what is built and the deliverable line names src/tools/launcher. Left: all three acceptance checks, which watch a real client, one listener seeing no patch connection, one recording what the client does with no `-P`, and one seeing no 'Patch failed' dialog |
 | 5.08 | MeruneFleuruwu | [#4](https://github.com/Justchicoo/Project-Ambrose/pull/4) | The scripts, env.dist and doc/INSTALL.md are delivered and the conf check is earned, verified by running both of them. Left: the check that a clean Ubuntu and a clean Windows machine reach 'ready' on all three apps, which needs those machines. The maintainer added the self-tests and fixed a relative install prefix that resolved against the working directory |
 | 5.07 | MeruneFleuruwu | before the reset | The cache is built, wired into the login server and measured at a third of the JSON path's time on the pinned install, and a truncated, bit-flipped or random cache is refused by name. Left: a client-gated comparison of every class, property and enum table, and a measurement showing a load under 200 ms |
 | 3.18 | MeruneFleuruwu | before the reset | The four acceptance checks are earned and ticked, but the deliverable asking for unit tests of the decision logic against an in-memory applied set, with no database, is not delivered: the three cases it names are covered by an integration test that skips wherever no database is configured. ARCHIVED files and module includes are also still to come |
