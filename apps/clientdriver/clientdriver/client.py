@@ -101,9 +101,29 @@ def force_foreground(handle, timeout=2.0):
     return False
 
 
+PATCH_FLAG = " -P 0"
+PATCH_CONFIG = "PatchConfig.xml"
+PATCH_HOST = re.compile(r'(<PatchServerHostname\s+host=")[^"]*(")')
+PATCH_PORT = re.compile(r'(<PatchServerPort\s+port=")[^"]*(")')
+
+
+def pointed_patch_config(text, host, port):
+    for pattern, value in ((PATCH_HOST, host), (PATCH_PORT, str(port))):
+        if len(pattern.findall(text)) != 1:
+            raise StepFailed(f"the install's {PATCH_CONFIG} does not name its patch host and port exactly once, so it cannot be pointed elsewhere")
+        text = pattern.sub(lambda found: found.group(1) + value + found.group(2), text)
+    return text
+
+
+def without_patch_flag(command):
+    if not command or command.count(PATCH_FLAG) != 1:
+        raise StepFailed(f"the launcher's command does not carry{PATCH_FLAG} exactly once, so it cannot be run without it: {command}")
+    return command.replace(PATCH_FLAG, "", 1)
+
+
 class Client:
     def __init__(self, launcher, run_folder, host, port, window, client_dir=None, locale=None, log=None,
-                 install=None, revision=None, character=None):
+                 install=None, revision=None, character=None, patching="off", patch_config=None):
         self.launcher = launcher
         self.run_folder = run_folder
         self.host = host
@@ -121,6 +141,9 @@ class Client:
         self.install = install
         self.revision = revision
         self.command = None
+        self.patching = patching
+        self.patch_config = patch_config
+        self.started_command = None
         self.previous_foreground = 0
         self.frame_source = None
         self._output = None
@@ -130,9 +153,9 @@ class Client:
         launcher = self.launcher_process.pid if self.launcher_process is not None else None
         return [pid for pid in (self.pid, launcher) if pid]
 
-    def arguments(self):
+    def arguments(self, prepare=False):
         wanted = [self.launcher, "--host", self.host, "--port", str(self.port),
-                  "--window", f"{self.window[0]}x{self.window[1]}", "--run-dir", self.run_folder, "--wait"]
+                  "--window", f"{self.window[0]}x{self.window[1]}", "--run-dir", self.run_folder, "--prepare" if prepare else "--wait"]
         if self.client_dir:
             wanted += ["--client", self.client_dir]
         if self.locale:
@@ -149,11 +172,45 @@ class Client:
         startup = subprocess.STARTUPINFO()
         startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startup.wShowWindow = SW_SHOWNOACTIVATE
-        self._output = open(self.launcher_output, "wb")
+        pointed = self.prepare_patch_config(timeout) if self.patch_config else ""
+        if self.patching == "default":
+            return self.start_with_default_patching(startup, timeout, pointed)
+        self._output = open(self.launcher_output, "ab")
         self.launcher_process = subprocess.Popen(self.arguments(), stdout=self._output, stderr=subprocess.STDOUT,
                                                  stdin=subprocess.DEVNULL, startupinfo=startup, creationflags=NO_WINDOW)
         self.pid = self.find_process(timeout)
-        return f"the launcher started the client from {self.install} ({self.revision}) as process {self.pid}"
+        return f"the launcher started the client from {self.install} ({self.revision}) as process {self.pid}{pointed}"
+
+    def prepare(self, timeout):
+        if self.command:
+            return
+        with open(self.launcher_output, "ab") as output:
+            prepared = subprocess.run(self.arguments(prepare=True), stdout=output, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                      creationflags=NO_WINDOW, timeout=timeout)
+        self.describe()
+        if prepared.returncode != 0:
+            lines = " ".join(line.strip() for line in self.launcher_log.lines[-4:])
+            raise StepFailed(f"the launcher could not prepare the run folder: {lines}")
+
+    def prepare_patch_config(self, timeout):
+        self.prepare(timeout)
+        source = os.path.join(self.install or "", "Bin", PATCH_CONFIG)
+        try:
+            with open(source, "r", encoding="utf-8", newline="") as handle:
+                text = handle.read()
+        except OSError as error:
+            raise StepFailed(f"the install's {PATCH_CONFIG} cannot be read: {error}")
+        with open(os.path.join(self.run_folder, PATCH_CONFIG), "w", encoding="utf-8", newline="") as handle:
+            handle.write(pointed_patch_config(text, self.patch_config["host"], self.patch_config["port"]))
+        return f", with the install's {PATCH_CONFIG} in its folder pointed at {self.patch_config['host']}:{self.patch_config['port']}"
+
+    def start_with_default_patching(self, startup, timeout, pointed):
+        self.prepare(timeout)
+        self.started_command = without_patch_flag(self.command)
+        process = subprocess.Popen(self.started_command, cwd=self.run_folder, stdin=subprocess.DEVNULL, startupinfo=startup)
+        self.pid = process.pid
+        return (f"the launcher prepared {self.run_folder} and the client was started from its command without -P{pointed}, "
+                f"as process {self.pid}, so it follows its own default")
 
     def describe(self):
         self.launcher_log.poll()

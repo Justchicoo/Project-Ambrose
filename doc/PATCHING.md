@@ -11,7 +11,7 @@ The client's own usage text (in `Bin/WizardGraphicalClient.exe` of the 1.610 ins
 | Flag | Meaning |
 |---|---|
 | `-L <host> <port>` | Login server to connect to |
-| `-P <0\|1>` | Patching enabled (0 turns it off) |
+| `-P <0\|1>` | Patching enabled (0 turns it off); left out, patching is on |
 | `-A <locale>` | Client locale, such as `en-US` |
 | `-D <dir>` | Data root folder, `..\Data\GameData\` by default, which needs its trailing separator |
 | `-G <file>` | The client's own log file |
@@ -20,17 +20,30 @@ The client's own usage text (in `Bin/WizardGraphicalClient.exe` of the 1.610 ins
 | `-PT` | Patch client patch time |
 
 Always include `-P 0` during development. The launcher does this for every
-run and refuses a configuration that asks for patching. The behavior of the
-retail client when `-P` is omitted has not been established against the pinned
-install, so omitting it is not a supported development path and may contact
-the host named by that install's `PatchConfig.xml`.
+run and refuses a configuration that asks for patching.
+
+When `-P` is left out, the r806919 client patches. `PatchClientInterface::StartPatching`
+reads `PatchConfig.xml` from the folder the client runs in, logs `Loaded PatchConfig.xml.
+Patch server host: <host>, port: <port>`, starts its patcher for the package
+`LATEST_FILE_LIST` over the PATCH message protocol and connects to that host and port. A
+failed connection is `Patch failed - Error connecting Patch Server`, and it tries again
+after 2, 4, 8, 16, 32, 64 and then 128 seconds, while the login window works as usual.
+With no `PatchConfig.xml` in its folder it logs `PatchClientInterface::StartPatching could
+not load PatchConfig.xml` and contacts nothing. The launcher's run folder holds none, but
+the Steam install's own `Bin/PatchConfig.xml` names `patch.us.wizard101.com` port 12700,
+so the client started from `Bin` without `-P` contacts KingsIsle. With `-P 0` none of the
+patcher runs: no line of it appears in the client's log, whatever `PatchConfig.xml` says.
+
+The client replaces the host `127.0.0.1` with this machine's own address before it
+connects, for the patch host as for the login host, so a local listener for either must
+be reached as `127.0.0.2` or on the machine's address, not bound to `127.0.0.1` alone.
 
 ## The launcher
 
 `launcher`, built from `src/tools/launcher`, starts the client:
 
 1. Copy `launcher.conf.dist`, which the build puts beside the program, to `launcher.conf` and set `ClientDir` to the folder that holds `Bin` and `Data`. Every setting is optional: with no file at all the launcher uses the newest install it finds and a local login server on port 12000.
-2. Run `launcher`. Add `--dry-run` to print the run folder and the exact command without starting anything, `--port 12001` or `--window 1600x900` to override a setting for one run, `--wait` to keep the launcher in front of the client, and `--tail` to watch the client's own log.
+2. Run `launcher`. Add `--dry-run` to print the run folder and the exact command without starting anything, `--prepare` to write that folder too and still start nothing, which is how the client driver starts a client that follows its own default, `--port 12001` or `--window 1600x900` to override a setting for one run, `--wait` to keep the launcher in front of the client, and `--tail` to watch the client's own log.
 
 The launcher never runs KingsIsle's launcher or patcher and never writes inside the install, and it refuses a run folder that is the install or lies inside it. It always passes `-L`, `-P 0`, `-A`, `-D` and `-G`, and it starts the client from `client/<revision>` in the Ambrose data folder, where it writes `config.xml` and `preferences.xml` every run, from the files that folder already holds or else the install's own, with the window asked for and `SilentMetricsURL` emptied, plus copies of `revision.dat` and `data.dat`. doc/config/launcher.md documents every option, that folder and what is never touched. The 3.24 driver starts the client through it, and a player launcher that patches a copy of the install from an Ambrose patchserver is planned for milestone 16.13.
 
@@ -78,8 +91,8 @@ These checks need the maintainer's own client, so they are done by hand and reco
 
 | Check | How | Result |
 |---|---|---|
-| `-P 0` makes no patch connection | Listen on 127.0.0.1:12500 with any TCP listener, start the client with `-L 127.0.0.1 12000 -P 0`, and confirm the 12500 listener records no connection while the client connects to 12000 | Not yet recorded |
-| Default without `-P` | Start the client with only `-L 127.0.0.1 12000` and note whether it contacts the patch host from `Bin/PatchConfig.xml` (this 1.610 install has no `PatchConfig.xml`) | Not yet recorded |
-| No patch error dialog | With `-P 0`, the login screen appears with no "Patch failed" or GUI_PatchingFailed dialog | Not yet recorded |
+| `-P 0` makes no patch connection | Listen on 127.0.0.1:12500 with any TCP listener, start the client with `-L 127.0.0.1 12000 -P 0`, and confirm the 12500 listener records no connection while the client connects to 12000 | Recorded on 2026-09-27 on r806919 by the client driver's `patch-off.json` (run 20260927-120321), which is stricter than the check: the run folder held the install's own `PatchConfig.xml` pointed at a live listener on 127.0.0.2:12700, and a second listener held 127.0.0.1:12500. Neither saw a connection, the guard saw only the login port (127.0.0.2:12100), the client logged in and was admitted, and its log holds no patcher line |
+| Default without `-P` | Start the client with only `-L 127.0.0.1 12000` and note whether it contacts the patch host from `Bin/PatchConfig.xml` | Recorded on 2026-09-27 on r806919 by `patch-default.json` (run 20260927-120125): started from the launcher's own command with only `-P 0` taken out, and with the install's `PatchConfig.xml` pointed at a listener on 127.0.0.2:12700, the client connected to that listener 34 times in 90 seconds, so by default it contacts the patch host its `PatchConfig.xml` names, which in the Steam install is `patch.us.wizard101.com:12700`. Nothing reached KingsIsle, since the host was local, and the install was left unchanged. Run 20260927-114939, with no `PatchConfig.xml` in the folder, contacted nothing |
+| No patch error dialog | With `-P 0`, the login screen appears with no "Patch failed" or GUI_PatchingFailed dialog | Recorded on 2026-09-27 on r806919 by `patch-off.json` (runs 20260927-114856 and 20260927-120321): the login window's screenshot shows no dialog, and the client's log holds no `Patch failed`, `Start Patcher` or `Connecting to Patch Server` line |
 | The launcher starts the client | Run `launcher --window 1280x720` against a local login server and confirm the client reaches the login screen in a window of that size, that nothing inside the install changed, and that a capture shows no connection leaving the machine | Recorded in part on 2026-09-17 on r806919, with no login server listening: two runs through the built launcher, `--window 1024x768` and then `--window 1280x720` in the same run folder, each logged `Attempt to create renderer with width=<the size asked for>, flags=40`, the windowed flag, with no `VidSettingsAuto` line choosing another resolution, `Metric Url: ?message=...` with no host and no line naming wizard101.com; the client ran its main loop for about 40 seconds and exited with code 0 on a posted `WM_SYSCOMMAND SC_CLOSE`; a snapshot of all 3363 files in the install before and after, with SHA-256 of the 119 files under `Bin`, showed no change; `psutil` polling the client and its children 189 times a run saw one socket, a `SYN_SENT` to port 12000 at 172.31.64.1, which is this machine's own address for its hostname, and nothing else. The login screen itself was not photographed and no login server answered, so the login-screen half of this check and the 3.24 driver's capture are still to be recorded |
 | `--wait` and the job object | Run `launcher --wait`, close the client, and confirm the launcher exits with the client's code; run it again and kill the launcher, and confirm the client ends with it | Not yet recorded |

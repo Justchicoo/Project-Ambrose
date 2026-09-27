@@ -1,0 +1,51 @@
+{
+  "title": "Without -P the client follows its own patching default and contacts the patch host its PatchConfig.xml names",
+  "include": "parts/common.json",
+  "patching": "default",
+  "patch_config": {
+    "host": "127.0.0.2",
+    "port": 12700
+  },
+  "notes": [
+    "The launcher prepares the run folder with --prepare and starts nothing, and the driver starts the client from",
+    "the launcher's own command with only its -P 0 taken out, so the client does what it does by default.",
+    "Without -P the client runs PatchClientInterface::StartPatching, which reads PatchConfig.xml from the folder it",
+    "runs in; the launcher's run folder holds none, so the driver copies the install's own Bin/PatchConfig.xml into",
+    "it with only the patch host and port changed, to 127.0.0.2 and 12700, where a local listener waits. The client",
+    "reaching that listener shows it contacts the patch host its PatchConfig.xml names by default, without any",
+    "connection to KingsIsle: the guard still ends the client at any connection off this machine.",
+    "127.0.0.2 is used because the client replaces 127.0.0.1 with this machine's own address before it connects,",
+    "which a first run showed when the listener on 127.0.0.1 saw nothing and the client dialled 12700 on the machine's",
+    "other interface. Nobody may type into the client during the run: a login it is refused opens a KingsIsle page on quit.",
+    "No game server runs here, so the login server's two warnings about empty creation and realm tables are expected."
+  ],
+  "listeners": [
+    {
+      "name": "the patch host PatchConfig.xml names",
+      "address": "127.0.0.2",
+      "port": 12700,
+      "expect": 1,
+      "at_least": true
+    }
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "steps": [
+    {
+      "action": "wait_listener",
+      "name": "the client contacts the patch host its PatchConfig.xml names",
+      "listener": "the patch host PatchConfig.xml names",
+      "timeout": 180
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client says it is patching",
+      "pattern": "(PATCHER|PatchClient)[^\\n]*",
+      "timeout": 60,
+      "record": true,
+      "from": "start"
+    }
+  ]
+}

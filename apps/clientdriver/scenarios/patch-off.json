@@ -1,0 +1,83 @@
+{
+  "title": "With -P 0 the client logs in with no patch connection and no patch error",
+  "include": "parts/common.json",
+  "patch_config": {
+    "host": "127.0.0.2",
+    "port": 12700
+  },
+  "notes": [
+    "The launcher starts the client with -P 0, as it always does. The run folder first gets a copy of the install's",
+    "own Bin/PatchConfig.xml with only its patch host and port changed, to 127.0.0.2 and 12700, the place a",
+    "client that patches would connect to, and a local listener waits there; a second listener holds 12500, the",
+    "port the roadmap's check names. Neither may see a connection, and the guard ends the client the moment it",
+    "reaches anything off this machine. 127.0.0.2 is used because the client replaces 127.0.0.1 with this",
+    "machine's own address before it connects.",
+    "The client connects to the login port only when it is asked to log in, so the run logs in and waits for",
+    "the login server to admit it, which is the connection to the login port that -P 0 must leave working.",
+    "No patch failure and no patcher start may show in the client's log, and the login window is photographed.",
+    "No game server runs here, so the login server's two warnings about empty creation and realm tables are expected."
+  ],
+  "listeners": [
+    {
+      "name": "the patch port the roadmap names",
+      "address": "127.0.0.1",
+      "port": 12500,
+      "expect": 0
+    },
+    {
+      "name": "the patch host PatchConfig.xml names",
+      "address": "127.0.0.2",
+      "port": 12700,
+      "expect": 0
+    }
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "steps": [
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "shot",
+      "name": "the login window with no patch dialog",
+      "file": "login-window"
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client connects to the login port",
+      "pattern": "Connect to login server\\. IP=(\\S+)",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "forbid_log",
+      "name": "the client reports no patch failure",
+      "side": "client",
+      "pattern": "Patch failed|PatchingFailed|Error connecting Patch Server|Start Patcher|Connecting to Patch Server"
+    }
+  ]
+}

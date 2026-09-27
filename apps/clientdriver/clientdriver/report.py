@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds a run's report from the two logs and what the run measured: every message the server did not handle, every warning on either side, and the checks that decide whether the run is clean, each of which fails when what it judges was never measured, then renders it as Markdown beside its JSON.
+# Builds a run's report from the two logs and what the run measured: every message the server did not handle, every warning on either side, and the checks that decide whether the run is clean, each of which fails when what it judges was never measured, among them that every port a scenario watches saw exactly the connections it expects, or at least that many where it says so, then renders it as Markdown beside its JSON.
 import json
 import os
 import re
@@ -107,6 +107,17 @@ def checks(facts, gathered):
         add("the client contacted only this machine", bool(guard) and not violations and not blind,
             f"{len(remotes)} address(es) contacted, all of them local" if guard and not violations and not blind
             else json.dumps(violations) if violations else str(blind))
+    watched = facts.get("listeners") or []
+    if watched:
+        def satisfied(listener):
+            seen = len(listener.get("connections") or [])
+            return not listener.get("failed") and (seen >= listener["expect"] if listener.get("at_least") else seen == listener["expect"])
+
+        wrong = [listener for listener in watched if not satisfied(listener)]
+        add("every watched port saw the connections the scenario expects", not wrong,
+            "; ".join(f"{listener['name']} on {listener['address']}:{listener['port']} saw {len(listener.get('connections') or [])}"
+                      f" of {'at least ' if listener.get('at_least') else ''}{listener['expect']}"
+                      + (f", {listener['failed']}" if listener.get("failed") else "") for listener in (wrong or watched)))
     pending = facts.get("pending_allowed") or []
     unexpected, unused = unexpected_messages(gathered["server_not_handled_lines"], pending)
     add("every message the server did not handle is one the scenario expects", not unexpected,

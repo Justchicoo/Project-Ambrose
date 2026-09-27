@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, or a seeded wizard's stat it does not carry or a negative one, before anything is started.
+# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, a seeded wizard's stat it does not carry or a negative one, a patching mode other than off or default, a listener without a name, an address, a port or the number of connections it should see, or a wait on a listener the scenario does not name, before anything is started.
 import json
 import os
 import re
@@ -25,10 +25,16 @@ ACTIONS = {
     "game_command": (("command",), ("pattern", "timeout")),
     "wait_game_log": (("pattern", "timeout"), ("from", "fail", "expect", "reject", "record", "keep")),
     "restart_client": ((), ("timeout",)),
+    "wait_listener": (("listener", "timeout"), ()),
 }
 COMMON_KEYS = ("action", "name")
 ALLOW_LISTS = ("pending_allowed", "dropped_allowed", "server_log_allowed", "client_log_allowed")
-TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "game_settings", "wizard", "variables", "expect", "steps") + ALLOW_LISTS
+TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "game_settings", "wizard", "variables", "expect", "steps",
+             "patching", "listeners", "patch_config") + ALLOW_LISTS
+PATCHING = ("off", "default")
+LISTENER_KEYS = ("name", "address", "port", "expect")
+LISTENER_OPTIONAL = ("at_least",)
+PATCH_CONFIG_KEYS = ("host", "port")
 REQUIRES = ("client", "capture", "gameserver")
 WIZARD = ("school", "zone", "first", "middle", "last")
 WIZARD_STATS = ("overflow_xp", "secondary_school", "training_points", "gold", "health", "mana", "potion_charge", "potion_max", "arena_points", "level_locked")
@@ -83,6 +89,9 @@ class Scenario:
         self.needs_capture = bool(requires.get("capture", True))
         self.needs_gameserver = bool(requires.get("gameserver", False))
         self.expect_failure = document.get("expect") == "failure"
+        self.patching = document.get("patching", "off")
+        self.listeners = [dict(listener) for listener in document.get("listeners") or []]
+        self.patch_config = dict(document["patch_config"]) if document.get("patch_config") else None
 
     @property
     def name(self):
@@ -142,7 +151,7 @@ def _check_step(path, index, step):
     for key in step:
         if key not in allowed:
             raise Refused(f"{where} ({name}) has the key {key!r}, which its {action} action does not take")
-    if action in ("wait_server_log", "wait_client_log", "wait_screen", "wait_db") and not isinstance(step["timeout"], (int, float)):
+    if action in ("wait_server_log", "wait_client_log", "wait_screen", "wait_db", "wait_listener") and not isinstance(step["timeout"], (int, float)):
         raise Refused(f"{where} ({name}) needs a timeout in seconds")
     if action == "wait_screen" and (not isinstance(step["screens"], list) or not step["screens"]):
         raise Refused(f"{where} ({name}) needs a list of screens to wait for")
@@ -192,6 +201,40 @@ def _check_document(path, document):
                     raise Refused(f"{path}: the wizard's {key} must be a number of zero or more")
         if not (document.get("requires") or {}).get("gameserver"):
             raise Refused(f"{path} seeds a wizard but does not require the game server it enters the world on")
+    if document.get("patching", "off") not in PATCHING:
+        raise Refused(f"{path} asks for patching {document['patching']!r}; a scenario runs the client with patching {' or '.join(PATCHING)}")
+    listeners = document.get("listeners")
+    if listeners is not None:
+        if not isinstance(listeners, list):
+            raise Refused(f"{path}: listeners must be a list")
+        seen = []
+        for listener in listeners:
+            if not isinstance(listener, dict) or not set(LISTENER_KEYS) <= set(listener) or not set(listener) <= set(LISTENER_KEYS + LISTENER_OPTIONAL):
+                raise Refused(f"{path}: each listener needs {', '.join(LISTENER_KEYS)} and may say {', '.join(LISTENER_OPTIONAL)}")
+            if not isinstance(listener.get("at_least", False), bool):
+                raise Refused(f"{path}: listener {listener['name']!r} says at_least with true or false")
+            port, expect = listener["port"], listener["expect"]
+            if isinstance(port, bool) or not isinstance(port, int) or not 0 < port < 65536:
+                raise Refused(f"{path}: listener {listener['name']!r} needs a port from 1 to 65535")
+            if isinstance(expect, bool) or not isinstance(expect, int) or expect < 0:
+                raise Refused(f"{path}: listener {listener['name']!r} needs the number of connections it should see, zero or more")
+            where = (listener["address"], port)
+            if listener["name"] in [name for name, _ in seen] or where in [place for _, place in seen]:
+                raise Refused(f"{path} names listener {listener['name']!r} or its address and port twice")
+            seen.append((listener["name"], where))
+    patch_config = document.get("patch_config")
+    if patch_config is not None:
+        if not isinstance(patch_config, dict) or sorted(patch_config) != sorted(PATCH_CONFIG_KEYS):
+            raise Refused(f"{path}: patch_config needs exactly {', '.join(PATCH_CONFIG_KEYS)}")
+        port = patch_config["port"]
+        if isinstance(port, bool) or not isinstance(port, int) or not 0 < port < 65536:
+            raise Refused(f"{path}: patch_config needs a port from 1 to 65535")
+        if not isinstance(patch_config["host"], str) or not patch_config["host"].strip():
+            raise Refused(f"{path}: patch_config needs a host")
+    named_listeners = [listener.get("name") for listener in document.get("listeners") or [] if isinstance(listener, dict)]
+    for index, step in enumerate(document.get("steps") or []):
+        if isinstance(step, dict) and step.get("action") == "wait_listener" and step.get("listener") not in named_listeners:
+            raise Refused(f"{path} step {index + 1} waits on listener {step.get('listener')!r}, which the scenario does not name")
     if document.get("expect", "pass") not in OUTCOMES:
         raise Refused(f"{path} expects {document['expect']!r}; a scenario expects {' or '.join(OUTCOMES)}")
     for key in ALLOW_LISTS:
@@ -235,6 +278,9 @@ def _merge(base, scenario):
     scenario.wizard = scenario.wizard or base.wizard
     scenario.expect_failure = base.expect_failure or scenario.expect_failure
     scenario.notes = base.notes + scenario.notes
+    scenario.listeners = base.listeners + scenario.listeners
+    scenario.patching = scenario.patching if scenario.patching != "off" else base.patching
+    scenario.patch_config = scenario.patch_config or base.patch_config
     names = [step.get("name") or step["action"] for step in scenario.steps]
     repeated = sorted({name for name in names if names.count(name) > 1})
     if repeated:

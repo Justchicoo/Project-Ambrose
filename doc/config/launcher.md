@@ -35,6 +35,7 @@ See doc/config/README.md for the file format, the layers and the environment var
 | `--character <name>` | Passed on as the client's own `-C <name>`, which creates or selects that character. A server creates a wizard from milestone 3.16 |
 | `--window-ui` | Open the launcher as a window instead of printing to the terminal, as "The window" below describes. A machine with no web view says so once and runs as the console launcher |
 | `--dry-run` | Print the install, the run folder and the exact command, and start and write nothing |
+| `--prepare` | Write the run folder and print the exact command, and start nothing, on any machine, so another program can start the client from that folder. It cannot be given with `--dry-run`, `--wait`, `--tail` or `--window-ui` |
 | `--wait` | Wait for the client and exit with its own code. The client runs in a job object that ends it if the launcher is killed, and Ctrl+C ends it too |
 | `--tail` | Print the client's own log lines while it runs. It waits for the client as `--wait` does, because the launcher has to stay running to read the log |
 | `--help` | Print the usage and exit 0 |

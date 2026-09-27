@@ -34,6 +34,13 @@ client and local server.
 
 All six require the game server as well as the login server; the driver starts one of its own.
 
+## Patching
+
+| Check | Scenario | What it verifies |
+| --- | --- | --- |
+| No patch connection with -P 0 | [`patch-off.json`](./patch-off.json) | The launcher's client, started with `-P 0` from a run folder holding the install's own `PatchConfig.xml` pointed at a live local listener, shows the login window and logs in while that listener and one on 12500 see no connection and the guard sees nothing off the machine, with no patcher line in the client's log. |
+| The default without -P | [`patch-default.json`](./patch-default.json) | The client started from the launcher's own prepared command with only `-P 0` taken out, so it follows its own default, with the install's own `PatchConfig.xml` in its folder pointed at a local listener; the client connecting to that listener shows it contacts the patch host its configuration names by default, while the guard keeps every connection on this machine and the install check proves nothing on disk changed. |
+
 ## Listing and running
 
 List the scenarios without starting a client or server:

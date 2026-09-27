@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * launcher entry point: reads its arguments and environment as UTF-8, loads launcher.conf when there is one, lets every option override it, and then has the Launcher library find the user's own install, build the folder the client runs from and the command that starts the client against an Ambrose login server; a machine that cannot start a Windows program is named before anything is written, --dry-run prints the folder and the command and starts nothing, --wait returns the client's own exit code and ends the client if the launcher is stopped, --tail waits and prints the client's own log lines, and without either the client is started detached so closing the launcher leaves the game running; it exits 0 on success, 1 when a refusal names its cause or the client cannot be started, and 2 on bad usage.
+ * launcher entry point: reads its arguments and environment as UTF-8, loads launcher.conf when there is one, lets every option override it, and then has the Launcher library find the user's own install, build the folder the client runs from and the command that starts the client against an Ambrose login server; a machine that cannot start a Windows program is named before anything is written, --dry-run prints the folder and the command and starts nothing, --prepare writes the folder and prints the command and starts nothing, on any machine, so another program can start the client from it, --wait returns the client's own exit code and ends the client if the launcher is stopped, --tail waits and prints the client's own log lines, and without either the client is started detached so closing the launcher leaves the game running; it exits 0 on success, 1 when a refusal names its cause or the client cannot be started, and 2 on bad usage.
  */
 
 #include "ClientLocator.h"
@@ -63,6 +63,7 @@ Options:
                        (needs milestone 3.16, which creates a wizard)
   --window-ui          open the launcher in a window instead of printing to this terminal
   --dry-run            print the run folder and the exact command, and start nothing
+  --prepare            write the run folder and print the exact command, and start nothing
   --wait               wait for the client, return its exit code, and end it if the launcher is stopped
   --tail               print the client's own log lines while it runs, waiting as --wait does
   --help               print this text
@@ -84,6 +85,7 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
         std::optional<std::string> Config;
         LauncherRequest Request;
         bool DryRun = false;
+        bool Prepare = false;
         bool WindowUi = false;
         bool Wait = false;
         bool Tail = false;
@@ -105,6 +107,8 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
                 parsed.Help = true;
             else if (arg == "--dry-run")
                 parsed.DryRun = true;
+            else if (arg == "--prepare")
+                parsed.Prepare = true;
             else if (arg == "--window-ui")
                 parsed.WindowUi = true;
             else if (arg == "--wait")
@@ -157,6 +161,11 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
                 error = fmt::format("unknown argument {}", arg);
                 return std::nullopt;
             }
+        }
+        if (parsed.Prepare && (parsed.DryRun || parsed.Wait || parsed.Tail || parsed.WindowUi))
+        {
+            error = "--prepare writes the run folder and starts nothing, so it cannot be given with --dry-run, --wait, --tail or --window-ui";
+            return std::nullopt;
         }
         return parsed;
     }
@@ -287,12 +296,17 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
             std::cout << "launcher: nothing was started and nothing was written, because --dry-run was given\n";
             return Success;
         }
-        if (!startable)
+        if (!startable && !arguments->Prepare)
             return Failure;
         if (!launcher.WriteRunFolder(*plan, error))
         {
             std::cerr << fmt::format("launcher: {}\n", error);
             return Failure;
+        }
+        if (arguments->Prepare)
+        {
+            std::cout << "launcher: the run folder is written and nothing was started, because --prepare was given\n";
+            return Success;
         }
 
         bool const wait = arguments->Wait || arguments->Tail;

@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs the built launcher without ever starting a client: it checks the usage text, that bad usage exits 2 and a named settings file that is missing exits 1, that a folder holding no install, patching asked for through the environment and a port of 0 each exit 1 naming the cause, that on a machine holding a synthetic install AMBROSE_SETUP_MODE=off prints the find and the flag to pass while auto uses it and names the missing client program, that an install whose archive holds no defaultconfig.xml is named, that --dry-run then prints the run folder and the whole command and writes nothing, that a run folder inside the install and a value beginning with '-' are refused, and, when AMBROSE_CLIENT_DIR names the user's own install, that --dry-run against it prints -L, -P 0, -A, -D and -G with none of the launcher's own environment variables set; it reports itself skipped when that last check cannot run.
+# Runs the built launcher without ever starting a client: it checks the usage text, that bad usage exits 2 and a named settings file that is missing exits 1, that a folder holding no install, patching asked for through the environment and a port of 0 each exit 1 naming the cause, that on a machine holding a synthetic install AMBROSE_SETUP_MODE=off prints the find and the flag to pass while auto uses it and names the missing client program, that an install whose archive holds no defaultconfig.xml is named, that --dry-run then prints the run folder and the whole command and writes nothing, that --prepare writes the run folder and prints the command and starts nothing, and refuses --wait, that a run folder inside the install and a value beginning with '-' are refused, and, when AMBROSE_CLIENT_DIR names the user's own install, that --dry-run against it prints -L, -P 0, -A, -D and -G with none of the launcher's own environment variables set; it reports itself skipped when that last check cannot run.
 if(NOT APP OR NOT WORKDIR)
     message(FATAL_ERROR "APP and WORKDIR must be set")
 endif()
@@ -79,6 +79,21 @@ if(NOT dryResult EQUAL 0
 endif()
 if(EXISTS "${run}")
     message(FATAL_ERROR "launcher --dry-run wrote ${run}")
+endif()
+
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} "${APP}" --config "${settings}" --prepare --run-dir "${run}" --host 127.0.0.1 --port 12100
+    RESULT_VARIABLE prepareResult OUTPUT_VARIABLE prepareOutput ERROR_VARIABLE prepareError TIMEOUT 60)
+if(NOT prepareResult EQUAL 0
+    OR NOT prepareOutput MATCHES "WizardGraphicalClient.exe[^\n]* -L 127\\.0\\.0\\.1 12100 -P 0"
+    OR NOT prepareOutput MATCHES "nothing was started, because --prepare was given"
+    OR NOT EXISTS "${run}/config.xml")
+    message(FATAL_ERROR "launcher --prepare on a synthetic install exited ${prepareResult}, or wrote no config.xml into ${run}: ${prepareOutput}${prepareError}")
+endif()
+file(REMOVE_RECURSE "${run}")
+
+execute_process(COMMAND "${APP}" --prepare --wait RESULT_VARIABLE prepareWaitResult ERROR_VARIABLE prepareWaitError TIMEOUT 30)
+if(NOT prepareWaitResult EQUAL 2 OR NOT prepareWaitError MATCHES "cannot be given with")
+    message(FATAL_ERROR "launcher --prepare --wait exited ${prepareWaitResult}: ${prepareWaitError}")
 endif()
 
 execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} "${APP}" --config "${settings}" --dry-run --run-dir "${synthetic}/Bin"

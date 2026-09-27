@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, for a scenario that logs a wizard in twice, and a log wait can keep what it matched for a later step to expect.
+# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect.
 import os
 import re
 import time
@@ -42,6 +42,7 @@ class Engine:
         self.previous = None
         self.current = None
         self.restart = None
+        self.listeners = {}
 
     def fill(self, value):
         return fill(value, self.variables)
@@ -224,6 +225,20 @@ class Engine:
         virtual_key = step["vk"] if isinstance(step["vk"], int) else int(str(step["vk"]), 0)
         self.client.key(virtual_key)
         return f"posted the key {virtual_key:#x}"
+
+    def act_wait_listener(self, step):
+        listener = self.listeners.get(step["listener"])
+        if listener is None:
+            raise StepFailed(f"the run has no listener named {step['listener']!r}")
+        deadline = time.monotonic() + float(step["timeout"])
+        while time.monotonic() < deadline:
+            if listener.connections:
+                first = listener.connections[0]
+                return f"{first['peer']} connected to {listener.label} on {listener.address}:{listener.port} at {first['time']}"
+            if not self.client.alive():
+                raise StepFailed(f"the client ended before anything connected to {listener.label}")
+            time.sleep(0.1)
+        raise StepFailed(f"nothing connected to {listener.label} on {listener.address}:{listener.port} within {step['timeout']}s")
 
     def act_restart_client(self, step):
         if self.restart is None:

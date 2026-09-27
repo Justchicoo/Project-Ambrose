@@ -943,9 +943,9 @@ All three executables run the standard lifecycle (args, config, logging, banner,
 
 **Acceptance**
 
-- [ ] With -P 0 a listener on :12500 records zero connections while the client connects to :12000
-- [ ] The default behaviour without -P is recorded in doc/PATCHING.md
-- [ ] No 'Patch failed' dialog with -P 0
+- [x] With -P 0 a listener on :12500 records zero connections while the client connects to :12000
+- [x] The default behaviour without -P is recorded in doc/PATCHING.md
+- [x] No 'Patch failed' dialog with -P 0
 
 ### Detailed spec from PAT-1: Patch-free development path (client -P 0) proven and documented
 
@@ -964,9 +964,9 @@ Every other domain can run the retail client against loginserver/gameserver with
 
 **Acceptance**
 
-- [ ] With a plain TCP listener bound to 127.0.0.1:12500 and the client launched with -L 127.0.0.1 12000 -P 0, the listener records zero connections while the client connects to port 12000 (any login-port listener, no loginserver needed)
-- [ ] Repeat without -P: record whether the client contacts the PatchConfig.xml host (patch.us.wizard101.com:12500) by default; result written into doc/PATCHING.md (resolves the default-value open question)
-- [ ] Client shows the login screen with no 'Patch failed - Error connecting Patch Server' or GUI_PatchingFailed dialog when -P 0 is used
+- [x] With a plain TCP listener bound to 127.0.0.1:12500 and the client launched with -L 127.0.0.1 12000 -P 0, the listener records zero connections while the client connects to port 12000 (any login-port listener, no loginserver needed) Earned on 2026-09-27 on r806919 by the client driver's patch-off.json (run 20260927-120321), with the login server on 127.0.0.2:12100 rather than 127.0.0.1:12000 because the client replaces 127.0.0.1 with this machine's own address before it connects: a listener on 127.0.0.1:12500 and a second one on 127.0.0.2:12700, where the run folder's copy of the install's PatchConfig.xml pointed the patch host, recorded no connection, while the client connected to its login port, logged in and was admitted, and the guard saw no other address. `PatchingTests` and the Launcher CTest hold the driver's listeners and the launcher's --prepare the run uses.
+- [x] Repeat without -P: record whether the client contacts the PatchConfig.xml host (patch.us.wizard101.com:12500) by default; result written into doc/PATCHING.md (resolves the default-value open question) Earned on 2026-09-27 by patch-default.json (run 20260927-120125), with the maintainer's approval of one guarded run: started from the launcher's own prepared command with only -P 0 taken out, the client runs PatchClientInterface::StartPatching, reads PatchConfig.xml from its working folder and connected 34 times in 90 seconds to the host and port it names, here pointed at a local listener so nothing reached KingsIsle. The Steam install's own file names patch.us.wizard101.com port 12700, not 12500. With no PatchConfig.xml in its folder (run 20260927-114939) it contacts nothing. doc/PATCHING.md records both.
+- [x] Client shows the login screen with no 'Patch failed - Error connecting Patch Server' or GUI_PatchingFailed dialog when -P 0 is used Earned on 2026-09-27 by patch-off.json (runs 20260927-114856 and 20260927-120321): the login window's screenshot shows no dialog and the client's log holds no Patch failed, Start Patcher or Connecting to Patch Server line.
 
 **Risks**
 

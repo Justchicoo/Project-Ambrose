@@ -1,15 +1,17 @@
 # Project Ambrose by Imjustchico
-# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server, the scratch game server's settings, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario.
+# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server, the scratch game server's settings, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both.
 import json
 import os
+import socket
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from clientdriver import capture, database, engine, install, netguard, paths, preflight, references, refscapture, report, run, scenario, screens, server, zones
+from clientdriver import capture, client, database, engine, install, listeners, netguard, paths, preflight, references, refscapture, report, run, scenario, screens, server, zones
 from clientdriver.errors import Refused, StepFailed
 from clientdriver.logtail import LogTail, read_lines
 
@@ -1198,6 +1200,7 @@ class RunOrderTests(TemporaryFolder):
                 self.revision = "r806919.Wizard_1_610"
                 self.run_folder = logs
                 self.command = "WizardGraphicalClient.exe"
+                self.started_command = None
                 self.frame_source = None
                 self.pids = [20, 10]
 
@@ -1359,6 +1362,84 @@ class CaptureRefsTests(TemporaryFolder):
         self.assertTrue(taking.written[0]["replaced"])
 
 
+class PatchingTests(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory(prefix="clientdriver-test-")
+        self.addCleanup(folder.cleanup)
+        self.folder = folder.name
+
+    def write(self, document):
+        path = os.path.join(self.folder, "scenario.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(document, handle)
+        return path
+
+    def test_the_shipped_patch_scenarios_watch_both_patch_ports_and_follow_the_default(self):
+        off = scenario.load("patch-off.json", search=(paths.SCENARIOS,))
+        self.assertEqual(off.patching, "off")
+        self.assertEqual(sorted(listener["port"] for listener in off.listeners), [12500, 12700])
+        self.assertTrue(all(listener["expect"] == 0 for listener in off.listeners))
+        default = scenario.load("patch-default.json", search=(paths.SCENARIOS,))
+        self.assertEqual(default.patching, "default")
+        self.assertEqual(default.patch_config, {"host": "127.0.0.2", "port": 12700})
+        self.assertEqual(off.patch_config, {"host": "127.0.0.2", "port": 12700})
+        self.assertEqual([(listener["port"], listener["at_least"]) for listener in default.listeners], [(12700, True)])
+        self.assertIn("wait_listener", [step["action"] for step in default.steps])
+
+    def test_a_patching_mode_or_listener_the_driver_does_not_know_is_refused(self):
+        base = {"title": "t", "steps": []}
+        with self.assertRaises(Refused):
+            scenario.load(self.write(dict(base, patching="on")))
+        with self.assertRaises(Refused):
+            scenario.load(self.write(dict(base, listeners=[{"name": "a", "address": "127.0.0.1", "port": 12500}])))
+        with self.assertRaises(Refused):
+            scenario.load(self.write(dict(base, listeners=[{"name": "a", "address": "127.0.0.1", "port": 70000, "expect": 0}])))
+        twice = {"name": "a", "address": "127.0.0.1", "port": 12500, "expect": 0}
+        with self.assertRaises(Refused):
+            scenario.load(self.write(dict(base, listeners=[twice, dict(twice, name="b")])))
+        with self.assertRaises(Refused):
+            scenario.load(self.write(dict(base, steps=[{"action": "wait_listener", "listener": "nobody", "timeout": 5}])))
+        with self.assertRaises(Refused):
+            scenario.load(self.write(dict(base, patching="default", patch_config={"host": "127.0.0.1"})))
+
+    def test_a_listener_counts_every_connection_and_gives_its_port_back(self):
+        watched = listeners.PortListener("a test port", "127.0.0.1", 0, expect=2)
+        watched.open()
+        for _ in range(2):
+            with socket.create_connection(("127.0.0.1", watched.port), timeout=5):
+                pass
+        deadline = time.monotonic() + 5
+        while len(watched.connections) < 2 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertIn("saw 2 connection(s)", watched.stop())
+        self.assertEqual(watched.record()["expect"], 2)
+        again = listeners.PortListener("the same port", "127.0.0.1", watched.port)
+        again.open()
+        again.stop()
+        taken = listeners.PortListener("a port in use", "127.0.0.1", 0)
+        taken.open()
+        self.addCleanup(taken.stop)
+        with self.assertRaises(StepFailed):
+            listeners.PortListener("the same port twice", "127.0.0.1", taken.port).open()
+
+    def test_the_installs_patch_configuration_is_pointed_elsewhere_and_nothing_else_changes(self):
+        text = ('<?xml version="1.0" encoding="utf-8" ?> \r\n  <root>\r\n  <PatchServerHostname host="patch.us.wizard101.com" /> \r\n'
+                '  <PatchServerPort port="12700" /> \r\n  <LoginHostname host="login.us.wizard101.com" /> \r\n  </root>\r\n')
+        pointed = client.pointed_patch_config(text, "127.0.0.1", 12701)
+        self.assertEqual(pointed, text.replace("patch.us.wizard101.com", "127.0.0.1").replace('port="12700"', 'port="12701"'))
+        with self.assertRaises(StepFailed):
+            client.pointed_patch_config(text.replace("PatchServerPort", "Other"), "127.0.0.1", 12701)
+
+    def test_the_launchers_command_is_run_with_only_its_patch_flag_taken_out(self):
+        command = '"C:\\Wizard101\\Bin\\WizardGraphicalClient.exe" -L 127.0.0.2 12100 -P 0 -A en-US -D "..\\Data\\GameData\\"'
+        self.assertEqual(client.without_patch_flag(command),
+                         '"C:\\Wizard101\\Bin\\WizardGraphicalClient.exe" -L 127.0.0.2 12100 -A en-US -D "..\\Data\\GameData\\"')
+        with self.assertRaises(StepFailed):
+            client.without_patch_flag(command.replace(" -P 0", ""))
+        with self.assertRaises(StepFailed):
+            client.without_patch_flag(command + " -P 0")
+
+
 class ReportTests(unittest.TestCase):
     def facts(self, **changes):
         facts = {
@@ -1396,6 +1477,18 @@ class ReportTests(unittest.TestCase):
         built = self.clean_report()
         self.assertTrue(built["clean"], [check for check in built["checks"] if not check["ok"]])
         self.assertEqual(len(built["checks"]), 12)
+
+    def test_every_watched_port_must_see_exactly_the_connections_its_scenario_expects(self):
+        quiet = {"name": "patch", "address": "127.0.0.1", "port": 12700, "expect": 0, "connections": [], "failed": None}
+        name = "every watched port saw the connections the scenario expects"
+        self.assertTrue(self.passed(self.clean_report(listeners=[quiet]), name))
+        reached = dict(quiet, connections=[{"time": "12:00:00", "peer": "127.0.0.1:50000"}])
+        self.assertFalse(self.passed(self.clean_report(listeners=[reached]), name))
+        self.assertFalse(self.passed(self.clean_report(listeners=[dict(quiet, failed="it stopped accepting")]), name))
+        wanted = dict(quiet, expect=1, at_least=True)
+        self.assertFalse(self.passed(self.clean_report(listeners=[wanted]), name))
+        twice = dict(wanted, connections=[{"time": "12:00:00", "peer": "127.0.0.1:50000"}, {"time": "12:00:01", "peer": "127.0.0.1:50001"}])
+        self.assertTrue(self.passed(self.clean_report(listeners=[twice]), name))
 
     def test_an_install_that_was_never_read_cannot_certify_that_it_was_only_read(self):
         built = self.clean_report(install_files=0)
