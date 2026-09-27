@@ -1,0 +1,25 @@
+{
+  "subject": "zone_archive_catalog",
+  "area": "world",
+  "claim": "On r806919.Wizard_1_610, every extracted zone path maps to the zone-data archive whose name is that path with slashes replaced by hyphens and a .wad suffix; the first path component is the world namespace.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Read Bin/revision.dat from your own install and confirm it reports r806919.Wizard_1_610.",
+    "Run the built extractor with --client <your install> --type-dump <your matching type dump> --sql <temporary file> zones.",
+    "Run contrib/tools/ambrose-zone-archive-catalog/zone_archive_catalog.py with the same install, matching type dump and built extractor, redirecting its tab-separated table outside the repository.",
+    "Confirm every row has zone, numeric zone id, world, zone path and archive columns; verify the archive column equals the zone path with / replaced by - and .wad appended.",
+    "Confirm the extractor reports 3,366 zone_template rows from 3,599 archives and exits successfully."
+  ],
+  "evidence": [
+    "The read-only extractor run reported 3,366 zone_template rows from 3,599 archives, 9,874 locations and 67,386 decoded objects, with exit status 0.",
+    "The private table generator produced one row for each of the 3,366 distinct zone paths and rejected duplicate paths or colliding KI string hashes.",
+    "The zone extraction implementation derives each zone archive by replacing path separators with hyphens and checks that the archive contains the zone's gamedata.bin."
+  ],
+  "disproof": "A repeat on the same revision that finds a zone path whose archive name does not follow the stated transformation, a duplicate zone path or hash, or an extractor failure would disprove this catalog.",
+  "confidence": "high",
+  "submitted_by": "Copilot",
+  "submitted_on": "2026-09-27",
+  "status": "claimed",
+  "scope_note": "The complete table is emitted at runtime outside the repository. The archive column identifies the GameData WAD containing the zone's gamedata.bin, not every WAD that may hold assets referenced by that zone."
+}
