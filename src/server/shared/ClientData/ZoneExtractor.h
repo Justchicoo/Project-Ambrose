@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Extracts every zone of the user's own install from the gamedata.bin its GameData archive holds: the zone's settings, each named location and one row for each entry of its object list, read through the zone views, with the zone known by the name its own data gives it, which the archive's name must match. A part of a zone whose class the type dump cannot describe is reported with its class hash and path rather than guessed at or dropped silently: an object list entry of such a class is left out, and inside an entry that is kept the part is left out of what the row holds; every other problem is reported up to a cap, either from an open GameData folder and catalog or straight from an install folder and type dump.
+ * Extracts every zone of the user's own install from the gamedata.bin its GameData archive holds: the zone's settings, each named location and one row for each entry of its object list, read through the zone views, with the zone known by the name its own data gives it, which the archive's name must match. A part of a zone whose class the type dump cannot describe is reported with its class hash and path rather than guessed at or dropped silently: an object list entry of such a class is left out, and inside an entry that is kept the part is left out of what the row holds; every other problem is reported up to a cap, either from an open GameData folder and catalog or straight from an install folder and type dump, telling a caller that asks how many archives it has read after each one.
  */
 
 #ifndef AMBROSE_ZONEEXTRACTOR_H
@@ -12,6 +12,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -82,14 +83,17 @@ struct ZoneExtraction
     ExtractedZone const* Find(std::string_view path) const noexcept;
 };
 
+using ZoneExtractionProgress = std::function<void(std::size_t archivesRead, std::size_t archives)>;
+
 class ZoneExtractor
 {
 public:
     static constexpr std::string_view DataEntry = "gamedata.bin";
     static constexpr std::size_t MaxEntryBytes = 64 * 1024 * 1024;
 
-    static ZoneExtraction Extract(std::filesystem::path const& gameData, TypeCatalogPtr const& catalog);
-    static std::optional<ZoneExtraction> ExtractFromInstall(std::filesystem::path const& clientDir, std::filesystem::path const& typeDump, std::string& error);
+    static ZoneExtraction Extract(std::filesystem::path const& gameData, TypeCatalogPtr const& catalog, ZoneExtractionProgress const& progress = {});
+    static std::optional<ZoneExtraction> ExtractFromInstall(std::filesystem::path const& clientDir, std::filesystem::path const& typeDump, std::string& error,
+        ZoneExtractionProgress const& progress = {});
     static void ReadZone(TypeCatalogPtr const& catalog, std::string_view archiveStem, std::span<uint8 const> data, ZoneExtraction& extraction);
     static std::string ArchiveStemOf(std::string_view zonePath);
 };

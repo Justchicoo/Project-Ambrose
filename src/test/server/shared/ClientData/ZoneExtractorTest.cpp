@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, flags, loading type and spawn requirements, an entry of the missing class is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted.
+ * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, flags, loading type and spawn requirements, an entry of the missing class is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted.
  */
 
 #include "DBUpdater.h"
@@ -309,9 +309,12 @@ TEST_F(ZoneExtractorTest, ArchivesAreReadInNameOrderAndOneWithoutZoneDataGivesNo
     WriteArchive(HubArchive, &hub);
     WriteArchive("WizardCity-Interiors-WC_Headmistress_House", &nested);
     WriteArchive("Root", nullptr);
-    ZoneExtraction const extraction = ZoneExtractor::Extract(_directory.Path(), _reader->GetCatalog());
+    std::vector<std::pair<std::size_t, std::size_t>> told;
+    ZoneExtraction const extraction = ZoneExtractor::Extract(_directory.Path(), _reader->GetCatalog(),
+        [&told](std::size_t read, std::size_t archives) { told.emplace_back(read, archives); });
     ASSERT_TRUE(extraction.Ok()) << Report(extraction);
     EXPECT_EQ(extraction.Archives, 3u);
+    EXPECT_EQ(told, (std::vector<std::pair<std::size_t, std::size_t>>{ { 1, 3 }, { 2, 3 }, { 3, 3 } })) << "a caller that asks is told after each archive";
     ASSERT_EQ(extraction.Zones.size(), 2u);
     EXPECT_EQ(extraction.Zones[0].Path, "WizardCity/Interiors/WC_Headmistress_House") << "every dash of a nested zone's archive is a slash of its path";
     EXPECT_EQ(extraction.Zones[1].Path, Hub);

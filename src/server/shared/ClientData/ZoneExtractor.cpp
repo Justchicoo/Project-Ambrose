@@ -230,7 +230,7 @@ void ZoneExtractor::ReadZone(TypeCatalogPtr const& catalog, std::string_view arc
     extraction.Zones.push_back(std::move(zone));
 }
 
-ZoneExtraction ZoneExtractor::Extract(std::filesystem::path const& gameData, TypeCatalogPtr const& catalog)
+ZoneExtraction ZoneExtractor::Extract(std::filesystem::path const& gameData, TypeCatalogPtr const& catalog, ZoneExtractionProgress const& progress)
 {
     ZoneExtraction extraction;
     std::vector<std::filesystem::path> archives;
@@ -245,8 +245,11 @@ ZoneExtraction ZoneExtractor::Extract(std::filesystem::path const& gameData, Typ
         return extraction;
     }
     std::sort(archives.begin(), archives.end());
-    for (std::filesystem::path const& file : archives)
+    for (std::size_t index = 0; index < archives.size(); ++index)
     {
+        if (progress && index != 0)
+            progress(index, archives.size());
+        std::filesystem::path const& file = archives[index];
         std::string const stem = ConfigMgr::PathToUtf8(file.stem());
         std::string openError;
         std::unique_ptr<KiwadArchive> const archive = KiwadArchive::Open(file, openError);
@@ -266,11 +269,14 @@ ZoneExtraction ZoneExtractor::Extract(std::filesystem::path const& gameData, Typ
         }
         ReadZone(catalog, stem, data.Data, extraction);
     }
+    if (progress)
+        progress(archives.size(), archives.size());
     extraction.FinishErrors();
     return extraction;
 }
 
-std::optional<ZoneExtraction> ZoneExtractor::ExtractFromInstall(std::filesystem::path const& clientDir, std::filesystem::path const& typeDump, std::string& error)
+std::optional<ZoneExtraction> ZoneExtractor::ExtractFromInstall(std::filesystem::path const& clientDir, std::filesystem::path const& typeDump, std::string& error,
+    ZoneExtractionProgress const& progress)
 {
     std::filesystem::path const gameData = clientDir / "Data" / "GameData";
     if (!std::filesystem::is_directory(gameData))
@@ -287,5 +293,5 @@ std::optional<ZoneExtraction> ZoneExtractor::ExtractFromInstall(std::filesystem:
         error = fmt::format("cannot load the type dump {}{}{}", ConfigMgr::PathToUtf8(typeDump), problems.empty() ? "" : ": ", problems.empty() ? std::string() : problems.front());
         return std::nullopt;
     }
-    return Extract(gameData, registry.GetCatalog());
+    return Extract(gameData, registry.GetCatalog(), progress);
 }
