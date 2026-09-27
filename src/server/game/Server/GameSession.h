@@ -20,6 +20,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -34,6 +35,15 @@ enum class SpellbookChange : uint8
     NotKnown,
     NoSuchSpell,
     NotInWorld
+};
+
+class GameSession;
+
+struct GameMapBroadcast
+{
+    uint32 DynamicZoneId = 0;
+    bool IncludeOriginator = false;
+    std::function<void(GameSession&)> Deliver;
 };
 
 class GameSession : public SessionBase
@@ -57,6 +67,7 @@ public:
 
     std::size_t DrainQueue(std::size_t limit = MaxQueuedMessages);
     void WorldUpdate(std::chrono::steady_clock::time_point now);
+    std::vector<GameMapBroadcast> TakeMapBroadcasts();
 
     void HandleAttach(GameMessages::Attach& message);
     void HandleClientZoned(GameMessages::ClientZoned& message);
@@ -98,6 +109,8 @@ protected:
 
 private:
     std::shared_ptr<GameSession> SharedSelf();
+    void QueueMapBroadcast(bool includeOriginator, std::function<void(GameSession&)> deliver);
+    void FlushMovement(std::chrono::steady_clock::time_point now);
     SQLOperation::CompletionHandler MakeCompletionHandler();
     void Diagnose(LoginKeyClaim claim, int64 now);
     void AcceptAttach(LoginKeyClaim const& claim);
@@ -115,6 +128,7 @@ private:
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
     AsyncCallbackProcessor<QueryCallback> _queryCallbacks;
+    std::vector<GameMapBroadcast> _mapBroadcasts;
     std::atomic<uint64> _accountId{ 0 };
     std::atomic<uint64> _characterId{ 0 };
     std::atomic<uint64> _unhandled{ 0 };

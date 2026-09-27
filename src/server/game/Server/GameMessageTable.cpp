@@ -44,6 +44,10 @@ namespace
 
             Refuse(GameService, "MSG_ATTACHFAILED");
             Refuse(GameService, "MSG_LOGINCOMPLETE");
+            Refuse(GameService, "MSG_SERVERMOVE");
+            Refuse(GameService, "MSG_MOVESTATE");
+            Refuse(GameService, "MSG_NEWOBJECT");
+            Refuse(GameService, "MSG_REMOVEOBJECT");
             Refuse(WizardService, "MSG_ADDSPELLTOBOOK");
             Refuse(WizardService, "MSG_REMOVESPELLFROMBOOK");
 
@@ -58,6 +62,9 @@ namespace
             Sends<LoginComplete>();
             Sends<NewObject>();
             Sends<RemoveObject>();
+            Sends<ServerMove>();
+            Sends<MoveState>();
+            Sends<Jump>();
             Sends<TimedAccessPasses>();
             Sends<SubscriberOnlyItems>();
             Sends<CombatPhaseForSpectators>();

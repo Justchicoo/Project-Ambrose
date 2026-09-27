@@ -149,6 +149,16 @@ void World::Update(std::chrono::milliseconds diff)
         RemoveSession(session.get());
     }
 
+    for (std::shared_ptr<GameSession> const& originator : sessions)
+        for (GameMapBroadcast const& broadcast : originator->TakeMapBroadcasts())
+            for (std::shared_ptr<GameSession> const& recipient : sessions)
+            {
+                if (!recipient->IsOpen() || recipient->GetMapId() != broadcast.DynamicZoneId ||
+                    (!broadcast.IncludeOriginator && recipient.get() == originator.get()))
+                    continue;
+                broadcast.Deliver(*recipient);
+            }
+
     for (uint32 const taken : sMapMgr.Update())
         LOG_DEBUG("server.world", "Took down zone instance {}, empty for longer than its unload delay", taken);
     for (MapObjectChanges const& changes : sMapMgr.RefreshObjects())

@@ -70,7 +70,10 @@ std::size_t GameSession::DrainQueue(std::size_t limit)
 
 void GameSession::WorldUpdate(std::chrono::steady_clock::time_point now)
 {
-    if (!IsOpen() || IsAttached() || _attaching.load(std::memory_order_relaxed))
+    if (!IsOpen())
+        return;
+    FlushMovement(now);
+    if (IsAttached() || _attaching.load(std::memory_order_relaxed))
         return;
     std::chrono::milliseconds const timeout = GetContext().GetSettings().AttachTimeout;
     if (now - _connectedAt < timeout)
@@ -78,6 +81,53 @@ void GameSession::WorldUpdate(std::chrono::steady_clock::time_point now)
     LOG_INFO("server.gamesession", "Session {} from {} sent no MSG_ATTACH within Attach.Timeout of {} s; closing it",
         GetSessionId(), GetRemoteAddress().to_string(), std::chrono::duration_cast<std::chrono::seconds>(timeout).count());
     CloseSocket();
+}
+
+void GameSession::QueueMapBroadcast(bool includeOriginator, std::function<void(GameSession&)> deliver)
+{
+    if (!_mapId)
+        return;
+    _mapBroadcasts.push_back({ *_mapId, includeOriginator, std::move(deliver) });
+}
+
+std::vector<GameMapBroadcast> GameSession::TakeMapBroadcasts()
+{
+    std::vector<GameMapBroadcast> broadcasts = std::move(_mapBroadcasts);
+    _mapBroadcasts.clear();
+    return broadcasts;
+}
+
+void GameSession::FlushMovement(std::chrono::steady_clock::time_point now)
+{
+    if (!_mapId)
+        return;
+    Map* const map = sMapMgr.Find(*_mapId);
+    std::optional<uint16> const mobileId = map ? map->GetMobileId(_worldGuid) : std::nullopt;
+    if (!mobileId)
+        return;
+
+    std::optional<PlayerMovementBroadcast> const update = _movement.Flush(now, std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MoveFlushInterval")),
+        sSettings.Get<uint32>("Zone.MoveIdleIntervals"));
+    if (!update)
+        return;
+
+    if (update->Move)
+    {
+        GameMessages::ServerMove move;
+        move.LocationX = update->Move->LocationX;
+        move.LocationY = update->Move->LocationY;
+        move.LocationZ = update->Move->LocationZ;
+        move.Direction = update->Move->Direction;
+        move.MobileId = *mobileId;
+        QueueMapBroadcast(false, [move](GameSession& recipient) { recipient.SendDmlMessage(move); });
+    }
+    if (update->NewState)
+    {
+        GameMessages::MoveState state;
+        state.GlobalId = _worldGuid;
+        state.NewState = *update->NewState;
+        QueueMapBroadcast(false, [state](GameSession& recipient) { recipient.SendDmlMessage(state); });
+    }
 }
 
 void GameSession::ProcessCallbacks()
@@ -342,10 +392,19 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, character, *stats, trackers, placement, problem);
     ObjectField const* const field = ObjectFields::Find("MSG_LOGINCOMPLETE", "Data");
     EncodeResult const data = player && field ? CoreObjectSerializer::EncodeField(*field, *player, *types) : EncodeResult{};
-    if (!player || !field || !data.Ok())
+    ObjectField const* const publicField = ObjectFields::Find("MSG_NEWOBJECT", "Data");
+    SerializerOptions publicOptions;
+    publicOptions.Mask = SerializerOptions::PublicMask;
+    EncodeResult const publicData = player && publicField ? CoreObjectSerializer::EncodeField(*publicField, *player, *types, publicOptions) : EncodeResult{};
+    if (!player || !field || !data.Ok() || !publicField || !publicData.Ok())
     {
         LeaveWorld();
-        RefuseEntry(claim, player ? fmt::format("its object does not encode: {}", data.Detail) : fmt::format("its object cannot be built: {}", problem));
+        std::string const reason = !player ? fmt::format("its object cannot be built: {}", problem)
+            : !field ? "MSG_LOGINCOMPLETE's Data is not declared"
+            : !data.Ok() ? fmt::format("its login object does not encode: {}", data.Detail)
+            : !publicField ? "MSG_NEWOBJECT's Data is not declared"
+            : fmt::format("its public object does not encode: {}", publicData.Detail);
+        RefuseEntry(claim, reason);
         return;
     }
 
@@ -370,10 +429,26 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     _stats = std::move(stats);
     _statsRevision = stored ? stored->Revision : 0;
     _spellbook = std::move(spellbook);
-    _movement.Reset({ placement.X, placement.Y, placement.Z, placement.Yaw }, 0);
+    _movement.Reset({ placement.X, placement.Y, placement.Z, placement.Yaw }, 0, std::chrono::steady_clock::now());
     _characterRevision = character.StateRevision;
+    if (!map.SetPlayerObject(character.Guid, character.Guid, publicData.Bytes))
+    {
+        LeaveWorld();
+        RefuseEntry(claim, "its public object could not be registered in its zone instance");
+        return;
+    }
+    GameMessages::NewObject playerObject;
+    playerObject.Data.assign(publicData.Bytes.begin(), publicData.Bytes.end());
     SendDmlMessage(complete);
     SendMapObjects(map);
+    for (auto const& [guid, other] : map.GetPlayerObjects())
+        if (guid != character.Guid)
+        {
+            GameMessages::NewObject message;
+            message.Data.assign(other.Data.begin(), other.Data.end());
+            SendDmlMessage(message);
+        }
+    QueueMapBroadcast(false, [playerObject](GameSession& recipient) { recipient.SendDmlMessage(playerObject); });
     SetStatus(SessionStatus::LoggedIn);
     LOG_DEBUG("server.gamesession", "Session {} sent MSG_LOGINCOMPLETE: zone {}, id {}, dynamic zone {} in process {}, server time {}, realm {}, permissions {:#x}, CSR {}, test server {}, critical objects {}",
         GetSessionId(), complete.ZoneName, complete.ZoneId, complete.DynamicZoneId, complete.DynamicServerProcId, complete.ServerTime, complete.RealmName, complete.Permissions,
@@ -525,7 +600,15 @@ void GameSession::LeaveWorld()
     if (!_mapId)
         return;
     if (Map* const map = sMapMgr.Find(*_mapId))
+    {
+        if (MapPlayerObject const* const player = map->FindPlayerObject(_worldGuid))
+        {
+            GameMessages::RemoveObject removed;
+            removed.GameObjectId = player->GlobalId;
+            QueueMapBroadcast(false, [removed](GameSession& recipient) { recipient.SendDmlMessage(removed); });
+        }
         sMapMgr.RemovePlayer(*map, _worldGuid);
+    }
     _mapId.reset();
 }
 

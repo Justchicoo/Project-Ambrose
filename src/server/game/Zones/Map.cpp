@@ -35,6 +35,7 @@ bool Map::RemovePlayer(uint64 characterGuid, Clock::time_point now, std::chrono:
         return false;
     _mobileIds.Release(found->second, now, releaseDelay);
     _players.erase(found);
+    _playerObjects.erase(characterGuid);
     if (_players.empty())
         _unloadAt = now + unloadDelay;
     return true;
@@ -87,6 +88,21 @@ std::vector<uint64> Map::GetPlayers() const
     for (auto const& [guid, mobileId] : _players)
         players.push_back(guid);
     return players;
+}
+
+MapPlayerObject const* Map::FindPlayerObject(uint64 characterGuid) const
+{
+    auto const found = _playerObjects.find(characterGuid);
+    return found == _playerObjects.end() ? nullptr : &found->second;
+}
+
+bool Map::SetPlayerObject(uint64 characterGuid, uint64 globalId, std::vector<uint8> data)
+{
+    auto const found = _players.find(characterGuid);
+    if (found == _players.end())
+        return false;
+    _playerObjects.insert_or_assign(characterGuid, MapPlayerObject{ globalId, found->second, std::move(data) });
+    return true;
 }
 
 void Map::AddObject(MapObject object)

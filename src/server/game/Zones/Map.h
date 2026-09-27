@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One running instance of a zone: the dynamic zone id the client is told, the zone it is an instance of, the wizards standing in it, the objects its zone places that the server sends, each with its ids and the Data MSG_NEWOBJECT carries encoded once for every wizard who comes, the generations of the zone rows, classes, tables and templates they were built from, and the mobile ids it has handed out. It lives on the world thread and is touched nowhere else, so it holds no lock. When its last wizard leaves it remembers when it may be taken down, with the delay read at that moment, so a changed Zone.UnloadDelay applies to the next instance that empties and a wizard who comes back before then finds the same instance still there.
+ * One running instance of a zone: the dynamic zone id the client is told, its players and each player's public MSG_NEWOBJECT data, the objects its zone places that the server sends, the generations of the zone rows and templates they were built from, and the mobile ids it has handed out. It lives on the world thread and is touched nowhere else, so it holds no lock. When its last wizard leaves it remembers when it may be taken down, with the delay read at that moment, so a changed Zone.UnloadDelay applies to the next instance that empties and a wizard who comes back before then finds the same instance still there.
  */
 
 #ifndef AMBROSE_MAP_H
@@ -42,6 +42,13 @@ struct MapObject
     std::vector<uint8> Data;
 };
 
+struct MapPlayerObject
+{
+    uint64 GlobalId = 0;
+    uint16 MobileId = 0;
+    std::vector<uint8> Data;
+};
+
 class Map
 {
 public:
@@ -73,6 +80,9 @@ public:
     MapObject const* FindObject(uint64 globalId) const;
     MapObject const* FindSpawn(uint64 spawnId) const;
     std::vector<uint64> GetPlayers() const;
+    std::map<uint64, MapPlayerObject> const& GetPlayerObjects() const noexcept { return _playerObjects; }
+    MapPlayerObject const* FindPlayerObject(uint64 characterGuid) const;
+    bool SetPlayerObject(uint64 characterGuid, uint64 globalId, std::vector<uint8> data);
     void AddObject(MapObject object);
     std::optional<MapObject> RemoveSpawn(uint64 spawnId, Clock::time_point now, std::chrono::milliseconds releaseDelay);
     std::optional<MapObjectStamp> const& GetObjectStamp() const noexcept { return _objectStamp; }
@@ -83,6 +93,7 @@ private:
     std::string _zonePath;
     bool _public;
     std::map<uint64, uint16> _players;
+    std::map<uint64, MapPlayerObject> _playerObjects;
     MobileIdAllocator _mobileIds;
     std::vector<MapObject> _objects;
     std::optional<MapObjectStamp> _objectStamp;

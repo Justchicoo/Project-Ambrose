@@ -38,7 +38,7 @@
 - [ ] Two clients see each other with correct name and gear
 - [ ] B sees A's smooth run and idle within ~0.5 s; jumps relay
 - [ ] A logs out and vanishes on B at once; quick relog shows no ghost
-- [ ] Changing Zone.MoveFlushInterval applies from the next flush
+- [x] Changing Zone.MoveFlushInterval applies from the next flush. `PlayerMovementTest.MovementBatchesAtTheLiveIntervalAndIdleUsesTheLiveThreshold` verifies it with a fake steady clock.
 
 ### Detailed spec from WLD-10: Players see each other (whole-zone broadcast)
 
@@ -46,11 +46,11 @@ Two real clients in the same zone instance see each other appear, walk, jump, an
 
 **Deliverables**
 
-- Map::AddPlayer: send the newcomer's public WizClientObject to everyone present, and every present player's object to the newcomer, via MSG_NEWOBJECT with the Public flag mask
-- MovementHandler: relay MSG_SERVERMOVE (the player's MobileID) and MSG_MOVESTATE (GlobalID) to others, batched on Zone.MoveFlushInterval; relay MSG_JUMP when ExcludeOriginator is set
+- GameSession::EnterWorld: retain the newcomer's public WizClientObject on the Map, send every present player's object to the newcomer, and queue the newcomer's MSG_NEWOBJECT for everyone present, encoded with the Public flag mask
+- MovementHandler and the world tick: relay MSG_SERVERMOVE (the player's MobileID) and MSG_MOVESTATE (GlobalID) to others, batched on Zone.MoveFlushInterval; relay MSG_JUMP according to ExcludeOriginator
 - Idle detection: after no MSG_CLIENTMOVE for Zone.MoveIdleIntervals flush intervals (default 2), broadcast MSG_MOVESTATE NewState=0 once
 - Zone.MoveFlushInterval and Zone.MoveIdleIntervals are live settings applied from the next flush
-- Map::RemovePlayer: MSG_REMOVEOBJECT (GameObjectID) to the remaining players
+- GameSession::LeaveWorld: queue MSG_REMOVEOBJECT (GameObjectID) to the remaining players before Map::RemovePlayer drops the public object data
 
 **Client messages:** MSG_NEWOBJECT, MSG_REMOVEOBJECT, MSG_SERVERMOVE, MSG_MOVESTATE, MSG_CLIENTMOVESTATE, MSG_JUMP, MSG_CLIENTMOVE
 
@@ -61,7 +61,7 @@ Two real clients in the same zone instance see each other appear, walk, jump, an
 - [ ] A jumps: B sees the jump
 - [ ] A logs out: A's model vanishes on B's screen at once
 - [ ] A logs back in quickly and gets a new mobile id: B sees one A, not a ghost
-- [ ] Unit: changing Zone.MoveFlushInterval or Zone.MoveIdleIntervals applies from the next flush without a restart
+- [x] Unit: changing Zone.MoveFlushInterval or Zone.MoveIdleIntervals applies from the next flush without a restart. `PlayerMovementTest.MovementBatchesAtTheLiveIntervalAndIdleUsesTheLiveThreshold` passes with a fake steady clock and changed intervals.
 
 **Risks**
 

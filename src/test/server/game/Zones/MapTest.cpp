@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the zone instances and the ids their objects carry, with a clock and settings the test holds: two instances of one zone get different dynamic zone ids while the public one is found again by its path, an instance that empties is taken down only once its delay has passed and a wizard who comes back first keeps it alive, the delay is the one in force when the instance empties so a changed Zone.UnloadDelay applies to the next one with nothing restarted, a wizard keeps one mobile id however often it is added, the same placed object is given the same permID on every run while runtime GIDs are never repeated and never fall where a stored id could.
+ * Tests the zone instances and the ids their objects carry, with a clock and settings the test holds: public player object data is retained for join broadcasts and removed on leave, instance lifetimes and mobile ids follow their configured delays, and object ids remain stable where they should and unique where they must.
  */
 
 #include "MapMgr.h"
@@ -113,6 +113,26 @@ TEST_F(MapTest, AWizardKeepsOneMobileIdHoweverOftenItIsAdded)
     EXPECT_GE(*first, MobileIdAllocator::FirstPlayerId) << "a wizard's id comes from the player range";
     EXPECT_EQ(map.GetPlayerCount(), 1u);
     EXPECT_EQ(map.GetMobileIds().Held(MobileIdAllocator::Range::Player), 1u);
+}
+
+TEST_F(MapTest, PublicPlayerObjectsAreRetainedForJoinsAndRemovedOnLeave)
+{
+    Map& map = sMapMgr.FindOrCreatePublic("WizardCity/WC_Hub");
+    ASSERT_TRUE(sMapMgr.AddPlayer(map, 7));
+    ASSERT_TRUE(sMapMgr.AddPlayer(map, 8));
+    ASSERT_TRUE(map.SetPlayerObject(7, 7007, { 1, 2, 3 }));
+    ASSERT_TRUE(map.SetPlayerObject(8, 8008, { 4, 5 }));
+
+    MapPlayerObject const* const visible = map.FindPlayerObject(7);
+    ASSERT_NE(visible, nullptr);
+    EXPECT_EQ(visible->GlobalId, 7007u);
+    EXPECT_EQ(visible->Data, (std::vector<uint8>{ 1, 2, 3 }));
+    EXPECT_FALSE(map.SetPlayerObject(9, 9009, { 6 })) << "a public object cannot be stored without an instance player";
+
+    ASSERT_TRUE(sMapMgr.RemovePlayer(map, 7));
+    EXPECT_EQ(map.FindPlayerObject(7), nullptr);
+    ASSERT_NE(map.FindPlayerObject(8), nullptr);
+    EXPECT_EQ(map.FindPlayerObject(8)->GlobalId, 8008u) << "leaving removes only that player's visible object";
 }
 
 TEST(ObjectGuidTest, TheSamePlacedObjectGetsTheSamePermIdOnEveryRun)

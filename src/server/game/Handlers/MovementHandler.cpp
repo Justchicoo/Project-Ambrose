@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Takes the moves, movement states and jumps a client sends for its own wizard once it stands in an instance: a move becomes where the wizard stands unless the client sent it under another zone counter, which is logged and ignored, a movement state is kept for the players who will see it, and a jump is noted until other players can be shown one; a message that arrives before the wizard has an instance, or after it has left one, has no wizard to move.
+ * Takes the moves, movement states and jumps a client sends for its own wizard once it stands in an instance: valid moves and states are batched for other players, stale-zone moves are logged and ignored, and a jump is relayed according to ExcludeOriginator; a message that arrives before the wizard has an instance, or after it has left one, has no wizard to move.
  */
 
 #include "GameSession.h"
@@ -26,5 +26,6 @@ void GameSession::HandleJump(GameMessages::Jump& message)
 {
     if (!_mapId)
         return;
+    QueueMapBroadcast(message.ExcludeOriginator == 0, [message](GameSession& recipient) { recipient.SendDmlMessage(message); });
     LOG_DEBUG("server.gamesession", "Session {}'s wizard {} jumped{}", GetSessionId(), _worldGuid, message.ExcludeOriginator != 0 ? ", shown to others only" : "");
 }
