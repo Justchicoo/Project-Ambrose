@@ -1,11 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant.
+ * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, waits past its timeout for a start step a stand-in admin API reports until the app is ready and ends one that runs past the time it asked for, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant.
  */
 
 #include "AdminAuth.h"
 #include "AdminRouter.h"
+#include "AdminServer.h"
 #include "AdminStatus.h"
+#include "ListenerSettings.h"
 #include "ConfigMgr.h"
 #include "LogTestDirectory.h"
 #include "LogTestHarness.h"
@@ -20,6 +22,7 @@
 #include <chrono>
 #include <fstream>
 #include <functional>
+#include <mutex>
 #include <memory>
 #include <string>
 #include <thread>
@@ -262,6 +265,94 @@ TEST(SupervisorTest, AStartThatNeverReportsReadyIsEndedAtItsTimeout)
     EXPECT_NE(rig.App().Message.find("did not become ready within 1"), std::string::npos) << rig.App().Message;
     EXPECT_EQ(rig.App().FailedStarts, 1u);
     EXPECT_TRUE(rig.Said("did not become ready within 1 s"));
+}
+
+namespace
+{
+    class StandInAdmin
+    {
+    public:
+        explicit StandInAdmin(LogTestHarness& harness, LogTestDirectory& directory) : _server(harness.GetLog(), "helper", directory.Path() / "standin")
+        {
+            _server.SetHealthSource([this]
+            {
+                std::lock_guard const lock(_mutex);
+                return _health;
+            });
+            ListenerSettings settings;
+            settings.Enable = true;
+            settings.BindIp = "127.0.0.1";
+            settings.Port = 0;
+            settings.Token = Token;
+            std::string error;
+            EXPECT_TRUE(_server.Start(settings, error)) << error;
+        }
+
+        ~StandInAdmin()
+        {
+            _server.Stop();
+        }
+
+        void Starting(std::string stage, std::chrono::seconds allowance)
+        {
+            std::lock_guard const lock(_mutex);
+            _health.State = "starting";
+            _health.StartStage = std::move(stage);
+            _health.StartUntilEpochMs = std::chrono::duration_cast<std::chrono::milliseconds>((std::chrono::system_clock::now() + allowance).time_since_epoch()).count();
+        }
+
+        void Running()
+        {
+            std::lock_guard const lock(_mutex);
+            _health.State = "running";
+            _health.StartStage.clear();
+        }
+
+        std::vector<std::string> Script() const
+        {
+            return { "Admin.Enable = 1", "Admin.BindIP = 127.0.0.1", fmt::format("Admin.Port = {}", _server.GetPort()), fmt::format("Admin.Token = {}", Token),
+                "Helper.Script = sleep 60000" };
+        }
+
+    private:
+        std::mutex _mutex;
+        AdminHealth _health{ "helper", "", "rev", 0, "starting" };
+        AdminServer _server;
+    };
+}
+
+TEST(SupervisorTest, AStartStepTheAppReportsIsWaitedForUntilTheAppIsReady)
+{
+    LogTestHarness harness;
+    LogTestDirectory directory;
+    StandInAdmin admin(harness, directory);
+    admin.Starting("extracting zones", 60s);
+    Rig rig(admin.Script(), "App.helper.StartTimeout = 1\n");
+    ASSERT_TRUE(rig.Open());
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.StartStage == "extracting zones"; }));
+    std::this_thread::sleep_for(2500ms);
+    AppSnapshot const waiting = rig.App();
+    EXPECT_EQ(waiting.State, AppState::Starting) << "a one second start timeout is waited past while the app says what it is doing: " << waiting.Message;
+    EXPECT_GT(waiting.StartUntilEpochMs, 0);
+
+    admin.Running();
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Running; })) << rig.App().Message;
+    EXPECT_TRUE(rig.App().StartStage.empty());
+    EXPECT_EQ(rig.App().FailedStarts, 0u);
+}
+
+TEST(SupervisorTest, AStartStepThatRunsPastTheTimeItAskedForEndsTheStart)
+{
+    LogTestHarness harness;
+    LogTestDirectory directory;
+    StandInAdmin admin(harness, directory);
+    admin.Starting("extracting zones", 3s);
+    Rig rig(admin.Script(), "App.helper.StartTimeout = 1\n");
+    ASSERT_TRUE(rig.Open());
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.StartStage == "extracting zones"; }));
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Crashed; }, 20s));
+    EXPECT_NE(rig.App().Message.find("extracting zones ran past the time it asked for"), std::string::npos) << rig.App().Message;
+    EXPECT_EQ(rig.App().FailedStarts, 1u);
 }
 
 TEST(SupervisorTest, ANewSupervisorTakesARunningAppBackAndRefusesAProcessIdThatIsNotItAnyMore)

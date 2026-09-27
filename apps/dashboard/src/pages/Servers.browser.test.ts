@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the servers page in a real browser against a stubbed admin API: every supervised app shows its state, process and crashes with the buttons its state allows, a restart asks first and then sends the countdown that was typed, a start goes straight through, the captured output of the chosen app is shown with the supervisor's own notes apart from the app's, a panel an app served itself says the supervisor is not serving it instead of offering power buttons, and a viewer sees the apps and their state but none of the power buttons, while a sub-user granted a restart on one app sees that one button on that one app.
+ * Tests the servers page in a real browser against a stubbed admin API: every supervised app shows its state, process and crashes with the buttons its state allows, an app still starting shows the step it reported, a restart asks first and then sends the countdown that was typed, a start goes straight through, the captured output of the chosen app is shown with the supervisor's own notes apart from the app's, a panel an app served itself says the supervisor is not serving it instead of offering power buttons, and a viewer sees the apps and their state but none of the power buttons, while a sub-user granted a restart on one app sees that one button on that one app.
  */
 
 import { flushSync, mount, unmount } from "svelte";
@@ -22,6 +22,7 @@ function supervision(name: string, state: string, extra: Partial<Supervision> = 
         adopted: false,
         started_epoch_ms: state === "offline" ? null : Date.now() - 65_000,
         ready_epoch_ms: state === "running" ? Date.now() - 60_000 : null,
+        start: null,
         admin: { enabled: true, address: "127.0.0.1", port: 12010, problem: null },
         stop: null,
         restart_epoch_ms: null,
@@ -125,6 +126,16 @@ describe("the servers page", () => {
         expect(labels.some((label) => label.startsWith("Restart"))).toBe(true);
         expect(labels.some((label) => label.startsWith("Stop"))).toBe(true);
         expect(labels.some((label) => label.startsWith("Start"))).toBe(true);
+    });
+
+    it("shows the step an app that is still starting reported", async () => {
+        live.apps = [
+            { name: "supervisor", role: "supervisor", realm: "", address: "", port: 0, revision: "abc1234" },
+            app("gameserver", "starting", { start: { stage: "extracting zones", until_ms: Date.now() + 60000 } }),
+        ];
+        open();
+        await vi.waitFor(() => expect(host.textContent).toContain("gameserver"));
+        expect(host.textContent).toContain("Now extracting zones");
     });
 
     it("asks before a restart and sends the countdown that was typed", async () => {

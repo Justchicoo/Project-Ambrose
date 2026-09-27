@@ -61,6 +61,7 @@ export const Supervision = v.looseObject({
     adopted: v.boolean(),
     started_epoch_ms: v.nullable(v.number()),
     ready_epoch_ms: v.nullable(v.number()),
+    start: v.optional(v.nullable(v.looseObject({ stage: v.string(), until_ms: v.number() })), null),
     admin: v.looseObject({
         enabled: v.boolean(),
         address: v.nullable(v.string()),

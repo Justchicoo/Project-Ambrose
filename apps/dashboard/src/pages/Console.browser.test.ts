@@ -38,6 +38,7 @@ function supervision(name: string): Supervision {
         adopted: false,
         started_epoch_ms: Date.now() - 65_000,
         ready_epoch_ms: Date.now() - 60_000,
+        start: null,
         admin: { enabled: true, address: "127.0.0.1", port: 12010, problem: null },
         stop: null,
         restart_epoch_ms: null,

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the admin API listener on a loopback port the operating system picks: health needs the token, wrong tokens are rate limited while the right one still answers, every /api path answers the same way without one whatever method it carries, whatever upgrade it claims and wherever it falls on a kept-alive connection, a certificate and key are served over TLS with HSTS and reported to the log, a reload swaps the certificate live and keeps the old one when the new pair does not match, a certificate that will not load stops the listener opening, a reload rotates the token without a restart and keeps the old listener when the new port is taken, an unsafe remote bind is refused, WebSocket routes registered before or after the listener opens take the same token and carry frames both ways, a machine with no data folder keeps its generated token beside the config file, an app reloads the listener from its own config, an app whose admin binding is unsafe exits with a failure, the built panel is served without a token and with the security headers, a browser signs in only from its own origin by trading the token for a cookie named after the port, with each wrong field named beside the request id, the cookie's unsafe requests and socket upgrades need its own origin and CSRF token, signing out and rotating the token end the session, and a host the listener does not answer for is refused.
+ * Tests the admin API listener on a loopback port the operating system picks: health needs the token and carries the step a start is on, wrong tokens are rate limited while the right one still answers, every /api path answers the same way without one whatever method it carries, whatever upgrade it claims and wherever it falls on a kept-alive connection, a certificate and key are served over TLS with HSTS and reported to the log, a reload swaps the certificate live and keeps the old one when the new pair does not match, a certificate that will not load stops the listener opening, a reload rotates the token without a restart and keeps the old listener when the new port is taken, an unsafe remote bind is refused, WebSocket routes registered before or after the listener opens take the same token and carry frames both ways, a machine with no data folder keeps its generated token beside the config file, an app reloads the listener from its own config, an app whose admin binding is unsafe exits with a failure, the built panel is served without a token and with the security headers, a browser signs in only from its own origin by trading the token for a cookie named after the port, with each wrong field named beside the request id, the cookie's unsafe requests and socket upgrades need its own origin and CSRF token, signing out and rotating the token end the session, and a host the listener does not answer for is refused.
  */
 
 #include "AdminClient.h"
@@ -423,6 +423,32 @@ namespace
         LogTestHarness _harness;
         LogTestDirectory _directory;
     };
+}
+
+TEST_F(AdminServerTest, HealthCarriesTheStepAStartIsOnAndHowLongItMayTake)
+{
+    AdminServer server = Make();
+    AdminHealth health;
+    health.App = "testserver";
+    health.State = "starting";
+    health.StartStage = "extracting zones";
+    health.StartUntilEpochMs = 1790000000123;
+    server.SetHealthSource([&health] { return health; });
+    std::string error;
+    ASSERT_TRUE(server.Start(Loopback(), error)) << error;
+
+    HttpReply const starting = Get(server.GetPort(), "/api/health", Token);
+    ASSERT_EQ(starting.Status, 200) << starting.Body;
+    nlohmann::json const body = nlohmann::json::parse(starting.Body);
+    EXPECT_EQ(body["state"], "starting");
+    EXPECT_EQ(body["start"]["stage"], "extracting zones");
+    EXPECT_EQ(body["start"]["until_ms"], 1790000000123);
+
+    health.State = "running";
+    health.StartStage.clear();
+    nlohmann::json const running = nlohmann::json::parse(Get(server.GetPort(), "/api/health", Token).Body);
+    EXPECT_TRUE(running["start"].is_null()) << running.dump();
+    server.Stop();
 }
 
 TEST_F(AdminServerTest, ServesHealthOnLoopbackOnlyWithTheToken)

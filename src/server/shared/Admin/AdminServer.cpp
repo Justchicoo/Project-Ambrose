@@ -338,6 +338,10 @@ AdminServer::AdminServer(Log& log, std::string appName, std::filesystem::path da
         body["revision"] = health.Revision;
         body["uptime"] = health.UptimeSeconds;
         body["state"] = health.State;
+        if (health.StartStage.empty())
+            body["start"] = nullptr;
+        else
+            body["start"] = { { "stage", health.StartStage }, { "until_ms", health.StartUntilEpochMs } };
         return AdminResponse::Json(200, body.dump());
     });
 

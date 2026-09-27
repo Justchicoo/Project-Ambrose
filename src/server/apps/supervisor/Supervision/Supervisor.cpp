@@ -57,6 +57,10 @@ namespace
         body["adopted"] = snapshot.Adopted;
         body["started_epoch_ms"] = OptionalNumber(snapshot.StartedEpochMs);
         body["ready_epoch_ms"] = OptionalNumber(snapshot.ReadyEpochMs);
+        if (snapshot.StartStage.empty())
+            body["start"] = nullptr;
+        else
+            body["start"] = { { "stage", snapshot.StartStage }, { "until_ms", snapshot.StartUntilEpochMs } };
         body["admin"] = {
             { "enabled", snapshot.AdminEnabled },
             { "address", TextOrNull(snapshot.AdminHost) },

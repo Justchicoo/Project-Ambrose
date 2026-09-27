@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The servers page, live from the supervisor: every app with its state, process, place, build, uptime and crash count, start, stop, restart and kill each with a countdown where one applies and a confirmation for the ones that end a run, and the output the supervisor captured for this run and the one before, which is what an app with its admin API off still shows, drawn as the four columns doc/DESIGN.md settles so a level, a category and a value each read apart from the words around them. Each power control is there only for an operator the server would let use it, hidden by the same permission it checks, so the page never offers what would come back refused. -->
+<!-- Project Ambrose by Imjustchico: The servers page, live from the supervisor: every app with its state and the step a start is on, process, place, build, uptime and crash count, start, stop, restart and kill each with a countdown where one applies and a confirmation for the ones that end a run, and the output the supervisor captured for this run and the one before, which is what an app with its admin API off still shows, drawn as the four columns doc/DESIGN.md settles so a level, a category and a value each read apart from the words around them. Each power control is there only for an operator the server would let use it, hidden by the same permission it checks, so the page never offers what would come back refused. -->
 <script lang="ts">
     import * as Card from "$lib/components/ui/card/index.js";
     import * as Dialog from "$lib/components/ui/dialog/index.js";
@@ -181,6 +181,11 @@
                         </Table.Cell>
                         <Table.Cell>
                             <StatusBadge tone={shown.tone} pulse={shown.tone === "healthy"}>{shown.word}</StatusBadge>
+                            {#if supervision?.state === "starting" && supervision.start}<div
+                                    class="mt-1 max-w-64 text-xs text-muted-foreground"
+                                >
+                                    Now {supervision.start.stage}
+                                </div>{/if}
                             {#if supervision?.message}<div class="mt-1 max-w-64 text-xs text-muted-foreground">
                                     {supervision.message}
                                 </div>{/if}

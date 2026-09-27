@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The optional admin API listener every operations feature builds on: it binds only where the remote-access rule allows, keeps a generated token in the data folder or, where the machine names none, beside the config file, holds the route table, the bearer token and the failure limiter, answers the same 401 on every path and every method without it, serves GET /api/health, serves the built panel at / without a token and lets it sign in by trading the token once for a browser session, and takes the WebSocket routes later milestones register, before or after it opens, each refused to a caller who lacks the permission it names.
+ * The optional admin API listener every operations feature builds on: it binds only where the remote-access rule allows, keeps a generated token in the data folder or, where the machine names none, beside the config file, holds the route table, the bearer token and the failure limiter, answers the same 401 on every path and every method without it, serves GET /api/health, with the step a start in progress is on and how long it may take, serves the built panel at / without a token and lets it sign in by trading the token once for a browser session, and takes the WebSocket routes later milestones register, before or after it opens, each refused to a caller who lacks the permission it names.
  */
 
 #ifndef AMBROSE_ADMINSERVER_H
@@ -29,6 +29,8 @@ struct AdminHealth
     std::string Revision;
     uint64 UptimeSeconds = 0;
     std::string State;
+    std::string StartStage = {};
+    int64 StartUntilEpochMs = 0;
 };
 
 class AdminSocket
