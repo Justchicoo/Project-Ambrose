@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, waits past its timeout for a start step a stand-in admin API reports until the app is ready and ends one that runs past the time it asked for, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant.
+ * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, hands every state the app passes through to the status observer once and in order with when each began and the data the panel's status event carries, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, waits past its timeout for a start step a stand-in admin API reports until the app is ready and ends one that runs past the time it asked for, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant.
  */
 
 #include "AdminAuth.h"
@@ -26,6 +26,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace
@@ -115,9 +116,10 @@ namespace
                 EndFromOutside(*process);
         }
 
-        bool Open()
+        bool Open(AppStatusObserver observer = {})
         {
             _instance = std::make_unique<Supervisor>(_harness.GetLog(), HelperBreak());
+            _instance->SetStatusObserver(std::move(observer));
             std::vector<std::string> problems;
             std::string error;
             SupervisorSettings const settings = SupervisorSettings::Load(_config, _directory.Path() / "data", HelperPath().parent_path(), _directory.Path(), problems);
@@ -202,6 +204,59 @@ TEST(SupervisorTest, StartsAnAppOnItsReadyLineAndStopsItThroughItsInput)
     EXPECT_EQ(stopped.Crashes, 0u);
     EXPECT_TRUE(rig.Said("Stopping helper with a shutdown line on its input"));
     EXPECT_TRUE(rig.Said("stopped by shutdown"));
+}
+
+TEST(SupervisorTest, EveryStateTheAppPassesThroughReachesTheStatusObserverOnceAndInOrder)
+{
+    std::mutex mutex;
+    std::vector<AppSnapshot> seen;
+    AppStatusObserver const observer = [&mutex, &seen](AppSnapshot const& snapshot)
+    {
+        std::lock_guard const lock(mutex);
+        seen.push_back(snapshot);
+    };
+    Rig rig(ServerScript());
+    ASSERT_TRUE(rig.Open(observer));
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Running; }));
+    EXPECT_TRUE(rig.Instance().Power("helper", PowerAction::Stop, 0).Accepted);
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Offline; }));
+    auto const until = std::chrono::steady_clock::now() + 10s;
+    while (std::chrono::steady_clock::now() < until)
+    {
+        {
+            std::lock_guard const lock(mutex);
+            if (!seen.empty() && seen.back().State == AppState::Offline)
+                break;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+    rig.Close();
+
+    std::lock_guard const lock(mutex);
+    std::vector<std::string> states;
+    for (AppSnapshot const& snapshot : seen)
+        states.emplace_back(ManagedApp::StateName(snapshot.State));
+    EXPECT_EQ(states, (std::vector<std::string>{ "starting", "running", "stopping", "offline" }));
+    for (std::size_t index = 1; index < seen.size(); ++index)
+    {
+        EXPECT_GE(seen[index].StateSinceEpochMs, seen[index - 1].StateSinceEpochMs) << "each state begins no earlier than the one before it";
+    }
+    if (seen.size() == 4)
+    {
+        EXPECT_TRUE(seen[0].ProcessId.has_value()) << "a start is handed on with the process it started";
+        EXPECT_EQ(seen[1].ProcessId, seen[0].ProcessId);
+        EXPECT_GT(seen[0].StateSinceEpochMs, 0);
+        nlohmann::json const offline = nlohmann::json::parse(Supervisor::StatusData(seen[3]));
+        EXPECT_EQ(offline["app"], "helper");
+        EXPECT_EQ(offline["state"], "offline");
+        EXPECT_TRUE(offline["pid"].is_null());
+        EXPECT_EQ(offline["exit_code"], 0) << "an app that is down carries the code it exited with";
+        EXPECT_EQ(offline["crashes"], 0);
+        EXPECT_TRUE(offline["next_restart"].is_null());
+        nlohmann::json const running = nlohmann::json::parse(Supervisor::StatusData(seen[1]));
+        EXPECT_EQ(running["pid"], *seen[1].ProcessId);
+        EXPECT_TRUE(running["exit_code"].is_null());
+    }
 }
 
 TEST(SupervisorTest, ARestartStartsTheAppAgainAsANewProcess)

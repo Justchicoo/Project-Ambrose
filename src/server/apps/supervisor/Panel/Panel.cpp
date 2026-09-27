@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the Panel options into a listener of the same shape as an app's admin API, opens the store before the listener so nothing serves without somewhere to write, names the certificate and key in Panel option names when the bind rule refuses them, and starts, reloads and stops the listener beside the supervisor's own; a reload that would leave the bind unsafe or the certificate unservable is refused and the old listener keeps serving. Signing in also says which role the operator holds and every permission that role allows, so the pages a person cannot use are never drawn for them and the panel never has to ask again what somebody is allowed to do. A route that asks for a permission the catalog does not hold is left out and named in a warning as the panel starts, so a misnamed key costs its page loudly rather than silently. A settings change, reset, batch or reload an app answered through the relay is recorded, a dry run not being a change, with who asked, from where, why and how it ended, refused ones too, and a read that showed a secret is recorded with the keys it showed, never a value.
+ * Reads the Panel options into a listener of the same shape as an app's admin API, opens the store before the listener so nothing serves without somewhere to write, names the certificate and key in Panel option names when the bind rule refuses them, and starts, reloads and stops the listener beside the supervisor's own; a reload that would leave the bind unsafe or the certificate unservable is refused and the old listener keeps serving. Signing in also says which role the operator holds and every permission that role allows, so the pages a person cannot use are never drawn for them and the panel never has to ask again what somebody is allowed to do. A route that asks for a permission the catalog does not hold is left out and named in a warning as the panel starts, so a misnamed key costs its page loudly rather than silently. A settings change, reset, batch or reload an app answered through the relay is recorded, a dry run not being a change, with who asked, from where, why and how it ended, refused ones too, and a read that showed a secret is recorded with the keys it showed, never a value. The event socket and its ticket route are registered with the rest, its streams and its sweeper start once the listener is up and stop before it closes.
  */
 
 #include "Panel.h"
@@ -50,6 +50,17 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     });
     _listener.Routes().SetPermissionKnown([](std::string_view permission) { return PanelPermissions::Holds(permission); });
     RegisterSignIn();
+    _eventSocket = std::make_unique<PanelEventSocket>(_log, _events, _tickets, _sessions, _users, _grants, _listener.Routes());
+    _listener.AddSocket(_eventSocket->MakeRoute());
+    _listener.Routes().AddOpenCosting("POST", std::string(PanelEventSocket::TicketPath), PanelEventSocket::TicketCost, [this](AdminRequest const& request)
+    {
+        return _eventSocket->MintTicket(request);
+    });
+}
+
+void Panel::SetAppSource(PanelEventSocket::AppSource source)
+{
+    _eventSocket->SetAppSource(std::move(source));
 }
 
 ListenerSettings Panel::LoadSettings(ConfigMgr const& config, std::vector<std::string>* problems)
@@ -113,6 +124,8 @@ bool Panel::Start(ConfigMgr const& config, std::string& error)
         AMBROSE_LOG(_log, LogLevel::Warn, PanelCategory, "The panel leaves out {}", refused);
     if (!_listener.Start(settings, error))
         return false;
+    _events.Start();
+    _eventSocket->Start();
     OfferTheOwnerLink();
     StartGathering();
     return true;
@@ -143,7 +156,10 @@ bool Panel::Reload(ConfigMgr const& config)
 void Panel::Stop()
 {
     StopGathering();
+    _eventSocket->Stop();
     _listener.Stop();
+    _events.Stop();
+    _tickets.Clear();
     _rateLimit.Clear();
     std::lock_guard const lock(_storeMutex);
     _store.Close();

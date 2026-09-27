@@ -900,11 +900,11 @@ Changed on 2026-09-27 at the maintainer's direction, who asked for the panel as 
 
 **Acceptance**
 
-- [ ] A socket opened with a foreign Origin is refused, and a ticket works once and only within 30 seconds
-- [ ] A page reconnecting after 10 seconds offline receives exactly the missed records or a dropped marker, with no duplicates, through the 17.04 layer's own tests
-- [ ] The contract test fails when a server event type is added without a dashboard handler
-- [ ] A ticket sent in the URL rather than the first frame is refused, and the URL appears in no log
-- [ ] A caller without `debug.errors` receives a correlation id that matches a line in the supervisor log, and no error text
+- [x] A socket opened with a foreign Origin is refused, and a ticket works once and only within 30 seconds (PanelEventSocketTest.AForeignOriginIsRefusedAtTheUpgradeWhileTheSameOriginSignsIn answers a foreign origin and `*` with 403 cross_origin at the upgrade while the panel's own origin reaches ready, and fails when the origin check is taken out; PanelEventTicketsTest.ATicketIsGoodForThirtySecondsAndOneUseFromItsOwnAddress holds a ticket good at 29.999 s and gone at 30 s, once, from the address it was minted for; PanelEventSocketTest.ATicketSignsASocketInOnceAndASecondUseClosesWith4401 does it over a real listener)
+- [x] A page reconnecting after 10 seconds offline receives exactly the missed records or a dropped marker, with no duplicates, through the 17.04 layer's own tests (PanelEventStreamTest runs the shared StreamLayerCases against the panel feed, and PanelEventSocketTest.AReconnectingPageGetsExactlyTheMissedStatusRecordsOrADroppedMarker resumes from 3 to receive exactly 4 to 7, and after a trimmed backlog one dropped frame for 8 to 25, count 18, then 26 to 30; events.test.ts covers the page resuming after its last sequence and skipping what it already has)
+- [x] The contract test fails when a server event type is added without a dashboard handler (apps/dashboard/src/lib/events.test.ts "every type the server can send has a dashboard handler" names a missing handler, the handler map is typed over every sent type so svelte-check refuses a gap, and PanelEventCatalogTest.TheDashboardTypesAreWhatTheCatalogRenders holds apps/dashboard/src/lib/protocol.ts to the C++ catalog)
+- [x] A ticket sent in the URL rather than the first frame is refused, and the URL appears in no log (PanelEventSocketTest.ATicketInTheUrlIsRefusedBurnedAndNeverLogged: `?ticket=` answers 400 credentials_in_url, the ticket is burned so its later hello closes with 4401, and no captured log line carries it; AdminServerTest.ARouteThatAdmitsItsOwnUpgradesNeedsNoTokenMayRefuseAndLogsNoQuery holds the listener to the same)
+- [x] A caller without `debug.errors` receives a correlation id that matches a line in the supervisor log, and no error text (PanelEventSocketTest.AnInternalFailureShowsItsTextOnlyToDebugErrorsAndItsCorrelationIsLogged: a viewer gets the generic message with a correlation id that a server.panel line carries with the full text, and only an owner holding debug.errors sees the text; the signed-in panel opens exactly one socket in tests/e2e/panel-listener.spec.ts, run against a real supervisor)
 
 ## 17.27 App states, operation locks and power targets
 

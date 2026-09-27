@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The one stream layer every live feed is built on, for any record a hub carries: a session per subscriber with the feed's own filter, the backlog or a resume after a sequence number on open, a dropped marker naming any range that left the backlog or a full queue, records pumped to the sink by one thread so a publisher never waits on a socket and pays one atomic flag per record to wake it, the socket route that opens a session from a subscribe message, and the page of backlog a plain HTTP read gets. A feed supplies only its record, filter, request and how each is written and read.
+ * The one stream layer every live feed is built on, for any record a hub carries: a session per subscriber with the feed's own filter and, when the feed's traits name one, the overflow policy of the stream it opens, the backlog or a resume after a sequence number on open, a dropped marker naming any range that left the backlog or a full queue, records pumped to the sink by one thread so a publisher never waits on a socket and pays one atomic flag per record to wake it, a session that closes once a stream that never drops has filled its queue and delivered what it held, the socket route that opens a session from a subscribe message, and the page of backlog a plain HTTP read gets. The sink hears the opening, each dropped range and an overflow through hooks whose defaults write the layer's own messages, so a feed with a wire of its own overrides only those. A feed supplies only its record, filter, request and how each is written and read.
  */
 
 #ifndef AMBROSE_STREAMSERVICE_H
@@ -29,6 +29,16 @@ public:
 
     virtual void Send(std::string text) = 0;
     virtual void Close(std::string reason) = 0;
+    virtual void Opened(uint64 latest, uint64 oldest, std::size_t backlog);
+    virtual void Dropped(uint64 from, uint64 to, uint64 count);
+    virtual void Overflowed();
+};
+
+struct StreamGap
+{
+    uint64 From = 0;
+    uint64 To = 0;
+    uint64 Count = 0;
 };
 
 namespace StreamWire
@@ -83,23 +93,24 @@ public:
             return 0;
         std::vector<std::shared_ptr<Record const>> records;
         StreamPopResult const popped = _subscription->Pop(records, max);
-        if (records.empty() && popped.Dropped == 0)
+        if (records.empty() && popped.Dropped == 0 && !popped.Overflowed)
             return 0;
         std::vector<std::string> out;
-        out.reserve(records.size() + 1);
+        out.reserve(records.size());
         uint64 sent = 0;
         uint64 lastSent = 0;
         {
             std::lock_guard const lock(_mutex);
             lastSent = _lastSent;
         }
+        std::optional<StreamGap> gap;
         if (popped.Dropped > 0)
         {
             uint64 const from = lastSent + 1;
             uint64 to = from + popped.Dropped - 1;
             if (!records.empty() && records.front()->Sequence > from)
                 to = records.front()->Sequence - 1;
-            out.push_back(StreamWire::EncodeDropped(from, to, popped.Dropped));
+            gap = StreamGap{ from, to, popped.Dropped };
         }
         for (std::shared_ptr<Record const> const& record : records)
         {
@@ -121,17 +132,22 @@ public:
         }
         try
         {
-            for (std::string const& message : out)
-                sink->Send(message);
+            if (gap)
+                sink->Dropped(gap->From, gap->To, gap->Count);
+            for (std::string& message : out)
+                sink->Send(std::move(message));
         }
         catch (std::exception const&)
         {
             Close();
+            return records.size();
         }
+        if (popped.Overflowed)
+            Overflow(sink);
         return records.size();
     }
 
-    void SendPreamble(std::vector<std::string> const& messages)
+    void Begin(uint64 latest, uint64 oldest, std::size_t backlog, std::optional<StreamGap> const& gap)
     {
         std::shared_ptr<StreamSink> sink;
         {
@@ -142,8 +158,9 @@ public:
         }
         try
         {
-            for (std::string const& message : messages)
-                sink->Send(message);
+            sink->Opened(latest, oldest, backlog);
+            if (gap)
+                sink->Dropped(gap->From, gap->To, gap->Count);
         }
         catch (std::exception const&)
         {
@@ -170,6 +187,24 @@ public:
     }
 
 private:
+    void Overflow(std::shared_ptr<StreamSink> const& sink)
+    {
+        {
+            std::lock_guard const lock(_mutex);
+            if (_closed)
+                return;
+            _closed = true;
+        }
+        _subscription->Close();
+        try
+        {
+            sink->Overflowed();
+        }
+        catch (std::exception const&)
+        {
+        }
+    }
+
     std::shared_ptr<StreamSink> _sink;
     std::shared_ptr<Subscription> _subscription;
     std::optional<uint64> _after;
@@ -244,14 +279,16 @@ public:
         uint64 const oldest = backlog.empty() ? 0 : backlog.front()->Sequence;
         uint64 const latest = backlog.empty() ? 0 : backlog.back()->Sequence;
 
-        std::shared_ptr<typename Session::Subscription> const subscription = _hub.Subscribe(Traits::FilterOf(request), request.QueueCapacity, [this] { Wake(); });
+        StreamOverflow overflow = StreamOverflow::DropOldest;
+        if constexpr (requires { Traits::OverflowOf(request); })
+            overflow = Traits::OverflowOf(request);
+        std::shared_ptr<typename Session::Subscription> const subscription = _hub.Subscribe(Traits::FilterOf(request), request.QueueCapacity, [this] { Wake(); }, overflow);
         auto const session = std::make_shared<Session>(std::move(sink), subscription, request.After);
 
-        std::vector<std::string> preamble;
-        preamble.push_back(StreamWire::EncodeHello(latest, oldest, backlog.size()));
+        std::optional<StreamGap> gap;
         if (request.After && oldest > 0 && *request.After + 1 < oldest)
-            preamble.push_back(StreamWire::EncodeDropped(*request.After + 1, oldest - 1, oldest - *request.After - 1));
-        session->SendPreamble(preamble);
+            gap = StreamGap{ *request.After + 1, oldest - 1, oldest - *request.After - 1 };
+        session->Begin(latest, oldest, backlog.size(), gap);
 
         {
             std::lock_guard const lock(_mutex);

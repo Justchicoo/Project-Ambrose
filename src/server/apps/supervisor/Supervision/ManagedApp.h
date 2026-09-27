@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One app the supervisor runs: a controller thread of its own starts it with its config, its output going to the supervisor's files and its input a pipe, calls it ready when its admin API reports it running or, with the admin API off, when it prints its ready line, waits for as long as a start step the app reports asked for, stops it by asking its admin API to shut down with the countdown, else by a shutdown line on its input, else by Ctrl+Break or SIGTERM to its group, interrupts it halfway through its stop timeout and ends its whole tree when the timeout passes, restarts it a second after it exits unexpectedly from running, records every exit with its code, saves its desired state and process identity whenever they change, and takes back the process an earlier supervisor started while that identity still matches.
+ * One app the supervisor runs: a controller thread of its own starts it with its config, its output going to the supervisor's files and its input a pipe, calls it ready when its admin API reports it running or, with the admin API off, when it prints its ready line, waits for as long as a start step the app reports asked for, stops it by asking its admin API to shut down with the countdown, else by a shutdown line on its input, else by Ctrl+Break or SIGTERM to its group, interrupts it halfway through its stop timeout and ends its whole tree when the timeout passes, restarts it a second after it exits unexpectedly from running, records every exit with its code, saves its desired state and process identity whenever they change, and takes back the process an earlier supervisor started while that identity still matches. Every change of state passes through one place that stamps when the state began, and each change, or a change of its process, crash count or restart time within a state, reaches the status observer once and in order, from the controller thread and never under the app's own lock.
  */
 
 #ifndef AMBROSE_MANAGEDAPP_H
@@ -15,8 +15,10 @@
 
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <deque>
 #include <filesystem>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -78,6 +80,7 @@ struct AppSnapshot
     std::filesystem::path Program;
     std::filesystem::path Config;
     AppState State = AppState::Offline;
+    int64 StateSinceEpochMs = 0;
     bool Watching = false;
     bool WantRunning = false;
     std::optional<int64> ProcessId;
@@ -109,6 +112,8 @@ struct PowerResult
     std::string Message;
 };
 
+using AppStatusObserver = std::function<void(AppSnapshot const&)>;
+
 class ManagedApp
 {
 public:
@@ -130,6 +135,7 @@ public:
 
     void Start();
     void Shutdown();
+    void SetStatusObserver(AppStatusObserver observer);
 
     PowerResult Power(PowerAction action, uint32 countdownSeconds);
     AppSnapshot Snapshot() const;
@@ -152,7 +158,20 @@ private:
         uint32 Countdown = 0;
     };
 
+    struct StatusMark
+    {
+        AppState State = AppState::Offline;
+        std::optional<int64> ProcessId = {};
+        uint32 Crashes = 0;
+        int64 RestartEpochMs = 0;
+        std::size_t Exits = 0;
+
+        bool operator==(StatusMark const&) const = default;
+    };
+
     void Run();
+    void EnterState(AppState state);
+    void DeliverStatus();
     void Begin();
     void Handle(Command const& command);
     void Step();
@@ -188,6 +207,10 @@ private:
     AppSnapshot _view;
     std::optional<AdminClient> _admin;
     std::thread _thread;
+    std::vector<AppSnapshot> _statusQueue;
+    std::optional<StatusMark> _statusMark;
+    std::mutex _deliveryMutex;
+    AppStatusObserver _observer;
 
     ChildProcessHandle _process;
     Clock::time_point _startedAt{};

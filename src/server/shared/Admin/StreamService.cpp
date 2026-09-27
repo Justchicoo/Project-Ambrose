@@ -1,12 +1,27 @@
 /*
  * Project Ambrose by Imjustchico
- * Writes the stream layer's own messages, the same for every feed: the hello that opens a session with the newest and oldest sequence kept, the dropped marker naming a missed range, the problem that refuses a subscribe message, and the page of backlog an HTTP read after a sequence number gets, which says what it could no longer show.
+ * Writes the stream layer's own messages, the same for every feed: the hello that opens a session with the newest and oldest sequence kept, the dropped marker naming a missed range, the problem that refuses a subscribe message, and the page of backlog an HTTP read after a sequence number gets, which says what it could no longer show; a sink that does not speak for itself sends the hello and the dropped marker as those messages and closes when a stream that never drops overflows.
  */
 
 #include "StreamService.h"
 
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
+
+void StreamSink::Opened(uint64 latest, uint64 oldest, std::size_t backlog)
+{
+    Send(StreamWire::EncodeHello(latest, oldest, backlog));
+}
+
+void StreamSink::Dropped(uint64 from, uint64 to, uint64 count)
+{
+    Send(StreamWire::EncodeDropped(from, to, count));
+}
+
+void StreamSink::Overflowed()
+{
+    Close("overflowed");
+}
 
 std::string StreamWire::EncodeDropped(uint64 from, uint64 to, uint64 count)
 {

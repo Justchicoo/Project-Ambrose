@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel and the supervisor routes on its admin API, records relayed settings and reload answers and its own secret reveals in the panel's audit log, offers apps, start, stop, restart and kill on its console, and leaves the apps running when it stops so the next start takes them back.
+ * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel and the supervisor routes on its admin API, records relayed settings and reload answers and its own secret reveals in the panel's audit log, publishes every state an app passes through on the panel's status stream at that app's scope and gives the panel's event socket its list of apps, offers apps, start, stop, restart and kill on its console, and leaves the apps running when it stops so the next start takes them back.
  */
 
 #include "AdminGraphsView.h"
@@ -159,6 +159,15 @@ namespace
             RegisterCommands();
         }
 
+        ~SupervisorApp() override
+        {
+            _supervisor.SetStatusObserver({});
+            _supervisor.Shutdown();
+        }
+
+        SupervisorApp(SupervisorApp const&) = delete;
+        SupervisorApp& operator=(SupervisorApp const&) = delete;
+
     protected:
         void OnSecretsRevealed(AdminRequest const& request, std::vector<std::string> const& keys) override
         {
@@ -181,6 +190,17 @@ namespace
             std::error_code code;
             std::filesystem::path const working = std::filesystem::current_path(code);
             SupervisorSettings const settings = SupervisorSettings::Load(Config(), ClientLocator::GetDataFolder(system), Ambrose::GetExecutableDirectory(), working, problems);
+            _supervisor.SetStatusObserver([this](AppSnapshot const& snapshot)
+            {
+                _panel.Events().Publish("status", "status", snapshot.Name, Supervisor::StatusData(snapshot), snapshot.Name);
+            });
+            _panel.SetAppSource([this]
+            {
+                std::vector<std::string> names;
+                for (AppSnapshot const& snapshot : _supervisor.Snapshots())
+                    names.push_back(snapshot.Name);
+                return names;
+            });
             std::string error;
             bool const started = _supervisor.Start(Config(), settings, !IsCheckOnly(), problems, error);
             for (std::string const& problem : problems)

@@ -56,12 +56,6 @@
       "since": "2026-09-27"
     },
     {
-      "scope": "milestone:17.26",
-      "who": "the maintainer's panel session",
-      "what": "the panel event socket, being built now",
-      "since": "2026-09-27"
-    },
-    {
       "scope": "milestone:17.28",
       "who": "the maintainer's panel session",
       "what": "launch and startup settings, taken back so the panel is finished first",

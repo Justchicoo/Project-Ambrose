@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Backlog ring and subscriber registry for any live stream of sequenced records: a new subscriber gets the matching backlog before anything published after it, so there is no gap and no repeat, a subscription closes when the last copy of the handle Subscribe returned is dropped, and the registry holds it plainly so publishing takes no reference count per subscriber.
+ * Backlog ring and subscriber registry for any live stream of sequenced records: a new subscriber gets the matching backlog before anything published after it, so there is no gap and no repeat, its ring follows the overflow policy it subscribed with, dropping the oldest unless its stream chose otherwise, a subscription closes when the last copy of the handle Subscribe returned is dropped, and the registry holds it plainly so publishing takes no reference count per subscriber.
  */
 
 #ifndef AMBROSE_STREAMHUB_H
@@ -31,9 +31,9 @@ public:
     StreamHub(StreamHub const&) = delete;
     StreamHub& operator=(StreamHub const&) = delete;
 
-    std::shared_ptr<Subscription> Subscribe(Filter filter, std::size_t capacity = DefaultSubscriberCapacity, std::function<void()> wake = {})
+    std::shared_ptr<Subscription> Subscribe(Filter filter, std::size_t capacity = DefaultSubscriberCapacity, std::function<void()> wake = {}, StreamOverflow overflow = StreamOverflow::DropOldest)
     {
-        auto subscription = std::make_shared<Subscription>(std::move(filter), capacity, std::move(wake));
+        auto subscription = std::make_shared<Subscription>(std::move(filter), capacity, std::move(wake), overflow);
         bool shouldWake = false;
         {
             std::lock_guard lock(_mutex);

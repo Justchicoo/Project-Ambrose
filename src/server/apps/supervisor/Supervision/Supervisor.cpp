@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps the apps behind a shared lock that only starting and stopping the supervisor takes alone, so a request always finds a whole list; the saved state and each app's output live under the data folder unless Supervisor.StateFile or Supervisor.OutputDir says otherwise; a power request names its action and, for a stop or restart, a countdown, and anything else in it is refused field by field; a relayed request keeps its method, path, query, body and request id, a settings request also names its caller and the rights they hold that the route can use, a settings batch pays its cost on the panel's limit first, and each relayed settings or reload answer is handed on to be recorded; and is let through only for a method and path whose permission the relay knows, the same one the app's own route asks for, so a caller who could not reach a route on the app cannot reach it through the supervisor and a path the relay does not know is answered as absent, each judged by the listener the request came in on, since the admin token on the supervisor's own API and a panel user's session on the panel are different callers; sessions stay the supervisor's own and are never relayed, and an app that is not running or has its admin API off is answered 503 with the reason.
+ * Keeps the apps behind a shared lock that only starting and stopping the supervisor takes alone, so a request always finds a whole list; the saved state and each app's output live under the data folder unless Supervisor.StateFile or Supervisor.OutputDir says otherwise; a power request names its action and, for a stop or restart, a countdown, and anything else in it is refused field by field; a relayed request keeps its method, path, query, body and request id, a settings request also names its caller and the rights they hold that the route can use, a settings batch pays its cost on the panel's limit first, and each relayed settings or reload answer is handed on to be recorded; and is let through only for a method and path whose permission the relay knows, the same one the app's own route asks for, so a caller who could not reach a route on the app cannot reach it through the supervisor and a path the relay does not know is answered as absent, each judged by the listener the request came in on, since the admin token on the supervisor's own API and a panel user's session on the panel are different callers; sessions stay the supervisor's own and are never relayed, and an app that is not running or has its admin API off is answered 503 with the reason. Each app is given the forwarder to the status observer before it starts watching, so the first state it enters is handed on too.
  */
 
 #include "Supervisor.h"
@@ -135,7 +135,10 @@ bool Supervisor::Start(ConfigMgr const& config, SupervisorSettings const& settin
         return false;
     std::vector<std::unique_ptr<ManagedApp>> apps;
     for (AppDefinition& definition : definitions)
+    {
         apps.push_back(std::make_unique<ManagedApp>(std::move(definition), *state, settings.OutputFolder, settings.MaxOutputBytes, settings.DataFolder, _sendBreak, _log));
+        apps.back()->SetStatusObserver([this](AppSnapshot const& snapshot) { ForwardStatus(snapshot); });
+    }
     {
         std::unique_lock<std::shared_mutex> const lock(_mutex);
         _state = std::move(state);
@@ -367,6 +370,33 @@ AdminResponse Supervisor::Answer(AdminRequest const& request, AdminRouter const&
 void Supervisor::SetRelayHooks(SupervisorRelayHooks hooks)
 {
     _hooks = std::move(hooks);
+}
+
+void Supervisor::SetStatusObserver(AppStatusObserver observer)
+{
+    std::lock_guard<std::mutex> const lock(_observerMutex);
+    _statusObserver = std::move(observer);
+}
+
+void Supervisor::ForwardStatus(AppSnapshot const& snapshot)
+{
+    std::lock_guard<std::mutex> const lock(_observerMutex);
+    if (_statusObserver)
+        _statusObserver(snapshot);
+}
+
+std::string Supervisor::StatusData(AppSnapshot const& snapshot)
+{
+    bool const alive = snapshot.State == AppState::Starting || snapshot.State == AppState::Running || snapshot.State == AppState::Stopping;
+    nlohmann::json data;
+    data["app"] = snapshot.Name;
+    data["state"] = std::string(ManagedApp::StateName(snapshot.State));
+    data["since"] = snapshot.StateSinceEpochMs;
+    data["pid"] = snapshot.ProcessId ? nlohmann::json(*snapshot.ProcessId) : nlohmann::json(nullptr);
+    data["exit_code"] = !alive && !snapshot.Exits.empty() && snapshot.Exits.back().Code ? nlohmann::json(*snapshot.Exits.back().Code) : nlohmann::json(nullptr);
+    data["crashes"] = snapshot.Crashes;
+    data["next_restart"] = OptionalNumber(snapshot.RestartEpochMs);
+    return data.dump();
 }
 
 std::vector<std::pair<std::string, std::string>> Supervisor::ForwardedHeaders(AdminRequest const& request, AdminRouter const& router, std::string_view method, std::string_view tail,

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The optional admin API listener every operations feature builds on: it binds only where the remote-access rule allows, keeps a generated token in the data folder or, where the machine names none, beside the config file, holds the route table, the bearer token and the failure limiter, answers the same 401 on every path and every method without it, serves GET /api/health, with the step a start in progress is on and how long it may take, serves the built panel at / without a token and lets it sign in by trading the token once for a browser session, and takes the WebSocket routes later milestones register, before or after it opens, each refused to a caller who lacks the permission it names.
+ * The optional admin API listener every operations feature builds on: it binds only where the remote-access rule allows, keeps a generated token in the data folder or, where the machine names none, beside the config file, holds the route table, the bearer token and the failure limiter, answers the same 401 on every path and every method without it, serves GET /api/health, with the step a start in progress is on and how long it may take, serves the built panel at / without a token and lets it sign in by trading the token once for a browser session, and takes the WebSocket routes later milestones register, before or after it opens, each refused to a caller who lacks the permission it names, unless the route admits its own upgrades and signs its callers in on their first frame, in which case only the host check and the route's own admission stand before the upgrade. A socket keeps the request that opened it and can be closed with a code of the route's choosing once the frames sent before it have gone.
  */
 
 #ifndef AMBROSE_ADMINSERVER_H
@@ -19,6 +19,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 
 
@@ -40,7 +41,9 @@ public:
 
     virtual void SendText(std::string text) = 0;
     virtual void Close(std::string reason) = 0;
+    virtual void CloseWith(uint16 code, std::string reason) = 0;
     virtual std::string GetRemoteAddress() = 0;
+    virtual AdminRequest const& GetUpgrade() const = 0;
     virtual std::shared_ptr<AdminSocket> Keep() { return {}; }
 };
 
@@ -48,6 +51,7 @@ struct AdminSocketRoute
 {
     std::string Path;
     std::string Permission;
+    std::function<std::optional<AdminResponse>(AdminRequest const&)> Admit;
     std::function<void(AdminSocket&)> Opened;
     std::function<void(AdminSocket&, std::string const&, bool)> Received;
     std::function<void(AdminSocket&, std::string const&, uint16)> Closed;

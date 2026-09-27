@@ -293,10 +293,13 @@ The panel has one WebSocket, `/api/panel/events`, for console output, status, st
 
 ### Connection
 
-- The upgrade is authenticated by the session cookie and requires an exact `Origin` match with the panel's configured origin; a wildcard origin is never allowed. Scripts using an API key first `POST /api/panel/events/ticket`, which returns a random ticket valid for 30 seconds and one use, bound to the key, the client address and the scopes, sent in the first frame, never in the URL.
-- The first client frame is `hello` with the protocol version and the CSRF token. The server answers `ready` or closes.
-- Each socket holds its user, session and permission generation. Every inbound message and every outbound stream class is checked against the current permissions, so a change applies to the next frame, not after a token expires.
-- The server sends `ping` every 20 seconds and closes a socket silent for 60 seconds. `session.expiring` arrives 60 seconds before idle or absolute expiry so the page can renew over HTTP.
+- The upgrade is authenticated by the session cookie and requires an exact `Origin` match with the panel's configured origin, `http://` or `https://` and the host the request named; anything else, a wildcard included, is refused with 403 `cross_origin` before the socket opens. An upgrade that sends no `Origin`, as a script does, is let through, but only a ticket can then sign it in.
+- The address carries nothing: an upgrade with any query, even an empty one, is refused with 400 `credentials_in_url`, and a ticket the query names is burned, so a credential that reached an address, and with it a proxy log or a browser history, is already spent. A refusal is logged by its path alone, never its query.
+- Scripts using an API key first `POST /api/panel/events/ticket`, which returns a random ticket valid for 30 seconds and one use, bound to the key, the client address and the scopes, sent in the first frame, never in the URL. The body is optional: `{"scopes": [{"app": "gameserver-1"}]}` narrows the ticket to those apps, a scope the caller holds nothing on answers 404 as a route would, and any other key 422. The answer is 201 `{"ticket": "...", "expires_in": 30}`. A ticket is 32 random bytes in base64url, kept only as its SHA-256, spent by any attempt to use it, and a caller holds at most 16 at a time, losing its oldest first. A browser session asking is refused with 403 `session_signs_in`, because a page signs in with its cookie. The route costs 5 on the panel's rate limit. Until 17.36 adds API keys the only bearer credential is the panel's own token, which the panel grants nothing, so its socket gets `ready` with empty permissions.
+- The first client frame is `hello` with the protocol version and the CSRF token, or a script's ticket instead, and it must arrive within 10 seconds of the socket opening or the socket is closed with 4401. The CSRF token is checked in constant time against the session the upgrade's cookie holds, and only when the upgrade named the panel's own origin; a ticket is spent from the address it was taken from. A first frame that is not `hello`, a version this panel does not speak, or a `hello` carrying both a token and a ticket or neither closes with 4400, and a sign-in that fails closes with 4401. The server answers `ready` or closes.
+- `ready` echoes the `hello`'s id and carries the protocol version, the server time, `instance`, the caller's permissions at panel scope and per app, the apps it may see and its realms, an empty list until 17.31. `instance` is a random id for this run of the supervisor; a page that sees it change throws away the sequence numbers it kept, because they count from the start of a run.
+- Each socket holds its user, session and permission generation. Every inbound message and every outbound stream class is checked against the current permissions, so a change applies to the next frame, not after a token expires (17.57); until then a socket keeps the permissions it had at `hello`.
+- The server sends `ping` every 20 seconds and closes a socket silent for 60 seconds (17.58). `session.expiring` arrives 60 seconds before idle or absolute expiry so the page can renew over HTTP. The page sends its own `ping` every 20 seconds, which the server answers with `pong` echoing its id, and reconnects when a `pong` has not come back by the next one.
 
 Close codes:
 
@@ -305,7 +308,7 @@ Close codes:
 | 4400 | Malformed frame or unsupported protocol version |
 | 4401 | Session ended: sign-out, expiry, or a revoked session |
 | 4403 | Access lost: the user's permissions no longer allow any subscribed stream |
-| 4429 | Closed for exceeding limits repeatedly |
+| 4429 | Closed for exceeding limits repeatedly, or for falling so far behind a stream that never drops that its queue filled |
 
 ### Envelope
 
@@ -316,8 +319,11 @@ Every frame in both directions is one JSON object:
 ```
 
 - `v` is the protocol version. Fields are only ever added; a test fails when a field is renamed or removed, as 17.03 does for the status API.
-- `type` names the event. `id` is a client request id that the answer echoes. `scope` names the app, realm, node or panel. `seq` is a sequence number per stream, used to resume. `time` is Unix milliseconds. `data` is structured JSON, never JSON encoded inside a string.
+- `type` names the event. `id` is a client request id that the answer echoes, 1 to 64 printable characters, and null on a server frame that answers no request. `scope` names the app, realm, node or panel: `{"app": "gameserver-1"}` for one app and null for the whole panel, with the realm, node and cluster keys joining it in 17.31 and 17.22. `seq` is a sequence number per stream, used to resume, and null on every frame that is not a stream record. `time` is Unix milliseconds. `data` is structured JSON, never JSON encoded inside a string, and always an object.
+- Every server frame carries all seven fields in this order. A client frame that is binary, is not one JSON object, names another version, has no text `type`, or has an `id`, `scope`, `seq` or `data` of the wrong shape closes the socket with 4400. Envelope keys the server does not know are ignored, so a newer page still connects, while an unknown key inside `data` is refused, as 17.05 refuses an unknown body key.
 - The TypeScript types are generated from the schemas the C++ side serializes. A contract test fails when the server can send a type the client has no handler for.
+- The one source of the protocol is `PanelEventCatalog` in the supervisor: every type, stream, close code and data shape as data, which the socket checks incoming data against and from which `apps/dashboard/src/lib/protocol.ts` is rendered with its types and Valibot schemas. `PanelEventCatalogTest` fails when the committed module differs from what the catalog renders, when a field version 1 published is renamed, removed or changes its kind, and when the catalog and the tables below disagree; running it with `AMBROSE_WRITE_PANEL_EVENT_TYPES=1` writes the module again. A type whose milestone has not built it yet carries an open object that its milestone fills in, so no field name is fixed before the code that writes it exists.
+- The server writes only the types the catalog marks as sent, each on its own stream or outside every stream as the catalog says; publishing or answering with any other type fails on the server instead of reaching a page. The module lists those types as `sentTypes`, and the dashboard's handler table is typed over them, so a type marked as sent without a handler fails the dashboard's type check and its contract test in `apps/dashboard/src/lib/events.test.ts`.
 
 ### Client to server
 
@@ -337,7 +343,7 @@ Every frame in both directions is one JSON object:
 
 | Type | Data | Sent to holders of |
 |---|---|---|
-| `ready` | protocol version, server time, permission snapshot per scope, apps and realms | the socket's user |
+| `ready` | protocol version, server time, this run's instance, permission snapshot per scope, apps and realms | the socket's user |
 | `status` | app, state, since, process id, exit code, exit reason, crash count, next restart time | `status.read` |
 | `stats` | scope, sample (CPU, memory, handles, threads, network, disk, sessions, players, tick average and maximum) | `metrics.read` |
 | `log` | app, `seq`, time, level, category, source (`app`, `stdout`, `stderr`, `supervisor`), message | `console.read`; Account and Login categories also need `activity.ip.read` |
@@ -367,6 +373,17 @@ Every frame in both directions is one JSON object:
 Error text is full only for holders of `debug.errors`. Everyone else gets a generic message with a correlation id that also appears in the supervisor log and the audit row.
 
 Later milestones add streams the same way, each with its read permission and its close codes documented here: alerts and notifications in 17.67, schedule run progress in 17.68, and a realm's queue length and oldest wait inside the stats sample in 17.71.
+
+### Streams, resume and errors
+
+Each stream is one feed of the 17.04 stream layer with its own sequence numbers, backlog and a queue per subscriber. This build serves `status`; the others answer `unsupported` until their milestone serves them.
+
+- `resume` names its `stream` in `data` and carries its scope and the last `seq` it saw in the envelope. A `seq` of 0, or none, means the page has seen nothing: it gets everything the backlog keeps and no dropped marker, since nobody missed records nobody saw. After N it gets exactly the records after N, or, when the backlog no longer holds the record after N, one `dropped` frame naming the missed range and then the rest. A second `resume` for the same stream and scope replaces the first, and closing the socket closes every stream it followed.
+- A `resume` needs the stream's read permission at its scope, decided the way a route decides: an app the caller holds nothing on answers `not_found`, one it holds something on but not this permission `forbidden`, and a stream the catalog does not name `invalid`.
+- `dropped` carries `stream`, `count`, `first` and `last`. It belongs to no stream itself, so its `seq` is null.
+- A stream's queue keeps the overflow policy its catalog entry names. `status` keeps every record: a page so far behind that its queue fills gets everything the queue held and then a close with 4429, so it resumes after its last `seq` rather than silently losing a record. `stats` keeps only the newest sample per app, and a sample replaced that way is not a gap. Every other stream drops its oldest records and says so with `dropped`.
+- `status` is published whenever a supervised app changes state, once for each change and in the order they happened. Its data is `app`, `state`, `since` (the Unix milliseconds the state began), `pid`, `exit_code` (the last exit's code once the app is down, null while it is up), `crashes` and `next_restart` (Unix milliseconds, or null). The exit reason joins it with 17.60.
+- Every refusal is an `error` frame whose `id` and `data.request` echo the request, with a `code`, a `message` and a `correlation` id that one `server.panel` line in the supervisor log repeats with the full text. The codes are `invalid` for data of the wrong shape, an unknown stream or a second `hello`, `unknown_type` for a type the socket never takes, `unsupported` for a type or stream this build does not serve yet, `not_found`, `forbidden`, and `failed` when the panel itself failed. A caller's own mistake is told in its own sentence; the text of a failure reaches only holders of `debug.errors`, and everyone else reads that the panel could not do that and the correlation id to quote.
 
 ### Limits
 

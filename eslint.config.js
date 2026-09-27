@@ -17,6 +17,7 @@ export default typescript.config(
             "storybook-static/**",
             "packages/ui/src/tokens/tokens.ts",
             "packages/ui/src/icons/icons.ts",
+            "apps/dashboard/src/lib/protocol.ts",
         ],
     },
     js.configs.recommended,

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The supervisor's apps and its admin routes: it builds each app from the definitions and the saved state, watches them until it stops, which leaves them running for the next supervisor to take back, answers GET /api/apps with itself and every app in the one list shape the panel reads, GET /api/supervisor with each app's state, exits and stop in progress, POST /api/apps/{name}/power to start, stop, restart or kill one with a countdown, GET /api/apps/{name}/output/current and /previous with its captured output, and relays any other /api/apps/{name}/api/... request to that app's own admin API with the app's token, the request's id and query, and for a settings route the caller's name and the rights they hold, so the app records who changed what and never grants more than the panel would, while a settings batch is charged its cost here and every relayed settings or reload answer is handed to the panel's record; the browser never talks to an app directly.
+ * The supervisor's apps and its admin routes: it builds each app from the definitions and the saved state, watches them until it stops, which leaves them running for the next supervisor to take back, answers GET /api/apps with itself and every app in the one list shape the panel reads, GET /api/supervisor with each app's state, exits and stop in progress, POST /api/apps/{name}/power to start, stop, restart or kill one with a countdown, GET /api/apps/{name}/output/current and /previous with its captured output, and relays any other /api/apps/{name}/api/... request to that app's own admin API with the app's token, the request's id and query, and for a settings route the caller's name and the rights they hold, so the app records who changed what and never grants more than the panel would, while a settings batch is charged its cost here and every relayed settings or reload answer is handed to the panel's record; the browser never talks to an app directly. Every state an app passes through is handed to one status observer, with the data the panel's status event carries: the app, its state and since when, its process, its last exit code once it is down, its crash count and when it starts again.
  */
 
 #ifndef AMBROSE_SUPERVISOR_H
@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <shared_mutex>
 #include <string>
@@ -76,6 +77,8 @@ public:
     void Shutdown();
     void Register(AdminRouter& router, std::function<AdminStatusSnapshot()> self);
     void SetRelayHooks(SupervisorRelayHooks hooks);
+    void SetStatusObserver(AppStatusObserver observer);
+    static std::string StatusData(AppSnapshot const& snapshot);
     static std::vector<std::pair<std::string, std::string>> ForwardedHeaders(AdminRequest const& request, AdminRouter const& router, std::string_view method, std::string_view tail,
         std::string_view permission, std::string const& name);
     static std::string QueryString(AdminRequest const& request);
@@ -97,6 +100,7 @@ private:
     AdminResponse PowerRoute(ManagedApp& app, AdminRequest const& request, AdminRouter const& router);
     AdminResponse Relay(ManagedApp& app, AdminRequest const& request, std::string_view path, std::vector<std::pair<std::string, std::string>> headers = {});
     ManagedApp* Find(std::string_view name) const;
+    void ForwardStatus(AppSnapshot const& snapshot);
 
     Log& _log;
     ChildBreakSender _sendBreak;
@@ -104,6 +108,8 @@ private:
     mutable std::shared_mutex _mutex;
     std::vector<std::unique_ptr<ManagedApp>> _apps;
     SupervisorRelayHooks _hooks;
+    std::mutex _observerMutex;
+    AppStatusObserver _statusObserver;
 };
 
 #endif

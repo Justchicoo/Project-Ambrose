@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The built panel loaded from the panel's own listener rather than an app's admin API: its first operator is made from the link the supervisor printed and reaches the overview with nothing written to the browser console, every request it makes goes back to the listener it came from, every response carries the policy, frame denial, nosniff and referrer headers, and the servers page reaches the app the supervisor runs through that listener rather than the app list of the supervisor alone.
+ * The built panel loaded from the panel's own listener rather than an app's admin API: its first operator is made from the link the supervisor printed and reaches the overview with nothing written to the browser console, every request it makes goes back to the listener it came from, every response carries the policy, frame denial, nosniff and referrer headers, the servers page reaches the app the supervisor runs through that listener rather than the app list of the supervisor alone, and a signed-in page opens exactly one event socket, to the listener's own events path with nothing in its address, whose first frame is hello and whose first answer is ready.
  */
 
 import { expect, test } from "@playwright/test";
@@ -68,4 +68,29 @@ test("the servers page reaches the app the supervisor runs through the panel lis
 
     const row = page.getByRole("row").filter({ hasText: "patchserver" });
     await expect(row.getByText("Running")).toBeVisible({ timeout: 20000 });
+});
+
+test("the signed-in panel opens one event socket with nothing in its address, says hello first and gets ready", async ({ page }) => {
+    const sockets: { url: string; sent: string[]; received: string[] }[] = [];
+    page.on("websocket", (socket) => {
+        const seen = { url: socket.url(), sent: [] as string[], received: [] as string[] };
+        sockets.push(seen);
+        socket.on("framesent", (frame) => seen.sent.push(String(frame.payload)));
+        socket.on("framereceived", (frame) => seen.received.push(String(frame.payload)));
+    });
+    const typeOf = (text: string | undefined) => (text === undefined ? "" : (JSON.parse(text) as { type?: string }).type);
+
+    await page.goto(`${panel.url}/#overview`);
+    await page.locator("#sign-in-username").fill(operator.name);
+    await page.locator("#sign-in-password").fill(operator.password);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByRole("heading", { name: "Overview", level: 1 })).toBeVisible();
+
+    await expect
+        .poll(() => sockets.some((socket) => socket.received.some((text) => typeOf(text) === "ready")), { timeout: 20000 })
+        .toBe(true);
+    expect(sockets).toHaveLength(1);
+    expect(sockets[0]?.url).toBe(`${panel.url.replace(/^http/, "ws")}/api/panel/events`);
+    expect(typeOf(sockets[0]?.sent[0])).toBe("hello");
+    expect(typeOf(sockets[0]?.received[0])).toBe("ready");
 });

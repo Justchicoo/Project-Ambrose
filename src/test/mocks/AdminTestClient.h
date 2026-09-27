@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A bare HTTP and WebSocket client for admin API tests: sends one request on a fresh connection and reads the reply, or upgrades to a WebSocket with the bearer token and carries masked text and close frames both ways, each read bounded by a ten second timer.
+ * A bare HTTP and WebSocket client for admin API tests: sends one request on a fresh connection and reads the reply, or upgrades to a WebSocket with the bearer token, or with no token and the host, origin and cookie headers a browser would send, keeps the status line and body of an upgrade that was refused, and carries masked text and close frames both ways, reading back the code and reason a socket was closed with, each read bounded by a ten second timer.
  */
 
 #ifndef AMBROSE_ADMINTESTCLIENT_H
@@ -22,6 +22,7 @@
 #include <string>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 namespace AdminTest
 {
@@ -135,24 +136,21 @@ namespace AdminTest
 
         bool Open(uint16 port, std::string const& path, std::string const& token)
         {
-            std::error_code code;
-            _socket.connect(asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), port), code);
-            if (code)
-                return false;
-            asio::write(_socket, asio::buffer(UpgradeRequest(path, token)), code);
-            if (code)
-                return false;
-            std::size_t head = _buffer.find("\r\n\r\n");
-            while (head == std::string::npos)
-            {
-                if (!Fill())
-                    return false;
-                head = _buffer.find("\r\n\r\n");
-            }
-            std::string const reply = _buffer.substr(0, head);
-            _buffer.erase(0, head + 4);
-            return reply.find(" 101 ") != std::string::npos;
+            return Upgrade(port, UpgradeRequest(path, token));
         }
+
+        bool OpenWith(uint16 port, std::string const& path, std::vector<std::string> const& headers)
+        {
+            std::string request = "GET " + path + " HTTP/1.1\r\nHost: 127.0.0.1:" + std::to_string(port) + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n";
+            for (std::string const& header : headers)
+                request += header + "\r\n";
+            request += "\r\n";
+            return Upgrade(port, request);
+        }
+
+        int Status() const { return _status; }
+        std::string const& RefusalBody() const { return _refusal; }
 
         bool SendText(std::string const& text) { return SendFrame(0x81, text); }
 
@@ -166,6 +164,8 @@ namespace AdminTest
 
         std::optional<std::string> ReadText()
         {
+            if (_closed)
+                return std::nullopt;
             for (;;)
             {
                 std::optional<std::pair<uint8, std::string>> const frame = ReadFrame();
@@ -174,8 +174,24 @@ namespace AdminTest
                 if (frame->first == 0x1)
                     return frame->second;
                 if (frame->first == 0x8)
+                {
+                    NoteClose(frame->second);
                     return std::nullopt;
+                }
             }
+        }
+
+        std::optional<std::pair<uint16, std::string>> ReadClose()
+        {
+            while (!_closed)
+            {
+                std::optional<std::pair<uint8, std::string>> const frame = ReadFrame();
+                if (!frame)
+                    return std::nullopt;
+                if (frame->first == 0x8)
+                    NoteClose(frame->second);
+            }
+            return _closed;
         }
 
         std::optional<std::pair<uint8, std::string>> ReadFrame()
@@ -215,6 +231,43 @@ namespace AdminTest
         void SetReadTimeout(std::chrono::milliseconds timeout) { _timeout = timeout; }
 
     private:
+        bool Upgrade(uint16 port, std::string const& request)
+        {
+            std::error_code code;
+            _socket.connect(asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), port), code);
+            if (code)
+                return false;
+            asio::write(_socket, asio::buffer(request), code);
+            if (code)
+                return false;
+            std::size_t head = _buffer.find("\r\n\r\n");
+            while (head == std::string::npos)
+            {
+                if (!Fill())
+                    return false;
+                head = _buffer.find("\r\n\r\n");
+            }
+            std::string const reply = _buffer.substr(0, head);
+            _buffer.erase(0, head + 4);
+            std::size_t const space = reply.find(' ');
+            _status = space == std::string::npos ? 0 : std::atoi(reply.c_str() + space + 1);
+            if (_status == 101)
+                return true;
+            std::size_t const expected = ContentLength(reply + "\r\n").value_or(0);
+            while (_buffer.size() < expected)
+                if (!Fill())
+                    break;
+            _refusal = _buffer.substr(0, expected);
+            _buffer.clear();
+            return false;
+        }
+
+        void NoteClose(std::string const& payload)
+        {
+            uint16 const status = payload.size() >= 2 ? static_cast<uint16>((static_cast<uint8>(payload[0]) << 8) | static_cast<uint8>(payload[1])) : uint16{ 0 };
+            _closed = std::make_pair(status, payload.size() > 2 ? payload.substr(2) : std::string());
+        }
+
         bool SendFrame(uint8 header, std::string const& payload)
         {
             std::array<uint8, 4> const mask{ 0x12, 0x34, 0x56, 0x78 };
@@ -271,6 +324,9 @@ namespace AdminTest
         asio::ip::tcp::socket _socket{ _context };
         std::string _buffer;
         std::chrono::milliseconds _timeout{ 10000 };
+        int _status = 0;
+        std::string _refusal;
+        std::optional<std::pair<uint16, std::string>> _closed;
     };
 }
 

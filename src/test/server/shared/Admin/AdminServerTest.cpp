@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the admin API listener on a loopback port the operating system picks: health needs the token and carries the step a start is on, wrong tokens are rate limited while the right one still answers, every /api path answers the same way without one whatever method it carries, whatever upgrade it claims and wherever it falls on a kept-alive connection, a certificate and key are served over TLS with HSTS and reported to the log, a reload swaps the certificate live and keeps the old one when the new pair does not match, a certificate that will not load stops the listener opening, a reload rotates the token without a restart and keeps the old listener when the new port is taken, an unsafe remote bind is refused, WebSocket routes registered before or after the listener opens take the same token and carry frames both ways, a machine with no data folder keeps its generated token beside the config file, an app reloads the listener from its own config, an app whose admin binding is unsafe exits with a failure, the built panel is served without a token and with the security headers, a browser signs in only from its own origin by trading the token for a cookie named after the port, with each wrong field named beside the request id, the cookie's unsafe requests and socket upgrades need its own origin and CSRF token, signing out and rotating the token end the session, and a host the listener does not answer for is refused.
+ * Tests the admin API listener on a loopback port the operating system picks: health needs the token and carries the step a start is on, wrong tokens are rate limited while the right one still answers, every /api path answers the same way without one whatever method it carries, whatever upgrade it claims and wherever it falls on a kept-alive connection, a certificate and key are served over TLS with HSTS and reported to the log, a reload swaps the certificate live and keeps the old one when the new pair does not match, a certificate that will not load stops the listener opening, a reload rotates the token without a restart and keeps the old listener when the new port is taken, an unsafe remote bind is refused, WebSocket routes registered before or after the listener opens take the same token and carry frames both ways and close with the code their route chose once the frames before it have gone, a route that admits its own upgrades opens without the token or its permission, keeps the request that opened it and has a refusal logged by its path and never its query, a machine with no data folder keeps its generated token beside the config file, an app reloads the listener from its own config, an app whose admin binding is unsafe exits with a failure, the built panel is served without a token and with the security headers, a browser signs in only from its own origin by trading the token for a cookie named after the port, with each wrong field named beside the request id, the cookie's unsafe requests and socket upgrades need its own origin and CSRF token, signing out and rotating the token end the session, and a host the listener does not answer for is refused.
  */
 
 #include "AdminClient.h"
@@ -832,6 +832,90 @@ TEST_F(AdminServerTest, ClosesASocketFromItsHandler)
     ASSERT_GE(frame->second.size(), 2u);
     EXPECT_EQ((static_cast<uint8>(frame->second[0]) << 8) | static_cast<uint8>(frame->second[1]), 1000);
     EXPECT_EQ(frame->second.substr(2), "done");
+}
+
+TEST_F(AdminServerTest, ClosesASocketWithTheCodeItsHandlerChoseAfterTheFramesBeforeIt)
+{
+    AdminServer server = Make();
+    server.SetHealthSource([] { return AdminHealth{ "testserver", "", "rev", 0, "running" }; });
+
+    AdminSocketRoute route;
+    route.Path = "/api/socket";
+    route.Received = [](AdminSocket& socket, std::string const&, bool)
+    {
+        socket.SendText("last words");
+        socket.CloseWith(4429, "limits");
+    };
+    server.AddSocket(std::move(route));
+
+    std::string error;
+    ASSERT_TRUE(server.Start(Loopback(), error)) << error;
+
+    SocketClient client;
+    ASSERT_TRUE(client.Open(server.GetPort(), "/api/socket", Token));
+    ASSERT_TRUE(client.SendText("go"));
+    std::optional<std::string> const last = client.ReadText();
+    ASSERT_TRUE(last.has_value());
+    EXPECT_EQ(*last, "last words");
+
+    std::optional<std::pair<uint8, std::string>> const frame = client.ReadFrame();
+    ASSERT_TRUE(frame.has_value());
+    EXPECT_EQ(frame->first, 0x8);
+    ASSERT_GE(frame->second.size(), 2u);
+    EXPECT_EQ((static_cast<uint8>(frame->second[0]) << 8) | static_cast<uint8>(frame->second[1]), 4429);
+    EXPECT_EQ(frame->second.substr(2), "limits");
+}
+
+TEST_F(AdminServerTest, ARouteThatAdmitsItsOwnUpgradesNeedsNoTokenMayRefuseAndLogsNoQuery)
+{
+    _harness.ApplyOrFail("Appender.Capture = 200,1,0\nLogger.root = 1,Capture\n");
+    AdminServer server = Make();
+    server.SetHealthSource([] { return AdminHealth{ "testserver", "", "rev", 0, "running" }; });
+
+    AdminSocketRoute admitted;
+    admitted.Path = "/api/admitted";
+    admitted.Permission = "debug.errors";
+    admitted.Admit = [](AdminRequest const& request) -> std::optional<AdminResponse>
+    {
+        if (request.HasQuery)
+            return AdminResponse::Problem(400, "query_refused", "This socket takes nothing in its address");
+        return std::nullopt;
+    };
+    admitted.Opened = [](AdminSocket& socket)
+    {
+        AdminRequest const& upgrade = socket.GetUpgrade();
+        socket.SendText(upgrade.Path + "|" + upgrade.RemoteAddress + "|" + (upgrade.Principal.empty() ? "nobody" : upgrade.Principal) + "|" + (upgrade.Upgrade ? "upgrade" : "plain"));
+    };
+    server.AddSocket(std::move(admitted));
+    AdminSocketRoute guarded;
+    guarded.Path = "/api/guarded";
+    server.AddSocket(std::move(guarded));
+
+    std::string error;
+    ASSERT_TRUE(server.Start(Loopback(), error)) << error;
+    uint16 const port = server.GetPort();
+
+    EXPECT_EQ(Upgrade(port, "/api/guarded", "").Status, 401) << "a route that does not admit its own upgrades still needs the token";
+
+    HttpReply const refused = Upgrade(port, "/api/admitted?secret=hunter2", "");
+    EXPECT_EQ(refused.Status, 400);
+    EXPECT_NE(refused.Body.find("query_refused"), std::string::npos) << refused.Body;
+    EXPECT_NE(HeaderOf(refused, "X-Request-Id"), "") << "a refusal carries a request id like any answer";
+
+    SocketClient client;
+    ASSERT_TRUE(client.Open(port, "/api/admitted", "")) << "neither a token nor the route's permission stands before an admitted upgrade";
+    std::optional<std::string> const greeting = client.ReadText();
+    ASSERT_TRUE(greeting.has_value());
+    EXPECT_EQ(*greeting, "/api/admitted|127.0.0.1|nobody|upgrade") << "the socket keeps the request that opened it";
+
+    bool refusalLogged = false;
+    for (std::string const& line : _harness.Store().Texts("Capture"))
+    {
+        EXPECT_EQ(line.find("hunter2"), std::string::npos) << line;
+        if (line.find("/api/admitted from 127.0.0.1 answered 400 query_refused") != std::string::npos)
+            refusalLogged = true;
+    }
+    EXPECT_TRUE(refusalLogged) << "the refusal is logged by its path alone";
 }
 
 TEST_F(AdminServerTest, ReloadKeepsTheOldListenerWhenTheNewPortIsTaken)

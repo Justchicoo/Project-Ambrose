@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The panel's own front door in the supervisor: a second listener with its own Panel options, its own token file and its own store, off unless Panel.Enable is set, holding its operators and their sessions, the counts a failed sign-in adds to, the cost-weighted limit every costly route is held to and the audit tables every change is recorded in, relayed settings changes, batches, reloads and secret reveals among them, bound to this machine unless a certificate and key are given or the operator opts into plain HTTP, serving the built dashboard at / and the panel's API under /api/panel/, and reloaded with the rest of the configuration so a bind it would not be allowed to keep is refused while the old one goes on serving.
+ * The panel's own front door in the supervisor: a second listener with its own Panel options, its own token file and its own store, off unless Panel.Enable is set, holding its operators and their sessions, the counts a failed sign-in adds to, the cost-weighted limit every costly route is held to and the audit tables every change is recorded in, relayed settings changes, batches, reloads and secret reveals among them, bound to this machine unless a certificate and key are given or the operator opts into plain HTTP, serving the built dashboard at / and the panel's API under /api/panel/, the one event socket every live page runs on at /api/panel/events with the streams it serves and the one-time tickets a script opens it with, and reloaded with the rest of the configuration so a bind it would not be allowed to keep is refused while the old one goes on serving.
  */
 
 #ifndef AMBROSE_PANEL_H
@@ -13,6 +13,9 @@
 #include "PanelErrors.h"
 #include "PanelGrants.h"
 #include "PanelAuthorization.h"
+#include "PanelEventSocket.h"
+#include "PanelEventStreams.h"
+#include "PanelEventTickets.h"
 #include "PanelSessions.h"
 #include "PanelSignIn.h"
 #include "PanelUsers.h"
@@ -29,6 +32,7 @@
 #include <thread>
 #include <utility>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -77,6 +81,10 @@ public:
     PanelSignInThrottle& SignInThrottle() { return _signIn; }
     PanelRateLimit& Limit() { return _rateLimit; }
     AdminRouter& Routes() { return _listener.Routes(); }
+    PanelEventStreams& Events() { return _events; }
+    PanelEventTickets& Tickets() { return _tickets; }
+    PanelEventSocket& EventSocket() { return *_eventSocket; }
+    void SetAppSource(PanelEventSocket::AppSource source);
 
     bool Record(AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error);
     std::string NameOf(AdminRequest const& request);
@@ -126,6 +134,9 @@ private:
     std::mutex _gatherMutex;
     std::condition_variable _gatherWake;
     bool _gathering = false;
+    PanelEventStreams _events;
+    PanelEventTickets _tickets;
+    std::unique_ptr<PanelEventSocket> _eventSocket;
     AdminServer _listener;
     bool _secure = false;
 };
