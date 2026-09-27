@@ -103,7 +103,6 @@ Nothing is closed for being unfinished. Missing or unfinished code, a missing de
 | 17.106 | Error reports: source locations, grouping and a report file | L | A build, Node 20+ and a browser | An operator's errors reach the maintainer as a file naming the build, file and line each was raised at, so a bug report can be fixed without a screen share. It is large and it changes the logging macros every file uses, so read the note on macros with commas in contrib/AI-MILESTONES-HERE.md before touching them. All six checks run on your own machine. Spared from the phase hold on 2026-09-25 |
 | 6.01 | Whole-zone player broadcast | M | A build, MySQL or MariaDB, and two clients of my own for its real-client checks, which stay unticked without them | Players see each other appear, move and leave: the first milestone that makes the world shared, on the zone instances 5.02 fills with objects |
 | 6.10 | Supplemental server-side schemas | S | A build and my own install's type dump | Server-owned classes decode like dump classes, which the sigils 4.08 still counts and the NPC behaviours need; its rows are extracted from my own install at first run, never committed |
-| 17.28 | Launch and startup settings | M | A build, Node 20+ and a browser | Operators control how each app is launched, its build, overrides, timeouts, restart policy and resource limits, from the panel instead of service files, on the settings page 17.13 just landed |
 
 ## Reserved
 
@@ -126,7 +125,12 @@ Everything not in the table above, including every milestone whose dependencies 
 | 17.47 | Being built now by the maintainer's panel session |
 | 17.18 | Being built now by the maintainer's panel session |
 | 17.26 | Being built now by the maintainer's panel session |
-| 17.24 | Held by the maintainer's panel session, which turns the panel into its own installable program on it |
+| 17.24 | Held by the maintainer's panel session: hosting a game on this computer, built on the panel program of 17.181 |
+| 17.28 | Being built by the maintainer's panel session, which the maintainer asked to finish the panel first |
+| 17.165 | Being built by the maintainer's panel session: the decoded data routes every game data page in 17.166-17.177 rests on |
+| 17.178 | Kept for the maintainer's panel session, after the game data pages |
+| 17.179 | Being built by the maintainer's panel session: the desktop shell the launcher and the panel program share |
+| 17.180 | Being built by the maintainer's panel session: the sign-in links the panel program opens panels with |
 | 8.04 | Built on 2026-09-26 by the maintainer's world session, 10 of 12 checks. Left: the game master's real-client check, which waits on 6.04's in-game commands, and the real-client check that shows a spell in the Spell Deck, which waits on the deck 8.10 and 8.11 build |
 | 9.02 | Built on 2026-09-26 by the maintainer's world session, 6 of 7 checks. Left: its real-client check, which waits on 6.04 |
 | 4.08 | Taken over by the maintainer's world session on 2026-09-26. 5.02 moved its writer into `extractor zones`, which now writes a row for every entry whose class the type dump describes, with typed columns and the loading type. MeruneFleuruwu's decoding of every zone, with real positions and display keys, is what it builds on. Left: the four checks that count every entry, which wait on the sigils 6.10's class tables describe, and the spawn data the two integration tests read |

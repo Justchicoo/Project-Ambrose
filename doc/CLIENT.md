@@ -22,7 +22,7 @@ This means a patch server we run can probably deliver new or changed data WADs w
 
 **The scale of a new client.**
 - **Assets:** 3,589 WADs, 550,616 entries, 34.6 GB unpacked.
-- **Protocol:** 971 network messages across 26 XML files.
+- **Protocol:** 1,448 network message records, 1,446 distinct ids, across 29 XML files.
 - **Formats:** 81% of models are Gamebryo 20.6 (NiMesh plus the newer "evaluator" animation), which no public library fully loads. 160 block types appear (all stock Gamebryo), plus two particle-system generations. Nearly all game data is BINd, a binary format keyed by hashes, so decoding it needs the client's type registry. The GUI and cinematic systems, and 9 minigame DLLs, are all built into the executable.
 - **Precedents:** OpenMW (a Morrowind engine rewrite) is still pre-1.0 after about 17 years with about 505 contributors. xoreos is pre-alpha after 16 years.
 
@@ -42,7 +42,7 @@ L0 to L2 are what can realistically be built; L4 is a good long-term side projec
 - The one real FusionFall rewrite in a new engine (Legacy) ran about 5 years, drifted in scope, never shipped, and was killed by the 2020-04-16 DMCA notice. Publicity plus trademarked assets made it an easy target.
 - Adding content inside a closed client hits hard limits: Retrobution hand-fixes bundle tables, bad references crash the client, and the community calls it limited. Wizard101 data modding will hit the equivalent wall at unknown classes, messages and UI controls.
 - OpenFusion pins exactly two client builds with a public support matrix. Ambrose should likewise pin r806919.
-- ffproto generates wire code from one JSON spec. Ambrose should generate its codecs from the 26 message XMLs (971 messages) the same way.
+- ffproto generates wire code from one JSON spec. Ambrose should generate its codecs from the 29 message XMLs (1,448 messages) the same way.
 - OpenFusion's distribution depends on a community CDN serving copyrighted bundles and patched binaries. That carries more legal exposure than Ambrose's bring-your-own-install rule, so don't copy it.
 - The launcher pattern carries over well: environment-variable feature flags, DXVK for Vulkan, an FPS-cap fix, an HTTPS proxy, and a hashed manifest with repair.
 - From-scratch JS engine runtimes (UWP.js) show that parsing assets is easy and executing game logic is where they stall; the same applies to a Wizard101 web client.
@@ -98,7 +98,7 @@ L0 to L2 are what can realistically be built; L4 is a good long-term side projec
 
 - **Enables:** True 'no limitations': new message types, systems, UI, shaders, platforms (Emscripten web build, Linux, Mac), new asset formats, and removing all dependence on the KingsIsle executable.
 - **Cannot do:** Remove the dependency on KingsIsle's assets. It still needs the user's own install (34.6 GB unpacked, 550,616 entries). Converted assets can't be hosted, so the only web-friendly form, a JS/three.js client with pre-converted glTF, conflicts directly with the no-redistribution rule. It can't reach parity quickly.
-- **Effort:** Very high: multi-year and many-contributor by precedent (OpenMW about 17 years and still pre-1.0; xoreos pre-alpha at 16 years; FusionFall Legacy 5 years and never shipped). Scope includes client handling for 971 messages; the GUI Window/Control system (960 .gui files, 8 SWF screens); the cinematic action and behavior vocabularies (3,985 cinematics, 1,824 state machines); 158 Lua scripts and their API; 9 minigames; ODE-like collision (BCD/NAV); audio (Miles-driven MP3/OGG/WAV); and combat presentation.
+- **Effort:** Very high: multi-year and many-contributor by precedent (OpenMW about 17 years and still pre-1.0; xoreos pre-alpha at 16 years; FusionFall Legacy 5 years and never shipped). Scope includes client handling for 1,448 messages; the GUI Window/Control system (960 .gui files, 8 SWF screens); the cinematic action and behavior vocabularies (3,985 cinematics, 1,824 state machines); 158 Lua scripts and their API; 9 minigames; ODE-like collision (BCD/NAV); audio (Miles-driven MP3/OGG/WAV); and combat presentation.
 - **Technical risk:** Very high. Most client behavior isn't in the data and has to be reverse engineered from observation. Scope creep is the historical killer.
 - **Legal and policy risk:** Medium to high. The code is ours and it reads the user's own files, which is defensible like OpenMW. But a polished playable Wizard101 clone is a high-profile trademark and DMCA target (FusionFall Retro and Legacy were taken down on 2020-04-16). Any web version that serves assets would be infringement.
 - **Prerequisites:** L4 complete (loader, animation, particles); The server stable enough to act as the protocol oracle; Explicit scope: one gameplay loop on one pinned revision; A private repo and a legal posture decision

@@ -89,6 +89,8 @@ Panel users are operators, separate from game accounts in `login.account`. A pan
 
 The first owner is created from a one-time sign-in link the supervisor prints on first start, usable once and only from the same machine (17.46). There is never a default password. The supervisor console also has `panel user create`, `panel user list`, `panel user reset-password` and `panel user disable`, run at console level, audited with the actor `console`, with their arguments kept out of logs as the console rules require. Resetting another user's two-factor sign-in is a users page action (17.50).
 
+A desktop program signs in through single-use links rather than a password (17.180). A local link, minted through the supervisor's admin API with its token by the panel program or by `supervisor --panel-link`, lasts 60 seconds and is honoured only from loopback, and on a panel with no user yet it makes the owner with a password nobody is told. A pairing link, printed by `panel user pair` or `supervisor --panel-pair` on the remote panel's console, lasts 10 minutes, is refused for a listener serving plain HTTP beyond loopback, and comes as one line holding the address, the port, the fingerprint of the certificate the listener serves and the token, so the program pins the certificate before it sends anything. Both are kept only as hashes in `panel_link` beside 17.46's owner claim and password links, which then survive a supervisor restart, and the token reaches only the caller that asked for it, never a log file, an audit row or the command history.
+
 ### Sign-in
 
 1. `POST /api/panel/auth/sign-in` takes a username and password.
@@ -97,6 +99,8 @@ The first owner is created from a one-time sign-in link the supervisor prints on
 4. Failures return one generic message. The audit row stores the resolved user id when there is one, or else a keyed hash of the normalized username, never the typed text, so a password pasted into the username field never reaches the log.
 
 Throttling reuses the 17.02 token bucket at three levels: per address (an IPv6 client by its /64), per target user, and a small global breaker that only adds delay and never locks everyone out. Only failures count, and a success does not clear the counters, so signing in to one account cannot reset guesses against another. The second-factor step has its own per-challenge limit and does not share the password bucket. Client addresses behind a reverse proxy come only from the `Panel.TrustedProxies` setting, which the listener owns from 17.14, so no throttle or audit row ever trusts a forwarded header from an untrusted peer. There is no captcha by default (see Panel settings). Sign-in and its throttles are 17.46 and the second factor 17.47, so both are correct before any other page is built.
+
+A 17.180 link is traded for a session through this same path, at `POST /api/panel/link` or on the `#link` page beside the claim and password pages: the session id is regenerated and the sign-in recorded, a wrong or spent token counts against the same throttles, a disabled user is refused, and no second factor is skipped.
 
 ### Two-factor sign-in
 
@@ -178,7 +182,7 @@ The catalog is one C++ table of groups, keys, descriptions, a structured danger 
 | backups | `backups.read`, `backups.create`, `backups.download` (danger: archives hold account verifiers and config secrets), `backups.restore` (danger), `backups.restore.players` (danger: can undo bans and password changes), `backups.delete`, `backups.pin`, `backups.settings`, `backups.key` (danger, owner-only: exporting the archive key) | node, panel |
 | schedules | `schedules.read`, `schedules.edit`, `schedules.run`, `schedules.delete` | app, realm, node, panel |
 | updates | `updates.read`, `updates.apply` (danger), `updates.rollback` | node, panel |
-| clientdata | `clientdata.read`, `clientdata.rebuild`, `clientdata.switch` | app, node, panel |
+| clientdata | `clientdata.read`, `clientdata.rebuild`, `clientdata.switch`, `clientdata.browse` (session-only: the game data pages, 17.165), `clientdata.scan` (starting a client scan, 17.170), `clientdata.program` (danger, opt-in: the client program reader, 17.171), `clientdata.drive` (danger, opt-in: client driver runs, 17.178) | app, node, panel |
 | patch | `patch.read`, `patch.publish` (danger, owner-only), `patch.key` (danger, owner-only: the operator's signing key) | node, panel |
 | database | `database.read`, `database.hosts` (danger), `database.rotate`, `database.secrets.read` (danger) | cluster, realm, node, panel |
 | world | `world.read`, `world.edit`, `world.export` | realm, panel |
@@ -195,6 +199,8 @@ The catalog is one C++ table of groups, keys, descriptions, a structured danger 
 | nodes | `nodes.read`, `nodes.manage` (danger), `nodes.move` | node, panel |
 | panel | `panel.settings` (danger), `panel.maintenance` (danger: closes the installation to players), `panel.status` (posting on the public status page) | panel |
 | debug | `debug.errors` (full error text instead of a correlation id) | panel |
+
+`clientdata.browse` is held by every default role, `clientdata.scan` by the owner, admin and operator roles, and the two opt-in keys by the owner alone until an owner grants them, as 17.165, 17.170, 17.171 and 17.178 set.
 
 ### Enforcement
 
@@ -592,7 +598,7 @@ The file manager works on named roots instead of one container home. The roots, 
 | install | The running build's folder. Read-only; changes go through updates |
 | config | Each app's `.conf.dist`, `.conf` and `conf.d`. Writable, with schema validation |
 | logs | Read, follow, truncate, rotate and trash |
-| data | The Ambrose data folder. Type dumps and their lock files are read-only, lock files are hidden, and the `types` folder is client-derived |
+| data | The Ambrose data folder. Type dumps and their lock files are read-only, lock files are hidden, and every folder on 17.18's client-derived list is client-derived: the type dumps and their fast copies, the client tool's caches, decompiled output, the launcher's run folders, the client driver's runs and 17.170's scan results |
 | sql-custom | `data/sql/custom/db_<name>`, writable, where exported world edits appear |
 | backups | Read-only here; download, delete and restore go through the backups page |
 | client | The user's own Wizard101 installs found by `ClientLocator`. Listing and metadata only, and client-derived |
@@ -762,13 +768,13 @@ Realm maintenance (17.32) closes a realm to players while game masters at or abo
 
 ### Players online
 
-The online players page (17.21) lists each player with realm, zone, character name and level, account (with `accounts.read`), session time, address and MachineID (with `accounts.pii.read`), and whether they are at character select or in world. Actions come as their milestones land: kick (6.05), mute (12.07), teleport (6.06), message the player, and open the account or character. Joins and leaves arrive live over the `players` stream.
+The online players page (17.177, over the live world routes of 17.175) lists each player with realm, zone, character name and level, account (with `accounts.read`), session time, address and MachineID (with `accounts.pii.read`), and whether they are at character select or in world. Actions come as their milestones land: kick (6.05), mute (12.07), teleport (6.06), message the player, and open the account or character. Joins and leaves arrive live over the `players` stream.
 
 ### Accounts, bans and characters
 
 - **Accounts (17.21):** search by username, email, address or MachineID; create; reset password; lock and unlock; set security level; see email, join date, last sign-in time, address and machine; and the account's activity. A password reset writes the verifier through AccountMgr, seals it with `Account.VerifierActiveKey`, deletes `account_session`, and kicks live sessions under `Login.DuplicateLoginPolicy`. The operator types the new password or has one generated and shown once; it is never logged.
-- **Bans:** account, address and machine bans with duration, reason, who and when, and unban with a reason, matching the 6.05 console commands. Bans apply live and disconnect a banned client.
-- **Characters (17.21):** a list per account with name, level, school, location and deleted state; rename, restore a deleted wizard and delete as 3.17 and later phases support them; and an edit form offering the fields the running build reports as editable through `GET /api/capabilities`, such as gold and level once later phases make them so, each applied through its own GM command.
+- **Bans (17.21):** account, address and machine bans with duration, reason, who and when, and unban with a reason. AccountMgr writes the `ip_banned` and `machine_banned` rows the login server's sign-in check reads, and 6.05's console commands call the same functions. Bans apply live, and a banned client on character select is disconnected through the 6.05 ban path (17.177).
+- **Characters:** a read-only list per account with name, level, school, location and deleted state (17.21); rename, restore a deleted wizard and delete as 3.17 and later phases support them; and an edit form offering the fields the running build reports as editable through `GET /api/capabilities`, such as gold and level once later phases make them so, each applied through its own GM command (17.177).
 - Every action requires its typed permission, runs through CommandMgr at the level the user's grants and linked game account allow, follows the no-escalation rule over security levels, requires a reason for bans, locks and security changes, and is audited, refused attempts included.
 
 ### Player accounts
@@ -790,7 +796,7 @@ Kick, mute and ban are actions; moderation is a queue with the evidence attached
 - The report queue sits over 12.07's moderation records: player reports and house reports with reporter, subject, category, text, realm, zone, time and state (new, claimed, actioned, dismissed), claimed by one moderator at a time with the claim visible.
 - Chat search for a reported player runs over 12.07's chat records, bounded by time range and result count, with the lines around each match, filtering by channel, and the bound reported when it stops early.
 - Mute history per account and character shows who, why, how long, when it ends, the kicks and bans the same moderator issued, and a repeat count per subject.
-- Actions taken from a report go through the checked paths in 17.21 for mute, kick and ban, stay linked to the report they came from, and each need a reason.
+- Actions taken from a report go through the checked paths of 17.177 for mute and kick and of 17.21 for bans, stay linked to the report they came from, and each need a reason.
 - Queue counts need `players.read`. Reporter identity and chat text need the moderation keys, and every read of chat text is audited with the subject and the range read.
 
 ### Live settings and reloads
@@ -799,15 +805,19 @@ The read half comes first, with 17.08: every app answers `GET /api/settings` wit
 
 ### Client data and revisions
 
-The client data page (17.20) lists the installs `ClientLocator` found and the revision each app uses, the type dump in use with its revision, program SHA-256, extractor version and build time, and the message definitions, name tables and creation config loaded. It shows 3.23's revision following: the newest revision seen, whether its data is built, and a build in progress with live output over the `setup` stream. Rebuild and switch buttons run as the protected `setup` state, are audited and apply live where 3.23 supports it; a failed rebuild keeps the previous data serving and shows the extractor's error. Nothing is served or copied from the install; the page reads it at runtime.
+The client data page (17.20) lists every install `ClientLocator` found, with its revision, whether it holds the client program and how many archives it has, and the revision each app uses; the type dump in use with its revision, program SHA-256, extractor version and build time, and whether its fast copy is current; and the message definitions, name tables and creation config loaded. It lists the caches built per revision in the Ambrose data folder and the world table sets extracted from the install, each with the revision it came from, as facts and never as files, and marks a set extracted from another revision than the install's. It shows 3.23's revision following: the newest revision seen, whether its data is built, and a build in progress with live output over the `setup` stream. Rebuild and switch buttons run as the protected `setup` state, are audited and apply live where 3.23 supports it; a failed rebuild keeps the previous data serving and shows the extractor's error. Nothing is served or copied from the install; the page reads it at runtime.
+
+### Game data
+
+The game data pages (17.165-17.178) show what the servers decoded from the operator's own install and what they hold: the type registry, the archives with each entry opened as the object it holds, locale text in every locale, templates with their cross-links and where zones place them, message definitions with what each server does with them, progression and character creation data, the world tables with where each row came from, the zone catalog with a plan drawn from decoded positions, the live world with its instances, objects and wizards, and spells and sigils. They share one route family, `/api/data/<kind>/`, one writer that cannot carry a byte buffer and one object view (17.165), so every answer holds at most 200 rows, is stamped with the revision, is never cached and is never a download, and a route sweep over marker runs proves that no answer carries an install's bytes. The install census, the decode sweep, the schema probe and the program scans run from a button (17.170), and the client program reader (17.171) and client driver runs (17.178) are developer pages, opt-in and off by default. No page renders a texture, model, sound, layout, screenshot or the text of an entry no decoder reads yet, and nothing decoded or extracted is exported.
 
 ### World database edits
 
-The world edits page (17.34) is a typed editor over the content tables the game server loads, starting with those that exist when it lands: spawns, templates, doors, vendors and quests as later phases add them.
+The world edits page (17.34) is a typed editor over the content tables the game server loads, built on the world tables browser of 17.173, starting with those that exist when it lands and gaining spawns, doors, vendors and quests as later phases add them. Templates are read from the install at run time and are never in the world database.
 
-- Rows are browsed with search and filters, and each table's form comes from a schema the game server publishes with types, bounds and references, so a foreign key is picked from its table.
+- Rows are browsed with search and filters, and each table's form comes from the world schema the stores publish (17.173) with types, bounds and references, so a foreign key is picked from its table.
 - An edit is sent to the game server, which applies it to the world database, records it in the 4.15 world edit journal with the panel user as author, and reloads the affected store, reporting the reload result. A group of edits applies as one change set and reloads together.
-- The page shows the journal with who, when, source (the panel or a GM command such as `.npc add`) and statement, and exports selected entries as a local-only SQL file into `data/sql/custom/db_world`, the tree doc/ARCHITECTURE.md sanctions for local SQL, the way `.journal export` does. A request naming any other folder is refused. `pending_db_<name>/` belongs to open pull requests, as Content, SQL and releases in doc/ARCHITECTURE.md settles, so a running panel never writes there.
+- The page shows the journal with who, when, source (the panel or a GM command such as `.npc add`) and statement, and exports selected entries as a local-only SQL file into `data/sql/custom/db_world`, the tree doc/ARCHITECTURE.md sanctions for local SQL, the way `.journal export` does. A request naming any other folder is refused, and so is an entry that changed a table the schema marks as extracted from the install, with the table named. `pending_db_<name>/` belongs to open pull requests, as Content, SQL and releases in doc/ARCHITECTURE.md settles, so a running panel never writes there.
 - A failed reload rolls back the database change and keeps the previous store serving.
 
 ### Database management
@@ -904,7 +914,7 @@ One Svelte app serves every page, with routes declared in a table that names eac
 - `/admin/{nodes, nodes/:id, locations, database-hosts, users, roles, invites, api-keys, settings/general, settings/mail, settings/security}`
 - `/account/{profile, security, api-keys, ssh-keys, activity}`
 
-A top bar holds a realm and app switcher, a global search across accounts, characters and the apps the caller may see whose every result is checked against their own permissions (17.21), the notification center, a theme toggle and the account menu. The side navigation groups Operate (overview, realms, apps, schedules, backups, alerts, analytics, maintenance), Game (players, accounts, bans, moderation, world, announcements, events, client data), Platform (nodes, locations, database hosts, files, patch, updates) and Panel (users, roles, invites, API keys, settings, activity). Tabs and controls the user lacks are hidden, a direct link without permission shows an access-denied page, and pages for a target in a protected state show that state and its live progress while owners keep the console.
+A top bar holds a realm and app switcher, a global search across accounts, characters and the apps the caller may see whose every result is checked against their own permissions (17.21, with characters from 17.177), the notification center, a theme toggle and the account menu. The side navigation groups Operate (overview, realms, apps, schedules, backups, alerts, analytics, maintenance), Game (players, accounts, bans, moderation, world, announcements, events, client data), Platform (nodes, locations, database hosts, files, patch, updates) and Panel (users, roles, invites, API keys, settings, activity). Tabs and controls the user lacks are hidden, a direct link without permission shows an access-denied page, and pages for a target in a protected state show that state and its live progress while owners keep the console.
 
 ### Conventions
 
@@ -925,8 +935,9 @@ A top bar holds a realm and app switcher, a global search across accounts, chara
 - The supervisor installs itself as a Windows service or systemd unit running as a dedicated user (17.23). When it runs as root on Linux, created files are given to the service user.
 - The Docker image and Compose file run the whole stack, with volumes for config, data, logs and backups and the user's client install mounted read-only.
 - The Pterodactyl egg (17.23) is for operators who already run Pterodactyl. It uses Wings' contract: the ready lifecycle line as the startup done string, `shutdown` as the stop command so Wings does not count the exit as a crash, and plain log lines when output is redirected.
-- The desktop app (17.24) installs Ambrose, starts the supervisor, the private database and the client, and opens the panel through a fresh one-time owner link bound to the local machine (17.46), so a player hosting on their own computer never types a panel password.
+- The panel program (17.181) is a desktop program of its own. It opens each panel in a window of the program's own, loaded from that panel's own address, so a program and a server can never be different versions. It lists this computer without being told and panels on other machines, paired from their console with a 17.180 link that carries the certificate fingerprint, added by an address a public authority vouches for, or reached through SSH (17.186), and it never stores a panel password.
+- On this computer it hosts the game from one icon (17.24): it starts the supervisor and, when this machine has no database server of its own, a private MariaDB, shows the first start step by step, opens the panel through a local link so a player hosting on their own computer never types a panel password, and starts the client through the launcher with Play. It sits in the tray (17.182), controls the Ambrose service where one is installed (17.185), installs per user from an installer or a portable archive with an optional server component (17.183), and updates itself from a signed release (17.184).
 
 ## Decisions
 
-Every choice this design proposed was settled on 2026-09-25 and is recorded under Decisions in doc/ARCHITECTURE.md, chiefly Panel operations, Time zones and Content, SQL and releases. Nothing is settled by being written in this document: a new choice this design proposes is listed under Decisions needed in doc/ROADMAP.md until the maintainer settles it, and no milestone may treat a choice as settled because it appears in this file.
+Every choice this design proposed was settled on 2026-09-25 and is recorded under Decisions in doc/ARCHITECTURE.md, chiefly Panel operations, Time zones and Content, SQL and releases, and the choices the game data pages and the panel program rest on were settled on 2026-09-27 under Desktop programs and client data. Nothing is settled by being written in this document: a new choice this design proposes is listed under Decisions needed in doc/ROADMAP.md until the maintainer settles it, and no milestone may treat a choice as settled because it appears in this file.

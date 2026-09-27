@@ -2,15 +2,15 @@
 
 # Tools
 
-The Ambrose tool suite takes the AzerothCore content toolchain and changes it in three ways for Wizard101. First, Wizard101 data is hash-keyed BINd ObjectProperty data stored in KIWAD archives, not DBC/ADT files. That makes the type registry dumper and the WAD/BINd decoder the base that every other tool sits on. Second, the world is spatial and quest-driven, so the most valuable authoring tools are quest/dialogue and zone/spawn editors, plus in-game GM build sessions that work inside the retail client. Third, the project rules come first: nothing extracted from the client is committed, and no database edit goes unrecorded. Authoring tools (Studio, capture_to_sql, GM build sessions, content DSL) write dated pending SQL updates (data/sql/updates/pending_db_world/YYYY_MM_DD_NN.sql). Direct GM edits apply at once and are journaled, so they can be exported the same way. Each file passes a codestyle-sql check by construction and is applied by a hash-tracking updater. All client-derived indexes (template names, locale strings, zone geometry, minimaps) are built locally from the user's r806919 install into a git-ignored cache.
+The Ambrose tool suite takes the AzerothCore content toolchain and changes it in three ways for Wizard101. First, Wizard101 data is hash-keyed BINd ObjectProperty data stored in KIWAD archives, not DBC/ADT files. That makes the type registry dumper and the WAD/BINd decoder the base that every other tool sits on. Second, the world is spatial and quest-driven, so the most valuable authoring tools are quest/dialogue and zone/spawn editors, plus in-game GM build sessions that work inside the retail client. Third, the project rules come first: nothing extracted from the client is committed, and no database edit goes unrecorded. Authoring tools (Studio, capture_to_sql, GM build sessions, content DSL) write pending SQL updates (data/sql/updates/pending_db_world/rev_<unix seconds>_<short-name>.sql, as Content, SQL and releases in doc/ARCHITECTURE.md settles), which take the next dated name when they merge. Direct GM edits apply at once and are journaled, so they can be exported the same way. Each file passes a codestyle-sql check by construction and is applied by a hash-tracking updater. All client-derived indexes (template names, locale strings, zone geometry, minimaps) are built locally from the user's r806919 install into a git-ignored cache.
 
-One source of truth ties the suite together: a per-table schema definition file in data/schema/world/<table>.yaml, inspired by WDE DbDefinitions and Keira field models. The same file drives the Studio editor forms and pickers, the gameserver startup and reload validator, the reload-command mapping and generated doc/world/<table>.md pages. Tables are defined as data, so adding a world table means adding one file.
+One source of truth ties the suite together: the world schema each store declares in C++ where it registers its reload target, with each table's source and key, its column types read from the database and the reference each column carries, which the servers publish from 17.173, inspired by WDE DbDefinitions and Keira field models. The same schema drives the panel's world table and edit forms and pickers (17.173 and 17.34), the gameserver startup and reload validator, the reload-command mapping and generated doc/world/<table>.md pages. It replaced the per-table data/schema/world/<table>.yaml files this list first planned, settled on 2026-09-27 under Desktop programs and client data in doc/ARCHITECTURE.md, so the schema cannot drift from the code that reads the tables.
 
 Current repo state (4.03): src/tools/client is the one tool client questions are asked of and the one that grows; src/tools/bindecode, src/tools/dbimport, src/tools/extractor, src/tools/launcher, src/tools/localetool and src/tools/typeextract are built; src/tools/{template_extractor, wad_extractor, zone_extractor} exist as empty folders. apps/{ci, clientdriver, codestyle, installer} exist. data/sql/base/db_world is empty. scripts/Commands is empty. ARCHITECTURE.md already sets the rules that tools depend only on database, shared and common and that GM commands reload single tables.
 
 Build order:
 1. **Early foundation:** codec_registry, wad_extractor, template_extractor, dbimport + codestyle-sql, the ambrose.sh dashboard, the reload framework (4.15) and its admin API (17.12).
-2. **Mid authoring:** Ambrose Studio (database editor) with quest/dialogue and NPC/loot/vendor sub-editors, GM build sessions (.spawn/.session), extractor zones + zone/spawn editor, wadview, spell inspector, create_module.
+2. **Mid authoring:** Ambrose Studio (database editor) with quest/dialogue and NPC/loot/vendor sub-editors, GM build sessions (.spawn/.session), extractor zones + zone/spawn editor, create_module. wadview, the spell inspector's read-only half and the Studio's browse views are panel pages instead (17.166, 17.168, 17.176, 17.173 and 17.34).
 3. **Late:** capture_to_sql (capture sources decided on 2026-09-16; capturing live KingsIsle sessions is the user's own choice and risk), a server-side event/action script table + editor, a Lua scripting module, client_content_builder + manifest_builder for custom WAD overlays (blocked on a test proving the client accepts a changed WAD), navmesh_generator, a content DSL.
 
 Formerly rejected ideas, reopened on 2026-09-16 at the maintainer's direction as experimental opt-in features:
@@ -40,6 +40,14 @@ This applies to contributors as well, and their prompts say so. Before writing a
 ### launcher (built in 3.25)
 
 Starts the user's own client against an Ambrose login server, on any machine that has a client, without ever running KingsIsle's launcher or writing inside the install. `launcher --help` lists its options. It finds the install the way the servers do, through `--client`, `ClientDir` in its own `launcher.conf`, `AMBROSE_CLIENT_DIR` or the discovery in `ClientLocator`, and builds a folder of its own for the client to run from, `client/<revision>` in the Ambrose data folder unless `--run-dir` names another, never the install or a folder inside it: `config.xml` and `preferences.xml` written on every run, from the files that folder already holds or else the install's own, with the window mode and size asked for and `SilentMetricsURL` emptied and every other byte left as the template has it, because the client ignores a configuration that has been parsed and written again, and copies of `revision.dat` and `data.dat`, the other files the client opens by relative name. The client always starts with `-L <host> <port>`, `-P 0`, `-A <locale>`, `-D <the install's data folder>` and `-G <log in the run folder>`, because the retail build starts KingsIsle's launcher when it sees none of its own options, and `--user` and `--character` pass the client's own automatic login and character options through for the 3.24 driver. `--dry-run` prints the run folder and the exact command and starts nothing, `--wait` returns the client's own exit code and ends the client if the launcher is stopped, and `--tail` prints the client's own log lines while it runs; without either the client is started detached. It exits 1, naming the cause, when no install is found, the client program is missing, patching is asked for, a login host or port is missing, a value begins with `-`, the run folder lies inside the install or cannot be written, the machine is not Windows and so cannot start the client, or the client cannot be started, and 2 on bad usage. `--window-ui` opens the launcher as a window rather than a terminal, the operating system's own web view showing the page built from `apps/launcherui` and copied beside the program as `launcher-ui`, read from a folder handed to the view rather than served, so no port is opened and the only traffic a run makes is the client's own; the window asks the same `Prepare` the console options reach, a password is replaced with `********` before the window is told anything, the window's own size and corner come back from `launcher-window.json` in the Ambrose data folder, and a machine with no web view says so once and runs as the console launcher. Its tests run as `unit_tests --gtest_filter=Launcher*` and as the `Launcher` CTest, which runs the built program against a synthetic machine, with the window's own page tested as the `launcher` project of the front-end suite. doc/config/launcher.md documents every option. It replaces the development scripts of milestone 1.21, and milestone 16.13 grows a player launcher that patches its own copy of the install from an Ambrose patch server on top of it.
+
+### shell and ambrose_embed_page (planned in 17.179)
+
+`desktop-shell` in src/tools/shell is the window host the launcher and the panel program share: the WebView2 window on Windows and the WebKitGTK window elsewhere, moved out of `launcher-core`, with a view bound to one remote origin, a host channel only the program's own origin reaches, a certificate hook that accepts a self-signed certificate only by its pinned SHA-256 fingerprint, and web view data in a folder of each program's own under the Ambrose data folder, with a profile per remote origin. `ambrose_embed_page` is the CMake step that compiles a built Vite folder into a program as one generated translation unit, never committed, which the shell serves from memory on the program's own `https` origin and which lets the supervisor serve the dashboard compiled into its own binary. 17.184's updater and the credential store wrapper 3.27 and 17.186 use live here too.
+
+### panel (planned in 17.181)
+
+`panel` in src/tools/panel, over a `panel-core` library that links the shell, is the panel program. It lists the panels it knows, this computer found without being added and others paired, pinned or reached through SSH, and opens each in a window of its own loaded from that panel's own address, so it carries no copy of the dashboard. Its own screens are built from `apps/panelui`. It hosts a game on this computer (17.24), sits in the tray (17.182), installs from 17.183's packages and updates itself through 17.184.
 
 ### clientdriver (built in 3.24)
 
@@ -147,26 +155,26 @@ Create and update the login, characters and world databases from base/ plus date
 - updates table: name, SHA-1 hash, state (RELEASED/CUSTOM/MODULE/PENDING/ARCHIVED), timestamp, speed
 - Redundancy mode: re-applies an edited pending file on dev when its hash changes (so Studio re-saves work)
 - Also applies module data/sql folders
-- ci-pending-sql: renames pending files to YYYY_MM_DD_NN.sql on merge
+- ci-pending-sql: renames each pending rev_<unix seconds>_<short-name>.sql to the next free YYYY_MM_DD_NN.sql on merge
 - codestyle-sql: no tabs, trailing whitespace or double blank lines; final newline; every INSERT preceded by a scoped DELETE; column names match base/ schema; Ambrose file header present
-- Schema check: SQL columns and types must match data/schema/world/*.yaml
+- Schema check: SQL columns and types must match the world schema the stores declare (17.173)
 
 ### World schema definitions + doc generator
 
-One data file per world table as the single source of truth for column types, enums, bitflags, foreign keys (with the table or client index each points to), primary keys, record mode and reload command. The Studio, the server's startup validator and the docs are all generated from it.
+The world schema is the single source of truth for column types, enums, bitflags, foreign keys (with the table or client index each points to), primary keys, record mode and reload command. Settled on 2026-09-27 under Desktop programs and client data in doc/ARCHITECTURE.md: each store declares its tables in C++ where it registers its reload target, and the servers publish it (17.173), rather than one YAML file per table. The panel's world table and edit forms, the server's startup validator and the docs are all built from it.
 
-- **Form:** Data files + small generator CLI
+- **Form:** Declarations beside each store's reload target + small doc generator CLI
 - **Inspired by:** WDE.DatabaseEditors DbDefinitions JSON (174 files); Keira3 field models/Options/Flags; AzerothCore wiki per-table pages
-- **Lives in:** data/schema/world/ (definitions), src/tools/schemagen/ (generator), doc/world/ (output)
+- **Lives in:** each store's reload target registration (declarations), src/tools/schemagen/ (generator), doc/world/ (output)
 - **Needs:** First world tables in data/sql/base/db_world
 
 **Key features**
 
-- data/schema/world/<table>.yaml: fields, value_type (TemplateId, ZoneId, LocaleKey, SpellId, QuestId, Flags, Enum), default, read_only, fk
+- Per table: its source (extracted from the install, authored in the repository, or imported) and its key; per column: value_type (TemplateId, ZoneId, LocaleKey, SpellId, QuestId, Flags, Enum), default, read_only and the reference it carries, with column types read from the database
 - record_mode: single-row vs multi-row (DELETE+INSERT per key), composite keys
 - reload: name of the .reload subcommand
 - Generates doc/world/<table>.md with a hand-written notes section kept separate
-- Generates C++ loader validation tables so the gameserver rejects bad rows at startup and on every reload, keeping the old store
+- The gameserver checks rows against it at startup and on every reload, rejecting bad ones and keeping the old store
 - Written from scratch; WDE/Keira definitions are not ported
 
 ### ambrose.sh / ambrose.ps1 dashboard
@@ -185,7 +193,7 @@ A single entry point for contributors and agents: install deps, compile, run the
 - extract: menu for wad, templates, zones, all
 - db: setup / update / squash
 - run: loginserver, gameserver, patchserver; test: ctest
-- module new/list; studio (launch local web editor); wadview
+- module new/list; studio (launch local web editor)
 - Reads client data only from the user's own install and never downloads it from a host the project runs. An opt-in step that fills a separate copy from KingsIsle's patch servers is planned, not yet scheduled; using it is the user's own choice on their own account and machine, may break KingsIsle's terms, and never touches the pinned development install
 
 ### Reload channel (.reload + admin API)
@@ -211,6 +219,8 @@ Let editors, GMs and operators push world database changes into any running game
 
 The main content editor: schema-aware forms over the world database with linked navigation between entities, a live SQL diff preview, and 'Save as pending update'. Content creation becomes fast, and the SQL never drifts from git.
 
+Settled on 2026-09-27 under Desktop programs and client data in doc/ARCHITECTURE.md: browsing the world tables and editing the running world database are the panel's World tables and World edits pages (17.173 and 17.34), so the Studio is not a second browser of them, and what stays here is authoring into pending SQL updates for the repository.
+
 - **Form:** Local web app served on localhost (C++ backend in src/tools using shared/database, simple TS/HTML frontend); no client files bundled, since it reads the user's own install at runtime
 - **Inspired by:** Keira3 (EditorService diffQuery/fullQuery, handler services, route guards, unused GUID search); WoW Database Editor (sessions, diff viewer, remote reload)
 - **Lives in:** src/tools/studio/
@@ -222,7 +232,7 @@ The main content editor: schema-aware forms over the world database with linked 
 - Live diff SQL (UPDATE of changed columns only; DELETE+INSERT for multi-row tables) with highlighted preview, Copy, Execute (local dev DB) and Save-as-update
 - 'Change session': bundles every edit made while building one quest line into one pending_db_world file, with a diff viewer before writing
 - Linked navigation: every foreign-key field has a picker (search by English name from the local template index) and a jump-to link (quest -> giver NPC -> spawn -> zone)
-- Unsaved-change dots per table; forms generated from data/schema/world/*.yaml
+- Unsaved-change dots per table; forms generated from the world schema the stores publish (17.173)
 - After Execute, calls the reload channel for the touched tables
 - Unused-id finder for the custom template/quest id range; collision check against the retail TemplateManifest
 - Help '?' on each field links to doc/world/<table>.md
@@ -274,7 +284,7 @@ Place and tune spatial content from inside the retail Wizard101 client (spawn po
 
 **Key features**
 
-- .session start <description> / .session undo / .session end: end writes data/sql/updates/pending_db_world/YYYY_MM_DD_NN.sql (scoped DELETE + INSERT with @variables)
+- .session start <description> / .session undo / .session end: end writes data/sql/updates/pending_db_world/rev_<unix seconds>_<short-name>.sql (scoped DELETE + INSERT with @variables)
 - .spawn add <templateId|name> at the GM's position and yaw; .spawn move / turn / delete / near / info
 - .path add/show/clear for patrol waypoints; .zone tele / .zone info
 - .dialogue test <id>, .quest start/complete <id> for quick testing of Studio content
@@ -318,28 +328,27 @@ See and edit spawns, mob patrol areas, NPC placements, trigger volumes and telep
 - 'Open in game': sends .zone tele + position to the dev server for the GM's character
 - Writes through the Studio change session
 
-### wadview (client data browser)
+### wadview (client data browser, now panel pages)
 
-A read-only local browser for the user's WADs. It shows BINd decoded through the registry, Locale strings, DDS textures and template cross-links, and gives every editor a 'jump to client definition' link.
+A read-only browser for the user's WADs, built into the panel rather than as a local web app of its own, as Desktop programs and client data in doc/ARCHITECTURE.md settled on 2026-09-27: the Types page (17.165), the Archives page (17.166), the Locale page (17.167) and the Templates page (17.168). It shows BINd decoded through the registry, Locale strings and template cross-links, and gives every editor a 'jump to client definition' link.
 
-- **Form:** Local web app (C++ backend reusing wad_extractor + codec)
+- **Form:** Panel pages over the `/api/data/` routes (17.165)
 - **Inspired by:** wow.tools.local (localhost web server over the user's install); WDBX Editor grid browser; Ladik's MPQ Editor
-- **Lives in:** src/tools/wadview/
-- **Needs:** wad_extractor, codec_registry, template_extractor index
+- **Lives in:** the game server's data routes and apps/dashboard
+- **Needs:** the KIWAD reader, the type registry, the locale store and the template store
 
 **Key features**
 
 - Tree browse of 3,589 WADs; search by path, template id, class or locale text
-- BINd rendered as typed property trees; .gui Window trees; .lang tables
-- DDS preview (DXT1/3/5) and NiPixelData texture preview
+- BINd rendered as typed property trees; .lang tables
 - Cross-links: template id -> ObjectData file -> references in spawns, quests, decks
-- Runs against the user's install and listens on localhost by default. Listening beyond localhost is an opt-in setting, off by default, because anyone who can reach it can browse that install; it never becomes a public host of client files. Nothing committed, no export of client files to the repo
+- No texture, model, GUI layout or plain-text preview, because nothing the panel serves carries a file from the client install, and no export of client files
 
 ### Spell and deck inspector
 
-Read-only decoding of the 18,173 Spells and 599 Decks into readable effects, pips, school, accuracy and targets, linked to the mobs, decks, items and treasure cards that use them. It doubles as the test oracle while combat is implemented.
+Read-only decoding of the 18,173 Spells and 599 Decks into readable effects, pips, school, accuracy and targets, linked to the mobs, decks, items and treasure cards that use them. It doubles as the test oracle while combat is implemented. Its read-only half is the panel's Spells and Sigils pages (17.176), which decks join in the milestone that loads them, as Desktop programs and client data in doc/ARCHITECTURE.md settled on 2026-09-27; the CLI dump mode and the combat oracle stay here.
 
-- **Form:** Studio sub-view + CLI dump mode
+- **Form:** Panel pages (17.176) + CLI dump mode
 - **Inspired by:** TrinityCore SpellWork (read-only spell inspector); stoneharry Spell Editor (its import/inspect half first; an editing mode like its writing half is planned, not yet scheduled, and saves pending SQL or a WAD overlay built on the user's machine)
 - **Lives in:** src/tools/studio/ (features/spell); CLI in src/tools/template_extractor
 - **Needs:** template_extractor spell/deck tables; combat subsystem (for oracle mode)
@@ -371,7 +380,7 @@ Scaffold drop-in modules (custom content, events, QoL features) that plug in thr
 
 ### capture_to_sql (packet capture to SQL)
 
-Decode session captures with the 971 message definitions from the client's 26 *Messages.xml plus the ObjectProperty codec. Collect spawned objects, NPC dialogue, quest offers and goals, shop lists and combat encounters, diff them against the world database, and write the minimum pending SQL update. By default it does not write to the database; an opt-in mode also applies the update to a local dev database through the updater, so the change is still recorded.
+Decode session captures with the 1,448 message definitions from the client's 29 *Messages.xml plus the ObjectProperty codec. Collect spawned objects, NPC dialogue, quest offers and goals, shop lists and combat encounters, diff them against the world database, and write the minimum pending SQL update. By default it does not write to the database; an opt-in mode also applies the update to a local dev database through the updater, so the change is still recorded.
 
 - **Form:** CLI (C++; shares message codecs generated from the message XMLs)
 - **Inspired by:** TrinityCore WowPacketParser (per-table SQL builders, DB diff 'minimum changes', VerifiedBuild) + ymir sniffer; AzerothCore wiki sniffing-and-parsing.md
@@ -394,7 +403,7 @@ Let content authors script server-side NPC and zone behavior as data rows (event
 
 - **Form:** World table + Studio sub-editor
 - **Inspired by:** SmartAI (smart_scripts) + Keira3 SAI editor (per-type param labels, comment generator) + WDE visual smart-script editor
-- **Lives in:** src/server/game/AI/ (runtime), data/schema/world/npc_script.yaml, src/tools/studio/ (features/script)
+- **Lives in:** src/server/game/AI/ (runtime, with the npc_script schema its store declares), src/tools/studio/ (features/script)
 - **Needs:** ScriptMgr, NPC interaction, dialogue, quest engine, teleports/zone transfers
 
 **Key features**
