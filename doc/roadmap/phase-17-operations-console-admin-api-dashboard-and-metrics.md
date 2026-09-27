@@ -117,6 +117,59 @@
 | 17.109 | Plugins: what one is, and the tab that installs it | M | 17.101, 17.48, 17.18 |
 | 17.110 | A panel tool runs without being trusted | L | 17.109 |
 | 17.111 | Plugins ship with the panel, from this repository | L | 17.109, 17.110, 17.105 |
+| 17.112 | Tomes: templates for realms, apps and companion services | L | 17.27, 17.28, 17.29, 17.30, 17.99 |
+| 17.113 | Hang detection and watchdogs at every layer | L | 17.22, 17.23, 17.24, 17.27, 17.60, 17.67, 17.83 |
+| 17.114 | Host awareness: sleep, OS updates, shutdown and the clock | L | 17.15, 17.22, 17.23, 17.24, 17.60, 17.78, 17.82, 17.94, 17.98 |
+| 17.115 | Runbooks on alerts, findings and crash groups | L | 17.53, 17.67, 17.82, 17.83, 17.86, 17.88 |
+| 17.116 | Restore drills and update rehearsals | L | 17.16, 17.17, 17.29, 17.43, 17.51, 17.67, 17.81, 17.82 |
+| 17.117 | Panel store durability: checks, snapshots and freeing space | M | 17.14, 17.16, 17.18, 17.19, 17.43, 17.72, 17.80 |
+| 17.118 | Drift watch: config, installed files and schema | L | 17.08, 17.12, 17.17, 17.22, 17.67, 17.99, 17.105, 2.06 |
+| 17.119 | Drive and host health: SMART, latency, pressure and limits | L | 17.19, 17.22, 17.67, 17.82 |
+| 17.120 | Release health, bake window and canary realm | M | 17.17, 17.19, 17.44, 17.52, 17.60, 17.81, 17.83, 17.106 |
+| 17.121 | Request tracing and the service map | L | 17.04, 17.49, 17.80, 17.81, 17.90, 17.91, 17.92 |
+| 17.122 | Service level objectives and error budgets | M | 17.17, 17.19, 17.44, 17.67, 17.81, 17.86, 17.94, 17.96 |
+| 17.123 | Reachability from the internet: router, firewall and an outside probe | M | 17.22, 17.23, 17.24, 17.29, 17.81 |
+| 17.124 | Backup copies to disks, shares and SFTP, with a 3-2-1 check | M | 17.16, 17.40, 17.43, 17.52, 17.72, 17.82 |
+| 17.125 | Moving the whole installation to a new machine | M | 17.16, 17.22, 17.24, 17.46, 17.51, 17.72, 17.99, 3.22 |
+| 17.126 | Point-in-time recovery from binary logs | L | 17.16, 17.24, 17.30, 17.43, 17.51, 17.67, 17.72, 17.78 |
+| 17.127 | Dynamic DNS and DNS-01 certificates | M | 17.14, 17.35, 17.108 |
+| 17.128 | Reverse proxy configs and the forwarded-header check | S | 17.14, 17.26, 17.35 |
+| 17.129 | Staging copies and pull request previews | L | 17.16, 17.17, 17.29, 17.30, 17.34, 17.51, 17.99, 17.116, 3.24 |
+| 17.130 | Usage accounting: transfer, energy and cost | M | 17.19, 17.22, 17.25, 17.65, 17.67 |
+| 17.131 | Host security audit | M | 17.14, 17.23, 17.29, 17.30, 17.82, 17.123 |
+| 17.132 | New sign-in notices and stolen-session signals | M | 17.14, 17.35, 17.36, 17.38, 17.46, 17.47, 17.86 |
+| 17.133 | Sign-in with OIDC, Discord or GitHub | L | 17.35, 17.38, 17.46, 17.47, 17.48, 17.50, 17.86 |
+| 17.134 | Access reviews and the who-can explorer | M | 17.15, 17.25, 17.36, 17.37, 17.48, 17.50, 17.86 |
+| 17.135 | Compromise response: canary credentials and lockdown | L | 17.16, 17.22, 17.25, 17.36, 17.37, 17.47, 17.52, 17.67, 17.84, 17.87, 17.99, 17.140 |
+| 17.136 | Expiring grants, just-in-time elevation and break-glass | M | 17.37, 17.47, 17.48, 17.50, 17.57, 17.86 |
+| 17.137 | Installed components and security advisories | M | 17.17, 17.67, 17.82, 17.97, 17.105 |
+| 17.138 | Network access rules and the address ban list | M | 17.14, 17.36, 17.40, 17.46, 17.47, 17.48, 17.132, 6.05 |
+| 17.139 | Player privacy requests: export, erasure and retention | L | 17.21, 17.25, 17.47, 17.51, 17.52, 17.62, 17.63, 17.80, 17.95 |
+| 17.140 | Secrets inventory and key rotation | M | 17.02, 17.22, 17.28, 17.30, 17.36, 17.47, 17.65, 17.67, 17.72 |
+| 17.141 | Two-person approval and change requests | L | 17.25, 17.37, 17.47, 17.48, 17.49, 17.53, 17.86 |
+| 17.142 | Discord bot: commands, alert buttons and live status | L | 17.26, 17.36, 17.38, 17.48, 17.49, 17.67, 17.85, 17.86 |
+| 17.143 | Crash and error groups linked to issues and fix releases | M | 17.17, 17.83, 17.105, 17.106 |
+| 17.144 | Feature flags with targeting and staged rollout | M | 17.12, 17.67, 17.81, 17.83, 17.106, 4.16 |
+| 17.145 | MCP server for AI assistants | M | 17.36, 17.48, 17.80, 17.84, 17.100, 17.106 |
+| 17.146 | OpenAPI description and API explorer | M | 17.26, 17.36, 17.48, 17.100, 17.105 |
+| 17.147 | Sandboxed operator scripts | L | 17.15, 17.28, 17.48, 17.53, 17.87, 17.110 |
+| 17.148 | Installation file synced from Git | M | 17.15, 17.17, 17.36, 17.67, 17.99, 17.149 |
+| 17.149 | Inbound webhooks that start a task chain | M | 17.14, 17.15, 17.87 |
+| 17.150 | Getting-started checklist and page tours | M | 3.22, 17.15, 17.16, 17.21, 17.37, 17.47, 17.82, 17.86, 17.108 |
+| 17.151 | Built-in help, offline docs and what's new | M | 17.06, 17.13, 17.37, 17.88, 17.105 |
+| 17.152 | Custom boards and a paired wall display | L | 17.06, 17.14, 17.19, 17.48, 17.58, 17.73, 17.99 |
+| 17.153 | High-contrast and color-vision themes, and display preferences | M | 17.38, 17.66, 17.73 |
+| 17.154 | Installable panel app, OS notifications and opt-in Web Push | M | 17.06, 17.67, 17.86, 17.108 |
+| 17.155 | Saved views, stars, recents and wider search | M | 17.06, 17.21, 17.25, 17.80, 17.88 |
+| 17.156 | Undo from the activity record, and bulk actions | L | 17.13, 17.25, 17.37, 17.48, 17.49, 17.53, 17.54, 17.55, 17.68, 17.88 |
+| 17.157 | Printable operations reports | M | 17.15, 17.16, 17.17, 17.18, 17.25, 17.35, 17.67, 17.94, 17.97, 17.98 |
+| 17.158 | Incident workspace and postmortems | L | 17.67, 17.70, 17.78, 17.79, 17.86, 17.94, 17.102, 17.159, 17.164 |
+| 17.159 | Notes, pinned warnings and graph annotations | M | 17.13, 17.25, 17.48, 17.78, 17.79, 17.151 |
+| 17.160 | Operator presence and one socket across tabs | M | 17.26, 17.57, 17.58 |
+| 17.161 | Change freeze windows | M | 17.15, 17.27, 17.47, 17.48, 17.96 |
+| 17.162 | Comment threads, mentions and an inbox | M | 17.26, 17.57, 17.67, 17.86, 17.159 |
+| 17.163 | On-call rotations, escalation and shift handoff | L | 17.25, 17.67, 17.85, 17.86, 17.96, 17.97 |
+| 17.164 | Staff task board and recurring chores | M | 17.15, 17.48, 17.82, 17.86, 17.96, 17.97, 17.159 |
 
 ## Review notes for this phase
 
@@ -128,10 +181,10 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Hosting panel parity.** 17.14-17.24 were added on 2026-09-17 at the maintainer's request to manage everything in one place the way game server hosting panels such as Pterodactyl do. The supervisor from 17.08 becomes the panel's single entry point, much as a Pterodactyl node daemon serves its panel: operators sign in to it once, and it relays each app's admin API. The panel milestones, 17.14 and everything above it, start after 3.23 and run alongside the gameplay phases. The choices are recorded under Decisions, Operations in doc/ARCHITECTURE.md: Argon2id for panel passwords, from Botan since 2026-09-22, TOTP for two-factor sign-in, zstd for backup archives, and the supervisor's own SQLite file for panel users, schedules and backup records, so the panel works before any game database exists.
 - **Pterodactyl source.** Settled on 2026-09-17 at the maintainer's direction: Ambrose owns its panel, tailored to Wizard101, and uses the MIT-licensed Pterodactyl panel and Wings source only as a reference for behavior, with no code copied and no Wings. The Ambrose panel is not a fork: the Pterodactyl panel is PHP 8.2 with Laravel, React, Redis, a web server and a queue worker on Linux, and Wings is Go and runs only on Linux with Docker, not on Windows. A fork would break the desktop run that sets itself up with no steps, and the TypeScript with Svelte dashboard and C++ supervisor settled under Decisions, Operations. Its generic model of a container with a console also cannot reach typed Ambrose features such as live settings, reloads, accounts and client data. Instead, this phase studies its source as the reference for features and behavior: the permission names and sub-users, schedules and task chains, backups, the file manager and the console socket. Operators who already run Pterodactyl use the 17.23 egg. A maintained fork stays an opt-in idea, planned, not yet scheduled.
 - **Built first.** Settled on 2026-09-18 at the maintainer's direction: the panel's foundation comes before the rest of the game, so later systems are built into it rather than fitted to it. The order is 17.01, 17.74, 17.02, 17.03, 17.04, 17.73 and 17.06 first, which need nothing that is not already built, with 17.74 immediately after 17.01 because the console line is the surface the maintainer reads on every day of the rest of this project, and 17.73 before 17.06 because the panel and the launcher window are both built from it; then 4.01 and 4.02, which the game needs next anyway and which 17.05 waits on; then 17.05, 17.08, 17.09, 17.11, 17.14 and 17.46-17.50. On 2026-09-22 the maintainer asked for panel accounts that can each be given any role, so after 17.06 the order is 17.08, 17.14 and 17.46, then 4.01, 4.02 and 17.05, then 17.47-17.50, then 17.09 and 17.11. The same day the maintainer asked for error reports an operator sends to the maintainer, so 17.106 follows 17.46. The same day the maintainer asked that a colored value in a log line be a link with a hovercard that opens whatever it names, so 17.107 follows the milestones it reads from, which are 17.76 for the runs, 17.106 for the source location and 17.07 for the log viewer. Everything else in this phase arrives with the system it shows, under the rule in doc/ROADMAP.md that every subsystem ships with its panel surface, so the pages for realms, players, settings, world edits and client data are built by the milestones that build those systems.
-- **Order.** Ids are allocation order, not build order. Within this phase the dependency graph gives the build order, so a dependency may name a higher id: 17.15 and 17.16 wait for 17.27 and 17.46-17.48, 17.22 waits for 17.26, 17.28, 17.29, 17.32 and 17.49, 17.31 waits for 17.26, and 17.24 waits for 17.46. 17.01-17.24 keep the ids they were published with, and everything added later takes an id from 17.25 up. Nothing added on 2026-09-18 breaks the rule the other way either: 17.85 waits for 17.22, 17.92 for 17.80, 17.94 for 17.81 and 17.100 for 17.99, all lower ids. Three pairs are built in their own order and are worth naming, since each second half is worthless without its first: 17.78 then 17.79, 17.80 then 17.92, and 17.103 then 17.104. A check never rests on a milestone outside its own dependency closure: where one did, the dependency was added or the check was narrowed to what exists at that point.
+- **Order.** Ids are allocation order, not build order. Within this phase the dependency graph gives the build order, so a dependency may name a higher id: 17.15 and 17.16 wait for 17.27 and 17.46-17.48, 17.22 waits for 17.26, 17.28, 17.29, 17.32 and 17.49, 17.31 waits for 17.26, and 17.24 waits for 17.46. 17.01-17.24 keep the ids they were published with, and everything added later takes an id from 17.25 up. Nothing added on 2026-09-18 breaks the rule the other way either: 17.85 waits for 17.22, 17.92 for 17.80, 17.94 for 17.81 and 17.100 for 17.99, all lower ids. Three pairs are built in their own order and are worth naming, since each second half is worthless without its first: 17.78 then 17.79, 17.80 then 17.92, and 17.103 then 17.104. A check never rests on a milestone outside its own dependency closure: where one did, the dependency was added or the check was narrowed to what exists at that point. The fifty-three milestones added on 2026-09-27, 17.112-17.164, take ids from 17.112 up in the order they were grouped, reliability, hosting, security, automation, experience and teamwork, after 17.112 itself; among them 17.135 waits for 17.140; 17.148 waits for 17.149; 17.158 waits for 17.159 and 17.164, and 17.129 waits for 17.116 so a staging copy reuses the drill's scratch copy.
 - **Splits.** 17.14 became six milestones, 17.16 three, 17.18 five, 17.26 three and 17.27 four. Each keeps its id for its first part and the rest take ids from 17.46 up (17.46-17.50 from 17.14, 17.51 and 17.52 from 17.16, 17.53-17.56 from 17.18, 17.57 and 17.58 from 17.26, 17.59-17.61 from 17.27). Three published titles narrowed to what their milestone now holds: 17.16, 17.18 and 17.19, whose alerts moved to 17.67 so graphs no longer wait for mail settings. Two titles changed because their milestone grew instead: 17.14 now names the audit store, which the panel needs from its first milestone, and 17.50 the roles page.
-- **Sizes.** A size is read off the milestone's own content, so a label can be checked against the text: S is at most 4 deliverables and at most 5 acceptance checks, L is 8 or more deliverables or 8 or more acceptance checks, and M is everything between. Two milestones carry L on judgment instead of count, 17.24 because it installs and runs on two desktop operating systems and 17.51 because it is one operation from end to end, and the Oversized note names both with the rest. Recounting moved sizes that were already published, without touching any id: 17.01 and 17.07 to S, 17.03, 17.04 and 17.12 to M, and 17.06, 17.14, 17.15 and 17.16 to L. Of the milestones added later, 17.50 moved to M with its roles page, 17.64 to M on its count, 17.106 carries L on its eight deliverables, 17.107 carries M on six deliverables and six checks, and of the three plugin milestones added on 2026-09-23, 17.109 carries M while 17.110 carries L on its nine acceptance checks and 17.111 on its ten deliverables. Of the thirty-one added on 2026-09-18, the thirteen marked S each carry at most 4 deliverables and at most 5 checks, and none of the eighteen marked M reaches 8 of either, so nothing new is large and the Oversized note's list of nine stands as it is. Where a 2026-09-18 deliverable was added to a milestone that already existed, it was folded into a deliverable already there wherever a new bullet would have changed that milestone's size, which is why 17.21 and 17.70 gained a clause rather than a line.
-- **Oversized.** The large milestones are the twelve carrying L: 17.110 the frame a panel tool runs in and 17.111 plugins shipping with the panel, and 17.06 dashboard app and overview page, 17.14 panel listener and audit store, 17.15 schedules, 17.16 backups, 17.18 file roots and the path jail, 17.22 nodes, 17.24 desktop control app, 17.51 backup restore, 17.73 the design system and 17.106 error reports. No other milestone in this phase is large. Split 17.106 along these lines if a focused stretch cannot finish it: the source location on every record with its grouping, and the errors page with its report file. Split 17.73 along these lines if a focused stretch cannot finish it: the token pipeline with its generator and gates, and the component set with its gallery and tests. Split any of them again if a focused stretch cannot finish it, along these lines: 17.14 into the listener with its TLS and the sessions, limiter and audit store; 17.15 into the engine with its triggers and the tasks with their completion and countdowns; 17.16 into the dumps with their snapshot record and the archive with its verification; 17.06 into the app shell with its route table and the overview cards; 17.18 into the jail with its roots and the listing and reading page; 17.22 into the join with its heartbeat and the nodes page with placement.
+- **Sizes.** A size is read off the milestone's own content, so a label can be checked against the text: S is at most 4 deliverables and at most 5 acceptance checks, L is 8 or more deliverables or 8 or more acceptance checks, and M is everything between. Two milestones carry L on judgment instead of count, 17.24 because it installs and runs on two desktop operating systems and 17.51 because it is one operation from end to end, and the Oversized note names both with the rest. Recounting moved sizes that were already published, without touching any id: 17.01 and 17.07 to S, 17.03, 17.04 and 17.12 to M, and 17.06, 17.14, 17.15 and 17.16 to L. Of the milestones added later, 17.50 moved to M with its roles page, 17.64 to M on its count, 17.106 carries L on its eight deliverables, 17.107 carries M on six deliverables and six checks, and of the three plugin milestones added on 2026-09-23, 17.109 carries M while 17.110 carries L on its nine acceptance checks and 17.111 on its ten deliverables. Of the thirty-one added on 2026-09-18, the thirteen marked S each carry at most 4 deliverables and at most 5 checks, and none of the eighteen marked M reaches 8 of either, so nothing new is large and the Oversized note's list of nine stands as it is. Where a 2026-09-18 deliverable was added to a milestone that already existed, it was folded into a deliverable already there wherever a new bullet would have changed that milestone's size, which is why 17.21 and 17.70 gained a clause rather than a line. Of the fifty-three added on 2026-09-27, 1 carry S, 32 carry M and 20 carry L, each read off its own count: 17.112, 17.113, 17.114, 17.115, 17.116, 17.118, 17.119, 17.121, 17.126, 17.129, 17.133, 17.135, 17.139, 17.141, 17.142, 17.147, 17.152, 17.156, 17.158, 17.163 each reach 8 deliverables or 8 checks.
+- **Oversized.** The large milestones are the twelve carrying L: 17.110 the frame a panel tool runs in and 17.111 plugins shipping with the panel, and 17.06 dashboard app and overview page, 17.14 panel listener and audit store, 17.15 schedules, 17.16 backups, 17.18 file roots and the path jail, 17.22 nodes, 17.24 desktop control app, 17.51 backup restore, 17.73 the design system and 17.106 error reports. No other milestone in this phase is large. Split 17.106 along these lines if a focused stretch cannot finish it: the source location on every record with its grouping, and the errors page with its report file. Split 17.73 along these lines if a focused stretch cannot finish it: the token pipeline with its generator and gates, and the component set with its gallery and tests. The twenty L milestones added on 2026-09-27 split along these lines if a focused stretch cannot finish one: 17.112 into the tome format with its reader, checks and the supervisor's ready checks, and the Tomes page with export and upgrades; 17.113 into the per-thread progress counters with the hung restart, and the operating system watchdogs with the outside heartbeat; 17.114 into keep-awake and a graceful operating system shutdown, and the update, reboot and clock findings; 17.115 into the runbook format with its built-in set and coverage test, and the action buttons with the steps recorded on an alert; 17.116 into the restore drill with its badge and finding, and the update rehearsal; 17.118 into configuration and settings drift, and installed files and schema drift; 17.119 into drives and their health, and memory pressure, steal time and handle limits; 17.121 into spans with their propagation, and the trace view with the service map; 17.126 into capturing and shipping binary logs, and the timeline restore; 17.129 into staging copies with scrubbed personal data, and pull request previews; 17.133 into generic OIDC with linking, and Discord and GitHub with role mapping and break-glass owners; 17.135 into canary credentials with their alerts, and the lockdown with its review; 17.139 into player data export, and erasure with retention; 17.141 into approval policies on chosen actions, and change requests; 17.142 into account linking with slash commands, and alert buttons with live status messages; 17.147 into the sandboxed runner with its capabilities, and the Scripts page with versions, dry runs and tasks; 17.152 into boards and widgets, and the wall display with its pairing; 17.156 into undo from the activity record, and selection with bulk actions; 17.158 into the incident workspace with its timeline, and postmortems with their actions; 17.163 into rotations with escalation, and handoff with the shift log. Split any of them again if a focused stretch cannot finish it, along these lines: 17.14 into the listener with its TLS and the sessions, limiter and audit store; 17.15 into the engine with its triggers and the tasks with their completion and countdowns; 17.16 into the dumps with their snapshot record and the archive with its verification; 17.06 into the app shell with its route table and the overview cards; 17.18 into the jail with its roots and the listing and reading page; 17.22 into the join with its heartbeat and the nodes page with placement.
 - **Gated checks.** A check that needs the maintainer's own machine, a second machine, a security key, a desktop SFTP client, a Pterodactyl install or a retail client session is marked `Dev-gated:` with what it needs, the form phase 16 already uses; a check an environment variable turns on is marked `Env-gated` with that variable, as the Tests section of doc/ARCHITECTURE.md describes. doc/ROADMAP.md's Where we are paragraph lists the phase 17 checks that wait for the maintainer.
 - **Proposals.** doc/PANEL.md proposed the choices this phase rests on, and every one of them is settled. On 2026-09-22, when 17.14 built it, the admin API's remote-access rule was extended to the panel's own listener, under Panel option names. On 2026-09-25 the rest were settled at the maintainer's direction: the time zone data source under Time zones in doc/ARCHITECTURE.md, and under Panel operations in doc/ARCHITECTURE.md the scope tree with its default role bundles, the command security level cap on `console.write`, the keyring, the cipher and keyed hashes, outbound HTTP, certificates for a hostname, the event socket protocol, backup sealing and structured dumps, the S3 client, the login-screen countdown, where a node's schedules run, the file editor and archive libraries with the default archive format, SFTP and remote pull, WebAuthn, the QR renderer, the trash and version stores, database credential rotation, the maintenance bypass levels, world edit exports, player registration, the patch signing key, the sequential ramp, the one search engine and the installation file's format. Each milestone below names the entry it rests on. Until the milestones that build nodes, clusters and realms land, grants are the per-app sub-user grants and every acceptance check here stays at app scope.
 - **Docs.** The supervisor is a fourth executable and the panel's host. The commit that adds this file also adds it to doc/ARCHITECTURE.md's Processes table, its repository layout block and its Operations paragraph, so nothing is left to do there. The panel listener's own bind and TLS rule was recorded under Decisions, Operations on 2026-09-22, when 17.14 built it, so nothing is left open there either.
@@ -142,7 +195,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Request size.** 17.02 bounds what the admin API accepts with `Admin.MaxRequestBytes`, checked after the token and before any handler, and the same value caps a WebSocket message. Crow buffers a request body in memory before any handler or middleware runs and offers no hook to refuse one earlier, so that setting bounds what an endpoint sees, not what an unauthenticated peer can make the process allocate. Closing that needs a patched Crow parser or another HTTP library, and it is listed here so a later milestone decides rather than the gap going unrecorded.
 - **Listening socket.** Crow's acceptor sets `SO_REUSEADDR` on the socket it listens on and offers no way to choose otherwise, so on Windows another process running under any account on the same machine can bind the same address and port as a running admin API and receive the connections meant for it, reading the bearer token an operator's dashboard or `curl` then sends. 17.02's pre-flight check already skips the option for exactly this reason, but the socket Crow binds is beyond its reach. Closing it needs `SO_EXCLUSIVEADDRUSE` on that socket, which means either a project-owned acceptor handed to `crow::Server` in place of `App::run_async`, or a patched Crow port, the same choice the Request size note asks for, so both are listed here for one decision rather than two. Until then the admin port is only as private as the machine's local accounts, and `doc/config/<app>.md` says so beside `Admin.BindIP`.
 - **Risk.** 2.15's real-client check showed that the client displays MSG_LOGINSERVERSHUTDOWN as the server going down, and the login server closes the connection as it sends it. A login-screen warning at 5 and 1 minutes therefore needs a notice that does not disconnect, found by capture or client reverse engineering. Until one is found, 17.15 sends only the final notice on the login server and earlier warnings go to players in the world.
-- **Operations depth.** 17.74-17.104 were added on 2026-09-18, after research against the panels and observability tools operators already run and after the maintainer judged the console this phase shipped. They fall in five bands. Reading a line: 17.74-17.77, which rework what 17.01 shipped and carry their own checks rather than editing 17.01's ticked ones. Seeing from outside: 17.81 and 17.94, because every health signal the first 73 milestones define is the server reporting on itself, and a server that is healthy by every internal figure and unreachable behind a firewall rule reads as fully green. Understanding what happened: 17.78, 17.79, 17.80, 17.83, 17.90, 17.91 and 17.92, which answer why rather than whether. Acting on the game rather than on the process: 17.89, 17.95, 17.101, 17.103 and 17.104, since nothing in the first 73 restores anything smaller than a whole database or gives a player anything. Not being told twice: 17.85, 17.86 and 17.87. The rest, 17.82, 17.84, 17.88, 17.93, 17.96, 17.97, 17.98, 17.99, 17.100 and 17.102, each remove a reason to reach for something Ambrose deliberately does not have, such as a shell. **Scheduled now:** 17.74, with 17.75, 17.76 and 17.77 behind it; 17.74 is in the Built first order immediately after 17.01. Everything else here is planned work that waits for its dependencies and its turn, and nothing else in this phase is reordered for it. Once those dependencies allow, the order worth taking is 17.81, 17.78, 17.83, 17.80, 17.82, 17.86, 17.89, 17.88 and 17.95; if the phase has to be cut, the last to schedule are 17.79, 17.96, 17.97, 17.98, 17.99, 17.100, 17.101, 17.102, 17.103 and 17.104, none of which blocks a server from running. Four ideas from the same research were deliberately not taken: statistical anomaly detection per metric, which on one machine with tens of players pages on every unusual login hour; browser push, which routes through another company's endpoints and would break the rule that nothing leaves the machine; a browser shell, which would defeat the path jail, the protected paths and the audit model in one control, and which 17.84 removes the reason to ask for; and a plugin API, which is a remote code execution surface on a panel that fronts a game database, and whose useful half 17.101 gives without running anybody's code. That refusal was reversed on 2026-09-23 at the maintainer's direction, and 17.109, 17.110 and 17.111 are the terms on which it comes back rather than a change of mind about the risk. The objection stands and is answered in three places: a plugin ships in this repository and arrives by the same signed release as the panel, so there is no second trust root and no registry to take over; a panel tool runs in a frame with no session, no cookies and one audited bridge whose every call names a capability the operator granted, so a review that misses something costs a broken tool rather than a database; and the server never loads code a plugin shipped, because a server-side plugin is source the operator builds. A plugin API that skipped any one of those three would still be the thing this note refused.
+- **Operations depth.** 17.74-17.104 were added on 2026-09-18, after research against the panels and observability tools operators already run and after the maintainer judged the console this phase shipped. They fall in five bands. Reading a line: 17.74-17.77, which rework what 17.01 shipped and carry their own checks rather than editing 17.01's ticked ones. Seeing from outside: 17.81 and 17.94, because every health signal the first 73 milestones define is the server reporting on itself, and a server that is healthy by every internal figure and unreachable behind a firewall rule reads as fully green. Understanding what happened: 17.78, 17.79, 17.80, 17.83, 17.90, 17.91 and 17.92, which answer why rather than whether. Acting on the game rather than on the process: 17.89, 17.95, 17.101, 17.103 and 17.104, since nothing in the first 73 restores anything smaller than a whole database or gives a player anything. Not being told twice: 17.85, 17.86 and 17.87. The rest, 17.82, 17.84, 17.88, 17.93, 17.96, 17.97, 17.98, 17.99, 17.100 and 17.102, each remove a reason to reach for something Ambrose deliberately does not have, such as a shell. **Scheduled now:** 17.74, with 17.75, 17.76 and 17.77 behind it; 17.74 is in the Built first order immediately after 17.01. Everything else here is planned work that waits for its dependencies and its turn, and nothing else in this phase is reordered for it. Once those dependencies allow, the order worth taking is 17.81, 17.78, 17.83, 17.80, 17.82, 17.86, 17.89, 17.88 and 17.95; if the phase has to be cut, the last to schedule are 17.79, 17.96, 17.97, 17.98, 17.99, 17.100, 17.101, 17.102, 17.103 and 17.104, none of which blocks a server from running. Four ideas from the same research were deliberately not taken: statistical anomaly detection per metric, which on one machine with tens of players pages on every unusual login hour; browser push, which routes through another company's endpoints and would break the rule that nothing leaves the machine, reopened on 2026-09-27 as 17.154's opt-in, off by default and carrying only a wake-up with no subject, figure or identity, so nothing about the server leaves through it; a browser shell, which would defeat the path jail, the protected paths and the audit model in one control, and which 17.84 removes the reason to ask for, and which 17.147's sandboxed scripts do not bring back, since a script has no shell, no file system and no network, only the audited calls it declared; and a plugin API, which is a remote code execution surface on a panel that fronts a game database, and whose useful half 17.101 gives without running anybody's code. That refusal was reversed on 2026-09-23 at the maintainer's direction, and 17.109, 17.110 and 17.111 are the terms on which it comes back rather than a change of mind about the risk. The objection stands and is answered in three places: a plugin ships in this repository and arrives by the same signed release as the panel, so there is no second trust root and no registry to take over; a panel tool runs in a frame with no session, no cookies and one audited bridge whose every call names a capability the operator granted, so a review that misses something costs a broken tool rather than a database; and the server never loads code a plugin shipped, because a server-side plugin is source the operator builds. A plugin API that skipped any one of those three would still be the thing this note refused.
 
 ## 17.01 Server console: colored logs and a command prompt
 
@@ -2733,3 +2786,1364 @@ Settled on 2026-09-23 at the maintainer's direction, and it is the reason a plug
 - [ ] An author can run those checks locally and get the same answer CI gives
 - [ ] A plugin installed from a file is told apart in the tab from one that shipped, and survives a panel update
 - [ ] A withdrawn plugin shows as withdrawn with its reason, and nothing is removed from the operator's machine
+
+## 17.112 Tomes: templates for realms, apps and companion services
+
+**Goal:** An operator adds a realm, another game server or a program the community runs beside the game by picking a tome, answering a few typed questions and reviewing what it will create, instead of writing configuration by hand. A tome is one readable file that can be shared, and nothing in it is hidden behind inheritance, a second placeholder language or a shell script.
+
+**Size:** L. **Depends on:** 17.27, 17.28, 17.29, 17.30, 17.99
+
+Settled on 2026-09-27 at the maintainer's direction: Ambrose's panel is its own product, and this is its own answer to the need other hosting panels meet with server templates, written to be simpler to read and safer to apply. A tome describes what should exist; 17.99's installation file describes what does exist. Applying a tome produces a fragment of that installation file and goes through 17.99's difference and apply, so there is one writer and one review for both.
+
+**Deliverables**
+
+- The tome format: TOML 1.0 through toml++, the format 17.99 already settles, with a `[tome]` table naming it, its version, a one-line summary, its author, its licence and the lowest Ambrose release it needs, then the questions it asks and the things it creates. Its schema is generated from the same types the settings schema uses and published beside it, so an editor can check a tome as it is written
+- Questions (`[[ask]]`) are typed, never rule strings: a bool, an integer or unsigned integer with bounds, a number, a line of text with a byte limit, a choice from a list, a port name, a file root path or a secret. A question may instead name a declared setting (`setting = "Rate.Drop.Item"`) and then takes that setting's type, bounds, unit, description and default from the registry, so nothing is typed twice and a tome can never offer a value the setting would refuse. A secret answer is sealed into the keyring at once and the tome and every export hold only its reference
+- Ambrose's own apps are created by kind (`kind = "gameserver"`, `"loginserver"` or `"patchserver"`), and the tome says nothing about how to start, check or stop them: the supervisor already knows, from 17.27, 17.28, each app's health and start steps and its admin API shutdown. The tome gives only what differs, such as the realm an app belongs to, settings values or a 17.13 preset, and the port names it needs
+- Companion services (`kind = "service"`) for programs a community runs beside the game, such as a bot or a website: the program and its arguments as a list, never one shell string; its working folder inside a file root; its environment; how the supervisor knows it is ready, an HTTP answer, an open TCP port or, as a last resort the page marks as fragile, a line in its output; and how it is stopped, an HTTP request, a signal or a line on its input, with the 17.27 stop timeout and kill after it. The supervisor gains the HTTP and TCP ready checks it needs for these, and they are the only new supervision it gains
+- One placeholder form only, `{{ask.name}}` for an answer and `{{port.name}}` for an allocated port, usable in a companion's arguments, environment and in a configuration file the tome renders for it. Every placeholder is checked against the tome's own questions and ports when the tome is read, and a rendered file is shown as a difference before it is written. There is no inheritance between tomes and no reference to another tome's values: a tome that wants another's apps lists them itself
+- Ports are asked for by name and role (`game`, `admin`, `http`) from 17.29's pool, never as numbers, and databases by name on a 17.30 host, created with their updates applied by dbimport
+- Install steps are typed and few, never a script: every Ambrose app runs the build already installed, and putting one on another machine stays with 17.22 and 17.42; the steps create the databases, place a file downloaded from a URL whose SHA-256 the tome pins into the companion's folder, and let 3.22's automatic setup extract client data as it already does. A tome carrying anything else is refused on reading, naming it; running operator code belongs to 17.147's sandbox, not here
+- A Tomes page: the library of tomes that shipped with this panel and tomes imported from a file, each as a card with its summary, what it creates and what it will ask; creating from one opens a form generated from its questions, checked as it is filled, then a review listing every app, port, database, setting and file it would create, with nothing written until it is applied. Every creation is audited with the tome's name, version and digest
+- Export as a tome: any realm, app or companion service already running can be written out as a tome, with installation-specific values such as secrets, paths and hostnames turned into questions rather than carried, so a working setup can be shared without leaking it
+- Every app made from a tome remembers the tome, version and answers that made it. When a newer version of that tome arrives, the page shows a three-way difference between the old tome, the new tome and what the operator has changed since, and an operator's own change is never overwritten without asking which to keep
+- Shipped tomes live in the repository and arrive with a release, the way 17.111 ships plugins: at least "A realm" (a login server, a patch server and one game server with their databases and ports) and "Another game server for a realm". Imported tomes are kept in the panel store with their text and digest, not as loose files
+- doc/TOMES.md written for someone who has never hosted a server: what a tome is, a complete short example, every field, and the reasons it has no scripts, no inheritance and one placeholder form
+
+**Acceptance**
+
+- [ ] Creating from the shipped "Another game server for a realm" tome on a running installation asks only for its name and realm, reviews the app, its ports and its database before writing anything, and the new game server reaches ready (end-to-end run against a real supervisor)
+- [ ] A question naming `Rate.Drop.Item` shows the setting's own bounds, unit and description, and an answer out of bounds is refused naming the bounds (unit test)
+- [ ] A tome carrying a shell script, a download without a pinned digest, a placeholder that names no question or port, an inheritance key, or a field the running build does not know is refused on reading, naming each (unit test)
+- [ ] A companion service with an HTTP ready check shows as starting until the check answers and is marked failed with the reason when it never answers within its start timeout, and its stop sends the declared request, then kills it after the stop timeout (unit test with a stub program)
+- [ ] Exporting a running realm as a tome and creating from it on a clean installation gives the same apps, port roles and settings, and no secret value appears in the exported file (unit test and end-to-end run)
+- [ ] Upgrading a tome whose new version changes a setting the operator also changed shows both values and keeps the operator's until they choose (browser test)
+- [ ] An app made from a tome shows the tome's name and version on its page, and the audit record of its creation names the tome's digest (browser test)
+
+## 17.113 Hang detection and watchdogs at every layer
+
+**Goal:** An app that is still running but no longer doing anything is noticed, recorded and restarted like a crash, and a frozen supervisor or a machine gone silent is noticed by something outside it.
+
+**Size:** L. **Depends on:** 17.22, 17.23, 17.24, 17.27, 17.60, 17.67, 17.83
+
+**Deliverables**
+
+- A progress counter per critical loop in every app, the world tick, each network thread, each database worker and the admin API's own loop, advanced once per turn at the cost of one relaxed atomic increment and published on `GET /api/health` and in the metrics registry; a loop with nothing to do still turns on its wait timeout, so an empty realm or an idle queue never reads as stuck
+- A stall limit per loop, a live setting, read by the supervisor on every health poll: a counter that has not moved for its limit while the process lives and its health endpoint still answers puts the app in a new `hung` state in 17.27's model, and the app card names the loop and how long it has been still. 4.03's realm heartbeat already drops a stalled realm from the realm list, but nothing restarts or records it; this does
+- No hang declared while an app is starting, stopping or in a protected state, or across a gap in the supervisor's own polling, so a restore's drain, a long save at shutdown or a machine waking from sleep is never taken for a deadlock
+- A dump of every thread of the hung process before it is ended, through the operating system's own writer from outside the process on Windows and through 17.83's writer, woken by a signal, on Linux, with a time limit after which the process is ended anyway and the record says no dump was written
+- The hung app restarted through the normal 17.27 restart operation with 17.60's backoff and crash loop limits, and a crash record classified as hung, a new 17.60 class, naming the loop, its last counter value and the seconds it was still; 17.83 groups it by the stuck thread's top frames, so the same deadlock is one group with a count
+- A watchdog inside the supervisor over its own loops, the event loop, the relay, the sampler and the schedule engine, which ends the supervisor with a failure exit when one of them stops; the supervisor started after it adopts the apps still running, as 17.08 already does, so its own recovery never drops a player
+- The operating system watching the supervisor: the systemd unit `--install-service` writes becomes `Type=notify` with `WatchdogSec`, sending `READY=1` once ready and `WATCHDOG=1` only while the supervisor's loops move, where today it writes `Type=simple` with `Restart=on-failure`, which restarts a supervisor that exits and not one that freezes; the Windows service gains failure actions that restart it after a failure exit, where today it registers none; in Docker the same failure exit lets the Compose restart policy bring the container back, and the 17.24 desktop app starts again a supervisor it launched that exits this way
+- An opt-in outbound heartbeat, off by default: a URL the operator gives, such as a push monitor on their own Uptime Kuma or Healthchecks, called on an interval through the outbound HTTP client only while the supervisor and every app meant to run are healthy, so a machine that loses power, sleeps or freezes is noticed by what stops arriving; with nodes, a second node can be the witness instead, sending one notice through the webhook or mail channel chosen for it when the panel's link has been silent past a limit
+- The hung condition, a supervisor restarted by its watchdog and a witness's missing heartbeat published for 17.67's alert rules, and every hang, dump and watchdog restart audited
+
+**Acceptance**
+
+- [ ] A test app whose world loop blocks on a lock while its health endpoint keeps answering is marked hung naming that loop inside its stall limit, a dump holding every thread is written, the app restarts through a 17.27 operation, and its crash record is classified hung
+- [ ] An app left idle with no players and an empty database queue for several stall limits is never marked hung
+- [ ] The same deadlock hit three times is one crash group with a count of three, and a hang in a different loop is a different group
+- [ ] A loop that stalls while its app holds the restoring state, or while it is stopping, is neither dumped nor restarted
+- [ ] Stalling the supervisor's own event loop in a test build makes its watchdog end it with the failure exit, and the supervisor started after it adopts the running apps without restarting them
+- [ ] With the outbound heartbeat set to a local test endpoint, pings arrive while everything is healthy and stop while an app is hung, and with the setting off no request leaves the machine
+- [ ] Dev-gated: a supervisor frozen by a test command is restarted by the operating system under the systemd unit and under the Windows service, while its apps keep serving players. Needs a real service install on each system, which CI cannot make, so it is run by hand and recorded
+
+## 17.114 Host awareness: sleep, OS updates, shutdown and the clock
+
+**Goal:** Ambrose on a home PC keeps the machine awake while it is needed, says plainly when the operating system slept or restarted under it, stops cleanly when the machine shuts down, and warns when a clock is wrong.
+
+**Size:** L. **Depends on:** 17.15, 17.22, 17.23, 17.24, 17.60, 17.78, 17.82, 17.94, 17.98
+
+**Deliverables**
+
+- A named keep-awake request held while players are in the world or a backup, restore, update or move runs, and released when none is: a power request with a reason string on Windows, which `powercfg /requests` lists, and a logind sleep inhibitor lock naming why on Linux. It never keeps the display on, is on by default only when the 17.24 desktop app starts the stack and off by default for a service install, is a live setting in both, and is never taken in Docker
+- Sleep and resume read from the operating system, its power notifications on Windows and logind's `PrepareForSleep` on Linux, and recorded as host events, so the dropped sessions and the gap in every graph after a resume are explained rather than read as crashes; 17.15 already re-arms schedules after a wall-clock jump, and a resume counts as one
+- The end of the previous boot read at every supervisor start and classified as a clean restart, a restart for operating system updates or an unexpected power loss, from Windows events Kernel-Power 41, EventLog 6008 and User32 1074, which names the process that asked for the restart, and from the journal's record of the previous boot on Linux; each appears as a 17.78 graph marker, a 17.94 incident timeline entry and a sentence such as "The PC restarted for updates at 03:12"
+- Pending restarts as 17.82 findings: the reboot-required flags of Windows Update and component servicing, pending file renames, `/run/reboot-required`, and apps still mapping libraries an upgrade deleted on Linux, with a finding when the operating system's own restart window, Windows' active hours among it, falls outside the quietest hours 17.98 names
+- A graceful stop when the operating system shuts down: the Windows service accepts preshutdown with a timeout long enough for 17.08's stop sequence, the 17.24 desktop app holds a desktop shutdown with a reason the operating system shows while the stop runs, and on Linux a logind shutdown delay inhibitor does the same, so players are warned and characters saved; every exit that follows is recorded as a host shutdown, a new 17.60 class, never as a crash. Today the service accepts only a plain shutdown, and a desktop run outside the service has no shutdown hook at all
+- A clock section per node showing whether the operating system's time sync is working and when it last succeeded, and each node's offset from the panel measured over the 17.22 heartbeat, with findings when an offset or a stopped sync threatens what assumes a correct clock: two-factor codes, certificate renewal, S3 request signing, which a store refuses beyond 15 minutes of skew, schedules, and the order of audit rows across nodes
+- An opt-in reboot host task for 17.15 schedules, off by default and owner-only under `host.reboot`, that counts down to players, stops the stack cleanly, asks the operating system to restart with a reason it records, and completes its run after the boot once every app meant to run is healthy, or fails naming the app that is not; it is not offered in Docker, where a container cannot restart its host
+- A host page per node gathering these events, and the unexpected power loss, restart pending inside busy hours, time sync stopped and clock offset conditions published for 17.67's alert rules
+
+**Acceptance**
+
+- [ ] With the power interface replaced by a test double, a keep-awake request is held while a player is in the world or a backup runs, released when both end, and never taken when the supervisor runs in its Docker image
+- [ ] Recorded event fixtures of a power loss and of an update restart are classified apart, and each appears as a graph marker and an incident timeline entry with its time and sentence
+- [ ] A simulated operating system shutdown during a test run saves every character in the world before the apps exit, and each exit is recorded as a host shutdown rather than a crash
+- [ ] A reboot-required flag produces its finding, and a restart window that overlaps the busiest hours in 17.98's grid produces a finding naming both
+- [ ] A node whose clock is set 20 minutes off the panel's shows the offset and a finding naming what that offset breaks, two-factor codes among them, and an offset of one second shows none
+- [ ] A user without `host.reboot` cannot create the reboot task, and the task is not offered in Docker
+- [ ] Dev-gated: on a Windows desktop with players in the world, `powercfg /requests` lists Ambrose's request with its reason and the machine stays awake past its sleep timeout, and the reboot task restarts the machine and completes its run once the apps are healthy. Needs a real desktop that may sleep and restart, which CI is not
+
+## 17.115 Runbooks on alerts, findings and crash groups
+
+**Goal:** Every alert, problem, finding and crash group opens a short procedure that says what it means, how to confirm it and what to do next, with the actions as buttons, so a newer game master can handle a crash loop at three in the morning without paging the owner.
+
+**Size:** L. **Depends on:** 17.53, 17.67, 17.82, 17.83, 17.86, 17.88
+
+**Deliverables**
+
+- A runbook format: a Markdown document with a title, what the condition means, how to confirm it and numbered steps, where a step is text, an action, a live figure or a link to a page opened on the right subject and time window
+- Actions that are the ones pages already register for 17.88's palette, such as opening the graphs for the alert's window, restarting gameserver or muting a rule for 30 minutes, filled in with the subject and window of whatever opened the runbook, confirmed exactly as on their own page and checked at the server; a step never holds a shell command, an action the reader may not run shows disabled naming the permission, and one whose milestone has not landed shows as unavailable naming it
+- Live-figure blocks naming a series or a status field, rendered with its current value under the same permission filtering as the page it comes from
+- A runbook opened from every 17.67 rule, every problem code 17.03 publishes and 17.82 turns into a finding, and every 17.83 crash group by its class or fingerprint, reached from the alert, the finding, the crash page and every notification
+- Built-in runbooks kept in the repository beside the rule or check that raises them, shipped with the release and read-only in the panel, and a coverage test that fails when a rule, a problem code or a crash class lands without one
+- Operators' own runbooks, and local notes on built-in ones, kept in the panel store with every version, who and when, a difference between versions and a restore, edited in 17.53's editor under `runbooks.edit`; a local note survives an update that replaces the built-in runbook beneath it
+- A step record: while an alert is open, each step an operator opens and each action run from it is written to that alert's history with who, when and the result, and audited, so the next person sees what was already tried
+- Markdown rendered with no raw HTML, no script and no image from another host, under the panel's content security policy, because a runbook is text one operator wrote and others open
+- A starter set written to the format: a crash loop, a disk nearly full, a saturated database pool, restoring from a backup, and rotating a leaked database credential or API key
+
+**Acceptance**
+
+- [ ] The coverage test fails when an alert rule, a problem code or a crash class is added in a fixture without a runbook, and passes for every built-in one
+- [ ] A crash-loop alert opens its runbook with the app and window filled in, and its restart step asks for the same confirmation the app's page asks for and is refused at the server for a user without `power.restart`
+- [ ] Running an action from a runbook while its alert is open writes the step, who ran it and its result to the alert's history and to the audit log
+- [ ] An operator's runbook saved twice keeps both versions with who and when, and the earlier one restores; a local note on a built-in runbook survives replacing the built-in with a newer copy
+- [ ] A runbook holding raw HTML, a script or an image from another host renders none of them, proved by a sanitizer test and the page's content security policy
+- [ ] A live-figure block shows the value its own page shows at the same moment, and nothing to a viewer without that figure's permission
+- [ ] Every email and webhook notification carries its runbook's link, proved by a shaping test
+
+## 17.116 Restore drills and update rehearsals
+
+**Goal:** Each backup carries proof that it restores, boots and lets a player sign in, and a waiting update says how long its schema changes take on real data before anyone schedules it.
+
+**Size:** L. **Depends on:** 17.16, 17.17, 17.29, 17.43, 17.51, 17.67, 17.81, 17.82
+
+**Deliverables**
+
+- A drill, on a 17.15 schedule or from a button under `backups.drill`: the newest verified backup or a chosen one, fetched back from its 17.43 target when no local copy is kept, verified and loaded by 17.51's staging loader into scratch schemas named `drill_` with the run's id, on the same database host, refused when a name collides and never touching a live schema
+- The 2.06 updater run on the scratch schemas, then a throwaway loginserver and gameserver from the running build started on loopback-only ports from the 17.29 pool, with the copy's config but mail, webhooks, S3, the public status page and registration off, and nothing published to the live realm list
+- The proof: the drill waits for health, runs the 17.81 probe's sign-in and world entry against the copy, creating the probe account on the copy when the backup predates it, then stops the throwaway servers and drops every scratch schema and folder
+- Each phase timed, fetch, load, update, boot and sign-in, and the result kept on the backup's record as a badge such as "restore proven on 2026-09-27 in 6 m 12 s", or as the step that failed with its error; a drill whose sign-in cannot run because the client driver or the probe account is missing records sign-in as unknown, and the badge never says proven
+- No successful drill inside a window, a live setting, as a 17.82 finding and a 17.67 condition from the same figure, and a failed drill raising its own alert naming the backup and the step
+- An update rehearsal: when 17.17 has a build waiting, the same copy first runs that build's `--check` and its schema updates, and the update page shows the time each update file took, which `ALTER TABLE` statements had to copy the whole table after `ALGORITHM=INSTANT` and then `ALGORITHM=INPLACE, LOCK=NONE` were refused, the rows touched and the disk growth, and so the downtime the real update should take
+- Drills throttled like backups: one at a time per database host, skipped with the reason when free space is below the copy's size plus the reservation, refused while the live installation is restoring, updating or moving, and cancelled and cleaned up when one of those starts
+- An interrupted drill recorded as interrupted at the next supervisor start, with its scratch schemas, folders and ports removed then, so nothing named `drill_` outlives its run
+- Drill results on the backups page and on each backup's record, and every drill audited with who started it or which schedule did
+
+**Acceptance**
+
+- [ ] Env-gated (AMBROSE_TEST_DB): a drill of a verified backup loads it into `drill_` schemas, starts a loginserver and gameserver on pool ports, reaches health, and leaves no drill schema, folder or listening port behind, and the backup's record carries each phase's time
+- [ ] Env-gated (AMBROSE_TEST_DB): every live table's row count and checksum are the same before and after a drill
+- [ ] A drill whose sign-in cannot run because the client driver is missing records sign-in as unknown, and the backup is not badged as proven
+- [ ] Killing the supervisor during a drill leaves it recorded as interrupted at the next start, which removes its scratch schemas
+- [ ] With no successful drill inside the window the finding and its alert fire from the same figure, and a successful drill clears both
+- [ ] Env-gated (AMBROSE_TEST_DB): rehearsing a waiting build lists each update file's time and names an `ALTER TABLE` on a seeded table that needed a full copy, and the live database's applied update list is unchanged
+- [ ] A drill requested while the live installation is restoring is refused naming the restore, and a running drill is cancelled and cleaned up when an update starts
+
+## 17.117 Panel store durability: checks, snapshots and freeing space
+
+**Goal:** The one file holding panel users, two-factor secrets, grants, the audit chain, schedules and the backup catalog survives a power cut, and a filling disk frees space by a stated rule before the panel loses the controls needed to fix it.
+
+**Size:** M. **Depends on:** 17.14, 17.16, 17.18, 17.19, 17.43, 17.72, 17.80
+
+**Deliverables**
+
+- Checks of the panel store, the 17.80 search index and the 17.19 graph history, a quick check at every supervisor start and a full integrity check weekly, each result a problem record in the status API; `PanelStore` opens the store in WAL mode with `synchronous = NORMAL`, and nothing checks it today
+- Online snapshots of the store every few minutes, a live setting, through SQLite's online backup interface while writes continue, into a folder on another volume when one exists and another folder when not, each checked before it counts and kept by number, and optionally shipped sealed by 17.72 to the 17.43 target; the keyring stays a separate file, as Panel operations in doc/ARCHITECTURE.md settles, so a snapshot alone never opens its secrets
+- Recovery at start: a store that fails its check or will not open is moved aside with its time in its name, the newest good snapshot restored and every panel session ended, and the panel opens with a banner naming the snapshot's time, the minutes lost and that any revocation made inside them must be repeated, kept until an owner acknowledges it; the search index and graph history are rebuilt or started empty rather than holding start back. 17.16's panel component stays what an operator restores on purpose, and this is only the store recovering itself
+- Space freed before any writer refuses: when a volume nears its 17.18 reserve, the supervisor frees space in a stated order, expired trash, file versions beyond their retention floor, crash dumps beyond their count, the oldest days of the search index, then local copies of backups already verified off the machine, never a pinned backup or the only copy; each class is registered by the milestone that owns it and one whose milestone has not landed is skipped, and each pass stops when headroom returns and writes one audit row with the bytes freed per class
+- A small reservation on the store's volume held back for the store's own security writes and the audit rows they carry, so disabling a user, revoking a key or changing a grant still commits when everything else refuses; 17.14's rule that a change whose audit row cannot be written is refused still holds for every other write
+- A durability setting for ordinary writes, `NORMAL` or `FULL`, shown with its cost measured on this volume before it is saved, while writes to users, two-factor secrets, grants, keys and sessions always run with `synchronous = FULL`
+
+**Acceptance**
+
+- [ ] A store with bytes overwritten inside a page fails the start check, is moved aside and replaced by the newest snapshot, every session is ended, and the banner names the snapshot's time
+- [ ] A test that cuts the store off at a random write, discarding everything after its last sync the way a power cut does, leaves a store that opens and passes the integrity check in every one of a hundred runs, by itself or through the recovery
+- [ ] A snapshot taken during a stream of writes passes its own check, and lands on the other volume when one is configured
+- [ ] With a volume filled to its reserve, the freeing pass removes classes in the stated order and stops when headroom returns, a settings change then succeeds with its audit row, and a local backup with no verified off-machine copy is untouched
+- [ ] With the volume full, disabling a panel user still commits with its audit row from the held reservation
+- [ ] Writes to users, grants and keys run with `synchronous = FULL` whatever the setting says, proved by a test reading the pragma inside those transactions, and the setting shows its measured cost before it is saved
+
+## 17.118 Drift watch: config, installed files and schema
+
+**Goal:** One page lists everything that no longer matches what runs or what was installed, so an edit made weeks ago is found before the restart that exposes it.
+
+**Size:** L. **Depends on:** 17.08, 17.12, 17.17, 17.22, 17.67, 17.99, 17.105, 2.06
+
+**Deliverables**
+
+- A drift page listing each mismatch by kind with when it was first seen, what it affects, its fix and an alert condition, so the page and 17.67's rules cannot disagree
+- Config drift: a `.conf` or `conf.d` file changed outside the panel since the app loaded it, shown key by key as what the next reload or restart would change, read through 17.12's schema and layers, with buttons to reload now when every changed key is live or to put back the text the app loaded, which the supervisor keeps for this
+- Installed file drift: every file of the running build checked against an install manifest holding each file's SHA-256, which the 17.105 release workflow writes into every package and 17.17 records at install for a build from source, listing each file changed, missing or added; on Windows a missing file is shown beside the antivirus detection event that names it when one exists, since quarantine is the usual cause, and the fix is reinstalling the build through 17.17
+- Schema drift: the 2.06 updater records a fingerprint of each database's schema after every update it applies, tables, columns with type, nullability and default, indexes, keys and triggers, and the watch compares the live schema with it and names each table, column or index changed by hand, with the pending update file that would fail on it; 17.08's database page already marks an applied update file that changed, and this looks at the schema itself
+- Node drift: settings that differ between nodes serving the same role, such as the gameservers of one realm, ignoring the host-specific keys a restore also keeps, such as bind addresses, `ClientDir`, TLS paths and admin tokens
+- Watches through `ReadDirectoryChangesW` on Windows and inotify on Linux over the config and install folders, with a periodic full rescan, a live setting, because both can drop events, and a cap on hashing per scan
+- Accepting a finding with a reason under a permission of its own, which hides it until the thing changes again, and every acceptance, revert and reload audited
+- The line with 17.99 kept: its difference against a file the operator wrote stays on demand there, and a scheduled comparison with a Git-synced installation file is 17.148's; this watch compares only against what was loaded, installed and recorded
+
+**Acceptance**
+
+- [ ] Editing a gameserver `.conf` value on disk by hand shows on the drift page inside the watch's delay with the key's current and next values, and reloading clears it
+- [ ] A change made while the watcher is stopped in a test is still found by the next rescan
+- [ ] Deleting one file of the installed build and changing another lists both with their expected and actual hashes, and a clean build lists nothing
+- [ ] Env-gated (AMBROSE_TEST_DB): a column added by hand to a table in the characters database is named against the recorded fingerprint, and applying a dated update file records a new fingerprint with no drift
+- [ ] Two gameservers of one realm with different values of one rate setting are listed, and different bind addresses are not
+- [ ] Putting back the loaded text of a hand-edited `.conf` file restores it byte for byte and writes an audit row naming the file
+- [ ] A finding raises its alert once, and accepting it with a reason hides it until the file changes again
+
+## 17.119 Drive and host health: SMART, latency, pressure and limits
+
+**Goal:** A failing drive, a slow volume, memory pressure, stolen CPU on a VPS or a descriptor leak shows on the panel before it takes the game database or the tick with it.
+
+**Size:** L. **Depends on:** 17.19, 17.22, 17.67, 17.82
+
+**Deliverables**
+
+- A host page per node listing each physical drive with its model, health, temperature, wear, power-on hours, reallocated and pending sectors and the operating system's own disk error events, and which Ambrose stores sit on it: each local database's data folder, the backups, the panel store and the logs
+- SMART data from smartmontools' `smartctl --json` when the operator installs it, found on the path or named in a setting and run with a time limit, and otherwise what the operating system gives without it, the storage reliability counters on Windows and the NVMe health figures on Linux; a figure no source can give, or one the service account may not read, reads unknown with the reason, never healthy
+- Read and write latency and queue depth per volume, from the physical disk counters on Windows and `diskstats` on Linux
+- Memory pressure per node, the pressure stall figures on Linux, and commit charge against its limit with hard faults a second on Windows
+- CPU steal time on a virtual machine, with a note on the tick graph when steal rises with tick time, since a slow tick on a cheap VPS is often the neighbour rather than Ambrose
+- Each app's open descriptors against its limit on Linux and its handles on Windows, with the growth rate since it started, so a leak shows before the limit rather than when a socket fails to open
+- Every figure a 17.82 finding and a 17.67 condition: a drive failing or its pending sectors rising, a temperature, a latency or a pressure held above its threshold, steal held high, and descriptors near their limit
+- The rows added to 17.19's sampler and carried in 17.22's heartbeat rather than a second sampler, with their cost reported by 17.19's benchmark; the finding for backups kept on the database's own disk belongs to 17.124's copy targets, so it is not built twice
+
+**Acceptance**
+
+- [ ] With smartctl absent, every SMART figure reads unknown with its reason and none reads healthy
+- [ ] Given recorded `smartctl --json` output whose pending sector count rises, the drive shows as failing, the finding names the stores on it, and its alert fires once
+- [ ] A test app leaking descriptors shows its growth rate and raises the near-limit finding before the limit is reached
+- [ ] Pressure and steal figures parsed from recorded `/proc` files equal the values in them
+- [ ] 17.19's benchmark reports the sampler's cost with the new rows, and a round of twenty apps stays inside its budget
+- [ ] A viewer without `nodes.read` sees none of a node's host figures
+- [ ] Dev-gated: on a machine with smartmontools installed, each physical drive shows the health, temperature and wear smartctl itself reports. Needs real drives with SMART, which hosted runners do not expose
+
+## 17.120 Release health, bake window and canary realm
+
+**Goal:** An update that starts but behaves worse than the build before it is caught by comparison and rolled back, and an operator with several realms can try a build on one of them first.
+
+**Size:** M. **Depends on:** 17.17, 17.19, 17.44, 17.52, 17.60, 17.81, 17.83, 17.106
+
+**Deliverables**
+
+- A bake window after 17.17's health wait passes, its length a live setting, comparing the new build with the previous one over the same hours: crashes an hour, crash groups and error groups first seen on this build from 17.83 and 17.106, tick p99, sign-in success, the memory slope and the 17.81 probe's step times
+- The baseline taken from 17.19's history and from the build each crash, error group and probe run already records, and a baseline too short to judge said so rather than passing or failing the bake
+- A threshold per figure, a live setting, and a regression shown with both values and the size of the change, offering a rollback through 17.17's own path while 17.52 still pins the pre-update backup; rolling back by itself on a regression is opt-in and off by default, and the bake window can never be set longer than that pin
+- A canary realm: with several realms, an update can go to one chosen realm first through 17.44's rolling restart, the rest following once its bake passes; it is offered only for a build whose release declares every schema update additive, since realms share the login and characters databases and the old build must keep running beside them, and the update page says why when it is not offered
+- The bake's result recorded on the update run as passed, regressed with its figures, or rolled back, shown in the update history, audited, and published for 17.67's alert rules
+
+**Acceptance**
+
+- [ ] A test build that crashes twice an hour during the bake, against a baseline with no crashes, is marked regressed with both figures, and a rollback is offered while the pre-update backup is still pinned
+- [ ] With the automatic rollback on, the same regression rolls back through 17.17's path and the run records why, and with it off nothing changes until the operator acts
+- [ ] An error group first seen on the new build is listed as new, and one also seen on the previous build is not
+- [ ] A baseline with too little history says so, and the bake neither passes nor fails
+- [ ] A canary update of one realm leaves the other realm on the previous build until the bake passes, and a build with a schema update not declared additive is not offered as a canary, with the reason shown
+- [ ] A bake window longer than the pre-update backup's pin is refused naming the pin
+
+## 17.121 Request tracing and the service map
+
+**Goal:** A slow sign-in, world entry or panel action opens as one timed waterfall across every process it crossed, and a live map shows what depends on what.
+
+**Size:** L. **Depends on:** 17.04, 17.49, 17.80, 17.81, 17.90, 17.91, 17.92
+
+**Deliverables**
+
+- Settled on 2026-09-27 at the maintainer's direction to take the recommended option, and recorded under Panel operations in doc/ARCHITECTURE.md: spans in the OpenTelemetry data model, W3C Trace Context's `traceparent` header on every HTTP hop the panel and apps make, the trace id carried on the login key row across the loginserver's hand-off to the gameserver, and no tracing library linked, as the Tick profiles row under Panel operations in doc/ARCHITECTURE.md settled on no profiler library
+- Spans in the apps: each loginserver handler, each database statement with its call site, emitted by 17.90's timing layer rather than a second timer, the hand-off, the gameserver's world entry and object streaming, and in the supervisor each panel request and its relay into an app, each span with its parent, start, duration, status and a small set of attributes where a player appears only as an id
+- Tail sampling in the supervisor: a trace's spans held for a bounded time and kept when it errored or ran slower than its route's threshold, and otherwise kept at a small random rate, with the store bounded by days and bytes through the sweep 17.80 uses and under the space guard
+- A waterfall view of one trace as a timed tree across processes, opened from a log line's request id, a slow statement on 17.90's page, a probe run and 17.92's player inspector, and listing the log lines its spans wrote
+- The trace id added to each record on the live log stream, as the rule that fields are only ever added allows, so 17.80's search finds every line of a trace and the correlation id 17.26 gives an error leads to it
+- A service map of the apps, the databases and the outbound dependencies, mail, S3, webhooks, certificate issuance and update channels, with each edge's rate, error share and latency, counted from every span before sampling so the rates are true
+- An opt-in exporter, off by default, sending kept spans over OTLP through the outbound HTTP client to the operator's own collector, such as Jaeger, Grafana Tempo or SigNoz, with a queue and backoff; with it off nothing leaves the machine
+- A span site costing one relaxed flag check while tracing is off, and the world tick itself left to 17.91's breakdown rather than traced per tick
+
+**Acceptance**
+
+- [ ] Env-gated (AMBROSE_TEST_DB): a sign-in on a test installation produces one trace from the loginserver's handler through its statements and the hand-off to the gameserver's world entry, with every parent right and every child inside its parent's time
+- [ ] With a seeded sampler, a request slower than its threshold and one that errored are both kept, and fast ones are kept at the configured rate
+- [ ] A log line's request id opens the trace it belongs to, and the waterfall lists that line
+- [ ] The map's rate between gameserver and its database over a window equals the statement count 17.90 reports for the same window
+- [ ] With the exporter pointed at a local OTLP test receiver the kept spans arrive, and with it off no request leaves the machine
+- [ ] A span site costs nothing measurable with tracing off, proved by a benchmark in the test suite
+- [ ] A viewer without the account permission sees a span's timing and not the account it names
+
+## 17.122 Service level objectives and error budgets
+
+**Goal:** An operator sets a target such as 99.5 percent of sign-ins succeeding over 28 days, sees how much room is left, and is paged when players are being hurt at a rate that matters rather than for one slow tick.
+
+**Size:** M. **Depends on:** 17.17, 17.19, 17.44, 17.67, 17.81, 17.86, 17.94, 17.96
+
+**Deliverables**
+
+- Objectives over series the server already keeps: sign-in success counting only failures the server caused, so a wrong password never counts; world entries under a time; ticks inside their budget; and the 17.81 probe's availability, each with a target, a rolling window and its counting rule written out in words
+- An objectives page with each one's current level, the budget left and a burn-down over the window, with planned maintenance from 17.96's sources left out of the count and drawn as left out; 17.94's uptime figures stay as they are, and this adds targets, budgets and player traffic to them
+- Fast and slow burn-rate alerts over two windows each, in the form the Google SRE Workbook describes, registered with 17.67 and routed through 17.86, with the plain threshold rule for the same signal switched to burn rate when the objective is created, so the operator is not paged twice for one thing
+- A spent budget named in the confirmation of an update on 17.17's page, of a 17.44 rolling restart and of any schedule marked risky, which may ask for a reason but never blocks
+- Nothing computed and no condition registered until an objective exists, and suggested objectives offered from the installation's own history, changing nothing until saved
+
+**Acceptance**
+
+- [ ] A synthetic month of sign-in results with a known failure count gives the level and budget a hand computation gives, and wrong-password failures change neither
+- [ ] A failure rate burning the budget 14.4 times too fast fires the fast alert inside its short window, and a slow steady drip fires the slow alert and not the fast one
+- [ ] A planned maintenance window is left out of the level and drawn as left out
+- [ ] With a budget spent, the update and rolling restart confirmations both say so, and neither is blocked
+- [ ] With no objective, no burn-rate condition exists and nothing is computed
+- [ ] A suggested objective is offered from the history and changes nothing until it is saved
+
+## 17.123 Reachability from the internet: router, firewall and an outside probe
+
+**Goal:** An operator hosting at home is told in plain words whether players outside the network can reach login, game and patch, and if not which step fails, with the router and firewall changes offered for exactly the ports players need.
+
+**Size:** M. **Depends on:** 17.22, 17.23, 17.24, 17.29, 17.81
+
+**Deliverables**
+
+- A reachability page giving each player-facing allocation, login, game and patch, one verdict in plain words, reachable from outside, reachable only on this network or not reachable, with the step that fails: no router mapping, the firewall, carrier-grade NAT, a second router, or something beyond the router
+- The router's external address read through UPnP IGD, NAT-PMP or PCP, with miniupnpc and libnatpmp, both BSD-licensed and cross-platform, and carrier-grade NAT reported when that address is in 100.64.0.0/10 or a private range, saying plainly that port forwarding cannot work there
+- Opt-in router forwards, off by default, for the player-facing allocations 17.29 holds and never the admin API, panel, metrics or database ports, leased and renewed while the app runs, removed when it stops or its allocation changes, discovered only on the local interface, and audited
+- Firewall rules scoped to port, protocol, profile and executable, made on Windows by the installer or the 17.24 desktop app, which can ask for elevation where the service account cannot, and on Linux applied through ufw or firewalld when either is found and the supervisor may, or printed for the operator; in Docker the page names the ports 17.23's Compose file publishes instead
+- The 17.81 probe run from outside: from a second node, or from a helper's machine running the supervisor in a probe-only mode, joined with a token that can run the probe against the public address and report its result and nothing else; a probe from the same machine through its own public address is labelled as proving nothing about outside reach, since NAT loopback can succeed where the outside fails
+- Every change the page makes to a router or a firewall audited, and doc/guides/internet-safety.md's hand-written firewall steps pointing to the page
+
+**Acceptance**
+
+- [ ] Against a test UPnP gateway, turning forwards on maps exactly the login, game and patch allocations, renews them and removes them when the app stops, and a request to map the panel or admin port is refused
+- [ ] A gateway reporting 100.64.1.2 as its external address is reported as carrier-grade NAT with the sentence that forwarding cannot work
+- [ ] With forwards off, the test gateway receives no discovery or mapping request
+- [ ] A probe-only token runs the probe and reports its result, and is refused on every other route
+- [ ] A probe through the machine's own public address is labelled as not proving outside reach
+- [ ] Dev-gated: on a home network with a UPnP router, turning forwards on lets a machine on another connection reach the login screen, and turning them off closes it again. Needs a real router and a second internet connection
+- [ ] Dev-gated: on Windows, the firewall rule made for the login allocation names its port, profile and executable, and removing the allocation removes the rule. Needs an elevated desktop run on a real machine
+
+## 17.124 Backup copies to disks, shares and SFTP, with a 3-2-1 check
+
+**Goal:** A hoster without an S3 bucket keeps a verified copy of every backup on a second disk, a USB drive, a NAS or an SFTP server they already own, and the panel says whether any copy would survive losing this machine's drive.
+
+**Size:** M. **Depends on:** 17.16, 17.40, 17.43, 17.52, 17.72, 17.82
+
+**Deliverables**
+
+- Copy targets beside 17.43's S3 targets: a folder on another volume; a removable drive recognised by its volume serial on Windows or its filesystem UUID on Linux, never written when another drive takes its letter or mount point; an SMB or NFS share with its credentials sealed in the keyring, since the Windows service runs as `NT AUTHORITY\LocalService`, which reaches no share without them; and an SFTP server through libssh's client side, the library 17.40 already brings, with its host key pinned
+- Each verified backup copied to each target by that target's rule, read back against the manifest's SHA-256 and recorded per backup with its location, its last check and a retention of its own under 17.52's pins; copies stay sealed by 17.72, and the first copy to a target shows the contents statement 17.43 shows and records the acknowledgement
+- A removable drive catching up with every copy it missed when it is attached again, and a drive not seen for a set time raising a finding
+- Copies checked again on a schedule by reading them back, and 17.51's restore streaming from any copy when the local archive is gone
+- The backups page showing per backup how many copies exist, on how many kinds of media and how many off the machine, where only S3, SFTP and a share on another host count as off the machine
+- 17.82 findings, each also an alert condition: every copy on the same physical disk as the database, no off-machine copy newer than 7 days, a removable drive not seen inside its window, and a copy that failed its check
+
+**Acceptance**
+
+- [ ] A backup copied to a folder on another volume is read back against its manifest and recorded with its location and check time, and a copy with one flipped byte fails its check and is marked bad
+- [ ] A removable drive target receives the copies it missed when it is attached again, and a different drive at the same letter or mount point is not written
+- [ ] An SFTP target whose host key changed is refused with both fingerprints named
+- [ ] With every copy on the database's physical disk the finding says so, and adding an off-machine copy clears it
+- [ ] Env-gated (AMBROSE_TEST_DB): with the local archive deleted, a restore streams from a copy target and succeeds
+- [ ] No share or SFTP credential appears in any response, log or audit row
+- [ ] Dev-gated: an SMB share on another machine receives a verified copy while the supervisor runs as its Windows service. Needs a real share on a second machine or a NAS
+
+## 17.125 Moving the whole installation to a new machine
+
+**Goal:** A hoster moving from an old PC to a new one, or from a desktop to a VPS, brings the whole installation across with panel users and their keys, and a dead machine is recovered the same way from a copy and the exported keys.
+
+**Size:** M. **Depends on:** 17.16, 17.22, 17.24, 17.46, 17.51, 17.72, 17.99, 3.22
+
+**Deliverables**
+
+- Move out on the old machine, owner-only after a step-up check: a transfer package holding a fresh verified backup with its panel component, the 17.99 installation file, and the keyring's keys wrapped under a passphrase the operator types, the key derived by Argon2id and the keys sealed with AES-256-GCM through Botan, as the panel's other secrets are
+- The package written to a file, or streamed to the new machine after a one-time pairing code over 17.22's join handshake, which never makes the new machine a node
+- On the new machine, the desktop app's first run and the panel's `/first-run` page offering to bring an installation from another machine before any empty database is created: the databases restored through 17.51 and the panel store with them, the one place a store is restored on purpose, so users keep their passwords, two-factor, security keys and API keys, and every session the store carried ended on arrival
+- Client data rebuilt from the new machine's own install through 3.22, never carried in the package
+- A walk through what differs, the client path, folders, ports, database host, service registration and certificates, keeping the new machine's host-specific keys as the restore sequence in doc/PANEL.md already does unless the operator takes the old values
+- The old installation marked moved, refusing to start apps without an owner override that needs a reason, so two machines never serve the same accounts
+- A report comparing every table's row count with the snapshot record, and the same path recovering a dead machine from any archive copied off it plus the keys the owner exported; with only the backup key, panel users come back with two-factor and API keys reset, and the page says so before anything is restored
+
+**Acceptance**
+
+- [ ] Env-gated (AMBROSE_TEST_DB): moving a test installation into a fresh data folder keeps accounts, characters, panel users with their two-factor secrets, and API keys, and the report shows every row count equal to the snapshot
+- [ ] A package opened with the wrong passphrase is refused and nothing is written
+- [ ] A pairing code works once and expires, and the receiving machine never appears on the nodes page
+- [ ] After a move, the old installation refuses to start an app without an override, and the override is audited with its reason
+- [ ] The package's manifest lists no client file, and the new machine builds its own type dump
+- [ ] Env-gated (AMBROSE_TEST_DB): recovering from a sealed archive and the exported keys restores the installation with no package, and with only the backup key it says first that two-factor and API keys will be reset
+- [ ] Dev-gated: moving from a Windows desktop to a Linux machine brings players back on the same accounts, and the owner signs in with the same two-factor. Needs two machines
+
+## 17.126 Point-in-time recovery from binary logs
+
+**Goal:** A bad GM command, a duplication exploit or a corrupting bug costs seconds of play rather than everything since last night's backup, because the operator can restore to the second before it.
+
+**Size:** L. **Depends on:** 17.16, 17.24, 17.30, 17.43, 17.51, 17.67, 17.72, 17.78
+
+**Deliverables**
+
+- Opt-in per database host: on 17.24's private MariaDB the supervisor turns on row-based binary logging with full row images, and on a host registered through 17.30 it checks the same settings and names what is missing rather than changing that server
+- A replication user among 17.30's generated users with only the rights to read the binary log, and the supervisor reading finished and in-progress binary logs through the replication interface of the MariaDB connector the servers already load, into the backup store, sealed as 17.72 seals archives and copied to every 17.43 target
+- Each 17.16 snapshot recording its binary log position inside the dump transaction, so a base archive and the logs after it join exactly
+- The recovery window on the backups page, such as "any second in the last 7 days", from the oldest base archive with an unbroken run of logs to the newest event read, with any gap named and the window ending at it; a gap, such as the server purging a log before it was read, raises a 17.67 alert
+- A timeline in 17.51's restore wizard with 17.78's events and the activity log's rows as anchors, so the operator picks a moment such as the second before a world edit rather than typing one
+- Restoring to a moment: the base archive loaded into staging by 17.51, the decoded row events replayed up to that second through prepared statements, so no SQL text is ever parsed, as the Backup archives row under Panel operations in doc/ARCHITECTURE.md requires, then the swap and the report 17.51 already does
+- A schema change inside the replayed range matched to its 2.06 update file and applied through the updater, and one with no update file stopping the replay before it with the event named
+- Binary logs kept as long as a retained base archive needs them and no longer, their size on the backups page, and their writes under the space guard
+
+**Acceptance**
+
+- [ ] Env-gated (AMBROSE_TEST_DB): rows written after a backup come back when restoring to a moment after them, and a row written one second after the chosen moment is absent
+- [ ] Env-gated (AMBROSE_TEST_DB): a world edit recorded in the activity log is undone by restoring to the second before it, picked from the timeline, while an account created before it remains
+- [ ] The replay applies row events only through prepared statements, proved by a test that fails if the replay path reaches the plain text query call
+- [ ] A schema change with no matching update file stops the replay before it and names the event
+- [ ] A log purged on the server before it was read leaves a gap that the window shows and the alert names
+- [ ] A stored binary log holds no known account verifier in its bytes, and a restore with the key succeeds
+- [ ] Env-gated (AMBROSE_TEST_DB): turning recovery on for a registered host without binary logging names the missing settings and changes nothing on that server
+
+## 17.127 Dynamic DNS and DNS-01 certificates
+
+**Goal:** A home hoster whose address changes, or whose ISP blocks port 80, keeps a working hostname and gets a trusted certificate, and a panel reachable only on a LAN or a VPN gets one too.
+
+**Size:** M. **Depends on:** 17.14, 17.35, 17.108
+
+**Deliverables**
+
+- Settled on 2026-09-27 at the maintainer's direction to take the recommended option, and recorded under Panel operations in doc/ARCHITECTURE.md, beside the Certificates for a hostname row: the ACME DNS-01 challenge beside HTTP-01, through the DNS providers below, with HTTP-01 on port 80 staying the default
+- A hostname and a DNS provider with a free API, DuckDNS, deSEC, dynv6 or Cloudflare, or RFC 2136 dynamic updates signed with TSIG for the operator's own BIND, Knot or PowerDNS, with the token sealed in the keyring and never shown back; each provider a small adapter of our own over the outbound HTTP client, and nothing contacted until one is chosen
+- A and AAAA records kept pointed at the current external address, read from the router when 17.123 has found one or from an address service the operator names, which is the off-by-default setting for discovering a public address that Decisions, Experimental features in doc/ARCHITECTURE.md lists, updated only when the address changes and checked afterwards against the zone's authoritative servers rather than a cache
+- DNS-01 issuance through 17.108's ACME client: the challenge record written, waited on until every authoritative server answers it, the order completed and the record removed, so a certificate is issued with port 80 closed and a panel bound only to a LAN or VPN address gets a trusted one with no self-signed walkthrough
+- Checks before any order is placed, so a certificate authority's rate limit is never spent on an order that cannot succeed: the name resolves over IPv4 and IPv6 to the address the panel serves, a CAA record allows the authority, and the token can write the zone, each failure named
+- A DNS card on the panel settings page with each record, its value, its last update and check, the challenge in use and the next renewal, and every update and issuance audited
+
+**Acceptance**
+
+- [ ] Against a local DNS server accepting RFC 2136 updates, a changed external address updates the A record once, and an unchanged one sends nothing
+- [ ] Against a local ACME test server and that DNS server, a DNS-01 order issues a certificate with port 80 closed, and the challenge record is gone afterwards
+- [ ] A CAA record naming another authority stops issuance before an order is placed, naming the record
+- [ ] A stale answer from a caching resolver does not count as an update being live; only the authoritative servers' answer does
+- [ ] The provider token appears in no response, log or audit row
+- [ ] Dev-gated: an installation behind a router that blocks inbound port 80, with a DuckDNS or deSEC name, obtains a trusted certificate and keeps its record current across an address change. Needs an account with an outside provider and a real home connection
+
+## 17.128 Reverse proxy configs and the forwarded-header check
+
+**Goal:** An operator who already runs a reverse proxy gets a correct config for it, and the panel says whether the proxy's forwarded headers are trusted, so throttles and audit rows record the real client rather than the proxy.
+
+**Size:** S. **Depends on:** 17.14, 17.26, 17.35
+
+**Deliverables**
+
+- A behind-a-proxy page that asks for the proxy, Caddy, nginx, Apache httpd, HAProxy, Traefik or IIS with Application Request Routing, and the public hostname, and writes a ready config for the panel listener and optionally the patchserver from templates of our own: the event socket's upgrade passed, read timeouts longer than the socket's 60-second silent close, buffering off for the socket, a body limit matching the listener's, HSTS set in one place only, and the admin API and `/metrics` never proxied
+- After the operator has reviewed it, the page setting `Panel.TrustedProxies` to the proxy's address and the public URL 17.35 keeps, through the settings path with its audit row, refused where a layer locks the key
+- A connection check reporting the request the panel actually received: the peer, every forwarded header, whether the peer is trusted, the client address, scheme and host that result, compared with the public URL, and whether a socket upgrade got through, each mismatch explained with its fix
+- A problem record when forwarded headers arrive from a peer not in `Panel.TrustedProxies`, since every throttle and audit row then records the proxy's address, and doc/guides/reverse-proxy-tls.md pointing to the page for the choices it leaves to the operator
+
+**Acceptance**
+
+- [ ] The nginx, Caddy, HAProxy and Apache configs the page writes pass each product's own configuration check in a test, and a template test proves all six leave the admin API and `/metrics` unproxied
+- [ ] Behind a test proxy missing from the trusted list, the check says the peer is untrusted and that audit rows carry the proxy's address, and once the page has set `Panel.TrustedProxies` the check and the next audit row show the real client address
+- [ ] The event socket stays open for five minutes through the generated nginx config, proved by an end-to-end run
+- [ ] A host or scheme that differs from the public URL is shown with both values named
+- [ ] Setting the trusted proxies from the page is audited with the old and new values, and refused for a user without `panel.settings`
+
+## 17.129 Staging copies and pull request previews
+
+**Goal:** An operator or a helper tries a new build, pack, plugin or setting on a realistic copy of the installation that holds no real player data and cannot mail real players, and a pull request can be previewed against that copy before it lands.
+
+**Size:** L. **Depends on:** 17.16, 17.17, 17.29, 17.30, 17.34, 17.51, 17.99, 17.116, 3.24
+
+**Deliverables**
+
+- A staging copy made from a chosen backup or a fresh one, loaded by the scratch-copy path 17.116 builds into schemas prefixed `stg_` and the copy's name, with the config carried across through 17.99's installation file and a second loginserver and gameserver started on 17.29 pool ports with a chosen build: the running one, a newer release, or a branch or pull request built through 17.17's build channel
+- The copy badged STAGING on every card, page and audit row, with its apps at a scope of their own, so a grant can give a helper the staging copy and nothing live
+- Scrubbing before the first start from a classification registry that names every column of every Ambrose database as personal, secret or plain: emails rewritten to `.invalid` addresses, addresses and machine ids dropped, every verifier reset to one staging password, security levels capped below game master, chat and report text emptied and sessions cleared; a test fails when a column exists with no class
+- Mail, webhooks, bots, S3 and copy targets, the public status page, registration, certificate issuance, update channels and the patch signing key forced off in staging by the supervisor rather than by config the copy carries, and shown as forced off on the page
+- Refresh from a newer backup keeping the chosen build, destroy with one click, and a lifetime after which the copy is removed with a notice first, each dropping every `stg_` schema, folder and port it held
+- World edits made in staging reaching live only as a 17.34 journal change set, exported from staging and applied on live's world edits page with its own review, and nothing else flowing back
+- A previews tab that builds an open pull request into a staging copy, runs the 3.24 client driver's scenarios against it and posts a commit status with the operator's own token, sealed in the keyring and unused until given; building a pull request from a fork runs its author's code, so it needs `staging.preview.fork` and a confirmation naming the author and commit
+- `staging.create` and `staging.destroy` as permissions of their own, every create, refresh, destroy and preview audited, and staging schemas left out of 17.16's backups unless chosen
+
+**Acceptance**
+
+- [ ] Env-gated (AMBROSE_TEST_DB): a staging copy of a seeded installation starts on pool ports with STAGING on its cards and audit rows, and an account signs in to it with the staging password
+- [ ] Env-gated (AMBROSE_TEST_DB): no seeded email, address, machine id or chat line survives in the copy, proved by a test that searches every copied row for each seeded value
+- [ ] The classification test fails when a column is added to any Ambrose database without a class
+- [ ] With mail and webhooks configured on live, an action in staging that would send either sends nothing, and the page shows both forced off
+- [ ] A world edit made in staging reaches live only when its change set is applied on live's world edits page, and destroying the copy leaves no `stg_` schema, folder or listening port
+- [ ] A preview of a fork's pull request is refused without `staging.preview.fork`, and with it asks for a confirmation naming the author and commit
+- [ ] Dev-gated: a preview of a real pull request runs the client driver's scenarios against its staging copy and posts a commit status. Needs the maintainer's own retail client and a GitHub token
+
+## 17.130 Usage accounting: transfer, energy and cost
+
+**Goal:** An operator paying for a server, or watching a home data cap, sees what each app and node used this month, when the transfer allowance runs out, and roughly what it all costs.
+
+**Size:** M. **Depends on:** 17.19, 17.22, 17.25, 17.65, 17.67
+
+**Deliverables**
+
+- Monthly totals per app, realm and node kept for 13 months: core-hours, memory GB-hours, disk growth per root and per database, and network in and out, with the patchserver's downloads counted apart; totals come from the counters 17.19 samples, never from downsampled averages, so a restart or a coarse range neither doubles nor loses any
+- A transfer allowance per node with its reset day, the day it is forecast to run out, and a 17.67 rule that warns before it does, with the patch downloads' share shown beside it, since patch downloads by new players are what most often use one up
+- Energy measured from RAPL on Linux where its counters are readable, and otherwise estimated from CPU time and a wattage the operator enters, always labelled as an estimate
+- Prices the operator types, per node a month, per gigabyte of transfer and per kilowatt-hour, producing a monthly cost report per node and app and a cost per player-hour; no pricing service is ever called
+- A usage page under `usage.read`, with export as CSV through 17.25's formula-safe writer and as JSON
+- Every node's figures carried in 17.22's heartbeat, so the panel adds up an installation across machines
+
+**Acceptance**
+
+- [ ] A synthetic month of samples gives core-hours, memory GB-hours and network totals equal to a hand computation, and restarting the supervisor mid-month neither doubles nor loses any
+- [ ] Patch downloads are counted apart from game traffic, and the two add up to the node's total
+- [ ] An allowance forecast to run out inside the warning window raises its alert once, naming the day
+- [ ] Without readable RAPL counters energy is labelled an estimate from the entered wattage, and with recorded counters it equals their difference across a counter wrap
+- [ ] A CSV cell beginning with an equals sign exports as text
+- [ ] A user without `usage.read` gets 403 on every usage route
+
+## 17.131 Host security audit
+
+**Goal:** The installation health page says where the machine around Ambrose leaves it open, such as a keyring any local user can read, a database that accepts remote root or an admin port reachable from outside, and each finding carries the exact fix.
+
+**Size:** M. **Depends on:** 17.14, 17.23, 17.29, 17.30, 17.82, 17.123
+
+**Deliverables**
+
+- A Security group in 17.82's check registry, each check with its code, severity, sentence and fix route, and each fix either the page that makes it or a one-click fix that shows exactly what it will change, asks for confirmation and a step-up check, and is audited with the state before and after; the security checks 17.82 already runs, plain HTTP beyond loopback, two-factor not required and a first-run owner grant still held, stay where they are
+- File access: the keyring, the panel store, every admin token file and every TLS private key held to the rule Panel operations in doc/ARCHITECTURE.md settles for the keyring, owned by the service user with mode 0600 in a 0700 folder on Linux and an access list naming only the service account, SYSTEM and Administrators on Windows, with a fix that resets a file to that rule and nothing wider
+- Run-as: the supervisor or an app running as root, or as an elevated Administrator outside a service, routed to 17.23's service install under a dedicated user; a container running as root or with the Docker socket mounted, found from inside the container; and the hardening an installed unit or service still leaves unset, such as ProtectHome, a bounded capability set or a restricted service SID, reported with the line to add rather than rewritten by a second installer
+- Database posture on every host 17.30 registers, read through its administrative connection: remote root, anonymous users, the test schema, accounts with empty passwords, a runtime user whose grants have drifted beyond the least privilege 17.30 generated, and a server bound beyond loopback while every app using it is on the same machine; each statement-level finding offered as a one-click fix naming the statement it runs, and the bind shown with the configuration line to change, since it needs the database server restarted
+- Exposure: every admin API, SFTP and `/metrics` listener in 17.29's allocations bound beyond loopback, the operating system firewall leaving the panel or an admin port open to the network, read and closed through the firewall layer 17.123 builds without touching a rule it did not create, and the TLS versions the panel and admin listeners actually offer, with anything below TLS 1.2 named
+- Information findings that never raise an alert on their own: whether the volumes holding the data folder and the backups are encrypted at rest, and whether operating system security updates are pending, as the platform's own update service reports it
+- A check that cannot read its subject, such as a database host whose administrative user may not list accounts or a firewall the service account may not query, reporting as unknown with the reason, never as passed, under 17.82's rule
+
+**Acceptance**
+
+- [ ] A keyring file made readable by every local user is reported with its path and the rule it breaks, and the fix restores the settled owner and mode, or access list, and clears the finding, proved by unit tests on Linux and on Windows
+- [ ] Env-gated (AMBROSE_TEST_DB): a database host with an anonymous user, the test schema and a root account that accepts remote connections shows three findings, and each fix removes exactly its subject and writes an audit row naming the statement, run once against MySQL 8 and once against MariaDB
+- [ ] An admin API bound to 0.0.0.0 shows its finding with the allocation named, and a firewall reader reporting that port open adds the firewall finding with its fix, proved by a unit test over a fake firewall layer
+- [ ] Dev-gated: on Windows and on Linux with ufw, the fix closes an open admin port while a player-facing allocation stays open and a rule the operator wrote stays untouched. Needs a machine whose firewall the run may change, so it is run by hand and recorded
+- [ ] A listener that accepts TLS 1.1 is reported naming the versions a handshake against the running listener was actually served, proved by a unit test that connects with each version
+- [ ] Running the supervisor as root, or as an elevated Administrator outside a service, shows the finding with the route to the service install, and the Docker image started with the socket mounted shows its own finding
+- [ ] A check whose subject cannot be read reads as unknown with the reason, a viewer sees no fix control, and a fix without a recent step-up check changes nothing and asks for one
+
+## 17.132 New sign-in notices and stolen-session signals
+
+**Goal:** An operator hears within seconds when their panel account is used from a device or network it has not seen, and one link in that notice shuts the intruder out; owners are told when a session looks stolen.
+
+**Size:** M. **Depends on:** 17.14, 17.35, 17.36, 17.38, 17.46, 17.47, 17.86
+
+**Deliverables**
+
+- Known devices and networks per panel user: a signed, HttpOnly device cookie holding a random id stored only as its hash, the browser family from the user agent, and the network as the /24 of an IPv4 or the /48 of an IPv6 client address taken from 17.14, listed on the 17.38 account page with first and last seen and a control to forget one
+- An address database reader for an MMDB file the operator places in the data folder, such as DB-IP Lite, which needs no account, answering country and ASN, reloaded live with the old file kept when a new one will not open, and harmless when absent: every rule here then works on device and network alone and says so, and 17.138 reads this reader rather than a second one. Settled on 2026-09-27 at the maintainer's direction to take the recommended option, and recorded under Panel operations in doc/ARCHITECTURE.md: the reader is libmaxminddb from vcpkg, under Apache-2.0, which OSS-Fuzz fuzzes continuously, rather than a reader of the project's own, because an input from outside the machine is better met by a parser that years of fuzzing have hardened
+- A sign-in from a device or network the user has not used before notifies that user through their 17.86 channels, the notification centre always and email or their webhook where they set one, naming the time, browser, network and, with an address database, the country, and carrying a single-use "This wasn't me" link
+- "This wasn't me" works without signing in, is stored only as a hash, expires after a set number of days and works once: it ends every session and socket of that user, suspends their API keys, sets 17.46's must-change flag, requires a fresh second-factor check at the next sign-in and notifies every owner. A suspended API key is refused until its owner reinstates it, a state built by whichever of this milestone and 17.135 lands first
+- Deterministic signals raised to owners as 17.67 conditions through 17.86's routing, never a statistical score: a correct password followed by repeated wrong second-factor codes, a session cookie presented from a network or browser family other than the one it was issued to, one user active from two countries at once, and an API key's first use from a network it has not used; an owner chooses each rule's action, notify only, require a step-up check on the session's next danger action, or end the session
+- For users without two-factor sign-in, an optional hold, off by default and needing SMTP from 17.35, that keeps a sign-in from a new device on a new network pending until a link mailed to the user confirms it
+- Every notice, confirmation, "This wasn't me" use and signal audited under the `auth` namespace with the user as subject, and no notice or alert body carrying the full client address, only the network and country, under the payload rule 17.86 enforces
+
+**Acceptance**
+
+- [ ] A sign-in from a new browser on a new network notifies the user once with the browser and network, and the same browser signing in again from that network sends nothing, proved by an end-to-end run against a supervisor
+- [ ] Opened without a session, the "This wasn't me" link ends that user's other sessions within one second, answers their API keys with 401, and makes the next sign-in set a new password and pass a second factor, and a second use of the link is refused
+- [ ] A session cookie replayed from another network raises the owner signal, and with the rule set to end the session the next request from either address is refused, proved by a unit test with `Panel.TrustedProxies` set
+- [ ] Three wrong second-factor codes after a correct password raise one owner alert naming the user, not three
+- [ ] With an MMDB file present, sign-ins by one user from two countries inside the rule's window raise the two-countries signal; with the file removed that rule reports as unavailable and the device and network rules still fire
+- [ ] An API key's first request from a new network notifies its owner and raises the owner signal, and a later request from the same network does neither
+- [ ] No notice or alert body holds a full client address, proved by a shaping test
+
+## 17.133 Sign-in with OIDC, Discord or GitHub
+
+**Goal:** Operators sign in to the panel with an identity their staff already share, losing a Discord role or a team membership takes panel access away within minutes, and flagged local owners keep a way in when the provider fails.
+
+**Size:** L. **Depends on:** 17.35, 17.38, 17.46, 17.47, 17.48, 17.50, 17.86
+
+**Deliverables**
+
+- A Sign-in providers tab in 17.35's panel settings, behind `panel.settings` and empty by default, holding any number of providers: generic OpenID Connect by issuer URL, which covers Authentik, Keycloak, Google and Microsoft, and Discord and GitHub over their OAuth 2.0 flows; each client secret sealed in the keyring and never shown back, and each callback address built from the panel's public URL
+- The authorization code flow with PKCE, with state and nonce bound to a short pre-authentication cookie; for OpenID Connect the discovery document and signing keys fetched through the outbound HTTP client Panel operations in doc/ARCHITECTURE.md settles and cached, the ID token's signature checked with Botan for RS256, ES256 and EdDSA, and its issuer, audience, expiry and nonce checked within a bounded clock skew; a provider that cannot be reached or answers wrongly fails that sign-in with the reason and leaves password sign-in untouched
+- The sign-in page showing a Continue with button for each enabled provider beside the password form, and exactly the password form when none is enabled, so the zero-step desktop run and every installation that never opens this tab are unchanged
+- Linking: an operator links an identity from the 17.38 account page after entering their password and a current second factor, sees each linked identity with its last use, and unlinks it the same way; just-in-time provisioning, which creates a panel user for an unknown identity a mapping rule admits, is a per-provider setting off by default, and an identity that neither a link nor provisioning admits is refused with the one generic sign-in message
+- Mapping rules per provider, evaluated in order, from a claim, a group, a Discord guild and role or a GitHub organization and team to a role at a scope or a set of grants, such as a guild's Moderator role giving game master on one realm once realm scope exists and on its gameserver app until then; grants a rule made are marked as managed by that provider and shown read-only with the rule named wherever grants are edited, and no rule can grant past 17.48's owner-only and no-escalation rules
+- Membership rechecked on a set interval with the provider's refresh token sealed in the keyring: a lost role, team or group removes what its rule granted and bumps the user's session generation, so their sessions and sockets close within one second; while a provider cannot be reached the last known mapping holds for a grace period an owner sets, and then that provider's sessions end
+- A role on 17.50's roles page can be marked provider only, so its holders are refused at the password form, and an owner can flag named local owners as break-glass accounts that keep password sign-in, each of whose password sign-ins notifies every other owner at once through 17.86
+- Second factor per provider: an owner either accepts an OpenID Connect provider's own multi-factor claim from `amr` or `acr`, or requires the local 17.47 second factor after the provider as well, which is the default and the only choice for Discord and GitHub, whose tokens carry no such claim
+- Every link, unlink, provider sign-in, refusal, mapping change, recheck result and break-glass sign-in audited under the `auth` namespace with the provider named, and no token, code or client secret in any log, response or audit row
+
+**Acceptance**
+
+- [ ] Against an OpenID Connect provider the test serves itself, a linked operator signs in, and an ID token with a wrong audience, an expired one, a replayed nonce and one signed by a key outside the provider's set are each refused with the reason audited, proved by unit tests
+- [ ] With no provider enabled, the sign-in page and every sign-in route answer exactly as they did before this milestone, proved by the 17.46 and 17.47 sign-in tests passing unchanged and a browser test of the page
+- [ ] A mapping rule gives a provisioned user the mapped role, and removing the group at the test provider makes the next recheck remove that role and close the user's sockets within one second
+- [ ] A holder of a provider-only role is refused at the password form, and a flagged break-glass owner signs in by password while every other owner is notified
+- [ ] Linking an identity without a current second factor is refused, and an identity neither linked nor admitted by provisioning gets the message an unknown user gets
+- [ ] With the test provider unreachable, sessions it issued last through the grace period and end after it, and break-glass owners are untouched
+- [ ] Dev-gated: an operator signs in with Discord, and removing their Moderator role in a real guild removes their panel access within one recheck interval; the same run is made with a GitHub team. Needs a Discord guild, a GitHub organization and the maintainer's own application credentials, so it is run by hand and recorded
+
+## 17.134 Access reviews and the who-can explorer
+
+**Goal:** An owner answers who could have done this in seconds during an incident, sees who still holds rights they no longer use, and runs a periodic review that trims grants on the record.
+
+**Size:** M. **Depends on:** 17.15, 17.25, 17.36, 17.37, 17.48, 17.50, 17.86
+
+**Deliverables**
+
+- Last use per permission: `AuthorizationMgr` records, for each user and API key, when each permission was last exercised at each scope, written at most once a minute as 17.36 writes a key's last use, and kept in the panel store rather than read back out of audit rows, so the figure outlives the activity log's retention
+- A who-can explorer: pick a permission and a scope, such as `backups.restore` on one app, and see every user and API key holding it with its source, their role, a direct grant or a grant inherited from a wider scope, and when each last used it; or pick a user and see their effective permissions with the source of each; both answered by the same resolution 17.48 uses to decide a request, so the explorer and the decision cannot disagree
+- A Dormant tab listing users not signed in for a set number of days, API keys unused for a set number of days, and danger permissions a holder has not exercised in 90 days, each with a one-click reduce or revoke that goes through 17.37's no-escalation rule
+- Optional automatic disabling of dormant users and keys, off by default, which warns the holder through their 17.86 channels a set number of days before it acts and never touches the last owner
+- Access reviews an owner schedules through 17.15, such as quarterly: each grant, role assignment and API key at the chosen scope becomes a line that a named reviewer marks keep, reduce or revoke by a deadline, reviewers are notified through 17.86, reduce and revoke apply through 17.37's grant editing path, and a line left unanswered at the deadline takes the review's chosen default, keep and flag or revoke
+- The explorer and the Dormant tab behind `users.read` and every change behind `users.update`, each change a review or the Dormant tab makes audited with the review named, and a finished review exportable as CSV and JSON through 17.25's formula-safe writer for holders of `activity.export`
+
+**Acceptance**
+
+- [ ] The explorer lists every user and key holding `backups.restore` on an app with its source, a grant inherited from panel scope included, and a test that compares its answer with 17.48's decision for every user in a seeded installation fails when they differ
+- [ ] Using a permission updates its last use at most once a minute, and the figure is still there after an activity sweep has removed the audit rows
+- [ ] A user idle past the threshold appears on the Dormant tab, and revoking a grant there bumps their session generation and writes an audit row
+- [ ] With automatic disabling on, a dormant user is warned first and disabled only when the notice period ends, and the last owner is never disabled whatever their idle time, proved with a clock the test moves
+- [ ] A scheduled review opens on time with a line per grant, a revoke marked there removes the grant through the grant editing path, and a line unanswered at the deadline takes the review's default
+- [ ] The exported review lists every line with its reviewer, decision and time, and a reason beginning with an equals sign exports as text
+- [ ] A user without `users.read` gets 403 on the explorer, the Dormant tab and every review
+
+## 17.135 Compromise response: canary credentials and lockdown
+
+**Goal:** A leaked backup, support bundle or installation file names itself the moment someone tries what is inside it, and one control stops a hijacked or leaked panel from doing more harm while an owner works out what happened.
+
+**Size:** L. **Depends on:** 17.16, 17.22, 17.25, 17.36, 17.37, 17.47, 17.52, 17.67, 17.84, 17.87, 17.99, 17.140
+
+**Deliverables**
+
+- Canary credentials, each unique to one artifact and recorded in the panel store with the artifact it went into: a game account row written into the login database's stream in each backup archive, which exists in no live database; an API key string in the `amb_` form written into each support bundle's effective configuration in place of one redacted value, and into each exported installation file as a comment line that apply ignores; and an admin token written into each backup's config component in a token file no app reads. The operator is told when each artifact is made that it carries one
+- Detection wherever a canary can be tried: the login server holds the canary account names as keyed hashes the supervisor pushes to it, never in a table a backup carries, and reports any sign-in attempt naming one, successful or not; the panel reports any request presenting a canary key's public id; and each app's admin API holds the canary tokens' hashes and answers one with 401 like any wrong token while reporting it. A canary never grants anything
+- A tripped canary raising a critical 17.67 alert naming the artifact, the address that tried it and every audited download or export of that artifact with who made it, read from 17.52's downloads and the 17.84 and 17.99 audit rows
+- A restore through 17.51 leaving the canary row out, and 17.16's snapshot record counting each table without it, so verification, the restore report and a restored installation are exactly what they were
+- A Lock down control for owners, also `panel lockdown on` at the supervisor console and a task 17.87's triggers can run, which in one step ends every panel session and socket except the initiator's, suspends every API key, closes invites and, where they are on, SFTP and remote pull, pauses every schedule and trigger whose tasks change anything, rotates every app's admin token at once with no overlap through 17.140's rotation path, revokes every outstanding node join token, restricts sign-in to owners and requires each owner to pass their second factor again. A suspended API key is refused until reinstated, a state built by whichever of this milestone and 17.132 lands first
+- Lockdown kept in the panel store so a supervisor restart comes back locked down, shown as a banner on every page and reported by the status API naming who locked the panel down, when and why, and every lockdown step audited
+- A review screen grouping every audit row since a time the owner chooses by actor, with sign-ins, grant changes, key use, restores, settings changes and file writes marked, read from 17.25's store rather than a copy
+- Unlocking as a staged checklist an owner walks through, confirming the review, rotating what the review points at, reinstating API keys one by one or together, reopening invites and remote access, resuming schedules and triggers and lifting the owner-only restriction, each stage audited and the panel staying locked down until the last
+
+**Acceptance**
+
+- [ ] Signing in to the login server with the canary account of one backup, with any password, raises one critical alert naming that backup and each audited download of it, proved by an end-to-end run against a login server
+- [ ] The canary key string from a support bundle is refused at the panel with 401 and raises the alert naming that bundle, and a backup's canary admin token presented to an app's admin API does the same
+- [ ] Restoring a backup leaves no canary account in the login database, and the restore report matches the snapshot record table by table
+- [ ] Locking down ends every other session and socket within one second, answers every API key with 401, refuses a non-owner's sign-in and pauses a mutating schedule, while the initiator's session keeps working
+- [ ] After a lockdown every app refuses its previous admin token, and the panel still relays to each app with the new one
+- [ ] A supervisor restarted during a lockdown comes back locked down with its banner, and the lockdown lifts only when every unlock stage is done, each writing an audit row
+- [ ] A user who is not an owner can neither lock down nor unlock, and `panel lockdown on` at the console works with no panel session
+
+## 17.136 Expiring grants, just-in-time elevation and break-glass
+
+**Goal:** A helper game master holds rights only for the event weekend, a volunteer who needs restore rights at three in the morning asks and gets them for two hours, and an emergency can skip approval only in plain sight.
+
+**Size:** M. **Depends on:** 17.37, 17.47, 17.48, 17.50, 17.57, 17.86
+
+**Deliverables**
+
+- An end date on grants and role assignments, set in 17.37's grant editor and on 17.50's users page and carried on the versioned grant row; a sweep ends each at its time, bumps the user's session generation and lets 17.57 re-filter their sockets, and while one is running the user sees a banner with the time left and a control to ask for more
+- Request access: the access-denied page, a 403 the dashboard shows and a control shown disabled for a missing permission each offer to ask for the permission and scope they name, with a duration up to an owner's maximum and a reason; the request reaches the users who may grant it under 17.37's no-escalation rule through their 17.86 channels, one of them approves or refuses it in one click, and approval creates the grant with its end date, never a permanent one
+- Eligible roles: an owner marks a user eligible for a role at a scope, and the user activates it for up to a set number of hours with a reason and a step-up check, with or without approval as the eligibility says
+- Break-glass: users an owner designates may take a named emergency role for a bounded time with a mandatory reason and a step-up check and no approver; while it is active every operator's page carries a red banner naming who and why, every owner is notified at once, and it ends by itself like any other expiring grant
+- Nobody approves their own request, a request for more than an approver holds cannot be approved by them, and 17.48's last-owner and owner-only rules hold for a time-boxed grant exactly as for a permanent one
+- A requests page with open, approved, refused and expired requests and the active elevations with their time left, and every request, approval, refusal, activation, expiry and break-glass audited with both users named
+
+**Acceptance**
+
+- [ ] A grant with an end date stops working at that time without a sign-out, the user's socket loses the stream it covered within one second, and the audit log shows the expiry, proved with a clock the test moves
+- [ ] A game master refused `backups.restore` asks for it for two hours, an admin approves it in one click, and the restore route answers for those two hours and refuses after them
+- [ ] A user cannot approve their own request, and an approver who does not hold the requested permission is not offered the request
+- [ ] Activating an eligible role without a recent step-up check is refused and changes nothing
+- [ ] Breaking glass without a reason is refused; with one, every signed-in operator's page shows the banner within one second and every owner is notified
+- [ ] The time-left banner shows the end time the grant row holds, and asking for more reaches the approvers
+
+## 17.137 Installed components and security advisories
+
+**Goal:** When the next OpenSSL or libssh advisory lands, the panel says whether this build is affected and which Ambrose release fixes it, from an inventory of everything the installation runs.
+
+**Size:** M. **Depends on:** 17.17, 17.67, 17.82, 17.97, 17.105
+
+**Deliverables**
+
+- A CycloneDX software bill of materials for every release, built in 17.105's release job from the SPDX files vcpkg writes for each port and from the npm lockfile, covering the supervisor, each app, the dashboard and the private MariaDB 17.24 installs, published beside the release's artefacts with its SHA-256 and carried inside the installed build
+- A Components page listing each library with its version, licence and the programs that load it, beside what the supervisor detects at run time: each registered database server's version, the OpenSSL actually loaded, the operating system build and, in Docker, the base image
+- One advisory matcher in `src/common/` over OSV records, fed from three sources: a feed signed with the release key and fetched by the channel check 17.17 already makes, adding no request of its own; opt-in queries to OSV.dev, off by default, that send only component names and versions; and an OSV export an operator drops into the data folder for a machine with no network
+- Each finding showing its advisory id, severity, affected and fixed versions, whether a newer Ambrose release carries the fix, with a link to 17.17's update page, and, where the signed feed carries one, the project's note on whether the affected code is reachable in the way Ambrose uses the library, never guessed by the panel
+- Suppression of a finding with a reason and an expiry, audited, after which it returns; and findings at or above a set severity published as a 17.82 finding and a 17.67 condition, and as a line in 17.97's digest while any is open
+- The same matcher run in the release job over the release's own bill of materials, and on a pull request that changes `vcpkg.json` in the Linux leg such a change already builds, failing on an unsuppressed advisory at or above a set severity
+
+**Acceptance**
+
+- [ ] A release's bill of materials lists every vcpkg port and npm package the build carries with its version and licence, and a check fails when a port in `vcpkg.json` is missing from it
+- [ ] Given an OSV export naming the loaded OpenSSL's version as affected, the Components page shows the finding with its fixed version and names the newer release whose bill carries the fix, proved by a unit test over the matcher and a browser test of the page
+- [ ] With OSV.dev queries off, the supervisor makes no outbound request beyond 17.17's channel check, proved by a test that records every outbound request
+- [ ] A feed whose signature does not verify is refused, nothing is replaced, and the previous feed's findings stay
+- [ ] A suppressed finding is hidden until its expiry and returns after it, and the suppression is audited with its reason
+- [ ] A finding at the alert severity raises its 17.67 condition once and appears on 17.82's page, and clearing it clears both
+
+## 17.138 Network access rules and the address ban list
+
+**Goal:** An owner keeps the owner surface of the panel reachable only from where it should be while moderators still sign in from anywhere, a stolen session cookie is useless from another network, and repeated guessers are banned in plain view.
+
+**Size:** M. **Depends on:** 17.14, 17.36, 17.40, 17.46, 17.47, 17.48, 17.132, 6.05
+
+**Deliverables**
+
+- A Network access page holding allow and deny rule sets panel-wide, per role and per user, each rule a CIDR range, a country or an ASN, such as owners only from one provider's range or no sign-in from hosting ASNs; country and ASN come from the address reader 17.132 builds, and with no address database only CIDR rules can be saved
+- Enforcement at sign-in and again on every request and socket upgrade against the 17.14 client address, compiled into a prefix table swapped atomically when rules change so a check costs one lookup, and optionally at SFTP sign-in; a refused request answers 403 and is audited with the rule named; 17.36's CIDR lists on API keys and 17.09's allow list on `/metrics` stay as they are, and a key must pass both its own list and these rules
+- Report-only mode for any rule set, which audits every request it would have refused without refusing it, so a rule is watched before it is enforced
+- Lock-out protection: saving a rule that would refuse the saver's own current address names that address and asks for a step-up check, an owner on loopback passes whatever the rules say, and `panel access off` at the supervisor console turns enforcement off until it is turned on again, audited with the console as actor
+- An address ban list, fail2ban style, of addresses banned automatically after repeated sign-in failures across several accounts, beside 17.46's throttles rather than replacing them, each entry with its reason, first and last hit, hit count and expiry, and an unban that takes a reason
+- An opt-in rule set for players, pushed to the login server as a live reload target, which refuses a matching address before authentication the way a 6.05 address ban does, with the reason the client shows
+- Every rule change, ban, unban and enforcement toggle audited with the rule set before and after
+
+**Acceptance**
+
+- [ ] A rule allowing owners only from one range refuses an owner's request from outside it with 403 and names the rule in the audit row, while a moderator outside the range still signs in
+- [ ] A session cookie presented from an address a rule refuses is refused on its next request and its socket closes, proved by a unit test over the 17.14 client address
+- [ ] In report-only mode nothing is refused and each would-be refusal writes an audit row
+- [ ] Saving a rule that excludes the saver's own address without a recent step-up check changes nothing, an owner on loopback passes every rule, and `panel access off` at the console lets a refused owner back in
+- [ ] Failed sign-ins against several accounts from one address put it on the ban list with its count and expiry, the ban lifts at its expiry, and an unban lifts it at once with an audit row
+- [ ] With no MMDB file a country rule cannot be saved and CIDR rules still apply; with one, a country rule refuses an address the file places in that country
+- [ ] A player rule set refuses a matching address at the login server before authentication and admits every other, proved by an end-to-end run with a fake client
+
+## 17.139 Player privacy requests: export, erasure and retention
+
+**Goal:** When a player asks what the server holds about them, or asks to be forgotten, the operator answers completely from one tab, later restores included, without hand-editing SQL.
+
+**Size:** L. **Depends on:** 17.21, 17.25, 17.47, 17.51, 17.52, 17.62, 17.63, 17.80, 17.95
+
+**Deliverables**
+
+- A Privacy tab on each game account behind a new `accounts.privacy` permission, marked danger and grantable at cluster and panel scope, with every action on it needing a 17.47 step-up check
+- Export: one archive of everything held about the account, the account row without its verifier, the email, sign-in history with addresses and MachineIDs, characters, chat the player wrote, reports by and about them with other players' identities removed, bans and mutes, registrations and verifications, and the audit rows naming the account as subject, written as JSON with an HTML index that opens offline, built as a background job and fetched once through a one-time ticket the way 17.52's downloads are, and audited
+- Erasure that deletes or pseudonymises in one transaction per database: the username replaced by a tombstone, the email, addresses and MachineIDs removed, chat text blanked while moderation records and item and currency ledger rows keep their shape with the identity replaced, and the search index rows 17.80 holds for that text removed, with a report of the rows touched per table
+- An opt-in keyed hash of each MachineID, an HMAC under a keyring key, kept for an erased account that carries a machine ban, so the ban still holds without the MachineID being kept
+- A forget list of erased accounts in the panel store, reapplied automatically after any 17.51 restore or 17.95 character restore before the restored apps start, so a restore never brings erased data back; what cannot be rewritten in place, sealed backup archives and log files, is listed on the request with the date its retention removes it
+- Retention as live settings for sign-in addresses, MachineIDs and chat text, swept daily by the sweep 17.25 runs, with one audit event per sweep counting what it removed
+- A request log with who asked, when, for what, its due date, its state and its answer, a reminder before the due date, and every export, erasure and change audited with the account as subject
+- Opt-in self-service on 17.62's public pages, off by default and needing SMTP: a player asks for an export or an erasure and confirms it by a link mailed to the account's address, and an erasure waits a cooling-off period an owner sets, during which the player signing in cancels it
+
+**Acceptance**
+
+- [ ] An export of a seeded account holds every section its index lists, no verifier, and no other player's name or address, proved by a shaping test
+- [ ] Erasing an account removes its email, addresses and MachineIDs from every table and from the search index and blanks its chat text, while its mutes, bans and ledger rows remain with the identity replaced
+- [ ] With the keyed hash on, a machine-banned account stays banned after erasure: a new account from the same MachineID is refused, proved by a unit test over the ban check
+- [ ] Restoring a backup taken before an erasure leaves the account erased when the apps start, and the restore report names the forget list as applied
+- [ ] The retention sweep removes addresses older than the setting, keeps newer ones, and writes one audit event with the count
+- [ ] A user without `accounts.privacy`, or without a recent step-up check, is refused and the attempt is audited
+- [ ] With self-service on, an erasure a player asks for waits for the mailed confirmation and the cooling-off period, and the player signing in during it cancels it
+
+## 17.140 Secrets inventory and key rotation
+
+**Goal:** An owner sees every credential the installation holds, how old each is and what uses it, and rotates any of them, keyring keys included, without taking anything down.
+
+**Size:** M. **Depends on:** 17.02, 17.22, 17.28, 17.30, 17.36, 17.47, 17.65, 17.67, 17.72
+
+**Deliverables**
+
+- An owner-only Secrets page listing every secret without its value: each app's admin token, the keyring's keys by purpose and id, the backup key, the patch signing key, database host and runtime passwords, the SMTP and S3 secrets, node certificates, TLS private keys and the ACME account key, `Account.VerifierKeys`, the SFTP host key, the probe account and every API key; each with when it was created and last rotated and by whom, its age and expiry, what uses it, and how many sealed rows still carry an older key id. A secret whose milestone has not landed is absent rather than shown empty
+- A maximum age per kind as a live setting, raising a 17.67 condition and a reminder to the secret's owner when it passes, beside the dated expiry alerts 17.67 already sends
+- A Rotate button on each row that calls the path that secret already has, 17.30 for database passwords, 17.36 for API keys, 17.65 for the patch key, 17.22 for node certificates and the settings path for `Account.VerifierKeys`, so no secret gains a second rotation path
+- App admin token rotation from the panel, new here: the supervisor gives the app a new token through its admin API, the app accepts the old and the new for an overlap window, the supervisor's relay moves to the new one, and the old stops working when the window ends, where 17.02 rotates a token only by a config edit and a reload
+- Keyring key rotation, new here: a new key id becomes the one that seals, a background job re-seals every sealed row under it with progress shown and resumes after a restart, and the old key is retired only when no row, and for the backup key no retained archive, still needs it
+- "I think this leaked" on each row, which rotates at once with no overlap, ends every session and socket that depended on that secret, and records the reason
+- Every rotation, retirement and leak response needing a step-up check and audited, and no value in any response, log line or audit row
+
+**Acceptance**
+
+- [ ] The page lists every kind of secret the build holds, and a test fails when a sealed column or a token file is added without an inventory entry
+- [ ] Rotating an app's admin token from the panel keeps the relay answering throughout, the old token answers 401 once the overlap window ends, and the app never restarts
+- [ ] A keyring key rotation re-seals every row under the new key id, resumes where it stopped after the supervisor is killed halfway, and retires the old key only when the count of rows under it reaches zero
+- [ ] The backup key is not retired while a retained archive is sealed under it, and the page names the archives that hold it back
+- [ ] "I think this leaked" on an API key revokes it at once with no grace, and on an admin token ends every admin API session opened with it, with no overlap window
+- [ ] A secret past its maximum age raises one condition and one reminder, and rotating it clears both
+- [ ] No response, log line or audit row from any route here holds a secret value, proved by a shaping test, and a user who is not an owner gets 403 on every route
+
+## 17.141 Two-person approval and change requests
+
+**Goal:** The actions that can wipe a server, restore over live data or promote an outsider need a second operator to agree, and any change can be proposed, reviewed and then applied exactly as it was reviewed.
+
+**Size:** L. **Depends on:** 17.25, 17.37, 17.47, 17.48, 17.49, 17.53, 17.86
+
+**Deliverables**
+
+- Change requests: a mutating route that declares itself submittable can be sent as a request instead of applied, storing the exact payload, its route, the structured difference 17.53's review renders, a reason and the version of what it changes; settings batches and grant and role edits declare it here, and world edit change sets, schedule saves, installation-file applies, restores and pack or plugin installs declare it as they land
+- A Changes page listing open, approved, applied, refused, expired and stale requests, each with its difference, author, reason and the reviewer's note, live on the 17.26 socket; discussion on a request comes with 17.162's threads
+- Review: another holder of the permission the change needs at its scope approves or refuses it with a step-up check, an author never approves their own, and approval is refused when the reviewer's own rights do not cover the whole change
+- Apply runs the stored payload through its normal route under the same `AuthorizationMgr` and `AuditScope` as a direct change, so a request carries no authority of its own, with one audit row naming the author, the approver and the request; a request whose base version has moved is stale and cannot be applied until it is rebased, and an approved request not applied expires after a set time
+- An approval policy per permission, off by default, naming the actions that must go through a request, such as restoring player databases, purging files, granting the owner role, revealing a secret, exporting the backup key and engaging a kill switch; a covered action sent directly is refused with 409 naming the policy, and turning a rule on is refused while fewer than two users could approve at that scope
+- A veto timer for an installation with one owner: a covered action waits a set time while every owner is notified, then applies unless cancelled, with the wait and any cancel audited
+- Notices through 17.86 to the users who can review a request, and to its author when it is decided
+- 17.104's second-operator approval for compensation above a threshold carried onto this engine as one policy when both have landed, so the panel keeps one approval path; asking for rights one does not hold stays 17.136's access request, which asks for access rather than proposing a change
+
+**Acceptance**
+
+- [ ] With the policy on for settings batches, a batch sent as a request changes nothing until a second operator approves it, and applying it changes exactly what the difference showed, with one audit row naming both operators
+- [ ] An author cannot approve their own request, and an approval without a recent step-up check is refused
+- [ ] A request whose settings changed underneath it is marked stale and cannot be applied, and neither can one past its expiry
+- [ ] Turning a policy on at a scope where only one user holds the permission is refused with the reason named, and on a single-owner installation the veto timer applies the change after its wait unless it is cancelled
+- [ ] A reviewer whose rights cover only part of a grant change cannot approve it
+- [ ] A covered action sent directly while its policy is on answers 409 naming the policy, from the panel and from an API key alike
+- [ ] With every policy off, every route answers exactly as before this milestone, proved by the route registry test
+
+## 17.142 Discord bot: commands, alert buttons and live status
+
+**Goal:** A community run from Discord operates its server from there: operators check status, restart a crashed realm and acknowledge alerts from a phone with the same permissions and audit trail as the panel, and nothing opens a port.
+
+**Size:** L. **Depends on:** 17.26, 17.36, 17.38, 17.48, 17.49, 17.67, 17.85, 17.86
+
+**Deliverables**
+
+- An opt-in bot, off by default: an owner pastes the token of a Discord application they created, sealed in the keyring and never shown back, and picks the guild and channels; the bot connects outward over Discord's gateway, so it works behind NAT with no open port, and reconnects and resumes with backoff
+- The gateway client is D++ from vcpkg, under Apache-2.0, rather than a client of the project's own over the admin API's WebSocket layer. Settled on 2026-09-27 at the maintainer's direction to take the recommended option, and recorded under Panel operations in doc/ARCHITECTURE.md
+- Linking: each operator links their Discord user to their panel user once, with a one-time code the 17.38 account page shows and a command in Discord; an unlinked Discord user is refused everything, and unlinking on either side applies to the next command
+- A chat-neutral command layer that runs each command as the linked panel user through 17.49's relay and `AuthorizationMgr`, audited with the source `discord`, offering `/status`, `/players`, `/restart`, `/announce` and `/maintenance` as the build's capabilities and the user's permissions allow and answering a refusal with the permission it lacked; a Matrix adapter can reuse it without touching the commands
+- Confirmation: a destructive command asks with a button and then a modal in which the operator types the target's name, and an action that needs a step-up check never runs from chat and is answered with a link to it in the panel
+- Danger permissions disabled in chat for everyone until an owner allows each by name, whatever the linked user holds
+- Alerts posted to a chosen channel with Acknowledge, Silence 1h and Open buttons, which write the same acknowledgement and silence rows as 17.67 and 17.85 under the pressing user's permissions
+- One status message per realm, pinned and edited in place with its state, players and last restart rather than a new message per change, within Discord's own rate limits
+- The bot's state on the panel, connected or not with its last error, the linked users and the commands run, and every link, unlink, command and button press audited
+
+**Acceptance**
+
+- [ ] With the bot off, the supervisor opens no connection to Discord and the zero-step desktop run is unchanged, proved by a test that records outbound connections
+- [ ] Driven through a test adapter, `/restart` from a linked user holding `power.restart` restarts the app after the typed confirmation, and from one without it answers with the permission named and runs nothing, each audited with the source `discord`
+- [ ] A command from an unlinked Discord user is refused, and a one-time link code works once and expires
+- [ ] A danger permission not allowed in chat is refused there for an owner who holds it, and a step-up action answers only with a panel link
+- [ ] Pressing Acknowledge on a posted alert writes the same acknowledgement row the alerts page writes, naming the linked user
+- [ ] Dev-gated: in a real guild, the bot answers `/status`, restarts a realm after confirmation, and edits its pinned status message in place when the realm comes back. Needs a Discord guild and the maintainer's own application token, so it is run by hand and recorded
+
+## 17.143 Crash and error groups linked to issues and fix releases
+
+**Goal:** An operator who meets a bug learns in one click whether the project already knows about it and whether an update fixes it, and the maintainer gets one issue per fault instead of a pile of duplicates.
+
+**Size:** M. **Depends on:** 17.17, 17.83, 17.105, 17.106
+
+**Deliverables**
+
+- A stable fingerprint string for every 17.106 error group and 17.83 crash group, derived from the grouping key and carrying no path from the operator's machine, no message text and no identity, so the same fault gives the same string on every installation
+- A Track button on each group, working only once the operator turns issue lookups on, off by default, which searches the repository's issue tracker for the fingerprint through the outbound HTTP client, with no token for a public repository, and shows each match with its state; the repository defaults to the one the release came from and can be changed for a fork
+- With no match, a prefilled new-issue form opened in the browser carrying the fingerprint, build, source location and the fields of 17.106's report the operator chose, sending nothing until the operator submits it there; with the operator's own token sealed in the keyring, the panel can create the issue itself after showing exactly what it will send
+- A tracked group showing "tracked in #N" with the issue's state, refreshed on 17.17's channel check interval, and once the issue is closed, the first release tag that contains the fix with "fixed in vX, you run vY" and a link to 17.17's update page
+- A group seen again on a build that already contains its fix marked as a regression on the group and on its page
+- Every lookup, link and created issue audited, and no request to any host while issue lookups are off
+
+**Acceptance**
+
+- [ ] The same fault logged on two installations with different install paths gives the same fingerprint, and the fingerprint holds no path, message text or account name, proved by a unit test
+- [ ] With issue lookups off, the error and crash pages make no request to any other host, proved by a test that records outbound requests
+- [ ] Against a recorded issue search, a group whose fingerprint is in an open issue shows "tracked in" with its number and state, and one with no match offers the prefilled form holding the fingerprint and build
+- [ ] Creating an issue with a token shows the exact body first, sends that body and nothing more, and writes an audit row
+- [ ] Given a closed issue and a list of tags, the panel names the first tag that contains the fix, and a group seen on a later build is marked as a regression, proved by a unit test over recorded answers
+- [ ] Dev-gated: against the project's public repository, a Track lookup finds a real issue by its fingerprint. Needs network access to the live issue tracker, so it is run by hand and recorded
+
+## 17.144 Feature flags with targeting and staged rollout
+
+**Goal:** A subsystem that is new in a build reaches game masters first, then a few percent of players, then everyone, and steps back by itself if errors or crashes appear, instead of the only choices being a whole release or a kill switch.
+
+**Size:** M. **Depends on:** 17.12, 17.67, 17.81, 17.83, 17.106, 4.16
+
+**Deliverables**
+
+- Flags declared in server code the way 4.16 declares settings, each with a name, one sentence, its owning milestone and a default of off, in the same registry, so the build reports them through `GET /api/capabilities` and a flag the build does not declare cannot be set
+- A rule per flag: off, on, accounts at game master level and above, a list of accounts, named realms, or a sticky percentage of accounts chosen by a hash of the account id and the flag's name, so the same player stays in or out as the percentage grows; rules validate, persist, audit and reach the apps through 17.12's settings API, applying live
+- Evaluation in the app as one lookup in a snapshot swapped atomically when a rule changes, with no allocation and no lock on the path that asks
+- A Flags page listing every flag with its rule, who changed it and when, and the share of online players it covers now, each change needing a reason
+- Rollout plans, such as 5 percent for a day, then 25, then everyone: a plan advances only while no new 17.106 error group or 17.83 crash group appears on a build carrying the flag, no 17.81 probe fails and no 17.67 alert fires in its scope, and otherwise pauses and steps back to its previous stage by itself, recording why
+- A stale report: flags fully on for a set time named on the page, and a repository check in the checks job listing flags whose owning milestone has every acceptance check ticked, so a finished flag is removed rather than kept
+
+**Acceptance**
+
+- [ ] A flag at 10 percent covers the same accounts on every evaluation and across a restart, and raising it to 25 percent keeps every account the 10 percent covered, proved by a unit test over a seeded set of accounts
+- [ ] A game master rule is on for a game master account and off for a player account, and a named realm rule is on only on that realm
+- [ ] Changing a rule applies to the running app without a restart and writes an audit row with the reason
+- [ ] A rollout plan whose next stage is due does not advance while a new crash group is open, steps back to its previous stage, and records that crash group as the reason
+- [ ] Evaluating a flag allocates nothing and stays inside a stated budget in a benchmark in the test suite
+- [ ] Setting a flag the build does not declare is refused naming it, and the repository check lists a flag whose milestone is complete
+
+## 17.145 MCP server for AI assistants
+
+**Goal:** An operator gives an AI assistant a least-privilege, audited way into their server, so it reads error groups and logs directly instead of the operator pasting them, and acts only as far as its key and a confirmation allow.
+
+**Size:** M. **Depends on:** 17.36, 17.48, 17.80, 17.84, 17.100, 17.106
+
+**Deliverables**
+
+- `ambrosectl mcp`, a Model Context Protocol server over standard input and output that the assistant's client starts, authenticated with a personal API key from 17.36, opening no listener and holding no credential but that key
+- Read tools by default: app status and problem records, log search over 17.80, error and crash groups, settings with secret values masked, and activity and schedule history; error report files from 17.106 and support bundle manifests from 17.84 offered as resources; each answered only as far as the key's rights reach
+- Tool schemas generated from the route table 17.100 generates its commands from, so a tool exists only for a route the build has, and a test fails when a route marked for assistants has no tool
+- Write tools only when the server is started with the flag that allows them and the key holds the permission, each carrying read-only or destructive annotations; a destructive call first returns what it would change and a single-use confirmation token valid for a minute, and only a second call carrying that token acts, so the person approving tool calls in their client sees the effect before it happens
+- No action that needs a step-up check exposed as a tool, whatever the key holds
+- Every call audited as the API key with the client's name from its initialize request beside it, refusals included, so the activity log tells an assistant's actions from a script's
+
+**Acceptance**
+
+- [ ] A client listing tools with a viewer's key sees only read tools, and a write reached through any tool is refused with 403 naming the permission, proved by an end-to-end run with a scripted client
+- [ ] A destructive call without its confirmation token changes nothing and returns what it would change, and the token works once and expires after a minute
+- [ ] No step-up action appears in the tool list for an owner's key
+- [ ] Every call writes an audit row naming the key and the client, and so does every refused call
+- [ ] A secret setting read through the settings tool is masked for a key without `settings.secrets.read`
+- [ ] The server opens no listening socket while it runs, proved by a test that lists the process's sockets
+
+## 17.146 OpenAPI description and API explorer
+
+**Goal:** Anyone building a bot, a site or a tool around their server reads one stable, documented contract for the panel API, tries it from the panel, and takes a generated client for their language from the release.
+
+**Size:** M. **Depends on:** 17.26, 17.36, 17.48, 17.100, 17.105
+
+**Deliverables**
+
+- `GET /api/panel/openapi.json`, an OpenAPI 3.1 description generated from the route registry and the C++ schemas 17.26 turns into TypeScript, with each operation's permission key, scope, danger flag, confirmation flag, rate-limit cost and error shapes, served to a signed-in user or an API key and listing only the operations the caller holds
+- An API page in the dashboard built from `@ambrose/ui` components rather than a third-party API viewer, so it follows doc/DESIGN.md and the panel's strict Content-Security-Policy like every other page: operations grouped by permission group, each with its schema and errors, a try-it form for read routes that runs with the caller's own session, and copyable curl, `ambrosectl` and Python snippets
+- A unit test holding the committed description of the previous release, which fails when an operation or a field in it is removed or renamed, so fields are only ever added, as 17.03 and 17.26 already hold for their own shapes
+- Python and TypeScript clients generated from the description in 17.105's release job and published beside the release's artefacts with their SHA-256, never shipped inside the panel; the generator is openapi-generator, under Apache-2.0, run only in that job. Settled on 2026-09-27 at the maintainer's direction to take the recommended option, and recorded under Panel operations in doc/ARCHITECTURE.md
+- Danger routes marked in the description and on the page, and try-it offered only for read routes, so nothing the explorer does changes the installation
+
+**Acceptance**
+
+- [ ] The served description validates as OpenAPI 3.1, and a test fails when a route in the registry is missing from it or lacks its permission
+- [ ] A viewer's description and API page list no route they cannot call
+- [ ] Removing a field from a response schema fails the compatibility test, and adding one passes it
+- [ ] The API page makes no request to another host and passes the accessibility gate, proved by a browser test
+- [ ] A try-it call answers with the caller's own permissions, and no write route offers try-it
+- [ ] A release carries the generated Python and TypeScript clients, and the Python client reads an app's status from a running supervisor with an API key
+
+## 17.147 Sandboxed operator scripts
+
+**Goal:** An operator writes the rule a fixed task cannot express, such as restarting only the realms over their tick budget that hold fewer than five players, one at a time, and runs it as a button or a scheduled task under the panel's own permissions, with no outside machine holding a key.
+
+**Size:** L. **Depends on:** 17.15, 17.28, 17.48, 17.53, 17.87, 17.110
+
+**Deliverables**
+
+- Settled on 2026-09-27 at the maintainer's direction to take the recommended option, and recorded under Panel operations in doc/ARCHITECTURE.md: sandboxed Lua scripts on the terms below, opt-in and off by default through `Panel.Scripts.Enable`. It is not the browser shell the Operations depth note refused: a script has no shell, no file system and no network, only the audited `ambrose.*` calls it declared
+- A Scripts page, owner-only by default through new `scripts.edit` and `scripts.run` permissions, where a short Lua script is written in 17.53's editor with typed parameters and declared capabilities, such as reading status, restarting an app, announcing or taking a backup, each a sentence an owner can judge
+- Each run in a worker process separate from the supervisor, on the Lua runtime Decisions, Experimental features settles, added through vcpkg by whichever of 13.11 and this milestone lands first, with the `io`, `os`, `package` and `debug` libraries and every loader removed, and caps on memory, instructions and wall time enforced under 17.28's job object on Windows or cgroup on Linux
+- One API, `ambrose.*`, generated from the route table, where each call is checked against the script's declared capabilities intersected with its author's permissions at the moment it runs, so demoting the author shrinks every script at once, as it shrinks their API keys
+- Every call audited as the script, with its version and the author whose rights it used, the way 17.110 audits a panel tool's calls
+- A dry run, the default for a new version, that answers read calls and records each write call it would make without making it, shown as a list before the first real run
+- Running as a button with its parameters, or as a task in a 17.15 schedule, a 17.87 trigger or, once 17.149 lands, an inbound hook, under the rule that arming a task needs every capability the script declares
+- Every saved version kept with who saved it and when, a difference between versions, and a run history with each run's parameters, calls, capped output and result
+
+**Acceptance**
+
+- [ ] A script calling `os.execute`, `io.open` or `require` fails with the name undefined, and one that loops forever stops at its instruction cap with the cap named in its run record
+- [ ] A script whose worker passes its memory cap is ended by the job object or cgroup and recorded, and the supervisor keeps serving
+- [ ] A script that declares only reading status is refused when it calls restart, and a script whose author has lost `power.restart` is refused the restart it made before
+- [ ] A dry run changes nothing and lists each write call the real run then makes
+- [ ] A script scheduled through 17.15 runs at its time, and every call it made appears in the activity log naming the script, its version and its author
+- [ ] A user without `scripts.edit` cannot save a script, and saving a new version keeps the previous one restorable with its difference
+- [ ] Arming a trigger that runs a script is refused when the arming user lacks a capability the script declares
+
+## 17.148 Installation file synced from Git
+
+**Goal:** An operator keeps the installation file in a Git repository, reviews changes there, and the panel pulls and applies them, even on a home machine that nothing on the internet can reach.
+
+**Size:** M. **Depends on:** 17.15, 17.17, 17.36, 17.67, 17.99, 17.149
+
+**Deliverables**
+
+- A sync source an owner sets on the installation file page: a repository, a branch, a folder and the file's path inside it, a poll interval, and manual or auto mode, with a read-only token for HTTPS or a deploy key for SSH sealed in the keyring and never shown back. The panel fetches through the one Git client the supervisor carries, libgit2 from vcpkg, which 17.17's build channel brings and whose choice is settled under Panel operations in doc/ARCHITECTURE.md, and only ever pulls, so it needs no inbound connection and works behind NAT
+- A sync status of Synced, Out of sync, Drifted or Unknown, computed with 17.99's difference between the file at the branch head, the file at the last applied commit and an export of what is running, and shown with the commit, its author, message and time; a repository that cannot be reached reads Unknown with the time of the last successful fetch, never Synced. Drift here means the running installation differs from the file in Git; files and schemas changed outside the panel are 17.118's
+- Manual mode offering Apply on the pending commit, run through 17.99's apply under the caller's own permissions after the difference is shown; auto mode applying each commit that validates as a 17.36 personal API key the owner creates for it, so its rights are the key's subset intersected with the owner's current permissions, and every audit row the apply writes carries the commit hash and the key id
+- A commit that fails validation or a permission check held rather than applied, with the failing field or permission and the commit named on the page, the installation left at the last applied commit, and a held-commit condition offered to 17.67's alert rules
+- Changes made in the panel since the last applied commit listed as drift, key by key with who made each from the audit log, and a Propose control that pushes a branch and opens a pull request through the Git host's API when the owner gave a separate write token, or otherwise downloads the change as a patch against the synced commit
+- A sync task on the 17.15 engine, so a schedule polls at its own interval and a 17.149 inbound hook starts a sync when the host reports a push; every source change, fetch, apply, hold and proposal is audited, under permission keys of their own in the 17.48 catalog
+
+**Acceptance**
+
+- [ ] With a local repository as the source, a commit that changes one value reads Out of sync with a difference naming that value, and Apply changes that value and nothing else, proved by an end-to-end run with the panel bound to loopback and no inbound connection
+- [ ] In auto mode a commit naming a field the build does not know is held with the field and the commit named, and the running installation is unchanged, proved by a unit test
+- [ ] Every audit row written by an auto apply carries the commit hash and the key id, and after the owner loses a permission the next commit needing it is held naming that permission, proved by a unit test
+- [ ] A setting changed in the panel after a sync reads Drifted with that key and who changed it, and with no write token Propose downloads a patch that applies cleanly to the synced commit, proved by a unit test that applies it with git
+- [ ] With the repository unreachable the status reads Unknown with the time of the last successful fetch, never Synced, proved by a unit test
+- [ ] Neither token nor the deploy key appears in any response, log line, audit row or exported file, proved by a response shaping test
+- [ ] Dev-gated: Propose opens a pull request on an outside Git host with the owner's own write token. Needs an account on an outside Git host, so it is run by hand and recorded
+
+## 17.149 Inbound webhooks that start a task chain
+
+**Goal:** The operator's own CI, Git host or community bot can start one known, safe action on the server without holding a general API key.
+
+**Size:** M. **Depends on:** 17.14, 17.15, 17.87
+
+**Deliverables**
+
+- Hooks on the automation page, each bound to exactly one task chain on the 17.15 engine, such as a backup then an update from the build channel, a world data reload or an announcement, with a URL carrying an unguessable id and a secret shown once in a dialog that cannot be dismissed from outside and then kept sealed in the keyring
+- A verifier chosen per hook: a GitHub signature, a Gitea or Forgejo signature, or a timestamped HMAC documented for any sender, with a replay window that refuses a timestamp outside it and a delivery id already seen inside it
+- Deliveries posted to the panel listener at a path of their own that reads no cookie and no session, with a rate limit and a size cap per hook inside the listener's request bound, checked in the order size, signature in constant time, replay window, then filters such as the ref equalling `refs/heads/main`; every refusal answers the same way, runs nothing, and is recorded with its reason. A hook is reachable only where the panel listener already is, and nothing is opened for it
+- A passing delivery running its chain as a 17.87 trigger of its own kind, under that milestone's cooldown, hourly cap and loop guard and in the run record schedules keep, with rights that are the hook's permission set intersected with its creator's permissions at the moment it runs, so a run whose creator lost a permission a task needs is skipped as permission revoked
+- Payload values reaching tasks only as typed variables the hook declares, each read by a JSON pointer and checked against a pattern, such as a commit hash of forty hex digits, and passed as a task's parameter, never spliced into command text
+- A deliveries tab listing each request with its time, source address, verdict, reason and the run it started, kept for a retention that is a live setting, with redeliver running a stored delivery once more as the operator's own audited action through the same signature and filter checks
+- Creating, changing, rotating the secret of and deleting a hook each audited, under hook permissions of their own in the 17.48 catalog, and creating one needing every permission its chain's tasks need, as 17.15 requires of a schedule
+
+**Acceptance**
+
+- [ ] A delivery with a valid GitHub signature for `refs/heads/main` runs the bound chain once, and the same delivery sent again inside the window is refused as a replay, proved by a unit test over a recorded delivery
+- [ ] A wrong signature, a timestamp outside the window, a body over the cap and a ref the filter refuses each run nothing, answer alike and appear on the deliveries tab with their reasons, proved by a unit test
+- [ ] After the creator loses a permission one of the chain's tasks needs, the next delivery is skipped as permission revoked naming it, and the skip is audited, proved by a unit test
+- [ ] A variable whose value fails its pattern runs nothing, and a value carrying shell metacharacters that passes a loose pattern reaches its task as one parameter and never as command text, proved by a unit test
+- [ ] The secret is shown once, no response returns it again, and the store holds it only sealed, proved by a response shaping test
+- [ ] A flood of deliveries to one hook is rate limited while the rest of the panel keeps answering, and 17.87's cooldown holds a second valid delivery inside it, proved by a unit test
+- [ ] Redelivering from the tab runs the stored delivery once more as the operator's audited action and links the new run, proved by a browser test
+
+## 17.150 Getting-started checklist and page tours
+
+**Goal:** A new owner learns what the first start already did for them and which few decisions are theirs, and the panel ticks each one off as it sees it done.
+
+**Size:** M. **Depends on:** 3.22, 17.15, 17.16, 17.21, 17.37, 17.47, 17.82, 17.86, 17.108
+
+**Deliverables**
+
+- A first-start record: 3.22's automatic setup publishes what it did as structured facts on each app's status, which install it chose and why, its revision, whether the type dump was built or reused and where, how many name tables it extracted, and the file each choice was saved to, and the supervisor keeps the first start's facts in its store so they outlive the log files
+- A Getting started card on the overview for owners, shown after the `/first-run` claim until an owner dismisses it, which is audited and can be undone from the account menu, opening with that record in plain sentences before listing what is left to decide; it adds no step to the first run, and nothing waits on it
+- The decisions left to the owner, each linking to the page that makes it: turn on two-factor sign-in (17.47), invite a teammate or record that you work alone (17.37), take and verify a first backup (17.16), schedule a nightly one (17.15), add an alert channel and send a test (17.86), decide how the panel is reached (17.108), and create a game account and sign a client in with it (17.21)
+- Each step ticked from observed state rather than from a click, by reading a check in 17.82's registry and adding the checks the registry lacks, so the card and the health page read one figure and cannot disagree; a step can be skipped with a reason that is audited and can be reopened, and a step the viewer cannot do names who can
+- Short tours on the busier pages, offered once per user on a first visit and remembered in the store rather than the browser, operable by keyboard with Escape ending them, following reduced motion, built on the design system's own popover with no tour library, and replayable from the page and from the help drawer once 17.151 lands
+- A test that renders each page with a tour and fails when a step's anchor is no longer on the page, and one that fails when a checklist step links to a route the route table does not hold
+
+**Acceptance**
+
+- [ ] On a fresh installation the card names the install, the revision, the type dump's path and the count of name tables 3.22 reported, and still does after the log files are removed, proved by an end-to-end run against a supervisor with a synthetic install
+- [ ] Taking and verifying a backup ticks its step, and the health page reads the same state from the same check, proved by a unit test that drives both from one check
+- [ ] Skipping a step records the reason and who skipped it in the audit log, and a skipped step can be reopened, proved by a browser test
+- [ ] A step whose subject is not built reads as unavailable naming its milestone, never as done, proved by a browser test
+- [ ] A tour runs from its first step to its last by keyboard alone, Escape ends it, and it passes the accessibility gate, proved by a browser test
+- [ ] Removing an element a tour step points at fails the anchor test, and so does a step linking to a route the table lacks, proved by running both tests against a broken fixture
+
+## 17.151 Built-in help, offline docs and what's new
+
+**Goal:** Every page explains itself from documentation built into the panel, which matches the running build and works with no network, and every operator learns what changed after an update.
+
+**Size:** M. **Depends on:** 17.06, 17.13, 17.37, 17.88, 17.105
+
+**Deliverables**
+
+- The operator documentation built into the dashboard at build time as static pages: the option rows in doc/config, the guides in doc/guides and one page of help per route kept beside those guides, so the help a build shows was written for that build and needs no network; the route table gains the help section each route opens
+- One Markdown renderer for the panel, markdown-it under MIT with its output passed through DOMPurify. Settled on 2026-09-27 at the maintainer's direction to take the recommended option, and recorded under Panel operations in doc/ARCHITECTURE.md, since doc/UI-STACK.md named none: used at build time for the documentation and in the browser for the operator-written text later milestones show, with raw HTML off, links limited to http, https and the panel's own routes, and images only from the panel
+- A help drawer on every page opened by F1 or by ?, registered in 17.88's shortcut registry so the sheet lists it and it never fires inside a field, showing the current route's section and keeping links between help pages inside the drawer
+- Help in context: each setting on the 17.13 settings page opens its option's row, each problem code from 17.03 and each error a page shows opens its explanation, and each permission in 17.37's grant editor opens what it allows, beside the catalog's one-line description
+- Search over the documentation from an index the build step writes, run in the browser with no search library and offered as a source in 17.88's palette
+- A What's new sheet each operator sees once after the version they run changes, holding the release notes 17.105 generates for that version as built into the dashboard, with each operator's dismissal kept in the store, and a New mark for two weeks on a page whose route names the version that added it
+- External links written as plain text unless their address is on the allow list the bundle check reads, and opened with no referrer, so the built dashboard still names no host it was not allowed to; a check fails when a route has no help section, when a help link names a section that does not exist, or when a problem code or a permission has no explanation
+
+**Acceptance**
+
+- [ ] With the network blocked, F1 and ? open the current page's help, and its text is the text built into that build, proved by an end-to-end run
+- [ ] Adding a route without a help section fails the check, and so does a help link to a section that does not exist, proved by the checks job
+- [ ] The help control beside a setting opens that option's row, and the one beside a problem code opens its explanation, proved by a browser test
+- [ ] A word from the body of a guide finds it from the palette and opens it in the drawer, proved by a browser test
+- [ ] After the version changes, each operator sees What's new once, a second sign-in does not show it again, and another operator still sees it, proved by a unit test over the store
+- [ ] A help page holding raw HTML, a script link and a remote image renders them as text or drops them, and the built bundle passes the check that it names no other host, proved by a browser test and the checks job
+- [ ] A page added in the running version carries its New mark until two weeks after that version, proved by a unit test with a fixed clock
+
+## 17.152 Custom boards and a paired wall display
+
+**Goal:** A team builds the views it watches from widgets the panel already renders, shares them by role, and puts one on a television that can see nothing else.
+
+**Size:** L. **Depends on:** 17.06, 17.14, 17.19, 17.48, 17.58, 17.73, 17.99
+
+**Deliverables**
+
+- A Boards page where a user creates, names and removes boards, each a grid of widgets kept in the supervisor's store, beside 17.06's overview, which stays one fixed layout for every installation
+- A widget catalog over data the panel already serves, each type registering its data source and the permission it needs: an app card, any 17.19 series, a stat tile with thresholds, a filtered alert list, the next schedule runs, backup freshness, health findings, players per realm, the top error groups and a filtered log tail; a type whose milestone has not landed is offered as unavailable naming it
+- Placing and resizing widgets by drag and by keyboard, where a focused widget is picked up with Enter, moved or resized with the arrow keys and put down or cancelled with Escape, snapping to the grid, stacking in reading order at phone width, and built from the design system's components with no layout library
+- Each widget's data checked on the server against the viewer's permissions, a widget the viewer may not see showing the denied empty that names the permission rather than an empty one, and live widgets subscribed on the one socket only while visible, each figure carrying the age of its sample
+- A board kept personal or shared with a role, edited only by holders of the board permission at that scope, and chosen by a user as their home in place of the overview
+- Export and import of shared boards through 17.99's installation file, validated against the board schema, refusing an unknown widget type or field by name, and holding layout and filters but never data or an identity
+- A wall display mode showing chosen boards full screen in large type, rotating through them at a set interval with no animation under reduced motion, with the connection state and each figure's age shown large enough to read from across a room, so a stale figure is never mistaken for a current one
+- Pairing a television's browser once: opening the display path shows a short code, and an owner or a holder of the display permission confirms that code on the Displays page and chooses its boards; a code works once, expires in minutes and is throttled against guessing
+- A display session of its own kind, since a 17.36 key is refused on a cookie request and a person's session would carry their rights: read-only, limited to its boards' widget data, listed with its last address and time, expiring, revocable at once and audited, and never sent an identity, with player names, account names, addresses and operator names left out of every widget it reads
+
+**Acceptance**
+
+- [ ] A widget over data the viewer may not see shows the denied state naming the permission, and its data never reaches the browser, proved by a browser test that reads the socket frames
+- [ ] A board is built, moved and resized by keyboard alone and passes the accessibility gate, proved by a browser test
+- [ ] A shared board exported with the installation file and applied to a fresh installation gives the same layout, and a file naming an unknown widget type is refused naming it, proved by a unit test
+- [ ] A paired display shows only its boards, is refused on every other route and socket subscription, and loses its boards within one second of being revoked, proved by an end-to-end run
+- [ ] No response or socket frame sent to a display session carries a player name, account name, address or operator name, proved by a response shaping test
+- [ ] A pairing code works once, is refused after its expiry, and repeated wrong codes are throttled, proved by a unit test
+- [ ] With the stream closed, every figure on the wall display turns visibly stale with its sample's age, proved by an end-to-end run
+
+## 17.153 High-contrast and color-vision themes, and display preferences
+
+**Goal:** An operator who needs more contrast, or who cannot tell some hues apart, gets a panel built for them from the same tokens, and every operator chooses how times are shown.
+
+**Size:** M. **Depends on:** 17.38, 17.66, 17.73
+
+**Deliverables**
+
+- High-contrast dark and light modes in `design/tokens.json` as remaps of the semantic tier, with text at 7:1 or better on every surface it sits on, control edges at 4.5:1 and a wider focus ring, chosen automatically under `prefers-contrast: more` when a user's choice is the system's, while forced-colors mode stays supported as doc/DESIGN.md describes
+- Color-vision modes over either theme, one for red-green deficiency, protanopia and deuteranopia, and one for tritanopia, that remap the state accents, the value ramp and the series ramp so no two meanings collide, removing the collisions doc/DESIGN.md accepts today for the value ramp, green and salmon under deuteranopia and blue and green under tritanopia
+- `apps/designtokens/designtokens.py` generating the modes with gates of their own: a 7:1 text gate and a 4.5:1 control edge gate for high contrast, and for each color-vision mode the simulation the series ramp gate already runs, extended to hold every pair of state accents, value kinds and series slots a set distance apart, refusing to write a file when one falls short and naming the pair, the mode and the distance; doc/DESIGN.md gains the generated tables for each mode
+- Dash patterns and point shapes per series slot from the tokens, which a user can turn on so a multi-series chart reads without hue, with every chart's table view unchanged
+- A Display tab on 17.38's account page holding the theme, the contrast and color-vision modes, the density and the time display: the browser's zone, UTC or the node's zone, 12 or 24 hours, and relative or absolute time first, stored with the user's profile so the choice follows them to another browser rather than living in one browser's storage as the theme does today, and applied through the one formatter with the zone named as 17.66 requires
+- The end-to-end suite running the accessibility gate over every real page in every theme and mode, not only over the component stories, and the screenshot job covering each mode
+
+**Acceptance**
+
+- [ ] Lowering one high-contrast text token until a pair falls under 7:1 makes the generator refuse naming the pair, proved by the generator's own tests
+- [ ] Moving two state accents together in a color-vision mode until they collide under its simulation makes the generator refuse naming both and the mode, proved by the generator's own tests
+- [ ] With `prefers-contrast: more` emulated and the choice left on the system, the panel renders high contrast, and an explicit choice wins over it, proved by a browser test
+- [ ] Every real page passes the accessibility gate in every theme and mode, proved by the end-to-end run
+- [ ] Choosing UTC shows every absolute time in UTC with the zone named, and the choice holds when the same user signs in from another browser, proved by an end-to-end run
+- [ ] With patterns on, every series in a multi-series chart carries a different dash or point shape and its table view is unchanged, proved by a browser test on the design system's chart component
+
+## 17.154 Installable panel app, OS notifications and opt-in Web Push
+
+**Goal:** An operator installs the panel as an app of its own and hears about an alert routed to them while its window is in the background, and a phone can be woken for one only if the owner opts in.
+
+**Size:** M. **Depends on:** 17.06, 17.67, 17.86, 17.108
+
+**Deliverables**
+
+- A web app manifest and icons from the design system in the dashboard's build, with shortcuts to Overview, Alerts and Console, so the panel installs from a Chromium browser on Windows, Linux or Android into a window of its own wherever it is served in a secure context, which 17.108 gives on loopback and with a trusted certificate
+- A service worker caching only the content-hashed static build and the shell page, never an API answer and never socket data, so the rule that the browser holds no server data stands; a new build replaces it with a prompt to reload, and the Content-Security-Policy gains only a same-origin worker and manifest source
+- An unreachable screen the cached shell shows when the supervisor does not answer, saying the panel has been unreachable since a named time and retrying with the attempt and a countdown, in the connection states doc/DESIGN.md sets, holding no figure from before
+- A this-browser channel in 17.86's per-user channels, raising an OS notification for each alert routed to that operator while the app is open or in the background, asked for on an explicit click and never on load, carrying only what 17.86's payload rule allows and opening the alert when clicked
+- The count of unacknowledged alerts routed to that operator on the app's taskbar or dock badge where the browser supports badging, cleared as they are acknowledged
+- Settled on 2026-09-27 at the maintainer's direction to take the recommended option, and recorded under Panel operations in doc/ARCHITECTURE.md, reopening the browser push the Operations depth note declined as an opt-in: Web Push as its own opt-in, `Panel.WebPush.Enable`, off by default, with VAPID keys (RFC 8292) the supervisor generates into the keyring, messages encrypted to RFC 8291 through Botan and sent by the settled outbound HTTP client, and a payload that is only a wake-up with no subject, figure or identity, after which the device fetches the details from the panel itself; each subscribed device is listed on the account page with revoke, and the settings page says which company runs a device's push endpoint and that it learns only that a message was sent and when
+- Everything except Web Push working with no outside service, and a panel that is never installed working exactly as before
+
+**Acceptance**
+
+- [ ] The built panel meets Chromium's installability criteria when served on loopback, with a valid manifest and a service worker controlling the page, proved by an end-to-end run
+- [ ] After signing in and opening every page, no cache the service worker holds contains an API answer or socket data, proved by an end-to-end run that lists every cache entry
+- [ ] With the supervisor stopped, the installed app opens to the unreachable screen naming the time and retrying, and shows no figure from before, proved by an end-to-end run
+- [ ] An alert routed to the operator raises one OS notification and sets the badge to the unacknowledged count, and acknowledging it clears the badge, proved by a browser test with the notification and badging interfaces stubbed
+- [ ] With Web Push off no request goes to any push endpoint, and with it on a message decrypts, with the subscription's own keys, to a wake-up carrying no subject, figure, name or address, proved by a unit test that also passes the RFC 8291 test vectors
+- [ ] Dev-gated: an installed panel on an Android phone is woken while closed and shows the alert's details only after fetching them from the panel. Needs a phone and an outside push endpoint, so it is run by hand and recorded
+
+## 17.155 Saved views, stars, recents and wider search
+
+**Goal:** An operator returns to the same filtered view in one click, sends a teammate a link that opens it under the teammate's own rights, and finds any panel object by name.
+
+**Size:** M. **Depends on:** 17.06, 17.21, 17.25, 17.80, 17.88
+
+**Deliverables**
+
+- Every list page keeping its filters, sort, columns and time range in its address, so a copied link opens the same view under the recipient's own rights: activity, logs and log search, backups, alerts, schedules and runs, files, crash and error groups, users and registrations, each list page adopting it as it lands, with a test over the route table's list pages that fails when one does not bring its state back from its address
+- Filter values that could name a person, such as an account, a username, an email or an address, kept on the server behind an opaque id rather than written into the address, the id resolving only for a caller allowed to see what it stands for
+- Views saved by name, personal or shared with a role, and made a page's default for a user or for a role, kept in the supervisor's store; a shared view opens under each viewer's own rights, and a view naming a filter its page no longer has says so rather than opening wrong
+- Stars on any app, realm, node, schedule, backup, setting key, alert rule or file, each kind as its milestone lands, gathered in a Starred section of the side bar, with a starred object the user can no longer see leaving the list rather than showing as a broken link
+- A Recent list of the objects and pages each user opened, kept in the store so it follows them between the desktop and a phone, and clearable by its owner
+- One search registry that 17.21's top-bar search and 17.88's palette both read, which today reach accounts, characters, apps, routes and page actions, extended to settings, schedules, backups, alert rules, crash and error groups, panel users and saved views, each kind registering its own provider as its milestone lands and every result filtered by the caller's permissions on the server; shared views are audited when created, shared and removed, while stars and recents stay a user's own
+
+**Acceptance**
+
+- [ ] A filtered, sorted activity page's address opened by another user shows the same filters and sort with only the rows that user may see, proved by an end-to-end run
+- [ ] No address the panel writes carries an account name, username, email or address, proved by a browser test over every list page with such a filter, and an opaque id resolves to nothing for a caller who may not see it, proved by a unit test
+- [ ] A view shared with a role appears for a member of that role and for nobody else, and made the page's default it opens that page with its filters, proved by a browser test
+- [ ] A star added in one browser appears in the same user's side bar in another, and a starred app the user loses access to leaves the list, proved by an end-to-end run
+- [ ] The palette finds a saved view and a panel user by name, and never one the caller may not see, proved by a browser test for a user whose grants narrowed while the page was open
+- [ ] A list page that does not bring its state back from its address fails the route table test
+
+## 17.156 Undo from the activity record, and bulk actions
+
+**Goal:** A wrong change made late at night is undone in one step from where it was made or from its activity row, and routine work across many rows is one checked action instead of dozens.
+
+**Size:** L. **Depends on:** 17.13, 17.25, 17.37, 17.48, 17.49, 17.53, 17.54, 17.55, 17.68, 17.88
+
+**Deliverables**
+
+- An inverse in 17.25's event catalog for every change that has one, registered by the milestone that owns the change and resting on the before value its audit row already keeps: a setting change (17.13), a grant change (17.37), a file save through 17.53's versions, a file delete through 17.55's trash and a schedule edit (17.68), with a role change, an app disable, a silence and a backup pin joining as 17.50, 17.27, 17.85 and 17.52 land; a test fails when an event marked reversible has no inverse
+- Undo as a new action rather than an erasure: it runs through the same route and permission check the change itself needs, is audited as its own event naming the one it undoes, marks that event undone with who and when, and cannot run twice
+- A refusal whenever the subject changed after the event, compared by its version or entity tag, showing the change that came since and changing nothing, so an undo never overwrites a later change
+- Undo offered on the activity row and inline where the action was taken, as a line under the control rather than in a toast, since doc/DESIGN.md keeps a toast from being the only record, for a window that is a live setting
+- Ctrl+Z undoing the operator's own last change on the current page after a confirmation naming it, bound through 17.88's shortcut registry so it never fires while focus is in a field, and never reaching into the file editor, which keeps its own undo
+- A My recent changes panel listing today's changes by the operator and, for each, whether it can still be undone and why not
+- Row selection on every table, a page at a time or every row matching the filter across pages with the count named, surviving paging and cleared when the filter changes
+- A bulk bar offering only the actions the caller holds on every selected row, computed on the server; the server preflights each item's permission, state and version and shows a verdict per item before anything changes, applies under one audit batch through 17.49's scope with a result per item, keeps 17.54's rule that a file batch is validated whole before any change, and asks once for the confirmation the single action asks for
+- A bulk action undone as one from its batch row, each item's inverse checked on its own, with the items that changed since listed and left as they are
+
+**Acceptance**
+
+- [ ] Undoing a setting change restores the old value through the settings API, writes its own audit row naming the original, and marks the original undone, proved by a unit test
+- [ ] Undoing a setting that was changed again since is refused with both values shown and changes nothing, proved by a unit test
+- [ ] Undoing a file delete restores it from the trash, and undoing a save restores the previous version with its hash, proved by a unit test
+- [ ] A caller who no longer holds the permission the inverse needs is offered no Undo and the route refuses it, proved by a unit test and a browser test
+- [ ] Selecting every schedule matching a filter across three pages and pausing them shows a verdict per schedule, applies under one audit batch with a result for each, and undoing the batch resumes exactly those it paused, proved by an end-to-end run
+- [ ] The bulk bar offers an action only when the caller holds it on every selected row, proved by a browser test over a selection that mixes apps the caller may and may not restart
+- [ ] Ctrl+Z inside a field does nothing to the panel, and outside one asks before undoing the operator's own last change on the page, proved by a browser test
+
+## 17.157 Printable operations reports
+
+**Goal:** An owner answers how last month went with one document built from the panel's own figures, printed or saved as a PDF by the browser, or written and mailed on a schedule.
+
+**Size:** M. **Depends on:** 17.15, 17.16, 17.17, 17.18, 17.25, 17.35, 17.67, 17.94, 17.97, 17.98
+
+**Deliverables**
+
+- A Reports page building a document for a week, a month or a chosen range in a chosen zone, over the whole installation, a realm or a node, with its figures read by the same queries the pages they come from and the 17.97 digest use, so the three cannot disagree
+- Sections for availability per realm and for the login path with the incidents and their notes from 17.94, crashes by group once 17.83 lands, backups taken, verified and restored, updates applied and rolled back from 17.17, a summary of who changed what by operator and by area from the audit store, alerts with their time to acknowledge, capacity headroom and forecasts from 17.98, and open findings once 17.82 lands; a section whose milestone has not landed says unavailable naming it, never zero
+- A layout for paper: a print stylesheet with page breaks between sections, table rows that never split and headers that repeat, a header and footer naming the installation, the period and the page, charts printed as markup with their table view, and meaning carried by words so a grey printout loses nothing
+- Saving as a PDF through the browser's own print dialog, with no PDF library in the dashboard or the supervisor
+- A report task on the 17.15 engine writing the same document as one self-contained HTML file, with no script and its stylesheet and fonts inline, into a reports root under 17.18's jail with a retention of its own, and mailing it through 17.35's mail settings to chosen panel users
+- A report carrying only the sections its viewer may see, a scheduled one mailed only to users who hold every permission its sections need, and no report carrying a secret value or a player's name, email or address; creating and scheduling reports audited under permission keys of their own
+- A print stylesheet on every other page, hiding navigation and controls and saying when a long list printed only the rows it had loaded
+
+**Acceptance**
+
+- [ ] A month's report shows the same availability, backup and alert figures their pages show for that month, proved by a unit test building both from one seeded month
+- [ ] Printing the report to PDF in Chromium gives pages whose header and footer name the installation, the period and the page, and no table row is split across two pages, proved by an end-to-end run
+- [ ] A section whose milestone has not landed prints as unavailable naming it, never as zero, proved by a browser test
+- [ ] A scheduled report writes one HTML file that holds no script and requests nothing from any host, and mails it to its recipients, proved by an end-to-end run with a local mail catcher
+- [ ] No report carries a secret value or a player's name, email or address, proved by a response shaping test
+- [ ] A user without `activity.read` gets a report without the audit summary, and a scheduled report cannot name a recipient who lacks a permission one of its sections needs, proved by a unit test
+- [ ] The overview and a list page print without the side bar or controls, proved by a browser test under print media
+
+## 17.158 Incident workspace and postmortems
+
+**Goal:** When the game falls over, the team runs the incident in one place that gathers what happened as it happens, tells players once, and ends in a written postmortem whose actions are tracked.
+
+**Size:** L. **Depends on:** 17.67, 17.70, 17.78, 17.79, 17.86, 17.94, 17.102, 17.159, 17.164
+
+**Deliverables**
+
+- Declare incident from an alert, from a crash group once 17.83 lands, or from any page's header and the palette, with a title, a severity from a list the owner sets with one sentence each, and a scope of apps, realms and nodes; incidents kept in the supervisor's store with the states declared, investigating, identified, monitoring and resolved
+- Commander and communications roles held by panel users who can see the scope, the declaring operator commanding until a hand-over, each hand-over on the timeline and each holder told through their 17.86 channels
+- A live timeline drawn from 17.78's events-in-range query over the incident's scope from its start, so audit rows, alerts, crashes, power operations and settings changes, kill switches among them, arrive as they happen on the one socket, merged with hand-typed entries written as 17.159 notes, each entry filtered by the viewer's permissions, and 17.79's correlation offered over the incident's window
+- One status box whose update is previewed exactly as it will leave and then posted to 17.70's public page as its incident note and to 17.102's subscribers for incident events, each post audited and held to the payload rules alerts carry
+- A declared incident and one 17.94 detects from the probe over the same window joined into one, so the uptime figures and the public page count it once and 17.94's note becomes the incident's
+- Resolving opens a postmortem prefilled with the timeline and the impact, the downtime 17.94 recorded, the sessions that dropped, and the times to acknowledge and to resolve, with sections for the cause, what went well, what went badly and the action items
+- Action items created as tasks on the 17.164 board, each linked back to the incident with an owner and a due date
+- The postmortem kept with its history as draft, reviewed or published to staff, and exported as Markdown holding the timeline, the impact and the action items with their task links
+- An incidents list with severity, duration, time to acknowledge and time to resolve and filters over them, with every declaration, role change, status post and postmortem edit audited under permission keys of their own
+
+**Acceptance**
+
+- [ ] Declaring an incident from an alert opens it with that alert, and a settings change and a restart made in its scope afterwards appear on its timeline without a reload, proved by an end-to-end run
+- [ ] A timeline entry from an audit row the viewer may not see is left out for that viewer while the rest renders, proved by a unit test
+- [ ] One status update reaches the public page and a subscribed webhook signed, matching the preview, with no player name or address in either, proved by a unit test and a response shaping test
+- [ ] A probe-detected incident and a declared one over the same window are one incident, and the uptime figures do not count it twice, proved by a unit test
+- [ ] Resolving opens a postmortem prefilled with the timeline and the downtime 17.94 recorded for that window, proved by a browser test
+- [ ] Each action item becomes a task on the board linked to the incident, and the Markdown export holds the timeline, the impact and the action items with their task links, proved by a unit test
+- [ ] The incidents list shows time to acknowledge and time to resolve computed from the timeline of a seeded incident, proved by a unit test
+
+## 17.159 Notes, pinned warnings and graph annotations
+
+**Goal:** The reason a setting has an odd value, or why a realm lives on one node, is written on the thing itself where the next operator will see it, and events outside the server are marked on the graphs they explain.
+
+**Size:** M. **Depends on:** 17.13, 17.25, 17.48, 17.78, 17.79, 17.151
+
+**Deliverables**
+
+- A Notes panel on every object the panel shows, each kind joining as its milestone lands: an app, realm, node, setting key, schedule, backup, alert rule, allocation, database host, file root and panel user, addressed through one object reference of kind and id that later milestones reuse; the notes field 17.29 gives an allocation moves into this panel once both are built, so a note has one place to live
+- Each note short Markdown under a size cap, rendered by 17.151's renderer with raw HTML and remote images off, carrying its author, time, edit history and an optional expiry after which it is archived rather than deleted
+- Reading a note needing the read permission of the object it sits on, checked on every read like the object's own data, and writing, pinning and deleting another operator's note needing note permissions of their own in the 17.48 catalog
+- A note flagged as a pinned warning shown as a banner wherever that object is edited, beside the control it concerns, with its author and time, until it is unpinned or expires, starting with the 17.13 settings editor and joined by each page that edits a kind as it lands
+- Annotations drawn on any graph by dragging across a range, or by entering its start and end from the keyboard, with a short text and a scope of an app, a realm or the installation; 17.78 draws them as markers of their own kind beside the automatic ones under the same filter, and 17.79 lists them for the window it correlates
+- Every note and annotation created, edited, pinned, unpinned and deleted audited, with its previous text kept in its history
+
+**Acceptance**
+
+- [ ] A note on a setting key is shown to a user holding `settings.read` and refused to one without it, on the page and on the API, proved by a unit test
+- [ ] A pinned warning on `Rate.Drop.Item` shows as a banner beside that key in the settings editor and disappears when it is unpinned or its expiry passes, proved by a browser test with a fixed clock
+- [ ] An annotation dragged across a range appears as a marker on every graph showing that window, is reachable by keyboard, and is listed by 17.79 for that window, proved by a browser test
+- [ ] A note holding raw HTML, a script link and a remote image shows them as text or drops them, and the page requests nothing from another host, proved by a browser test
+- [ ] Editing a note keeps the previous text in its history, and every change writes an audit row, proved by a unit test
+
+## 17.160 Operator presence and one socket across tabs
+
+**Goal:** Operators see who else is looking at or editing the same thing before they collide, and a browser with many panel tabs holds one connection instead of one per tab.
+
+**Size:** M. **Depends on:** 17.26, 17.57, 17.58
+
+**Deliverables**
+
+- Presence messages on the 17.26 socket, added as new client and server types under the rule that types and fields are only added and covered by its contract test: a page reports the object it is viewing and, while an editor holds unsaved changes, that it is editing
+- Presence held only in the supervisor's memory, never in the store or the audit log, expiring with the socket or after an idle period, and filtered through 17.57 so a viewer learns another operator is on an object only when the viewer may see that object, and which page someone is on only with `users.read`
+- The header showing the initials of anyone else on the same app, schedule, file or settings key, the console showing who else is typing to that app, and an editor opened on something another operator has unsaved changes in saying who and since when before work starts, while the 409 on a stale save stays the protection it already is
+- An Operators online list of who is signed in and, where the viewer may see it, on which page, with a per-user setting that hides one's own presence from everyone else
+- One socket per browser rather than one per tab: tabs elect a leader through the Web Locks API, the leader holds the one 17.26 socket and shares it with the other tabs over a BroadcastChannel, and when the leader closes another tab takes over and resumes by sequence number; a browser lacking either interface falls back to a socket per tab under 17.58's per-user caps, which count every page load today
+- Sign-out, theme and locale applied in every tab of the browser at once, and a page open in two tabs warning in each about the other
+
+**Acceptance**
+
+- [ ] Two operators on one app each see the other's initials within one second, and a third who holds nothing on that app sees neither, proved by a unit test and a browser test
+- [ ] Opening the settings editor on a key another operator holds unsaved changes in names them and since when, and a stale save still answers 409, proved by an end-to-end run
+- [ ] Presence never reaches the store or the audit log, and clears within one idle period after the other operator closes the page, proved by a unit test
+- [ ] Twelve tabs of one browser open exactly one socket, and closing the leader hands it to another tab with no missed or repeated records, proved by a browser test counting sockets and sequence numbers
+- [ ] Signing out in one tab signs every tab out, and a theme chosen in one applies in all, proved by a browser test
+- [ ] A user who hides their presence appears in no other operator's header or online list, proved by a unit test
+
+## 17.161 Change freeze windows
+
+**Goal:** For a launch weekend or an event, the team freezes the kinds of change that could hurt it, and the freeze holds on every path until it ends.
+
+**Size:** M. **Depends on:** 17.15, 17.27, 17.47, 17.48, 17.96
+
+**Deliverables**
+
+- A freeze an owner declares with a name, a start and end in a chosen zone, a reason, a scope of the installation, a realm or an app, and the change classes it blocks, chosen from settings edits, world edits, pack and plugin installs, updates, patch publishes, installation file applies, grant changes and restarts, each class joining as its milestone lands; declaring, changing and ending one early audited, under a permission of its own
+- Each mutating route and socket message registered with the change class it belongs to, and a route registry test that fails when a mutating route names none
+- Enforcement at 17.48's state step, so a request in a frozen class answers 409 naming the freeze, its reason and its end whatever it came through, the page, an API key, `ambrosectl` or a socket message, checked beside 17.27's protected hours, which stay the daily window they are
+- Banners naming the freeze on the controls it blocks, disabled with the reason named, and the freeze shown on the overview while it runs
+- Exceptions only through an owner override with a reason and a fresh 17.47 step-up check, audited naming the freeze, or through an approved change request once 17.141 lands
+- Scheduled tasks in a frozen class held until the freeze ends and then run within their misfire grace or recorded as skipped for the freeze, unless an owner marked the task exempt, while the supervisor's own restart of a crashed app is never held, because it is not a change
+- Freezes on the 17.96 calendar in a meaning color of their own, with a schedule run or a timed event planned inside one marked as a conflict
+
+**Acceptance**
+
+- [ ] With settings edits frozen, a settings change through the page and through a direct API request each answer 409 naming the freeze while reads still answer, and every mutating route and socket message the registry holds is covered, proved by a unit test driven from the route registry
+- [ ] A mutating route registered without a change class fails the route registry test
+- [ ] An owner override with a reason and a fresh step-up check goes through inside a freeze and is audited naming the freeze and the reason, and one without either is refused, proved by a unit test
+- [ ] A scheduled restart inside a restart freeze is held and runs when the freeze ends within its grace, and one marked exempt runs on time, proved by a unit test with a fake clock
+- [ ] The supervisor still restarts a crashed app inside a restart freeze, proved by a unit test
+- [ ] A freeze appears on the calendar, and a schedule run inside it is marked as a conflict, proved by a browser test
+
+## 17.162 Comment threads, mentions and an inbox
+
+**Goal:** Staff discuss an alert, a crash or a backup on the object itself, under the panel's permissions, and each operator has one inbox of what needs them.
+
+**Size:** M. **Depends on:** 17.26, 17.57, 17.67, 17.86, 17.159
+
+**Deliverables**
+
+- A discussion thread on alerts, crash and error groups, error reports, schedule runs, backups and audit rows, each kind joining as its milestone lands, and on change requests and incidents once 17.141 and 17.158 land, attached through 17.159's object references so a thread is readable exactly when its object is, and written in Markdown through the same renderer
+- New comments arriving live as an event on the one 17.26 socket, filtered by 17.57 per message, so a thread never reaches a viewer who lost access mid-conversation
+- Typing @ suggesting only panel users who can see that object, computed on the server, and a mention of someone who cannot see it refused with the reason rather than sent
+- A mention delivered through the mentioned user's own 17.86 channels and preferences, carrying who mentioned them on which object and a link, never the comment's text, so nothing written in a thread leaves the panel
+- An Inbox page listing mentions, replies in threads the user follows and, as their milestones land, assignments and review requests, each read, unread or done, with the unread count in the header and an item leaving the inbox when its object leaves the user's sight
+- Following and unfollowing a thread, edits kept with their history, deletion by the author or a holder of the moderation permission leaving a tombstone naming who deleted it, and every comment, edit and deletion audited under permission keys of their own
+
+**Acceptance**
+
+- [ ] A comment on an alert appears in another operator's open thread within one second with no reload, proved by an end-to-end run
+- [ ] Typing @ on a backup suggests only users who can read that backup, and a mention of a user who cannot is refused naming why, proved by a unit test
+- [ ] A mention reaches the user through their chosen channel with a link and without the comment's text, proved by a shaping test on the delivered payload
+- [ ] The inbox lists a new mention as unread, marking it done removes it from the count, and it leaves the inbox when the user loses access to the object, proved by a unit test
+- [ ] A user without read on an object gets 404 for its thread on the route and not found on the socket, proved by a unit test
+- [ ] An edited comment keeps its history and a deleted one leaves a tombstone naming who deleted it, proved by a unit test
+
+## 17.163 On-call rotations, escalation and shift handoff
+
+**Goal:** A volunteer team always knows who is watching, an alert nobody answers moves on to someone who will, and each shift hands over what is still open in writing.
+
+**Size:** L. **Depends on:** 17.25, 17.67, 17.85, 17.86, 17.96, 17.97
+
+**Deliverables**
+
+- Rotations an owner defines per scope, the installation, a node, a realm or an app: participants in order, a daily or weekly length, a handoff time in a named zone and layers such as primary and secondary, kept in the store; nothing about on call shows until a rotation exists, and a lone owner is always on call
+- Overrides an owner sets and swaps one operator requests from another for a range, taking effect only when accepted, each audited and shown on the 17.96 calendar
+- Who is on call for the current page's scope shown in the top bar
+- Routing through the rotation once one covers an alert's scope: the alert goes first to whoever is on call through their 17.86 channels rather than to everyone whose grants cover it, which stays the rule where no rotation exists, and 17.85's grouping, inhibition and silences apply before anyone is paged
+- Escalation policies moving an alert unacknowledged within a set number of minutes to the next layer and then to every owner, stopped by 17.67's acknowledgement, each step recorded on the alert's history, a critical step never held by quiet hours, and every timer committed to the store so a supervisor restart resumes it without repeating a step
+- A handoff report at each handoff for the outgoing and incoming operators: open and unacknowledged alerts, active silences and kill switches, maintenance in effect, running incidents, pending change requests and the schedules due in the next shift, each section following the reader's permissions and one whose milestone has not landed named as unavailable
+- A shift log in which the outgoing operator writes a note the incoming one must acknowledge, an unacknowledged handoff escalated to the owners after a set time, and the log kept and searchable
+- A Since you were last here card at each operator's sign-in, gathering from the audit log and 17.97's figure sources the alerts raised and resolved, the changes others made in their scope, and the incidents and handoff notes since their last session
+- Permissions of their own for managing rotations and requesting swaps in the 17.48 catalog, with every rotation, override, swap, escalation step and acknowledgement audited
+
+**Acceptance**
+
+- [ ] With a rotation on an app, an alert on that app goes only to the operator on call and not to every holder of the grant, and with no rotation it goes to every holder as 17.86 routes it, proved by a unit test
+- [ ] An alert unacknowledged past its layer's wait moves to the next layer and then to every owner, each step on its history, and acknowledging it stops the escalation, proved by a unit test with a fake clock
+- [ ] Killing the supervisor mid-escalation resumes the timer on the next start and sends no step twice, proved by a unit test
+- [ ] An accepted swap changes who is on call for exactly its range and shows on the calendar, and an unaccepted request changes nothing, proved by a unit test
+- [ ] The handoff report for a seeded state lists its unacknowledged alerts, active silences and next-shift schedules, and names a section whose milestone has not landed as unavailable, proved by a unit test
+- [ ] A handoff note left unacknowledged past its time is escalated to the owners, and acknowledging it records who and when, proved by a unit test
+- [ ] With no rotation defined the top bar shows nothing about on call and routing is unchanged, and a lone owner reads as on call, proved by a browser test
+
+## 17.164 Staff task board and recurring chores
+
+**Goal:** Work that is not an alert, such as a restore drill, a grant review or a certificate renewal, is written down, assigned and dated beside the objects it concerns, and recurring chores no longer depend on someone remembering them.
+
+**Size:** M. **Depends on:** 17.15, 17.48, 17.82, 17.86, 17.96, 17.97, 17.159
+
+**Deliverables**
+
+- A Tasks page with a board of To do, In progress, Waiting and Done and a list view, each task carrying a title, a Markdown description through 17.159's renderer, assignees among panel users, a due date and links to panel objects through 17.159's references, such as a crash group, an app, a setting key, a backup, an incident or a node, each link shown only to a viewer who may see its object
+- Moving cards by drag and by keyboard, each move sending the task's version with `If-Match` so a move from a stale view answers 409 instead of undoing another operator's
+- Tasks created by hand, from a health finding's Create task control carrying its code and fix route, from a crash or error group as those land, and from postmortem action items once 17.158 lands; a task from a finding shows the finding's current state and offers to close itself once the finding clears
+- A create-task step on the 17.15 engine, so recurring templates such as a monthly restore drill, a quarterly grant review or a certificate renewal make a task with its assignee and due offset on a schedule, and a template with an open task from its last run does not make a second one
+- Due tasks on the 17.96 calendar, overdue ones in the 17.97 digest and in the handoff report once 17.163 lands, and assignment notices through each assignee's 17.86 channels
+- Task permissions of their own in the 17.48 catalog for reading, writing, assigning and managing templates, with every change audited
+
+**Acceptance**
+
+- [ ] A task created from a health finding carries its code and fix link, and says so when the finding clears, proved by a unit test
+- [ ] A schedule with a create-task step makes one task per run and no second one while the first is open, proved by a unit test
+- [ ] A task due tomorrow appears on the calendar on its date, and an overdue one appears in the next digest, proved by a unit test
+- [ ] Moving a card from a stale view answers 409 and changes nothing, and a card moves between columns by keyboard alone and passes the accessibility gate, proved by a browser test
+- [ ] A task linked to a backup shows that link only to users who can read the backup, and a user without the task read permission gets 403, proved by a unit test
+- [ ] Assigning a task notifies the assignee through their channels, and every change writes an audit row, proved by a unit test
