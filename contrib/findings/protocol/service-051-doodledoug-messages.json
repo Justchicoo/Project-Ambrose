@@ -1,0 +1,763 @@
+{
+    "subject":  "F-41 service 51 DOODLEDOUG_MESSAGES",
+    "area":  "protocol",
+    "claim":  "The r806919 Wizard 1.610 Root.wad message definitions identify service 51 as DOODLEDOUG_MESSAGES and define its ordered message tags and field types as catalogued here.",
+    "revision":  "r806919.Wizard_1_610",
+    "method":  "static",
+    "how_to_repeat":  [
+                          "Read Messages/WizCombatMessages.xml from Root.wad in your own r806919 install with `bindecode` --client \u003cinstall\u003e --text Messages/WizCombatMessages.xml.",
+                          "Read ServiceID and ProtocolType from _ProtocolInfo/RECORD; enumerate each message RECORD and retain each non-metadata field name and its TYPE (or the supported TPYE/TYP spelling, with GlobalID inferred as GID).",
+                          "Use explicit _MsgOrder or _MsgType where the first message has it; otherwise sort distinct message element tags by byte-ordinal order and number them from 1, collapsing repeated tags only when their fields match.",
+                          "Run `bindecode --client \u003cinstall\u003e --sweep` as an archive-decode check; the sweep covers BINd entries, not the XML message definitions."
+                      ],
+    "evidence":  [
+                     "`bindecode` --client \u003cinstall\u003e --text Messages/WizCombatMessages.xml read this definition from the local r806919 Root.wad; it declares service id 51, protocol name DOODLEDOUG_MESSAGES, and 36 distinct ordered messages with 119 fields.",
+                     "The service uses tag-ordinal order; the catalog records every message tag/name, resolved order, and field name/type, excluding underscore-prefixed metadata.",
+                     "`bindecode --client \u003cinstall\u003e --sweep --threads 8` reported 173088 entries, 134640 BINd files, 134635 decoded, 5 unknown-root-class failures and 0 unreadable entries; those five BINd failures do not validate or contradict this XML catalog."
+                 ],
+    "disproof":  "A repeat read of Messages/WizCombatMessages.xml from another r806919 install that yields a different service id/name, distinct message order, or field name/type under the stated ordering rule.",
+    "confidence":  "high",
+    "submitted_by":  "Copilot SDK",
+    "submitted_on":  "2026-09-27",
+    "status":  "claimed",
+    "service":  {
+                    "id":  51,
+                    "name":  "DOODLEDOUG_MESSAGES",
+                    "version":  1,
+                    "entry":  "Messages/WizCombatMessages.xml",
+                    "ordering":  "tag-ordinal",
+                    "messages":  [
+                                     {
+                                         "tag":  "MSG_ALLOWLEAVEPVP",
+                                         "name":  "MSG_ALLOWLEAVEPVP",
+                                         "order":  1,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATACTIONS",
+                                         "name":  "MSG_COMBATACTIONS",
+                                         "order":  2,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "ActionData",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATADD",
+                                         "name":  "MSG_COMBATADD",
+                                         "order":  3,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "ParticipantData",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATAFK",
+                                         "name":  "MSG_COMBATAFK",
+                                         "order":  4,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "IsCombatAFK",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATCHEAT",
+                                         "name":  "MSG_COMBATCHEAT",
+                                         "order":  5,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "CheatFlags",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "MaycastChance",
+                                                            "type":  "FLT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATDRAW",
+                                         "name":  "MSG_COMBATDRAW",
+                                         "order":  6,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATFLEE",
+                                         "name":  "MSG_COMBATFLEE",
+                                         "order":  7,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "ParticipantID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATHAND",
+                                         "name":  "MSG_COMBATHAND",
+                                         "order":  8,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DeckCount",
+                                                            "type":  "USHRT"
+                                                        },
+                                                        {
+                                                            "name":  "TotalDeckCount",
+                                                            "type":  "USHRT"
+                                                        },
+                                                        {
+                                                            "name":  "TreasureCardCount",
+                                                            "type":  "USHRT"
+                                                        },
+                                                        {
+                                                            "name":  "ParticipantID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "HandData",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATHEALTH",
+                                         "name":  "MSG_COMBATHEALTH",
+                                         "order":  9,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "HealthData",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATLOADED",
+                                         "name":  "MSG_COMBATLOADED",
+                                         "order":  10,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "RoundNum",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "FirstTeamToAct",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "ParticipantList",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATMATCHRESULT",
+                                         "name":  "MSG_COMBATMATCHRESULT",
+                                         "order":  11,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "WinningTeam",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATMOVE",
+                                         "name":  "MSG_COMBATMOVE",
+                                         "order":  12,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "MoveType",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "SpellSelection",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "SpellTarget",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "TimeLeft",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "ShadowPactTarget",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "SelectedTieredSpellID",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATMOVESELECTION",
+                                         "name":  "MSG_COMBATMOVESELECTION",
+                                         "order":  13,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "ParticipantID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "MoveType",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "SpellID",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "SpellTargetIndex",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "EnchantmentID",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "IsItemCard",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "IsTreasureCard",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "IsBattleCard",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "ShadowPactTarget",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATPAUSED",
+                                         "name":  "MSG_COMBATPAUSED",
+                                         "order":  14,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Paused",
+                                                            "type":  "BYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATPHASE",
+                                         "name":  "MSG_COMBATPHASE",
+                                         "order":  15,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "NewPhase",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PlayerID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATPHASEFORSPECTATORS",
+                                         "name":  "MSG_COMBATPHASEFORSPECTATORS",
+                                         "order":  16,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "NewPhase",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "Time",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "ParticipantName1",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "ParticipantName2",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "ParticipantName3",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "ParticipantName4",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "ParticipantName5",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "ParticipantName6",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "ParticipantName7",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "ParticipantName8",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Subcircles",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "TeamName0",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "TeamName1",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATPIPS",
+                                         "name":  "MSG_COMBATPIPS",
+                                         "order":  17,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "PipData",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATREMOVE",
+                                         "name":  "MSG_COMBATREMOVE",
+                                         "order":  18,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "ParticipantID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATREVEALHANGING",
+                                         "name":  "MSG_COMBATREVEALHANGING",
+                                         "order":  19,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "ParticipantID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "CloakEffectType",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "SpellTemplateID",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "EffectType",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "EffectAmount",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "DamageType",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "ActNum",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATSTATS",
+                                         "name":  "MSG_COMBATSTATS",
+                                         "order":  20,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "PartID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "StatsData",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATUPFIRST",
+                                         "name":  "MSG_COMBATUPFIRST",
+                                         "order":  21,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "UpFirst",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "RoundNum",
+                                                            "type":  "USHRT"
+                                                        },
+                                                        {
+                                                            "name":  "PlayerID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "FirstTeamToAct",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMBATVICTORY",
+                                         "name":  "MSG_COMBATVICTORY",
+                                         "order":  22,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DISMISS_SUMMON",
+                                         "name":  "MSG_DISMISS_SUMMON",
+                                         "order":  23,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Subcircle",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DUEL",
+                                         "name":  "MSG_DUEL",
+                                         "order":  24,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_ENDDUEL",
+                                         "name":  "MSG_ENDDUEL",
+                                         "order":  25,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETWILLCAST",
+                                         "name":  "MSG_PETWILLCAST",
+                                         "order":  26,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PetCastingSpell",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Target",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SETDUELTIMER",
+                                         "name":  "MSG_SETDUELTIMER",
+                                         "order":  27,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "DurationTime",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "RedTime",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "YellowTime",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "MinTurnTime",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SETPLANNINGPHASETIMER",
+                                         "name":  "MSG_SETPLANNINGPHASETIMER",
+                                         "order":  28,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Time",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "TimeData",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SETST",
+                                         "name":  "MSG_SETST",
+                                         "order":  29,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Type",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Arg1",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "Arg2",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "Arg3",
+                                                            "type":  "FLT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SETST2",
+                                         "name":  "MSG_SETST2",
+                                         "order":  30,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "PlayerID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "SpellDamage",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "StatDmg",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "StatRes",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "StatPierce",
+                                                            "type":  "FLT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SETSTATUS",
+                                         "name":  "MSG_SETSTATUS",
+                                         "order":  31,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Player",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Status",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SHOWCOMBATUI",
+                                         "name":  "MSG_SHOWCOMBATUI",
+                                         "order":  32,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "AltTurn",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "AltTurnTeam",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "DynamicTurnFlags",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "DynamicSubcircles",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SHOWPETCARD",
+                                         "name":  "MSG_SHOWPETCARD",
+                                         "order":  33,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PetData",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Cooldown",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "RequirementFailed",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "MyTurn",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SIGILSPELL",
+                                         "name":  "MSG_SIGILSPELL",
+                                         "order":  34,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Subcircles",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "SpellID",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_UPDATECOMBATPARTICIPANT",
+                                         "name":  "MSG_UPDATECOMBATPARTICIPANT",
+                                         "order":  35,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "ObjectID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "HidePVPEnemyChat",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_UPDATEDUELTIMER",
+                                         "name":  "MSG_UPDATEDUELTIMER",
+                                         "order":  36,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DuelID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "RemainingTime",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     }
+                                 ]
+                }
+}
