@@ -6,6 +6,7 @@
 #include "ConfigMgr.h"
 #include "LogTestDirectory.h"
 #include "LogTestHarness.h"
+#include "MemorySettingStore.h"
 #include "ScopeExit.h"
 #include "ServerApp.h"
 #include "Settings.h"
@@ -25,31 +26,7 @@
 
 namespace
 {
-    class MemoryStore : public SettingStore
-    {
-    public:
-        bool Load(std::map<std::string, std::string, std::less<>>& values, std::string&) override
-        {
-            values = Values;
-            return true;
-        }
-
-        bool Write(SettingWrite const& write, std::string&) override
-        {
-            if (write.Persisted)
-                Values[write.Key] = *write.Persisted;
-            else
-                Values.erase(write.Key);
-            return true;
-        }
-
-        bool History(std::string const&, std::size_t, std::vector<SettingAuditEntry>&, std::string&) override
-        {
-            return true;
-        }
-
-        std::map<std::string, std::string, std::less<>> Values;
-    };
+    using MemoryStore = MemorySettingStore;
 
     class TickingApp : public ServerApp
     {

@@ -1,19 +1,23 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps the apps behind a shared lock that only starting and stopping the supervisor takes alone, so a request always finds a whole list; the saved state and each app's output live under the data folder unless Supervisor.StateFile or Supervisor.OutputDir says otherwise; a power request names its action and, for a stop or restart, a countdown, and anything else in it is refused field by field; a relayed request keeps its method, path, body and request id and is let through only for a method and path whose permission the relay knows, the same one the app's own route asks for, so a caller who could not reach a route on the app cannot reach it through the supervisor and a path the relay does not know is answered as absent, each judged by the listener the request came in on, since the admin token on the supervisor's own API and a panel user's session on the panel are different callers; sessions stay the supervisor's own and are never relayed, and an app that is not running or has its admin API off is answered 503 with the reason.
+ * Keeps the apps behind a shared lock that only starting and stopping the supervisor takes alone, so a request always finds a whole list; the saved state and each app's output live under the data folder unless Supervisor.StateFile or Supervisor.OutputDir says otherwise; a power request names its action and, for a stop or restart, a countdown, and anything else in it is refused field by field; a relayed request keeps its method, path, query, body and request id, a settings request also names its caller and the rights they hold that the route can use, a settings batch pays its cost on the panel's limit first, and each relayed settings or reload answer is handed on to be recorded; and is let through only for a method and path whose permission the relay knows, the same one the app's own route asks for, so a caller who could not reach a route on the app cannot reach it through the supervisor and a path the relay does not know is answered as absent, each judged by the listener the request came in on, since the admin token on the supervisor's own API and a panel user's session on the panel are different callers; sessions stay the supervisor's own and are never relayed, and an app that is not running or has its admin API off is answered 503 with the reason.
  */
 
 #include "Supervisor.h"
+#include "AdminConfigView.h"
 #include "AdminRouter.h"
+#include "AdminSettingsView.h"
 #include "ConfigMgr.h"
 #include "Log.h"
 #include "StringUtil.h"
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <mutex>
 
 namespace
@@ -245,6 +249,19 @@ std::optional<std::string_view> Supervisor::PermissionFor(std::string_view metho
         return read ? std::optional<std::string_view>("console.read") : std::nullopt;
     if (tail == "/api/settings")
         return read ? std::optional<std::string_view>("settings.read") : method == "PATCH" || method == "PUT" ? std::optional<std::string_view>("settings.edit") : std::nullopt;
+    if (tail == "/api/settings/batch")
+        return method == "POST" ? std::optional<std::string_view>("settings.edit") : std::nullopt;
+    if (tail.starts_with("/api/settings/"))
+    {
+        std::string_view const key = tail.substr(std::string_view("/api/settings/").size());
+        if (key.ends_with("/history") && key.size() > std::string_view("/history").size())
+            return read ? std::optional<std::string_view>("settings.read") : std::nullopt;
+        if (!key.empty() && key.find('/') == std::string_view::npos)
+            return method == "PUT" ? std::optional<std::string_view>("settings.edit") : std::nullopt;
+        return std::nullopt;
+    }
+    if (tail.starts_with("/api/events/after/"))
+        return read ? std::optional<std::string_view>("settings.read") : std::nullopt;
     if (tail == "/api/database" || tail == "/api/database/updates")
         return read ? std::optional<std::string_view>("database.read") : std::nullopt;
     if (tail == "/api/database/apply")
@@ -333,7 +350,57 @@ AdminResponse Supervisor::Answer(AdminRequest const& request, AdminRouter const&
         return AdminResponse::Problem(404, "not_found", fmt::format("The supervisor relays nothing at {} {}", method, request.Path));
     if (std::optional<AdminResponse> refused = Refuse(request, *permission, router))
         return std::move(*refused);
-    return Relay(*app, request, tail);
+    if (method == "POST" && tail == "/api/settings/batch")
+        if (std::optional<AdminResponse> held = router.Charge(request, AdminSettingsView::BatchCost))
+            return std::move(*held);
+    std::string const actor = _hooks.NameOf ? _hooks.NameOf(request) : std::string();
+    AdminResponse response = Relay(*app, request, tail, ForwardedHeaders(request, router, method, tail, *permission, actor));
+    if (_hooks.Relayed && (tail.starts_with("/api/settings") || tail.starts_with("/api/reload")))
+        _hooks.Relayed(request, RelayedAnswer{ std::string(name), method, std::string(tail) + QueryString(request), response.Status, response.Body });
+    return response;
+}
+
+void Supervisor::SetRelayHooks(SupervisorRelayHooks hooks)
+{
+    _hooks = std::move(hooks);
+}
+
+std::vector<std::pair<std::string, std::string>> Supervisor::ForwardedHeaders(AdminRequest const& request, AdminRouter const& router, std::string_view method, std::string_view tail,
+    std::string_view permission, std::string const& name)
+{
+    std::vector<std::pair<std::string, std::string>> headers;
+    if (!tail.starts_with("/api/settings"))
+        return headers;
+    headers.emplace_back("X-Ambrose-Actor", request.Principal);
+    headers.emplace_back("X-Ambrose-Actor-Name", name.empty() ? request.Principal : name);
+    std::vector<std::string> granted{ std::string(permission) };
+    if (method != "GET" && router.MayI(request, AdminSettingsView::RestrictedPermission) == PermissionVerdict::Allowed)
+        granted.emplace_back(AdminSettingsView::RestrictedPermission);
+    if (method == "GET" && AdminConfigView::AsksToReveal(request) && router.MayI(request, "settings.secrets.read") == PermissionVerdict::Allowed)
+        granted.emplace_back("settings.secrets.read");
+    headers.emplace_back("X-Ambrose-Grants", fmt::format("{}", fmt::join(granted, ",")));
+    return headers;
+}
+
+std::string Supervisor::QueryString(AdminRequest const& request)
+{
+    auto const encode = [](std::string_view text)
+    {
+        std::string out;
+        for (char const c : text)
+        {
+            unsigned char const byte = static_cast<unsigned char>(c);
+            if (std::isalnum(byte) != 0 || c == '-' || c == '_' || c == '.' || c == '~')
+                out += c;
+            else
+                out += fmt::format("%{:02X}", byte);
+        }
+        return out;
+    };
+    std::string query;
+    for (auto const& [name, value] : request.QueryValues)
+        query += fmt::format("{}{}={}", query.empty() ? "?" : "&", encode(name), encode(value));
+    return query;
 }
 
 AdminResponse Supervisor::PowerRoute(ManagedApp& app, AdminRequest const& request, AdminRouter const& router)
@@ -421,7 +488,7 @@ std::optional<std::string> Supervisor::AskApp(std::string_view name, std::string
     return answer.Body;
 }
 
-AdminResponse Supervisor::Relay(ManagedApp& app, AdminRequest const& request, std::string_view path)
+AdminResponse Supervisor::Relay(ManagedApp& app, AdminRequest const& request, std::string_view path, std::vector<std::pair<std::string, std::string>> headers)
 {
     std::string const& name = app.GetDefinition().Name;
     if (path == "/api/session" || path.starts_with("/api/session/"))
@@ -432,7 +499,7 @@ AdminResponse Supervisor::Relay(ManagedApp& app, AdminRequest const& request, st
         return AdminResponse::Problem(503, "app_admin_off", fmt::format("The admin API of {} cannot be reached: {}", name, snapshot.AdminProblem.empty() ? std::string("it is not set up") : snapshot.AdminProblem));
     if (!snapshot.ProcessId)
         return AdminResponse::Problem(503, "app_not_running", fmt::format("{} is {}, so its admin API is not answering", name, ManagedApp::StateName(snapshot.State)));
-    AdminClientResponse const answer = admin->Send({ request.Method, std::string(path), request.Body, "application/json", request.Id }, RelayTimeout);
+    AdminClientResponse const answer = admin->Send({ request.Method, std::string(path) + QueryString(request), request.Body, "application/json", request.Id, std::move(headers) }, RelayTimeout);
     if (!answer.Answered)
         return AdminResponse::Problem(502, "app_unreachable", fmt::format("{} did not answer: {}", name, answer.Error));
     AdminResponse response;

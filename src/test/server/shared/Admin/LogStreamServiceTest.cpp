@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the stream layer without opening a socket: a warn filter passes only warnings and above, the same backlog is readable over HTTP after a sequence number and says what it could no longer show, and a record read that way is the record the socket would have sent, a record carries the place in the code it was written at and the template it was written from while one with neither carries no location rather than a wrong one, a new session gets the hello and the whole backlog in sequence order, a resume after N gets exactly the records after N or a dropped marker naming the evicted range, a full queue drops the oldest and reports how many with their range, sequence numbers never go backwards across pump batches, secret setting values are masked before a record leaves, a bad subscribe request names its fault, and a subscriber that stops reading changes the cost of 100000 log lines by no more than ten percent against one that reads, with the cost of having no subscriber at all recorded beside them.
+ * Tests the live log's feed of the stream layer without opening a socket, running the layer's shared cases the admin events feed runs too: a warn filter passes only warnings and above, the same backlog is readable over HTTP after a sequence number and says what it could no longer show, and a record read that way is the record the socket would have sent, a record carries the place in the code it was written at and the template it was written from while one with neither carries no location rather than a wrong one, a new session gets the hello and the whole backlog in sequence order, a resume after N gets exactly the records after N or a dropped marker naming the evicted range, a full queue drops the oldest and reports how many with their range, sequence numbers never go backwards across pump batches, secret setting values are masked before a record leaves, a bad subscribe request names its fault, and a subscriber that stops reading changes the cost of 100000 log lines by no more than ten percent against one that reads, with the cost of having no subscriber at all recorded beside them.
  */
 
 #include "LogRedaction.h"
 #include "LogStream.h"
 #include "LogStreamHub.h"
 #include "LogTestHarness.h"
+#include "StreamLayerCases.h"
 
 #include <nlohmann/json.hpp>
 
@@ -17,62 +18,13 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
 namespace
 {
-    class RecordingSink final : public LogStreamSink
-    {
-    public:
-        void Send(std::string text) override
-        {
-            std::lock_guard const lock(_mutex);
-            _messages.push_back(nlohmann::json::parse(text));
-        }
-
-        void Close(std::string reason) override
-        {
-            std::lock_guard const lock(_mutex);
-            _closeReason = std::move(reason);
-            _closed = true;
-        }
-
-        std::vector<nlohmann::json> Messages() const
-        {
-            std::lock_guard const lock(_mutex);
-            return _messages;
-        }
-
-        std::vector<nlohmann::json> OfType(std::string const& type) const
-        {
-            std::vector<nlohmann::json> out;
-            for (nlohmann::json const& message : Messages())
-                if (message.value("type", "") == type)
-                    out.push_back(message);
-            return out;
-        }
-
-        std::vector<uint64> Sequences() const
-        {
-            std::vector<uint64> out;
-            for (nlohmann::json const& record : OfType("record"))
-                out.push_back(record["sequence"].get<uint64>());
-            return out;
-        }
-
-        bool IsClosed() const
-        {
-            std::lock_guard const lock(_mutex);
-            return _closed;
-        }
-
-    private:
-        mutable std::mutex _mutex;
-        std::vector<nlohmann::json> _messages;
-        std::string _closeReason;
-        bool _closed = false;
-    };
+    using RecordingSink = RecordingStreamSink;
 
     class NeverDrainingSink final : public LogStreamSink
     {
@@ -92,7 +44,7 @@ namespace
         return message;
     }
 
-    void PublishRange(LogStreamHub& hub, uint64 from, uint64 to, LogLevel level = LogLevel::Info)
+    void PublishLines(LogStreamHub& hub, uint64 from, uint64 to, LogLevel level = LogLevel::Info)
     {
         for (uint64 sequence = from; sequence <= to; ++sequence)
             hub.Publish(Record(sequence, level, "test", "line " + std::to_string(sequence)));
@@ -100,11 +52,23 @@ namespace
 
     std::vector<uint64> Range(uint64 from, uint64 to)
     {
-        std::vector<uint64> out;
-        for (uint64 sequence = from; sequence <= to; ++sequence)
-            out.push_back(sequence);
-        return out;
+        return SequenceRange(from, to);
     }
+
+    struct LogFeed
+    {
+        using Hub = LogStreamHub;
+        using Service = LogStreamService;
+        using Request = LogStreamRequest;
+        static constexpr std::string_view RecordType = "record";
+
+        static void PublishRange(LogStreamHub& hub, uint64 from, uint64 to)
+        {
+            PublishLines(hub, from, to);
+        }
+    };
+
+    using Cases = StreamLayerCases<LogFeed>;
 
     class LogStreamServiceTest : public testing::Test
     {
@@ -192,120 +156,39 @@ TEST_F(LogStreamServiceTest, ACategoryFilterPassesOnlyThoseCategories)
 
 TEST_F(LogStreamServiceTest, ANewSessionGetsTheHelloThenTheWholeBacklogInOrder)
 {
-    PublishRange(_hub, 1, 25);
+    Cases::NewSessionGetsHelloThenBacklogInOrder(_hub, _service);
 
     auto const sink = std::make_shared<RecordingSink>();
     Open(sink);
-
-    std::vector<nlohmann::json> const messages = sink->Messages();
-    ASSERT_FALSE(messages.empty());
-    EXPECT_EQ(messages.front()["type"], "hello");
-    EXPECT_EQ(messages.front()["latest"], 25u);
-    EXPECT_EQ(messages.front()["oldest"], 1u);
-    EXPECT_EQ(messages.front()["backlog"], 25u);
-    EXPECT_EQ(sink->Sequences(), Range(1, 25));
     nlohmann::json const first = sink->OfType("record").front();
     EXPECT_EQ(first["message"], "line 1");
     EXPECT_EQ(first["category"], "test");
     EXPECT_EQ(first["level"], "info");
-    EXPECT_TRUE(first.contains("time"));
-    EXPECT_TRUE(first.contains("epoch_ms"));
 }
 
 TEST_F(LogStreamServiceTest, AResumeAfterNGetsExactlyTheRecordsAfterN)
 {
-    PublishRange(_hub, 1, 50);
-
-    auto const sink = std::make_shared<RecordingSink>();
-    LogStreamRequest request;
-    request.After = 30;
-    std::shared_ptr<LogStreamSession> const session = Open(sink, request);
-
-    EXPECT_EQ(sink->Sequences(), Range(31, 50));
-    EXPECT_TRUE(sink->OfType("dropped").empty());
-    EXPECT_EQ(session->GetLastSent(), 50u);
-    EXPECT_EQ(session->GetSentCount(), 20u);
+    Cases::ResumeAfterN(_hub, _service);
 }
 
 TEST_F(LogStreamServiceTest, AResumeAfterAnEvictedSequenceGetsADroppedMarkerNamingTheMissedRange)
 {
-    _hub.SetBacklogCapacity(10);
-    PublishRange(_hub, 1, 50);
-
-    auto const sink = std::make_shared<RecordingSink>();
-    LogStreamRequest request;
-    request.After = 20;
-    Open(sink, request);
-
-    std::vector<nlohmann::json> const messages = sink->Messages();
-    ASSERT_GE(messages.size(), 2u);
-    EXPECT_EQ(messages[0]["type"], "hello");
-    EXPECT_EQ(messages[0]["oldest"], 41u);
-    EXPECT_EQ(messages[1]["type"], "dropped");
-    EXPECT_EQ(messages[1]["from"], 21u);
-    EXPECT_EQ(messages[1]["to"], 40u);
-    EXPECT_EQ(messages[1]["count"], 20u);
-    EXPECT_EQ(sink->Sequences(), Range(41, 50));
+    Cases::ResumeAfterEvicted(_hub, _service);
 }
 
 TEST_F(LogStreamServiceTest, AResumeAtTheLatestSequenceGetsNothingButTheHello)
 {
-    PublishRange(_hub, 1, 10);
-
-    auto const sink = std::make_shared<RecordingSink>();
-    LogStreamRequest request;
-    request.After = 10;
-    Open(sink, request);
-
-    EXPECT_EQ(sink->Messages().size(), 1u);
-    EXPECT_TRUE(sink->Sequences().empty());
+    Cases::ResumeAtLatest(_hub, _service);
 }
 
 TEST_F(LogStreamServiceTest, AFullQueueDropsTheOldestAndReportsHowManyWithTheirRange)
 {
-    auto const sink = std::make_shared<RecordingSink>();
-    LogStreamRequest request;
-    request.QueueCapacity = 5;
-    std::shared_ptr<LogStreamSession> const session = Open(sink, request);
-
-    PublishRange(_hub, 1, 12);
-    while (_service.Pump() > 0)
-    {
-    }
-
-    std::vector<nlohmann::json> const dropped = sink->OfType("dropped");
-    ASSERT_EQ(dropped.size(), 1u);
-    EXPECT_EQ(dropped[0]["from"], 1u);
-    EXPECT_EQ(dropped[0]["to"], 7u);
-    EXPECT_EQ(dropped[0]["count"], 7u);
-    EXPECT_EQ(sink->Sequences(), Range(8, 12));
-    EXPECT_EQ(session->GetDroppedCount(), 7u);
-
-    std::vector<nlohmann::json> const messages = sink->Messages();
-    std::size_t const markerAt = static_cast<std::size_t>(std::find_if(messages.begin(), messages.end(), [](nlohmann::json const& message) { return message["type"] == "dropped"; }) - messages.begin());
-    std::size_t const firstRecordAt = static_cast<std::size_t>(std::find_if(messages.begin(), messages.end(), [](nlohmann::json const& message) { return message["type"] == "record"; }) - messages.begin());
-    EXPECT_LT(markerAt, firstRecordAt);
+    Cases::FullQueueDrops(_hub, _service);
 }
 
 TEST_F(LogStreamServiceTest, SequenceNumbersNeverGoBackwardsAcrossPumpBatches)
 {
-    auto const sink = std::make_shared<RecordingSink>();
-    Open(sink);
-
-    uint64 next = 1;
-    for (int round = 0; round < 20; ++round)
-    {
-        PublishRange(_hub, next, next + 99);
-        next += 100;
-        _service.Pump(7);
-    }
-    while (_service.Pump(7) > 0)
-    {
-    }
-
-    std::vector<uint64> const sequences = sink->Sequences();
-    EXPECT_EQ(sequences, Range(1, 2000));
-    EXPECT_TRUE(std::is_sorted(sequences.begin(), sequences.end()));
+    Cases::SequenceNeverBackwards(_hub, _service);
 }
 
 TEST_F(LogStreamServiceTest, SecretSettingValuesAreMaskedBeforeARecordLeaves)
@@ -374,7 +257,7 @@ TEST_F(LogStreamServiceTest, ThePumpThreadDeliversWithoutAnyManualPump)
     _service.Start();
     auto const sink = std::make_shared<RecordingSink>();
     _service.Open(sink, {});
-    PublishRange(_hub, 1, 100);
+    PublishLines(_hub, 1, 100);
 
     auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     while (sink->Sequences().size() < 100 && std::chrono::steady_clock::now() < deadline)
@@ -430,7 +313,7 @@ TEST(LogStreamCost, ASubscriberThatStopsReadingChangesLoggingCostByNoMoreThanTen
 
 TEST_F(LogStreamServiceTest, TheBacklogIsReadableOverHttpAfterASequenceNumber)
 {
-    PublishRange(_hub, 1, 20);
+    PublishLines(_hub, 1, 20);
 
     nlohmann::json const all = nlohmann::json::parse(LogStreamService::BacklogJson(_hub, 0, 500), nullptr, false);
     ASSERT_TRUE(all.is_object());
@@ -452,7 +335,7 @@ TEST_F(LogStreamServiceTest, TheBacklogIsReadableOverHttpAfterASequenceNumber)
 TEST_F(LogStreamServiceTest, TheHttpReadSaysWhatItCouldNotShowAndMatchesTheSocketsRecord)
 {
     _hub.SetBacklogCapacity(10);
-    PublishRange(_hub, 1, 30);
+    PublishLines(_hub, 1, 30);
 
     nlohmann::json const missed = nlohmann::json::parse(LogStreamService::BacklogJson(_hub, 5, 500), nullptr, false);
     ASSERT_FALSE(missed["dropped"].is_null()) << "the reader asked for lines the backlog no longer holds";

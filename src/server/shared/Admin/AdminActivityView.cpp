@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the record from the end, because the newest rows are the ones an operator came for and a record that has run for weeks should not have to be read whole to show the last twenty. A line that is not a JSON object is counted as unreadable and passed over, so one bad write cannot hide everything written after it, and the count is reported rather than swallowed.
+ * Appends one row a line, and reads the record from the end, because the newest rows are the ones an operator came for and a record that has run for weeks should not have to be read whole to show the last twenty. A line that is not a JSON object is counted as unreadable and passed over, so one bad write cannot hide everything written after it, and the count is reported rather than swallowed.
  */
 
 #include "AdminActivityView.h"
@@ -38,6 +38,19 @@ namespace
         }
         return lines;
     }
+}
+
+bool AdminActivityView::Append(std::filesystem::path const& file, std::string const& row)
+{
+    if (file.empty())
+        return false;
+    std::error_code code;
+    std::filesystem::create_directories(file.parent_path(), code);
+    std::ofstream out(file, std::ios::app | std::ios::binary);
+    if (!out)
+        return false;
+    out << row << '\n';
+    return static_cast<bool>(out);
 }
 
 std::string AdminActivityView::ActivityJson(std::filesystem::path const& file, std::size_t limit)

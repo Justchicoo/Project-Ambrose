@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Answers for the register: the listing names every target in the order they would run, with the generation each is serving and what the last attempt found, and a run answers with that target's outcome whether it worked or not, because an operator who reloads something and is told only that it failed has to go to the log to learn why, and this is the page they were already looking at.
+ * Answers for the register: the listing names every target in the order they would run, with the generation each is serving, what the last attempt found and when it finished, and a run answers with that target's outcome whether it worked or not, because an operator who reloads something and is told only that it failed has to go to the log to learn why, and this is the page they were already looking at.
  */
 
 #include "AdminReloadView.h"
@@ -25,6 +25,7 @@ namespace
         entry["ran"] = last.has_value();
         entry["ok"] = last ? last->Ok : true;
         entry["errors"] = last ? last->Errors : std::vector<std::string>{};
+        entry["finished_ms"] = last ? nlohmann::json(last->FinishedEpochMs) : nlohmann::json(nullptr);
         return entry;
     }
 
@@ -36,6 +37,7 @@ namespace
         entry["ran"] = true;
         entry["ok"] = outcome.Ok;
         entry["errors"] = outcome.Errors;
+        entry["finished_ms"] = outcome.FinishedEpochMs;
         return entry;
     }
 }

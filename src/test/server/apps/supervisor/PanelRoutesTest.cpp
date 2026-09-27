@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests that the panel and the apps agree on what each admin route needs: every route an app or the supervisor serves asks for a permission the panel's catalog holds, so no page is lost from the panel unseen, the supervisor's relay asks the same permission the app's own route asks for, method by method, and a write the relay does not know, or a sign-in, is never relayed at all.
+ * Tests that the panel and the apps agree on what each admin route needs: every route an app or the supervisor serves asks for a permission the panel's catalog holds, so no page is lost from the panel unseen, the supervisor's relay asks the same permission the app's own route asks for, method by method, settings changes, batches, history and events included, and a write the relay does not know, or a sign-in, is never relayed at all; a settings relay names the caller and forwards only the rights they hold, and the query goes with it encoded.
  */
 
 #include "AdminActivityView.h"
@@ -12,6 +12,7 @@
 #include "AdminMetricsView.h"
 #include "AdminRealmsView.h"
 #include "AdminReloadView.h"
+#include "AdminSettingsView.h"
 #include "AdminRouter.h"
 #include "AdminStatus.h"
 #include "ConfigMgr.h"
@@ -19,10 +20,13 @@
 #include "OnlinePlayersView.h"
 #include "PanelPermissions.h"
 #include "SeriesStore.h"
+#include "Settings.h"
 #include "Supervisor.h"
 
 #include <gtest/gtest.h>
 
+#include <map>
+#include <set>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -46,7 +50,9 @@ namespace
     void RegisterAppRoutes(AdminRouter& routes, ConsoleCommandTable const& commands)
     {
         AdminStatus::Register(routes, [] { return AdminStatusSnapshot{}; });
-        AdminConfigView::Register(routes, sConfigMgr);
+        static Settings settings;
+        AdminConfigView::Register(routes, sConfigMgr, {}, &settings);
+        AdminSettingsView::Register(routes, settings);
         AdminReloadView::Register(routes);
         AdminMetricsView::Register(routes);
         AdminActivityView::Register(routes, "activity.jsonl");
@@ -101,7 +107,9 @@ TEST(PanelRoutesTest, TheRelayAsksThePermissionTheAppsOwnRouteAsks)
         if (permission.empty())
             continue;
         auto [method, path] = Split(route);
-        if (path.ends_with('/'))
+        if (path == "/api/settings/")
+            path += method == "GET" ? "World.UpdateInterval/history" : "World.UpdateInterval";
+        else if (path.ends_with('/'))
             path += "templates";
         std::optional<std::string_view> const relayed = Supervisor::PermissionFor(method, path);
         ASSERT_TRUE(relayed.has_value()) << route << " is not relayed";
@@ -120,6 +128,15 @@ TEST(PanelRoutesTest, AWriteTheRelayDoesNotKnowOrASignInIsNeverRelayed)
     EXPECT_EQ(Supervisor::PermissionFor("GET", "/api/logs/after/0"), std::optional<std::string_view>("console.read"));
     EXPECT_EQ(Supervisor::PermissionFor("POST", "/api/shutdown"), std::optional<std::string_view>("power.stop"));
     EXPECT_EQ(Supervisor::PermissionFor("PATCH", "/api/settings"), std::optional<std::string_view>("settings.edit"));
+    EXPECT_EQ(Supervisor::PermissionFor("PUT", "/api/settings/World.UpdateInterval"), std::optional<std::string_view>("settings.edit"));
+    EXPECT_EQ(Supervisor::PermissionFor("GET", "/api/settings/World.UpdateInterval/history"), std::optional<std::string_view>("settings.read"));
+    EXPECT_EQ(Supervisor::PermissionFor("POST", "/api/settings/batch"), std::optional<std::string_view>("settings.edit"));
+    EXPECT_EQ(Supervisor::PermissionFor("GET", "/api/events/after/0"), std::optional<std::string_view>("settings.read"));
+    EXPECT_FALSE(Supervisor::PermissionFor("GET", "/api/settings/batch").has_value());
+    EXPECT_FALSE(Supervisor::PermissionFor("PUT", "/api/settings/").has_value()) << "a change names its key";
+    EXPECT_FALSE(Supervisor::PermissionFor("PUT", "/api/settings/World.UpdateInterval/history").has_value());
+    EXPECT_FALSE(Supervisor::PermissionFor("DELETE", "/api/settings/World.UpdateInterval").has_value());
+    EXPECT_FALSE(Supervisor::PermissionFor("POST", "/api/events/after/0").has_value());
 
     EXPECT_FALSE(Supervisor::PermissionFor("POST", "/api/session").has_value()) << "a sign-in stays the supervisor's own";
     EXPECT_FALSE(Supervisor::PermissionFor("POST", "/api/realms").has_value()) << "a read route is not a write route";
@@ -128,4 +145,38 @@ TEST(PanelRoutesTest, AWriteTheRelayDoesNotKnowOrASignInIsNeverRelayed)
     EXPECT_FALSE(Supervisor::PermissionFor("GET", "/api/database/apply").has_value());
     for (std::string_view const key : { "database.read", "updates.apply", "reload.run", "console.read", "power.stop", "settings.edit", "clientdata.read", "activity.read", "metrics.read" })
         EXPECT_TRUE(PanelPermissions::Holds(key)) << key;
+}
+
+TEST(PanelRoutesTest, ASettingsRelayNamesTheCallerAndForwardsOnlyTheRightsTheyHold)
+{
+    AdminAuth auth(10, 1.0);
+    AdminRouter routes(auth);
+    std::set<std::string, std::less<>> held{ "settings.read", "settings.edit" };
+    routes.SetPermissionCheck([&held](AdminRequest const&, std::string_view permission) { return held.contains(permission) ? PermissionVerdict::Allowed : PermissionVerdict::Forbidden; });
+    auto const headersOf = [&routes](AdminRequest const& request, std::string_view method, std::string_view tail, std::string_view permission)
+    {
+        std::map<std::string, std::string> out;
+        for (auto const& [name, value] : Supervisor::ForwardedHeaders(request, routes, method, tail, permission, "Merle"))
+            out[name] = value;
+        return out;
+    };
+
+    AdminRequest request;
+    request.Principal = "user:3";
+    std::map<std::string, std::string> put = headersOf(request, "PUT", "/api/settings/Account.VerifierKeys", "settings.edit");
+    EXPECT_EQ(put["X-Ambrose-Actor"], "user:3");
+    EXPECT_EQ(put["X-Ambrose-Actor-Name"], "Merle");
+    EXPECT_EQ(put["X-Ambrose-Grants"], "settings.edit") << "a right the caller lacks is never forwarded";
+    held.insert("settings.edit.restricted");
+    EXPECT_EQ(headersOf(request, "PUT", "/api/settings/Account.VerifierKeys", "settings.edit")["X-Ambrose-Grants"], "settings.edit,settings.edit.restricted");
+
+    held.insert("settings.secrets.read");
+    EXPECT_EQ(headersOf(request, "GET", "/api/settings", "settings.read")["X-Ambrose-Grants"], "settings.read") << "a read that does not ask to reveal forwards no reveal";
+    request.QueryValues["reveal"] = "1";
+    EXPECT_EQ(headersOf(request, "GET", "/api/settings", "settings.read")["X-Ambrose-Grants"], "settings.read,settings.secrets.read");
+    EXPECT_TRUE(headersOf(request, "GET", "/api/status", "status.read").empty()) << "only a settings route carries who asked";
+
+    request.QueryValues["q"] = "a b&c";
+    EXPECT_EQ(Supervisor::QueryString(request), "?q=a%20b%26c&reveal=1");
+    EXPECT_EQ(Supervisor::QueryString(AdminRequest{}), "");
 }

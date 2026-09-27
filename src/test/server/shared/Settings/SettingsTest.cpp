@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the live settings registry over an in-memory store and a config file the test writes: every declaration in the table passes its own checks and a contradictory one is refused; a value of the wrong type or out of bounds is refused naming the type or bound with nothing persisted, audited or announced; exactly one change is announced per successful set and none for a refused or unchanged one; a key an environment variable or command-line override sets is locked and the refusal names that layer; a live value outranks the config file for sSettings and ConfigMgr readers alike and a reset returns to the config value; a persisted value the bounds refuse falls back to the config value with a warning; a config reload announces only keys whose value changed; a store that fails changes nothing; a table key reads its declared default before an app declares it; and the settings command lists, gets, sets, resets and reads history.
+ * Tests the live settings registry over an in-memory store and a config file the test writes: every declaration in the table passes its own checks and a contradictory one is refused; a value of the wrong type or out of bounds is refused naming the type or bound with nothing persisted, audited or announced; exactly one change is announced per successful set and none for a refused or unchanged one; a key an environment variable or command-line override sets is locked and the refusal names that layer; a live value outranks the config file for sSettings and ConfigMgr readers alike and a reset returns to the config value; a persisted value the bounds refuse falls back to the config value with a warning; a config reload announces only keys whose value changed; a store that fails changes nothing; a table key reads its declared default before an app declares it; the settings command lists, gets, sets, resets and reads history; validating a batch names every bad entry, a batch with one bad entry applies none and one whose store fails changes nothing, while a good batch is one commit announced once; a check sees the values proposed beside its own; a secret is masked in every message, log line, audit row and command answer; and a watcher hears a change on the writing thread before any tick.
  */
 
 #include "ConfigMgr.h"
 #include "LogTestDirectory.h"
+#include "MemorySettingStore.h"
 #include "SettingDeclarations.h"
 #include "Settings.h"
 #include "SettingsCommand.h"
@@ -17,46 +18,12 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 namespace
 {
-    class MemoryStore : public SettingStore
-    {
-    public:
-        bool Load(std::map<std::string, std::string, std::less<>>& values, std::string&) override
-        {
-            values = Values;
-            return true;
-        }
-
-        bool Write(SettingWrite const& write, std::string& error) override
-        {
-            if (FailWrites)
-            {
-                error = "the test refuses every write";
-                return false;
-            }
-            Writes.push_back(write);
-            if (write.Persisted)
-                Values[write.Key] = *write.Persisted;
-            else
-                Values.erase(write.Key);
-            return true;
-        }
-
-        bool History(std::string const& key, std::size_t limit, std::vector<SettingAuditEntry>& entries, std::string&) override
-        {
-            for (auto write = Writes.rbegin(); write != Writes.rend() && entries.size() < limit; ++write)
-                if (write->Key == key)
-                    entries.push_back({ 0, write->Key, write->OldValue, write->NewValue, write->Author.Who, write->Author.AccountId, write->Author.Source, write->Reason, write->EpochSeconds });
-            return true;
-        }
-
-        std::map<std::string, std::string, std::less<>> Values;
-        std::vector<SettingWrite> Writes;
-        bool FailWrites = false;
-    };
+    using MemoryStore = MemorySettingStore;
 
     SettingAuthor const Merle{ "Merle", 7, "console" };
 
@@ -75,10 +42,10 @@ namespace
             return config;
         }
 
-        void Open(Settings& settings, ConfigMgr& config, std::shared_ptr<SettingStore> store, std::vector<std::string>* warnings = nullptr)
+        void Open(Settings& settings, ConfigMgr& config, std::shared_ptr<SettingStore> store, std::vector<std::string>* warnings = nullptr, uint8 app = SettingApps::Game)
         {
             std::vector<std::string> errors;
-            ASSERT_TRUE(settings.DeclareFor(SettingApps::Game, errors)) << errors.front();
+            ASSERT_TRUE(settings.DeclareFor(app, errors)) << errors.front();
             std::vector<std::string> collected;
             ASSERT_TRUE(settings.Start(config, std::move(store), collected));
             if (warnings)
@@ -347,4 +314,181 @@ TEST_F(SettingsTest, TheSettingsCommandListsGetsSetsResetsAndReadsHistory)
     EXPECT_FALSE(run({ "fly" }));
     ASSERT_TRUE(run({ "set", "World.UpdateInterval", "fast" })) << "a refusal is the command used correctly";
     EXPECT_TRUE(said("is not one"));
+}
+
+TEST_F(SettingsTest, ValidatingABatchNamesEveryBadEntry)
+{
+    std::unique_ptr<ConfigMgr> const config = Config("World.UpdateInterval = 50\n", { { "AMBROSE_WORLD_HEARTBEAT", "30" } });
+    auto const store = std::make_shared<MemoryStore>();
+    Settings settings;
+    Open(settings, *config, store);
+
+    std::vector<SettingEntry> const entries{ { "World.UpdateInterval", "0" }, { "World.Heartbeat", "10" }, { "Rate.XP.Quest", "fast" }, { "No.Such.Setting", "1" },
+        { "Zone.UnloadDelay", "30" }, { "Zone.UnloadDelay", "40" }, { "Rate.XP.Kill", "2" } };
+    std::vector<SettingProblem> const problems = settings.Validate(entries);
+    ASSERT_EQ(problems.size(), 5u);
+    EXPECT_EQ(problems[0].Key, "World.UpdateInterval");
+    EXPECT_EQ(problems[0].Result, SettingResult::OutOfBounds);
+    EXPECT_EQ(problems[1].Key, "World.Heartbeat");
+    EXPECT_EQ(problems[1].Result, SettingResult::Locked);
+    EXPECT_NE(problems[1].Message.find("AMBROSE_WORLD_HEARTBEAT"), std::string::npos) << problems[1].Message;
+    EXPECT_EQ(problems[2].Result, SettingResult::WrongType);
+    EXPECT_EQ(problems[3].Result, SettingResult::UnknownKey);
+    EXPECT_EQ(problems[4].Key, "Zone.UnloadDelay");
+    EXPECT_EQ(problems[4].Result, SettingResult::Duplicate);
+    EXPECT_TRUE(store->Writes.empty()) << "validating writes nothing";
+}
+
+TEST_F(SettingsTest, ABatchWithOneBadEntryAppliesNoneAndNamesEveryBadOne)
+{
+    std::unique_ptr<ConfigMgr> const config = Config("World.UpdateInterval = 50\n", { { "AMBROSE_WORLD_HEARTBEAT", "30" } });
+    auto const store = std::make_shared<MemoryStore>();
+    Settings settings;
+    Open(settings, *config, store);
+
+    std::vector<SettingEntry> const entries{ { "World.UpdateInterval", "100" }, { "Rate.XP.Quest", "500" }, { "World.Heartbeat", "10" } };
+    SettingBatchOutcome const outcome = settings.SetMany(entries, Merle, "tuning");
+    EXPECT_FALSE(outcome.Ok());
+    ASSERT_EQ(outcome.Problems.size(), 2u) << outcome.Message;
+    EXPECT_EQ(outcome.Problems[0].Key, "Rate.XP.Quest");
+    EXPECT_EQ(outcome.Problems[0].Result, SettingResult::OutOfBounds);
+    EXPECT_EQ(outcome.Problems[1].Key, "World.Heartbeat");
+    EXPECT_EQ(outcome.Problems[1].Result, SettingResult::Locked);
+    EXPECT_TRUE(outcome.Changes.empty());
+    EXPECT_TRUE(store->Writes.empty()) << "the good entry is not written either";
+    EXPECT_EQ(settings.Get<uint32>("World.UpdateInterval"), 50u);
+    EXPECT_EQ(settings.GetPendingChangeCount(), 0u);
+}
+
+TEST_F(SettingsTest, ABatchWhoseStoreFailsChangesNothingAndAGoodBatchIsOneCommitAnnouncedOnce)
+{
+    std::unique_ptr<ConfigMgr> const config = Config("World.UpdateInterval = 50\n");
+    auto const store = std::make_shared<MemoryStore>();
+    Settings settings;
+    Open(settings, *config, store);
+    std::vector<SettingEntry> const entries{ { "World.UpdateInterval", "100" }, { "World.Heartbeat", "30" }, { "Rate.XP.Quest", "1" } };
+
+    store->FailWrites = true;
+    SettingBatchOutcome const failed = settings.SetMany(entries, Merle, "tuning");
+    EXPECT_EQ(failed.Result, SettingResult::StoreFailed);
+    EXPECT_NE(failed.Message.find("the test refuses every write"), std::string::npos) << failed.Message;
+    EXPECT_EQ(settings.Get<uint32>("World.UpdateInterval"), 50u);
+    EXPECT_EQ(settings.Get<uint32>("World.Heartbeat"), 60u);
+    EXPECT_TRUE(Dispatch(settings).empty());
+
+    store->FailWrites = false;
+    SettingBatchOutcome const landed = settings.SetMany(entries, Merle, "tuning");
+    ASSERT_TRUE(landed.Ok()) << landed.Message;
+    EXPECT_EQ(store->Commits, 1u);
+    EXPECT_EQ(store->Writes.size(), 2u);
+    ASSERT_EQ(landed.Unchanged.size(), 1u);
+    EXPECT_EQ(landed.Unchanged.front(), "Rate.XP.Quest") << "a value already held is reported, not written";
+    EXPECT_EQ(settings.Get<uint32>("World.UpdateInterval"), 100u);
+    EXPECT_EQ(settings.Get<uint32>("World.Heartbeat"), 30u);
+    std::vector<SettingChange> const changes = Dispatch(settings);
+    ASSERT_EQ(changes.size(), 2u);
+    EXPECT_EQ(changes[0].Author.Who, "Merle");
+    EXPECT_EQ(changes[0].Reason, "tuning");
+    EXPECT_EQ(config->GetOption<uint32>("World.Heartbeat", 0), 30u) << "ConfigMgr readers see the batch too";
+}
+
+TEST_F(SettingsTest, ACheckSeesTheValuesProposedBesideItsOwn)
+{
+    std::unique_ptr<ConfigMgr> const config = Config("World.UpdateInterval = 50\n");
+    auto const store = std::make_shared<MemoryStore>();
+    Settings settings;
+    Open(settings, *config, store);
+    Settings::Check const heartbeatOutlastsTick = [](std::string_view, Settings::ProposedValue const& proposed) -> std::optional<std::string>
+    {
+        uint64 const tick = std::stoull(proposed("World.UpdateInterval"));
+        uint64 const heartbeat = std::stoull(proposed("World.Heartbeat"));
+        if (heartbeat != 0 && heartbeat * 1000 < tick)
+            return std::string("World.Heartbeat must be longer than one tick");
+        return std::nullopt;
+    };
+    ASSERT_TRUE(settings.AddCheck("World.UpdateInterval", heartbeatOutlastsTick));
+    ASSERT_TRUE(settings.AddCheck("World.Heartbeat", heartbeatOutlastsTick));
+    EXPECT_FALSE(settings.AddCheck("No.Such.Setting", heartbeatOutlastsTick));
+
+    SettingOutcome const alone = settings.Set("World.Heartbeat", "1", Merle, "");
+    ASSERT_TRUE(alone.Ok()) << alone.Message;
+    std::vector<SettingEntry> const clash{ { "World.UpdateInterval", "5000" }, { "World.Heartbeat", "2" } };
+    SettingBatchOutcome const refused = settings.SetMany(clash, Merle, "");
+    ASSERT_EQ(refused.Problems.size(), 2u) << "each check reads the other entry's proposed value, not the one in force";
+    EXPECT_EQ(refused.Problems[0].Result, SettingResult::Invalid);
+    std::vector<SettingEntry> const fits{ { "World.UpdateInterval", "5000" }, { "World.Heartbeat", "10" } };
+    EXPECT_TRUE(settings.SetMany(fits, Merle, "").Ok());
+    EXPECT_EQ(settings.Set("World.UpdateInterval", "20000", Merle, "").Result, SettingResult::OutOfBounds) << "the declared bounds still come first";
+}
+
+TEST_F(SettingsTest, ASecretIsMaskedInEveryMessageLogLineAuditRowAndCommandAnswer)
+{
+    std::string const first = "1:" + std::string(64, 'a');
+    std::string const both = first + ",2:" + std::string(64, 'b');
+    std::unique_ptr<ConfigMgr> const config = Config("Account.VerifierKeys = " + first + "\n");
+    auto const store = std::make_shared<MemoryStore>();
+    Settings settings;
+    Open(settings, *config, store, nullptr, SettingApps::Login);
+    EXPECT_TRUE(settings.IsSecret("Account.VerifierKeys"));
+    EXPECT_TRUE(settings.IsSecret("LoginDatabaseInfo"));
+    EXPECT_FALSE(settings.IsSecret("Account.VerifierActiveKey"));
+    EXPECT_EQ(settings.Get<std::string>("Account.VerifierKeys"), first) << "the registry itself holds the real value";
+
+    auto const clean = [](std::string const& text) { return text.find("aaaa") == std::string::npos && text.find("bbbb") == std::string::npos; };
+    SettingOutcome const set = settings.Set("Account.VerifierKeys", both, Merle, "a second key");
+    ASSERT_TRUE(set.Ok()) << set.Message;
+    EXPECT_TRUE(clean(set.Message)) << set.Message;
+    EXPECT_NE(set.Message.find("1:***,2:***"), std::string::npos) << set.Message;
+    EXPECT_TRUE(clean(settings.Set("Account.VerifierKeys", both, Merle, "").Message));
+    SettingOutcome const wrong = settings.Set("Account.VerifierKeys", std::string(70000, 'c'), Merle, "");
+    EXPECT_EQ(wrong.Message.find("cccc"), std::string::npos) << wrong.Message;
+    ASSERT_EQ(store->Writes.size(), 1u);
+    EXPECT_EQ(store->Writes[0].Persisted, both) << "the settings table keeps the value it must apply";
+    EXPECT_EQ(store->Writes[0].OldValue, "1:***");
+    EXPECT_EQ(store->Writes[0].NewValue, "1:***,2:***") << "the audit row keeps only the mask";
+
+    std::vector<std::string> lines;
+    auto const run = [&](std::vector<std::string> arguments)
+    {
+        lines.clear();
+        return SettingsCommand::Run(settings, arguments, Merle, [&lines](std::string_view line) { lines.emplace_back(line); });
+    };
+    for (std::vector<std::string> const& command : { std::vector<std::string>{ "list" }, { "get", "Account.VerifierKeys" }, { "history", "Account.VerifierKeys" },
+             { "reset", "Account.VerifierKeys" } })
+    {
+        ASSERT_TRUE(run(command));
+        for (std::string const& line : lines)
+            EXPECT_TRUE(clean(line)) << line;
+    }
+}
+
+TEST_F(SettingsTest, AWatcherHearsAChangeOnTheWritingThreadBeforeAnyTick)
+{
+    std::unique_ptr<ConfigMgr> const config = Config("World.UpdateInterval = 50\n");
+    auto const store = std::make_shared<MemoryStore>();
+    Settings settings;
+    Open(settings, *config, store);
+    std::vector<SettingChange> heard;
+    std::thread::id heardOn;
+    uint64 const token = settings.Watch([&](SettingChange const& change)
+    {
+        heard.push_back(change);
+        heardOn = std::this_thread::get_id();
+    });
+
+    ASSERT_TRUE(settings.Set("World.UpdateInterval", "100", Merle, "faster ticks").Ok());
+    ASSERT_EQ(heard.size(), 1u) << "heard before DispatchChanges ran";
+    EXPECT_EQ(heardOn, std::this_thread::get_id());
+    EXPECT_EQ(heard[0].OldValue, "50");
+    EXPECT_EQ(heard[0].NewValue, "100");
+    EXPECT_EQ(heard[0].Author.Who, "Merle");
+    EXPECT_EQ(heard[0].Reason, "faster ticks");
+    EXPECT_GT(heard[0].EpochSeconds, 0);
+    EXPECT_EQ(settings.GetPendingChangeCount(), 1u) << "the tick still gets its own copy";
+
+    ASSERT_TRUE(settings.Reset("World.UpdateInterval", Merle, "").Ok());
+    EXPECT_EQ(heard.size(), 2u);
+    settings.Unwatch(token);
+    ASSERT_TRUE(settings.Set("World.UpdateInterval", "100", Merle, "").Ok());
+    EXPECT_EQ(heard.size(), 2u) << "an unwatched handler hears nothing more";
 }

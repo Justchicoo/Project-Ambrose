@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the targets and remembers what happened: the order is worked out from what each target says it follows, a target whose dependencies cannot be satisfied is still run last rather than dropped, because a cycle in the register is the operator's problem to see and not a reason to stop reloading anything, and a loader that throws is treated as a loader that failed, since a store that was serving before must go on serving.
+ * Runs the targets and remembers what happened: the order is worked out from what each target says it follows, a target whose dependencies cannot be satisfied is still run last rather than dropped, because a cycle in the register is the operator's problem to see and not a reason to stop reloading anything, and a loader that throws is treated as a loader that failed, since a store that was serving before must go on serving. Observers hear each outcome after the register's lock is let go, so one that asks the register what it holds cannot deadlock it.
  */
 
 #include "ReloadMgr.h"
@@ -160,6 +160,7 @@ ReloadOutcome ReloadMgr::RunLocked(Target& target)
     else if (outcome.Errors.empty())
         outcome.Errors.emplace_back("the loader refused the new contents but named no reason");
     outcome.Generation = target.Generation;
+    outcome.FinishedEpochMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     target.Ran = true;
     target.Last = outcome;
     target.Seconds->Observe(std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count());
@@ -176,31 +177,74 @@ ReloadOutcome ReloadMgr::RunLocked(Target& target)
 
 ReloadOutcome ReloadMgr::Reload(std::string_view name)
 {
-    std::lock_guard const lock(_mutex);
-    auto const it = _targets.find(std::string(name));
-    if (it == _targets.end())
+    ReloadOutcome outcome;
     {
-        ReloadOutcome missing;
-        missing.Target = std::string(name);
-        missing.Ok = false;
-        missing.Errors.emplace_back("there is nothing registered by that name");
-        return missing;
+        std::lock_guard const lock(_mutex);
+        auto const it = _targets.find(std::string(name));
+        if (it == _targets.end())
+        {
+            outcome.Target = std::string(name);
+            outcome.Ok = false;
+            outcome.Errors.emplace_back("there is nothing registered by that name");
+            return outcome;
+        }
+        outcome = RunLocked(it->second);
     }
-    return RunLocked(it->second);
+    Notify({ outcome });
+    return outcome;
 }
 
 std::vector<ReloadOutcome> ReloadMgr::ReloadAll()
 {
-    std::lock_guard const lock(_mutex);
     std::vector<ReloadOutcome> outcomes;
-    for (std::string const& name : OrderLocked())
     {
-        auto const it = _targets.find(name);
-        if (it == _targets.end())
-            continue;
-        outcomes.push_back(RunLocked(it->second));
+        std::lock_guard const lock(_mutex);
+        for (std::string const& name : OrderLocked())
+        {
+            auto const it = _targets.find(name);
+            if (it == _targets.end())
+                continue;
+            outcomes.push_back(RunLocked(it->second));
+        }
     }
+    Notify(outcomes);
     return outcomes;
+}
+
+uint64 ReloadMgr::Observe(Observer observer)
+{
+    std::lock_guard const lock(_observerMutex);
+    uint64 const token = _nextObserver++;
+    _observers.emplace(token, std::move(observer));
+    return token;
+}
+
+void ReloadMgr::Unobserve(uint64 token)
+{
+    std::lock_guard const lock(_observerMutex);
+    _observers.erase(token);
+}
+
+void ReloadMgr::Notify(std::vector<ReloadOutcome> const& outcomes)
+{
+    std::vector<Observer> observers;
+    {
+        std::lock_guard const lock(_observerMutex);
+        for (auto const& [token, observer] : _observers)
+            observers.push_back(observer);
+    }
+    for (ReloadOutcome const& outcome : outcomes)
+        for (Observer const& observer : observers)
+        {
+            try
+            {
+                observer(outcome);
+            }
+            catch (std::exception const& failure)
+            {
+                LOG_ERROR("server.reload", "An observer of reloads failed on {}: {}", outcome.Target, failure.what());
+            }
+        }
 }
 
 std::vector<std::string> ReloadMgr::Describe(ReloadOutcome const& outcome)

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Answers the settings command: bare or list prints each setting with its value and where the value comes from, get adds its type, bounds, when a change applies and what it does, set and reset say what they did or why they refused, and history prints a key's newest changes with who made them, from where and why. A refusal still counts as the command being used correctly; only a missing key or value is a usage error.
+ * Answers the settings command: bare or list prints each setting with its value and where the value comes from, get adds its type, bounds, when a change applies and what it does, set and reset say what they did or why they refused, and history prints a key's newest changes with who made them, from where and why, a secret's value shown only as its mask in every answer. A refusal still counts as the command being used correctly; only a missing key or value is a usage error.
  */
 
 #include "SettingsCommand.h"
@@ -40,9 +40,9 @@ namespace
         return fmt::format("{:04}-{:02}-{:02} {:02}:{:02}:{:02}Z", parts.tm_year + 1900, parts.tm_mon + 1, parts.tm_mday, parts.tm_hour, parts.tm_min, parts.tm_sec);
     }
 
-    std::string Line(SettingView const& view)
+    std::string Line(Settings const& settings, SettingView const& view)
     {
-        std::string const value = view.Value.empty() ? std::string("empty") : WithUnit(view.Declaration, view.Value);
+        std::string const value = view.Value.empty() ? std::string("empty") : WithUnit(view.Declaration, settings.Shown(view.Declaration.Key, view.Value));
         return fmt::format("{} = {} ({})", view.Declaration.Key, value, Settings::LayerName(view.Layer));
     }
 
@@ -62,7 +62,7 @@ namespace
                 current = view.Declaration.Category;
                 reply(fmt::format("{}:", current));
             }
-            reply(fmt::format("  {}", Line(view)));
+            reply(fmt::format("  {}", Line(settings, view)));
         }
         return true;
     }
@@ -76,12 +76,12 @@ namespace
             return true;
         }
         SettingDeclaration const& declaration = view->Declaration;
-        reply(fmt::format("{}, from {}", Line(*view), view->Origin));
+        reply(fmt::format("{}, from {}", Line(settings, *view), view->Origin));
         std::string const bounds = Settings::DescribeBounds(declaration);
         reply(fmt::format("{}{}, default {}, applies {}", Settings::TypeName(declaration.Type), bounds.empty() ? std::string() : " " + bounds,
-            declaration.Default.empty() ? std::string("empty") : WithUnit(declaration, declaration.Default), Settings::ApplyName(declaration.Apply)));
+            declaration.Default.empty() ? std::string("empty") : WithUnit(declaration, settings.Shown(key, declaration.Default)), Settings::ApplyName(declaration.Apply)));
         if (view->Persisted && view->Layer != SettingLayer::Live)
-            reply(fmt::format("The settings table holds {} for it, which {} overrides", *view->Persisted, view->Origin));
+            reply(fmt::format("The settings table holds {} for it, which {} overrides", settings.Shown(key, *view->Persisted), view->Origin));
         reply(declaration.Description);
         return true;
     }
@@ -101,8 +101,8 @@ namespace
             return true;
         }
         for (SettingAuditEntry const& entry : entries)
-            reply(fmt::format("{}  {} to {} by {} from {}{}", Stamp(entry.EpochSeconds), entry.OldValue.empty() ? std::string("empty") : entry.OldValue,
-                entry.NewValue.empty() ? std::string("empty") : entry.NewValue, entry.Who, entry.Source, entry.Reason.empty() ? std::string() : fmt::format(": {}", entry.Reason)));
+            reply(fmt::format("{}  {} to {} by {} from {}{}", Stamp(entry.EpochSeconds), entry.OldValue.empty() ? std::string("empty") : settings.Shown(key, entry.OldValue),
+                entry.NewValue.empty() ? std::string("empty") : settings.Shown(key, entry.NewValue), entry.Who, entry.Source, entry.Reason.empty() ? std::string() : fmt::format(": {}", entry.Reason)));
         return true;
     }
 }

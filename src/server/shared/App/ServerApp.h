@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The lifecycle every server app shares: options, config, logging, banner, the one start time and lifecycle state its console and its admin API both report, the optional admin API listener an app fills with its own routes before it opens, with the live log stream, the read half of the settings API and a shutdown with a countdown on it, shutdown signals that a start in progress can poll for, an optional update tick, console commands on their own thread with their replies on the log's own writer, and a clean exit code.
+ * The lifecycle every server app shares: options, config, logging, banner, the one start time and lifecycle state its console and its admin API both report, the optional admin API listener an app fills with its own routes before it opens, with the live log stream, the events feed, the settings API with its changes, batches, history and audited reveals, and a shutdown with a countdown on it, shutdown signals that a start in progress can poll for, an optional update tick, console commands on their own thread with their replies on the log's own writer, and a clean exit code.
  */
 
 #ifndef AMBROSE_SERVERAPP_H
@@ -33,8 +33,11 @@
 #include <utility>
 #include <vector>
 
+class AdminEventHub;
+class AdminEventService;
 class AdminRouter;
 class AdminServer;
+struct AdminRequest;
 class ConsoleInput;
 class ConsoleReader;
 class Log;
@@ -111,6 +114,7 @@ protected:
     virtual std::vector<RestartRequiredOption> GetRestartRequiredOptions() const;
     virtual void OnConfigChanged(std::vector<std::string> const& changed);
     virtual uint8 GetSettingApps() const;
+    virtual void OnSecretsRevealed(AdminRequest const& request, std::vector<std::string> const& keys);
 
     bool StartSettings(std::shared_ptr<SettingStore> store);
     ConfigMgr& Config() noexcept { return _config; }
@@ -127,6 +131,8 @@ private:
     bool IsStopping() const noexcept { return GetLifecycleState() == AppLifecycle::Stopping; }
     bool DeclareSettings();
     bool StartAdminApi();
+    void StartEvents();
+    void StopEvents();
     void ScheduleUpdate();
     void ScheduleStop(Seconds delay, std::string reason);
     bool CancelScheduledStop();
@@ -155,6 +161,10 @@ private:
     ConsoleCommandTable _commands;
     std::unique_ptr<AdminServer> _admin;
     std::unique_ptr<LogStreamService> _logStream;
+    std::unique_ptr<AdminEventHub> _events;
+    std::unique_ptr<AdminEventService> _eventStream;
+    uint64 _settingsWatch = 0;
+    uint64 _reloadObserver = 0;
     std::unique_ptr<ConsoleReader> _console;
     bool _tuiAsked = false;
     bool _dashboard = false;

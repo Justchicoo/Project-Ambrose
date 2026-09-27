@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The admin API's route table and front door: every request gets a request id that its answer and any error body carry, keeping one a caller such as the supervisor sent when it has the same form, so one id names the request in both logs, a host that is no IP address, localhost or a name the operator allows is refused so a page elsewhere cannot rebind a name onto this listener, paths outside /api that no route claims go to the panel's files without a token, so a route a scraper expects at a fixed place such as /metrics is still served and still guarded, public routes such as signing in run without one, a route may answer every path under a prefix when no exact route claims it, the longest prefix first, and every other path needs the bearer token or a browser session whose unsafe requests and socket upgrades name this listener's own origin and carry the session's CSRF token, with every answer stamped with the panel's security headers and every error handed to a log. A route that asks for a permission the listener's catalog does not hold is not served, and is kept among the refused routes so the listener can say which pages it left out rather than losing them unseen.
+ * The admin API's route table and front door: every request gets a request id that its answer and any error body carry, keeping one a caller such as the supervisor sent when it has the same form, so one id names the request in both logs, a host that is no IP address, localhost or a name the operator allows is refused so a page elsewhere cannot rebind a name onto this listener, paths outside /api that no route claims go to the panel's files without a token, so a route a scraper expects at a fixed place such as /metrics is still served and still guarded, public routes such as signing in run without one, a route may answer every path under a prefix when no exact route claims it, the longest prefix first, and every other path needs the bearer token or a browser session whose unsafe requests and socket upgrades name this listener's own origin and carry the session's CSRF token, with every answer stamped with the panel's security headers and every error handed to a log. A caller may be asked about a permission beyond its route's, which a token caller the supervisor relays is held to only when the supervisor forwarded it, and a route may charge the listener's rate limit a cost of its own. A route that asks for a permission the listener's catalog does not hold is not served, and is kept among the refused routes so the listener can say which pages it left out rather than losing them unseen.
  */
 
 #ifndef AMBROSE_ADMINROUTER_H
@@ -15,6 +15,7 @@
 #include <functional>
 #include <map>
 #include <optional>
+#include <set>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
@@ -39,6 +40,9 @@ struct AdminRequest
     std::string Principal;
     std::optional<std::string> SessionCsrf;
     std::map<std::string, std::string, std::less<>> QueryValues;
+    std::string Actor;
+    std::string ActorName;
+    std::optional<std::set<std::string, std::less<>>> ForwardedGrants;
 
     std::string_view Query(std::string_view name) const
     {
@@ -111,6 +115,7 @@ public:
     void AddCosting(std::string method, std::string path, std::string permission, uint32 cost, Handler handler);
     void AddOpenCosting(std::string method, std::string path, uint32 cost, Handler handler);
     void SetThrottle(Throttle throttle);
+    std::optional<AdminResponse> Charge(AdminRequest const& request, uint32 cost) const;
     uint32 CostOf(std::string_view method, std::string_view path) const;
     void AddPublic(std::string method, std::string path, Handler handler);
     void AddPrefix(std::string method, std::string prefix, Handler handler);
@@ -133,6 +138,7 @@ public:
     void SetPermissionCheck(PermissionCheck check);
     PermissionVerdict MayI(AdminRequest const& request, std::string_view permission) const;
     bool Holds(AdminRequest const& request, std::string_view permission) const;
+    bool Permits(AdminRequest const& request, std::string_view permission) const;
     std::vector<std::pair<std::string, std::string>> DeclaredRoutes() const;
     void Finish(AdminRequest const& request, AdminResponse& response) const;
     std::optional<std::string> SessionSecret(AdminRequest const& request) const;

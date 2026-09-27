@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the settings answer and the shutdown route: every loaded key with its effective value, shipped default, layer, file and line, secrets masked in both values, restart reasons only on the keys an app declares, one by name and one for every key under a prefix, and POST /api/shutdown refusing bad bodies field by field, scheduling and cancelling a countdown, and stopping the app, and that a secret stays masked until the caller holds the permission to read one, which the route asks per request rather than once when it was registered.
+ * Tests the settings answer and the shutdown route: every loaded key with its effective value, shipped default, layer, file and line, secrets masked in both values, restart reasons only on the keys an app declares, one by name and one for every key under a prefix, and POST /api/shutdown refusing bad bodies field by field, scheduling and cancelling a countdown, and stopping the app, and that a secret stays masked until the caller asks to see it with ?reveal=1 and holds the permission to read one, which the route asks per request rather than once when it was registered.
  */
 
 #include "AdminAuth.h"
@@ -255,7 +255,7 @@ TEST(AdminConfigViewTest, ShutdownRefusesBadBodiesSchedulesCancelsAndStops)
     EXPECT_NE(harness.Device().Output().find("The admin API asked testserver to stop now"), std::string::npos);
 }
 
-TEST(AdminConfigViewTest, ASecretIsMaskedUntilTheCallerMayReadOneAndTheRouteAsksPerRequest)
+TEST(AdminConfigViewTest, ASecretIsMaskedUntilTheCallerAsksWithTheRightToReadOneAndTheRouteAsksPerRequest)
 {
     LogTestDirectory directory;
     std::filesystem::path const file = directory.Write("testserver.conf", Header +
@@ -290,6 +290,14 @@ TEST(AdminConfigViewTest, ASecretIsMaskedUntilTheCallerMayReadOneAndTheRouteAsks
     request.RemoteAddress = "127.0.0.1";
     request.Authorization = "Bearer 0123456789abcdef0123456789abcdef";
 
+    allow = true;
+    AdminResponse const unasked = routes.Dispatch(request);
+    EXPECT_EQ(unasked.Status, 200);
+    EXPECT_EQ(unasked.Body.find("0123456789abcdef"), std::string::npos) << "holding the right is not asking to see the secret";
+    EXPECT_TRUE(asked.empty() || std::count(asked.begin(), asked.end(), std::string("settings.secrets.read")) == 0) << "and the right is not even asked about";
+
+    request.QueryValues["reveal"] = "1";
+    allow = false;
     AdminResponse const without = routes.Dispatch(request);
     EXPECT_EQ(without.Status, 200);
     EXPECT_EQ(without.Body.find("0123456789abcdef"), std::string::npos);
@@ -300,5 +308,5 @@ TEST(AdminConfigViewTest, ASecretIsMaskedUntilTheCallerMayReadOneAndTheRouteAsks
     EXPECT_NE(with.Body.find("0123456789abcdef"), std::string::npos);
 
     EXPECT_EQ(std::count(asked.begin(), asked.end(), std::string("settings.secrets.read")), 2)
-        << "the reveal is decided once per request, so it can be recorded each time it happens";
+        << "the reveal is decided once per request that asks, so it can be recorded each time it happens";
 }

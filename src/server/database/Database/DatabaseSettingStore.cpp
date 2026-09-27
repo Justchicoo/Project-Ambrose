@@ -1,12 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads and writes the settings and setting_audit tables through one store over whichever pool an app owns: a change sets or removes its row and writes its audit row in one transaction, so a value is never persisted without its audit row nor audited without being persisted, and a key's history reads its newest audit rows first.
+ * Reads and writes the settings and setting_audit tables through one store over whichever pool an app owns: a change, or every change of a batch, sets or removes its rows and writes their audit rows in one transaction, so a value is never persisted without its audit row nor audited without being persisted and a batch lands whole or not at all, and a key's history reads its newest audit rows first.
  */
 
 #include "DatabaseSettingStore.h"
 #include "DatabaseEnv.h"
 
 #include <fmt/format.h>
+
+#include <span>
 
 namespace
 {
@@ -50,38 +52,46 @@ namespace
 
         bool Write(SettingWrite const& write, std::string& error) override
         {
+            return WriteMany(std::span<SettingWrite const>(&write, 1), error);
+        }
+
+        bool WriteMany(std::span<SettingWrite const> writes, std::string& error) override
+        {
             auto transaction = _pool.BeginTransaction();
-            if (write.Persisted)
+            for (SettingWrite const& write : writes)
             {
-                auto statement = _pool.GetPreparedStatement(_statements.Replace);
-                if (!statement)
+                if (write.Persisted)
+                {
+                    auto statement = _pool.GetPreparedStatement(_statements.Replace);
+                    if (!statement)
+                        return Refuse(error);
+                    statement->SetData(0, write.Key);
+                    statement->SetData(1, *write.Persisted);
+                    statement->SetData(2, write.Author.Who);
+                    statement->SetData(3, static_cast<uint64>(write.EpochSeconds));
+                    transaction->Append(std::move(statement));
+                }
+                else
+                {
+                    auto statement = _pool.GetPreparedStatement(_statements.Remove);
+                    if (!statement)
+                        return Refuse(error);
+                    statement->SetData(0, write.Key);
+                    transaction->Append(std::move(statement));
+                }
+                auto audit = _pool.GetPreparedStatement(_statements.Audit);
+                if (!audit)
                     return Refuse(error);
-                statement->SetData(0, write.Key);
-                statement->SetData(1, *write.Persisted);
-                statement->SetData(2, write.Author.Who);
-                statement->SetData(3, static_cast<uint64>(write.EpochSeconds));
-                transaction->Append(std::move(statement));
+                audit->SetData(0, write.Key);
+                audit->SetData(1, write.OldValue);
+                audit->SetData(2, write.NewValue);
+                audit->SetData(3, write.Author.Who);
+                audit->SetData(4, write.Author.AccountId);
+                audit->SetData(5, write.Author.Source);
+                audit->SetData(6, write.Reason);
+                audit->SetData(7, static_cast<uint64>(write.EpochSeconds));
+                transaction->Append(std::move(audit));
             }
-            else
-            {
-                auto statement = _pool.GetPreparedStatement(_statements.Remove);
-                if (!statement)
-                    return Refuse(error);
-                statement->SetData(0, write.Key);
-                transaction->Append(std::move(statement));
-            }
-            auto audit = _pool.GetPreparedStatement(_statements.Audit);
-            if (!audit)
-                return Refuse(error);
-            audit->SetData(0, write.Key);
-            audit->SetData(1, write.OldValue);
-            audit->SetData(2, write.NewValue);
-            audit->SetData(3, write.Author.Who);
-            audit->SetData(4, write.Author.AccountId);
-            audit->SetData(5, write.Author.Source);
-            audit->SetData(6, write.Reason);
-            audit->SetData(7, static_cast<uint64>(write.EpochSeconds));
-            transaction->Append(std::move(audit));
             if (!_pool.DirectCommitTransaction(transaction))
                 return Refuse(error);
             return true;

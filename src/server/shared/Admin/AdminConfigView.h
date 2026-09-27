@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The read half of the settings API every app answers on GET /api/settings: each key it has loaded with its effective value, the shipped default, the layer, file and line each comes from, the reason when the app documents it as taking effect only at the next start, and secret values shown only as the mask, so the panel's config page compares them without the admin layer knowing any subsystem; 17.12 adds the schema, the edits and the history to the same route.
+ * The read half of the settings API every app answers on GET /api/settings: each key it has loaded, and each live setting it declares, with its effective value, the shipped default, the layer, file and line each comes from, the reason when the app documents it as taking effect only at the next start, and for a declared setting its type, bounds, unit, category, description, apply mode, lock, visibility and edit class; a secret is shown only as the mask unless the caller asks with ?reveal=1 and holds the right to see secrets, and every value revealed is handed to a recorder so the reveal is audited.
  */
 
 #ifndef AMBROSE_ADMINCONFIGVIEW_H
@@ -8,23 +8,31 @@
 
 #include "ConfigMgr.h"
 
+#include <functional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
 class AdminRouter;
+class Settings;
+struct AdminRequest;
 
 class AdminConfigView
 {
 public:
-    static constexpr int SchemaVersion = 1;
+    static constexpr int SchemaVersion = 2;
+
+    using RevealRecorder = std::function<void(AdminRequest const& request, std::vector<std::string> const& keys)>;
 
     AdminConfigView() = delete;
 
     static std::string_view LayerName(ConfigSourceKind kind) noexcept;
-    static std::string SettingsJson(ConfigMgr const& config, std::span<RestartRequiredOption const> restartRequired, bool revealSecrets);
-    static void Register(AdminRouter& router, ConfigMgr const& config, std::vector<RestartRequiredOption> restartRequired = {});
+    static bool AsksToReveal(AdminRequest const& request);
+    static std::string SettingsJson(ConfigMgr const& config, std::span<RestartRequiredOption const> restartRequired, bool revealSecrets, Settings const* settings = nullptr,
+        std::vector<std::string>* revealed = nullptr);
+    static void Register(AdminRouter& router, ConfigMgr const& config, std::vector<RestartRequiredOption> restartRequired = {}, Settings const* settings = nullptr,
+        RevealRecorder recorder = {});
 };
 
 #endif

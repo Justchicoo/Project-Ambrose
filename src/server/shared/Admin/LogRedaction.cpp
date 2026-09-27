@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Names the secret settings, masks a connection string's password segment, each key of a key list while keeping its id, and a token's whole value, leaves an empty value empty because it hides nothing, and scrubs any text that quotes a secret setting's value after its key, reading a key list through its commas.
+ * Asks the settings table which settings are secrets, masks a connection string's password segment, each key of a key list while keeping its id, and a token's whole value, leaves an empty value empty because it hides nothing, and scrubs any text that quotes a secret setting's value after its key, reading a key list through its commas.
  */
 
 #include "LogRedaction.h"
+#include "SettingDeclarations.h"
 #include "StringUtil.h"
 
 #include <algorithm>
@@ -71,15 +72,21 @@ namespace
     }
 }
 
-bool LogRedaction::IsSecretSetting(std::string_view key) noexcept
+bool LogRedaction::IsSecretSetting(std::string_view key)
 {
-    std::string const lowered = Ambrose::ToLower(std::string(key));
-    return lowered == "admin.token" || IsKeyList(lowered) || EndsWith(lowered, "databaseinfo");
+    return SettingDeclarations::IsSecret(key);
 }
 
 std::string LogRedaction::RedactSettingValue(std::string_view key, std::string_view value)
 {
-    if (!IsSecretSetting(key) || Ambrose::Trim(value).empty())
+    if (!IsSecretSetting(key))
+        return std::string(value);
+    return MaskSecretValue(key, value);
+}
+
+std::string LogRedaction::MaskSecretValue(std::string_view key, std::string_view value)
+{
+    if (Ambrose::Trim(value).empty())
         return std::string(value);
     std::string const lowered = Ambrose::ToLower(std::string(key));
     if (EndsWith(lowered, "databaseinfo"))

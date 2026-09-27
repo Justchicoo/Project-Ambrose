@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks what the register promises an operator: a build that fails leaves the generation it had and reports every error rather than the first, a loader that throws is a loader that failed rather than a server that stops, targets run after the targets they say they follow, a register whose dependencies form a ring still reloads everything instead of refusing to start, and a name nobody registered is answered rather than ignored.
+ * Checks what the register promises an operator: a build that fails leaves the generation it had and reports every error rather than the first, a loader that throws is a loader that failed rather than a server that stops, targets run after the targets they say they follow, a register whose dependencies form a ring still reloads everything instead of refusing to start,, a name nobody registered is answered rather than ignored, and an observer hears every outcome with when it finished once the register's lock is let go, so it may ask the register what it holds, until it stops observing.
  */
 
 #include "ReloadMgr.h"
@@ -188,4 +188,37 @@ TEST_F(ReloadMgrTest, RegisteringUnregisteringAndListing)
     EXPECT_FALSE(sReloadMgr.IsRegistered("config"));
     EXPECT_FALSE(sReloadMgr.Unregister("config"));
     EXPECT_EQ(sReloadMgr.GetTargets().size(), 1u);
+}
+
+TEST_F(ReloadMgrTest, AnObserverHearsEveryOutcomeAfterTheLockIsLetGo)
+{
+    ASSERT_TRUE(sReloadMgr.Register("config", [](std::vector<std::string>&) { return true; }));
+    ASSERT_TRUE(sReloadMgr.Register("messages", [](std::vector<std::string>& errors) { errors.push_back("one"); errors.push_back("two"); return false; }));
+    std::vector<ReloadOutcome> heard;
+    std::vector<uint64> generationsSeen;
+    uint64 const token = sReloadMgr.Observe([&](ReloadOutcome const& outcome)
+    {
+        heard.push_back(outcome);
+        generationsSeen.push_back(sReloadMgr.GetGeneration(outcome.Target));
+    });
+
+    sReloadMgr.Reload("config");
+    ASSERT_EQ(heard.size(), 1u) << "an observer that asks the register from inside its call would deadlock under the lock";
+    EXPECT_TRUE(heard[0].Ok);
+    EXPECT_EQ(generationsSeen[0], 1u);
+    EXPECT_GT(heard[0].FinishedEpochMs, 0);
+
+    sReloadMgr.ReloadAll();
+    ASSERT_EQ(heard.size(), 3u);
+    auto const messages = std::find_if(heard.begin() + 1, heard.end(), [](ReloadOutcome const& outcome) { return outcome.Target == "messages"; });
+    ASSERT_NE(messages, heard.end());
+    EXPECT_FALSE(messages->Ok);
+    EXPECT_EQ(messages->Errors, (std::vector<std::string>{ "one", "two" }));
+
+    sReloadMgr.Reload("nobody");
+    EXPECT_EQ(heard.size(), 3u) << "a name nobody registered runs nothing, so nothing is announced";
+
+    sReloadMgr.Unobserve(token);
+    sReloadMgr.Reload("config");
+    EXPECT_EQ(heard.size(), 3u);
 }

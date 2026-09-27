@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the admin API on Crow: it resolves the token, tells every route whose socket is still open when the listener stops and detaches the handle first so nothing reaches a connection Crow has let go, refuses a bind the remote-access rule forbids, says out loud what a bind it allows still costs, proves no other socket holds the address before Crow takes it, answers every request from the shared table in a middleware that runs before Crow's own routing, with the host, origin, cookie and CSRF headers a browser session is checked by and a caller's request id when it has the router's form, answers from the same table again after it the requests Crow replies to before a connection has an address of its own, such as OPTIONS, hands only a real WebSocket upgrade to the route registered for it under the same host check and authentication, serves the built panel and its sign-in, which trades the token once for a session cookie named after the port because cookies ignore ports, logs every error with its request id, gives each open socket a handle a route may keep and write to from any thread until the socket closes, owning every socket's binding in the listener so one Crow drops without a close is still freed, queues a close behind the frames sent before it, and on a reload rotates the token live and ends every session with the old one, applies the panel folder, allowed hosts and session lifetimes without rebinding, rebinds a changed address, or brings the old listener back when the new one cannot bind.
+ * Runs the admin API on Crow: it resolves the token, tells every route whose socket is still open when the listener stops and detaches the handle first so nothing reaches a connection Crow has let go, refuses a bind the remote-access rule forbids, says out loud what a bind it allows still costs, proves no other socket holds the address before Crow takes it, answers every request from the shared table in a middleware that runs before Crow's own routing, with the host, origin, cookie and CSRF headers a browser session is checked by and a caller's request id when it has the router's form, answers from the same table again after it the requests Crow replies to before a connection has an address of its own, such as OPTIONS, reads the caller a relaying supervisor names and the rights it forwards, hands only a real WebSocket upgrade to the route registered for it under the same host check, authentication and the route's own permission, serves the built panel and its sign-in, which trades the token once for a session cookie named after the port because cookies ignore ports, logs every error with its request id, gives each open socket a handle a route may keep and write to from any thread until the socket closes, owning every socket's binding in the listener so one Crow drops without a close is still freed, queues a close behind the frames sent before it, and on a reload rotates the token live and ends every session with the old one, applies the panel folder, allowed hosts and session lifetimes without rebinding, rebinds a changed address, or brings the old listener back when the new one cannot bind.
  */
 
 #include "AdminServer.h"
@@ -185,6 +185,16 @@ namespace
                 incoming.QueryValues.emplace(key, value);
         if (std::string const offered = request.get_header_value("X-Request-Id"); AdminRouter::IsRequestId(offered))
             incoming.Id = offered;
+        incoming.Actor = Ambrose::ForLog(request.get_header_value("X-Ambrose-Actor"), 128);
+        incoming.ActorName = Ambrose::ForLog(request.get_header_value("X-Ambrose-Actor-Name"), 128);
+        if (std::string const grants = request.get_header_value("X-Ambrose-Grants"); !grants.empty())
+        {
+            std::set<std::string, std::less<>> granted;
+            for (std::string_view part : Ambrose::Tokenize(grants, ',', false))
+                if (std::string_view const permission = Ambrose::Trim(part); !permission.empty())
+                    granted.emplace(permission);
+            incoming.ForwardedGrants = std::move(granted);
+        }
         return incoming;
     }
 
@@ -731,6 +741,20 @@ bool AdminServer::Open(ListenerSettings const& settings, std::string const& toke
                 {
                     refuse(AdminResponse::Problem(404, "not_found", "The admin API has no WebSocket on " + incoming.Path));
                     return;
+                }
+                if (!route->Permission.empty())
+                {
+                    PermissionVerdict const verdict = _router.MayI(incoming, route->Permission);
+                    if (verdict == PermissionVerdict::OutOfScope)
+                    {
+                        refuse(AdminResponse::Problem(404, "not_found", "The admin API has no WebSocket on " + incoming.Path));
+                        return;
+                    }
+                    if (verdict == PermissionVerdict::Forbidden)
+                    {
+                        refuse(AdminResponse::Problem(403, "forbidden", "This account is not allowed to " + route->Permission));
+                        return;
+                    }
                 }
                 *userdata = open->Accept(route);
             })

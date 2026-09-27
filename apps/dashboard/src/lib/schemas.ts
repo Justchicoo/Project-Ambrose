@@ -162,9 +162,15 @@ export const PowerAnswer = v.looseObject({
     accepted: v.boolean(),
 });
 
+export const SettingLock = v.looseObject({
+    layer: v.string(),
+    origin: v.string(),
+});
+
 export const SettingsAnswer = v.looseObject({
     schema: v.number(),
     file: v.string(),
+    revealed: v.optional(v.boolean(), false),
     settings: v.array(
         v.looseObject({
             key: v.string(),
@@ -176,8 +182,67 @@ export const SettingsAnswer = v.looseObject({
             default_file: v.nullable(v.string()),
             secret: v.boolean(),
             restart_reason: v.nullable(v.string()),
+            declared: v.optional(v.boolean(), false),
+            origin: v.optional(v.string()),
+            type: v.optional(v.picklist(["bool", "integer", "unsigned", "float", "string"])),
+            declared_default: v.optional(v.string()),
+            min: v.optional(v.nullable(v.string())),
+            max: v.optional(v.nullable(v.string())),
+            bounds: v.optional(v.string()),
+            unit: v.optional(v.string()),
+            category: v.optional(v.string()),
+            description: v.optional(v.string()),
+            apply: v.optional(v.picklist(["live", "next_use", "restart"])),
+            lock: v.optional(v.nullable(SettingLock)),
+            visibility: v.optional(v.picklist(["normal", "secret"])),
+            edit: v.optional(v.picklist(["normal", "restricted"])),
+            persisted: v.optional(v.nullable(v.string())),
         }),
     ),
+});
+
+export const SettingChangeAnswer = v.looseObject({
+    schema: v.number(),
+    key: v.string(),
+    changed: v.boolean(),
+    value: v.string(),
+    layer: v.string(),
+    apply: v.string(),
+    restart_reason: v.nullable(v.string()),
+    message: v.string(),
+});
+
+export const SettingBatchAnswer = v.looseObject({
+    schema: v.number(),
+    changed: v.array(v.looseObject({ key: v.string(), old: v.string(), new: v.string() })),
+    unchanged: v.array(v.string()),
+    message: v.string(),
+});
+
+export const SettingHistoryAnswer = v.looseObject({
+    schema: v.number(),
+    key: v.string(),
+    visibility: v.picklist(["normal", "secret"]),
+    entries: v.array(
+        v.looseObject({
+            id: v.number(),
+            old: v.string(),
+            new: v.string(),
+            who: v.string(),
+            account_id: v.number(),
+            source: v.string(),
+            reason: v.string(),
+            epoch_seconds: v.number(),
+        }),
+    ),
+});
+
+export const SettingProblem = v.looseObject({
+    key: v.string(),
+    code: v.string(),
+    message: v.string(),
+    layer: v.optional(v.string()),
+    origin: v.optional(v.string()),
 });
 
 export const PanelSettingsAnswer = v.looseObject({
@@ -287,6 +352,7 @@ export const ReloadTarget = v.looseObject({
     ran: v.boolean(),
     ok: v.boolean(),
     errors: v.array(v.string()),
+    finished_ms: v.optional(v.nullable(v.number())),
 });
 
 export const ReloadAnswer = v.looseObject({
@@ -448,6 +514,11 @@ export const ClientAnswer = v.looseObject({
 
 export type OutputAnswer = v.InferOutput<typeof OutputAnswer>;
 export type SettingsAnswer = v.InferOutput<typeof SettingsAnswer>;
+export type SettingLock = v.InferOutput<typeof SettingLock>;
+export type SettingChangeAnswer = v.InferOutput<typeof SettingChangeAnswer>;
+export type SettingBatchAnswer = v.InferOutput<typeof SettingBatchAnswer>;
+export type SettingHistoryAnswer = v.InferOutput<typeof SettingHistoryAnswer>;
+export type SettingProblem = v.InferOutput<typeof SettingProblem>;
 export type DatabaseAnswer = v.InferOutput<typeof DatabaseAnswer>;
 export type DatabaseUpdatesAnswer = v.InferOutput<typeof DatabaseUpdatesAnswer>;
 export type DatabaseApplyAnswer = v.InferOutput<typeof DatabaseApplyAnswer>;

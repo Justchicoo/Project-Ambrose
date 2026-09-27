@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Answers every admin API request in one order: a request id, the host check, the panel's files for paths outside /api, public routes, then the bearer token or a browser session with its origin and CSRF checks, the body limit and the route, an exact one before the longest prefix that covers the path, and finally the security headers, the request id in the answer and in any error body, and the error log.
+ * Answers every admin API request in one order: a request id, the host check, the panel's files for paths outside /api, public routes, then the bearer token or a browser session with its origin and CSRF checks, the body limit and the route, an exact one before the longest prefix that covers the path, and finally the security headers, the request id in the answer and in any error body, and the error log; a permission a relayed token caller was not forwarded is never granted to it, and a cost charged outside a route goes to the same limit.
  */
 
 #include "AdminRouter.h"
@@ -172,6 +172,27 @@ PermissionVerdict AdminRouter::MayI(AdminRequest const& request, std::string_vie
         check = _permission;
     }
     return check ? check(request, permission) : PermissionVerdict::Allowed;
+}
+
+std::optional<AdminResponse> AdminRouter::Charge(AdminRequest const& request, uint32 cost) const
+{
+    Throttle throttle;
+    {
+        std::shared_lock const lock(_mutex);
+        throttle = _throttle;
+    }
+    if (!throttle || cost == 0)
+        return std::nullopt;
+    return throttle(request, cost);
+}
+
+bool AdminRouter::Permits(AdminRequest const& request, std::string_view permission) const
+{
+    if (MayI(request, permission) != PermissionVerdict::Allowed)
+        return false;
+    if (request.Principal == "token" && request.ForwardedGrants)
+        return request.ForwardedGrants->contains(permission);
+    return true;
 }
 
 bool AdminRouter::Holds(AdminRequest const& request, std::string_view permission) const

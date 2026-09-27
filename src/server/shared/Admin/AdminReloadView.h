@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What every app answers about reloading on GET /api/reload and POST /api/reload/<target>: which stores can be rebuilt without a restart, which generation each is serving, how the last attempt went and every error it found, so the panel can show an operator what is live and put it back in place from the same page rather than from a terminal.
+ * What every app answers about reloading on GET /api/reload and POST /api/reload/<target>: which stores can be rebuilt without a restart, which generation each is serving, how the last attempt went, when it finished and every error it found, so the panel can show an operator what is live and put it back in place from the same page rather than from a terminal.
  */
 
 #ifndef AMBROSE_ADMINRELOADVIEW_H

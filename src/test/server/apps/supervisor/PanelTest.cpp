@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the panel's own listener and what it holds: it serves nothing until Panel.Enable is set, it opens its store with the panel tables before it listens, it answers its own routes on a loopback port with its own token, a bind beyond this machine with no certificate is refused with the Panel option names in the message, the plain-HTTP opt-in lifts that refusal, a certificate and key are served over TLS with the fingerprint the files hold, a route that declares a cost is held back with a retry hint while an uncosted route from the same caller still answers, one audit row records the throttling however many requests are refused in that minute, and a change whose audit row cannot be written is not applied, the plain-HTTP opt-in lets it reach beyond this machine with the risk said out loud, a reload that would leave the bind unsafe is refused while the old listener goes on serving, and a replaced certificate is served after a reload on the same port, and it refuses to start at all when a route says neither which permission it needs nor that any signed-in member may call it, or names a permission the catalog does not hold.
+ * Tests the panel's own listener and what it holds: it serves nothing until Panel.Enable is set, it opens its store with the panel tables before it listens, it answers its own routes on a loopback port with its own token, a bind beyond this machine with no certificate is refused with the Panel option names in the message, the plain-HTTP opt-in lifts that refusal, a certificate and key are served over TLS with the fingerprint the files hold, a route that declares a cost is held back with a retry hint while an uncosted route from the same caller still answers, one audit row records the throttling however many requests are refused in that minute, and a change whose audit row cannot be written is not applied, the plain-HTTP opt-in lets it reach beyond this machine with the risk said out loud, a reload that would leave the bind unsafe is refused while the old listener goes on serving, and a replaced certificate is served after a reload on the same port, and it refuses to start at all when a route says neither which permission it needs nor that any signed-in member may call it, or names a permission the catalog does not hold; and a relayed settings change, batch, reload or reveal is recorded with who, where, why and how it ended, a refused change too, but never a value.
  */
 
 #include "AdminClient.h"
@@ -11,6 +11,7 @@
 #include "Panel.h"
 #include "PanelErrors.h"
 #include "PanelAudit.h"
+#include "PanelStore.h"
 #include "TlsCertificate.h"
 
 #include <fmt/format.h>
@@ -379,4 +380,54 @@ TEST_F(PanelTest, ARouteNamingAPermissionTheCatalogDoesNotHoldIsNeverRegistered)
     std::string error;
     EXPECT_TRUE(panel.Start(config, error)) << error;
     panel.Stop();
+}
+
+TEST_F(PanelTest, RelayedSettingsChangesReloadsAndRevealsAreRecordedWithoutTheirValues)
+{
+    Panel panel = Make();
+    std::string error;
+    ASSERT_TRUE(panel.Start(Configured("Panel.Enable = 1\nPanel.Port = 0\n"), error)) << error;
+
+    AdminRequest request;
+    request.Principal = "token";
+    request.RemoteAddress = "127.0.0.1";
+    request.Id = "relayed-request";
+    request.Body = R"({"value":"100","reason":"faster ticks"})";
+    panel.RecordRelayed(request, "gameserver", "PUT", "/api/settings/World.UpdateInterval", 200, R"({"changed":true,"value":"100"})");
+    request.Body = R"({"value":"0","reason":"too fast"})";
+    panel.RecordRelayed(request, "gameserver", "PUT", "/api/settings/World.UpdateInterval", 422, R"({"error":"invalid","message":"World.UpdateInterval was not changed"})");
+    request.Body = R"({"reason":"tuning","entries":[{"key":"Rate.XP.Quest","value":2},{"key":"Rate.XP.Kill","value":3}]})";
+    panel.RecordRelayed(request, "gameserver", "POST", "/api/settings/batch", 200, "{}");
+    request.Body.clear();
+    panel.RecordRelayed(request, "gameserver", "POST", "/api/reload/messages", 409, R"({"ok":false})");
+    panel.RecordRelayed(request, "loginserver", "GET", "/api/settings?reveal=1", 200,
+        R"({"revealed":true,"settings":[{"key":"Account.VerifierKeys","secret":true,"value":"1:aaaaaaaa"},{"key":"LoginDatabaseInfo","secret":true,"value":""},{"key":"Login.Name","secret":false,"value":"Ambrose"}]})");
+    panel.RecordRelayed(request, "loginserver", "GET", "/api/settings", 200, R"({"revealed":false,"settings":[]})");
+    panel.RecordRelayed(request, "loginserver", "GET", "/api/settings/Login.Name/history", 200, "{}");
+
+    EXPECT_EQ(PanelAudit::Count(panel.Store(), "settings:setting.changed"), 2) << "a refused change is recorded as well as one that landed";
+    EXPECT_EQ(PanelAudit::Count(panel.Store(), "settings:batch.changed"), 1);
+    EXPECT_EQ(PanelAudit::Count(panel.Store(), "reload:target.run"), 1);
+    EXPECT_EQ(PanelAudit::Count(panel.Store(), "settings:secret.revealed"), 1) << "only a read that showed a secret is a reveal";
+
+    std::optional<PanelStore::Statement> rows = panel.Store().Prepare("SELECT result, reason, node, properties, error FROM audit_event WHERE name = 'settings:setting.changed' ORDER BY created_epoch_ms, event_id", error);
+    ASSERT_TRUE(rows.has_value()) << error;
+    std::vector<std::string> results;
+    while (rows->Step(error))
+    {
+        results.push_back(rows->Text(0));
+        EXPECT_EQ(rows->Text(2), "gameserver");
+        EXPECT_EQ(rows->Text(3).find("100"), std::string::npos) << "no value is kept: " << rows->Text(3);
+        EXPECT_NE(rows->Text(3).find("World.UpdateInterval"), std::string::npos) << rows->Text(3);
+    }
+    std::sort(results.begin(), results.end());
+    EXPECT_EQ(results, (std::vector<std::string>{ std::string(PanelAudit::ToString(AuditResult::Refused)), std::string(PanelAudit::ToString(AuditResult::Succeeded)) }));
+
+    std::optional<PanelStore::Statement> reveal = panel.Store().Prepare("SELECT properties FROM audit_event WHERE name = 'settings:secret.revealed'", error);
+    ASSERT_TRUE(reveal.has_value()) << error;
+    ASSERT_TRUE(reveal->Step(error)) << error;
+    std::string const properties = reveal->Text(0);
+    EXPECT_NE(properties.find("Account.VerifierKeys"), std::string::npos) << properties;
+    EXPECT_EQ(properties.find("LoginDatabaseInfo"), std::string::npos) << "an empty secret showed nothing: " << properties;
+    EXPECT_EQ(properties.find("aaaaaaaa"), std::string::npos) << properties;
 }

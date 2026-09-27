@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Login server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile and never saving an install it has no type dump for, loads account and login settings and the type dump, declares the login message table and checks it against the client's message definitions, refuses to serve clients from an install without a type dump, naming why and where ClientDir came from, or without both databases, opens the login and characters databases, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, listens for clients, and offers account console commands until shutdown, telling connected clients before it shuts down and closing the databases, which drains their callbacks, before its network threads stop.
+ * Login server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile and never saving an install it has no type dump for, loads account and login settings and the type dump, refuses a live verifier key ring that does not parse, lacks its active key or drops a key a stored verifier still uses, reapplies the account settings when one changes live, declares the login message table and checks it against the client's message definitions, refuses to serve clients from an install without a type dump, naming why and where ClientDir came from, or without both databases, opens the login and characters databases, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, listens for clients, and offers account console commands until shutdown, telling connected clients before it shuts down and closing the databases, which drains their callbacks, before its network threads stop.
  */
 
 #include "DatabaseSettingStore.h"
@@ -38,6 +38,7 @@
 #include "SocketMgr.h"
 #include "StringUtil.h"
 #include "TypeRegistry.h"
+#include "VerifierKeyRing.h"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -58,6 +59,37 @@ namespace
         QueryResult const result = LoginDatabase.Query(fmt::format("SELECT COUNT(*) FROM `login_key` WHERE `used` = 0 AND `expires` > {}",
             std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count()));
         return result ? static_cast<int64>((*result)[0].Get<uint64>()) : -1;
+    }
+
+    std::optional<std::string> CheckVerifierKeys(Settings::ProposedValue const& proposed)
+    {
+        std::optional<uint32> const active = Ambrose::StringTo<uint32>(proposed("Account.VerifierActiveKey"));
+        std::string error;
+        std::optional<VerifierKeyRing> const ring = VerifierKeyRing::Parse(proposed("Account.VerifierKeys"), active.value_or(0), error);
+        if (!ring)
+            return fmt::format("Account.VerifierKeys and Account.VerifierActiveKey do not work together: {}", error);
+        if (ring->GetKeyCount() > 0 && ring->GetActiveKeyId() == 0)
+            return std::string("Account.VerifierKeys lists keys, so Account.VerifierActiveKey must name the one that seals new verifiers rather than 0");
+        if (!LoginDatabase.IsOpen())
+            return std::nullopt;
+        auto const statement = LoginDatabase.GetPreparedStatement(LOGIN_SEL_VERIFIER_KEYS_IN_USE);
+        PreparedQueryResult result;
+        if (!statement || !LoginDatabase.TryQuery(*statement, result))
+            return std::string("the login database could not say which keys seal stored verifiers, so the key ring was left as it is");
+        if (!result)
+            return std::nullopt;
+        std::vector<std::string> missing;
+        do
+        {
+            uint32 const id = (*result)[0].Get<uint32>();
+            uint64 const accounts = (*result)[1].Get<uint64>();
+            if (id > 255 || !ring->HasKey(static_cast<uint8>(id)))
+                missing.push_back(fmt::format("key {} seals {} account{}", id, accounts, accounts == 1 ? "" : "s"));
+        } while (result->NextRow());
+        if (missing.empty())
+            return std::nullopt;
+        return fmt::format("Account.VerifierKeys must keep every key that still seals a stored verifier, and {} would no longer open: {}", missing.size() == 1 ? "one" : "some",
+            fmt::join(missing, "; "));
     }
 
     class LoginServerApp : public ServerApp
@@ -250,8 +282,16 @@ namespace
             }
             if (!LoginDatabase.IsOpen())
                 LOG_WARN("server.loginserver", "LoginDatabaseInfo is empty, so live settings take their config values and cannot be changed or kept");
+            for (char const* key : { "Account.VerifierKeys", "Account.VerifierActiveKey" })
+                sSettings.AddCheck(key, [](std::string_view, Settings::ProposedValue const& proposed) { return CheckVerifierKeys(proposed); });
             if (!StartSettings(LoginDatabase.IsOpen() ? SettingStores::ForLogin() : nullptr))
             {
+                _databases.Close();
+                return false;
+            }
+            if (!sAccountMgr.LoadSettings(Config()))
+            {
+                LOG_ERROR("server.loginserver", "The account settings the live settings hold cannot be used");
                 _databases.Close();
                 return false;
             }
@@ -329,6 +369,11 @@ namespace
             std::string_view const key = change.Key;
             if (key.starts_with("Login.") || key.starts_with("Character."))
                 sLoginMgr.LoadSettings(Config());
+            else if (key.starts_with("Account."))
+            {
+                if (!sAccountMgr.LoadSettings(Config()))
+                    LOG_ERROR("server.loginserver", "{} changed, but the account settings it leaves cannot be used, so the ones before it go on serving", key);
+            }
             else if (key == "Locale.Default")
                 sCharacterNameMgr.SetDefaultLocale(sSettings.Get<std::string>("Locale.Default"));
             else if (key.starts_with("Realm."))
