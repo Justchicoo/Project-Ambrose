@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The read half of the settings API every app answers on GET /api/settings: each key it has loaded, and each live setting it declares, with its effective value, the shipped default, the layer, file and line each comes from, the reason when the app documents it as taking effect only at the next start, and for a declared setting its type, bounds, unit, category, description, apply mode, lock, visibility and edit class; a secret is shown only as the mask unless the caller asks with ?reveal=1, or ?reveal= naming the keys it wants, and holds the right to see secrets, and every value revealed is handed to a recorder so the reveal is audited.
+ * The read half of the settings API every app answers on GET /api/settings: each key it has loaded, and each live setting it declares, with its effective value, the shipped default, the layer, file and line each comes from, the reason when the app documents it as taking effect only at the next start, and for a declared setting its type, bounds, unit, category, description, apply mode, lock, visibility and edit class; a secret is shown only as the mask unless the caller asks with ?reveal=1, or ?reveal= naming the keys it wants, and holds the right to see secrets, after any fresh check of who they are the listener asks for, and every value revealed is handed to a recorder so the reveal is audited.
  */
 
 #ifndef AMBROSE_ADMINCONFIGVIEW_H

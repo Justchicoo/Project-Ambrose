@@ -122,7 +122,7 @@ Everything not in the table above, including every milestone whose dependencies 
 | 16.11 | Overlaps the type extraction already built in 3.21 and is being rethought |
 | 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal, and nothing else left to build |
 | 3.26 | Held by the maintainer's panel session: the panel's own installable program shares the launcher's window |
-| 17.47 | Being built now by the maintainer's panel session |
+| 17.47 | Landed on 2026-09-27 by the maintainer's panel session with four of five checks. Left: the API-key half of check 2, which waits on 17.36's keys |
 | 17.18 | Being built now by the maintainer's panel session |
 | 17.24 | Held by the maintainer's panel session: hosting a game on this computer, built on the panel program of 17.181 |
 | 17.28 | Being built by the maintainer's panel session, which the maintainer asked to finish the panel first |

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps the apps behind a shared lock that only starting and stopping the supervisor takes alone, so a request always finds a whole list; the saved state and each app's output live under the data folder unless Supervisor.StateFile or Supervisor.OutputDir says otherwise; a power request names its action and, for a stop or restart, a countdown, and anything else in it is refused field by field; a relayed request keeps its method, path, query, body and request id, a settings request also names its caller and the rights they hold that the route can use, a settings batch pays its cost on the panel's limit first, and each relayed settings or reload answer is handed on to be recorded; and is let through only for a method and path whose permission the relay knows, the same one the app's own route asks for, so a caller who could not reach a route on the app cannot reach it through the supervisor and a path the relay does not know is answered as absent, each judged by the listener the request came in on, since the admin token on the supervisor's own API and a panel user's session on the panel are different callers; sessions stay the supervisor's own and are never relayed, and an app that is not running or has its admin API off is answered 503 with the reason. Each app is given the forwarder to the status observer before it starts watching, so the first state it enters is handed on too.
+ * Keeps the apps behind a shared lock that only starting and stopping the supervisor takes alone, so a request always finds a whole list; the saved state and each app's output live under the data folder unless Supervisor.StateFile or Supervisor.OutputDir says otherwise; a power request names its action and, for a stop or restart, a countdown, and anything else in it is refused field by field; a relayed request keeps its method, path, query, body and request id, a settings request also names its caller and the rights they hold that the route can use, a settings batch pays its cost on the panel's limit first, and each relayed settings or reload answer is handed on to be recorded; and is let through only for a method and path whose permission the relay knows, the same one the app's own route asks for, so a caller who could not reach a route on the app cannot reach it through the supervisor and a path the relay does not know is answered as absent, each judged by the listener the request came in on, since the admin token on the supervisor's own API and a panel user's session on the panel are different callers; sessions stay the supervisor's own and are never relayed, and an app that is not running or has its admin API off is answered 503 with the reason. Each app is given the forwarder to the status observer before it starts watching, so the first state it enters is handed on too. A permission that is allowed is followed by the listener's own fresh-check rule before it is used, and a read that asks to reveal secrets by a caller who may see them, or a change naming a setting the declarations mark restricted by a caller who may change those, asks for a check every time, a dry run excepted since it changes nothing.
  */
 
 #include "Supervisor.h"
@@ -9,6 +9,7 @@
 #include "AdminSettingsView.h"
 #include "ConfigMgr.h"
 #include "Log.h"
+#include "SettingDeclarations.h"
 #include "StringUtil.h"
 
 #include <fmt/format.h>
@@ -30,6 +31,38 @@ namespace
     nlohmann::json TextOrNull(std::string const& text)
     {
         return text.empty() ? nlohmann::json(nullptr) : nlohmann::json(text);
+    }
+
+    bool IsRestricted(std::string_view key)
+    {
+        SettingDeclaration const* const declared = SettingDeclarations::Find(key);
+        return declared && declared->Edit == SettingEditClass::Restricted;
+    }
+
+    bool NamesRestricted(AdminRequest const& request, std::string_view method, std::string_view tail)
+    {
+        constexpr std::string_view SettingPrefix = "/api/settings/";
+        if (tail.starts_with(SettingPrefix) && tail != "/api/settings/batch")
+        {
+            std::string_view const key = tail.substr(SettingPrefix.size());
+            return (method == "PUT" || method == "DELETE") && key.find('/') == std::string_view::npos && IsRestricted(key);
+        }
+        if (tail != "/api/settings/batch" && tail != "/api/settings")
+            return false;
+        nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
+        if (!body.is_object())
+            return false;
+        if (auto const dry = body.find("dry_run"); dry != body.end() && dry->is_boolean() && dry->get<bool>())
+            return false;
+        if (auto const entries = body.find("entries"); entries != body.end() && entries->is_array())
+            for (nlohmann::json const& entry : *entries)
+                if (entry.is_object() && entry.contains("key") && entry["key"].is_string() && IsRestricted(entry["key"].get_ref<std::string const&>()))
+                    return true;
+        if (auto const values = body.find("values"); values != body.end() && values->is_object())
+            for (auto const& [key, value] : values->items())
+                if (IsRestricted(key))
+                    return true;
+        return false;
     }
 
     nlohmann::json ExitJson(AppExit const& exit)
@@ -303,13 +336,28 @@ std::optional<AdminResponse> Supervisor::Refuse(AdminRequest const& request, std
     switch (router.MayI(request, permission))
     {
         case PermissionVerdict::Allowed:
-            return std::nullopt;
+            return router.StepUp(request, permission, StepUpWhen::Changing);
         case PermissionVerdict::OutOfScope:
             return AdminResponse::Problem(404, "not_found", fmt::format("The supervisor has nothing at {}", request.Path));
         case PermissionVerdict::Forbidden:
             return AdminResponse::Problem(403, "forbidden", fmt::format("This account is not allowed to {}", permission));
     }
     return std::nullopt;
+}
+
+std::optional<AdminResponse> Supervisor::StepUpFor(AdminRequest const& request, AdminRouter const& router, std::string_view method, std::string_view tail)
+{
+    if (method == "GET")
+    {
+        if (tail == "/api/settings" && AdminConfigView::AsksToReveal(request) && router.MayI(request, "settings.secrets.read") == PermissionVerdict::Allowed)
+            return router.StepUp(request, "settings.secrets.read", StepUpWhen::Always);
+        return std::nullopt;
+    }
+    if (!tail.starts_with("/api/settings") || !NamesRestricted(request, method, tail))
+        return std::nullopt;
+    if (router.MayI(request, AdminSettingsView::RestrictedPermission) != PermissionVerdict::Allowed)
+        return std::nullopt;
+    return router.StepUp(request, AdminSettingsView::RestrictedPermission, StepUpWhen::Always);
 }
 
 AdminResponse Supervisor::Answer(AdminRequest const& request, AdminRouter const& router)
@@ -357,6 +405,8 @@ AdminResponse Supervisor::Answer(AdminRequest const& request, AdminRouter const&
         return AdminResponse::Problem(404, "not_found", fmt::format("The supervisor relays nothing at {} {}", method, request.Path));
     if (std::optional<AdminResponse> refused = Refuse(request, *permission, router))
         return std::move(*refused);
+    if (std::optional<AdminResponse> asked = StepUpFor(request, router, method, tail))
+        return std::move(*asked);
     if (method == "POST" && tail == "/api/settings/batch")
         if (std::optional<AdminResponse> held = router.Charge(request, AdminSettingsView::BatchCost))
             return std::move(*held);

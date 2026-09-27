@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The admin API's route table and front door: every request gets a request id that its answer and any error body carry, keeping one a caller such as the supervisor sent when it has the same form, so one id names the request in both logs, a host that is no IP address, localhost or a name the operator allows is refused so a page elsewhere cannot rebind a name onto this listener, paths outside /api that no route claims go to the panel's files without a token, so a route a scraper expects at a fixed place such as /metrics is still served and still guarded, public routes such as signing in run without one, a route may answer every path under a prefix when no exact route claims it, the longest prefix first, and every other path needs the bearer token or a browser session whose unsafe requests and socket upgrades name this listener's own origin and carry the session's CSRF token, with every answer stamped with the panel's security headers and every error handed to a log. A caller may be asked about a permission beyond its route's, which a token caller the supervisor relays is held to only when the supervisor forwarded it, and a route may charge the listener's rate limit a cost of its own. A route that asks for a permission the listener's catalog does not hold is not served, and is kept among the refused routes so the listener can say which pages it left out rather than losing them unseen. A request says whether its address carried a query at all, even one with no value a route could read, without keeping the query itself.
+ * The admin API's route table and front door: every request gets a request id that its answer and any error body carry, keeping one a caller such as the supervisor sent when it has the same form, so one id names the request in both logs, a host that is no IP address, localhost or a name the operator allows is refused so a page elsewhere cannot rebind a name onto this listener, paths outside /api that no route claims go to the panel's files without a token, so a route a scraper expects at a fixed place such as /metrics is still served and still guarded, public routes such as signing in run without one, a route may answer every path under a prefix when no exact route claims it, the longest prefix first, and every other path needs the bearer token or a browser session whose unsafe requests and socket upgrades name this listener's own origin and carry the session's CSRF token, with every answer stamped with the panel's security headers and every error handed to a log. A caller may be asked about a permission beyond its route's, which a token caller the supervisor relays is held to only when the supervisor forwarded it, and a route may charge the listener's rate limit a cost of its own. A route that asks for a permission the listener's catalog does not hold is not served, and is kept among the refused routes so the listener can say which pages it left out rather than losing them unseen. A request says whether its address carried a query at all, even one with no value a route could read, without keeping the query itself. A listener may hold every authenticated caller to an admission rule, such as a requirement to turn on two-factor sign-in, which every route and socket passes after authentication except the routes registered as the way to meet it, and may ask for a fresh check of who the caller is before a permission it allows is used, the check deciding when a change or any use needs one and its answer standing in for the handler's.
  */
 
 #ifndef AMBROSE_ADMINROUTER_H
@@ -86,6 +86,12 @@ enum class RouteAccess : uint8
     Permission
 };
 
+enum class StepUpWhen : uint8
+{
+    Changing,
+    Always
+};
+
 class AdminRouter
 {
 public:
@@ -104,12 +110,19 @@ public:
     AdminRouter& operator=(AdminRouter const&) = delete;
 
     using Throttle = std::function<std::optional<AdminResponse>(AdminRequest const&, uint32 cost)>;
+    using Admission = std::function<std::optional<AdminResponse>(AdminRequest const&)>;
+    using StepUpCheck = std::function<std::optional<AdminResponse>(AdminRequest const&, std::string_view permission, StepUpWhen when)>;
 
     void Add(std::string method, std::string path, Handler handler);
     void AddGuarded(std::string method, std::string path, std::string permission, Handler handler);
     void AddGuardedPrefix(std::string method, std::string prefix, std::string permission, Handler handler);
     void AddOpen(std::string method, std::string path, Handler handler);
     void AddOpenPrefix(std::string method, std::string prefix, Handler handler);
+    void AddEnrollment(std::string method, std::string path, Handler handler, uint32 cost = 0);
+    void SetAdmission(Admission admission);
+    std::optional<AdminResponse> Admit(AdminRequest const& request) const;
+    void SetStepUp(StepUpCheck check);
+    std::optional<AdminResponse> StepUp(AdminRequest const& request, std::string_view permission, StepUpWhen when) const;
     void SetPermissionKnown(Known known);
     std::vector<std::string> RouteProblems() const;
     std::vector<std::string> RefusedRoutes() const;
@@ -143,6 +156,7 @@ public:
     std::vector<std::pair<std::string, std::string>> DeclaredRoutes() const;
     void Finish(AdminRequest const& request, AdminResponse& response) const;
     std::optional<std::string> SessionSecret(AdminRequest const& request) const;
+    std::optional<std::string> CookieOf(AdminRequest const& request, std::string_view suffix) const;
     AdminBrowserAccess GetBrowserAccess() const;
     static AdminResponse Refused(AdminAuthResult result);
     static AdminResponse HostRefused(std::string_view host);
@@ -160,13 +174,14 @@ private:
         bool Prefix = false;
         uint32 Cost = 0;
         std::string Permission;
+        bool Enrollment = false;
 
         bool Public() const { return Access == RouteAccess::Public; }
     };
 
     AdminResponse Answer(AdminRequest& request) const;
     AdminResponse Serve(AdminRequest const& request) const;
-    void Put(std::string method, std::string path, Handler handler, RouteAccess access, bool prefix = false, uint32 cost = 0, std::string permission = {});
+    void Put(std::string method, std::string path, Handler handler, RouteAccess access, bool prefix = false, uint32 cost = 0, std::string permission = {}, bool enrollment = false);
 
     PermissionCheck _permission;
     Known _known;
@@ -176,6 +191,8 @@ private:
     std::atomic<bool> _secure{ false };
     TrustedProxies _trustedProxies;
     Throttle _throttle;
+    Admission _admission;
+    StepUpCheck _stepUp;
     mutable std::shared_mutex _mutex;
     std::vector<Route> _routes;
     std::vector<std::string> _refused;

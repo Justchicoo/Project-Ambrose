@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Answers every admin API request in one order: a request id, the host check, the panel's files for paths outside /api, public routes, then the bearer token or a browser session with its origin and CSRF checks, the body limit and the route, an exact one before the longest prefix that covers the path, and finally the security headers, the request id in the answer and in any error body, and the error log; a permission a relayed token caller was not forwarded is never granted to it, and a cost charged outside a route goes to the same limit.
+ * Answers every admin API request in one order: a request id, the host check, the panel's files for paths outside /api, public routes, then the bearer token or a browser session with its origin and CSRF checks, the listener's admission rule unless the exact route is one registered for meeting it, the body limit and the route, an exact one before the longest prefix that covers the path, the route's permission and then any fresh check the listener asks for before it is used, and finally the security headers, the request id in the answer and in any error body, and the error log; a permission a relayed token caller was not forwarded is never granted to it, and a cost charged outside a route goes to the same limit.
  */
 
 #include "AdminRouter.h"
@@ -91,7 +91,7 @@ AdminRouter::AdminRouter(AdminAuth& auth) : _auth(auth)
 {
 }
 
-void AdminRouter::Put(std::string method, std::string path, Handler handler, RouteAccess access, bool prefix, uint32 cost, std::string permission)
+void AdminRouter::Put(std::string method, std::string path, Handler handler, RouteAccess access, bool prefix, uint32 cost, std::string permission, bool enrollment)
 {
     std::unique_lock const lock(_mutex);
     std::string const upper = Ambrose::ToUpper(method);
@@ -107,9 +107,10 @@ void AdminRouter::Put(std::string method, std::string path, Handler handler, Rou
         existing->Access = access;
         existing->Cost = cost;
         existing->Permission = std::move(permission);
+        existing->Enrollment = enrollment;
         return;
     }
-    _routes.push_back({ upper, std::move(path), std::move(handler), access, prefix, cost, std::move(permission) });
+    _routes.push_back({ upper, std::move(path), std::move(handler), access, prefix, cost, std::move(permission), enrollment });
 }
 
 void AdminRouter::AddOpen(std::string method, std::string path, Handler handler)
@@ -122,6 +123,54 @@ void AdminRouter::AddOpenPrefix(std::string method, std::string prefix, Handler 
     if (prefix.empty() || prefix.back() != '/')
         prefix.push_back('/');
     Put(std::move(method), std::move(prefix), std::move(handler), RouteAccess::AnyMember, true);
+}
+
+void AdminRouter::AddEnrollment(std::string method, std::string path, Handler handler, uint32 cost)
+{
+    Put(std::move(method), std::move(path), std::move(handler), RouteAccess::AnyMember, false, cost, {}, true);
+}
+
+void AdminRouter::SetAdmission(Admission admission)
+{
+    std::unique_lock const lock(_mutex);
+    _admission = std::move(admission);
+}
+
+std::optional<AdminResponse> AdminRouter::Admit(AdminRequest const& request) const
+{
+    Admission admission;
+    {
+        std::shared_lock const lock(_mutex);
+        if (!_admission)
+            return std::nullopt;
+        if (!request.Upgrade)
+        {
+            std::string const method = Ambrose::ToUpper(request.Method);
+            for (Route const& route : _routes)
+                if (route.Enrollment && !route.Prefix && route.Method == method && route.Path == request.Path)
+                    return std::nullopt;
+        }
+        admission = _admission;
+    }
+    return admission(request);
+}
+
+void AdminRouter::SetStepUp(StepUpCheck check)
+{
+    std::unique_lock const lock(_mutex);
+    _stepUp = std::move(check);
+}
+
+std::optional<AdminResponse> AdminRouter::StepUp(AdminRequest const& request, std::string_view permission, StepUpWhen when) const
+{
+    StepUpCheck check;
+    {
+        std::shared_lock const lock(_mutex);
+        check = _stepUp;
+    }
+    if (!check)
+        return std::nullopt;
+    return check(request, permission, when);
 }
 
 void AdminRouter::SetPermissionKnown(Known known)
@@ -383,6 +432,14 @@ std::optional<std::string> AdminRouter::SessionSecret(AdminRequest const& reques
     return CookieValue(request.Cookie, browser.CookieName);
 }
 
+std::optional<std::string> AdminRouter::CookieOf(AdminRequest const& request, std::string_view suffix) const
+{
+    AdminBrowserAccess const browser = GetBrowserAccess();
+    if (browser.CookieName.empty() || request.Cookie.empty())
+        return std::nullopt;
+    return CookieValue(request.Cookie, browser.CookieName + std::string(suffix));
+}
+
 AdminAuthResult AdminRouter::Authenticate(AdminRequest& request) const
 {
     if (!request.Authorization.empty())
@@ -514,6 +571,8 @@ AdminResponse AdminRouter::Answer(AdminRequest& request) const
     AdminAuthResult const authenticated = Authenticate(request);
     if (authenticated != AdminAuthResult::Ok)
         return Refused(authenticated);
+    if (std::optional<AdminResponse> held = Admit(request))
+        return std::move(*held);
     if (limit != 0 && request.Body.size() > limit)
         return AdminResponse::Problem(413, "payload_too_large", "The admin API takes at most " + std::to_string(limit) + " bytes of request body");
     Throttle throttle;
@@ -638,6 +697,8 @@ AdminResponse AdminRouter::Serve(AdminRequest const& request) const
             case PermissionVerdict::Forbidden:
                 return AdminResponse::Problem(403, "forbidden", "This account is not allowed to " + permission);
         }
+        if (std::optional<AdminResponse> asked = StepUp(request, permission, StepUpWhen::Changing))
+            return std::move(*asked);
     }
 
     try

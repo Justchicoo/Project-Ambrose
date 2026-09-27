@@ -1393,11 +1393,11 @@ Changed on 2026-09-27. The tables browser, and the world schema its forms are bu
 
 **Acceptance**
 
-- [ ] With two-factor on, a correct password without a valid code is refused, a code already accepted once is refused the second time, and each recovery code works once
+- [x] With two-factor on, a correct password without a valid code is refused, a code already accepted once is refused the second time, and each recovery code works once (PanelTwoFactorTest.APasswordWithoutAValidCodeOpensNoSession, ACodeAcceptedOnceIsRefusedTheSecondTime on sign-in, on enabling and on a step-up check, and EachRecoveryCodeWorksOnce; PanelStepUpTest.AStepUpCodeCannotBeOneAlreadyAccepted and TotpTest.AcceptsOneStepEitherSideAndNothingAtOrBelowTheLastAccepted fail with the step check taken out of the code match and the store's update; tests/e2e/two-factor.spec.ts signs in with a recovery code once and is refused the second time against a real supervisor)
 - [ ] Setting two-factor required for everyone sends a user without it to enrollment on their next request, and their API key requests answer 403 with `two_factor_required`
-- [ ] A danger action attempted with a second factor older than the freshness window asks again and changes nothing
-- [ ] Disabling two-factor without a current code is refused, and disabling it with one ends that user's other sessions
-- [ ] A recovery code appears in no response, no log and no audit row after the dialog that issued it, and the store holds only its keyed hash
+- [x] A danger action attempted with a second factor older than the freshness window asks again and changes nothing (PanelStepUpTest.ADangerActionPastTheFreshnessWindowAsksAgainAndChangesNothing answers 403 step_up_required with Panel.Name unchanged and no settings.changed row; AFreshCheckAuthorizesTheActionAndTheAuditRowSaysWhat, ASecretRevealAsksForAFreshCheckEveryTime and PanelRoutesTest.TheRelayAsksForAFreshCheckBeforeARevealAKillOrARestrictedChange cover the relay)
+- [x] Disabling two-factor without a current code is refused, and disabling it with one ends that user's other sessions (PanelTwoFactorTest.DisablingWithoutACurrentCodeIsRefusedAndWithOneEndsTheOtherSessions: the password alone answers 422 and a wrong or replayed code 403, while a correct one ends the other session and deletes the secret and codes; DisablingIsRefusedWhileTheRequirementCoversTheUser)
+- [x] A recovery code appears in no response, no log and no audit row after the dialog that issued it, and the store holds only its keyed hash (PanelTwoFactorTest.ARecoveryCodeIsShownOnceAndTheStoreHoldsOnlyItsKeyedHash scans every later answer, audit_event and audit_subject, the captured log, the store file, its write-ahead log and the keyring, and finds only the keyring's HMAC-SHA-256 of each code; tests/e2e/two-factor.spec.ts checks the page and the browser's storage after the dialog closes)
 
 ## 17.48 Permission catalog, roles and grants
 

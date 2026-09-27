@@ -62,12 +62,6 @@
       "since": "2026-09-27"
     },
     {
-      "scope": "milestone:17.47",
-      "who": "the maintainer's panel session",
-      "what": "two-factor sign-in, being built now",
-      "since": "2026-09-27"
-    },
-    {
       "scope": "milestone:17.165",
       "who": "the maintainer's panel session",
       "what": "the type registry browser and the decoded data routes",

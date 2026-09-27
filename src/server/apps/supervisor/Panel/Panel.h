@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The panel's own front door in the supervisor: a second listener with its own Panel options, its own token file and its own store, off unless Panel.Enable is set, holding its operators and their sessions, the counts a failed sign-in adds to, the cost-weighted limit every costly route is held to and the audit tables every change is recorded in, relayed settings changes, batches, reloads and secret reveals among them, bound to this machine unless a certificate and key are given or the operator opts into plain HTTP, serving the built dashboard at / and the panel's API under /api/panel/, the one event socket every live page runs on at /api/panel/events with the streams it serves and the one-time tickets a script opens it with, and reloaded with the rest of the configuration so a bind it would not be allowed to keep is refused while the old one goes on serving.
+ * The panel's own front door in the supervisor: a second listener with its own Panel options, its own token file, its own store and its own keyring, off unless Panel.Enable is set, holding its operators and their sessions, the counts a failed sign-in or a wrong second factor adds to, the cost-weighted limit every costly route is held to and the audit tables every change is recorded in, relayed settings changes, batches, reloads and secret reveals among them, signing an operator with two-factor sign-in in only after a password and a code, holding every route and socket to the two-factor requirement an owner sets while leaving open the routes that meet it, and asking for a fresh check before a danger action, bound to this machine unless a certificate and key are given or the operator opts into plain HTTP, serving the built dashboard at / and the panel's API under /api/panel/, the one event socket every live page runs on at /api/panel/events with the streams it serves and the one-time tickets a script opens it with, and reloaded with the rest of the configuration so a bind it would not be allowed to keep, or a two-factor requirement it does not know, is refused while the old one goes on serving.
  */
 
 #ifndef AMBROSE_PANEL_H
@@ -16,8 +16,10 @@
 #include "PanelEventSocket.h"
 #include "PanelEventStreams.h"
 #include "PanelEventTickets.h"
+#include "PanelKeyring.h"
 #include "PanelSessions.h"
 #include "PanelSignIn.h"
+#include "PanelTwoFactor.h"
 #include "PanelUsers.h"
 #include "PanelStore.h"
 #include "PanelSettings.h"
@@ -36,6 +38,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 class ConfigMgr;
@@ -47,6 +50,9 @@ public:
     static constexpr uint16 DefaultPort = 12080;
     static constexpr std::string_view Prefix = "/api/panel";
     static constexpr std::chrono::minutes ClaimLifetime{ 30 };
+    static constexpr std::string_view ChallengeCookie = "_challenge";
+    static constexpr std::size_t MaxChallenges = 1024;
+    static constexpr uint32 PasswordCheckCost = 10;
 
     Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path configFolder = {});
 
@@ -55,6 +61,7 @@ public:
 
     static ListenerSettings LoadSettings(ConfigMgr const& config, std::vector<std::string>* problems = nullptr);
     static std::filesystem::path StoreFile(ConfigMgr const& config, std::filesystem::path const& dataFolder);
+    static std::filesystem::path KeyringFile(ConfigMgr const& config, std::filesystem::path const& dataFolder);
 
     bool Start(ConfigMgr const& config, std::string& error);
     bool Reload(ConfigMgr const& config);
@@ -74,39 +81,74 @@ public:
     PanelSessions& Sessions() { return _sessions; }
     PanelErrors& Errors() { return _errors; }
     PanelGrants& Grants() { return _grants; }
+    PanelKeyring& Keyring() { return _keyring; }
+    PanelTwoFactor& TwoFactor() { return _twoFactor; }
+    PanelTwoFactorSettings TwoFactorSettings() const;
     void SetErrorSource(std::function<std::vector<std::pair<std::string, std::string>>()> source);
     std::size_t GatherErrorsOnce();
 
     static constexpr std::chrono::seconds GatherInterval{ 30 };
     PanelSignInThrottle& SignInThrottle() { return _signIn; }
+    PanelSignInThrottle& SecondFactorThrottle() { return _secondFactor; }
     PanelRateLimit& Limit() { return _rateLimit; }
     AdminRouter& Routes() { return _listener.Routes(); }
     PanelEventStreams& Events() { return _events; }
     PanelEventTickets& Tickets() { return _tickets; }
     PanelEventSocket& EventSocket() { return *_eventSocket; }
     void SetAppSource(PanelEventSocket::AppSource source);
+    void AddSocket(AdminSocketRoute route) { _listener.AddSocket(std::move(route)); }
 
     bool Record(AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error);
     std::string NameOf(AdminRequest const& request);
     void RecordRelayed(AdminRequest const& request, std::string_view app, std::string_view method, std::string_view path, int status, std::string const& body);
     void RecordReveal(AdminRequest const& request, std::string_view app, std::vector<std::string> const& keys);
+    bool ResetTwoFactor(PanelUser const& user, std::string_view actor, std::string& error);
+
+    std::optional<AdminResponse> Admit(AdminRequest const& request);
+    std::optional<AdminResponse> StepUpCheck(AdminRequest const& request, std::string_view permission, StepUpWhen when);
 
 private:
+    struct Challenge
+    {
+        int64 UserId = 0;
+        std::string Username = {};
+        std::string How = {};
+        std::chrono::steady_clock::time_point Expires = {};
+        uint32 Attempts = 0;
+    };
+
     bool OpenStore(ConfigMgr const& config, std::string& error);
+    bool OpenKeyring(ConfigMgr const& config, std::string& error);
+    std::optional<PanelTwoFactorSettings> LoadTwoFactorSettings(ConfigMgr const& config, std::string& error);
+    void ApplyTwoFactorSettings(ConfigMgr const& config, PanelTwoFactorSettings const& loaded);
     void RegisterSignIn();
+    void RegisterTwoFactor();
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
     AdminResponse Probe(AdminRequest const& request);
     AdminResponse Reset(AdminRequest const& request);
-    AdminResponse OpenFor(PanelUser const& user, AdminRequest const& request, std::string_view how);
+    AdminResponse OpenFor(PanelUser const& user, AdminRequest const& request, std::string_view how, nlohmann::json const* properties = nullptr);
+    AdminResponse Challenged(PanelUser const& user, AdminRequest const& request, std::string_view how);
     AdminResponse SignIn(AdminRequest const& request);
+    AdminResponse SecondFactor(AdminRequest const& request);
     AdminResponse SignOut(AdminRequest const& request);
     AdminResponse WhoAmI(AdminRequest const& request);
+    AdminResponse TwoFactorGet(AdminRequest const& request);
+    AdminResponse TwoFactorSetup(AdminRequest const& request);
+    AdminResponse TwoFactorEnable(AdminRequest const& request);
+    AdminResponse TwoFactorDisable(AdminRequest const& request);
+    AdminResponse RecoveryCodes(AdminRequest const& request);
+    AdminResponse StepUpRoute(AdminRequest const& request);
     AdminResponse PanelSettingsGet(AdminRequest const& request);
     AdminResponse PanelSettingsUpdate(AdminRequest const& request);
     std::optional<PanelUser> UserOf(AdminRequest const& request);
     nlohmann::json UserAnswer(PanelUser const& user);
+    std::string Issuer() const;
+    bool Required(PanelUser const& user);
     std::optional<AdminResponse> Throttle(AdminRequest const& request, uint32 cost);
+    std::optional<AdminResponse> HeldBack(PanelSignInThrottle& throttle, std::string_view username, std::string_view address, std::string_view counted);
+    PanelSecondFactor CheckSecondFactor(PanelUser const& user, nlohmann::json const& body, std::string& method, std::string& error);
+    void RecordRefused(std::string_view name, PanelUser const& user, AdminRequest const& request, std::string_view reason);
 
     Log& _log;
     std::filesystem::path _dataFolder;
@@ -116,14 +158,21 @@ private:
     PanelSessions _sessions;
     PanelErrors _errors;
     PanelGrants _grants;
+    PanelKeyring _keyring;
+    PanelTwoFactor _twoFactor;
     std::unique_ptr<PanelAuthorization> _authorization;
     PanelSignInThrottle _signIn;
+    PanelSignInThrottle _secondFactor;
     std::mutex _claimMutex;
     std::string _claimToken;
     std::chrono::steady_clock::time_point _claimExpires;
     std::chrono::seconds _sessionIdle{ 0 };
     std::chrono::seconds _sessionLifetime{ 0 };
     std::map<std::string, std::pair<int64, std::chrono::steady_clock::time_point>> _resets;
+    std::mutex _challengeMutex;
+    std::map<std::string, Challenge, std::less<>> _challenges;
+    mutable std::mutex _twoFactorMutex;
+    PanelTwoFactorSettings _twoFactorSettings;
     PanelRateLimit _rateLimit;
     std::mutex _storeMutex;
     void StartGathering();

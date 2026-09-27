@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The panel's route table: every page with its path, title, icon, the permission it needs, whether it appears in the side bar and under which heading, and how it is drawn: its own page loaded on first visit, a page whose milestone has not landed that names it and offers a design preview, or the access-denied page; the check that holds every entry complete, and the one decision of what a path shows a caller with a given set of permissions.
+ * The panel's route table: every page with its path, title, icon, the permission it needs, none for a page about the operator's own account, whether it appears in the side bar and under which heading, and how it is drawn: its own page loaded on first visit, a page whose milestone has not landed that names it and offers a design preview, or the access-denied page; the check that holds every entry complete, and the one decision of what a path shows a caller with a given set of permissions.
  */
 
 import type { Component } from "svelte";
@@ -18,6 +18,7 @@ import ServerIcon from "@lucide/svelte/icons/server";
 import SettingsIcon from "@lucide/svelte/icons/settings";
 import SlidersHorizontalIcon from "@lucide/svelte/icons/sliders-horizontal";
 import ShieldIcon from "@lucide/svelte/icons/shield";
+import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
 import SquareTerminalIcon from "@lucide/svelte/icons/square-terminal";
 import UserIcon from "@lucide/svelte/icons/user";
 import UsersIcon from "@lucide/svelte/icons/users";
@@ -194,6 +195,15 @@ export const routes: Route[] = [
         nav: true,
         group: "Panel",
         view: { kind: "page", load: () => import("./pages/Activity.svelte") },
+    },
+    {
+        path: "two-factor",
+        title: "Two-factor sign-in",
+        icon: ShieldCheckIcon,
+        permission: "none",
+        nav: false,
+        group: "Panel",
+        view: { kind: "page", load: () => import("./pages/TwoFactor.svelte") },
     },
     { path: "denied", title: "Access denied", icon: LockIcon, permission: "none", nav: false, group: "Panel", view: { kind: "denied" } },
 ];

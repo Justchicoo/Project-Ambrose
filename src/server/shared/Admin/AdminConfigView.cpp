@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds the settings answer from the config's own layers and the live settings registry: every loaded key and every declared setting in key order, a declared setting described by the registry that resolves it, each with its effective and shipped values, where each was read and the restart reason the app declared for it, which may be declared for every key under a prefix ending in a star, or none. A secret is masked the same way the log stream masks it unless the caller asked to see secrets, all of them or the keys it named, and holds that right, which is decided per request, and the keys whose values were shown are handed to the recorder at that moment, so every reveal is audited when it happens and a read that shows nothing records nothing.
+ * Builds the settings answer from the config's own layers and the live settings registry: every loaded key and every declared setting in key order, a declared setting described by the registry that resolves it, each with its effective and shipped values, where each was read and the restart reason the app declared for it, which may be declared for every key under a prefix ending in a star, or none. A secret is masked the same way the log stream masks it unless the caller asked to see secrets, all of them or the keys it named, and holds that right, which is decided per request, and the keys whose values were shown are handed to the recorder at that moment, so every reveal is audited when it happens and a read that shows nothing records nothing. On a listener that asks for a fresh check of who the caller is before a secret is shown, that check comes first and its answer is given instead of the settings.
  */
 
 #include "AdminConfigView.h"
@@ -15,6 +15,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <utility>
 
 namespace
 {
@@ -194,6 +195,11 @@ void AdminConfigView::Register(AdminRouter& router, ConfigMgr const& config, std
     {
         std::optional<std::set<std::string, std::less<>>> const asked = RevealAsked(request);
         bool const reveal = asked && router.Permits(request, "settings.secrets.read");
+        if (reveal)
+        {
+            if (std::optional<AdminResponse> checked = router.StepUp(request, "settings.secrets.read", StepUpWhen::Always))
+                return std::move(*checked);
+        }
         std::vector<std::string> revealed;
         std::string body = SettingsJson(config, restartRequired, reveal, settings, &revealed, asked && !asked->empty() ? &*asked : nullptr);
         if (!revealed.empty() && recorder)

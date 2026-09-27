@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The browsers a panel user is signed in on, kept in the supervisor's own store rather than in memory, so restarting the supervisor does not sign every operator out: each row holds only the SHA-256 of the cookie's secret and of its CSRF token, the user it belongs to and the generation that user had when it opened, its idle and absolute expiry, and where it was opened from; a session stops being believed the moment its user's generation moves, which is how a password change or a disable ends every other session that user has.
+ * The browsers a panel user is signed in on, kept in the supervisor's own store rather than in memory, so restarting the supervisor does not sign every operator out: each row holds only the SHA-256 of the cookie's secret and of its CSRF token, the user it belongs to and the generation that user had when it opened, its idle and absolute expiry, where it was opened from and when its operator last proved who they are with a password or a second factor; a session stops being believed the moment its user's generation moves, which is how a password change or a disable ends every other session that user has, while a two-factor change moves the one session that made it to the new generation and ends the rest.
  */
 
 #ifndef AMBROSE_PANELSESSIONS_H
@@ -35,6 +35,7 @@ struct PanelSessionInfo
     int64 AbsoluteExpiresEpochMs = 0;
     std::string Address;
     std::string UserAgent;
+    int64 CheckedEpochMs = 0;
 };
 
 class PanelSessions : public SessionSource
@@ -51,9 +52,12 @@ public:
 
     void SetLifetimes(std::chrono::seconds idle, std::chrono::seconds absolute);
 
-    std::optional<PanelSessionOpened> Open(int64 userId, int64 generation, std::string_view address, std::string_view userAgent, std::string& error);
+    std::optional<PanelSessionOpened> Open(int64 userId, int64 generation, std::string_view address, std::string_view userAgent, int64 checkedEpochMs, std::string& error);
     std::optional<SessionHolder> Hold(std::string_view secret) override;
 
+    bool MarkChecked(std::string_view secret, std::string& error);
+    std::optional<int64> CheckedAt(std::string_view secret);
+    bool KeepOnly(int64 userId, std::string_view secret, int64 generation, std::string_view reason, std::string& error);
     bool Close(std::string_view secret, std::string_view reason, std::string& error);
     bool CloseEveryOne(int64 userId, std::string_view reason, std::string& error);
     bool DropExpired(std::string& error);

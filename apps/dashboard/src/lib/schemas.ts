@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The shapes the panel accepts from the admin API, checked at the boundary with Valibot: the session, the app list with what the supervisor knows about each app, the status, the capabilities, the captured output, a power answer, the settings an app has loaded with their changes, batches, history and events and its databases with their update files, each loose so a field a newer server adds is kept rather than refused, since these schemas only ever gain fields.
+ * The shapes the panel accepts from the admin API, checked at the boundary with Valibot: the session, a sign-in that asks for a second factor, the operator's two-factor state, its setup secret, the recovery codes shown once, a step-up check and the refusal that asks for one, the app list with what the supervisor knows about each app, the status, the capabilities, the captured output, a power answer, the settings an app has loaded with their changes, batches, history and events and its databases with their update files, each loose so a field a newer server adds is kept rather than refused, since these schemas only ever gain fields.
  */
 
 import * as v from "valibot";
@@ -23,6 +23,8 @@ export const PanelUser = v.looseObject({
     permissions: v.optional(v.array(v.string()), []),
     grants: v.optional(v.record(v.string(), v.array(v.string())), {}),
     must_change_password: v.boolean(),
+    two_factor: v.optional(v.boolean(), false),
+    two_factor_required: v.optional(v.boolean(), false),
 });
 
 export const PanelSessionAnswer = v.looseObject({
@@ -39,6 +41,57 @@ export const PanelSessionAnswer = v.looseObject({
 export const PanelSignedIn = v.looseObject({
     csrf: v.string(),
     user: PanelUser,
+});
+
+export const SecondFactorAsked = v.looseObject({
+    second_factor: v.literal(true),
+    methods: v.array(v.string()),
+    expires_seconds: v.number(),
+});
+
+export const PanelSignInAnswer = v.union([SecondFactorAsked, PanelSignedIn]);
+
+export const TwoFactorState = v.looseObject({
+    enabled: v.boolean(),
+    pending: v.boolean(),
+    required: v.boolean(),
+    recovery_codes_left: v.number(),
+    enabled_epoch_ms: v.nullable(v.number()),
+    window_steps: v.optional(v.number(), 1),
+    issuer: v.optional(v.string(), ""),
+});
+
+export const TwoFactorSetup = v.looseObject({
+    secret: v.string(),
+    uri: v.string(),
+    issuer: v.string(),
+    account: v.string(),
+    algorithm: v.string(),
+    digits: v.number(),
+    period: v.number(),
+    fresh: v.boolean(),
+});
+
+export const RecoveryCodesIssued = v.looseObject({
+    recovery_codes: v.array(v.string()),
+    recovery_codes_left: v.number(),
+    user: v.optional(v.nullable(PanelUser)),
+});
+
+export const TwoFactorTurnedOff = v.looseObject({
+    user: v.nullable(PanelUser),
+});
+
+export const StepUpAnswer = v.looseObject({
+    checked_epoch_ms: v.number(),
+    window_seconds: v.number(),
+});
+
+export const StepUpAsked = v.looseObject({
+    error: v.literal("step_up_required"),
+    permission: v.string(),
+    methods: v.array(v.string()),
+    window_seconds: v.number(),
 });
 
 export const AppExit = v.looseObject({
@@ -359,6 +412,13 @@ export const DatabaseApplyAnswer = v.looseObject({
 export type SessionAnswer = v.InferOutput<typeof SessionAnswer>;
 export type PanelUser = v.InferOutput<typeof PanelUser>;
 export type PanelSessionAnswer = v.InferOutput<typeof PanelSessionAnswer>;
+export type SecondFactorAsked = v.InferOutput<typeof SecondFactorAsked>;
+export type PanelSignInAnswer = v.InferOutput<typeof PanelSignInAnswer>;
+export type TwoFactorState = v.InferOutput<typeof TwoFactorState>;
+export type TwoFactorSetup = v.InferOutput<typeof TwoFactorSetup>;
+export type RecoveryCodesIssued = v.InferOutput<typeof RecoveryCodesIssued>;
+export type StepUpAnswer = v.InferOutput<typeof StepUpAnswer>;
+export type StepUpAsked = v.InferOutput<typeof StepUpAsked>;
 export type AppEntry = v.InferOutput<typeof AppEntry>;
 export type LogRecord = v.InferOutput<typeof LogRecord>;
 export type LogAnswer = v.InferOutput<typeof LogAnswer>;

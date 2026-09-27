@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the panel's event socket end to end over a real panel listener on a loopback port: an upgrade from a foreign origin is refused before it becomes a socket while the panel's own page signs in with its cookie and CSRF token and gets ready with its permissions, apps and this run's instance; a script's ticket works once and a second use closes with 4401; a ticket in the address is refused, burned and never written to the log; a page that comes back resumes after the last sequence it saw and gets exactly the records it missed, or a dropped frame naming the range the backlog no longer holds and then the rest; an internal failure shows its text only to a holder of debug.errors while everyone gets a correlation id the supervisor log repeats; a handler that answers with a type the catalog does not mark as sent fails instead of writing it; a first frame that is not hello closes with 4400 and a socket silent for ten seconds with 4401; ping answers pong with its id; and a message the panel does not take yet, one it never takes and a stream it cannot serve are each answered with their own code.
+ * Runs the panel's event socket end to end over a real panel listener on a loopback port: an upgrade from a foreign origin is refused before it becomes a socket while the panel's own page signs in with its cookie and CSRF token and gets ready with its permissions, apps and this run's instance; a script's ticket works once and a second use closes with 4401; a ticket in the address is refused, burned and never written to the log; a page that comes back resumes after the last sequence it saw and gets exactly the records it missed, or a dropped frame naming the range the backlog no longer holds and then the rest; an internal failure shows its text only to a holder of debug.errors while everyone gets a correlation id the supervisor log repeats; a handler that answers with a type the catalog does not mark as sent fails instead of writing it; a first frame that is not hello closes with 4400 and a socket silent for ten seconds with 4401; ping answers pong with its id; and a message the panel does not take yet, one it never takes and a stream it cannot serve are each answered with their own code, and an operator the two-factor requirement holds back is closed with 4403 before any ready.
  */
 
 #include "AdminClient.h"
@@ -101,11 +101,11 @@ namespace
     class PanelEventSocketTest : public testing::Test
     {
     protected:
-        void Start()
+        void Start(std::string const& extra = {})
         {
             _harness.ApplyOrFail("Appender.Capture = 200,1,0\nLogger.root = 1,Capture\n");
             _config = std::make_unique<ConfigMgr>(NoEnvironment());
-            ASSERT_TRUE(_config->LoadInitial(_directory.Write("supervisor.conf", "Panel.Enable = 1\nPanel.Port = 0\n")).Succeeded());
+            ASSERT_TRUE(_config->LoadInitial(_directory.Write("supervisor.conf", "Panel.Enable = 1\nPanel.Port = 0\n" + extra)).Succeeded());
             _panel = std::make_unique<Panel>(_harness.GetLog(), _directory.Path() / "data", _directory.Path());
             _panel->SetAppSource([] { return std::vector<std::string>{ "gameserver-1", "loginserver" }; });
             std::string error;
@@ -321,6 +321,21 @@ TEST_F(PanelEventSocketTest, AHelloNeedsTheSessionsOwnCsrfTokenFromThePanelsOwnP
     std::optional<std::pair<uint16, std::string>> const malformed = both.ReadClose();
     ASSERT_TRUE(malformed.has_value());
     EXPECT_EQ(malformed->first, PanelEventCatalog::Malformed);
+}
+
+TEST_F(PanelEventSocketTest, AnOperatorTheTwoFactorRequirementHoldsBackIsClosedWith4403)
+{
+    Start("Panel.TwoFactorRequired = everyone\n");
+    MakeUser("viewer", false);
+    Browser const browser = SignIn("viewer");
+    ASSERT_FALSE(browser.Cookie.empty());
+
+    AdminTest::SocketClient held;
+    EXPECT_FALSE(SignedInSocket(held, browser).has_value()) << "no ready reaches an operator who still has to turn on two-factor sign-in";
+    std::optional<std::pair<uint16, std::string>> const closed = held.ReadClose();
+    ASSERT_TRUE(closed.has_value());
+    EXPECT_EQ(closed->first, PanelEventCatalog::AccessLost);
+    EXPECT_NE(closed->second.find("two-factor"), std::string::npos) << closed->second;
 }
 
 TEST_F(PanelEventSocketTest, ATicketSignsASocketInOnceAndASecondUseClosesWith4401)

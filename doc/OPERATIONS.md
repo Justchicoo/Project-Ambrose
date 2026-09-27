@@ -146,7 +146,10 @@ docker compose -f apps/packaging/docker-compose.yml --env-file apps/packaging/.e
 ```
 
 The client is mounted read-only. Configuration, data, logs and backups are
-named volumes. The image carries the type extractor and the SQL, so the first
+named volumes. The panel's store and its keyring both live on the data volume;
+back them up together, because the keyring holds the keys that open the
+two-factor secrets the store seals, and a store restored without it cannot
+sign anyone in with a second factor. The image carries the type extractor and the SQL, so the first
 start builds the type dump into the data volume and sets up the three
 databases, and the container reports healthy once the login server accepts
 connections on its port. Import

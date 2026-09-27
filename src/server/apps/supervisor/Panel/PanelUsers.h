@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The operators who sign in to the panel, kept in the supervisor's own store apart from any game account: names held to the same rules a game account's name is, passwords hashed with Argon2id and never kept any other way, one policy on every path that sets one, and a generation per user that a password or a disable bumps so that user's other sessions stop being believed; a password is checked in the same time and with the same answer whether the user is unknown, disabled or simply wrong, so a caller learns nothing from trying.
+ * The operators who sign in to the panel, kept in the supervisor's own store apart from any game account: names held to the same rules a game account's name is, passwords hashed with Argon2id and never kept any other way, one policy on every path that sets one, whether two-factor sign-in is on for them, and a generation per user that a password, a disable or a two-factor change bumps so that user's other sessions stop being believed; a password is checked in the same time and with the same answer whether the user is unknown, disabled or simply wrong, so a caller learns nothing from trying, and a signed-in operator's password is checked again the same way before a change to how they sign in.
  */
 
 #ifndef AMBROSE_PANELUSERS_H
@@ -50,6 +50,7 @@ struct PanelUser
     int64 CreatedEpochMs = 0;
     int64 PasswordSetEpochMs = 0;
     std::optional<int64> SignedInEpochMs;
+    bool TwoFactor = false;
 };
 
 struct PanelPasswordPolicy
@@ -86,6 +87,8 @@ public:
 
     PanelUserResult Create(std::string_view username, std::string_view password, bool owner, bool mustChange, int64* id, std::string& error);
     PanelUserResult Authenticate(std::string_view username, std::string_view password, PanelUser& user, std::string& error);
+    PanelUserResult CheckPassword(int64 id, std::string_view password, std::string& error);
+    std::optional<int64> BumpGeneration(int64 id, std::string& error);
     PanelUserResult SetPassword(int64 id, std::string_view password, bool mustChange, std::string& error);
     bool SetDisabled(int64 id, bool disabled, std::string& error);
     PanelUserResult SetRole(int64 id, PanelRole role, int64 byUserId, std::string& error);

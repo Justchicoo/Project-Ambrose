@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads and writes the panel's general, mail and security settings with explicit types and bounds, keeps secrets out of answers and audit properties, and refuses listener-owned options instead of letting this page become their enforcement point.
+ * Reads and writes the panel's general, mail and security settings with explicit types and bounds, keeps secrets out of answers and audit properties, refuses listener-owned options instead of letting this page become their enforcement point, and answers an option the panel enforces from its own config with the value and layer it was handed rather than a default, so the page shows what is in force.
  */
 
 #include "PanelSettings.h"
@@ -54,6 +54,7 @@ namespace
         Definition{ "security", "Panel.TrustedProxies", "", false, true, "environment", 0, 0 },
         Definition{ "security", "Panel.BindIP", "127.0.0.1", false, true, "config", 0, 0 },
         Definition{ "security", "Panel.AllowPlainHttpRemote", "0", false, true, "config", 0, 1 },
+        Definition{ "security", "Panel.TwoFactorRequired", "none", false, true, "config", 0, 0 },
     };
 
     Definition const* Find(std::string_view key)
@@ -112,14 +113,28 @@ nlohmann::json PanelSettings::Answer(std::string_view group, std::string& error)
     if (!error.empty())
         return {};
 
+    std::map<std::string, std::pair<std::string, std::string>, std::less<>> owned;
+    {
+        std::lock_guard const lock(_ownedMutex);
+        owned = _owned;
+    }
     for (Definition const& definition : Definitions)
     {
         if (!group.empty() && definition.Group != group)
             continue;
         std::string value = saved.contains(std::string(definition.Key)) ? saved[std::string(definition.Key)] : std::string(definition.Default);
+        std::string layer(definition.Layer);
         std::string const environment = EnvironmentValue("AMBROSE_PANEL_TRUSTED_PROXIES");
         if (definition.Key == "Panel.TrustedProxies" && !environment.empty())
+        {
             value = environment;
+            layer = "environment";
+        }
+        if (auto const pushed = owned.find(definition.Key); definition.Locked && pushed != owned.end())
+        {
+            value = pushed->second.first;
+            layer = pushed->second.second;
+        }
         nlohmann::json row{
             { "key", definition.Key },
             { "group", definition.Group },
@@ -127,13 +142,34 @@ nlohmann::json PanelSettings::Answer(std::string_view group, std::string& error)
             { "default", definition.Secret && !definition.Default.empty() ? "***" : definition.Default },
             { "secret", definition.Secret },
             { "locked", definition.Locked },
-            { "layer", definition.Key == "Panel.TrustedProxies" && !environment.empty() ? "environment" : definition.Layer },
+            { "layer", layer },
             { "minimum", definition.Minimum },
             { "maximum", definition.Maximum },
         };
         settings.push_back(std::move(row));
     }
     return nlohmann::json{ { "schema", 1 }, { "settings", std::move(settings) } };
+}
+
+void PanelSettings::SetOwned(std::string_view key, std::string value, std::string layer)
+{
+    std::lock_guard const lock(_ownedMutex);
+    _owned.insert_or_assign(std::string(key), std::pair{ std::move(value), std::move(layer) });
+}
+
+std::string PanelSettings::ValueOf(std::string_view key) const
+{
+    Definition const* const definition = Find(key);
+    if (!definition)
+        return {};
+    std::string error;
+    std::optional<PanelStore::Statement> rows = _store.Prepare("SELECT value FROM panel_setting WHERE key = ?", error);
+    if (!rows)
+        return std::string(definition->Default);
+    rows->Bind(1, key);
+    if (!rows->Step(error))
+        return std::string(definition->Default);
+    return rows->Text(0);
 }
 
 bool PanelSettings::Update(nlohmann::json const& values, int64 userId, std::string& error)

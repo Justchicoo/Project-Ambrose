@@ -417,6 +417,7 @@ namespace SupervisorService
             configuredAll = replace("Supervisor.OutputDir", "/var/lib/ambrose/supervisor/output") && configuredAll;
             configuredAll = replace("Supervisor.HistoryFile", "/var/lib/ambrose/supervisor/history.bin") && configuredAll;
             configuredAll = replace("Panel.StoreFile", "/var/lib/ambrose/panel.sqlite") && configuredAll;
+            configuredAll = replace("Panel.KeyringFile", "/var/lib/ambrose/keyring") && configuredAll;
             configuredAll = replace("Panel.Enable", "1") && configuredAll;
             for (std::string_view const name : { "loginserver", "gameserver", "patchserver" })
             {

@@ -24,6 +24,7 @@ if [ ! -f "$config_dir/supervisor.conf" ]; then
         -e 's#^Supervisor.OutputDir =.*#Supervisor.OutputDir = /var/lib/ambrose/logs/apps#' \
         -e 's#^Supervisor.HistoryFile =.*#Supervisor.HistoryFile = /var/lib/ambrose/data/supervisor-history.json#' \
         -e 's#^Panel.StoreFile =.*#Panel.StoreFile = /var/lib/ambrose/data/panel.sqlite#' \
+        -e 's#^Panel.KeyringFile =.*#Panel.KeyringFile = /var/lib/ambrose/data/keyring#' \
         "$config_dir/supervisor.conf"
 fi
 

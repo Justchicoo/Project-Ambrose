@@ -196,6 +196,8 @@ describe("the power buttons a viewer and a sub-user see", () => {
             permissions,
             grants,
             must_change_password: false,
+            two_factor: false,
+            two_factor_required: false,
         };
     }
 

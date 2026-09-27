@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the panel's route table: every entry names a permission, a navigation flag, a group and how it is drawn, the check itself fails on an entry that leaves any of them out, a page whose milestone has not landed names it, every page is gated on a permission the server's panel catalog holds, since a page gated on a name the catalog lacks is hidden from every role that is not the owner, and a direct link to a route the caller may not use resolves to the access-denied page while the side bar leaves it out.
+ * Tests the panel's route table: every entry names a permission, a navigation flag, a group and how it is drawn, the check itself fails on an entry that leaves any of them out, a page whose milestone has not landed names it, every page is gated on a permission the server's panel catalog holds, since a page gated on a name the catalog lacks is hidden from every role that is not the owner, or on none when it is about the operator's own account and so open to every operator, and a direct link to a route the caller may not use resolves to the access-denied page while the side bar leaves it out.
  */
 
 import { readFileSync } from "node:fs";
@@ -47,7 +47,7 @@ describe("the route table", () => {
         const keys = new Set([...catalog.matchAll(/\{ "[a-z]+", "([a-z.]+)", "/g)].map((match) => match[1]));
         expect(keys.size).toBeGreaterThan(90);
         const unknown = routes
-            .filter((route) => route.view.kind !== "denied" && !keys.has(route.permission))
+            .filter((route) => route.view.kind !== "denied" && route.permission !== "none" && !keys.has(route.permission))
             .map((route) => `${route.path}: ${route.permission}`);
         expect(unknown).toEqual([]);
     });
@@ -79,6 +79,11 @@ describe("what a path shows", () => {
         expect(navigation(new Set(["metrics.read"])).map((route) => route.path)).toEqual(["metrics", "resources"]);
         expect(navigation(everything).some((route) => route.path === "denied")).toBe(false);
         expect(navigation(everything)).toHaveLength(routes.filter((route) => route.nav).length);
+    });
+
+    it("opens the operator's own two-factor page to everyone and keeps it out of the side bar", () => {
+        expect(resolve("two-factor", new Set()).kind).toBe("shown");
+        expect(navigation(everything).some((route) => route.path === "two-factor")).toBe(false);
     });
 
     it("keeps panel settings hidden from users without panel.settings", () => {

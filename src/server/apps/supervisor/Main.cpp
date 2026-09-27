@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel and the supervisor routes on its admin API, records relayed settings and reload answers and its own secret reveals in the panel's audit log, publishes every state an app passes through on the panel's status stream at that app's scope and gives the panel's event socket its list of apps, offers apps, start, stop, restart and kill on its console, and leaves the apps running when it stops so the next start takes them back.
+ * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel and the supervisor routes on its admin API, records relayed settings and reload answers and its own secret reveals in the panel's audit log, publishes every state an app passes through on the panel's status stream at that app's scope and gives the panel's event socket its list of apps, reloads the panel's own listener and its two-factor rules when a Panel option changes, offers apps, start, stop, restart and kill on its console with the panel's operators beside them, including the way back in for an operator who lost their authenticator and their recovery codes, and leaves the apps running when it stops so the next start takes them back.
  */
 
 #include "AdminGraphsView.h"
@@ -285,8 +285,18 @@ namespace
         {
             constexpr std::string_view AtStart = "The supervisor reads it when it starts watching, so a change takes effect at its next start";
             constexpr std::string_view PanelStore = "The panel opens its store when it starts, so a change takes effect at its next start";
+            constexpr std::string_view PanelKeyring = "The panel opens its keyring when it starts, so a change takes effect at its next start";
             return { { "Supervisor.Apps", AtStart }, { "Supervisor.StateFile", AtStart }, { "Supervisor.OutputDir", AtStart }, { "Supervisor.OutputMaxBytes", AtStart },
-                { "App.*", AtStart }, { "Panel.StoreFile", PanelStore } };
+                { "App.*", AtStart }, { "Panel.StoreFile", PanelStore }, { "Panel.KeyringFile", PanelKeyring } };
+        }
+
+        void OnConfigChanged(std::vector<std::string> const& changed) override
+        {
+            ServerApp::OnConfigChanged(changed);
+            if (std::none_of(changed.begin(), changed.end(), [](std::string const& key) { return key.starts_with("Panel."); }))
+                return;
+            if (!_panel.Reload(Config()))
+                LOG_WARN("server.panel", "The panel kept its earlier settings; the reason is logged above");
         }
 
         void OnStatus(std::vector<std::pair<std::string, std::string>>& fields) override
@@ -313,8 +323,33 @@ namespace
                     if (users.empty())
                         reply("The panel has no operator yet; its console printed a one-time link when it started");
                     for (PanelUser const& user : users)
-                        reply(fmt::format("{}{}{} last signed in {}", user.Username, user.IsOwner ? " (owner)" : "", user.Disabled ? " (disabled)" : "",
-                            user.SignedInEpochMs ? WhenText(*user.SignedInEpochMs) : std::string("never")));
+                        reply(fmt::format("{}{}{}{} last signed in {}", user.Username, user.IsOwner ? " (owner)" : "", user.Disabled ? " (disabled)" : "",
+                            user.TwoFactor ? " (two-factor)" : "", user.SignedInEpochMs ? WhenText(*user.SignedInEpochMs) : std::string("never")));
+                    return true;
+                } });
+            Commands().Register({ "panel user reset-two-factor", "<name>", "turn off an operator's two-factor sign-in and end their sessions, for one who lost their authenticator and codes", false,
+                [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
+                {
+                    if (arguments.size() != 1)
+                        return false;
+                    std::string error;
+                    std::optional<PanelUser> const user = _panel.Users().Find(arguments[0], error);
+                    if (!user)
+                    {
+                        reply(error.empty() ? fmt::format("The panel has no operator named {}", arguments[0]) : error);
+                        return true;
+                    }
+                    if (!user->TwoFactor)
+                    {
+                        reply(fmt::format("{} has no two-factor sign-in to reset", user->Username));
+                        return true;
+                    }
+                    if (!_panel.ResetTwoFactor(*user, "console", error))
+                    {
+                        reply(fmt::format("Two-factor sign-in was not reset for {}: {}", user->Username, error));
+                        return true;
+                    }
+                    reply(fmt::format("{} signs in with their password alone until they turn two-factor sign-in on again, and the sessions they had have ended", user->Username));
                     return true;
                 } });
             Commands().Register({ "panel user create", "<name>", "make an operator and print a one-time link they set their password from", false,

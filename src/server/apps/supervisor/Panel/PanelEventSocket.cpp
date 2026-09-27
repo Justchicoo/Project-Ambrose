@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the event socket: a connection is kept from its upgrade until its close with the request that opened it, whether it has said hello, who it is and the stream sessions it follows; frames are read on the listener's own thread and each connection's state changes under its own lock, never under the table's, so the sweeper and a closing socket never wait on each other. A caller's permissions are read once, at hello, from its role and its grants, and a ticket's scopes narrow what it may follow. A frame outside a stream is written only for a type the catalog marks as sent, so a handler that answers with anything else fails rather than reach a page with no handler for it, and a second resume of one stream at one scope closes the session it replaces before the new one opens. Each stream session writes through a sink that drops the layer's own hello, turns a dropped range into a dropped frame naming its stream and closes the socket with 4429 when a stream that never drops overflows. The sweeper wakes every second and closes with 4401 any socket that has not said hello within ten seconds of opening.
+ * Runs the event socket: a connection is kept from its upgrade until its close with the request that opened it, whether it has said hello, who it is and the stream sessions it follows; frames are read on the listener's own thread and each connection's state changes under its own lock, never under the table's, so the sweeper and a closing socket never wait on each other. A caller's permissions are read once, at hello, from its role and its grants, and a ticket's scopes narrow what it may follow. A frame outside a stream is written only for a type the catalog marks as sent, so a handler that answers with anything else fails rather than reach a page with no handler for it, and a second resume of one stream at one scope closes the session it replaces before the new one opens. Each stream session writes through a sink that drops the layer's own hello, turns a dropped range into a dropped frame naming its stream and closes the socket with 4429 when a stream that never drops overflows. The sweeper wakes every second and closes with 4401 any socket that has not said hello within ten seconds of opening, and a caller the listener's admission rule holds back, such as an operator who still has to turn on a required two-factor sign-in, is closed with 4403 before anything reaches them.
  */
 
 #include "PanelEventSocket.h"
@@ -613,6 +613,14 @@ void PanelEventSocket::Hello(std::shared_ptr<Connection> const& connection, Pane
     {
         AMBROSE_LOG(_log, LogLevel::Info, PanelCategory, "An event socket from {} was not signed in: {}", upgrade.RemoteAddress, refusal);
         Shut(*connection, PanelEventCatalog::SessionEnded, refusal);
+        return;
+    }
+    AdminRequest admitted = upgrade;
+    admitted.Principal = *principal;
+    if (_routes.Admit(admitted))
+    {
+        AMBROSE_LOG(_log, LogLevel::Info, PanelCategory, "An event socket from {} was not signed in: the panel's admission rule holds {} back", upgrade.RemoteAddress, *principal);
+        Shut(*connection, PanelEventCatalog::AccessLost, "this account has to turn on two-factor sign-in before the panel's live pages open");
         return;
     }
 
