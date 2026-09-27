@@ -1,0 +1,25 @@
+{
+  "subject": "client revision and launcher file layout",
+  "area": "client",
+  "claim": "In the inspected r806919.Wizard_1_610 install, Bin/revision.dat is a 20-byte ASCII revision identifier followed by one LF byte; the adjacent data.dat is byte-identical. The retail launcher's AppStart.dat is line-oriented text, and its launcher-data YAML carries 3,836 records with the same eight typed fields in each record.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "On your own install, run `client --client <install> hex <install>\\Bin\\revision.dat --from 0 --count 24`; confirm that the file has 21 bytes, bytes 0-19 are printable ASCII, and byte 20 is LF. Do not copy the bytes or identifier into a report.",
+    "Compare the bytes of Bin/revision.dat and Bin/data.dat locally; confirm they are identical without printing either value.",
+    "Read AppStart.dat as bytes and count CRLF-delimited lines and byte offsets. Record only lengths and roles: the first line is a relative patch-client executable path with a launch option, the next line is blank, and the final line is a Steam-specific launcher note.",
+    "Scan Wizard101launcher-data.yml without printing values. Count its CRLF lines and mapping records, and for each record verify the field names and value types listed here.",
+    "Read LocalPackagesList.txt without printing values; count CRLF-delimited nonempty lines, empty lines, and whether each record contains a delimiter."
+  ],
+  "evidence": [
+    "The local Bin/revision.dat is 21 bytes, has 20 printable ASCII bytes, no BOM, no CR bytes, and one trailing LF. Bin/data.dat is also 21 bytes and compared byte-for-byte equal.",
+    "AppStart.dat is 151 bytes with two CRLF sequences and no final line terminator. Bytes 0-40 are the relative executable path and launch option; bytes 41-42 and 43-44 are CRLF separators, with the second line empty; bytes 45-150 are the launcher note.",
+    "Wizard101launcher-data.yml is 1,067,705 bytes and has 34,524 CRLF-terminated lines. It contains 3,836 mappings, each with CompressedHeaderSize, CRC, FileType, HeaderCRC, HeaderSize, Size, SrcFileName, and TarFileName. The first six fields are integer-valued and the last two are strings; no field values are included here.",
+    "LocalPackagesList.txt is 155,505 bytes and has 3,590 CRLF-delimited lines: 3,589 nonempty single-token records and one empty line. No record contains a comma, semicolon, tab, or path separator."
+  ],
+  "disproof": "A repeatable inspection of the same revision that finds a different revision.dat length or terminator, non-identical Bin/data.dat bytes, different AppStart.dat segment boundaries, or a different launcher-data record count, field set, or value type refutes this finding.",
+  "confidence": "high",
+  "submitted_by": "Merune Fleur",
+  "submitted_on": "2026-09-27",
+  "status": "claimed"
+}
