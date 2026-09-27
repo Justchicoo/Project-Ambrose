@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: Proposal for teaching finding quality with one verified and one refuted worked example. -->
+<!-- Project Ambrose by Imjustchico: Proposal for two worked finding examples, one verified and one refuted. -->
 
 # Proposal: worked finding examples
 
@@ -6,107 +6,100 @@
 
 C-52: add a proposal for what a good finding looks like, with one verified example and one refuted example.
 
-## Purpose
+## Problem
 
-The findings guide already defines the JSON fields and explains that a merged finding starts as `claimed`. It also explains that later re-derivation changes the result to `verified` or `refuted`. Contributors still have to infer what enough evidence looks like and how a false lead should be recorded.
+The findings guide defines the required fields and explains that a merged finding starts as `claimed`, then changes to `verified` or `refuted` only after Ambrose re-derives it. It does not yet show both completed outcomes side by side. The examples must show all fields the checker requires for each status: `verified_by`, `verified_on` and `verified_how`, or `refuted_by`, `refuted_on` and `refuted_how`.
 
-This proposal adds two small, synthetic examples to the findings documentation:
+## Proposed change
 
-1. a claim that survives a repeatable check and is marked `verified`; and
-2. a plausible claim whose check fails and is marked `refuted`.
+Add two clearly labelled teaching examples to `contrib/findings/README.md`. Keep them in the guide rather than `contrib/findings/`, because they are not claims about Wizard101 and must not be mistaken for findings the project can cite.
 
-The examples must be clearly labelled as teaching examples. They must not describe real Wizard101 behavior, use a real client revision as evidence, or be cited by a roadmap milestone.
+Base the examples on existing synthetic frame tests so they are repeatable without a client, installation, capture, database, network connection or external source. The `revision` below is a schema-shaped synthetic placeholder, not a real client revision and not a value to copy into a real finding.
 
-## Example 1: verified
+### Verified example
 
-Use a harmless protocol-shaped fixture rather than a client message:
+This example demonstrates a narrow claim and an observed passing check. It describes only the synthetic input in the named Ambrose test, not retail-client behavior.
 
 ```json
 {
-  "subject": "Synthetic fixture field width",
+  "subject": "Synthetic frame control flag",
   "area": "protocol",
-  "claim": "The synthetic fixture's mode field occupies three bits and accepts values from 0 through 7.",
-  "revision": "r000000.Synthetic_0_0",
+  "claim": "The synthetic frame input with control flag 2 is rejected as BadControlFlag.",
+  "revision": "r0.Synthetic_FrameTest",
   "method": "experiment",
   "how_to_repeat": [
-    "Create the repository's synthetic fixture with the documented three-bit mode field.",
-    "Run the focused fixture test with values 0 and 7, then run it with value 8.",
-    "Inspect the test result and the encoded field width without copying any fixture bytes into the finding."
+    "Build the unit test executable using the repository's documented CMake preset.",
+    "Run `unit_tests --gtest_filter=FrameTest.ProtocolErrorsStopTheStream`.",
+    "Check that the input with control flag 2 produces FrameError::BadControlFlag."
   ],
   "evidence": [
-    "The focused test accepts values 0 and 7.",
-    "The focused test rejects value 8.",
-    "The decoder reports a three-bit field for mode."
+    "FrameTest.ProtocolErrorsStopTheStream passed.",
+    "Its assertion expects the synthetic input with control flag 2 to produce FrameError::BadControlFlag."
   ],
-  "disproof": "A focused fixture test that accepts 8, rejects a value from 0 through 7, or reports a field width other than three bits.",
+  "disproof": "The focused test fails, or the same synthetic input is accepted or produces a different frame error.",
   "confidence": "high",
   "submitted_by": "example only",
-  "submitted_on": "2026-09-19",
+  "submitted_on": "2026-09-27",
   "status": "verified",
-  "verified_by": "Synthetic fixture validation",
-  "verified_on": "2026-09-19",
-  "verified_how": "The focused test accepted the stated boundary values, rejected 8, and reported the expected three-bit width."
+  "verified_by": "FrameTest.ProtocolErrorsStopTheStream",
+  "verified_on": "2026-09-27",
+  "verified_how": "The focused unit test passed and asserted BadControlFlag for the specified synthetic input."
 }
 ```
 
-The important pattern is not the fixture itself. The claim is bounded, the steps name the check, the evidence reports observations rather than intentions, and the disproof gives a result that would change the conclusion.
+### Refuted example
 
-## Example 2: refuted
-
-Use a second synthetic fixture to show that a failed claim remains valuable:
+This example shows a plausible overgeneralization and the concrete counterexample that disproves it. It describes only the synthetic inputs in the named Ambrose test, not the retail protocol.
 
 ```json
 {
-  "subject": "Synthetic fixture terminator",
+  "subject": "Synthetic frame message count",
   "area": "protocol",
-  "claim": "The synthetic fixture always ends with a zero-valued terminator byte.",
-  "revision": "r000000.Synthetic_0_0",
+  "claim": "Every synthetic DML frame contains exactly one DML message.",
+  "revision": "r0.Synthetic_FrameTest",
   "method": "experiment",
   "how_to_repeat": [
-    "Create the repository's synthetic fixture with the normal encoder.",
-    "Decode several fixtures with the focused fixture test.",
-    "Record the final byte value reported by the test without copying the fixture bytes into the finding."
+    "Build the unit test executable using the repository's documented CMake preset.",
+    "Run `unit_tests --gtest_filter=FrameTest.ChainedDmlMessagesSplitInOrder`.",
+    "Check the assertions for the decoded message counts and order."
   ],
   "evidence": [
-    "The first fixture ended with a zero-valued byte.",
-    "A fixture containing an optional field ended with a non-zero value.",
-    "The decoder accepted both fixtures without treating the final byte as a terminator."
+    "FrameTest.ChainedDmlMessagesSplitInOrder passed.",
+    "The test decodes a frame containing three DML messages and separately asserts that another frame contains two."
   ],
-  "disproof": "A fixture whose final byte is non-zero while decoding succeeds, or decoder behavior showing that the final byte is not required to be zero.",
+  "disproof": "A successful decode of any synthetic DML frame containing more than one message disproves the one-message claim.",
   "confidence": "high",
   "submitted_by": "example only",
-  "submitted_on": "2026-09-19",
+  "submitted_on": "2026-09-27",
   "status": "refuted",
-  "refuted_how": "The optional-field fixture decoded successfully with a non-zero final byte, so the claimed terminator rule was false."
+  "refuted_by": "FrameTest.ChainedDmlMessagesSplitInOrder",
+  "refuted_on": "2026-09-27",
+  "refuted_how": "The test successfully decoded frames containing three and two messages, so the claim that every frame contains exactly one is false."
 }
 ```
-
-The refuted example should remain in the documentation as a model for recording a useful false lead. It must not be presented as a fact about the game or cited as protocol evidence.
 
 ## Rules for the examples
 
-- Mark synthetic subjects, revisions, submitters, and evidence as examples so nobody mistakes them for findings about a client.
-- Keep the fields valid for the findings checker, including the status-specific verification or refutation fields.
-- Do not include client bytes, archive entries, captures, credentials, or copied text.
-- State the cheapest experiment that could disprove the claim.
-- Keep a verified example from becoming a guarantee: it is verified only against the named synthetic fixture and check.
-- Keep a refuted example visible instead of deleting it; its value is showing how a plausible claim is corrected.
+- Keep both examples visibly labelled as synthetic teaching material and do not cite them as evidence about Wizard101.
+- Preserve the status-specific fields required by `apps/ci/ci_findings.py`.
+- A real finding must replace the synthetic revision with the revision actually observed and report only evidence someone actually collected.
+- Name the check and the result it asserts; a test name alone is not enough evidence.
+- Do not add captures, client files, protocol bytes or output copied from a client.
 
-## Cheapest disproof of this proposal
+## Cheapest disproof
 
-Run `python apps/ci/ci_findings.py` against the proposed examples and ask a contributor unfamiliar with the findings guide to explain which example is verified, which is refuted, what evidence supports each, and what would disprove each. If the checker rejects the status-specific fields or the reader cannot distinguish the examples from real game findings, this proposal needs revision before implementation.
+Run the two named unit tests. If either test is absent, fails, or no longer asserts the behavior described, the corresponding example is unsupported and must be updated before it is added to the guide. Validate both JSON objects with `python apps/ci/ci_findings.py --paths <example paths>`; if the checker rejects either object, it does not match the findings format.
 
 ## Dependencies and cost
 
-The implementation needs only the existing findings guide, its checker, and a small documentation change. It does not need a client installation, a packet capture, a database, a server build, or any external source. The examples should be added to the guide in the same pull request so the proposal does not alter the findings schema or checker.
+This documentation-only proposal belongs in `contrib/proposals/`. Its implementation would edit only `contrib/findings/README.md`, which the contributor track allows, and would leave the finding schema and checker unchanged. Neither the proposal nor its examples require starting Wizard101 or accessing a client installation.
 
 ## Acceptance
 
-The proposal is ready for implementation when a maintainer can point to one findings-guide section that:
+The proposal is ready for implementation when the findings guide contains:
 
-- contains one clearly synthetic verified example;
-- contains one clearly synthetic refuted example;
-- shows the required status-specific fields;
-- gives repeatable evidence and a concrete disproof for each;
-- contains no client-derived data or copied external material; and
-- leaves the findings schema and checker unchanged.
+- one synthetic verified example with all required verification fields;
+- one synthetic refuted example with all required refutation fields;
+- repeatable checks and concrete evidence for both outcomes;
+- a clear warning that neither example is evidence about Wizard101; and
+- no client-derived data, captured bytes or copied external material.
