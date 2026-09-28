@@ -1,0 +1,41 @@
+{
+  "title": "C-77: a ban before sign-in shows why login was refused",
+  "include": "parts/common.json",
+  "notes": [
+    "The driver creates the disposable account before these steps.",
+    "The console ban precedes the first authentication attempt; the client log identifies its ban message as GUI_AccountBannedTime.",
+    "The ban dialog is captured directly because its taller message does not match the existing invalid-login crop."
+  ],
+  "server_log_allowed": [
+    "Character creation: character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "steps": [
+    {"action": "wait_client_log", "name": "the client brings its renderer up",
+     "pattern": "About to initialize graphical client\\.", "timeout": 180},
+    {"action": "wait_screen", "name": "the login window is on the screen", "screens": ["login"], "timeout": 120},
+    {"action": "server_command", "name": "ban the account before its first sign-in",
+     "command": "account ban {user} 1h C-77-test",
+     "pattern": "Account {user} banned until", "timeout": 20},
+    {"action": "submit_login", "name": "submit the banned account's password", "password": "{password}"},
+    {"action": "wait_client_log", "name": "the client sends its authentication request",
+     "pattern": "Send MSG_USER_AUTHEN to Login Server", "timeout": 30},
+    {"action": "wait_server_log", "name": "the server reads the authentication message",
+     "pattern": "LOGIN MSG_USER_AUTHEN_V3 \\(\\d+:\\d+\\) from session \\d+", "timeout": 20},
+    {"action": "wait_server_log", "name": "the server refuses the banned account",
+     "pattern": "failed to authenticate as {user}: the account is banned; sent MSG_USER_AUTHEN_RSP Error=(\\S+)",
+     "timeout": 20, "expect": "AccountBanned"},
+    {"action": "wait_client_log", "name": "the client receives a non-success response",
+     "pattern": "LOGIN RESPONSE: Error=(-?\\d+)", "timeout": 30, "reject": "0", "record": true},
+    {"action": "wait_client_log", "name": "the client chooses a refusal message",
+     "pattern": "msg string key = (\\S+?),", "timeout": 20,
+     "expect": "GUI_AccountBannedTime", "record": true},
+    {"action": "shot", "name": "the client shows why the account was refused",
+     "file": "banned-account-refusal"},
+    {"action": "forbid_log", "name": "the client is never admitted or sent to character select",
+     "side": "client",
+     "pattern": "The LoginServer has admitted the user|WizardCharacterSelect: The scene has been loaded successfully\\."},
+    {"action": "forbid_log", "name": "the server never authenticates the banned account",
+     "side": "server", "pattern": "authenticated as {user} \\(id \\d+\\)"}
+  ]
+}
