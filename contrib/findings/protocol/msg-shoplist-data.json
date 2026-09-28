@@ -1,0 +1,27 @@
+{
+  "subject": "MSG_SHOPLIST.Data",
+  "area": "protocol",
+  "claim": "MSG_SHOPLIST.Data is a binary-serialized WizShopOffering object. WizShopOffering has eight properties: m_shopList (gid list), m_recipeList (string list), m_shopTitle (string), m_sellModifier (float), m_shopType (int), m_CSRTestShop (bool), m_furnitureShop (int), and m_activeHolidayList (string list).",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Build a type dump from your own r806919.Wizard_1_610 install with `typeextract --client <install> --out <dump.json>`.",
+    "Run `client --client <install> --type-dump <dump.json> messages MSG_ShopList` and confirm that Data is declared TYPE=STR.",
+    "Run `client --client <install> --type-dump <dump.json> handlers MSG_SHOPLIST` to find WizardClientModules::MSG_ShopList, then run `client --client <install> --type-dump <dump.json> disasm <handler address>` to see it send the OpenShoppingWindow event.",
+    "Run `client --client <install> --type-dump <dump.json> strings OpenShoppingWindow` to find WizardGUIManager::HandleOpenShoppingWindow and its failed-to-deserialize-Data diagnostic, then disassemble that function.",
+    "Confirm that the GUI handler converts Data to a string, passes it to SerializerBinary::Load, and reads fields at offsets 0x68, 0x88, 0x8c, 0x90 and 0x94.",
+    "Run `client --client <install> --type-dump <dump.json> types WizShopOffering` and compare its m_shopTitle, m_sellModifier, m_shopType, m_CSRTestShop and m_furnitureShop field offsets and types with the handler's accesses."
+  ],
+  "evidence": [
+    "WizardMessages.xml declares MSG_SHOPLIST.Data as TYPE=STR.",
+    "The client registers WizardClientModules::MSG_ShopList as the message handler; it sends the OpenShoppingWindow event.",
+    "The OpenShoppingWindow consumer is WizardGUIManager::HandleOpenShoppingWindow, which calls DMLField::ToStr on Data and loads the resulting string with SerializerBinary::Load.",
+    "The consumer accesses the deserialized object at offsets 0x68, 0x88, 0x8c, 0x90 and 0x94. The type dump identifies those offsets in WizShopOffering as m_shopTitle (string), m_sellModifier (float), m_shopType (int), m_CSRTestShop (bool) and m_furnitureShop (int), respectively.",
+    "The type dump lists eight WizShopOffering properties: m_shopList, m_recipeList, m_shopTitle, m_sellModifier, m_shopType, m_CSRTestShop, m_furnitureShop and m_activeHolidayList."
+  ],
+  "disproof": "A same-revision client handler that deserializes MSG_SHOPLIST.Data into a different class, or a type dump whose field types and offsets do not match the fields the handler reads.",
+  "confidence": "high",
+  "submitted_by": "MeruneFleuruwu",
+  "submitted_on": "2026-09-28",
+  "status": "claimed"
+}
