@@ -1,0 +1,261 @@
+{
+  "subject": "QST-2 property flag masks",
+  "area": "quests",
+  "claim": "In the r806919.Wizard_1_610 type dump, the properties carrying masks 1, 4, and 16 on the listed QST-2 quest, goal, reward, service, and dialog classes are exactly those recorded in class_property_flags.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Run typeextract against your own r806919 client installation and write a version-2 type dump.",
+    "For each class named in class_property_flags, run the client types query against that dump and record each property's numeric flags value.",
+    "For each property, test the numeric flags value against masks 1, 4, and 16; compare the complete matching property sets and exact flags values with class_property_flags.",
+    "Confirm the flag names for those masks in src/server/shared/ObjectProperty/PropertyFlags.h: Save is bit 0, Public is bit 2, and AuthorityTransmit is bit 4."
+  ],
+  "evidence": [
+    "The local typeextract version-2 dump identifies revision r806919.Wizard_1_610 and contains 6,986 class entries; its SHA-256 is AA18B288B04DF8BD4854F9B02C0850645CE58ED4B710E4292A8EA0706E4135BF.",
+    "The dump reports 36 properties on QuestTemplate (hash 276946680, 0x1081def8) and 6 properties on ActorDialog (hash 971222955, 0x39e3afab).",
+    "The dump contains each of the 26 named classes and the recorded property counts. Each map groups every property carrying at least one queried bit under its exact numeric flags value; membership is determined with flags & 1, flags & 4, or flags & 16.",
+    "PropertyFlags.h maps bit 0 to Save, bit 2 to Public, and bit 4 to AuthorityTransmit, corresponding to the requested numeric masks 1, 4, and 16."
+  ],
+  "disproof": "A fresh type dump from the same client revision yields a different class hash, property count, or exact flags value for any listed property, or reveals a property carrying one of the masks that is absent from the corresponding class map.",
+  "confidence": "high",
+  "submitted_by": "johil",
+  "submitted_on": "2026-09-28",
+  "status": "claimed",
+  "dump_sha256": "AA18B288B04DF8BD4854F9B02C0850645CE58ED4B710E4292A8EA0706E4135BF",
+  "queried_masks": {
+    "1": "Save",
+    "4": "Public",
+    "16": "AuthorityTransmit"
+  },
+  "class_property_flags": {
+    "class QuestTemplate": {
+      "hash": 276946680,
+      "property_count": 36,
+      "properties": {
+        "7": ["m_behaviors", "m_questName", "m_questNameID", "m_startGoals", "m_goals", "m_startResults", "m_endResults", "m_requirements", "m_prepRequirements", "m_pruneRequirements", "m_prepAlways", "m_clientTags", "m_goalLogic", "m_questLevel", "m_questRepeat", "m_onStartQuestScript", "m_onEndQuestScript", "m_dialogList", "m_missionDoors", "m_dynaMods", "m_isHidden", "m_outdated", "m_noQuestHelper", "m_mainline", "m_defaultDialogAnimation", "m_skipQHAutoSelect", "m_questEffectInfoList", "m_forceInteraction", "m_checkInventoryForCrafting", "m_playAsYourPetNPC"],
+        "2097159": ["m_activityType"],
+        "8388615": ["m_questTitle", "m_questInfo", "m_questPrep", "m_questUnderway", "m_questComplete"]
+      }
+    },
+    "class GoalTemplate": {
+      "hash": 1068979478,
+      "property_count": 26,
+      "properties": {
+        "7": ["m_behaviors", "m_goalName", "m_goalNameID", "m_completeResults", "m_goalRequirements", "m_tallyCounter", "m_clientTags", "m_genericEvents", "m_autoQualify", "m_autoComplete", "m_dialogList", "m_noQuestHelper", "m_petOnlyQuest", "m_activateResults", "m_hideGoalFloatyText", "m_hideGoal", "m_requiresMagicWeavingSchool"],
+        "131079": ["m_displayImage1", "m_displayImage2"],
+        "2097159": ["m_goalType"],
+        "8388615": ["m_goalTitle", "m_goalUnderway", "m_hyperlink", "m_completeText", "m_locationName"],
+        "268435463": ["m_destinationZone"]
+      }
+    },
+    "class PersonaGoalTemplate": {
+      "hash": 430933174,
+      "property_count": 28,
+      "properties": {
+        "7": ["m_behaviors", "m_goalName", "m_goalNameID", "m_completeResults", "m_goalRequirements", "m_tallyCounter", "m_clientTags", "m_genericEvents", "m_autoQualify", "m_autoComplete", "m_dialogList", "m_noQuestHelper", "m_petOnlyQuest", "m_activateResults", "m_hideGoalFloatyText", "m_hideGoal", "m_requiresMagicWeavingSchool", "m_usePatron"],
+        "131079": ["m_displayImage1", "m_displayImage2"],
+        "2097159": ["m_goalType"],
+        "8388615": ["m_goalTitle", "m_goalUnderway", "m_hyperlink", "m_completeText", "m_locationName"],
+        "268435463": ["m_destinationZone", "m_personaName"]
+      }
+    },
+    "class BountyGoalTemplate": {
+      "hash": 429200250,
+      "property_count": 29,
+      "properties": {
+        "7": ["m_behaviors", "m_goalName", "m_goalNameID", "m_completeResults", "m_goalRequirements", "m_tallyCounter", "m_clientTags", "m_genericEvents", "m_autoQualify", "m_autoComplete", "m_dialogList", "m_noQuestHelper", "m_petOnlyQuest", "m_activateResults", "m_hideGoalFloatyText", "m_hideGoal", "m_requiresMagicWeavingSchool", "m_npcAdjectives", "m_bountyTotal"],
+        "131079": ["m_displayImage1", "m_displayImage2"],
+        "2097159": ["m_goalType", "m_bountyType"],
+        "8388615": ["m_goalTitle", "m_goalUnderway", "m_hyperlink", "m_completeText", "m_locationName"],
+        "268435463": ["m_destinationZone"]
+      }
+    },
+    "class ScavengeGoalTemplate": {
+      "hash": 1021238115,
+      "property_count": 28,
+      "properties": {
+        "7": ["m_behaviors", "m_goalName", "m_goalNameID", "m_completeResults", "m_goalRequirements", "m_tallyCounter", "m_clientTags", "m_genericEvents", "m_autoQualify", "m_autoComplete", "m_dialogList", "m_noQuestHelper", "m_petOnlyQuest", "m_activateResults", "m_hideGoalFloatyText", "m_hideGoal", "m_requiresMagicWeavingSchool", "m_itemAdjectives", "m_itemTotal"],
+        "131079": ["m_displayImage1", "m_displayImage2"],
+        "2097159": ["m_goalType"],
+        "8388615": ["m_goalTitle", "m_goalUnderway", "m_hyperlink", "m_completeText", "m_locationName"],
+        "268435463": ["m_destinationZone"]
+      }
+    },
+    "class WaypointGoalTemplate": {
+      "hash": 1351220400,
+      "property_count": 30,
+      "properties": {
+        "7": ["m_behaviors", "m_goalName", "m_goalNameID", "m_completeResults", "m_goalRequirements", "m_tallyCounter", "m_clientTags", "m_genericEvents", "m_autoQualify", "m_autoComplete", "m_dialogList", "m_noQuestHelper", "m_petOnlyQuest", "m_activateResults", "m_hideGoalFloatyText", "m_hideGoal", "m_requiresMagicWeavingSchool", "m_zoneEntry", "m_zoneTag", "m_proximityTag", "m_zoneExit"],
+        "131079": ["m_displayImage1", "m_displayImage2"],
+        "2097159": ["m_goalType"],
+        "8388615": ["m_goalTitle", "m_goalUnderway", "m_hyperlink", "m_completeText", "m_locationName"],
+        "268435463": ["m_destinationZone"]
+      }
+    },
+    "class AchieveRankGoalTemplate": {
+      "hash": 1439813663,
+      "property_count": 27,
+      "properties": {
+        "7": ["m_behaviors", "m_goalName", "m_goalNameID", "m_completeResults", "m_goalRequirements", "m_tallyCounter", "m_clientTags", "m_genericEvents", "m_autoQualify", "m_autoComplete", "m_dialogList", "m_noQuestHelper", "m_petOnlyQuest", "m_activateResults", "m_hideGoalFloatyText", "m_hideGoal", "m_requiresMagicWeavingSchool", "m_rank"],
+        "131079": ["m_displayImage1", "m_displayImage2"],
+        "2097159": ["m_goalType"],
+        "8388615": ["m_goalTitle", "m_goalUnderway", "m_hyperlink", "m_completeText", "m_locationName"],
+        "268435463": ["m_destinationZone"]
+      }
+    },
+    "class GoalCompleteLogic": {
+      "hash": 184230721,
+      "property_count": 5,
+      "properties": {
+        "7": ["m_goalsAND", "m_goalsOR", "m_goalsToAdd", "m_completeQuest", "m_requiredORCount"]
+      }
+    },
+    "class TallyCounterTemplate": {
+      "hash": 1240028178,
+      "property_count": 5,
+      "properties": {
+        "7": ["m_percentChance", "m_count", "m_tallyResults"],
+        "8388615": ["m_descriptor", "m_descriptor2"]
+      }
+    },
+    "class GoalEntry": {
+      "hash": 1568319405,
+      "property_count": 10,
+      "properties": {
+        "31": ["m_serviceName", "m_iconKey", "m_displayKey", "m_serviceIndex", "m_forceInteract", "m_questID", "m_goalID", "m_goalTitle", "m_questTitle", "m_goalNameID"]
+      }
+    },
+    "class GoalEntryFull": {
+      "hash": 1689163694,
+      "property_count": 24,
+      "properties": {
+        "31": ["m_serviceName", "m_iconKey", "m_displayKey", "m_serviceIndex", "m_forceInteract", "m_questID", "m_goalID", "m_goalTitle", "m_questTitle", "m_goalNameID", "m_personaName", "m_goalType", "m_goalStatus", "m_goalCount", "m_goalTotal", "m_useTally", "m_tallyText", "m_tallyText2", "m_goalLocation", "m_goalDestinationZone", "m_goalImage1", "m_goalImage2", "m_clientTags", "m_goalMadlibs"]
+      }
+    },
+    "class GoalCompilation": {
+      "hash": 1663158128,
+      "property_count": 1,
+      "properties": {
+        "31": ["m_goals"]
+      }
+    },
+    "class LootInfoList": {
+      "hash": 1214710570,
+      "property_count": 3,
+      "properties": {
+        "31": ["m_loot", "m_goldInfo", "m_lootRarityList"]
+      }
+    },
+    "class GoldLootInfo": {
+      "hash": 461650270,
+      "property_count": 2,
+      "properties": {
+        "31": ["m_goldAmount"],
+        "2097183": ["m_lootType"]
+      }
+    },
+    "class MagicXPLootInfo": {
+      "hash": 1701545865,
+      "property_count": 3,
+      "properties": {
+        "31": ["m_magicSchool", "m_experience"],
+        "2097183": ["m_lootType"]
+      }
+    },
+    "class ItemLootInfo": {
+      "hash": 1685778299,
+      "property_count": 3,
+      "properties": {
+        "31": ["m_numItems"],
+        "2097183": ["m_lootType"],
+        "33554463": ["m_itemID"]
+      }
+    },
+    "class AddSpellLootInfo": {
+      "hash": 135479856,
+      "property_count": 4,
+      "properties": {
+        "31": ["m_internalName", "m_spellID"],
+        "2097183": ["m_lootType"],
+        "268435487": ["m_spellName"]
+      }
+    },
+    "class ServiceMementoBase": {
+      "hash": 1846355199,
+      "property_count": 9,
+      "properties": {
+        "31": ["m_serviceOptions", "m_personaMadlibs", "m_npcNameKey", "m_npcTextKey", "m_npcIcon", "m_npcGreetingSound", "m_npcFarewellSound", "m_bTurnPlayerToFace", "m_clickToInteractOnly"]
+      }
+    },
+    "class PrepEntry": {
+      "hash": 1653005502,
+      "property_count": 6,
+      "properties": {
+        "31": ["m_serviceName", "m_iconKey", "m_displayKey", "m_serviceIndex", "m_forceInteract", "m_prepText"]
+      }
+    },
+    "class InteractableOption": {
+      "hash": 497734595,
+      "property_count": 6,
+      "properties": {
+        "31": ["m_serviceName", "m_iconKey", "m_displayKey", "m_serviceIndex", "m_forceInteract", "m_optionIndex"]
+      }
+    },
+    "class ActorDialog": {
+      "hash": 971222955,
+      "property_count": 6,
+      "properties": {
+        "7": ["m_dialogEvents", "m_noAggroWhileDialogIsUp", "m_noAggroNoDelay"],
+        "31": ["m_dialogTag", "m_dialogEntries", "m_madlibs"]
+      }
+    },
+    "class ActorDialogList": {
+      "hash": 1738298685,
+      "property_count": 1,
+      "properties": {
+        "7": ["m_dialogs"]
+      }
+    },
+    "class ActorDialogEntry": {
+      "hash": 88283298,
+      "property_count": 59,
+      "properties": {
+        "31": ["m_action", "m_dialogEvent", "m_cameraName", "m_interpolationDuration", "m_cameraOffsetX", "m_cameraOffsetY", "m_cameraOffsetZ", "m_pitch", "m_yaw", "m_roll", "m_cameraShakeType", "m_cameraShakeDuration", "m_cameraShakeAmplitude", "m_bypassCameraOnReview", "m_duration", "m_idleAnimation", "m_meetsRequirements"],
+        "263": ["m_requirements"],
+        "287": ["m_cameraZoneName", "m_delay", "m_cameraHidePlayers", "m_walkAwayExitDirectionInDegrees", "m_walkAwayFadeTime", "m_walkAwayUseCurrentFacing", "m_standInPlayerTag", "m_fadeOutCamera", "m_snapCameraToPlayerAtExit", "m_secondaryCameraName", "m_secondaryInterpolationDuration", "m_npcStandInList", "m_dialogAnimationList", "m_dialogTurningList", "m_npcYawOffsetInDegrees", "m_allowPlayerToMove", "m_soundEffectFile", "m_musicFile", "m_nonStackableMusic", "m_nonRepeatableMusic", "m_playMusicAtSFXVolume", "m_soundEffectDelay", "m_musicDelay", "m_musicFadeTime", "m_dontReleaseCameraAtExit", "m_disableBackButton", "m_enableExitButton", "m_cameraFadeType", "m_cameraFadeTime", "m_spamTime", "m_playSoundIfSpamming", "m_playMusicIfSpamming", "m_stopMusicFadeTime", "m_restartMusicFadeTime", "m_secondaryCameraInitalDelay", "m_displayButtonsOnTimedDialog"],
+        "131103": ["m_picture", "m_soundFile"],
+        "8388639": ["m_dialog"],
+        "33554463": ["m_actorTemplateID"],
+        "33554719": ["m_walkAwayNpcTemplateID"]
+      }
+    },
+    "class NPCDialogEntry": {
+      "hash": 1502144961,
+      "property_count": 65,
+      "properties": {
+        "31": ["m_action", "m_dialogEvent", "m_cameraName", "m_interpolationDuration", "m_cameraOffsetX", "m_cameraOffsetY", "m_cameraOffsetZ", "m_pitch", "m_yaw", "m_roll", "m_cameraShakeType", "m_cameraShakeDuration", "m_cameraShakeAmplitude", "m_bypassCameraOnReview", "m_duration", "m_idleAnimation", "m_meetsRequirements", "m_nameSTKey", "m_maxTimeSeconds", "m_invisible"],
+        "263": ["m_requirements"],
+        "287": ["m_cameraZoneName", "m_delay", "m_cameraHidePlayers", "m_walkAwayExitDirectionInDegrees", "m_walkAwayFadeTime", "m_walkAwayUseCurrentFacing", "m_standInPlayerTag", "m_fadeOutCamera", "m_snapCameraToPlayerAtExit", "m_secondaryCameraName", "m_secondaryInterpolationDuration", "m_npcStandInList", "m_dialogAnimationList", "m_dialogTurningList", "m_npcYawOffsetInDegrees", "m_allowPlayerToMove", "m_soundEffectFile", "m_musicFile", "m_nonStackableMusic", "m_nonRepeatableMusic", "m_playMusicAtSFXVolume", "m_soundEffectDelay", "m_musicDelay", "m_musicFadeTime", "m_dontReleaseCameraAtExit", "m_disableBackButton", "m_enableExitButton", "m_cameraFadeType", "m_cameraFadeTime", "m_spamTime", "m_playSoundIfSpamming", "m_playMusicIfSpamming", "m_stopMusicFadeTime", "m_restartMusicFadeTime", "m_secondaryCameraInitalDelay", "m_displayButtonsOnTimedDialog"],
+        "131103": ["m_picture", "m_soundFile", "m_guiDisplay"],
+        "8388639": ["m_dialog", "m_nameOverride"],
+        "33554463": ["m_actorTemplateID"],
+        "33554719": ["m_walkAwayNpcTemplateID"],
+        "268435487": ["m_personaName"]
+      }
+    },
+    "class ClientTagList": {
+      "hash": 201320469,
+      "property_count": 1,
+      "properties": {
+        "31": ["m_clientTags"]
+      }
+    },
+    "class AssociatedWorldsList": {
+      "hash": 536105006,
+      "property_count": 1,
+      "properties": {
+        "31": ["m_associatedWorlds"]
+      }
+    }
+  }
+}
