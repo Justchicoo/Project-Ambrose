@@ -5,13 +5,15 @@
   "revision": "r806919.Wizard_1_610",
   "method": "static",
   "how_to_repeat": [
-    "Use the project's client tool with your own install to decode `MagicXPConfig.xml` from `Root.wad`.",
-    "Count the decoded object's m_levelInfo entries, confirm each entry is a MagicLevelInfo, and verify m_level runs from 0 through 180 once each.",
-    "Use the project's client types command with the type dump from that install to inspect class MagicXPConfig and class MagicLevelInfo, including the m_petEnergy property's type."
+    "Run `typeextract --client <install> --out <temporary dump>` against your own r806919 install.",
+    "Run `client wad MagicXPConfig.xml --client <install> --type-dump <temporary dump> --wad Root.wad` and inspect the decoded root class and m_levelInfo rows.",
+    "Run `client types \"class MagicXPConfig\" --client <install> --type-dump <temporary dump>` and `client types \"class MagicLevelInfo\" --client <install> --type-dump <temporary dump>` to inspect both schemas.",
+    "Count m_levelInfo entries, confirm every entry is a MagicLevelInfo with m_petEnergy, and verify m_level lists each integer from 0 through 180 once."
   ],
   "evidence": [
     "The project's client decoder identified the local install as r806919.Wizard_1_610 and decoded Root.wad/MagicXPConfig.xml with root class MagicXPConfig.",
     "The decoded m_levelInfo property contains 181 class MagicLevelInfo rows. Their m_level values are unique and contiguous from 0 through 180.",
+    "Every one of the 181 decoded rows has an m_petEnergy property.",
     "The local type dump identifies class MagicXPConfig as hash 1299811140 with 7 properties; m_levelInfo is a list of class MagicLevelInfo pointers.",
     "The local type dump identifies class MagicLevelInfo as hash 1812555506 with 20 properties, including int m_petEnergy."
   ],
