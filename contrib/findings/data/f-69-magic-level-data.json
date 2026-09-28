@@ -1,0 +1,72 @@
+{
+  "subject": "Pet energy level data source",
+  "area": "data",
+  "claim": "The r806919.Wizard_1_610 client stores its shared level table in Root.wad's MagicXPConfig.xml entry: class MagicXPConfig holds 181 m_levelInfo rows of class MagicLevelInfo, covering levels 0 through 180, and the row schema includes integer m_petEnergy.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Use the project's client tool with your own install to decode `MagicXPConfig.xml` from `Root.wad`.",
+    "Count the decoded object's m_levelInfo entries, confirm each entry is a MagicLevelInfo, and verify m_level runs from 0 through 180 once each.",
+    "Use the project's client types command with the type dump from that install to inspect class MagicXPConfig and class MagicLevelInfo, including the m_petEnergy property's type."
+  ],
+  "evidence": [
+    "The project's client decoder identified the local install as r806919.Wizard_1_610 and decoded Root.wad/MagicXPConfig.xml with root class MagicXPConfig.",
+    "The decoded m_levelInfo property contains 181 class MagicLevelInfo rows. Their m_level values are unique and contiguous from 0 through 180.",
+    "The local type dump identifies class MagicXPConfig as hash 1299811140 with 7 properties; m_levelInfo is a list of class MagicLevelInfo pointers.",
+    "The local type dump identifies class MagicLevelInfo as hash 1812555506 with 20 properties, including int m_petEnergy."
+  ],
+  "disproof": "A fresh decode and type-dump inspection from the same client revision places the shared level table elsewhere, returns a different root or row class, gives a different count or level range, or shows no integer m_petEnergy field on MagicLevelInfo.",
+  "confidence": "high",
+  "submitted_by": "johil",
+  "submitted_on": "2026-09-28",
+  "status": "claimed",
+  "archive": "Root.wad",
+  "entry": "MagicXPConfig.xml",
+  "root_class": {
+    "name": "class MagicXPConfig",
+    "hash": 1299811140,
+    "property_count": 7,
+    "properties": {
+      "m_encounterXPFactors": "float[]",
+      "m_levelInfo": "class MagicLevelInfo*[]",
+      "m_classInfo": "class ClassInfo*[]",
+      "m_maxSchoolLevel": "int",
+      "m_experienceBonus": "float",
+      "m_schoolOfFocusBonus": "float",
+      "m_levelsConfig": "class MobRankLevel*[]"
+    }
+  },
+  "level_table": {
+    "property": "m_levelInfo",
+    "row_count": 181,
+    "first_level": 0,
+    "last_level": 180,
+    "row_class": {
+      "name": "class MagicLevelInfo",
+      "hash": 1812555506,
+      "property_count": 20,
+      "properties": {
+        "m_level": "int",
+        "m_xpToLevel": "int",
+        "m_hitpoints": "int",
+        "m_mana": "int",
+        "m_gold": "int",
+        "m_levelName": "std::string",
+        "m_pipChance": "float",
+        "m_trainingPoints": "int",
+        "m_craftingSlots": "int",
+        "m_petEnergy": "int",
+        "m_pipConversionRatingAllSchools": "int",
+        "m_pipConversionRatingFire": "int",
+        "m_pipConversionRatingIce": "int",
+        "m_pipConversionRatingStorm": "int",
+        "m_pipConversionRatingLife": "int",
+        "m_pipConversionRatingMyth": "int",
+        "m_pipConversionRatingDeath": "int",
+        "m_pipConversionRatingBalance": "int",
+        "m_shadowPipRating": "float",
+        "m_archmastery": "float"
+      }
+    }
+  }
+}
