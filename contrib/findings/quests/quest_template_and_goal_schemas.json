@@ -1,0 +1,174 @@
+{
+  "subject": "QuestTemplate and GoalTemplate schemas",
+  "area": "quests",
+  "claim": "The r806919 type dump defines one QuestTemplate class and five concrete GoalTemplate subclasses, while the installed TemplateManifest has no name matches for any of those seven class names including the GoalTemplate base.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Run typeextract --client <install> --out <temporary dump> against the r806919 install.",
+    "Run client --client <install> --type-dump <temporary dump> --derived types GoalTemplate to list the concrete goal classes.",
+    "Read the properties and types from the exact class records named class QuestTemplate, class GoalTemplate, and each derived class in the dump.",
+    "Run client --client <install> --type-dump <temporary dump> template --list <class name> for QuestTemplate, GoalTemplate, and each derived class; record the reported TemplateManifest match count."
+  ],
+  "evidence": [
+    "A fresh typeextract run produced 6,986 classes and 49,465 properties for r806919.Wizard_1_610.",
+    "The dump has one class record for QuestTemplate (hash 276946680, 36 properties) and one for GoalTemplate (hash 1068979478, 26 properties).",
+    "The dump has one class record each for PersonaGoalTemplate (hash 430933174, 28 properties), BountyGoalTemplate (hash 429200250, 29 properties), ScavengeGoalTemplate (hash 1021238115, 28 properties), WaypointGoalTemplate (hash 1351220400, 30 properties), and AchieveRankGoalTemplate (hash 1439813663, 27 properties).",
+    "client template --list returned 0 name matches for QuestTemplate, GoalTemplate, and each of the five concrete goal class names, from the 137,423 TemplateManifest entries across 27 archives."
+  ],
+  "disproof": "A fresh r806919 type dump changes any recorded class layout or count, or a TemplateManifest query for one of the seven names returns a matching entry.",
+  "confidence": "high",
+  "submitted_by": "MeruneFleuruwu",
+  "submitted_on": "2026-09-28",
+  "status": "claimed",
+  "count_scope": "definition_count counts reflected class records. template_manifest_name_matches counts entries whose TemplateManifest name or path matches the class-name query; it is not a count of serialized quest or goal instances.",
+  "derived_property_scope": "additional_properties lists fields beyond the 26 GoalTemplate properties; property_count includes both inherited and subclass fields.",
+  "template_manifest": {
+    "template_count": 137423,
+    "archive_count": 27,
+    "name_match_counts": {
+      "QuestTemplate": 0,
+      "GoalTemplate": 0,
+      "PersonaGoalTemplate": 0,
+      "BountyGoalTemplate": 0,
+      "ScavengeGoalTemplate": 0,
+      "WaypointGoalTemplate": 0,
+      "AchieveRankGoalTemplate": 0
+    }
+  },
+  "quest_template": {
+    "class_hash": 276946680,
+    "definition_count": 1,
+    "property_count": 36,
+    "properties": [
+      {"name": "m_behaviors", "type": "class BehaviorTemplate*"},
+      {"name": "m_questName", "type": "std::string"},
+      {"name": "m_questNameID", "type": "unsigned int"},
+      {"name": "m_questTitle", "type": "std::string"},
+      {"name": "m_questInfo", "type": "std::string"},
+      {"name": "m_questPrep", "type": "std::string"},
+      {"name": "m_questUnderway", "type": "std::string"},
+      {"name": "m_questComplete", "type": "std::string"},
+      {"name": "m_startGoals", "type": "std::string"},
+      {"name": "m_goals", "type": "class SharedPointer<class GoalTemplate>"},
+      {"name": "m_startResults", "type": "class SharedPointer<class ResultList>"},
+      {"name": "m_endResults", "type": "class SharedPointer<class ResultList>"},
+      {"name": "m_requirements", "type": "class RequirementList*"},
+      {"name": "m_prepRequirements", "type": "class RequirementList*"},
+      {"name": "m_pruneRequirements", "type": "class RequirementList*"},
+      {"name": "m_prepAlways", "type": "bool"},
+      {"name": "m_clientTags", "type": "std::string"},
+      {"name": "m_goalLogic", "type": "class GoalCompleteLogic*"},
+      {"name": "m_questLevel", "type": "int"},
+      {"name": "m_questRepeat", "type": "int"},
+      {"name": "m_onStartQuestScript", "type": "std::string"},
+      {"name": "m_onEndQuestScript", "type": "std::string"},
+      {"name": "m_dialogList", "type": "class ActorDialogListBase*"},
+      {"name": "m_missionDoors", "type": "std::string"},
+      {"name": "m_dynaMods", "type": "class QuestDynaModInfo*"},
+      {"name": "m_isHidden", "type": "bool"},
+      {"name": "m_outdated", "type": "bool"},
+      {"name": "m_noQuestHelper", "type": "bool"},
+      {"name": "m_mainline", "type": "bool"},
+      {"name": "m_defaultDialogAnimation", "type": "std::string"},
+      {"name": "m_skipQHAutoSelect", "type": "bool"},
+      {"name": "m_questEffectInfoList", "type": "class SharedPointer<class GameEffectInfo>"},
+      {"name": "m_forceInteraction", "type": "bool"},
+      {"name": "m_checkInventoryForCrafting", "type": "bool"},
+      {"name": "m_playAsYourPetNPC", "type": "bool"},
+      {"name": "m_activityType", "type": "enum QuestTemplate::ActivityType"}
+    ]
+  },
+  "goal_template": {
+    "class_hash": 1068979478,
+    "definition_count": 1,
+    "property_count": 26,
+    "properties": [
+      {"name": "m_behaviors", "type": "class BehaviorTemplate*"},
+      {"name": "m_goalName", "type": "std::string"},
+      {"name": "m_goalNameID", "type": "unsigned int"},
+      {"name": "m_goalTitle", "type": "std::string"},
+      {"name": "m_goalUnderway", "type": "std::string"},
+      {"name": "m_hyperlink", "type": "std::string"},
+      {"name": "m_completeText", "type": "std::string"},
+      {"name": "m_completeResults", "type": "class ResultList*"},
+      {"name": "m_goalRequirements", "type": "class RequirementList*"},
+      {"name": "m_tallyCounter", "type": "class TallyCounterTemplate*"},
+      {"name": "m_locationName", "type": "std::string"},
+      {"name": "m_displayImage1", "type": "std::string"},
+      {"name": "m_displayImage2", "type": "std::string"},
+      {"name": "m_clientTags", "type": "std::string"},
+      {"name": "m_genericEvents", "type": "std::string"},
+      {"name": "m_autoQualify", "type": "bool"},
+      {"name": "m_autoComplete", "type": "bool"},
+      {"name": "m_destinationZone", "type": "std::string"},
+      {"name": "m_dialogList", "type": "class ActorDialogListBase*"},
+      {"name": "m_goalType", "type": "enum GoalTemplate::GOAL_TYPE"},
+      {"name": "m_noQuestHelper", "type": "bool"},
+      {"name": "m_petOnlyQuest", "type": "bool"},
+      {"name": "m_activateResults", "type": "class ResultList*"},
+      {"name": "m_hideGoalFloatyText", "type": "bool"},
+      {"name": "m_hideGoal", "type": "bool"},
+      {"name": "m_requiresMagicWeavingSchool", "type": "std::string"}
+    ]
+  },
+  "concrete_goal_classes": [
+    {
+      "name": "PersonaGoalTemplate",
+      "class_hash": 430933174,
+      "definition_count": 1,
+      "property_count": 28,
+      "base": "GoalTemplate",
+      "additional_properties": [
+        {"name": "m_personaName", "type": "std::string"},
+        {"name": "m_usePatron", "type": "bool"}
+      ]
+    },
+    {
+      "name": "BountyGoalTemplate",
+      "class_hash": 429200250,
+      "definition_count": 1,
+      "property_count": 29,
+      "base": "GoalTemplate",
+      "additional_properties": [
+        {"name": "m_npcAdjectives", "type": "std::string"},
+        {"name": "m_bountyTotal", "type": "int"},
+        {"name": "m_bountyType", "type": "enum BountyGoalTemplate::BOUNTY_TYPE"}
+      ]
+    },
+    {
+      "name": "ScavengeGoalTemplate",
+      "class_hash": 1021238115,
+      "definition_count": 1,
+      "property_count": 28,
+      "base": "GoalTemplate",
+      "additional_properties": [
+        {"name": "m_itemAdjectives", "type": "std::string"},
+        {"name": "m_itemTotal", "type": "int"}
+      ]
+    },
+    {
+      "name": "WaypointGoalTemplate",
+      "class_hash": 1351220400,
+      "definition_count": 1,
+      "property_count": 30,
+      "base": "GoalTemplate",
+      "additional_properties": [
+        {"name": "m_zoneEntry", "type": "bool"},
+        {"name": "m_zoneTag", "type": "std::string"},
+        {"name": "m_proximityTag", "type": "std::string"},
+        {"name": "m_zoneExit", "type": "bool"}
+      ]
+    },
+    {
+      "name": "AchieveRankGoalTemplate",
+      "class_hash": 1439813663,
+      "definition_count": 1,
+      "property_count": 27,
+      "base": "GoalTemplate",
+      "additional_properties": [
+        {"name": "m_rank", "type": "int"}
+      ]
+    }
+  ]
+}
