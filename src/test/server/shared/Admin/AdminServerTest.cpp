@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the admin API listener on a loopback port the operating system picks: health needs the token and carries the step a start is on, wrong tokens are rate limited while the right one still answers, every /api path answers the same way without one whatever method it carries, whatever upgrade it claims and wherever it falls on a kept-alive connection, a certificate and key are served over TLS with HSTS and reported to the log, a reload swaps the certificate live and keeps the old one when the new pair does not match, a certificate that will not load stops the listener opening, a reload rotates the token without a restart and keeps the old listener when the new port is taken, an unsafe remote bind is refused, WebSocket routes registered before or after the listener opens take the same token and carry frames both ways and close with the code their route chose once the frames before it have gone, a route that admits its own upgrades opens without the token or its permission, keeps the request that opened it and has a refusal logged by its path and never its query, a machine with no data folder keeps its generated token beside the config file, an app reloads the listener from its own config, an app whose admin binding is unsafe exits with a failure, the built panel is served without a token and with the security headers, a browser signs in only from its own origin by trading the token for a cookie named after the port, with each wrong field named beside the request id, the cookie's unsafe requests and socket upgrades need its own origin and CSRF token, signing out and rotating the token end the session, and a host the listener does not answer for is refused.
+ * Tests the admin API listener on a loopback port the operating system picks: health needs the token and carries the step a start is on, wrong tokens are rate limited while the right one still answers, every /api path answers the same way without one whatever method it carries, whatever upgrade it claims and wherever it falls on a kept-alive connection, a certificate and key are served over TLS with HSTS and reported to the log, a reload swaps the certificate live and keeps the old one when the new pair does not match, a certificate that will not load stops the listener opening, a reload rotates the token without a restart and keeps the old listener when the new port is taken, an unsafe remote bind is refused, WebSocket routes registered before or after the listener opens take the same token and carry frames both ways and close with the code their route chose once the frames before it have gone, a route that admits its own upgrades opens without the token or its permission, keeps the request that opened it and has a refusal logged by its path and never its query, a machine with no data folder keeps its generated token beside the config file, an app reloads the listener from its own config, an app whose admin binding is unsafe exits with a failure, the built panel is served without a token and with the security headers, a browser signs in only from its own origin by trading the token for a cookie named after the port, with each wrong field named beside the request id, the cookie's unsafe requests and socket upgrades need its own origin and CSRF token, signing out and rotating the token end the session, a host the listener does not answer for is refused, and a route is handed the query exactly as it was sent beside the decoded values.
  */
 
 #include "AdminClient.h"
@@ -32,6 +32,7 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -1342,4 +1343,29 @@ TEST_F(AdminServerTest, AcceptsASocketUpgradeByCookieOnlyFromItsOwnOrigin)
     EXPECT_EQ(upgrade("").Status, 403);
     EXPECT_EQ(upgrade("http://evil.example").Status, 403);
     EXPECT_EQ(upgrade(OwnOrigin(port)).Status, 101);
+}
+
+TEST_F(AdminServerTest, HandsARouteTheQueryExactlyAsItWasSentBesideTheDecodedValues)
+{
+    AdminServer server = Make();
+    std::mutex seenMutex;
+    std::string raw;
+    std::string decoded;
+    server.Routes().AddGuarded("GET", "/api/echo", "status.read", [&seenMutex, &raw, &decoded](AdminRequest const& request)
+    {
+        std::lock_guard const lock(seenMutex);
+        raw = std::string(request.RawQueryValue("path").value_or("absent"));
+        decoded = std::string(request.Query("sort"));
+        return AdminResponse::Json(200, "{}");
+    });
+    std::string error;
+    ASSERT_TRUE(server.Start(Loopback(), error)) << error;
+    HttpReply const reply = Get(server.GetPort(), "/api/echo?path=%2e%2e%2fx&sort=size%20desc", Token);
+    ASSERT_EQ(reply.Status, 200) << reply.Head;
+    {
+        std::lock_guard const lock(seenMutex);
+        EXPECT_EQ(raw, "%2e%2e%2fx") << "the route decodes the path itself, exactly once";
+        EXPECT_EQ(decoded, "size desc");
+    }
+    server.Stop();
 }

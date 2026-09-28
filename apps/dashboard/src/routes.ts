@@ -9,6 +9,7 @@ import ArchiveIcon from "@lucide/svelte/icons/archive";
 import ChartLineIcon from "@lucide/svelte/icons/chart-line";
 import DatabaseIcon from "@lucide/svelte/icons/database";
 import FileTextIcon from "@lucide/svelte/icons/file-text";
+import FolderIcon from "@lucide/svelte/icons/folder";
 import GaugeIcon from "@lucide/svelte/icons/gauge";
 import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 import GlobeIcon from "@lucide/svelte/icons/globe";
@@ -114,6 +115,15 @@ export const routes: Route[] = [
         nav: true,
         group: "Servers",
         view: { kind: "page", load: () => import("./pages/Config.svelte") },
+    },
+    {
+        path: "files",
+        title: "Files",
+        icon: FolderIcon,
+        permission: "files.list",
+        nav: true,
+        group: "Servers",
+        view: { kind: "page", load: () => import("./pages/Files.svelte") },
     },
     {
         path: "backups",

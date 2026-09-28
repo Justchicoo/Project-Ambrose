@@ -927,7 +927,8 @@ class MilestoneTrackTests(unittest.TestCase):
     def test_the_real_holds_stop_the_real_branches(self):
         kept = ci_contrib_paths.holds(ROOT)
         self.assertTrue(kept)
-        self.assertEqual(ci_contrib_paths.main(["--root", ROOT, "--paths", "src/x.cpp", "--branch", "milestone/17.18-file-roots"]), 1)
+        held = next(hold["scope"].split(":", 1)[1] for hold in kept if hold["scope"].startswith("milestone:"))
+        self.assertEqual(ci_contrib_paths.main(["--root", ROOT, "--paths", "src/x.cpp", "--branch", f"milestone/{held}-held"]), 1)
         self.assertEqual(ci_contrib_paths.main(["--root", ROOT, "--paths", "src/x.cpp", "--branch", "milestone/4.04-world-wire-math"]), 0)
 
     def test_the_checker_and_the_board_read_the_same_holds(self):

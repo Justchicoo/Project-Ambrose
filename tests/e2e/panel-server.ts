@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Starts a real Ambrose app whose admin API serves the built panel, for the end-to-end and screenshot runs, every port counted from AMBROSE_E2E_PORT_BASE, 12600 unless it is set, and the one operator the runs make: the patchserver the C++ build made, or the one AMBROSE_PANEL_APP names, on a port the caller picks with a known token and its logs in a folder of its own, waits until it answers, and stops it again; or the supervisor from the same build, given a folder of its own holding its config and one patchserver to run, so the panel it serves carries another app's state and power buttons that reach it; or the supervisor with its own panel listener on, running one patchserver, with any further config lines the caller adds, such as a two-factor requirement, so the built page can be loaded from the door it will really be opened through and carry an app's state through it, with the one-time link that makes its first operator; or that listener running a real gameserver from a config the caller names, with its databases and client, its admin API and world port moved to ports of the caller's choosing, bound to loopback and logging into the run's own folder, and reached for anything but the browser through the supervisor's own admin API, since the panel listener's token only signs a browser in, with the one-time link to make the panel's first operator read from the supervisor's log and the tail of the gameserver's output kept for a failure to name; every panel keeps its store and its keyring in the run's own folder, so no run reads or writes the keyring of the machine it runs on; a stack that fails to start, or is stopped, leaves no process running and no copy of the caller's config behind.
+ * Starts a real Ambrose app whose admin API serves the built panel, for the end-to-end and screenshot runs, every port counted from AMBROSE_E2E_PORT_BASE, 12600 unless it is set, and the one operator the runs make: the patchserver the C++ build made, or the one AMBROSE_PANEL_APP names, on a port the caller picks with a known token and its logs in a folder of its own, waits until it answers, and stops it again; or the supervisor from the same build, given a folder of its own holding its config and one patchserver to run, so the panel it serves carries another app's state and power buttons that reach it; or the supervisor with its own panel listener on, running one patchserver, with any further config lines the caller adds, such as a two-factor requirement, so the built page can be loaded from the door it will really be opened through and carry an app's state through it, with the one-time link that makes its first operator and the folder holding its config and logs; or that listener running a real gameserver from a config the caller names, with its databases and client, its admin API and world port moved to ports of the caller's choosing, bound to loopback and logging into the run's own folder, and reached for anything but the browser through the supervisor's own admin API, since the panel listener's token only signs a browser in, with the one-time link to make the panel's first operator read from the supervisor's log and the tail of the gameserver's output kept for a failure to name; every panel keeps its store and its keyring in the run's own folder, so no run reads or writes the keyring of the machine it runs on; a stack that fails to start, or is stopped, leaves no process running and no copy of the caller's config behind.
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
@@ -235,6 +235,7 @@ export async function startPanelListener(
     return {
         url,
         claim,
+        folder,
         stop: async () => {
             await stopApp(`http://127.0.0.1:${adminPort}`, folder, "patchserver", "kill");
             child.kill();
@@ -244,7 +245,7 @@ export async function startPanelListener(
     };
 }
 
-export type PanelListener = Panel & { claim: string };
+export type PanelListener = Panel & { claim: string; folder: string };
 export type GameStack = PanelListener & { admin: string; output: () => string };
 
 async function claimLink(folder: string): Promise<string> {
@@ -371,7 +372,7 @@ export async function startGameStack(
             await new Promise((done) => setTimeout(done, 200));
         }
         const claim = await claimLink(folder);
-        return { url, admin, claim, output, stop };
+        return { url, admin, claim, folder, output, stop };
     } catch (failure) {
         await stop();
         throw failure;

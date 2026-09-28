@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * What the panel asks about one app: running a command on it, the supervisor's own routes for power and captured output, and the app's own routes for its status, settings with their changes, resets, batches and their previews, history and reveals, the events it announces, and databases, sent through the supervisor's relay when the supervisor served this panel and straight to the app when the app served it itself, so every page reads the same way whichever is in front of it. A page about something only some apps keep, such as the realm list the login server holds, asks each app once and offers only those that answer, because an app answering that it has no such page is not an app with an empty one; an app run without an admin API has no pages at all and is never offered, while one that is only stopped still is, so its page can say so.
+ * What the panel asks about one app: running a command on it, the supervisor's own routes for power, captured output and the file roots with their listings, reads and protected patterns, and the app's own routes for its status, settings with their changes, resets, batches and their previews, history and reveals, the events it announces, and databases, sent through the supervisor's relay when the supervisor served this panel and straight to the app when the app served it itself, so every page reads the same way whichever is in front of it. A page about something only some apps keep, such as the realm list the login server holds, asks each app once and offers only those that answer, because an app answering that it has no such page is not an app with an empty one; an app run without an admin API has no pages at all and is never offered, while one that is only stopped still is, so its page can say so.
  */
 
 import { ApiError, request } from "./api.svelte";
+import { filesQuery } from "./files";
 import { live } from "./status.svelte";
 import {
     CommandAnswer,
@@ -28,6 +29,10 @@ import {
     SettingHistoryAnswer,
     EventsAnswer,
     PanelSettingsAnswer,
+    FileContent,
+    FileListing,
+    FileRootsAnswer,
+    FileRulesAnswer,
     type AppEntry,
 } from "./schemas";
 
@@ -193,4 +198,40 @@ export function updatesOf(app: string, signal?: AbortSignal) {
 
 export function applyData(app: string, database: string) {
     return request("POST", pathFor(app, "database/apply"), DatabaseApplyAnswer, { database });
+}
+
+export type FileListQuery = { path: string; q?: string; sort?: string; order?: string; offset?: number; limit?: number };
+
+export function fileRoots(signal?: AbortSignal) {
+    return request("GET", "api/files", FileRootsAnswer, undefined, signal);
+}
+
+export function listFiles(root: string, query: FileListQuery, signal?: AbortSignal) {
+    const asked = filesQuery({
+        path: query.path,
+        q: query.q,
+        sort: query.sort,
+        order: query.order,
+        offset: query.offset,
+        limit: query.limit,
+    });
+    return request("GET", `api/files/${encodeURIComponent(root)}/list${asked === "" ? "" : `?${asked}`}`, FileListing, undefined, signal);
+}
+
+export function readFile(root: string, path: string, options: { offset?: number; reveal?: boolean } = {}, signal?: AbortSignal) {
+    const asked = filesQuery({ path, offset: options.offset, reveal: options.reveal });
+    return request("GET", `api/files/${encodeURIComponent(root)}/content?${asked}`, FileContent, undefined, signal);
+}
+
+export function fileRules(root: string, signal?: AbortSignal) {
+    return request("GET", `api/files/${encodeURIComponent(root)}/rules`, FileRulesAnswer, undefined, signal);
+}
+
+export function setFileRules(root: string, patterns: string[], reason: string) {
+    return request(
+        "PUT",
+        `api/files/${encodeURIComponent(root)}/rules`,
+        FileRulesAnswer,
+        reason === "" ? { patterns } : { patterns, reason },
+    );
 }

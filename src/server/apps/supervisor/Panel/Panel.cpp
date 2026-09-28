@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the Panel options into a listener of the same shape as an app's admin API, opens the store and then the keyring before the listener so nothing serves without somewhere to write or the keys its secrets need, names the certificate and key in Panel option names when the bind rule refuses them, and starts, reloads and stops the listener beside the supervisor's own; a reload that would leave the bind unsafe or the certificate unservable, or name a two-factor requirement the panel does not know, is refused and the old listener and requirement keep serving. Signing in also says which role the operator holds and every permission that role allows, so the pages a person cannot use are never drawn for them and the panel never has to ask again what somebody is allowed to do. An operator with two-factor sign-in is given no session for a password alone: the password earns a challenge held in memory under the hash of a short-lived cookie, which dies after a few attempts or minutes, and only a code or a recovery code from that operator turns it into a session, the one-time password link included; an operator who already has two-factor sign-in moves to another authenticator only with a current code or recovery code from the one in use as well as the password and a code from the new one, so a session and a password alone cannot swap the factor out. A code or recovery code is checked and spent under the same lock every recorded change holds, so it never lands inside another request's transaction and is never undone with it. Every authenticated route and socket is held to the two-factor requirement except the routes that turn it on, and a danger permission, a secret reveal or a restricted change asks for a check of who the caller is within the last few minutes, records what that check authorized, and changes nothing while it is missing. A route that asks for a permission the catalog does not hold is left out and named in a warning as the panel starts, so a misnamed key costs its page loudly rather than silently. A settings change, reset, batch or reload an app answered through the relay is recorded, a dry run not being a change, with who asked, from where, why and how it ended, refused ones too, and a read that showed a secret is recorded with the keys it showed, never a value; no code, secret or password ever reaches an audit row or a log line. The event socket and its ticket route are registered with the rest, its streams and its sweeper start once the listener is up and stop before it closes.
+ * Reads the Panel options into a listener of the same shape as an app's admin API, opens the store and then the keyring before the listener so nothing serves without somewhere to write or the keys its secrets need, lends that store under its own lock to the supervisor's live settings and to an owner's protected file patterns, which are saved in the same transaction as the audit row naming who changed them, names the certificate and key in Panel option names when the bind rule refuses them, and starts, reloads and stops the listener beside the supervisor's own; a reload that would leave the bind unsafe or the certificate unservable, or name a two-factor requirement the panel does not know, is refused and the old listener and requirement keep serving. Signing in also says which role the operator holds and every permission that role allows, so the pages a person cannot use are never drawn for them and the panel never has to ask again what somebody is allowed to do. An operator with two-factor sign-in is given no session for a password alone: the password earns a challenge held in memory under the hash of a short-lived cookie, which dies after a few attempts or minutes, and only a code or a recovery code from that operator turns it into a session, the one-time password link included; an operator who already has two-factor sign-in moves to another authenticator only with a current code or recovery code from the one in use as well as the password and a code from the new one, so a session and a password alone cannot swap the factor out. A code or recovery code is checked and spent under the same lock every recorded change holds, so it never lands inside another request's transaction and is never undone with it. Every authenticated route and socket is held to the two-factor requirement except the routes that turn it on, and a danger permission, a secret reveal or a restricted change asks for a check of who the caller is within the last few minutes, records what that check authorized, and changes nothing while it is missing. A route that asks for a permission the catalog does not hold is left out and named in a warning as the panel starts, so a misnamed key costs its page loudly rather than silently. A settings change, reset, batch or reload an app answered through the relay is recorded, a dry run not being a change, with who asked, from where, why and how it ended, refused ones too, and a read that showed a secret is recorded with the keys it showed, never a value; no code, secret or password ever reaches an audit row or a log line. The event socket and its ticket route are registered with the rest, its streams and its sweeper start once the listener is up and stop before it closes.
  */
 
 #include "Panel.h"
 #include "AdminConfigView.h"
 #include "ConfigMgr.h"
+#include "PanelSettingStore.h"
 #include "ConstantTime.h"
 #include "CryptoRandom.h"
 #include "Base64.h"
@@ -77,7 +78,7 @@ namespace
 
 Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path configFolder)
     : _log(log), _dataFolder(std::move(dataFolder)), _store(), _settings(_store), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _keyring(),
-      _twoFactor(_store, _keyring), _listener(log, "panel", _dataFolder, std::move(configFolder))
+      _twoFactor(_store, _keyring), _fileRules(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
 {
     _listener.Routes().SetThrottle([this](AdminRequest const& request, uint32 cost) { return Throttle(request, cost); });
     _listener.SetSessionSource(&_sessions);
@@ -96,6 +97,7 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     _listener.Routes().SetAdmission([this](AdminRequest const& request) { return Admit(request); });
     _listener.Routes().SetStepUp([this](AdminRequest const& request, std::string_view permission, StepUpWhen when) { return StepUpCheck(request, permission, when); });
     _secondFactor.SetLimits(PanelTwoFactorSettings::DefaultFailureLimit, std::chrono::minutes(PanelTwoFactorSettings::DefaultFailureWindowMinutes));
+    _settingStore = std::make_shared<PanelSettingStore>(_store, _storeMutex);
     RegisterSignIn();
     _eventSocket = std::make_unique<PanelEventSocket>(_log, _events, _tickets, _sessions, _users, _grants, _listener.Routes());
     _listener.AddSocket(_eventSocket->MakeRoute());
@@ -109,6 +111,33 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
 void Panel::SetAppSource(PanelEventSocket::AppSource source)
 {
     _eventSocket->SetAppSource(std::move(source));
+}
+
+std::shared_ptr<SettingStore> Panel::LiveSettingStore()
+{
+    return _settingStore;
+}
+
+bool Panel::IsStoreOpen()
+{
+    std::lock_guard const lock(_storeMutex);
+    return _store.IsOpen();
+}
+
+bool Panel::ReadFileRules(std::map<std::string, std::vector<std::string>, std::less<>>& rules, std::string& error)
+{
+    std::lock_guard const lock(_storeMutex);
+    rules.clear();
+    if (!_store.IsOpen())
+        return true;
+    return _fileRules.Read(rules, error);
+}
+
+bool Panel::SaveFileRules(AdminRequest const& request, AuditEvent const& event, std::string const& root, std::vector<std::string> const& patterns, std::string& error)
+{
+    std::optional<PanelUser> const user = UserOf(request);
+    std::optional<int64> const by = user ? std::optional<int64>(user->Id) : std::nullopt;
+    return Record(event, [this, &root, &patterns, by](std::string& failure) { return _fileRules.Replace(root, patterns, by, failure); }, error);
 }
 
 ListenerSettings Panel::LoadSettings(ConfigMgr const& config, std::vector<std::string>* problems)

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The table of live settings with the default, bounds and unit each reader already used, grouped by category, and the page doc/config/settings.md is: one table per category, with the apps that read each setting, when a change takes hold and who may see and change it; the secrets are the table's secret settings and the options only config holds, the admin token and the database connection strings.
+ * The table of live settings with the default, bounds and unit each reader already used, grouped by category, and the page doc/config/settings.md is: one table per category, with the apps that read each setting, the supervisor among them, when a change takes hold and who may see and change it; the secrets are the table's secret settings and the options only config holds, the admin and panel tokens and the database connection strings.
  */
 
 #include "SettingDeclarations.h"
@@ -135,6 +135,15 @@ namespace
                 "The key id that seals new and changed verifiers, which Account.VerifierKeys must list; 0 stores them unencrypted and is refused while keys are listed.")),
             Restricted(Flag("Account.AllowPlainVerifiers", "true", "Accounts", Login, NextUse,
                 "Whether an account whose verifier is still unencrypted may log in while a verifier key is active.")),
+
+            Unsigned("Files.MinFreeBytes", "1073741824", "0", "1125899906842624", "bytes", "Files", Supervisor, Live,
+                "The least free space a volume must keep after any write the panel makes; the larger of this and Files.MinFreePercent holds."),
+            Unsigned("Files.MinFreePercent", "5", "0", "90", "%", "Files", Supervisor, Live,
+                "The least free space a volume must keep after any write the panel makes, as a share of the volume; the larger of this and Files.MinFreeBytes holds."),
+            Unsigned("Files.ReadMaxBytes", "4194304", "65536", "67108864", "bytes", "Files", Supervisor, Live,
+                "The most of a file one read hands the panel; a file this size or smaller also carries its content hash, and a configuration file larger than this is not shown."),
+            Unsigned("Files.ListMaxEntries", "100000", "1000", "10000000", "entries", "Files", Supervisor, Live,
+                "The most entries a folder listing reads before it stops and says the folder held more."),
         };
         std::sort(table.begin(), table.end(), [](SettingDeclaration const& left, SettingDeclaration const& right) { return left.Key < right.Key; });
         return table;
@@ -149,6 +158,8 @@ namespace
             names.push_back("loginserver");
         if (apps & SettingApps::Patch)
             names.push_back("patchserver");
+        if (apps & SettingApps::Supervisor)
+            names.push_back("supervisor");
         return fmt::format("{}", fmt::join(names, ", "));
     }
 
@@ -194,7 +205,7 @@ bool SettingDeclarations::IsSecret(std::string_view key)
                 keys.push_back(declaration.Key);
         return keys;
     }();
-    if (Ambrose::EqualsIgnoreCase(key, "Admin.Token") || EndsWithIgnoreCase(key, "DatabaseInfo"))
+    if (Ambrose::EqualsIgnoreCase(key, "Admin.Token") || Ambrose::EqualsIgnoreCase(key, "Panel.Token") || EndsWithIgnoreCase(key, "DatabaseInfo"))
         return true;
     return std::any_of(secrets.begin(), secrets.end(), [key](std::string const& secret) { return Ambrose::EqualsIgnoreCase(secret, key); });
 }
@@ -209,12 +220,13 @@ std::string SettingDeclarations::RenderDocument()
     page += "# Live settings\n\n";
     page += "Every setting here can be changed while its app runs with `.settings set <key> <value> [reason]` in game or `settings set` on the app's console, and returned to its "
             "config value with `settings reset`. A change is checked against the type and bounds below, persisted in the `settings` table of the database the app owns "
-            "(`characters` for the game server, `login` for the login server), and written to `setting_audit` with who made it and why. A setting also set by an "
-            "`AMBROSE_` environment variable or a command-line override is locked and cannot be changed live. The layers are described in [README.md](README.md).\n\n";
+            "(`characters` for the game server, `login` for the login server, and the panel store for the supervisor), and written to `setting_audit` with who made it and why. "
+            "A setting also set by an `AMBROSE_` environment variable or a command-line override is locked and cannot be changed live. The layers are described in [README.md](README.md).\n\n";
     page += "Applies says when a change takes hold: live at once, or from the next connection or operation that reads it.\n\n";
     page += "Access says who may see and change a setting over the admin API and the panel. A secret's value is shown masked, in `setting_audit` too, unless the caller asks "
-            "for it with the right to see secrets, and every such reveal is audited. A restricted setting is one whose wrong value stops the app or locks players out, so "
-            "changing it takes its own right besides the right to change settings.\n";
+            "for it with the right to see secrets, and every such reveal is audited. The admin and panel tokens and the password in each database connection string are secrets "
+            "too, although only config holds them, and are masked the same way wherever they are shown, a configuration file read through the panel included. A restricted "
+            "setting is one whose wrong value stops the app or locks players out, so changing it takes its own right besides the right to change settings.\n";
     for (auto const& [category, declarations] : byCategory)
     {
         page += fmt::format("\n## {}\n\n", category);

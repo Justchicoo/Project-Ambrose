@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Asks the settings table which settings are secrets, masks a connection string's password segment, each key of a key list while keeping its id, and a token's whole value, leaves an empty value empty because it hides nothing, and scrubs any text that quotes a secret setting's value after its key, reading a key list through its commas.
+ * Asks the settings table which settings are secrets, masks a connection string's password segment, each key of a key list while keeping its id, and a token's whole value, leaves an empty value empty because it hides nothing, scrubs any text that quotes a secret setting's value after its key, reading a key list through its commas, and masks a configuration file one Key = value line at a time, keeping its byte order mark, comments, spacing, quotes and line endings and naming each key it hid.
  */
 
 #include "LogRedaction.h"
@@ -69,6 +69,51 @@ namespace
     bool IsKeyCharacter(char character) noexcept
     {
         return std::isalnum(static_cast<unsigned char>(character)) || character == '.' || character == '_';
+    }
+
+    std::string RedactConfLine(std::string_view line, std::vector<std::string>* redactedKeys)
+    {
+        std::size_t bodyEnd = line.size();
+        if (bodyEnd > 0 && line[bodyEnd - 1] == '\n')
+            --bodyEnd;
+        if (bodyEnd > 0 && line[bodyEnd - 1] == '\r')
+            --bodyEnd;
+        std::string_view const body = line.substr(0, bodyEnd);
+        std::string_view const ending = line.substr(bodyEnd);
+        std::size_t const start = body.find_first_not_of(" \t");
+        if (start == std::string_view::npos || body[start] == '#')
+            return std::string(line);
+        std::size_t const equals = body.find('=', start);
+        if (equals == std::string_view::npos)
+            return std::string(line);
+        std::string_view const key = Ambrose::Trim(body.substr(start, equals - start));
+        if (!LogRedaction::IsSecretSetting(key))
+            return std::string(line);
+        std::size_t valueStart = equals + 1;
+        while (valueStart < body.size() && (body[valueStart] == ' ' || body[valueStart] == '\t'))
+            ++valueStart;
+        std::size_t valueEnd = body.size();
+        while (valueEnd > valueStart && (body[valueEnd - 1] == ' ' || body[valueEnd - 1] == '\t'))
+            --valueEnd;
+        std::string_view value = body.substr(valueStart, valueEnd - valueStart);
+        std::string_view quote;
+        if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
+        {
+            quote = "\"";
+            value = value.substr(1, value.size() - 2);
+        }
+        std::string const masked = LogRedaction::RedactSettingValue(key, value);
+        if (masked == value)
+            return std::string(line);
+        if (redactedKeys && std::find(redactedKeys->begin(), redactedKeys->end(), key) == redactedKeys->end())
+            redactedKeys->emplace_back(key);
+        std::string out(body.substr(0, valueStart));
+        out.append(quote);
+        out.append(masked);
+        out.append(quote);
+        out.append(body.substr(valueEnd));
+        out.append(ending);
+        return out;
     }
 }
 
@@ -153,6 +198,27 @@ std::string LogRedaction::Redact(std::string_view text)
         out.append(text.substr(keyEnd, cursor - keyEnd));
         out.append(RedactSettingValue(text.substr(keyStart, keyEnd - keyStart), text.substr(cursor, valueEnd - cursor)));
         position = valueEnd;
+    }
+    return out;
+}
+
+std::string LogRedaction::RedactConf(std::string_view text, std::vector<std::string>* redactedKeys)
+{
+    constexpr std::string_view ByteOrderMark = "\xEF\xBB\xBF";
+    std::string out;
+    out.reserve(text.size());
+    if (text.starts_with(ByteOrderMark))
+    {
+        out.append(ByteOrderMark);
+        text.remove_prefix(ByteOrderMark.size());
+    }
+    std::size_t position = 0;
+    while (position < text.size())
+    {
+        std::size_t const end = text.find('\n', position);
+        std::size_t const stop = end == std::string_view::npos ? text.size() : end + 1;
+        out.append(RedactConfLine(text.substr(position, stop - position), redactedKeys));
+        position = stop;
     }
     return out;
 }

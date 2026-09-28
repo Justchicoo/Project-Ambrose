@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The admin API's route table and front door: every request gets a request id that its answer and any error body carry, keeping one a caller such as the supervisor sent when it has the same form, so one id names the request in both logs, a host that is no IP address, localhost or a name the operator allows is refused so a page elsewhere cannot rebind a name onto this listener, paths outside /api that no route claims go to the panel's files without a token, so a route a scraper expects at a fixed place such as /metrics is still served and still guarded, public routes such as signing in run without one, a route may answer every path under a prefix when no exact route claims it, the longest prefix first, and every other path needs the bearer token or a browser session whose unsafe requests and socket upgrades name this listener's own origin and carry the session's CSRF token, with every answer stamped with the panel's security headers and every error handed to a log. A caller may be asked about a permission beyond its route's, which a token caller the supervisor relays is held to only when the supervisor forwarded it, and a route may charge the listener's rate limit a cost of its own. A route that asks for a permission the listener's catalog does not hold is not served, and is kept among the refused routes so the listener can say which pages it left out rather than losing them unseen. A request says whether its address carried a query at all, even one with no value a route could read, without keeping the query itself. A listener may hold every authenticated caller to an admission rule, such as a requirement to turn on two-factor sign-in, which every route and socket passes after authentication except the routes registered as the way to meet it, and may ask for a fresh check of who the caller is before a permission it allows is used, the check deciding when a change or any use needs one and its answer standing in for the handler's.
+ * The admin API's route table and front door: a request carries its query both decoded and exactly as it was sent, so a route that decodes a value itself, as the file jail does, decodes it once; every request gets a request id that its answer and any error body carry, keeping one a caller such as the supervisor sent when it has the same form, so one id names the request in both logs, a host that is no IP address, localhost or a name the operator allows is refused so a page elsewhere cannot rebind a name onto this listener, paths outside /api that no route claims go to the panel's files without a token, so a route a scraper expects at a fixed place such as /metrics is still served and still guarded, public routes such as signing in run without one, a route may answer every path under a prefix when no exact route claims it, the longest prefix first, and every other path needs the bearer token or a browser session whose unsafe requests and socket upgrades name this listener's own origin and carry the session's CSRF token, with every answer stamped with the panel's security headers and every error handed to a log. A caller may be asked about a permission beyond its route's, which a token caller the supervisor relays is held to only when the supervisor forwarded it, and a route may charge the listener's rate limit a cost of its own. A route that asks for a permission the listener's catalog does not hold is not served, and is kept among the refused routes so the listener can say which pages it left out rather than losing them unseen. A request says whether its address carried a query at all, even one with no value a route could read, without keeping the query itself. A listener may hold every authenticated caller to an admission rule, such as a requirement to turn on two-factor sign-in, which every route and socket passes after authentication except the routes registered as the way to meet it, and may ask for a fresh check of who the caller is before a permission it allows is used, the check deciding when a change or any use needs one and its answer standing in for the handler's.
  */
 
 #ifndef AMBROSE_ADMINROUTER_H
@@ -41,6 +41,7 @@ struct AdminRequest
     std::optional<std::string> SessionCsrf;
     std::map<std::string, std::string, std::less<>> QueryValues;
     bool HasQuery = false;
+    std::string RawQuery = {};
     std::string Actor;
     std::string ActorName;
     std::optional<std::set<std::string, std::less<>>> ForwardedGrants;
@@ -49,6 +50,23 @@ struct AdminRequest
     {
         auto const found = QueryValues.find(name);
         return found == QueryValues.end() ? std::string_view() : std::string_view(found->second);
+    }
+
+    std::optional<std::string_view> RawQueryValue(std::string_view name) const
+    {
+        std::string_view rest(RawQuery);
+        while (!rest.empty())
+        {
+            std::size_t const separator = rest.find('&');
+            std::string_view const pair = rest.substr(0, separator);
+            std::size_t const equals = pair.find('=');
+            if (pair.substr(0, equals) == name)
+                return equals == std::string_view::npos ? std::string_view() : pair.substr(equals + 1);
+            if (separator == std::string_view::npos)
+                break;
+            rest.remove_prefix(separator + 1);
+        }
+        return std::nullopt;
     }
 };
 

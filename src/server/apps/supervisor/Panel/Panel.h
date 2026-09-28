@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The panel's own front door in the supervisor: a second listener with its own Panel options, its own token file, its own store and its own keyring, off unless Panel.Enable is set, holding its operators and their sessions, the counts a failed sign-in or a wrong second factor adds to, the cost-weighted limit every costly route is held to and the audit tables every change is recorded in, relayed settings changes, batches, reloads and secret reveals among them, signing an operator with two-factor sign-in in only after a password and a code, holding every route and socket to the two-factor requirement an owner sets while leaving open the routes that meet it, and asking for a fresh check before a danger action, bound to this machine unless a certificate and key are given or the operator opts into plain HTTP, serving the built dashboard at / and the panel's API under /api/panel/, the one event socket every live page runs on at /api/panel/events with the streams it serves and the one-time tickets a script opens it with, and reloaded with the rest of the configuration so a bind it would not be allowed to keep, or a two-factor requirement it does not know, is refused while the old one goes on serving.
+ * The panel's own front door in the supervisor: a second listener with its own Panel options, its own token file, its own store and its own keyring, off unless Panel.Enable is set, holding its operators and their sessions, the counts a failed sign-in or a wrong second factor adds to, the cost-weighted limit every costly route is held to and the audit tables every change is recorded in, relayed settings changes, batches, reloads and secret reveals among them, the protected path patterns an owner adds to a file root, saved with their audit row, and the supervisor's own live settings with their history, signing an operator with two-factor sign-in in only after a password and a code, holding every route and socket to the two-factor requirement an owner sets while leaving open the routes that meet it, and asking for a fresh check before a danger action, bound to this machine unless a certificate and key are given or the operator opts into plain HTTP, serving the built dashboard at / and the panel's API under /api/panel/, the one event socket every live page runs on at /api/panel/events with the streams it serves and the one-time tickets a script opens it with, and reloaded with the rest of the configuration so a bind it would not be allowed to keep, or a two-factor requirement it does not know, is refused while the old one goes on serving.
  */
 
 #ifndef AMBROSE_PANEL_H
@@ -11,6 +11,7 @@
 #include "PanelAudit.h"
 #include "PanelRateLimit.h"
 #include "PanelErrors.h"
+#include "PanelFileRules.h"
 #include "PanelGrants.h"
 #include "PanelAuthorization.h"
 #include "PanelEventSocket.h"
@@ -31,6 +32,7 @@
 #include <filesystem>
 #include <map>
 #include <condition_variable>
+#include <memory>
 #include <thread>
 #include <utility>
 #include <functional>
@@ -43,6 +45,8 @@
 
 class ConfigMgr;
 class Log;
+class PanelSettingStore;
+class SettingStore;
 
 class Panel
 {
@@ -84,6 +88,11 @@ public:
     PanelKeyring& Keyring() { return _keyring; }
     PanelTwoFactor& TwoFactor() { return _twoFactor; }
     PanelTwoFactorSettings TwoFactorSettings() const;
+    PanelFileRules& FileRules() { return _fileRules; }
+    std::shared_ptr<SettingStore> LiveSettingStore();
+    bool IsStoreOpen();
+    bool ReadFileRules(std::map<std::string, std::vector<std::string>, std::less<>>& rules, std::string& error);
+    bool SaveFileRules(AdminRequest const& request, AuditEvent const& event, std::string const& root, std::vector<std::string> const& patterns, std::string& error);
     void SetErrorSource(std::function<std::vector<std::pair<std::string, std::string>>()> source);
     std::size_t GatherErrorsOnce();
 
@@ -160,6 +169,7 @@ private:
     PanelGrants _grants;
     PanelKeyring _keyring;
     PanelTwoFactor _twoFactor;
+    PanelFileRules _fileRules;
     std::unique_ptr<PanelAuthorization> _authorization;
     PanelSignInThrottle _signIn;
     PanelSignInThrottle _secondFactor;
@@ -175,6 +185,7 @@ private:
     PanelTwoFactorSettings _twoFactorSettings;
     PanelRateLimit _rateLimit;
     std::mutex _storeMutex;
+    std::shared_ptr<PanelSettingStore> _settingStore;
     void StartGathering();
     void StopGathering();
 

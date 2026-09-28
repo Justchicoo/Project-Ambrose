@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds the supervision library of app definitions, the per-app controller, output capture, the saved state, the panel's own SQLite store with its users and their Argon2id passwords, the panel's event socket with its catalog, streams and tickets, its keyring wrapped on Windows with the data protection API, and the supervisor's admin routes that tests link, and the supervisor executable that starts, stops, restarts and takes back the other apps on top of it.
+# Builds the supervision library of app definitions, the per-app controller, output capture, the saved state, the panel's own SQLite store with its users and their Argon2id passwords, the panel's event socket with its catalog, streams and tickets, its keyring wrapped on Windows with the data protection API, the file roots with their routes, and the supervisor's admin routes that tests link, and the supervisor executable that starts, stops, restarts and takes back the other apps on top of it.
 if(TARGET botan::botan)
     set(ambrose_botan_target botan::botan)
 else()

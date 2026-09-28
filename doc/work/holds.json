@@ -44,12 +44,6 @@
       "since": "2026-09-27"
     },
     {
-      "scope": "milestone:17.18",
-      "who": "the maintainer's panel session",
-      "what": "file roots, the path jail and browsing, being built now",
-      "since": "2026-09-27"
-    },
-    {
       "scope": "milestone:17.24",
       "who": "the maintainer's panel session",
       "what": "the panel as its own installable program",

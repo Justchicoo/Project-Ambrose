@@ -627,13 +627,13 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Size:** L. **Depends on:** 17.12, 17.48
 
-Changed on 2026-09-27: the data root's client-derived folders are named from one list, which the code that writes each of them shares. The launcher's run folders are on that list, because they hold copies of the install's own files.
+Changed on 2026-09-27: the data root is client-derived by default. Only what the supervisor itself keeps there is left out, so a folder any tool writes later is refused for download from the day it appears, rather than waiting for somebody to add it to a list. The launcher's run folders are covered this way, because they hold copies of the install's own files.
 
 **Deliverables**
 
 - Named roots with policies:
   - Install (read-only), config, logs, data (type dumps read-only, lock files hidden), custom SQL, backups (read-only here), and the user's client installs (read-only and never downloadable).
-  - Within data, every folder on one client-derived list is a client-derived root, and each writer of such a folder takes the folder's name from that list. The list holds:
+  - Within data, everything is client-derived except what the supervisor itself keeps there, `supervisor/` and `launcher-window.json`, with `admin/`, `panel/`, the keyring and lock files hidden. That covers, without naming them one by one:
     - the type dumps and their fast copies;
     - the client tool's caches of messages, handlers, behaviors and functions;
     - decompiled output and its Ghidra project;
@@ -660,14 +660,14 @@ Changed on 2026-09-27: the data root's client-derived folders are named from one
 
 **Acceptance**
 
-- [ ] Requests for `../`, an absolute path, an encoded traversal, a device name such as `CON`, or a symbolic link or junction leaving the roots are refused with 403 and audited with the resolved path, which the response does not carry (route tests on Windows and Linux)
-- [ ] A download of a file under the client install root, or under any folder on the client-derived list, is refused for an owner as well as a viewer, on every path including a share link (route tests over each path), and a unit test fails when a writer of such a folder names one the list lacks
-- [ ] Reading a `.conf` file without `settings.secrets.read` shows every secret value redacted (route test)
-- [ ] A write that would leave less than the minimum free space is refused with the volume and the figure named, before any byte reaches the disk (unit test with a fake volume)
-- [ ] A FIFO, a device node and a unix socket placed inside a root are refused before they are opened (unit test on Linux)
-- [ ] The jail's component and link checks pass in the unit tests on Windows and on Linux
-- [ ] A protected path is refused for listing, reading and every write operation, not only for writes (route tests)
-- [ ] The files page walks into a folder by its breadcrumbs, selects a filtered set and shows its count, and on a read-only root every write control is disabled with the root's policy named (browser test)
+- [x] Requests for `../`, an absolute path, an encoded traversal, a device name such as `CON`, or a symbolic link or junction leaving the roots are refused with 403 and audited with the resolved path, which the response does not carry (route tests on Windows and Linux) (FilesServiceTest.TraversalAbsoluteEncodedDeviceAndEscapingLinkRequestsAre403AndAuditedWithTheResolvedPath covers `../x`, `/etc/passwd`, `C:/Windows`, `%2e%2e%2fx`, `CON`, `nul.txt` and a link as the path or as a folder on it, each 403 with no host path in the body and one audit row naming the resolved path; it and FileJailTest.RefusesALinkedFolderLeavingTheRoot fail with the jail's link and outside checks taken out; run on Windows and on Linux under WSL, and again through tests/e2e/files.spec.ts against a real supervisor)
+- [ ] A download of a file under the client install root, or anywhere in the data root outside what the supervisor itself keeps, is refused for an owner as well as a viewer, on every path including a share link (route tests over each path), and a folder a test creates in the data root under a new name is refused the same way
+- [x] Reading a `.conf` file without `settings.secrets.read` shows every secret value redacted (route test) (FilesServiceTest.AConfFileReadWithoutTheSecretsRightShowsEverySecretRedacted: a viewer asking to reveal and an owner not asking both see Admin.Token, Panel.Token, the database password and the verifier keys masked with the keys named, copies such as `supervisor.conf.bak` included, and only an owner who asks sees them, with the reveal audited)
+- [x] A write that would leave less than the minimum free space is refused with the volume and the figure named, before any byte reaches the disk (unit test with a fake volume) (SpaceGuardTest.AWriteThatWouldLeaveLessThanTheMinimumIsRefusedWithTheVolumeAndFigureBeforeAnyByte names the volume, the free space, the minimum and the size asked for, and no file exists afterwards)
+- [x] A FIFO, a device node and a unix socket placed inside a root are refused before they are opened (unit test on Linux) (FileJailTest.RefusesAFifoADeviceNodeAndASocketBeforeOpeningThem, run on Linux under WSL, kernel 6.6, where each is refused from its O_PATH descriptor's fstat before any open; on Windows the same test refuses a device path and an AF_UNIX socket)
+- [x] The jail's component and link checks pass in the unit tests on Windows and on Linux (JailPathTest, FileJailTest, PathRulesTest and FolderPageTest pass on Windows and on Linux under WSL: 50 on Windows with the file-symbolic-link case skipped only because an unprivileged Windows account cannot make one, and 91 with the panel suites on Linux, where only the 8.3 short-name case skips because Linux keeps none)
+- [x] A protected path is refused for listing, reading and every write operation, not only for writes (route tests) (FilesServiceTest and PanelFileRulesTest: an owner's pattern and the built-in ones refuse list, read and each write operation alike, and PathRulesTest holds the gitignore matching, a pattern of hundreds of `**/` segments included)
+- [x] The files page walks into a folder by its breadcrumbs, selects a filtered set and shows its count, and on a read-only root every write control is disabled with the root's policy named (browser test) (apps/dashboard/src/pages/Files.browser.test.ts, and tests/e2e/files.spec.ts against a real supervisor)
 
 ## 17.19 Built-in resource graphs
 

@@ -1,8 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel and the supervisor routes on its admin API, records relayed settings and reload answers and its own secret reveals in the panel's audit log, publishes every state an app passes through on the panel's status stream at that app's scope and gives the panel's event socket its list of apps, reloads the panel's own listener and its two-factor rules when a Panel option changes, offers apps, start, stop, restart and kill on its console with the panel's operators beside them, including the way back in for an operator who lost their authenticator and their recovery codes, and leaves the apps running when it stops so the next start takes them back.
+ * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel, the supervisor routes and the file roots on its admin API and the panel's listener alike, keeps its own live settings in the panel store when that is open and in config alone when it is not, hands a change of the minimum free space to the space guard, rebuilds the file roots on a configuration change, a reload of file_roots or a change of an owner's protected patterns, records relayed settings and reload answers, refused file paths and its own secret reveals in the panel's audit log, publishes every state an app passes through on the panel's status stream at that app's scope and gives the panel's event socket its list of apps, reloads the panel's own listener and its two-factor rules when a Panel option changes, offers apps, start, stop, restart and kill on its console with the panel's operators beside them, including the way back in for an operator who lost their authenticator and their recovery codes, and leaves the apps running when it stops so the next start takes them back.
  */
 
+#include "AdminCapabilities.h"
 #include "AdminGraphsView.h"
 #include "AdminServer.h"
 #include "AdminStatus.h"
@@ -12,15 +13,21 @@
 #include "ConfigMgr.h"
 #include "Duration.h"
 #include "Environment.h"
+#include "FileRoots.h"
+#include "FilesService.h"
 #include "Log.h"
 #include "AppOptions.h"
 #include "Panel.h"
 #include "PanelUsers.h"
 #include "PublishedSampler.h"
+#include "ReloadMgr.h"
 #include "ResourceSampler.h"
 #include "SeriesStore.h"
 #include "ServerApp.h"
 #include "ServiceInstaller.h"
+#include "Settings.h"
+#include "SourceFolder.h"
+#include "SpaceGuard.h"
 #include "StringUtil.h"
 #include "Supervisor.h"
 #include "TlsCertificate.h"
@@ -154,7 +161,7 @@ namespace
     public:
         static constexpr uint16 DefaultAdminPort = 12020;
 
-        SupervisorApp() : ServerApp({ "supervisor", "supervisor.conf", DefaultAdminPort }, sConfigMgr, sLog, std::cout, std::cerr), _supervisor(sLog, BreakThroughThisProgram()), _panel(sLog, ClientLocator::GetDataFolder(LocalClientSystem()), sConfigMgr.GetFilename().parent_path())
+        SupervisorApp() : ServerApp({ "supervisor", "supervisor.conf", DefaultAdminPort }, sConfigMgr, sLog, std::cout, std::cerr), _supervisor(sLog, BreakThroughThisProgram()), _panel(sLog, ClientLocator::GetDataFolder(LocalClientSystem()), sConfigMgr.GetFilename().parent_path()), _files(_roots, _space, FileHooks())
         {
             RegisterCommands();
         }
@@ -169,6 +176,11 @@ namespace
         SupervisorApp& operator=(SupervisorApp const&) = delete;
 
     protected:
+        uint8 GetSettingApps() const override
+        {
+            return SettingApps::Supervisor;
+        }
+
         void OnSecretsRevealed(AdminRequest const& request, std::vector<std::string> const& keys) override
         {
             ServerApp::OnSecretsRevealed(request, keys);
@@ -181,6 +193,7 @@ namespace
                 [this](AdminRequest const& request, RelayedAnswer const& answer) { _panel.RecordRelayed(request, answer.App, answer.Method, answer.Path, answer.Status, answer.Body); } });
             _supervisor.Register(admin.Routes(), [this] { return BuildStatus(); });
             AdminGraphsView::Register(admin.Routes(), [this]() -> Ambrose::SeriesStore const& { return _history; });
+            _files.Register(admin.Routes());
         }
 
         bool OnStart() override
@@ -229,6 +242,7 @@ namespace
             RegisterStandardRoutes(_panel.Routes());
             AdminGraphsView::Register(_panel.Routes(), [this]() -> Ambrose::SeriesStore const& { return _history; });
             _supervisor.Register(_panel.Routes(), [this] { return BuildStatus(); });
+            _files.Register(_panel.Routes());
             _panel.SetErrorSource([this]
             {
                 std::vector<std::pair<std::string, std::string>> reports = _supervisor.CollectErrorReports();
@@ -240,6 +254,22 @@ namespace
                 LOG_ERROR("server.panel", "{}", error);
                 return false;
             }
+            if (!_panel.IsStoreOpen())
+                LOG_INFO("server.settings", "The panel store is not open (Panel.Enable = 0), so the supervisor's live settings resolve from its config alone and a live change is refused");
+            else if (!StartSettings(_panel.LiveSettingStore()))
+                LOG_WARN("server.settings", "The supervisor's live settings resolve from its config alone until the panel store's settings can be read");
+            _files.Tune();
+            _settingsSubscription = sSettings.Subscribe([this](SettingChange const& change)
+            {
+                if (change.Key.starts_with("Files.MinFree"))
+                    _files.Tune();
+            });
+            std::vector<std::string> rootErrors;
+            if (!RebuildRoots(rootErrors))
+                for (std::string const& problem : rootErrors)
+                    LOG_WARN("server.files", "The file roots could not be built: {}", problem);
+            sReloadMgr.Register(std::string(FileRootsTarget), [this](std::vector<std::string>& found) { return RebuildRoots(found); }, { "config" });
+            sAdminCapabilities.AddReloadTarget(std::string(FileRootsTarget));
             return true;
         }
 
@@ -275,6 +305,9 @@ namespace
 
         void OnStop() override
         {
+            if (_settingsSubscription != 0)
+                sSettings.Unsubscribe(_settingsSubscription);
+            _settingsSubscription = 0;
             SaveHistory();
             _panel.Stop();
             _supervisor.Shutdown();
@@ -293,10 +326,14 @@ namespace
         void OnConfigChanged(std::vector<std::string> const& changed) override
         {
             ServerApp::OnConfigChanged(changed);
-            if (std::none_of(changed.begin(), changed.end(), [](std::string const& key) { return key.starts_with("Panel."); }))
-                return;
-            if (!_panel.Reload(Config()))
+            if (std::any_of(changed.begin(), changed.end(), [](std::string const& key) { return key.starts_with("Panel."); }) && !_panel.Reload(Config()))
                 LOG_WARN("server.panel", "The panel kept its earlier settings; the reason is logged above");
+            if (std::all_of(changed.begin(), changed.end(), [](std::string const& key) { return key.starts_with("Files."); }))
+                return;
+            std::vector<std::string> errors;
+            if (!RebuildRoots(errors))
+                for (std::string const& problem : errors)
+                    LOG_WARN("server.files", "The file roots were not rebuilt after the configuration changed, and the ones serving go on serving: {}", problem);
         }
 
         void OnStatus(std::vector<std::pair<std::string, std::string>>& fields) override
@@ -306,6 +343,59 @@ namespace
         }
 
     private:
+        static constexpr std::string_view FileRootsTarget = "file_roots";
+
+        FilesHooks FileHooks()
+        {
+            FilesHooks hooks;
+            hooks.Record = [this](AuditEvent const& event, std::string& error) { return _panel.Record(event, {}, error); };
+            hooks.NameOf = [this](AdminRequest const& request) { return _panel.NameOf(request); };
+            hooks.SaveRules = [this](AdminRequest const& request, AuditEvent const& event, std::string const& root, std::vector<std::string> const& patterns, std::string& error)
+            {
+                return _panel.SaveFileRules(request, event, root, patterns, error);
+            };
+            hooks.Rebuild = [](std::vector<std::string>& errors)
+            {
+                ReloadOutcome const outcome = sReloadMgr.Reload(FileRootsTarget);
+                errors = outcome.Errors;
+                return outcome.Ok;
+            };
+            hooks.Log = [](std::string const& line) { LOG_WARN("server.files", "{}", line); };
+            return hooks;
+        }
+
+        bool RebuildRoots(std::vector<std::string>& errors)
+        {
+            LocalClientSystem const system;
+            FileRootPlaces places;
+            places.DataFolder = ClientLocator::GetDataFolder(system);
+            places.ExecutableFolder = Ambrose::GetExecutableDirectory();
+            places.SourceFolder = Ambrose::FindSourceFolder();
+            std::error_code code;
+            places.WorkingFolder = std::filesystem::current_path(code);
+            places.StoreFile = Panel::StoreFile(Config(), places.DataFolder);
+            for (ClientCandidate const& candidate : ClientLocator::FindInstalls(system))
+                places.ClientInstalls.push_back(candidate.Install.Root);
+            std::vector<std::string> problems;
+            FileRootInputs inputs = FileRootInputs::Read(Config(), places, problems);
+            for (std::string const& problem : problems)
+                LOG_WARN("server.files", "{}", problem);
+            std::string error;
+            if (!_panel.ReadFileRules(inputs.OperatorRules, error))
+            {
+                errors.push_back(fmt::format("the protected patterns could not be read from the panel store: {}", error));
+                return false;
+            }
+            if (!_roots.Rebuild(inputs, errors))
+                return false;
+            FileRoots::Snapshot const set = _roots.Get();
+            for (std::string const& note : set->Notes)
+                LOG_WARN("server.files", "{}", note);
+            std::size_t const present = static_cast<std::size_t>(std::count_if(set->Roots.begin(), set->Roots.end(), [](FileRoot const& root) { return root.Present(); }));
+            LOG_INFO("server.files", "{} file root(s) are open to the panel and {} are missing, generation {}", present, set->Roots.size() - present, _roots.GetGeneration());
+            return true;
+        }
+
         void RegisterCommands()
         {
             Commands().Register({ "panel user list", "", "list the panel's operators", false,
@@ -478,6 +568,10 @@ namespace
         std::chrono::seconds _sampleInterval{ 5 };
         std::chrono::seconds _saveInterval{ 300 };
         std::chrono::steady_clock::time_point _lastSave{};
+        FileRoots _roots;
+        Ambrose::SpaceGuard _space;
+        FilesService _files;
+        uint64 _settingsSubscription = 0;
     };
 }
 

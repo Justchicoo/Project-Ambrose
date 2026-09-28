@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The panel frame: it asks the server that served it whether this browser is signed in, shows the sign-in page when it is not and a plain notice when the server cannot be reached, shows only the two-factor enrollment page, asking the server for nothing else, while the panel requires two-factor sign-in of an operator who has not turned it on, keeps the question a danger action asks for a fresh check of who the operator is ready on every page, and once signed in opens the panel's one event socket while a panel session holds it, follows the status stream wherever the socket's permissions let it read status, and draws a skip link that moves focus to the page without touching the address, the shadcn-svelte sidebar from the route table, a top bar with the breadcrumb, the command palette's search button and the connection's state, a bar that says when the server stopped answering with a countdown and a retry, the user's menu naming the operator with the light and dark choice, their two-factor sign-in and signing out, and the page the address names, which is the page itself, the milestone that brings it, or the access-denied page. -->
+<!-- Project Ambrose by Imjustchico: The panel frame: it asks the server that served it whether this browser is signed in, shows the sign-in page when it is not and a plain notice when the server cannot be reached, shows only the two-factor enrollment page, asking the server for nothing else, while the panel requires two-factor sign-in of an operator who has not turned it on, keeps the question a danger action asks for a fresh check of who the operator is ready on every page, and once signed in opens the panel's one event socket while a panel session holds it, follows the status stream wherever the socket's permissions let it read status, and draws a skip link that moves focus to the page without touching the address, the shadcn-svelte sidebar from the route table, a top bar with the breadcrumb, the command palette's search button and the connection's state, a bar that says when the server stopped answering with a countdown and a retry, the user's menu naming the operator with the light and dark choice, their two-factor sign-in and signing out, and the page the address names, read from the address up to any query so a page can keep its own place after it, which is the page itself, the milestone that brings it, or the access-denied page. -->
 <script lang="ts">
     import * as Breadcrumb from "$lib/components/ui/breadcrumb/index.js";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
@@ -33,7 +33,7 @@
     const granted = everything;
 
     function readPath(): string {
-        const path = window.location.hash.replace(/^#\/?/, "");
+        const path = window.location.hash.replace(/^#\/?/, "").split("?")[0];
         return path === "" ? "overview" : path;
     }
 

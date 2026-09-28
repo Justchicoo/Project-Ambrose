@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The shapes the panel accepts from the admin API, checked at the boundary with Valibot: the session, a sign-in that asks for a second factor, the operator's two-factor state, its setup secret, the recovery codes shown once, a step-up check and the refusal that asks for one, the app list with what the supervisor knows about each app, the status, the capabilities, the captured output, a power answer, the settings an app has loaded with their changes, batches, history and events and its databases with their update files, each loose so a field a newer server adds is kept rather than refused, since these schemas only ever gain fields.
+ * The shapes the panel accepts from the admin API, checked at the boundary with Valibot: the session, a sign-in that asks for a second factor, the operator's two-factor state, its setup secret, the recovery codes shown once, a step-up check and the refusal that asks for one, the app list with what the supervisor knows about each app, the status, the capabilities, the captured output, a power answer, the settings an app has loaded with their changes, batches, history and events, its databases with their update files, and the supervisor's file roots with their policies, a folder's listing, a window of a file and a root's protected patterns, each loose so a field a newer server adds is kept rather than refused, since these schemas only ever gain fields.
  */
 
 import * as v from "valibot";
@@ -593,6 +593,114 @@ export const ClientAnswer = v.looseObject({
     saved_to: v.string(),
 });
 
+export const FileOperationState = v.looseObject({
+    allowed: v.boolean(),
+    code: v.optional(v.string(), ""),
+    reason: v.optional(v.string(), ""),
+    rule: v.optional(v.nullable(v.string()), null),
+});
+
+export const FilePolicy = v.looseObject({
+    summary: v.string(),
+    client_derived: v.optional(v.boolean(), false),
+    read_only: v.optional(v.boolean(), false),
+    operations: v.record(v.string(), FileOperationState),
+});
+
+export const FileRule = v.looseObject({
+    pattern: v.string(),
+    effect: v.string(),
+    origin: v.optional(v.string(), "built_in"),
+    why: v.string(),
+});
+
+export const FileVolume = v.looseObject({
+    name: v.string(),
+    free: v.number(),
+    total: v.number(),
+    minimum: v.number(),
+    reserved: v.number(),
+});
+
+export const FileRoot = v.looseObject({
+    id: v.string(),
+    label: v.string(),
+    kind: v.string(),
+    apps: v.array(v.string()),
+    present: v.boolean(),
+    problem: v.nullable(v.string()),
+    client_derived: v.boolean(),
+    read_only: v.boolean(),
+    policy: FilePolicy,
+    volume: v.nullable(FileVolume),
+    rules: v.array(FileRule),
+});
+
+export const FileRootsAnswer = v.looseObject({
+    schema: v.number(),
+    generation: v.optional(v.number(), 0),
+    roots: v.array(FileRoot),
+    apps: v.optional(v.array(v.looseObject({ name: v.string(), program: v.string() })), []),
+    notes: v.optional(v.array(v.string()), []),
+});
+
+export const FileEntry = v.looseObject({
+    name: v.string(),
+    kind: v.string(),
+    size: v.number(),
+    modified_ms: v.number(),
+    openable: v.boolean(),
+    problem: v.nullable(v.string()),
+    rule: v.nullable(FileRule),
+});
+
+export const FileListing = v.looseObject({
+    schema: v.number(),
+    root: v.string(),
+    path: v.string(),
+    modified_ms: v.optional(v.number(), 0),
+    policy: FilePolicy,
+    rule: v.optional(v.nullable(FileRule), null),
+    entries: v.array(FileEntry),
+    total: v.number(),
+    offset: v.number(),
+    limit: v.number(),
+    truncated: v.boolean(),
+    sort: v.string(),
+    order: v.string(),
+    filter: v.string(),
+});
+
+export const FileContent = v.looseObject({
+    schema: v.number(),
+    root: v.string(),
+    path: v.string(),
+    name: v.string(),
+    size: v.number(),
+    modified_ms: v.number(),
+    etag: v.nullable(v.string()),
+    offset: v.number(),
+    length: v.number(),
+    next_offset: v.nullable(v.number()),
+    eof: v.boolean(),
+    binary: v.boolean(),
+    bom: v.optional(v.boolean(), false),
+    text: v.nullable(v.string()),
+    redacted: v.boolean(),
+    redacted_keys: v.array(v.string()),
+    revealed: v.boolean(),
+    revealed_keys: v.optional(v.array(v.string()), []),
+});
+
+export const FileRulesAnswer = v.looseObject({
+    schema: v.number(),
+    root: v.string(),
+    built_in: v.array(v.looseObject({ pattern: v.string(), effect: v.string(), why: v.string() })),
+    patterns: v.array(v.string()),
+    rebuilt: v.optional(v.boolean(), true),
+    errors: v.optional(v.array(v.string()), []),
+});
+
 export type OutputAnswer = v.InferOutput<typeof OutputAnswer>;
 export type SettingsAnswer = v.InferOutput<typeof SettingsAnswer>;
 export type SettingLock = v.InferOutput<typeof SettingLock>;
@@ -623,3 +731,13 @@ export type MetricsAnswer = v.InferOutput<typeof MetricsAnswer>;
 export type ActivityRow = v.InferOutput<typeof ActivityRow>;
 export type ActivityAnswer = v.InferOutput<typeof ActivityAnswer>;
 export type ClientAnswer = v.InferOutput<typeof ClientAnswer>;
+export type FileOperationState = v.InferOutput<typeof FileOperationState>;
+export type FilePolicy = v.InferOutput<typeof FilePolicy>;
+export type FileRule = v.InferOutput<typeof FileRule>;
+export type FileVolume = v.InferOutput<typeof FileVolume>;
+export type FileRoot = v.InferOutput<typeof FileRoot>;
+export type FileRootsAnswer = v.InferOutput<typeof FileRootsAnswer>;
+export type FileEntry = v.InferOutput<typeof FileEntry>;
+export type FileListing = v.InferOutput<typeof FileListing>;
+export type FileContent = v.InferOutput<typeof FileContent>;
+export type FileRulesAnswer = v.InferOutput<typeof FileRulesAnswer>;

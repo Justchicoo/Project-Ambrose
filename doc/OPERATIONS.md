@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: Operator runbook for the console, admin API, metrics stack, safe remote access, and restart boundaries. -->
+<!-- Project Ambrose by Imjustchico: Operator runbook for the console, admin API, server files, metrics stack, safe remote access, and restart boundaries. -->
 
 # Operations
 
@@ -13,6 +13,21 @@ The Prometheus endpoint is `GET /metrics`. It is guarded by the same admin
 token permission as the status API. Give Prometheus a bearer token through a
 local file; never put the token in this repository, a Compose file, a
 dashboard URL, or a log excerpt.
+
+## Server files
+
+The panel's Files page and the supervisor's `/api/files` routes reach the
+server's own files through named roots and nothing else: install, config (and
+`config-<app>` for an app whose config sits elsewhere), logs (and
+`logs-<app>`), data, sql-custom, backups and one `client` root for each client
+install found. Your Wizard101 installs and everything the extractors built
+from them in the data folder are listed but never downloaded, archived or
+read into a browser, by an owner as much as anyone. The panel store, the
+keyring, token files and TLS keys are refused in every root. Owners add
+protected paths per root from the Files page. The free space a volume must
+keep after any write the panel makes is the larger of `Files.MinFreeBytes` and
+`Files.MinFreePercent`, live settings of the supervisor on its settings page;
+`Backups.Dir` in `supervisor.conf` says where backups are kept.
 
 ## Local metrics stack
 
