@@ -1,7 +1,7 @@
 {
   "subject": "r806919 sigil entry schemas and Wizard City placements",
   "area": "combat",
-  "claim": "In r806919.Wizard_1_610, Root.wad has 25 Sigils entries: 3 BattlegroundSigilTemplate, 10 CombatSigilTemplate, 1 DynamicSigilTemplate, 7 MinigameSigilTemplate, and 4 PvPCombatSigilTemplate; the six client-named sigil-info classes occur in Wizard City's 133 zone archives with the per-zone counts recorded here, where an omitted zone has count zero.",
+  "claim": "In r806919.Wizard_1_610, Root.wad has 25 Sigils entries: 3 BattlegroundSigilTemplate, 10 CombatSigilTemplate, 1 DynamicSigilTemplate, 7 MinigameSigilTemplate, and 4 PvPCombatSigilTemplate; across Wizard City's 133 zone archives there are 322 CombatSigilInfo, 53 MinigameSigilInfo, 4 ConfigurableMinigameSigilInfo, 2 PvPCombatSigilInfo, and no BattlegroundSigilInfo or DynamicSigilInfo entries, with the per-zone counts recorded here and omitted zone/class pairs equal to zero.",
   "revision": "r806919.Wizard_1_610",
   "method": "static",
   "how_to_repeat": [
