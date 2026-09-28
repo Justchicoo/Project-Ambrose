@@ -1,0 +1,24 @@
+{
+  "subject": "Root.wad Spells entry encoding and root classes",
+  "area": "combat",
+  "claim": "In r806919.Wizard_1_610, all 18173 Root.wad entries whose names begin with Spells/ are compressed at the KIWAD archive layer. After that layer is read, each entry is a BINd file whose object payload after the 8-byte header is plain, not BINd-compressed. Their root classes are SpellTemplate (14856), TieredSpellTemplate (2579), CastleMagicSpellTemplate (290), CantripsSpellTemplate (162), GardenSpellTemplate (143), WhirlyBurlySpellTemplate (94), and FishingSpellTemplate (49).",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Build bindecode, client and client_tests from this repository revision. Generate the type dump from your own r806919.Wizard_1_610 install.",
+    "Run `build/windows-msvc-x64/bin/Debug/bindecode.exe --client <install> --wad Root.wad --list Spells/` and retain only output lines beginning exactly with `Spells/`; the list operation matches substrings, so the prefix filter excludes paths such as Cinematics/BG_Cinematics/SigilSpells/.",
+    "Run a read-only census over those exact entries using KiwadArchive::GetEntries and KiwadArchive::Read. Count each entry's KiwadEntry::Compressed field, pass the decompressed entry bytes to BindFile::Read with the generated type catalog, count SerializerFlag::Compress in BindReadResult::Flags, and group BindReadResult::RootClassHash by the name in TypeCatalog::FindClass.",
+    "Set AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH to that install and dump, then run `build/windows-msvc-x64/bin/Debug/client_tests.exe --gtest_filter=SpellMgrClientTest.EverySpellUnderSpellsLoadsWithNoFailure`; it independently checks that all 18173 spell templates load."
+  ],
+  "evidence": [
+    "The exact Spells/ prefix census selected 18173 entries. Every entry was KIWAD-compressed, and every decompressed entry decoded as BINd; no selected entry was KIWAD-stored without compression.",
+    "The BINd flags in all 18173 entries had the Compress bit clear, so the versionable object bytes after the 8-byte BINd header were not compressed at the BINd layer.",
+    "Grouping each decoded root hash by its generated type-dump class name yielded SpellTemplate 14856, TieredSpellTemplate 2579, CastleMagicSpellTemplate 290, CantripsSpellTemplate 162, GardenSpellTemplate 143, WhirlyBurlySpellTemplate 94 and FishingSpellTemplate 49. These counts sum to 18173; no other root class occurred.",
+    "The targeted census decoded all 18173 entries with zero failures, read errors, unknown classes or other decode issues. SpellMgrClientTest.EverySpellUnderSpellsLoadsWithNoFailure also passed and reported 18173 spells with 106729 effects."
+  ],
+  "disproof": "A complete census of the same revision and exact Spells/ path prefix that finds a different entry total, a KIWAD-stored entry, a BINd-compressed payload, an undecodable object, or a different root-class count.",
+  "confidence": "high",
+  "submitted_by": "MeruneFleuruwu",
+  "submitted_on": "2026-09-28",
+  "status": "claimed"
+}
