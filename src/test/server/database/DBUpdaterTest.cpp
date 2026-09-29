@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests SQL splitting, data-only statement and file classification, update names and LF-normalized hashes offline, and with AMBROSE_TEST_DB set runs the updater on fresh databases: base import, ordered and custom updates, a folder an update adds applied in the same run, bad names, failing files, the repository's own login schema, and a live listing and data-only apply that stops before a schema change and rolls a failing file back.
+ * Tests SQL splitting, statement and file classification, in-memory updater policy decisions, update names and LF-normalized hashes offline, and with AMBROSE_TEST_DB set runs the updater on fresh databases: base import, ordered and custom updates, a folder an update adds applied in the same run, bad names, failing files, the repository's own login schema, and a live listing and data-only apply that stops before a schema change and rolls a failing file back.
  */
 
 #include "DBUpdater.h"
@@ -19,6 +19,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <fstream>
 #include <random>
 
@@ -149,6 +150,73 @@ TEST(UpdateFetcherTest, NamesStatesAndHashes)
     EXPECT_TRUE(UpdateFetcher::IsPendingFileName("rev_1767225600_npc.sql"));
     EXPECT_FALSE(UpdateFetcher::IsPendingFileName("2026_01_01_00.sql"));
     EXPECT_FALSE(UpdateFetcher::IsPendingFileName("rev_now_npc.sql"));
+}
+
+TEST(UpdateFetcherTest, PlansRenamedFilesWithoutReapplying)
+{
+    std::vector<UpdateCandidate> const candidates{ { UpdateFile{ {}, "B", UpdateState::Released }, "h1" } };
+    AppliedUpdate row;
+    row.Name = "A";
+    row.Hash = "h1";
+    UpdatePlan const plan = UpdateFetcher::PlanUpdates(candidates, { row }, UpdaterSettings{});
+
+    ASSERT_FALSE(plan.DeadReferenceLimitExceeded);
+    ASSERT_EQ(plan.Decisions.size(), 1u);
+    EXPECT_EQ(plan.Decisions.front().Action, UpdateDecisionAction::Rename);
+    EXPECT_EQ(plan.Decisions.front().RenamedFrom, "A");
+    EXPECT_TRUE(plan.DeadReferences.empty());
+    EXPECT_EQ(std::count_if(plan.Decisions.begin(), plan.Decisions.end(), [](UpdateDecision const& decision)
+    {
+        return decision.Action == UpdateDecisionAction::Apply || decision.Action == UpdateDecisionAction::Reapply;
+    }), 0);
+}
+
+TEST(UpdateFetcherTest, EnforcesHashAndRedundancyPoliciesInMemory)
+{
+    UpdateCandidate const candidate{ UpdateFile{ {}, "A", UpdateState::Released }, "h2" };
+    AppliedUpdate row;
+    row.Name = "A";
+    row.Hash = "h1";
+    std::vector<UpdateCandidate> const candidates{ candidate };
+    std::vector<AppliedUpdate> const recorded{ row };
+
+    UpdatePlan const rejected = UpdateFetcher::PlanUpdates(candidates, recorded, UpdaterSettings{});
+    ASSERT_EQ(rejected.Decisions.size(), 1u);
+    EXPECT_EQ(rejected.Decisions.front().Action, UpdateDecisionAction::RejectChanged);
+
+    UpdaterSettings settings;
+    settings.Redundancy = true;
+    UpdatePlan const reapplied = UpdateFetcher::PlanUpdates(candidates, recorded, settings);
+    ASSERT_EQ(reapplied.Decisions.size(), 1u);
+    EXPECT_EQ(reapplied.Decisions.front().Action, UpdateDecisionAction::Reapply);
+
+    row.Hash.clear();
+    std::vector<AppliedUpdate> const missingHash{ row };
+    UpdatePlan const rehashRejected = UpdateFetcher::PlanUpdates(candidates, missingHash, UpdaterSettings{});
+    ASSERT_EQ(rehashRejected.Decisions.size(), 1u);
+    EXPECT_EQ(rehashRejected.Decisions.front().Action, UpdateDecisionAction::RejectMissingHash);
+
+    settings.AllowRehash = true;
+    UpdatePlan const rehashed = UpdateFetcher::PlanUpdates(candidates, missingHash, settings);
+    ASSERT_EQ(rehashed.Decisions.size(), 1u);
+    EXPECT_EQ(rehashed.Decisions.front().Action, UpdateDecisionAction::FillHash);
+}
+
+TEST(UpdateFetcherTest, RejectsTooManyDeadReferencesBeforeCleanup)
+{
+    std::vector<AppliedUpdate> recorded;
+    for (std::string const& name : { "A", "B", "C", "D" })
+    {
+        AppliedUpdate row;
+        row.Name = name;
+        row.Hash = fmt::format("h{}", name);
+        recorded.push_back(std::move(row));
+    }
+    UpdatePlan const plan = UpdateFetcher::PlanUpdates({}, recorded, UpdaterSettings{});
+
+    EXPECT_TRUE(plan.DeadReferenceLimitExceeded);
+    EXPECT_EQ(plan.DeadReferences, (std::vector<std::string>{ "A", "B", "C", "D" }));
+    EXPECT_TRUE(plan.Decisions.empty());
 }
 
 TEST(SqlScriptTest, TellsDataOnlyStatementsFromOnesThatCanChangeTheSchema)

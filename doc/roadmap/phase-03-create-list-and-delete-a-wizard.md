@@ -829,11 +829,11 @@ The updater copes with renamed, edited, deleted and pending update files the way
 
 **Acceptance**
 
-- [ ] Unit: applied {A:h1}, disk {B:h1} gives rename A->B, 0 applies
-- [ ] Unit: applied {A:h1}, disk {A:h2}, Redundancy=0 gives an error; Redundancy=1 gives a re-apply
-- [ ] Unit: 4 dead refs with CleanDeadRefMaxCount=3 gives an error, not a delete
-- [ ] Integration: with AllowPending=1 a pending_db_world file is applied as PENDING; with 0 it is ignored
-- [ ] Real client: n/a
+- [x] Unit: applied {A:h1}, disk {B:h1} gives rename A->B, 0 applies (UpdateFetcherTest.PlansRenamedFilesWithoutReapplying)
+- [x] Unit: applied {A:h1}, disk {A:h2}, Redundancy=0 gives an error; Redundancy=1 gives a re-apply (UpdateFetcherTest.EnforcesHashAndRedundancyPoliciesInMemory)
+- [x] Unit: 4 dead refs with CleanDeadRefMaxCount=3 gives an error, not a delete (UpdateFetcherTest.RejectsTooManyDeadReferencesBeforeCleanup)
+- [x] Integration: with AllowPending=1 a pending_db_test file is applied as PENDING; with 0 it is ignored (DBUpdaterTest.EnforcesRehashRedundancyDeadReferenceAndPendingPolicies)
+- [x] Real client: n/a (the database updater has no client-facing behavior)
 
 **Risks**
 
@@ -866,7 +866,7 @@ Pending SQL from merged PRs becomes correctly numbered dated files, and CI prove
 - [ ] A PR editing data/sql/updates/db_world/2026_01_01_00.sql fails ci-sql-check
 - [ ] Merging a PR with pending_db_world/rev_1767225600_npc.sql produces updates/db_world/<today>_00.sql, or _01 if _00 exists
 - [ ] A PR whose pending SQL has a syntax error fails the DB job, naming the file
-- [ ] Real client: n/a
+- [x] Real client: n/a (the database updater has no client-facing behavior)
 
 **Risks**
 
