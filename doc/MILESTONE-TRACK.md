@@ -97,8 +97,9 @@ Nothing is closed for being unfinished. Missing or unfinished code, a missing de
 
 | ID | Milestone | Size | What you need | Why it is a good one to take |
 |---|---|---|---|---|
-| 6.01 | Whole-zone player broadcast | M | A build, MySQL or MariaDB, and two clients of my own for its real-client checks, which stay unticked without them | Players see each other appear, move and leave: the first milestone that makes the world shared, on the zone instances 5.02 fills with objects |
-| 6.10 | Supplemental server-side schemas | S | A build and my own install's type dump | Server-owned classes decode like dump classes, which the sigils 4.08 still counts and the NPC behaviours need; its rows are extracted from my own install at first run, never committed |
+| 6.02 | PLAYERWIZBANG broadcast | S | A build, MySQL or MariaDB, and two clients of my own for its one real-client check, which stays unticked without them | The spellbook wizbang a player opens shows for everyone in their zone instance: handle MSG_PLAYERWIZBANG in `src/server/game/Handlers/WizardHandler.cpp` and send MSG_WIZBANG through the instance broadcast 6.01 built, the way it relays a jump. The message's fields come from my own install's definitions through `client messages` |
+| 6.08 | Logout, link-dead, AFK, shutdown | M | A build, MySQL or MariaDB, and two clients of my own for its three real-client checks, which stay unticked without them | A wizard leaves the world cleanly whether it quits, its client dies, it goes AFK or the server stops, with its place saved and the others seeing it go. Its two unit checks need no client. `GameSession` is shared with 4.11, which the maintainer's world session is building, so keep changes there small and name them in the pull request; the new settings go in `gameserver.conf.dist` as live settings |
+| 6.15 | AOI grid and visibility sets, unit level | M | A build, MySQL or MariaDB, and two clients of my own for its two real-client checks, which stay unticked without them | Big zones send each client only what is in range: a cell grid per zone instance and a known set per player with hysteresis, as new files under `src/server/game/Zones` with their unit tests, and 6.01's relays asking the known sets who can see a mover. Three of its five checks are unit tests |
 
 ## Reserved
 
@@ -111,7 +112,6 @@ Everything not in the table above, including every milestone whose dependencies 
 | 3.02 | Built but for one check, which waits on a real client being sent MSG_BADGES, which NET and WIZ have not built yet |
 | 3.12 | Its remaining checks wait for 6.10 and for a real client session |
 | 3.23 | Next in the maintainer's own queue |
-| 4.02 | Built and passing every automated check; its one real-client check needs the maintainer's own client |
 | 4.06 | Built but for one check, a bad key refused with MSG_ATTACHFAILED on a real client, which is next in the maintainer's world session |
 | 4.11 | Being built now, and the world entry after it runs through the same files |
 | 16.11 | Overlaps the type extraction already built in 3.21 and is being rethought |
@@ -135,6 +135,7 @@ A row that says **before the reset** came from a pull request that was on the re
 
 | ID | Who | Sent as | What is left |
 |---|---|---|---|
+| 6.10 | MeruneFleuruwu | [#26](https://github.com/Justchicoo/Project-Ambrose/pull/26) | A draft. The maintainer's world session is building 6.10's remaining half, the XML sweep of server-side classes, in the same files, and folds this pull request's tests and evidence into that landing with its author credited |
 | 17.91 | MeruneFleuruwu | [#14](https://github.com/Justchicoo/Project-Ambrose/pull/14) | Landed on 2026-09-29 with checks 1, 3 and 5 earned, after review timed 6.01's movement relay as its own subsystem. Left: a benchmark showing the accumulators cost nothing measurable while no profile runs (check 2), and a tick alert naming the subsystem (check 4), which waits for 17.67's alert rules |
 | 6.17 | MeruneFleuruwu | [#12](https://github.com/Justchicoo/Project-Ambrose/pull/12) | Landed on 2026-09-29 with six of eight checks. Left: the two 10-minute fuzz runs on the frame and decode paths, which need the `linux-clang-fuzz` preset |
 | 3.28 | MeruneFleuruwu | [#10](https://github.com/Justchicoo/Project-Ambrose/pull/10) | Landed on 2026-09-26 with checks 3 and 4 earned: Type.name, Type.hash and the std::string layout derived from the client's own constructor with chosen values, the other 27 fields reported as assumed, and strict mode refusing by name. Left: the rest of the layout the same way (the list initializer, an enum option through the race adder, a property once its registering function is found, the map node), checks 1 and 2 once every field is derived (the maintainer runs the r801440 half), check 5 on a second client, and the record of extracted clients |

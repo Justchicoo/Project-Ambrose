@@ -14,36 +14,6 @@
       "since": "2026-09-27"
     },
     {
-      "scope": "milestone:16.04",
-      "who": "the maintainer's world session",
-      "what": "decoding the client's patcher and building Ambrose's own, so panel, launcher, client and server all connect",
-      "since": "2026-09-27"
-    },
-    {
-      "scope": "milestone:16.05",
-      "who": "the maintainer's world session",
-      "what": "the patcher chain after 16.04",
-      "since": "2026-09-27"
-    },
-    {
-      "scope": "milestone:16.06",
-      "who": "the maintainer's world session",
-      "what": "the patcher chain after 16.05",
-      "since": "2026-09-27"
-    },
-    {
-      "scope": "milestone:16.08",
-      "who": "the maintainer's world session",
-      "what": "the patcher chain, once it is ready",
-      "since": "2026-09-27"
-    },
-    {
-      "scope": "milestone:16.13",
-      "who": "the maintainer's world session",
-      "what": "the patcher chain, once it is ready",
-      "since": "2026-09-27"
-    },
-    {
       "scope": "milestone:17.24",
       "who": "the maintainer's panel session",
       "what": "the panel as its own installable program",
