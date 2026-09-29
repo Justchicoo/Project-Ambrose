@@ -282,7 +282,7 @@ Namespaces: `auth` (sign-in, lockout, second factor, recovery code, sign-out, se
 - Each row shows the actor, a rendered sentence with escaped values, whether an API key or a schedule acted, the address when visible, relative time with the absolute time on hover, and a details view for extra properties.
 - Retention is a setting per event class: 365 days for security events and 90 days for high-volume events such as file reads and console commands, with pinned rows kept.
 - Nodes buffer events locally while the panel link is down and forward them in batches, deduplicated by `event_uuid`. High-volume file events may be merged per actor, subject and minute.
-- A tamper-evident hash chain, where each row stores the hash of the one before it with a verify command, is planned, not yet scheduled, as an opt-in.
+- Each audit row stores a SHA-256 hash of its contents and the previous row's hash. The supervisor backfills the chain for existing rows when it opens the store; a separate verification command remains planned.
 
 ### From Pterodactyl
 
@@ -421,7 +421,7 @@ The console page (17.07, moved onto the event socket by 17.58) shows each app's 
 - Commands go through CommandMgr on the app's admin API (17.05), return their output lines as `command.result` tied to the request, and show inline under the command.
 - Destructive commands (shutdown, account delete, ban, realm close) need the confirm flag, and the page asks before sending one.
 - A command sent while the app is starting or stopped is refused with the reason, not dropped. A command payload is capped at 4096 bytes and a body with an unknown key is refused, so a newer page cannot smuggle a field an older app ignores (17.05).
-- History is kept per user and app in the supervisor's store (17.49), so it follows the operator across devices and the browser keeps nothing beyond the open page's recall. Tab completion offers only the commands the user may run at their level.
+- History is kept per user and app in the supervisor's store (17.49), so it follows the operator across devices. It contains the server-redacted command description, never sensitive arguments, and the browser keeps no persistent copy. Tab completion offers only the commands the user may run at their level.
 - `console.raw`, owner-only by default, writes a line to an app's standard input when its admin API is down (17.58). It is audited like any command and refused while the app is in a protected state.
 
 ### From Pterodactyl

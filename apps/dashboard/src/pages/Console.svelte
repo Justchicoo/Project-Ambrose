@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The remote console, live: it shows everything the chosen server prints as it prints it, which is what an owner watches, and interleaves the commands an operator sends and what came back in the same scrollback, so cause and effect read in the order they happened rather than in two places. What the server wrote to its error stream is coloured as such. The view follows the newest line until the operator scrolls up, and then leaves them where they are, because a console that yanks itself to the bottom while somebody is reading is a console they cannot read. It lists the apps the supervisor runs, sends what is typed to the app's own command route and prints what came back, keeping each app's output and its recalled commands in memory only. A command that cannot be undone comes back refused rather than run, and typing yes sends the same command again with the confirmation the server asked for, so the confirming is a thing the operator does on purpose rather than a flag the page sets for them. A refusal is printed in the colour of something wrong with the reason the server gave, never as though it had worked, and the prompt is closed while an app is not running or a command is still out. The prompt and the power controls are there only for an operator who may use them, hidden by the same permissions the server checks, so the page never offers what would come back refused. -->
+<!-- Project Ambrose by Imjustchico: The remote console shows app output and audited command results; recalled commands come from per-user, per-app history, and the UI displays only the server-redacted command description. Confirmation and running-state checks remain server-enforced. -->
 <script lang="ts">
     import * as Card from "$lib/components/ui/card/index.js";
     import * as Select from "$lib/components/ui/select/index.js";
@@ -21,7 +21,7 @@
     import { formatUptime } from "$lib/format.js";
     import { live } from "$lib/status.svelte.js";
     import { may } from "$lib/permission.svelte.js";
-    import { output as capturedOutput, runCommand, supervised } from "$lib/supervision.svelte.js";
+    import { commandHistory, output as capturedOutput, runCommand, supervised } from "$lib/supervision.svelte.js";
     import type { AppEntry } from "$lib/schemas.js";
 
     type Line = { kind: "command" | "reply" | "status" | "refused" | "said" | "wrote"; text: string };
@@ -96,14 +96,20 @@
         { icon: GitCommitIcon, title: "Build", value: app.revision || "Not read", copy: Boolean(app.revision), tone: "" },
     ]);
 
-    const typed: Record<string, string[]> = {};
+    const histories = $state<Record<string, string[]>>({});
 
     function history(name: string): string[] {
-        return typed[name] ?? [];
+        return histories[name] ?? [];
     }
 
-    function remember(name: string, command: string) {
-        typed[name] = [command, ...history(name).filter((one) => one !== command)].slice(0, 50);
+    async function refreshHistory(name: string, signal?: AbortSignal) {
+        try {
+            histories[name] = (await commandHistory(name, signal)).commands;
+        } catch (problem) {
+            if (problem instanceof DOMException && problem.name === "AbortError") return;
+            const reason = problem instanceof ApiError ? problem.message : String(problem);
+            say(name, [{ kind: "status", text: `Command history could not be read: ${reason}` }]);
+        }
     }
 
     function say(name: string, lines: Line[]) {
@@ -136,6 +142,14 @@
     });
 
     $effect(() => {
+        const name = app.name;
+        if (name === "") return;
+        const controller = new AbortController();
+        void refreshHistory(name, controller.signal);
+        return () => controller.abort();
+    });
+
+    $effect(() => {
         void output.length;
         if (!screen || !following) return;
         screen.scrollTop = screen.scrollHeight;
@@ -155,6 +169,8 @@
         sending = true;
         try {
             const answer = await runCommand(name, command, confirm);
+            await refreshHistory(name);
+            say(name, [{ kind: "command", text: answer.command }]);
             awaiting = answer.needs_confirm ? command : "";
             if (answer.lines.length > 0)
                 say(
@@ -164,6 +180,10 @@
             if (!answer.success) say(name, [{ kind: "refused", text: answer.reason }]);
         } catch (failure) {
             const problem = failure instanceof ApiError ? failure.message : String(failure);
+            if (failure instanceof ApiError && failure.body !== null && typeof failure.body === "object") {
+                const description = (failure.body as Record<string, unknown>).command;
+                if (typeof description === "string") say(name, [{ kind: "command", text: description }]);
+            }
             say(name, [{ kind: "refused", text: problem }]);
             awaiting = failure instanceof ApiError && asksToConfirm(failure.body) ? command : "";
             if (awaiting !== "") say(name, [{ kind: "refused", text: "Type yes to run it, or anything else to leave it alone" }]);
@@ -179,7 +199,6 @@
         const name = app.name;
         if (awaiting !== "") {
             const held = awaiting;
-            say(name, [{ kind: "command", text: command }]);
             line = "";
             recall = -1;
             awaiting = "";
@@ -190,8 +209,6 @@
             say(name, [{ kind: "refused", text: `${held} was left alone` }]);
             return;
         }
-        say(name, [{ kind: "command", text: command }]);
-        remember(name, command);
         line = "";
         recall = -1;
         awaiting = command;

@@ -8,6 +8,7 @@ import { filesQuery } from "./files";
 import { live } from "./status.svelte";
 import {
     CommandAnswer,
+    CommandHistoryAnswer,
     LogAnswer,
     DatabaseAnswer,
     DatabaseApplyAnswer,
@@ -104,6 +105,10 @@ export function logsAfter(app: string, after: number, signal?: AbortSignal) {
 
 export function runCommand(app: string, command: string, confirm = false) {
     return request("POST", pathFor(app, "command"), CommandAnswer, confirm ? { command, confirm } : { command });
+}
+
+export function commandHistory(app: string, signal?: AbortSignal) {
+    return request("GET", `api/panel/apps/${encodeURIComponent(app)}/command-history`, CommandHistoryAnswer, undefined, signal);
 }
 
 export function settingsOf(app: string, signal?: AbortSignal, reveal?: string) {

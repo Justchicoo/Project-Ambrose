@@ -87,10 +87,36 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     _listener.SetSessionSource(&_sessions);
     _authorization = std::make_unique<PanelAuthorization>(_grants,
         [this](AdminRequest const& request) { return UserOf(request); },
-        [this](AdminRequest const& request, std::string_view permission, std::string_view app, bool allowed)
+        [this](AdminRequest const& request, std::string_view permission, std::string_view app, PermissionVerdict verdict)
         {
             AMBROSE_LOG(_log, LogLevel::Info, PanelCategory, "{} {} {}{} (request {})", request.Principal.empty() ? std::string("somebody") : request.Principal,
-                allowed ? "used" : "was refused", permission, app.empty() ? std::string() : " on " + std::string(app), request.Id);
+                verdict == PermissionVerdict::Allowed ? "used" : "was refused", permission, app.empty() ? std::string() : " on " + std::string(app), request.Id);
+            if (verdict == PermissionVerdict::Allowed)
+                return;
+
+            AuditScope scope(request, app.empty() ? "panel:permission.refused" : "app:permission.refused");
+            AuditEvent& event = scope.Event();
+            event.Result = AuditResult::Refused;
+            event.Reason = verdict == PermissionVerdict::OutOfScope
+                ? fmt::format("the caller holds no grant in the {} app scope", app)
+                : fmt::format("the caller does not hold {}", permission);
+            event.Properties = nlohmann::json{
+                { "permission", permission },
+                { "verdict", verdict == PermissionVerdict::OutOfScope ? "out_of_scope" : "forbidden" }
+            }.dump();
+            std::optional<PanelUser> const user = UserOf(request);
+            if (user)
+            {
+                event.Actor = AuditActor::User;
+                event.ActorId = std::to_string(user->Id);
+                event.ActorName = user->Username;
+                event.On("panel_user", std::to_string(user->Id), user->Username);
+            }
+            if (!app.empty())
+                event.On("app", std::string(app), std::string(app));
+            std::string error;
+            if (!Record(event, {}, error))
+                AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A refused permission {} could not be recorded: {}", permission, error);
         });
     _listener.Routes().SetPermissionCheck([this](AdminRequest const& request, std::string_view permission)
     {
@@ -109,6 +135,7 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
         return _eventSocket->MintTicket(request);
     });
     RegisterTwoFactor();
+    RegisterCommandHistory();
 }
 
 void Panel::SetAppSource(PanelEventSocket::AppSource source)
@@ -173,6 +200,11 @@ bool Panel::OpenStore(ConfigMgr const& config, std::string& error)
     std::filesystem::path const file = StoreFile(config, _dataFolder);
     if (!_store.Open(file, Ambrose::FindSourceFolder(), warnings, error))
         return false;
+    if (!PanelAudit::EnsureChain(_store, error))
+    {
+        _store.Close();
+        return false;
+    }
     for (std::string const& warning : warnings)
         AMBROSE_LOG(_log, LogLevel::Warn, PanelCategory, "{}", warning);
     for (std::string const& applied : _store.GetApplied())
@@ -448,6 +480,145 @@ bool Panel::Record(AuditEvent const& event, std::function<bool(std::string& erro
     return PanelAudit::Record(_store, event, change, error);
 }
 
+bool Panel::Record(AuditEvent& event, std::function<bool(AuditEvent& event, std::string& error)> const& change, std::string& error)
+{
+    std::lock_guard const lock(_storeMutex);
+    if (!_store.IsOpen())
+    {
+        error = "the panel store is not open, so nothing can be recorded and nothing is changed";
+        return false;
+    }
+    return PanelAudit::Record(_store, event, change, error);
+}
+
+AdminResponse Panel::AuditRequest(AdminRequest const& request, std::string_view app, std::string_view action, std::function<AdminResponse()> operation)
+{
+    AuditScope scope(request, std::string(action));
+    AuditEvent& event = scope.Event();
+    event.Properties = nlohmann::json{
+        { "method", request.Method },
+        { "path", request.Path }
+    }.dump();
+    std::optional<PanelUser> const user = UserOf(request);
+    if (user)
+    {
+        event.Actor = AuditActor::User;
+        event.ActorId = std::to_string(user->Id);
+        event.ActorName = user->Username;
+        event.On("panel_user", std::to_string(user->Id), user->Username);
+    }
+    if (!app.empty())
+        event.On("app", std::string(app), std::string(app));
+    std::optional<AdminResponse> answer;
+    std::string error;
+    bool operationStarted = false;
+    if (!Record(event, [&](AuditEvent& recorded, std::string&)
+    {
+        operationStarted = true;
+        answer = operation();
+        if (answer->Status >= 500)
+        {
+            recorded.Result = AuditResult::Failed;
+            recorded.Error = answer->Body;
+        }
+        else if (answer->Status >= 400)
+        {
+            recorded.Result = AuditResult::Refused;
+            nlohmann::json const body = nlohmann::json::parse(answer->Body, nullptr, false);
+            recorded.Reason = body.is_object() && body.contains("message") && body["message"].is_string()
+                ? body["message"].get<std::string>() : fmt::format("the request was refused with HTTP {}", answer->Status);
+        }
+        if (request.Path.ends_with("/api/command") && answer->Status < 500)
+        {
+            nlohmann::json const body = nlohmann::json::parse(answer->Body, nullptr, false);
+            if (body.is_object() && body.contains("command") && body["command"].is_string()
+                && !StoreCommandHistoryWithinAudit(request, app, body["command"].get<std::string>(), error))
+            {
+                recorded.Result = AuditResult::Failed;
+                recorded.Error = fmt::format("the command ran but its history could not be saved: {}", error);
+            }
+        }
+        return true;
+    }, error))
+    {
+        if (operationStarted)
+            return AdminResponse::Problem(503, "audit_incomplete", fmt::format("The action may have run, but the panel could not finalize its audit record: {}", error));
+        return AdminResponse::Problem(503, "audit_unavailable", fmt::format("The action was not run because the panel could not record it: {}", error));
+    }
+    return answer.value_or(AdminResponse::Problem(503, "audit_unavailable", "The action did not produce an answer"));
+}
+
+uint8 Panel::CommandLevel(AdminRequest const& request)
+{
+    return _authorization->CommandLevel(request);
+}
+
+std::string Panel::CommandActorName(AdminRequest const& request)
+{
+    std::optional<PanelUser> const user = UserOf(request);
+    return user ? user->Username : std::string();
+}
+
+bool Panel::StoreCommandHistoryWithinAudit(AdminRequest const& request, std::string_view app, std::string_view command, std::string& error)
+{
+    std::optional<PanelUser> const user = UserOf(request);
+    if (!user || app.empty() || command.empty())
+        return true;
+    std::optional<PanelStore::Statement> insert = _store.Prepare(
+        "INSERT INTO panel_command_history (user_id, app, command, created_epoch_ms) VALUES (?, ?, ?, ?)", error);
+    if (!insert)
+        return false;
+    insert->Bind(1, user->Id);
+    insert->Bind(2, app);
+    insert->Bind(3, command);
+    insert->Bind(4, PanelStore::NowEpochMs());
+    if (!insert->Run(error))
+        return false;
+    std::optional<PanelStore::Statement> trim = _store.Prepare(
+        "DELETE FROM panel_command_history WHERE user_id = ? AND id NOT IN "
+        "(SELECT id FROM panel_command_history WHERE user_id = ? ORDER BY id DESC LIMIT 500)", error);
+    if (!trim)
+        return false;
+    trim->Bind(1, user->Id);
+    trim->Bind(2, user->Id);
+    return trim->Run(error);
+}
+
+AdminResponse Panel::CommandHistoryGet(AdminRequest const& request)
+{
+    constexpr std::string_view HistoryPrefix = "/api/panel/apps/";
+    constexpr std::string_view Suffix = "/command-history";
+    std::string_view path(request.Path);
+    if (!path.starts_with(HistoryPrefix) || !path.ends_with(Suffix))
+        return AdminResponse::Problem(404, "not_found", "That command history does not exist");
+    path.remove_prefix(HistoryPrefix.size());
+    path.remove_suffix(Suffix.size());
+    if (path.empty() || path.find('/') != std::string_view::npos)
+        return AdminResponse::Problem(404, "not_found", "That command history does not exist");
+    std::optional<PanelUser> const user = UserOf(request);
+    if (!user)
+        return AdminResponse::Problem(403, "forbidden", "A panel user is needed to read command history");
+    std::lock_guard const lock(_storeMutex);
+    std::string error;
+    std::optional<PanelStore::Statement> rows = _store.Prepare(
+        "SELECT command FROM panel_command_history WHERE user_id = ? AND app = ? ORDER BY id DESC LIMIT 50", error);
+    if (!rows)
+        return AdminResponse::Problem(503, "history_unavailable", error);
+    rows->Bind(1, user->Id);
+    rows->Bind(2, path);
+    nlohmann::json commands = nlohmann::json::array();
+    while (rows->Step(error))
+        commands.push_back(rows->Text(0));
+    if (!error.empty())
+        return AdminResponse::Problem(503, "history_unavailable", error);
+    nlohmann::json answer{
+        { "schema", 1 },
+        { "app", path },
+        { "commands", std::move(commands) }
+    };
+    return AdminResponse::Json(200, answer.dump());
+}
+
 std::optional<AdminResponse> Panel::Throttle(AdminRequest const& request, uint32 cost)
 {
     if (cost == 0)
@@ -718,6 +889,14 @@ void Panel::RegisterTwoFactor()
     routes.AddOpenCosting("POST", "/api/panel/step-up", PasswordCheckCost, [this](AdminRequest const& request) { return StepUpRoute(request); });
 }
 
+void Panel::RegisterCommandHistory()
+{
+    _listener.Routes().AddGuardedPrefix("GET", "/api/panel/apps/", "console.read", [this](AdminRequest const& request)
+    {
+        return CommandHistoryGet(request);
+    });
+}
+
 AdminResponse Panel::PanelSettingsGet(AdminRequest const& request)
 {
     std::string error;
@@ -732,8 +911,6 @@ AdminResponse Panel::PanelSettingsUpdate(AdminRequest const& request)
     if (!user || !body.is_object() || !body.contains("values"))
         return AdminResponse::Invalid("Updating panel settings takes a values object", { { "values", "Give the settings to change" } });
     std::string error;
-    if (!_settings.Update(body["values"], user->Id, error))
-        return AdminResponse::Problem(409, "settings_refused", error);
     AuditEvent event;
     event.Name = "panel:settings.changed";
     event.Actor = AuditActor::User;
@@ -742,8 +919,17 @@ AdminResponse Panel::PanelSettingsUpdate(AdminRequest const& request)
     event.Address = request.RemoteAddress;
     event.Properties = "{\"changed\":true}";
     event.On("panel_user", std::to_string(user->Id), user->Username);
-    if (!Record(event, {}, error))
+    if (!Record(event, [&](AuditEvent& recorded, std::string& failure)
+    {
+        if (_settings.Update(body["values"], user->Id, failure, true))
+            return true;
+        recorded.Result = AuditResult::Refused;
+        recorded.Reason = failure;
+        return true;
+    }, error))
         return AdminResponse::Problem(503, "audit_unavailable", error);
+    if (event.Result == AuditResult::Refused)
+        return AdminResponse::Problem(409, "settings_refused", event.Reason);
     return PanelSettingsGet(request);
 }
 

@@ -108,6 +108,12 @@ public:
     void AddSocket(AdminSocketRoute route) { _listener.AddSocket(std::move(route)); }
 
     bool Record(AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error);
+    bool Record(AuditEvent& event, std::function<bool(AuditEvent& event, std::string& error)> const& change, std::string& error);
+    AdminResponse AuditRequest(AdminRequest const& request, std::string_view app, std::string_view action, std::function<AdminResponse()> operation);
+    uint8 CommandLevel(AdminRequest const& request);
+    std::string CommandActorName(AdminRequest const& request);
+    bool StoreCommandHistoryWithinAudit(AdminRequest const& request, std::string_view app, std::string_view command, std::string& error);
+    AdminResponse CommandHistoryGet(AdminRequest const& request);
     std::string NameOf(AdminRequest const& request);
     void RecordRelayed(AdminRequest const& request, std::string_view app, std::string_view method, std::string_view path, int status, std::string const& body);
     void RecordReveal(AdminRequest const& request, std::string_view app, std::vector<std::string> const& keys);
@@ -132,6 +138,7 @@ private:
     void ApplyTwoFactorSettings(ConfigMgr const& config, PanelTwoFactorSettings const& loaded);
     void RegisterSignIn();
     void RegisterTwoFactor();
+    void RegisterCommandHistory();
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
     AdminResponse Probe(AdminRequest const& request);

@@ -28,7 +28,9 @@
 #include "StartProgress.h"
 #include "PlayerLevelMgr.h"
 #include "AccountMgr.h"
+#include "AdminCommand.h"
 #include "ClientSetup.h"
+#include "CommandCaller.h"
 #include "CommandMgr.h"
 #include "ConfigMgr.h"
 #include "DatabaseEnv.h"
@@ -114,6 +116,45 @@ namespace
         }
 
     protected:
+        void RegisterAdminCommand(AdminRouter& routes) override
+        {
+            AdminCommand::Register(routes,
+                [](std::string const& line, uint8 level, bool confirmed)
+                {
+                    AdminCommandOutcome outcome;
+                    outcome.Command = sCommandMgr.DescribeForLog(line);
+                    CommandMatch const match = sCommandMgr.Parse(line);
+                    if (!match.Found || level < match.SecurityLevel)
+                    {
+                        outcome.Refused = true;
+                        outcome.Reason = "there is no such command";
+                        return outcome;
+                    }
+                    if (AdminCommand::IsDestructive(line) && !confirmed)
+                    {
+                        outcome.Refused = true;
+                        outcome.NeedsConfirm = true;
+                        outcome.Reason = "this command changes something that cannot be undone, so it needs confirm";
+                        return outcome;
+                    }
+                    RecordingCaller caller(level, true, "panel operator");
+                    CommandResult const result = sCommandMgr.Execute(caller, line);
+                    outcome.Lines = caller.GetLines();
+                    outcome.Ran = result == CommandResult::Ran;
+                    outcome.Refused = !outcome.Ran;
+                    if (result == CommandResult::Unknown)
+                        outcome.Reason = "there is no such command";
+                    else if (result == CommandResult::Usage)
+                        outcome.Reason = "the command was not used the way it takes";
+                    else if (result == CommandResult::Empty)
+                        outcome.Reason = "there was no command to run";
+                    else if (result == CommandResult::Refused)
+                        outcome.Reason = "the command refused to run";
+                    return outcome;
+                }, Commands(), GetInfo().Name, CommandAuditFile(),
+                [](std::string_view line) { return sCommandMgr.DescribeForLog(line); });
+        }
+
         void OnAdminApiReady(AdminServer& admin) override
         {
             _databaseView.Register(admin.Routes());

@@ -108,6 +108,7 @@ void AdminRouter::Put(std::string method, std::string path, Handler handler, Rou
         existing->Cost = cost;
         existing->Permission = std::move(permission);
         existing->Enrollment = enrollment;
+        existing->ResolvePermission = {};
         return;
     }
     _routes.push_back({ upper, std::move(path), std::move(handler), access, prefix, cost, std::move(permission), enrollment });
@@ -211,6 +212,14 @@ void AdminRouter::AddGuarded(std::string method, std::string path, std::string p
 void AdminRouter::AddGuardedPrefix(std::string method, std::string prefix, std::string permission, Handler handler)
 {
     Put(std::move(method), std::move(prefix), std::move(handler), RouteAccess::Permission, true, 0, std::move(permission));
+}
+
+void AdminRouter::AddDynamicGuardedPrefix(std::string method, std::string prefix, std::string fallbackPermission, PermissionResolver resolver, Handler handler)
+{
+    Put(std::move(method), std::move(prefix), std::move(handler), RouteAccess::Permission, true, 0, std::move(fallbackPermission));
+    std::unique_lock const lock(_mutex);
+    Route& route = _routes.back();
+    route.ResolvePermission = std::move(resolver);
 }
 
 PermissionVerdict AdminRouter::MayI(AdminRequest const& request, std::string_view permission) const
@@ -626,6 +635,7 @@ AdminResponse AdminRouter::Serve(AdminRequest const& request) const
 {
     Handler handler;
     std::string permission;
+    PermissionResolver resolvePermission;
     PermissionCheck check;
     std::vector<std::string> allowed;
     {
@@ -640,6 +650,7 @@ AdminResponse AdminRouter::Serve(AdminRequest const& request) const
             {
                 handler = route.Run;
                 permission = route.Permission;
+                resolvePermission = route.ResolvePermission;
                 break;
             }
             allowed.push_back(route.Method);
@@ -662,6 +673,7 @@ AdminResponse AdminRouter::Serve(AdminRequest const& request) const
                 {
                     handler = route.Run;
                     permission = route.Permission;
+                    resolvePermission = route.ResolvePermission;
                 }
                 else
                 {
@@ -686,6 +698,8 @@ AdminResponse AdminRouter::Serve(AdminRequest const& request) const
         return response;
     }
 
+    if (resolvePermission)
+        permission = resolvePermission(request);
     if (check && !permission.empty())
     {
         switch (check(request, permission))

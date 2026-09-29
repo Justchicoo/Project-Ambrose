@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel, the supervisor routes and the file roots on its admin API and the panel's listener alike, keeps its own live settings in the panel store when that is open and in config alone when it is not, hands a change of the minimum free space to the space guard, rebuilds the file roots on a configuration change, a reload of file_roots or a change of an owner's protected patterns, records relayed settings and reload answers, refused file paths and its own secret reveals in the panel's audit log, publishes every state an app passes through on the panel's status stream at that app's scope and gives the panel's event socket its list of apps, reloads the panel's own listener and its two-factor rules when a Panel option changes, offers apps, start, stop, restart and kill on its console with the panel's operators beside them, including the way back in for an operator who lost their authenticator and their recovery codes, and leaves the apps running when it stops so the next start takes them back.
+ * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel, the supervisor routes and the file roots on its admin API and the panel's listener alike, keeps its own live settings in the panel store when that is open and in config alone when it is not, hands a change of the minimum free space to the space guard, rebuilds the file roots on a configuration change, a reload of file_roots or a change of an owner's protected patterns, records relayed settings and reload answers, refused file paths and its own secret reveals in the panel's audit log, runs every relayed change inside a panel audit record while the panel store is open, as it runs them unrecorded by a panel that is off, and caps a relayed command at the level the caller's grants allow, the admin token keeping the top level, publishes every state an app passes through on the panel's status stream at that app's scope and gives the panel's event socket its list of apps, reloads the panel's own listener and its two-factor rules when a Panel option changes, offers apps, start, stop, restart and kill on its console with the panel's operators beside them, including the way back in for an operator who lost their authenticator and their recovery codes, and leaves the apps running when it stops so the next start takes them back.
  */
 
 #include "AdminCapabilities.h"
@@ -241,6 +241,19 @@ namespace
                 LOG_INFO("server.supervisor", "Starting with no history: {}", historyError);
             RegisterStandardRoutes(_panel.Routes());
             AdminGraphsView::Register(_panel.Routes(), [this]() -> Ambrose::SeriesStore const& { return _history; });
+            _supervisor.SetAuditRecorder([this](AdminRequest const& request, std::string_view app, std::string_view action, std::function<AdminResponse()> operation)
+            {
+                if (!_panel.IsStoreOpen())
+                    return operation();
+                return _panel.AuditRequest(request, app, action, std::move(operation));
+            });
+            _supervisor.SetCommandContext([this](AdminRequest const& request)
+            {
+                return request.Principal == "token" ? uint8(4) : _panel.CommandLevel(request);
+            }, [this](AdminRequest const& request)
+            {
+                return _panel.CommandActorName(request);
+            });
             _supervisor.Register(_panel.Routes(), [this] { return BuildStatus(); });
             _files.Register(_panel.Routes());
             _panel.SetErrorSource([this]

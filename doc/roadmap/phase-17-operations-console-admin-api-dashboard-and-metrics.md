@@ -1441,12 +1441,12 @@ Changed on 2026-09-27. The tables browser, and the world schema its forms are bu
 
 **Acceptance**
 
-- [ ] A restart run through the panel appears once in the audit log with the panel user, the client address and the app as subject
-- [ ] A command refused for being above the caller's level writes a refused audit row and runs nothing
-- [ ] A forced failure of the audit insert leaves the change unapplied, since both are one transaction
-- [ ] No response body or browser storage holds an app token, and a request that tries to pass one is ignored by the relay
-- [ ] A command run in one browser appears in that user's history in another browser, with a password argument redacted
-- [ ] A relay call to a stopped app and one to an app refusing its token give different errors, both recorded
+- [x] A restart run through the panel appears once in the audit log with the panel user, the client address and the app as subject (PanelTest.APanelRestartIsRecordedOnceWithItsUserAddressAppAndChainHash)
+- [x] A command refused for being above the caller's level writes a refused audit row and runs nothing (PanelTest.ARefusedCommandIsAuditedWithoutRunningIt; AdminCommandRouteTest.ACommandAboveTheRunnerLevelIsRefusedWithoutExecution)
+- [x] A forced failure of the audit insert leaves the change unapplied, since both are one transaction (PanelTest.AChangeWhoseRecordCannotBeWrittenIsNotApplied)
+- [x] No response body or browser storage holds an app token, and a request that tries to pass one is ignored by the relay (SupervisorTest.TheRelayRemovesClientCredentialsAndCapsCommandLevels; Console.browser.test.ts, where the history stays on the server and browser storage stays empty)
+- [x] A command run in one browser appears in that user's history in another browser, with a password argument redacted (PanelTest.CommandHistoryIsStoredPerUserAndReturnsOnlyTheRedactedCommand; Console.browser.test.ts, which loads the shared history after the page is reopened)
+- [x] A relay call to a stopped app and one to an app refusing its token give different errors, both recorded (SupervisorTest.StoppedAppAndInvalidTokenRelayFailuresAreDistinctAndAudited)
 
 ## 17.50 Panel users, roles and grants pages
 

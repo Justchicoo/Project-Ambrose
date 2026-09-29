@@ -111,6 +111,7 @@ protected:
     virtual std::unique_ptr<ConsoleInput> CreateConsoleInput();
     virtual std::string GetRealmName() const;
     virtual void OnAdminApiReady(AdminServer& admin);
+    virtual void RegisterAdminCommand(AdminRouter& routes);
     virtual std::vector<RestartRequiredOption> GetRestartRequiredOptions() const;
     virtual void OnConfigChanged(std::vector<std::string> const& changed);
     virtual uint8 GetSettingApps() const;
