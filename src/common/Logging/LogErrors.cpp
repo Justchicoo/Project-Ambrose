@@ -52,6 +52,7 @@ void LogErrorStore::Note(LogMessage const& message) noexcept
         entry.Group.Count += 1;
         entry.Group.LastSeen = message.Time;
         entry.Group.LastMessage = message.Text;
+        entry.Group.LastSequence = message.Sequence;
         entry.Order = ++_order;
     }
     catch (std::exception const&)

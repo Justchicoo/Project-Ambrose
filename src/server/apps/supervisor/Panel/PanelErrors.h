@@ -30,6 +30,7 @@ struct PanelErrorGroup
     int64 FirstEpochMs = 0;
     int64 LastEpochMs = 0;
     std::string LastMessage;
+    std::string ContextBeforeJson = "[]";
     std::optional<int64> ClearedEpochMs;
 
     bool IsNewSinceCleared() const noexcept { return ClearedEpochMs && LastEpochMs > *ClearedEpochMs; }

@@ -30,7 +30,7 @@
     import SignIn from "./pages/SignIn.svelte";
     import Unavailable from "./pages/Unavailable.svelte";
 
-    const granted = everything;
+    const granted = $derived(session.panel ? new Set(session.user?.permissions ?? []) : everything);
 
     function readPath(): string {
         const path = window.location.hash.replace(/^#\/?/, "").split("?")[0];
@@ -70,11 +70,13 @@
 
     const shown = $derived(resolve(path, granted));
     const title = $derived(shown.kind === "missing" ? "Not found" : shown.route.title);
-    const reachable = navigation(granted);
-    const groups = (["Servers", "Game", "Panel"] as const).map((heading) => ({
-        heading,
-        entries: reachable.filter((entry) => entry.group === heading),
-    }));
+    const reachable = $derived(navigation(granted));
+    const groups = $derived(
+        (["Servers", "Game", "Panel"] as const).map((heading) => ({
+            heading,
+            entries: reachable.filter((entry) => entry.group === heading),
+        })),
+    );
     const stale = $derived(live.receivedAt !== 0 && isStale(live.receivedAt, live.now));
     const countdown = $derived(Math.max(0, Math.ceil((live.retryAt - live.now) / 1000)));
     const connection = $derived.by((): { tone: "healthy" | "waiting" | "unknown"; word: string } => {

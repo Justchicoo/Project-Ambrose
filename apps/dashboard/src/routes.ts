@@ -8,6 +8,7 @@ import ActivityIcon from "@lucide/svelte/icons/activity";
 import ArchiveIcon from "@lucide/svelte/icons/archive";
 import ChartLineIcon from "@lucide/svelte/icons/chart-line";
 import DatabaseIcon from "@lucide/svelte/icons/database";
+import BugIcon from "@lucide/svelte/icons/bug";
 import FileTextIcon from "@lucide/svelte/icons/file-text";
 import FolderIcon from "@lucide/svelte/icons/folder";
 import GaugeIcon from "@lucide/svelte/icons/gauge";
@@ -205,6 +206,15 @@ export const routes: Route[] = [
         nav: true,
         group: "Panel",
         view: { kind: "page", load: () => import("./pages/Activity.svelte") },
+    },
+    {
+        path: "errors",
+        title: "Error reports",
+        icon: BugIcon,
+        permission: "errors.read",
+        nav: true,
+        group: "Panel",
+        view: { kind: "page", load: () => import("./pages/Errors.svelte") },
     },
     {
         path: "two-factor",

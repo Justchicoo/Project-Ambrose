@@ -116,3 +116,22 @@ TEST_F(PanelErrorsTest, AGroupRaisedAgainAfterItWasClearedIsNewAgain)
     EXPECT_TRUE(after.IsNewSinceCleared()) << "raised again after it was cleared";
     EXPECT_EQ(after.ClearedEpochMs.value_or(0), 3000) << "clearing is remembered rather than undone";
 }
+
+TEST_F(PanelErrorsTest, TheContextBeforeAnErrorSurvivesClosingAndReopeningThePanelStore)
+{
+    std::string error;
+    PanelErrorGroup group = Raised(2, 1000, 2000);
+    group.ContextBeforeJson = R"([{"sequence":77,"message":"the preceding log line"}])";
+    ASSERT_TRUE(_errors->Record("gameserver", { group }, error)) << error;
+
+    _store.Close();
+    std::vector<std::string> warnings;
+    ASSERT_TRUE(_store.Open(_directory.Path() / "panel.sqlite3", Ambrose::FindSourceFolder(), warnings, error)) << error;
+    PanelErrorGroup const restored = Only();
+    EXPECT_EQ(restored.App, "gameserver");
+    EXPECT_EQ(restored.File, group.File);
+    EXPECT_EQ(restored.Line, group.Line);
+    EXPECT_EQ(restored.Revision, group.Revision);
+    EXPECT_EQ(restored.TotalCount, group.Count);
+    EXPECT_EQ(restored.ContextBeforeJson, group.ContextBeforeJson);
+}

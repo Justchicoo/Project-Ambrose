@@ -5,6 +5,7 @@
 
 #include "Panel.h"
 #include "AdminConfigView.h"
+#include "PanelErrorReport.h"
 #include "ConfigMgr.h"
 #include "PanelSettingStore.h"
 #include "ConstantTime.h"
@@ -15,6 +16,7 @@
 #include "RecoveryCode.h"
 #include "SecureMemory.h"
 #include "SHA256.h"
+#include "LogRedaction.h"
 #include "SourceFolder.h"
 #include "StringUtil.h"
 #include "Totp.h"
@@ -25,6 +27,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <mutex>
 #include <utility>
 
@@ -410,6 +413,9 @@ std::size_t Panel::GatherErrorsOnce()
             group.FirstEpochMs = entry.value("first_epoch_ms", int64{ 0 });
             group.LastEpochMs = entry.value("last_epoch_ms", int64{ 0 });
             group.LastMessage = entry.value("last_message", std::string());
+            nlohmann::json context = entry.value("context_before", nlohmann::json::array());
+            if (context.is_array())
+                group.ContextBeforeJson = context.dump();
             if (group.File.empty() || group.Template.empty())
                 continue;
             groups.push_back(std::move(group));
@@ -525,6 +531,180 @@ void Panel::RegisterSignIn()
     routes.AddOpen("GET", "/api/panel/permissions", [](AdminRequest const&) { return AdminResponse::Json(200, PanelPermissions::CatalogJson()); });
     routes.AddGuarded("GET", "/api/panel/settings", "panel.settings", [this](AdminRequest const& request) { return PanelSettingsGet(request); });
     routes.AddGuarded("PATCH", "/api/panel/settings", "panel.settings", [this](AdminRequest const& request) { return PanelSettingsUpdate(request); });
+    routes.AddGuarded("GET", "/api/panel/errors", "errors.read", [this](AdminRequest const&)
+    {
+        std::string error;
+        std::lock_guard const lock(_storeMutex);
+        std::vector<PanelErrorGroup> const groups = _errors.List(error);
+        if (!error.empty())
+            return AdminResponse::Problem(503, "errors_unavailable", error);
+        nlohmann::json answer;
+        answer["schema"] = 1;
+        answer["groups"] = nlohmann::json::array();
+        for (PanelErrorGroup const& group : groups)
+        {
+            nlohmann::json context = nlohmann::json::parse(group.ContextBeforeJson, nullptr, false);
+            if (!context.is_array())
+                return AdminResponse::Problem(503, "errors_unavailable", fmt::format("Error group {} has invalid saved log context", group.Id));
+            answer["groups"].push_back({
+                { "id", group.Id }, { "app", group.App }, { "category", group.Category }, { "level", group.Level },
+                { "file", group.File }, { "line", group.Line }, { "function", group.Function }, { "template", group.Template },
+                { "revision", group.Revision }, { "count", group.Count }, { "total_count", group.TotalCount },
+                { "first_epoch_ms", group.FirstEpochMs }, { "last_epoch_ms", group.LastEpochMs },
+                { "last_message", group.LastMessage }, { "context_before", std::move(context) },
+                { "new_since_cleared", group.IsNewSinceCleared() }
+            });
+        }
+        return AdminResponse::Json(200, answer.dump());
+    });
+    routes.AddGuarded("POST", "/api/panel/errors/clear", "errors.clear", [this](AdminRequest const& request)
+    {
+        return ClearError(request);
+    });
+    routes.AddGuarded("POST", "/api/panel/errors/report/preview", "errors.read", [this](AdminRequest const& request)
+    {
+        return ErrorReport(request, false);
+    });
+    routes.AddGuarded("POST", "/api/panel/errors/report", "errors.report", [this](AdminRequest const& request)
+    {
+        return ErrorReport(request, true);
+    });
+}
+
+AdminResponse Panel::ClearError(AdminRequest const& request)
+{
+    nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
+    if (!body.is_object() || !body.contains("id") || !body["id"].is_number_integer())
+        return AdminResponse::Invalid("Clearing an error group takes its positive id", { { "id", "Choose an error group" } });
+
+    int64 id = 0;
+    if (body["id"].is_number_unsigned())
+    {
+        uint64 const value = body["id"].get<uint64>();
+        if (value > static_cast<uint64>(std::numeric_limits<int64>::max()))
+            return AdminResponse::Invalid("The error group id must be a positive whole number", { { "id", "Choose a valid error group" } });
+        id = static_cast<int64>(value);
+    }
+    else
+    {
+        id = body["id"].get<int64>();
+    }
+    if (id <= 0)
+        return AdminResponse::Invalid("The error group id must be a positive whole number", { { "id", "Choose a valid error group" } });
+
+    PanelErrorGroup selected;
+    {
+        std::lock_guard const lock(_storeMutex);
+        std::string error;
+        std::vector<PanelErrorGroup> const groups = _errors.List(error);
+        if (!error.empty())
+            return AdminResponse::Problem(503, "errors_unavailable", error);
+        auto const found = std::find_if(groups.begin(), groups.end(), [id](PanelErrorGroup const& group) { return group.Id == id; });
+        if (found == groups.end())
+            return AdminResponse::Problem(404, "error_group_missing", fmt::format("Error group {} no longer exists", id));
+        selected = *found;
+    }
+
+    AuditEvent event;
+    event.Name = "errors:group.cleared";
+    std::optional<PanelUser> const actor = UserOf(request);
+    event.Actor = actor ? AuditActor::User : AuditActor::Token;
+    event.ActorId = actor ? std::to_string(actor->Id) : request.Principal;
+    event.ActorName = actor ? actor->Username : request.Principal;
+    event.Address = request.RemoteAddress;
+    event.UserAgent = request.UserAgent;
+    nlohmann::json properties;
+    properties["id"] = id;
+    properties["request"] = request.Id;
+    event.Properties = properties.dump();
+    event.On("error_group", std::to_string(id), selected.App + " " + selected.Category);
+    std::string error;
+    if (!Record(event, [this, id](std::string& failure) { return _errors.Clear(id, PanelStore::NowEpochMs(), failure); }, error))
+        return AdminResponse::Problem(503, "error_clear_unavailable", error);
+
+    return AdminResponse::Json(200, R"({"schema":1,"cleared":true})");
+}
+
+AdminResponse Panel::ErrorReport(AdminRequest const& request, bool create)
+{
+    nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
+    if (!body.is_object() || !body.contains("groups") || !body["groups"].is_array() ||
+        !body.contains("include_rendered") || !body["include_rendered"].is_boolean())
+        return AdminResponse::Invalid("Building an error report takes group ids and an include_rendered choice",
+            { { "groups", "Choose one or more error groups" }, { "include_rendered", "Choose whether to include rendered log text" } });
+    if (body["groups"].empty() || body["groups"].size() > 200)
+        return AdminResponse::Invalid("Choose from 1 to 200 error groups", { { "groups", "Choose from 1 to 200 groups" } });
+
+    std::vector<int64> ids;
+    for (nlohmann::json const& id : body["groups"])
+    {
+        int64 value = 0;
+        if (id.is_number_unsigned())
+        {
+            uint64 const unsignedValue = id.get<uint64>();
+            if (unsignedValue > static_cast<uint64>(std::numeric_limits<int64>::max()))
+                return AdminResponse::Invalid("Error group ids must be positive whole numbers", { { "groups", "Every id must be a positive whole number" } });
+            value = static_cast<int64>(unsignedValue);
+        }
+        else if (id.is_number_integer())
+        {
+            value = id.get<int64>();
+        }
+        if (value <= 0)
+            return AdminResponse::Invalid("Error group ids must be positive whole numbers", { { "groups", "Every id must be a positive whole number" } });
+        ids.push_back(value);
+    }
+    std::sort(ids.begin(), ids.end());
+    if (std::adjacent_find(ids.begin(), ids.end()) != ids.end())
+        return AdminResponse::Invalid("An error group can appear only once", { { "groups", "Remove repeated ids" } });
+
+    std::string error;
+    nlohmann::json report;
+    std::vector<PanelErrorGroup> selected;
+    {
+        std::lock_guard const lock(_storeMutex);
+        std::vector<PanelErrorGroup> const all = _errors.List(error);
+        if (!error.empty())
+            return AdminResponse::Problem(503, "errors_unavailable", error);
+        selected.reserve(ids.size());
+        for (int64 id : ids)
+        {
+            auto const found = std::find_if(all.begin(), all.end(), [id](PanelErrorGroup const& group) { return group.Id == id; });
+            if (found == all.end())
+                return AdminResponse::Problem(404, "error_group_missing", fmt::format("Error group {} no longer exists", id));
+            selected.push_back(*found);
+        }
+        std::optional<nlohmann::json> built = PanelErrorReport::Build(selected, body["include_rendered"].get<bool>(), error);
+        if (!built)
+            return AdminResponse::Problem(503, "report_unavailable", error);
+        report = std::move(*built);
+    }
+
+    if (create)
+    {
+        AuditEvent event;
+        event.Name = "errors:report.created";
+        std::optional<PanelUser> const actor = UserOf(request);
+        event.Actor = actor ? AuditActor::User : AuditActor::Token;
+        event.ActorId = actor ? std::to_string(actor->Id) : request.Principal;
+        event.ActorName = actor ? actor->Username : request.Principal;
+        event.Address = request.RemoteAddress;
+        event.UserAgent = request.UserAgent;
+        nlohmann::json properties;
+        properties["group_count"] = selected.size();
+        properties["include_rendered"] = body["include_rendered"];
+        properties["request"] = request.Id;
+        event.Properties = properties.dump();
+        for (PanelErrorGroup const& group : selected)
+            event.On("error_group", std::to_string(group.Id), group.App + " " + group.Category);
+        if (!Record(event, {}, error))
+            return AdminResponse::Problem(503, "audit_unavailable", error);
+    }
+
+    nlohmann::json answer;
+    answer["schema"] = 1;
+    answer["report"] = std::move(report);
+    return AdminResponse::Json(200, answer.dump());
 }
 
 void Panel::RegisterTwoFactor()

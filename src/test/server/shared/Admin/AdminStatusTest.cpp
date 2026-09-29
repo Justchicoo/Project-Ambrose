@@ -324,8 +324,12 @@ TEST_F(AdminStatusTest, TheErrorsRouteReportsAGroupPerPlaceAnErrorWasRaised)
     EXPECT_EQ(group["level"], "error");
     EXPECT_EQ(group["count"], 2u);
     EXPECT_EQ(group["template"], "could not reach {} for {}");
+    EXPECT_TRUE(std::string(group["file"]).starts_with("src/")) << group["file"];
     EXPECT_NE(std::string(group["file"]).find("AdminStatusTest.cpp"), std::string::npos);
     EXPECT_GT(group["line"].get<uint32>(), 0u);
+    EXPECT_FALSE(group["function"].get<std::string>().empty());
+    EXPECT_FALSE(group["revision"].get<std::string>().empty());
+    EXPECT_TRUE(group["context_before"].is_array());
     EXPECT_LE(group["first_epoch_ms"].get<int64>(), group["last_epoch_ms"].get<int64>());
 
     std::set<std::string> const keys = Keys(group);

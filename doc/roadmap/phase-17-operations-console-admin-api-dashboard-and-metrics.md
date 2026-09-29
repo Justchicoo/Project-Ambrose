@@ -2770,12 +2770,12 @@ Added on 2026-09-22 at the maintainer's direction: errors an operator meets shou
 
 **Acceptance**
 
-- [ ] An error logged in a test build appears on the page with its repository-relative file, line and function, and the build revision it came from
-- [ ] The same error logged three times is one group with a count of three, a different line is a different group, and a group survives a restart of the app and of the supervisor
-- [ ] A report built from groups of two apps names both apps' revisions and each group's location, and a known secret, a known account verifier and a known account name appear nowhere in its bytes while rendered text is left out
-- [ ] Ticking rendered messages shows them in the preview and puts exactly those lines in the file
-- [ ] The console and file log lines are byte for byte what they were before, and the stream's version-one fields are all still there
-- [ ] Creating a report writes an audit row
+- [x] An error logged in a test build appears on the page with its repository-relative file, line and function, and the build revision it came from (SLogSourceTest.ARecordCarriesTheFileLineAndFunctionOfItsCall; AdminStatusTest.TheErrorsRouteReportsAGroupPerPlaceAnErrorWasRaised; Errors.browser.test.ts)
+- [x] The same error logged three times is one group with a count of three, a different line is a different group, and a group survives a restart of the app and of the supervisor (LogErrorStoreTest.OneLineRaisedManyTimesIsOneGroupWithACount; LogErrorStoreTest.TheSameWordsFromDifferentPlacesAreDifferentGroups; PanelErrorsTest.ACountThatWentBackwardsIsAnAppThatRestarted; PanelErrorsTest.TheContextBeforeAnErrorSurvivesClosingAndReopeningThePanelStore)
+- [x] A report built from groups of two apps names both apps' revisions and each group's location, and a known secret, a known account verifier and a known account name appear nowhere in its bytes while rendered text is left out (PanelTest.ErrorReportsPreviewPrivacyAndAuditExactlyTheSelectedGroups)
+- [x] Ticking rendered messages shows them in the preview and puts exactly those lines in the file (Errors.browser.test.ts; PanelTest.ErrorReportsPreviewPrivacyAndAuditExactlyTheSelectedGroups, where the created report equals the preview with rendered text ticked)
+- [x] The console and file log lines are byte for byte what they were before, and the stream's version-one fields are all still there (LogMessageTest.PrefixSegmentsFollowFlagsInFixedOrder; AppenderConsoleTest.RedirectedOutputKeepsTheFullDateAndTheUnpaddedCategory; SyncAndAsync/SLogFileTest.WritesServerLogInLogsDirWithPrefix/0 and /1; LogStreamServiceTest.ARecordCarriesWhereItWasWrittenAndWhatItWasWrittenFrom)
+- [x] Creating a report writes an audit row (PanelTest.ErrorReportsPreviewPrivacyAndAuditExactlyTheSelectedGroups)
 
 ## 17.107 A value in a log line is a place you can go
 
