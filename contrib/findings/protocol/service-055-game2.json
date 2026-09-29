@@ -1,0 +1,206 @@
+{
+    "subject":  "F-41 service 55 GAME2",
+    "area":  "protocol",
+    "claim":  "The r806919 Wizard 1.610 Root.wad message definitions identify service 55 as GAME2 and define its ordered message tags and field types as catalogued here.",
+    "revision":  "r806919.Wizard_1_610",
+    "method":  "static",
+    "how_to_repeat":  [
+                          "Read GameMessages2.xml from Root.wad in your own r806919 install with `bindecode` --client \u003cinstall\u003e --text GameMessages2.xml.",
+                          "Read ServiceID and ProtocolType from _ProtocolInfo/RECORD; enumerate each message RECORD and retain each non-metadata field name and its TYPE (or the supported TPYE/TYP spelling, with GlobalID inferred as GID).",
+                          "Use explicit _MsgOrder or _MsgType where the first message has it; otherwise sort distinct message element tags by byte-ordinal order and number them from 1, collapsing repeated tags only when their fields match.",
+                          "Run `bindecode --client \u003cinstall\u003e --sweep` as an archive-decode check; the sweep covers BINd entries, not the XML message definitions."
+                      ],
+    "evidence":  [
+                     "`bindecode` --client \u003cinstall\u003e --text GameMessages2.xml read this definition from the local r806919 Root.wad; it declares service id 55, protocol name GAME2, and 10 distinct ordered messages with 26 fields.",
+                     "The service uses tag-ordinal order; the catalog records every message tag/name, resolved order, and field name/type, excluding underscore-prefixed metadata.",
+                     "`bindecode --client \u003cinstall\u003e --sweep --threads 8` reported 173088 entries, 134640 BINd files, 134635 decoded, 5 unknown-root-class failures and 0 unreadable entries; those five BINd failures do not validate or contradict this XML catalog."
+                 ],
+    "disproof":  "A repeat read of GameMessages2.xml from another r806919 install that yields a different service id/name, distinct message order, or field name/type under the stated ordering rule.",
+    "confidence":  "high",
+    "submitted_by":  "Copilot SDK",
+    "submitted_on":  "2026-09-27",
+    "status":  "claimed",
+    "service":  {
+                    "id":  55,
+                    "name":  "GAME2",
+                    "version":  1,
+                    "entry":  "GameMessages2.xml",
+                    "ordering":  "tag-ordinal",
+                    "messages":  [
+                                     {
+                                         "tag":  "MSG_BADGESEGMENT",
+                                         "name":  "MSG_BADGESEGMENT",
+                                         "order":  1,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Segment",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CURRENTREALM",
+                                         "name":  "MSG_CURRENTREALM",
+                                         "order":  2,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "CurrentRealm",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "CurrentZone",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_NOTIFYITEMFORSETBONUS",
+                                         "name":  "MSG_NOTIFYITEMFORSETBONUS",
+                                         "order":  3,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "AsEquip",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "ItemID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PLATFORMSYNCPURCHASES",
+                                         "name":  "MSG_PLATFORMSYNCPURCHASES",
+                                         "order":  4,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PurchaseToken",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "ProductID",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PlatformCurrency",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PurchaseAmount",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Timestamp",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PVPBLOCK",
+                                         "name":  "MSG_PVPBLOCK",
+                                         "order":  5,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PvPBlockTime",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "ForceMessage",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PVPBLOCK_RSP",
+                                         "name":  "MSG_PVPBLOCK_RSP",
+                                         "order":  6,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PvPBlockID",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PvPBlockTime",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Success",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PlatformSyncPurchasesErr",
+                                         "name":  "MSG_PlatformSyncPurchasesErr",
+                                         "order":  7,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "ErrorStr",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_REQUESTEXPLICITLOYALTYSTOREUPDATE",
+                                         "name":  "MSG_REQUESTEXPLICITLOYALTYSTOREUPDATE",
+                                         "order":  8,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "AskClientToRequestLoyaltyInfo",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SetPlatformFriends",
+                                         "name":  "MSG_SetPlatformFriends",
+                                         "order":  9,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "ListOwnerGID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "FullList",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "Added",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Removed",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SetPlatformIgnore",
+                                         "name":  "MSG_SetPlatformIgnore",
+                                         "order":  10,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "ListOwnerGID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "FullList",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "Added",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Removed",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     }
+                                 ]
+                }
+}

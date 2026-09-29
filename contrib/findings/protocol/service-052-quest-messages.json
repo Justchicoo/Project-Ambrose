@@ -1,0 +1,533 @@
+{
+    "subject":  "F-41 service 52 QUEST_MESSAGES",
+    "area":  "protocol",
+    "claim":  "The r806919 Wizard 1.610 Root.wad message definitions identify service 52 as QUEST_MESSAGES and define its ordered message tags and field types as catalogued here.",
+    "revision":  "r806919.Wizard_1_610",
+    "method":  "static",
+    "how_to_repeat":  [
+                          "Read Messages/QuestMessages.xml from Root.wad in your own r806919 install with `bindecode` --client \u003cinstall\u003e --text Messages/QuestMessages.xml.",
+                          "Read ServiceID and ProtocolType from _ProtocolInfo/RECORD; enumerate each message RECORD and retain each non-metadata field name and its TYPE (or the supported TPYE/TYP spelling, with GlobalID inferred as GID).",
+                          "Use explicit _MsgOrder or _MsgType where the first message has it; otherwise sort distinct message element tags by byte-ordinal order and number them from 1, collapsing repeated tags only when their fields match.",
+                          "Run `bindecode --client \u003cinstall\u003e --sweep` as an archive-decode check; the sweep covers BINd entries, not the XML message definitions."
+                      ],
+    "evidence":  [
+                     "`bindecode` --client \u003cinstall\u003e --text Messages/QuestMessages.xml read this definition from the local r806919 Root.wad; it declares service id 52, protocol name QUEST_MESSAGES, and 19 distinct ordered messages with 92 fields.",
+                     "The service uses tag-ordinal order; the catalog records every message tag/name, resolved order, and field name/type, excluding underscore-prefixed metadata.",
+                     "`bindecode --client \u003cinstall\u003e --sweep --threads 8` reported 173088 entries, 134640 BINd files, 134635 decoded, 5 unknown-root-class failures and 0 unreadable entries; those five BINd failures do not validate or contradict this XML catalog."
+                 ],
+    "disproof":  "A repeat read of Messages/QuestMessages.xml from another r806919 install that yields a different service id/name, distinct message order, or field name/type under the stated ordering rule.",
+    "confidence":  "high",
+    "submitted_by":  "Copilot SDK",
+    "submitted_on":  "2026-09-27",
+    "status":  "claimed",
+    "service":  {
+                    "id":  52,
+                    "name":  "QUEST_MESSAGES",
+                    "version":  1,
+                    "entry":  "Messages/QuestMessages.xml",
+                    "ordering":  "tag-ordinal",
+                    "messages":  [
+                                     {
+                                         "tag":  "MSG_ACCEPTQUEST",
+                                         "name":  "MSG_ACCEPTQUEST",
+                                         "order":  1,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "MobileID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "QuestName",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CANACQUIREWORLDELIXIR",
+                                         "name":  "MSG_CANACQUIREWORLDELIXIR",
+                                         "order":  2,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "ElixirTemplateGID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Result",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMPLETEGOAL",
+                                         "name":  "MSG_COMPLETEGOAL",
+                                         "order":  3,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "QuestID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "GoalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "CompleteText",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMPLETEPERSONA",
+                                         "name":  "MSG_COMPLETEPERSONA",
+                                         "order":  4,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "MobileID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "QuestID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "GoalID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_COMPLETEQUEST",
+                                         "name":  "MSG_COMPLETEQUEST",
+                                         "order":  5,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "QuestID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "CompleteText",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DEBUGQUESTDATA",
+                                         "name":  "MSG_DEBUGQUESTDATA",
+                                         "order":  6,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "QuestID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "GoalID",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "QuestName",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "GoalName",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DECLINEQUEST",
+                                         "name":  "MSG_DECLINEQUEST",
+                                         "order":  7,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "QuestName",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_GETNEXTWORLD",
+                                         "name":  "MSG_GETNEXTWORLD",
+                                         "order":  8,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "World",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_INTERACTNPC",
+                                         "name":  "MSG_INTERACTNPC",
+                                         "order":  9,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "ServiceName",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Reinteract",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "ServiceIndex",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "RequestedSigilMode",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_NPCINFO",
+                                         "name":  "MSG_NPCINFO",
+                                         "order":  10,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "MobileID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Name",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Greeting",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PersonaMadlibs",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PERSONAINFO",
+                                         "name":  "MSG_PERSONAINFO",
+                                         "order":  11,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "MobileID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "QuestID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "GoalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "GoalHyperlink",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_QUESTOFFER",
+                                         "name":  "MSG_QUESTOFFER",
+                                         "order":  12,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "MobileID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "QuestName",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "QuestTitle",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "QuestInfo",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Level",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Rewards",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "GoalData",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Mainline",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_QUESTREADYTOTURNIN",
+                                         "name":  "MSG_QUESTREADYTOTURNIN",
+                                         "order":  13,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "QuestID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_REMOVEGOAL",
+                                         "name":  "MSG_REMOVEGOAL",
+                                         "order":  14,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "QuestID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "GoalID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_REMOVEQUEST",
+                                         "name":  "MSG_REMOVEQUEST",
+                                         "order":  15,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "QuestID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "NpcID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SENDGOAL",
+                                         "name":  "MSG_SENDGOAL",
+                                         "order":  16,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "QuestID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "GoalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "GoalNameID",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "GoalTitle",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "GoalLocation",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "GoalDestinationZone",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "GoalImage1",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "GoalImage2",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PersonaName",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "GoalType",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "GoalStatus",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "GoalCount",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "GoalTotal",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "SubscriberGoalTotal",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "UseTally",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "TallyText",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "SendType",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "GoalMadlibs",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "ClientTags",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PatronIcon",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "NoQuestHelper",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "PetOnlyQuest",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "HasActiveResults",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "HideGoalFloatyText",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "RequiresMagicWeavingSchool",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SENDNPCOPTIONS",
+                                         "name":  "MSG_SENDNPCOPTIONS",
+                                         "order":  17,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "MobileID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Options",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Reinteract",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SENDQUEST",
+                                         "name":  "MSG_SENDQUEST",
+                                         "order":  18,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "QuestID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "QuestNameID",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "QuestType",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "QuestLevel",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "QuestTitle",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "QuestInfo",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "New",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "QuestMadlibs",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "GoalData",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Rewards",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "ClientTags",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "AssociatedWorlds",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "NoQuestHelper",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "Mainline",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "ReadyToTurnIn",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "SkipQHAutoSelect",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "PetOnlyQuest",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "ActivityType",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "RequiresMagicWeavingSchool",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_UPDATEUSERHIDDENQUESTS",
+                                         "name":  "MSG_UPDATEUSERHIDDENQUESTS",
+                                         "order":  19,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     }
+                                 ]
+                }
+}
