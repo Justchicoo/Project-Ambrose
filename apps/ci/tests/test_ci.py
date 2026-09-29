@@ -879,6 +879,17 @@ class MilestoneTrackTests(unittest.TestCase):
                      "apps/ci/ci_contrib_paths.py", "apps/progress/progress.py", "doc/progress/progress.svg"):
             self.assertEqual([entry[0] for entry in ci_contrib_paths.check_milestone([path], "4.04")], [path], path)
 
+    def test_a_grant_lets_exactly_its_files_through_for_exactly_its_milestone(self):
+        given = [{"scope": "milestone:3.19", "paths": ["apps/ci/ci_sql_check.py", ".github/workflows/sql.yml"]}]
+        granted = ci_contrib_paths.granted_to("3.19", given)
+        self.assertEqual(ci_contrib_paths.check_milestone(["apps/ci/ci_sql_check.py", ".github/workflows/sql.yml"], "3.19", granted), [])
+        self.assertEqual([path for path, _reason in ci_contrib_paths.check_milestone(["apps/ci/ci_local.py"], "3.19", granted)], ["apps/ci/ci_local.py"])
+        self.assertEqual(ci_contrib_paths.granted_to("4.04", given), set())
+        self.assertEqual(ci_contrib_paths.granted_to("3.19", [{"scope": "milestone:3.19", "paths": "apps/ci/"}]), set())
+        for entry in ci_contrib_paths.grants(ROOT):
+            self.assertTrue(str(entry.get("scope", "")).startswith("milestone:"), entry)
+            self.assertTrue(entry.get("paths") and all(not path.endswith("/") for path in entry["paths"]), entry)
+
     def test_a_milestone_branch_may_bring_a_library_with_its_notice(self):
         self.assertEqual(ci_contrib_paths.check_milestone(["vcpkg.json", "THIRD-PARTY-NOTICES.md"], "4.04"), [])
 

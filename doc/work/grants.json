@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "grants": [
+    {
+      "scope": "milestone:3.19",
+      "paths": [
+        "apps/ci/ci_pending_sql.py",
+        "apps/ci/ci_sql_check.py",
+        "apps/ci/tests/test_sql_ci.py",
+        ".github/workflows/sql.yml"
+      ],
+      "why": "its deliverables are the two SQL checks and the workflow that runs them",
+      "since": "2026-09-29"
+    }
+  ]
+}

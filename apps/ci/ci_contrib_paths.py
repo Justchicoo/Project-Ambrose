@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks that a change stays inside the contributor track's own folders, exactly the ones doc/CONTRIBUTOR-TRACK.md's table names, so outside work cannot collide with a milestone in flight, and that a branch named for a milestone, which is allowed the source tree instead, is not one the maintainer holds, and keeps off the files that govern the project and out of every phase file but its own; a milestone branch may add a dependency to vcpkg.json with its notice in THIRD-PARTY-NOTICES.md, which ci_dependency_notices.py checks, because building on a library is part of building a milestone.
+# Checks that a change stays inside the contributor track's own folders, exactly the ones doc/CONTRIBUTOR-TRACK.md's table names, so outside work cannot collide with a milestone in flight, and that a branch named for a milestone, which is allowed the source tree instead, is not one the maintainer holds, and keeps off the files that govern the project, except exactly the ones doc/work/grants.json grants that milestone because its own deliverables are among them, and out of every phase file but its own; a milestone branch may add a dependency to vcpkg.json with its notice in THIRD-PARTY-NOTICES.md, which ci_dependency_notices.py checks, because building on a library is part of building a milestone.
 import argparse
 import json
 import os
@@ -26,6 +26,7 @@ ALLOWED_FILES = ()
 TRACK = "doc/CONTRIBUTOR-TRACK.md"
 MILESTONE_TRACK = "doc/MILESTONE-TRACK.md"
 HOLDS = "doc/work/holds.json"
+GRANTS = "doc/work/grants.json"
 BOARD = "https://justchicoo.github.io/Project-Ambrose/"
 MILESTONE_BRANCH = re.compile(r"^(?:.*/)?milestone/(\d+)\.(\d+)(?:-.*)?$")
 ROADMAP_DIR = "doc/roadmap/"
@@ -95,6 +96,23 @@ def holds(root):
         return []
 
 
+def grants(root):
+    try:
+        with open(os.path.join(root, GRANTS), "r", encoding="utf-8") as handle:
+            return json.load(handle).get("grants", [])
+    except (OSError, ValueError):
+        return []
+
+
+def granted_to(milestone, given):
+    paths = set()
+    for entry in given:
+        listed = entry.get("paths", [])
+        if str(entry.get("scope", "")) == "milestone:" + milestone and isinstance(listed, list):
+            paths.update(str(path) for path in listed)
+    return paths
+
+
 def held_by(milestone, kept):
     phase = milestone.split(".")[0]
     for entry in kept:
@@ -111,9 +129,11 @@ def phase_prefix(milestone):
     return f"{ROADMAP_DIR}phase-{int(milestone.split('.')[0]):02d}-"
 
 
-def check_milestone(paths, milestone):
+def check_milestone(paths, milestone, granted=()):
     refused = []
     for path in paths:
+        if path in granted:
+            continue
         if any(path.startswith(prefix) for prefix in RESERVED_PREFIXES) or path in RESERVED_FILES:
             refused.append((path, "the maintainer keeps this file; say in the pull request what it needs"))
         elif path.startswith(ROADMAP_DIR) and not path.startswith(phase_prefix(milestone)):
@@ -129,7 +149,7 @@ def report_milestone(paths, milestone, root=None):
               + (f", who is building {hold['what']}" if hold.get("what") else ""))
         print(f"Nothing inside a hold can be taken from outside. The board says what is open right now: {BOARD}")
         return 1
-    refused = check_milestone(paths, milestone)
+    refused = check_milestone(paths, milestone, granted_to(milestone, grants(root)) if root else ())
     for path, reason in refused:
         print(f"{path}: {reason}")
     ticks = [path for path in paths if path.startswith(phase_prefix(milestone))]
