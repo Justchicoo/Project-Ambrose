@@ -179,6 +179,7 @@
                             scripting: "Scripting",
                             world_overhead: "Other world tick work",
                             movement: "Movement",
+                            chat: "Chat",
                             database_waits: "Database waits",
                             combat: "Combat",
                         } as Record<string, string>

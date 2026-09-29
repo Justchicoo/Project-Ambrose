@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, each object of that zone the server sends it, as the unwrapped CoreObject Data the client builds it from, and the id of one that leaves its view, another wizard's move as its client packed it with that wizard's mobile id and its movement state with its global id, MSG_WIZBANG for a wizard's current player icon, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters or plays: its player wizbang state, requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and notes on its screen, patch time, shopping and quest finder; and the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits.
+ * Declares the typed client messages the game server handles or sends, including movement, speech, spellbook, and player-wizbang messages.
  */
 
 #ifndef AMBROSE_GAMEMESSAGES_H
@@ -517,7 +517,6 @@ namespace GameMessages
             return std::tuple{ DmlField("Enable", &QuestFinderOption::Enable) };
         }
     };
-
     struct PlayerWizBang
     {
         static constexpr uint8 ServiceId = WizardService;
@@ -528,6 +527,111 @@ namespace GameMessages
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("StateName", &PlayerWizBang::StateName) };
+        }
+    };
+
+    struct RequestRadialChat
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_REQUESTRADIALCHAT";
+
+        std::string Message;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Message", &RequestRadialChat::Message) };
+        }
+    };
+
+    struct RadialChat
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_RADIALCHAT";
+
+        std::string SourceName;
+        uint64 SourceId = 0;
+        std::string Message;
+        uint8 Filter = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("SourceName", &RadialChat::SourceName), DmlField("SourceID", &RadialChat::SourceId), DmlField("Message", &RadialChat::Message),
+                DmlField("Filter", &RadialChat::Filter) };
+        }
+    };
+
+    struct RequestRadialQuickChat
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_REQUESTRADIALQUICKCHAT";
+
+        uint32 MessageId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("MessageID", &RequestRadialQuickChat::MessageId) };
+        }
+    };
+
+    struct RadialQuickChat
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_RADIALQUICKCHAT";
+
+        std::string SourceName;
+        uint64 SourceId = 0;
+        uint32 MessageId = 0;
+        uint8 Filter = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("SourceName", &RadialQuickChat::SourceName), DmlField("SourceID", &RadialQuickChat::SourceId),
+                DmlField("MessageID", &RadialQuickChat::MessageId), DmlField("Filter", &RadialQuickChat::Filter) };
+        }
+    };
+
+    struct RequestRadialQuickChatExt
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_REQUESTRADIALQUICKCHATEXT";
+
+        std::string Message;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Message", &RequestRadialQuickChatExt::Message) };
+        }
+    };
+
+    struct RadialQuickChatExt
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_RADIALQUICKCHATEXT";
+
+        std::string SourceName;
+        uint64 SourceId = 0;
+        std::string Message;
+        uint8 Filter = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("SourceName", &RadialQuickChatExt::SourceName), DmlField("SourceID", &RadialQuickChatExt::SourceId),
+                DmlField("Message", &RadialQuickChatExt::Message), DmlField("Filter", &RadialQuickChatExt::Filter) };
+        }
+    };
+
+    struct CoreEmote
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_CORE_EMOTE";
+
+        std::string Name;
+        uint8 ExcludeOriginator = 0;
+        uint32 PhraseId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Name", &CoreEmote::Name), DmlField("ExcludeOriginator", &CoreEmote::ExcludeOriginator), DmlField("PhraseID", &CoreEmote::PhraseId) };
         }
     };
 }

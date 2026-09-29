@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One connected game client, on the network side a session like the login server's and on the game side the thing the world owns: what arrives is queued by the network thread that read it and run later by the world thread that owns the game state, so a handler never touches the world from two threads at once, and the account and character it belongs to are carried here for every later system to read. What arrives goes through the game server's own message table, so a message with no rule is counted and reported rather than acted on. An attach is judged by the handoff key it carries, which is spent against the login database off the network thread, so a client is only ever let in on a key that this attach won; the wizard it names is then loaded, checked to belong to that account, placed in its zone's instance on the world thread and handed its own object in MSG_LOGINCOMPLETE, and when the client says it has loaded that zone the wizard is in the world. The wizard's name, as its client shows it, is kept for a command to find the session by, under a lock of its own since a console asks from another thread. The instance and zone it stands in are the world thread's alone, and it leaves them when the session goes; the wizard's object is also encoded as other wizards see it, and the session says once that it arrived and once that it left, for the world to show it to the wizards in its instance and take it away from them, while showing another wizard or taking one away is the session's own sending; a jump its client sends is kept until the world's next tick tells the wizards in the instance, and the client itself when it asked to be told, that the wizard's object entered its jumping state. A wizard's current player wizbang is retained and broadcast to its instance, and shown to a wizard who joins while it is active. The WIZARD messages a client sends as it enters are answered by the handlers in game/Handlers. Where the wizard stands is kept from the moves its client sends, and written to its character row when it leaves the world, never as it moves. The wizard's stats are read with it, from its character_stats row, and kept on the world thread while it plays; they are written when they change and when it leaves, never on a timer, each write queued so a closing session need not wait on it and carrying the next revision of the wizard's row, so writes that land out of order leave the newest. Its spellbook is read with it too, from its character_spell rows, and the player object carries a tracker for each spell it knows; LearnSpell and UnlearnSpell change it on the world thread, for a command, a quest or a trainer alike, each change written at once under the spellbook's next revision and told to the client with MSG_ADDSPELLTOBOOK or MSG_REMOVESPELLFROMBOOK. The world ticks each session, and one that has neither attached nor begun to within Attach.Timeout of connecting is closed, so a socket that never says who it is cannot hold a slot.
+ * Declares one connected game client, its queued world-thread state, handlers, and outbound updates to other wizards.
  */
 
 #ifndef AMBROSE_GAMESESSION_H
@@ -10,6 +10,7 @@
 #include "CharacterSpell.h"
 #include "CharacterStats.h"
 #include "CharacterSummary.h"
+#include "ChatMgr.h"
 #include "GameMessages.h"
 #include "LoginKeyValidator.h"
 #include "MapObjectSpawner.h"
@@ -25,8 +26,11 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
+
+struct ChatSpeaker;
 
 struct WorldDeparture
 {
@@ -71,6 +75,10 @@ public:
     void HandleClientMove(GameMessages::ClientMove& message);
     void HandleClientMoveState(GameMessages::ClientMoveState& message);
     void HandleJump(GameMessages::Jump& message);
+    void HandleRequestRadialChat(GameMessages::RequestRadialChat& message);
+    void HandleRequestRadialQuickChat(GameMessages::RequestRadialQuickChat& message);
+    void HandleRequestRadialQuickChatExt(GameMessages::RequestRadialQuickChatExt& message);
+    void HandleCoreEmote(GameMessages::CoreEmote& message);
     void LeaveWorld();
     std::optional<uint32> GetMapId() const noexcept { return _mapId; }
     uint64 GetWorldGuid() const noexcept { return _worldGuid; }
@@ -83,6 +91,10 @@ public:
     std::optional<uint32> TakeWizBangChange() noexcept { return std::exchange(_pendingWizBang, std::nullopt); }
     std::optional<uint8> TakeJump() noexcept;
     void ShowStateOf(uint64 worldGuid, uint32 state);
+    std::vector<Speech> TakeSpeech();
+    void HearSpeech(ChatSpeaker const& speaker, Speech const& speech);
+    std::string const& GetChatName() const noexcept { return _chatName; }
+    uint8 GetChatFilter() const noexcept { return _chatFilter; }
     MovementUpdate TakeMovementUpdate(uint32 idleFlushes);
     void ShowMovementOf(GameSession const& mover, MovementUpdate const& update);
     void SendObjectChanges(MapObjectChanges const& changes);
@@ -133,6 +145,9 @@ private:
     void SaveSpell(CharacterSpell const& spell);
     void SavePosition(PlayerPosition const& position);
     void RefuseEntry(LoginKeyClaim const& claim, std::string const& reason);
+    bool CanSpeak(std::string_view what) const;
+    void QueueSpeech(Speech speech, std::string_view what);
+    void QueueEmote(std::string_view name, uint8 excludeOriginator, std::string_view what);
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
     AsyncCallbackProcessor<QueryCallback> _queryCallbacks;
@@ -157,6 +172,9 @@ private:
     bool _arrived = false;
     std::optional<WorldDeparture> _departure;
     std::optional<uint8> _jump;
+    std::vector<Speech> _speech;
+    std::string _chatName;
+    uint8 _chatFilter = 0;
     uint16 _mobileId = 0;
     uint64 _characterRevision = 0;
     mutable std::mutex _nameMutex;

@@ -24,6 +24,12 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Character.AllowChosenNames` | bool | false | none | live | loginserver | normal | Whether any account may name a wizard freely rather than from the client's name tables. |
 | `Character.MaxPerAccount` | unsigned | 6 | from 0 to 250 | live | loginserver | normal | How many wizards an account may hold. |
 
+## Chat
+
+| Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
+|---|---|---|---|---|---|---|---|
+| `Chat.SayRange` | float | 0 world units | from 0 to 100000 world units | live | gameserver | normal | How far a wizard's typed chat, quick chat and emotes reach the other wizards in its instance, read at each tick; 0 reaches the whole instance. |
+
 ## Commands
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |

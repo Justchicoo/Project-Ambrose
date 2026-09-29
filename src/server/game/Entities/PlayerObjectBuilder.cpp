@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Makes the player object from the catalog's own classes and defaults and sets only what the stored wizard decides: a behavior the template names that behavior_client_class does not know refuses the build rather than being guessed or dropped, because the client reads the behaviors by position and one missing slot shifts every later one, and a slot the template itself leaves empty stays empty; the school behavior and the stats come from the wizard's stats, with its level as the highest on the account, the spellbook holds a SpellIDTracker for each spell the wizard knows, which the client's spellbook reads when the object arrives, and every other field keeps the class's default.
+ * Makes the player object from the catalog's own classes and defaults and sets only what the stored wizard decides: a behavior the template names that behavior_client_class does not know refuses the build rather than being guessed or dropped, because the client reads the behaviors by position and one missing slot shifts every later one, and a slot the template itself leaves empty stays empty; the name behavior's m_chatPermissions is the account's permissions, the same the session hands the client in MSG_LOGINCOMPLETE, because the client draws no chat mark beside a name whose low four bits are all set, the filtered balloon beside one that holds menu chat and its display without all four, and the word balloon beside any other, so leaving it at 0 drew the word balloon beside every wizard; the school behavior and the stats come from the wizard's stats, with its level as the highest on the account, the spellbook holds a SpellIDTracker for each spell the wizard knows, which the client's spellbook reads when the object arrives, and every other field keeps the class's default.
  */
 
 #include "PlayerObjectBuilder.h"
@@ -42,7 +42,8 @@ namespace
         return problem.empty();
     }
 
-    bool FillBehavior(PropertyObject& behavior, CharacterSummary const& character, PlayerStats const& stats, std::vector<SpellTracker> const& spells, std::string& problem)
+    bool FillBehavior(PropertyObject& behavior, CharacterSummary const& character, PlayerStats const& stats, std::vector<SpellTracker> const& spells, uint32 permissions,
+        std::string& problem)
     {
         std::string_view const name = behavior.GetClass().Name;
         if (name == "class WizardCharacterBehavior")
@@ -64,7 +65,8 @@ namespace
                 .Set("m_wsNameOverride", std::move(custom))
                 .Set("m_nameKeys", character.NameIndices)
                 .Set("m_eGender", int64{ character.Appearance.Gender })
-                .Set("m_eRace", int64{ character.Appearance.Race });
+                .Set("m_eRace", int64{ character.Appearance.Race })
+                .Set("m_chatPermissions", permissions);
             return problem.empty();
         }
         if (name == "class ClientMagicSchoolBehavior")
@@ -76,7 +78,7 @@ namespace
 }
 
 PropertyObjectPtr PlayerObjectBuilder::Build(TypeCatalogPtr const& catalog, CoreObjectTypeTable const& types, BehaviorClientClasses const& behaviors, ObjectTemplate const& playerTemplate,
-    CharacterSummary const& character, PlayerStats const& stats, std::vector<SpellTracker> const& spells, PlayerPlacement const& placement, std::string& problem)
+    CharacterSummary const& character, PlayerStats const& stats, std::vector<SpellTracker> const& spells, PlayerPlacement const& placement, uint32 permissions, std::string& problem)
 {
     problem.clear();
     if (!catalog)
@@ -129,7 +131,7 @@ PropertyObjectPtr PlayerObjectBuilder::Build(TypeCatalogPtr const& catalog, Core
             continue;
         }
         PropertyObjectPtr behavior = Create(catalog, *row->ClassName, problem);
-        if (!behavior || !FillBehavior(*behavior, character, stats, spells, problem))
+        if (!behavior || !FillBehavior(*behavior, character, stats, spells, permissions, problem))
             return nullptr;
         inactive.emplace_back(std::move(behavior));
     }

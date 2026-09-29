@@ -897,6 +897,21 @@ class EngineTests(TemporaryFolder):
         self.assertEqual(self.companion.held, 0.3)
         self.assertIn(f"filmed {len(filmed)} time(s)", running.steps[0]["result"])
 
+    def test_a_watched_press_films_the_other_client_while_it_is_made_and_after(self):
+        running = self.build([{"action": "click", "name": "the main wizard waves", "target": "press",
+                               "watch": "companion", "watch_every": 0.1, "watch_after": 0.3}], companion=True)
+        self.client.on_click = lambda presses: time.sleep(0.3)
+        running.run()
+        filmed = [taken for taken in running.screenshots if taken.get("client") == "companion"]
+        self.assertGreaterEqual(len(filmed), 3)
+        self.assertTrue(filmed[0]["held"])
+        self.assertFalse(filmed[-1]["held"])
+        self.assertEqual(len(self.companion.shots), len(filmed))
+        self.assertEqual(len(self.client.presses), 1)
+        self.assertEqual(self.companion.presses, [])
+        self.assertIn(f"filmed {len(filmed)} time(s)", running.steps[0]["result"])
+        self.assertIn("while the press was made", running.steps[0]["result"])
+
     def test_several_keys_held_together_go_down_together_and_a_list_is_bounded(self):
         running = self.build([{"action": "hold_key", "name": "circle", "vk": ["0x57", 0x44], "seconds": 0.01}])
         running.run()

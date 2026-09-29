@@ -21,7 +21,7 @@ TEST(TypedViewClientTest, EveryBuiltInViewBindsAgainstR806919AndReadsEveryField)
     ASSERT_TRUE(registry.LoadFromFile(LogConfig::Utf8Path(*path))) << (registry.GetErrors().empty() ? std::string() : registry.GetErrors().front());
     TypeCatalogPtr const catalog = registry.GetCatalog();
     std::vector<ViewDefinition const*> const views = sTypedViewRegistry.GetViews();
-    ASSERT_EQ(views.size(), 23u);
+    ASSERT_EQ(views.size(), 24u);
     for (ViewDefinition const* view : views)
     {
         ViewBinding const* const binding = catalog->FindView(*view);

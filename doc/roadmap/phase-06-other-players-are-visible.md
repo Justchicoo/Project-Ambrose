@@ -120,9 +120,9 @@ A character entering the world gets no errors or unknown-message spam from the W
 
 **Acceptance**
 
-- [ ] Command-prefixed messages are never broadcast
-- [ ] B sees A's 'hello' bubble, quick chat and wave
-- [ ] Prefix and range changes apply to the next message; a failed `.reload quickchat` keeps the old IDs
+- [x] Command-prefixed messages are never broadcast
+- [x] B sees A's 'hello' bubble, quick chat and wave
+- [x] Prefix and range changes apply to the next message; a failed `.reload quickchat` keeps the old IDs
 
 ### Detailed spec from WIZ-4: Say chat, quick chat and core emotes
 
@@ -136,6 +136,8 @@ Players in the same zone can see each other's typed chat bubbles, quick-chat lin
 - `.reload quickchat` rebuilds the quick-chat ID set from QuickChat.xml off to the side, validates it, and swaps it; a failure keeps the old set and reports every error
 - src/test/server/game/ChatHandlerTest.cpp
 
+Built as src/server/game/Chat/ChatMgr, ChatText and QuickChatMgr, src/server/game/Entities/AnimationListMgr, src/server/shared/Characters/PackedName, src/server/game/Server/SpeechMessages, src/server/game/World/SpeechRelay and src/server/game/Handlers/ChatHandler.cpp, with the test in src/test/server/game/Handlers/ChatHandlerTest.cpp. A command line is never shown; 6.04 hands it to CommandMgr. The listener's ignore list arrives with 12.02, whose checks cover the suppression. The radial menu's emotes stay with 12.14. The wire formats are settled under Chat and emotes in doc/ARCHITECTURE.md.
+
 **Client messages:** GAME MSG_REQUESTRADIALCHAT, GAME MSG_RADIALCHAT, GAME MSG_REQUESTRADIALQUICKCHAT, GAME MSG_RADIALQUICKCHAT, GAME MSG_REQUESTRADIALQUICKCHATEXT, GAME MSG_RADIALQUICKCHATEXT, GAME MSG_CORE_EMOTE
 
 **Data sources**
@@ -144,16 +146,21 @@ Players in the same zone can see each other's typed chat bubbles, quick-chat lin
 
 **Acceptance**
 
-- [ ] Unit test: a message starting with the command prefix is never broadcast
-- [ ] Unit test: RADIALCHAT SourceName is the wizard's name blob and SourceID the player's GameObject GID
-- [ ] Unit test: changing GM.CommandPrefix or Chat.SayRange applies to the next message without a restart, and `.reload quickchat` with an unreadable QuickChat.xml keeps the old ID set and reports the error
-- [ ] Two real clients in one zone: A types 'hello'. B sees a speech bubble over A and a line in the chat log. A picks a quick-chat phrase and B sees it. A clicks the wave emote and B sees A wave.
+- [x] Unit test: a message starting with the command prefix is never broadcast. `ChatMgrTest.ATypedLineIsShownUnlessItIsACommandOrDoesNotRead` judges `.help` a command under the prefix `.`, and the handler keeps nothing it judges a command. In the client driver's say-and-emote.json run 20260929-173917 on r806919, the main wizard typed `.help`. The game server logged "typed a command, which is never shown to anyone", and the companion's shot shows no bubble.
+- [x] Unit test: RADIALCHAT SourceName is the wizard's name blob and SourceID the player's GameObject GID. `SpeechMessagesTest.EachMessageNamesTheSpeakerAndCarriesWhatItDid` covers SourceName, SourceID and Filter. `PackedNameTest` holds the blob to the layout the client's own `WizardNameCodec::PackName` and `UnpackName` give, read in Ghidra, with the locale always the reader's own. In the same run the companion's chat log names the speaker Adam AngleBane, as its nameplate does. An earlier run, which sent the stored locale, showed the German table's Adrian AscheAst.
+- [x] Unit test: changing GM.CommandPrefix or Chat.SayRange applies to the next message without a restart, and `.reload quickchat` with an unreadable QuickChat.xml keeps the old ID set and reports the error. The handler judges each line against the prefix CommandMgr holds when the line arrives, and the world reads Chat.SayRange at each tick. `ChatMgrTest` shows a changed prefix deciding the next line, `SpeechRelayTest` shows a range deciding who hears, and `QuickChatMgrTest.AFailedReloadOfQuickChatKeepsTheOldPhrasesAndReportsTheError` keeps the serving phrases through a reload of an unreadable file. In the same run, `settings set Chat.SayRange 1` on the game server console made the next line reach 0 wizards. `settings set GM.CommandPrefix !` made the next `.help` a line shown to the companion and `!help` a command. Both took effect with nothing restarted.
+- [x] Two real clients in one zone: A types 'hello'. B sees a speech bubble over A and a line in the chat log. A picks a quick-chat phrase and B sees it. A clicks the wave emote and B sees A wave. Run 20260929-173917, with two-wizards.json passing on the same build as run 20260929-174313:
+  - Typed hello is a menu chat phrase, so the client sent it as quick chat phrase 270, Hello, which plays the Wave emote. The companion's shot shows Hello over the main wizard with its arm raised, and `[Adam AngleBane] ** Hello` in its chat log.
+  - A line no phrase matches, `hello from the Commons`, went out as typed chat. The companion shows it as a bubble and a chat log line, and the talking emote the line plays was shown to it too.
+  - From the quick chat menu, the main wizard picked Yes, which the companion shows.
+  - It then chose the Hello/Goodbye category and picked Hi, the phrase marked with the waving hand. The companion was filmed every 0.4 seconds and shows the main wizard waving from 1.6 to 2.8 seconds after the press.
+  - The emote wheel, which opens from the menu's Emotes entry, belongs to 12.14 with the radial menu's own messages.
 
 **Risks**
 
-- The capture shows REQUESTRADIALCHAT Message bytes as UTF-16 even though the XML types the field STR. The codec must treat it as a length-prefixed byte string and pass the payload through untouched; the exact encoding is unverified.
-- The meaning of the Filter byte (the reference sends 2 for typed chat and 0 for quick chat) is unverified.
-- In the capture the client sends CORE_EMOTE Name=Chat together with each typed line. It must not be treated as a real emote request.
+- The capture shows REQUESTRADIALCHAT Message bytes as UTF-16 even though the XML types the field STR. The codec must treat it as a length-prefixed byte string and pass the payload through untouched; the exact encoding is unverified. Resolved in 6.03: a 16-bit count of UTF-16 units, then the units, as the client writes a wide string. The server passes the bytes on unchanged once they read that way.
+- The meaning of the Filter byte (the reference sends 2 for typed chat and 0 for quick chat) is unverified. Resolved in 6.03: it is the chat level the speaker's own client shows its own line at, 2 with open chat, otherwise 1 with menu chat, otherwise 0. The client uses the same rule for quick chat.
+- In the capture the client sends CORE_EMOTE Name=Chat together with each typed line. It must not be treated as a real emote request. Resolved in 6.03: it is the talking gesture the speaker's own client plays with every line. Others see it as the Emoting state with the Chat animation, and it adds no line to anyone's chat.
 
 ## 6.04 GM commands in chat (WIZ-5 remainder)
 
@@ -228,6 +235,7 @@ Operators can manage accounts, bans, security levels and deleted characters from
 - src/server/scripts/Commands/cs_ban.cpp: ban account, ban ip, ban machine, unban, baninfo
 - src/server/scripts/Commands/cs_character.cpp: character deleted list, character deleted restore, character rename flag (sets should_rename)
 - Security levels mapped to account.security_level; command tables declare their default required level, and a world.command_security row overrides it live through `.reload command_security`
+- An account's own permissions: account.permissions, NULL keeping `LoginComplete.Permissions`, set with `account set permissions`. They go in MSG_LOGINCOMPLETE and in the name behavior's `m_chatPermissions`, whose chat bits choose the mark other clients draw beside the wizard's name (settled in 6.03), so an account's chat level shows where its players see it. Added on 2026-09-29 at the maintainer's direction.
 
 **Client messages:** MSG_FORCE_DISCONNECT, MSG_SERVERMESSAGE
 
@@ -246,6 +254,8 @@ Operators can manage accounts, bans, security levels and deleted characters from
 - [ ] Unit: a world.command_security row raising '.ban account' to ADMINISTRATOR, then `.reload command_security`, refuses a GAMEMASTER account without a restart
 - [ ] Real client: `ban account test 1h spam` from a GM character disconnects the target, whose next login attempt is refused; `unban` lets them back in
 - [ ] Real client: `character deleted restore <guid>` makes a deleted wizard reappear on its owner's select screen after a relog
+- [ ] Unit: an account's own permissions reach MSG_LOGINCOMPLETE and the name behavior, and an account without them gets `LoginComplete.Permissions`
+- [ ] Real client: an account set to menu chat only shows the filtered balloon beside its wizard's name on another client, and one with open chat shows no mark
 
 **Risks**
 

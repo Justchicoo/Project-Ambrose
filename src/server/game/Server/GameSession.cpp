@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements a connected game session from attach through in-world play: dispatches messages on the world thread, maintains and saves wizard state, and sends object, movement and player-wizbang updates to clients in the instance.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, chat, and outbound instance updates.
  */
 
 #include "GameSession.h"
@@ -17,6 +17,7 @@
 #include "ObjectSchemaMgr.h"
 #include "ObjectTemplateMgr.h"
 #include "PlayerLevelMgr.h"
+#include "PackedName.h"
 #include "PlayerObjectBuilder.h"
 #include "Settings.h"
 #include "SpellMgr.h"
@@ -326,6 +327,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     _mapId = map.GetDynamicZoneId();
     _zonePath = character.Zone;
     _worldGuid = character.Guid;
+    _chatName = PackedName::ForWizard(character.CustomName, character.NameIndices, character.Appearance.Gender);
     placement.MobileId = *mobileId;
 
     PlayerSpellbook spellbook = PlayerSpellbook::FromStored(spells);
@@ -339,7 +341,8 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
     std::shared_ptr<BehaviorClientClasses const> const behaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
     std::shared_ptr<ObjectTemplate const> const playerTemplate = sObjectTemplateMgr.GetPlayer();
-    PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, character, *stats, trackers, placement, problem);
+    uint32 const permissions = sSettings.Get<uint32>("LoginComplete.Permissions");
+    PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, character, *stats, trackers, placement, permissions, problem);
     ObjectField const* const field = ObjectFields::Find("MSG_LOGINCOMPLETE", "Data");
     EncodeResult const data = player && field ? CoreObjectSerializer::EncodeField(*field, *player, *types) : EncodeResult{};
     if (!player || !field || !data.Ok())
@@ -369,7 +372,8 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     complete.ZoneId = StringHash::KiStringHash(character.Zone);
     complete.DynamicZoneId = map.GetDynamicZoneId();
     complete.DynamicServerProcId = map.GetDynamicZoneId();
-    complete.Permissions = sSettings.Get<uint32>("LoginComplete.Permissions");
+    complete.Permissions = permissions;
+    _chatFilter = ChatMgr::FilterFor(complete.Permissions);
     complete.IsCsr = _securityLevel.load(std::memory_order_relaxed) >= sSettings.Get<uint32>("LoginComplete.CSRSecurityLevel") ? 1 : 0;
     complete.TestServer = sSettings.Get<bool>("LoginComplete.TestServer") ? 1 : 0;
     complete.RealmName = sSettings.Get<std::string>("Realm.Name");
@@ -619,6 +623,7 @@ void GameSession::LeaveWorld()
     _publicObject.clear();
     _arrived = false;
     _jump.reset();
+    _speech.clear();
     if (Map* const map = sMapMgr.Find(*_mapId))
         sMapMgr.RemovePlayer(*map, _worldGuid);
     _mapId.reset();
