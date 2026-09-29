@@ -1,0 +1,27 @@
+{
+  "subject": "FishingInfo.xml pond fish lists",
+  "area": "world",
+  "claim": "Pond fish lists are stored in the FishingInfo.xml entry of a GameData archive, separately from the WizZoneData object in gamedata.bin. The root class is FishingInfo, whose m_bodyOfWaterList contains BodyOfWater entries; each BodyOfWater has m_waterX (float), m_waterY (float), m_secondsToRespawn (unsigned int), m_numberOfFish (int), m_waterType (int), and m_zoneFishList. Each ZoneFish has m_fishTemplateID (unsigned int), m_creationChance (float), m_alternateLootChance (float), and m_alternateLootTableName (string).",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Build the extractor, bindecode and client tools from this repository revision and use the type dump built from your own r806919.Wizard_1_610 install.",
+    "Run `extractor --client <install> --type-dump <dump.json> --sql <temporary.sql> zones` to obtain the complete zone-path-to-archive catalog.",
+    "For each `*.wad` in `<install>/Data/GameData`, run `bindecode --client <install> --wad <archive.wad> --list FishingInfo.xml`; for each archive that lists the entry, run `bindecode --client <install> --type-dump <dump.json> --wad <archive.wad> FishingInfo.xml` and count the root's `m_bodyOfWaterList` entries.",
+    "Use the first segment of each corresponding `zone_path` from the extracted zone catalog to group the pond counts by world. The archive `Raids-Raid_AZ.wad` has no `gamedata.bin`; group its FishingInfo.xml count under Raids using the archive family name.",
+    "Run `client --client <install> --type-dump <dump.json> types FishingInfo BodyOfWater ZoneFish` to verify each class's property names and types."
+  ],
+  "evidence": [
+    "The client type dump defines FishingInfo.m_bodyOfWaterList as a list of SharedPointer<BodyOfWater>, and BodyOfWater.m_zoneFishList as a list of SharedPointer<ZoneFish>.",
+    "The type dump gives BodyOfWater the fields m_waterX, m_waterY, m_secondsToRespawn, m_numberOfFish, m_waterType and m_zoneFishList; it gives ZoneFish the fields m_fishTemplateID, m_creationChance, m_alternateLootChance and m_alternateLootTableName.",
+    "Decoding WizardCity-WC_Hub.wad's FishingInfo.xml with the client tool returns a FishingInfo root containing three BodyOfWater entries, with their fish-list lengths 28, 24 and 28.",
+    "A current-revision extractor scan read 3,599 GameData archives and produced 3,366 zone-template rows. Scanning all 3,599 archives for FishingInfo.xml found 132 entries; all 132 decoded as FishingInfo. 131 archives map to extracted zone paths. Raids-Raid_AZ.wad has no gamedata.bin and is the one additional archive grouped under Raids.",
+    "Pond counts by top-level zone path (the Raids count includes the unpaired Raids-Raid_AZ.wad): Aquila 2; Avalon 17; Azteca 42; Celestia 15; DragonSpire 91; G14_DM 1; G14_HS 1; G14_SB 2; Grizzleheim 16; Housing 21; Housing_Acropolis 1; Housing_AeroVillage 2; Housing_AV_OutlawHouse 6; Housing_AZ_BAC 3; Housing_BeeHouse 3; Housing_BotanicalGardens 4; Housing_BuildACastleProto 15; Housing_Darkmoor 2; Housing_DM_GraveholmInn 1; Housing_FairytaleFarm 2; Housing_FishingRetreat 2; Housing_FlotsamCantina 3; Housing_Gauntlet_Voyage 10; Housing_GH_BlacksmithFjord 2; Housing_GreatBelow 1; Housing_KaramelVillage 2; Housing_KR_PeppergrassGlen 2; Housing_KT_RiverPalace 13; Housing_LightkeepersEstate 1; Housing_LM_StreetHouse 3; Housing_Mirage_Tents 1; Housing_Novus 1; Housing_Polaris_Ship 4; Housing_PyramidOfTheLost 3; Housing_SeaVillage 1; Housing_SkyCastle 2; Housing_SP 5; Housing_SP_CottageCore 2; Housing_SteamSkyCastle 2; Housing_SunPal 2; Housing_Wallaru_Ranch 1; Housing_WaterMoleResort 1; Housing_Winter_Wind_Tower 1; Housing_WizardKeep 1; Khrysalis 16; Krokotopia 6; Marleybone 1; MonthlyEvents 2; MooShu 22; Raids 14; WizardCity 13; Zafaria 13. These populated roots total 400 ponds.",
+    "The other extracted top-level roots had zero ponds: Arcanum, Battlegrounds, DD_DS_01, DD_PA_01, Darkmoor, Empyrea, GrizzleheimLite, Heroic_Dungeons_01, Holiday, Housing_AR_Dormroom, Housing_AV_BAC, Housing_AV_Gauntlet, Housing_AvalonTier1, Housing_AztecaTier1, Housing_BirdNest, Housing_CL, Housing_CastleToursApt, Housing_CreepyFairgrounds, Housing_CrystalMine, Housing_EM_Airship, Housing_FantasyPalace, Housing_FarmHouse, Housing_FishBowl, Housing_GHGauntlet, Housing_Gauntlet, Housing_Gauntlet_Forbidden_Library, Housing_Gauntlet_Highlands, Housing_Gauntlet_Professor, Housing_Gauntlet_SIT, Housing_Gauntlet_Sinbad, Housing_Gauntlet_Swamp, Housing_Gauntlet_Theater, Housing_Gauntlet_Train, Housing_Guild, Housing_KT_Apartment, Housing_KrampusMagicArena, Housing_MR_Dormroom, Housing_MonsterMagicArena, Housing_NinjaDojo, Housing_PA_Gauntlet, Housing_Polarian_Fort, Housing_SP_FlatIsland, Housing_SP_TomeFallArena, Housing_SP_TomeSummerArena, Housing_Sandbox, Housing_SunkP, Housing_VA_Gauntlet, Housing_Villa_Gardens, Housing_Watch, Housing_WizardCommonsApt, Housing_ZF_HouseBoat, Karamelle, Lemuria, Mirage, Novus, PetDerby, Polaris, Test, ThePhantomZoneWorld, Wallaru and Wysteria."
+  ],
+  "disproof": "A same-revision zone archive whose FishingInfo.xml does not decode as FishingInfo with this list structure, or a complete scan that produces different pond counts for the same zone roots.",
+  "confidence": "high",
+  "submitted_by": "MeruneFleuruwu",
+  "submitted_on": "2026-09-28",
+  "status": "claimed"
+}
