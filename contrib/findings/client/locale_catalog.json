@@ -1,0 +1,28 @@
+{
+  "subject": "locale_catalog",
+  "area": "client",
+  "claim": "On r806919, Root.wad contains locale tables for exactly eight locale codes: de, el, en-US, es, fr, gr, it and pl.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Read Bin/revision.dat from your own install and confirm it reports r806919.Wizard_1_610.",
+    "Run the built localetool with `localetool locales --client <your install>` against that install.",
+    "Compare the locale codes, successfully parsed .lang file counts, distinct key counts, repeated keys and skipped files with the evidence below."
+  ],
+  "evidence": [
+    "The localetool locales command reported de: 5,098 successfully parsed files, 215,525 distinct keys, 0 repeated keys and 0 skipped files.",
+    "It reported el: 4,417 successfully parsed files, 167,899 distinct keys, 0 repeated keys and 0 skipped files.",
+    "It reported en-US: 5,132 successfully parsed files, 216,992 distinct keys, 40 repeated keys and 0 skipped files.",
+    "It reported es: 5,098 successfully parsed files, 215,616 distinct keys, 0 repeated keys and 0 skipped files.",
+    "It reported fr: 5,097 successfully parsed files, 215,756 distinct keys, 0 repeated keys and 0 skipped files.",
+    "It reported gr: 3 successfully parsed files, 241 distinct keys, 0 repeated keys and 0 skipped files.",
+    "It reported it: 4,529 successfully parsed files, 174,215 distinct keys, 0 repeated keys and 0 skipped files.",
+    "It reported pl: 4,557 successfully parsed files, 170,872 distinct keys and 3 repeated keys; it skipped Locale/pl/WizardFurniture.lang because the file ends on line 10,143 in the middle of an entry.",
+    "Repeating the command against the same install returned the same eight locale codes and counts."
+  ],
+  "disproof": "A repeat of localetool locales against r806919 that reports a different locale code set or different per-locale counts would disprove this catalog.",
+  "confidence": "high",
+  "submitted_by": "Copilot",
+  "submitted_on": "2026-09-27",
+  "status": "claimed"
+}
