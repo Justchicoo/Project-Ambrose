@@ -30,8 +30,8 @@ namespace
     class ScriptedConsoleInput : public ConsoleInput
     {
     public:
-        ScriptedConsoleInput(std::vector<std::string> lines, bool closeAtEnd, std::atomic<int>& interrupts)
-            : _lines(std::move(lines)), _closeAtEnd(closeAtEnd), _interrupts(interrupts)
+        ScriptedConsoleInput(std::vector<std::string> lines, bool closeAtEnd, std::atomic<int>& interrupts, std::atomic<bool>* waiting = nullptr)
+            : _lines(std::move(lines)), _closeAtEnd(closeAtEnd), _interrupts(interrupts), _waiting(waiting)
         {
         }
 
@@ -47,6 +47,8 @@ namespace
             }
             if (_closeAtEnd)
                 return ReadResult::Closed;
+            if (_waiting)
+                _waiting->store(true);
             _wake.wait_for(lock, timeout, [this] { return _interrupted; });
             return _interrupted ? ReadResult::Closed : ReadResult::Timeout;
         }
@@ -65,6 +67,7 @@ namespace
         bool _closeAtEnd;
         bool _interrupted = false;
         std::atomic<int>& _interrupts;
+        std::atomic<bool>* _waiting;
         std::mutex _mutex;
         std::condition_variable _wake;
     };
@@ -294,10 +297,14 @@ TEST_F(ServerAppTest, ClosedConsoleKeepsRunningAndStopInterruptsAWaitingReader)
 
     TickApp waiting({ "testserver", "testserver.conf" }, _config, _harness.GetLog(), _out, _err);
     std::atomic<int> waitingInterrupts{ 0 };
-    waiting.ConsoleFactory = [&waitingInterrupts] { return std::make_unique<ScriptedConsoleInput>(std::vector<std::string>{}, false, waitingInterrupts); };
+    std::atomic<bool> readerWaits{ false };
+    waiting.ConsoleFactory = [&waitingInterrupts, &readerWaits]
+    {
+        return std::make_unique<ScriptedConsoleInput>(std::vector<std::string>{}, false, waitingInterrupts, &readerWaits);
+    };
     std::thread second([&] { waiting.Run({ "testserver", "-c", ConfigMgr::PathToUtf8(file) }); });
     ScopeExit const joinSecond([&] { if (second.joinable()) { waiting.RequestStop(); second.join(); } });
-    ASSERT_TRUE(WaitFor([&] { return waiting.IsReady(); }));
+    ASSERT_TRUE(WaitFor([&] { return waiting.IsReady() && readerWaits.load(); })) << "the stop must find the reader waiting, which a stop that lands before the console starts never does";
     auto const stopAt = std::chrono::steady_clock::now();
     waiting.RequestStop();
     second.join();
