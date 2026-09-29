@@ -110,7 +110,7 @@ Everything not in the table above, including every milestone whose dependencies 
 | 1.18 | Answered against the maintainer's own capture of a session |
 | 2.14 | Built but for its real-client checks: a banned account refused with a visible message, which contributor item C-77 turns into a scenario, and an optional sniffer check |
 | 3.02 | Built but for one check, which waits on a real client being sent MSG_BADGES, which NET and WIZ have not built yet |
-| 3.12 | Its remaining checks wait for 6.10 and for a real client session |
+| 3.12 | Only its real-client check is left: the character creation screen offering exactly what the server validates |
 | 3.23 | Next in the maintainer's own queue |
 | 4.06 | Built but for one check, a bad key refused with MSG_ATTACHFAILED on a real client, which is next in the maintainer's world session |
 | 4.11 | Being built now, and the world entry after it runs through the same files |
@@ -135,7 +135,6 @@ A row that says **before the reset** came from a pull request that was on the re
 
 | ID | Who | Sent as | What is left |
 |---|---|---|---|
-| 6.10 | MeruneFleuruwu | [#26](https://github.com/Justchicoo/Project-Ambrose/pull/26) | Landed on 2026-09-29 with five of seven checks, from the versionable round trip this pull request added to the type registry test. Left: check 6, decoding a class a live reload adds, and the client-gated sweep, both in the maintainer's world session's 6.10 landing |
 | 17.91 | MeruneFleuruwu | [#14](https://github.com/Justchicoo/Project-Ambrose/pull/14) | Landed on 2026-09-29 with checks 1, 3 and 5 earned, after review timed 6.01's movement relay as its own subsystem. Left: a benchmark showing the accumulators cost nothing measurable while no profile runs (check 2), and a tick alert naming the subsystem (check 4), which waits for 17.67's alert rules |
 | 6.17 | MeruneFleuruwu | [#12](https://github.com/Justchicoo/Project-Ambrose/pull/12) | Landed on 2026-09-29 with six of eight checks. Left: the two 10-minute fuzz runs on the frame and decode paths, which need the `linux-clang-fuzz` preset |
 | 3.28 | MeruneFleuruwu | [#10](https://github.com/Justchicoo/Project-Ambrose/pull/10) | Landed on 2026-09-26 with checks 3 and 4 earned: Type.name, Type.hash and the std::string layout derived from the client's own constructor with chosen values, the other 27 fields reported as assumed, and strict mode refusing by name. Left: the rest of the layout the same way (the list initializer, an enum option through the race adder, a property once its registering function is found, the map node), checks 1 and 2 once every field is derived (the maintainer runs the r801440 half), check 5 on a second client, and the record of extracted clients |
@@ -149,6 +148,7 @@ A row that says **before the reset** came from a pull request that was on the re
 
 | ID | Who | Sent as | What landed |
 |---|---|---|---|
+| 6.10 | MeruneFleuruwu | [#26](https://github.com/Justchicoo/Project-Ambrose/pull/26) | The versionable round trip of a supplemental class in the type registry test, five of the seven checks' evidence. The maintainer's world session finished 6.10 the same day: the game server finds the install's server-only classes on its first start, from BINd files and plain-XML object files |
 | 3.18 | MeruneFleuruwu | [#45](https://github.com/Justchicoo/Project-Ambrose/pull/45) | The updater's rename, hash, redundancy, dead-reference and pending decisions pulled into one pure planning step with database-free tests, the deliverable left open before the reset. All nine checks earned |
 | 17.49 | MeruneFleuruwu | [#13](https://github.com/Justchicoo/Project-Ambrose/pull/13) | Panel audit scope, app relay and command history: every action recorded in the transaction of its change with a chain hash on each row, the app relay holding the tokens and capping command levels, distinct recorded relay errors, and a per-user command history with sensitive arguments redacted. All six checks earned |
 | 17.106 | MeruneFleuruwu | [#15](https://github.com/Justchicoo/Project-Ambrose/pull/15) | Error reports: every log record carries its repository-relative file, line, function and template, apps group their errors by place with counts that survive restarts, and the Error reports page previews and downloads a versioned report file with rendered text only when ticked, every report audited. All six checks earned |
