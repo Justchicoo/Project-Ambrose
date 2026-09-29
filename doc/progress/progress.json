@@ -1,13 +1,13 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 89,
+    "done": 90,
     "total": 469,
-    "percent": 19.0
+    "percent": 19.2
   },
   "checks": {
     "done": 794,
-    "total": 2867,
+    "total": 2866,
     "percent": 27.7
   },
   "contributor_track": {
@@ -42,10 +42,10 @@
     {
       "phase": 4,
       "title": "A wizard stands in ravenwood",
-      "milestones_done": 12,
+      "milestones_done": 13,
       "milestones_total": 16,
       "checks_done": 118,
-      "checks_total": 128
+      "checks_total": 127
     },
     {
       "phase": 5,
