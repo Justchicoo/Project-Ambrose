@@ -1,19 +1,21 @@
 {
   "subject": "Type-dump classes with no reflected properties",
   "area": "objects",
-  "claim": "The r806919.Wizard_1_610 format-v2 type dump has 702 class entries with empty properties objects, grouped below by their complete immediate-base lists.",
+  "claim": "The r806919.Wizard_1_610 format-v2 type dump has 702 class entries with empty properties objects, grouped below by their full base lists, which the dump gives as each class's whole base chain, nearest first.",
   "revision": "r806919.Wizard_1_610",
   "method": "static",
   "how_to_repeat": [
     "Run `typeextract --client <install> --out <temporary-dump.json>` against your own install and confirm the reported revision is r806919.Wizard_1_610.",
     "Parse the resulting format-v2 JSON with Python json; retain each value in `classes` whose `properties` object is empty, and group its `name` by the full `bases` array, using an empty array for entries with no listed base.",
     "Sort each group by its exact dump name and count its entries; keep pointer-spelled names as separate raw dump entries rather than applying TypeRegistry alias canonicalization.",
+    "For distinct_classes, collapse each class X* and class SharedPointer<class X> name onto class X and count the distinct names left in the group.",
     "Cross-check a listed entry with `client types \"class ActiveMusicLoop\" --client <install> --type-dump <temporary-dump.json>`; it reports `class PropertyClass` as its base and zero properties."
   ],
   "evidence": [
     "The built typeextract tool read the user-owned install offline, reported r806919.Wizard_1_610, wrote a valid format-v2 dump and exited 0; it reported 6,986 class entries and 49,465 properties overall.",
-    "The dump census found 702 entries with an empty properties object and 702 unique class names; the entries form 22 distinct complete immediate-base groups.",
+    "The dump census found 702 entries with an empty properties object and 702 unique class names; the entries form 22 distinct full base-list groups.",
     "Of the 702 entries, 405 have no listed base and 297 have one or more listed bases. The group arrays record every exact class name; pointer-spelled raw entries remain separate.",
+    "Each count includes the class X* and class SharedPointer<class X> spellings of a class as entries of their own; distinct_classes collapses them onto class X, so the 297 entries with bases are 99 classes, the PropertyClass group's 210 entries are 70, and the 405 with no base are 401, where char*, wchar_t* and struct GameOverlayActivated_t* are not class spellings and stay separate.",
     "The built `client types` command loaded the generated dump and independently reported class ActiveMusicLoop with base class PropertyClass and zero properties."
   ],
   "empty_property_entries": 702,
@@ -22,6 +24,7 @@
     {
       "bases": [],
       "count": 405,
+      "distinct_classes": 401,
       "classes": [
         "__int64",
         "bf16",
@@ -436,6 +439,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class SharedPointer<class WizardAutobotManager>",
         "class WizardAutobotManager",
@@ -448,6 +452,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class SharedPointer<class WizardAutobotMobAvoidance>",
         "class WizardAutobotMobAvoidance",
@@ -460,6 +465,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class SharedPointer<class WizardAutobotQuestManager>",
         "class WizardAutobotQuestManager",
@@ -473,6 +479,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class ClientHousingBlobStrategy",
         "class ClientHousingBlobStrategy*",
@@ -485,6 +492,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class PhysicsSim",
         "class PhysicsSim*",
@@ -497,6 +505,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class BaseClientHousingBlobStrategy",
         "class BaseClientHousingBlobStrategy*",
@@ -509,6 +518,7 @@
         "PropertyClass"
       ],
       "count": 9,
+      "distinct_classes": 3,
       "classes": [
         "class ChaseCamController",
         "class ChaseCamController*",
@@ -528,6 +538,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class FixedCamController",
         "class FixedCamController*",
@@ -540,6 +551,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class ClientCinematic",
         "class ClientCinematic*",
@@ -552,6 +564,7 @@
         "PropertyClass"
       ],
       "count": 6,
+      "distinct_classes": 2,
       "classes": [
         "class ClientCinematicActor",
         "class ClientCinematicActor*",
@@ -568,6 +581,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class ClientEventDrivenCinematic",
         "class ClientEventDrivenCinematic*",
@@ -580,6 +594,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class ClientCrownsRewardsSchedule",
         "class ClientCrownsRewardsSchedule*",
@@ -592,6 +607,7 @@
         "PropertyClass"
       ],
       "count": 6,
+      "distinct_classes": 2,
       "classes": [
         "class PartyChatObserver",
         "class PartyChatObserver*",
@@ -607,6 +623,7 @@
         "PropertyClass"
       ],
       "count": 15,
+      "distinct_classes": 5,
       "classes": [
         "class FoodFightGameComponent",
         "class FoodFightGameComponent*",
@@ -631,6 +648,7 @@
         "PropertyClass"
       ],
       "count": 6,
+      "distinct_classes": 2,
       "classes": [
         "class PhysicsSimMassBox",
         "class PhysicsSimMassBox*",
@@ -648,6 +666,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class PhysicsSimMassTube",
         "class PhysicsSimMassTube*",
@@ -661,6 +680,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class PhysicsSimMassCylinder",
         "class PhysicsSimMassCylinder*",
@@ -672,6 +692,7 @@
         "PropertyClass"
       ],
       "count": 210,
+      "distinct_classes": 70,
       "classes": [
         "class ActiveMusicLoop",
         "class ActiveMusicLoop*",
@@ -891,6 +912,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class ResTeleport",
         "class ResTeleport*",
@@ -904,6 +926,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class SharedPointer<class WizardAutobotManagerGraphicalClient>",
         "class WizardAutobotManagerGraphicalClient",
@@ -917,6 +940,7 @@
         "PropertyClass"
       ],
       "count": 3,
+      "distinct_classes": 1,
       "classes": [
         "class SharedPointer<class WizardAutobotQuestManagerGraphicalClient>",
         "class WizardAutobotQuestManagerGraphicalClient",
@@ -924,7 +948,7 @@
       ]
     }
   ],
-  "disproof": "A fresh typeextract dump from r806919.Wizard_1_610 contains a different set of empty properties objects or a different immediate-base list for any class named here.",
+  "disproof": "A fresh typeextract dump from r806919.Wizard_1_610 contains a different set of empty properties objects or a different base list for any class named here.",
   "confidence": "high",
   "submitted_by": "MeruneFleuruwu",
   "submitted_on": "2026-09-27",

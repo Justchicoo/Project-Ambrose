@@ -6326,7 +6326,7 @@
   ],
   "disproof": "A fresh typeextract run on r806919.Wizard_1_610 that sets an unlisted bit, changes any per-bit property or class total, or produces a different per-class property count refutes this finding.",
   "confidence": "high",
-  "submitted_by": "Merune Fleur",
+  "submitted_by": "MeruneFleuruwu",
   "submitted_on": "2026-09-27",
   "status": "claimed"
 }

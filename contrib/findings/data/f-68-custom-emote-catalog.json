@@ -21,7 +21,7 @@
   ],
   "disproof": "A fresh manifest query and complete decode from the same client revision returns a different number of entries, root or behavior classes, per-type counts, CustomEmoteBehaviorTemplate hash or property schema, or CustomEmoteType values.",
   "confidence": "high",
-  "submitted_by": "johil",
+  "submitted_by": "MeruneFleuruwu",
   "submitted_on": "2026-09-28",
   "status": "claimed",
   "archive": "Root.wad",

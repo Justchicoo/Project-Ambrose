@@ -262,7 +262,7 @@
   },
   "disproof": "A repeatable decode of the same r806919 Root.wad or any of the 133 matched Wizard City zone archives that yields a different root class, serialized field set, class hash, or per-zone count would disprove this finding.",
   "confidence": "high",
-  "submitted_by": "Merune Fleur",
+  "submitted_by": "MeruneFleuruwu",
   "submitted_on": "2026-09-28",
   "status": "claimed"
 }

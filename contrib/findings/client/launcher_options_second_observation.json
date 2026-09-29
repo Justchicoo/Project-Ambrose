@@ -21,10 +21,10 @@
   ],
   "disproof": "A second observation on r806919.Wizard_1_610 that changes a retail-install hash, writes a generated launcher file inside the install, or omits one of the recorded command-line or configuration values would refute this finding.",
   "confidence": "high",
-  "submitted_by": "Copilot",
+  "submitted_by": "MeruneFleuruwu",
   "submitted_on": "2026-09-27",
   "status": "verified",
-  "verified_by": "F-51 second local observation",
+  "verified_by": "MeruneFleuruwu, F-51 second local observation",
   "verified_on": "2026-09-27",
   "verified_how": "A read-only --prepare run and a second prepared run with explicit window coordinates reproduced the command and configuration values above; full SHA-256 listings of the retail install were identical before and after."
 }

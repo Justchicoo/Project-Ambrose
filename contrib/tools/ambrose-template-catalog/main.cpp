@@ -42,9 +42,8 @@ namespace
     std::set<std::string> DirectBasesOf(ClassInfo const& type)
     {
         std::set<std::string> bases;
-        for (ClassInfo const* const base : type.Bases)
-            if (base != nullptr)
-                bases.insert(base->Name);
+        if (!type.Bases.empty() && type.Bases.front() != nullptr)
+            bases.insert(type.Bases.front()->Name);
         return bases;
     }
 

@@ -1,5 +1,5 @@
 {
-  "title": "Keep the real client at the login prompt for five minutes while keepalives pass both ways",
+  "title": "C-79: keep the real client at the login prompt for five minutes while keepalives pass both ways",
   "include": "parts/common.json",
   "notes": [
     "The client accepts a session only after a login attempt, so submit the run's deliberately wrong password and leave its retry prompt untouched.",

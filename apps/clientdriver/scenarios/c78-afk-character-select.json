@@ -11,8 +11,7 @@
   "game_settings": [
     "Logger.server=2,Console Server Errors Stream",
     "Realm.Name=Ambrose Driver",
-    "Logger.network.session=2,Console Server Errors Stream",
-    "Updates.EnableDatabases=0"
+    "Logger.network.session=2,Console Server Errors Stream"
   ],
   "server_log_allowed": [
     "character_create_school holds no school, so no wizard can be created until it does",

@@ -21,6 +21,17 @@ individual regression checks. This catalog groups them under C-03 without
 changing their executable behavior or asserting that a run passed without a
 client and local server.
 
+## Login and character select
+
+| Check | Scenario | What it verifies |
+| --- | --- | --- |
+| Banned before sign-in | [`c77-banned-login.json`](./c77-banned-login.json) | 2.14's banned account: `account ban` on the login server console before the account first signs in, the server's refusal with AccountBanned, the client choosing GUI_AccountBannedTime and a shot of its dialog, and neither the client's admission nor character select ever logged. |
+| AFK on character select | [`c78-afk-character-select.json`](./c78-afk-character-select.json) | 2.15's AFK check: a seeded wizard left on character select past a 150-second `Login.AfkTimeout`, the server's MSG_DISCONNECT_LOGIN_AFK, and the client choosing GUI_ConnectionAFK with no lost-connection message, with shots before the timeout and of the dialog. |
+| Idle at the login prompt | [`c79-idle-login-keepalive.json`](./c79-idle-login-keepalive.json) | 1.22's idle check: after a wrong password, the client held at the login retry prompt with `Login.AfkTimeout` raised to 600, through six keepalive cycles each way at a 60-second `Network.KeepAliveInterval`, over five minutes, with the session never closed and the account never authenticated. |
+
+C-78 also requires the game server, which the driver starts; C-77 and C-79 run
+against the login server alone.
+
 ## World entry
 
 | Check | Scenario | What it verifies |

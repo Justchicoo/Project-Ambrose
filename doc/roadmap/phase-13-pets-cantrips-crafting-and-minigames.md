@@ -63,7 +63,7 @@ An equipped pet follows the wizard, and the energy bar ticks and caps correctly.
 **Data sources**
 
 - ObjectData/Pets (1480) templates
-- Energy per level: MagicLevels data in the client (exact file unverified)
+- Energy per level: Root.wad MagicXPConfig.xml, whose 181 MagicLevelInfo rows for levels 0 to 180 each carry m_petEnergy (finding F-69); src/server/shared/ClientData/LevelExtractor.cpp already reads it into PlayerLevelInfo.PetEnergy
 
 **Database tables**
 

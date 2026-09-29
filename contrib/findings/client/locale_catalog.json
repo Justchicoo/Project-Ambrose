@@ -22,7 +22,7 @@
   ],
   "disproof": "A repeat of localetool locales against r806919 that reports a different locale code set or different per-locale counts would disprove this catalog.",
   "confidence": "high",
-  "submitted_by": "Copilot",
+  "submitted_by": "MeruneFleuruwu",
   "submitted_on": "2026-09-27",
   "status": "claimed"
 }

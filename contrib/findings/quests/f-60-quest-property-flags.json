@@ -1,7 +1,7 @@
 {
   "subject": "QST-2 property flag masks",
   "area": "quests",
-  "claim": "In the r806919.Wizard_1_610 type dump, the properties carrying masks 1, 4, and 16 on the listed QST-2 quest, goal, reward, service, and dialog classes are exactly those recorded in class_property_flags.",
+  "claim": "In the r806919.Wizard_1_610 type dump, the properties carrying masks 1, 4, and 16 on the listed QST-2 quest, goal, reward, service, dialog, and madlib classes are exactly those recorded in class_property_flags.",
   "revision": "r806919.Wizard_1_610",
   "method": "static",
   "how_to_repeat": [
@@ -13,12 +13,13 @@
   "evidence": [
     "The local typeextract version-2 dump identifies revision r806919.Wizard_1_610 and contains 6,986 class entries; its SHA-256 is AA18B288B04DF8BD4854F9B02C0850645CE58ED4B710E4292A8EA0706E4135BF.",
     "The dump reports 36 properties on QuestTemplate (hash 276946680, 0x1081def8) and 6 properties on ActorDialog (hash 971222955, 0x39e3afab).",
-    "The dump contains each of the 26 named classes and the recorded property counts. Each map groups every property carrying at least one queried bit under its exact numeric flags value; membership is determined with flags & 1, flags & 4, or flags & 16.",
-    "PropertyFlags.h maps bit 0 to Save, bit 2 to Public, and bit 4 to AuthorityTransmit, corresponding to the requested numeric masks 1, 4, and 16."
+    "The dump contains each of the 37 named classes and the recorded property counts. Each map groups every property carrying at least one queried bit under its exact numeric flags value; membership is determined with flags & 1, flags & 4, or flags & 16.",
+    "PropertyFlags.h maps bit 0 to Save, bit 2 to Public, and bit 4 to AuthorityTransmit, corresponding to the requested numeric masks 1, 4, and 16.",
+    "The quest blobs nest madlibs through GoalEntryFull.m_goalMadlibs and ServiceMementoBase.m_personaMadlibs, both class SharedPointer<class MadlibBlock>, and ActorDialog.m_madlibs, class ActorMadlib*; the 11 madlib classes they reach, MadlibBlock, MadlibArg, ActorMadlib and the eight MadlibArgT instances, carry flags 31 on every one of their 21 properties."
   ],
   "disproof": "A fresh type dump from the same client revision yields a different class hash, property count, or exact flags value for any listed property, or reveals a property carrying one of the masks that is absent from the corresponding class map.",
   "confidence": "high",
-  "submitted_by": "johil",
+  "submitted_by": "MeruneFleuruwu",
   "submitted_on": "2026-09-28",
   "status": "claimed",
   "dump_sha256": "AA18B288B04DF8BD4854F9B02C0850645CE58ED4B710E4292A8EA0706E4135BF",
@@ -255,6 +256,83 @@
       "property_count": 1,
       "properties": {
         "31": ["m_associatedWorlds"]
+      }
+    },
+    "class MadlibBlock": {
+      "hash": 1165770906,
+      "property_count": 2,
+      "properties": {
+        "31": ["m_madlibs", "m_blockToken"]
+      }
+    },
+    "class MadlibArg": {
+      "hash": 1966430886,
+      "property_count": 1,
+      "properties": {
+        "31": ["m_madlibToken"]
+      }
+    },
+    "class ActorMadlib": {
+      "hash": 1117347935,
+      "property_count": 2,
+      "properties": {
+        "31": ["m_madlibBlock", "m_index"]
+      }
+    },
+    "MadlibArgT<double>": {
+      "hash": 289844667,
+      "property_count": 2,
+      "properties": {
+        "31": ["m_madlibToken", "m_madlibArgument"]
+      }
+    },
+    "MadlibArgT<float>": {
+      "hash": 601713999,
+      "property_count": 2,
+      "properties": {
+        "31": ["m_madlibToken", "m_madlibArgument"]
+      }
+    },
+    "MadlibArgT<int>": {
+      "hash": 71424697,
+      "property_count": 2,
+      "properties": {
+        "31": ["m_madlibToken", "m_madlibArgument"]
+      }
+    },
+    "MadlibArgT<std::string>": {
+      "hash": 1804927325,
+      "property_count": 2,
+      "properties": {
+        "31": ["m_madlibToken", "m_madlibArgument"]
+      }
+    },
+    "MadlibArgT<std::string const>": {
+      "hash": 427079144,
+      "property_count": 2,
+      "properties": {
+        "31": ["m_madlibToken", "m_madlibArgument"]
+      }
+    },
+    "MadlibArgT<std::wstring>": {
+      "hash": 208186592,
+      "property_count": 2,
+      "properties": {
+        "31": ["m_madlibToken", "m_madlibArgument"]
+      }
+    },
+    "MadlibArgT<unsigned __int64>": {
+      "hash": 2066758188,
+      "property_count": 2,
+      "properties": {
+        "31": ["m_madlibToken", "m_madlibArgument"]
+      }
+    },
+    "MadlibArgT<unsigned int>": {
+      "hash": 306737126,
+      "property_count": 2,
+      "properties": {
+        "31": ["m_madlibToken", "m_madlibArgument"]
       }
     }
   }

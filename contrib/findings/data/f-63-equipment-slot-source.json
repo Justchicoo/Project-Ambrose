@@ -1,11 +1,13 @@
 {
   "subject": "Player equipment slot definitions",
   "area": "data",
-  "claim": "The r806919.Wizard_1_610 client stores the player equipment slot definitions in Root.wad ObjectData/BasicMobileEquipment.xml, whose EquipmentTemplate has 15 ordered base EquipSlot entries with the names and categories recorded here.",
+  "claim": "The r806919.Wizard_1_610 client stores the player equipment slot definitions in Root.wad ObjectData/BasicMobileEquipment.xml, whose EquipmentTemplate has 15 ordered base EquipSlot entries with the names, categories and m_maxItemCount values recorded here.",
   "revision": "r806919.Wizard_1_610",
   "method": "static",
   "how_to_repeat": [
     "Read Bin/revision.dat from your own client installation and confirm it identifies r806919.Wizard_1_610.",
+    "Run the project's client utility with `template 1` against that installation and confirm it names ObjectData/PlayerObject.xml, a class WizGameObjectTemplate named Player Object.",
+    "Run the project's client utility with `wad ObjectData/PlayerObject.xml` against that installation and its generated type dump, and confirm its first behavior is a class EquipmentBehaviorTemplate named WizardEquipmentBehavior whose m_equipmentTemplate is BasicMobileEquipment.",
     "Run the project's client utility with `wad --list BasicMobileEquipment.xml` against that installation and confirm it returns ObjectData/BasicMobileEquipment.xml.",
     "Run the project's client utility with `wad ObjectData/BasicMobileEquipment.xml` against that installation and its generated type dump, then inspect the decoded root class and each ordered m_baseSlots entry.",
     "Run the project's client utility with `types EquipmentTemplate EquipSlot` against the same type dump and compare the class hashes, property counts, and EquipSlot field types recorded here."
@@ -15,12 +17,14 @@
     "The project's client WAD reader lists ObjectData/BasicMobileEquipment.xml for the BasicMobileEquipment.xml query and decodes that entry with root class EquipmentTemplate.",
     "EquipmentTemplate has hash 2065998829 and 3 properties; its m_baseSlots property has type class EquipSlot* and its m_equipmentName property has type std::string.",
     "The decoded m_baseSlots vector has 15 ordered class EquipSlot records. Their slot names and categories are Hat/Hats, Weapon/Weapons, Robe/Robes, Shoes/Shoes, Athame/Athames, Amulet/Amulets, Ring/Rings, Deck/Decks, Pet/Pets, Islands/Islands, Structure/Structures, Mount/Mounts, Elixir/Elixir, PIITeleportEffect/PIITeleportEffect, and PIIVictoryDance/PIIVictoryDance.",
+    "The decoded m_maxItemCount is 1 for each of the first 12 slots, Hat to Mount, 3 for Elixir, and 5 for each of PIITeleportEffect and PIIVictoryDance.",
     "EquipSlot has hash 1647185960 and 7 properties: m_slotRequirements (class RequirementList*), m_adjectivesAND, m_adjectivesOR, m_adjectivesNOT, m_slotName, and m_slotCategory are string properties, and m_maxItemCount is unsigned int.",
-    "The reader reported an unknown nested requirement class hash 1483570415 under base slot index 12 (Elixir), and skipped five unknown-class/property parts there; the slot count, names, and categories were decoded, but this finding does not identify that requirement class."
+    "The reader reported an unknown nested requirement class hash 1483570415 under base slot index 12 (Elixir), and skipped five unknown-class/property parts there; the slot count, names, and categories were decoded, but this finding does not identify that requirement class.",
+    "Template 1 is ObjectData/PlayerObject.xml, a class WizGameObjectTemplate named Player Object, and its first behavior is the class EquipmentBehaviorTemplate WizardEquipmentBehavior with m_equipmentTemplate BasicMobileEquipment. That string equals BasicMobileEquipment.xml's own m_equipmentName, which is what makes these slots the player's."
   ],
-  "disproof": "A fresh decode from the same client revision yields a different EquipmentTemplate root, class hash, base-slot count, or ordered slot name/category pair, or the type dump reports different EquipSlot fields or hash.",
+  "disproof": "A fresh decode from the same client revision yields a different EquipmentTemplate root, class hash, base-slot count, ordered slot name/category pair or m_maxItemCount, a PlayerObject.xml equipment behavior that names another equipment template, or the type dump reports different EquipSlot fields or hash.",
   "confidence": "high",
-  "submitted_by": "johil",
+  "submitted_by": "MeruneFleuruwu",
   "submitted_on": "2026-09-28",
   "status": "claimed",
   "class_hashes": {
@@ -28,21 +32,21 @@
     "class EquipSlot": 1647185960
   },
   "base_slots": [
-    {"index": 0, "name": "Hat", "category": "Hats"},
-    {"index": 1, "name": "Weapon", "category": "Weapons"},
-    {"index": 2, "name": "Robe", "category": "Robes"},
-    {"index": 3, "name": "Shoes", "category": "Shoes"},
-    {"index": 4, "name": "Athame", "category": "Athames"},
-    {"index": 5, "name": "Amulet", "category": "Amulets"},
-    {"index": 6, "name": "Ring", "category": "Rings"},
-    {"index": 7, "name": "Deck", "category": "Decks"},
-    {"index": 8, "name": "Pet", "category": "Pets"},
-    {"index": 9, "name": "Islands", "category": "Islands"},
-    {"index": 10, "name": "Structure", "category": "Structures"},
-    {"index": 11, "name": "Mount", "category": "Mounts"},
-    {"index": 12, "name": "Elixir", "category": "Elixir"},
-    {"index": 13, "name": "PIITeleportEffect", "category": "PIITeleportEffect"},
-    {"index": 14, "name": "PIIVictoryDance", "category": "PIIVictoryDance"}
+    {"index": 0, "name": "Hat", "category": "Hats", "max_item_count": 1},
+    {"index": 1, "name": "Weapon", "category": "Weapons", "max_item_count": 1},
+    {"index": 2, "name": "Robe", "category": "Robes", "max_item_count": 1},
+    {"index": 3, "name": "Shoes", "category": "Shoes", "max_item_count": 1},
+    {"index": 4, "name": "Athame", "category": "Athames", "max_item_count": 1},
+    {"index": 5, "name": "Amulet", "category": "Amulets", "max_item_count": 1},
+    {"index": 6, "name": "Ring", "category": "Rings", "max_item_count": 1},
+    {"index": 7, "name": "Deck", "category": "Decks", "max_item_count": 1},
+    {"index": 8, "name": "Pet", "category": "Pets", "max_item_count": 1},
+    {"index": 9, "name": "Islands", "category": "Islands", "max_item_count": 1},
+    {"index": 10, "name": "Structure", "category": "Structures", "max_item_count": 1},
+    {"index": 11, "name": "Mount", "category": "Mounts", "max_item_count": 1},
+    {"index": 12, "name": "Elixir", "category": "Elixir", "max_item_count": 3},
+    {"index": 13, "name": "PIITeleportEffect", "category": "PIITeleportEffect", "max_item_count": 5},
+    {"index": 14, "name": "PIIVictoryDance", "category": "PIIVictoryDance", "max_item_count": 5}
   ],
   "decode_limitation": {
     "slot_index": 12,

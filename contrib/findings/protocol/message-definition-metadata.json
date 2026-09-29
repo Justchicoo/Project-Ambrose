@@ -18,7 +18,8 @@
     "The protocol rows are listed below as service id, protocol type, version and description length; description text is not included.",
     "The XML census counted 1,448 message records, and Ambrose's `client messages --list` exited successfully and returned 1,448 lines.",
     "Across those records, _MsgName and _MsgHandler each occur 1,448 times; _MsgDescription occurs 1,448 times and is non-empty 1,392 times; _MsgAccessLvl occurs 14 times; _MsgOrder 32 times; and _MsgType 4 times. Every such metadata element has TYPE and NOXFER attributes; the first three use STR, and the last three use UBYT.",
-    "The 4,315 non-metadata field elements have 10 non-empty text defaults. Their attributes are TYPE 4,312 times, TPYE once and TYP once; no other field attributes occur."
+    "The 4,315 non-metadata field elements have 10 non-empty text defaults. Their attributes are TYPE 4,312 times, TPYE once and TYP once; no other field attributes occur.",
+    "MSG_MINIGAMEREWARDS.GlobalID in WizardMessages.xml carries no attribute at all, so those counts cover 4,314 of the 4,315 field elements; the TPYE field is MSG_PHYSICS_GRAB.Force in Messages/PhysicsBehaviorMessages.xml and the TYP field is MSG_BATTLEGROUNDQUEUEUPDATE.Kicked in WizardMessages2.xml, as irregular_fields lists."
   ],
   "protocol_info_fields": [
     { "name": "ServiceID", "records": 29, "type": "UBYT", "attributes": ["TYPE"] },
@@ -75,6 +76,11 @@
     },
     "other_attributes": []
   },
+  "irregular_fields": [
+    { "service_id": 16, "entry": "Messages/PhysicsBehaviorMessages.xml", "message": "MSG_PHYSICS_GRAB", "field": "Force", "attributes": ["TPYE"] },
+    { "service_id": 53, "entry": "WizardMessages2.xml", "message": "MSG_BATTLEGROUNDQUEUEUPDATE", "field": "Kicked", "attributes": ["TYP"] },
+    { "service_id": 12, "entry": "WizardMessages.xml", "message": "MSG_MINIGAMEREWARDS", "field": "GlobalID", "attributes": [] }
+  ],
   "disproof": "A repeat read of r806919.Wizard_1_610 shows a different protocol field, version, description length, metadata type or NOXFER attribute count.",
   "confidence": "high",
   "submitted_by": "MeruneFleuruwu",

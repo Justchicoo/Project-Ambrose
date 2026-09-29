@@ -49,9 +49,15 @@ foreach(library IN LISTS AMBROSE_LIBRARIES)
     endif()
 endforeach()
 
-file(GLOB_RECURSE AMBROSE_INCLUDE_DIRS LIST_DIRECTORIES true
+file(GLOB_RECURSE AMBROSE_SOURCE_ENTRIES LIST_DIRECTORIES true
     "${AMBROSE_ROOT}/src/common/*"
     "${AMBROSE_ROOT}/src/server/*")
+set(AMBROSE_INCLUDE_DIRS "")
+foreach(entry IN LISTS AMBROSE_SOURCE_ENTRIES)
+    if(IS_DIRECTORY "${entry}")
+        list(APPEND AMBROSE_INCLUDE_DIRS "${entry}")
+    endif()
+endforeach()
 list(APPEND AMBROSE_INCLUDE_DIRS
     "${AMBROSE_ROOT}/src/common"
     "${AMBROSE_ROOT}/src/server/shared"

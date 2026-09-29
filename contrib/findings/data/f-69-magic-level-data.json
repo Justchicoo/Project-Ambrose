@@ -19,7 +19,7 @@
   ],
   "disproof": "A fresh decode and type-dump inspection from the same client revision places the shared level table elsewhere, returns a different root or row class, gives a different count or level range, or shows no integer m_petEnergy field on MagicLevelInfo.",
   "confidence": "high",
-  "submitted_by": "johil",
+  "submitted_by": "MeruneFleuruwu",
   "submitted_on": "2026-09-28",
   "status": "claimed",
   "archive": "Root.wad",

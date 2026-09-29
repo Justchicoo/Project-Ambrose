@@ -9,10 +9,13 @@ count for every decoded class, up to the top 100 classes with their direct
 bases and ancestors, and the direct bases and ancestors shared by that ranked
 set. When fewer than 100 classes occur, the report includes all of them.
 
-The report contains metadata only and should still be kept outside Git. The
-tool refuses output paths inside the repository or client install, and refuses
-to produce a partial report: a missing archive, entry, decode failure, or
-unknown template class is an error. It does not contact any server.
+The report contains metadata only: class names, counts and bases, which are
+facts about the data, and a finding records the ones it needs, as
+`contrib/findings/data/objectdata_template_catalog.json` does. The report file
+itself is a run's output, so the tool refuses output paths inside the
+repository or client install, and refuses to produce a partial report: a
+missing archive, entry, decode failure, or unknown template class is an error.
+It does not contact any server.
 
 ## Build
 

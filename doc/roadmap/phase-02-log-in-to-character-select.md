@@ -27,6 +27,7 @@
 The roadmap critic flagged these. Resolve each one before or while implementing the milestones it names.
 
 - **Ordering.** 2.13 acceptance runs a console `account create test test` in loginserver, but the command/console framework (CommandMgr, 4.02) comes later and itself depends on 2.13. Either add a minimal console to 2.13 or 1.20, or move account creation after 4.02. Resolved in 2.13: every app has a console command table and reader, and 4.02 takes it over.
+- **Missing work.** 2.14's AccountBanned reply comes from `Failure()` in src/server/apps/loginserver/Handlers/AuthHandler.cpp, which fills only Error and Reason and leaves MSG_USER_AUTHEN_RSP.TimeStamp (STR) empty, so the client's ban dialog, GUI_AccountBannedTime, shows the ban ending December 31, 1969. apps/clientdriver/scenarios/c77-banned-login.json reaches and shoots that dialog.
 
 ## 2.01 MySQLConnection and raw queries (FND-13)
 

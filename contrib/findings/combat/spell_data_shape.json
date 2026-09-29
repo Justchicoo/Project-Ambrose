@@ -1,20 +1,22 @@
 {
   "subject": "spell_data_shape",
   "area": "combat",
-  "claim": "On r806919, all 18,173 TemplateManifest entries under Spells/ expose the 56 declared SpellTemplate properties listed here, and grouping them by m_sMagicSchoolName yields the counts below, including three empty values.",
+  "claim": "On r806919, all 18,173 TemplateManifest entries under Spells/ expose the 56 declared SpellTemplate properties listed here, the six subclasses among them add the fields subclass_properties lists, and grouping them by m_sMagicSchoolName yields the counts below, including three empty values.",
   "revision": "r806919.Wizard_1_610",
   "method": "static",
   "how_to_repeat": [
     "Read Bin/revision.dat from your own install and confirm it reports r806919.Wizard_1_610.",
     "Run the built client tool with `client template --list Spells/` and confirm that it lists 18,173 entries.",
     "Decode every listed template id with `client template <id>` in batches, and group the resulting records by m_sMagicSchoolName, counting an empty value separately.",
-    "Run `client types 1864220976` against the type dump built from that install and compare the 56 SpellTemplate declarations with spell_template_properties."
+    "Run `client types 1864220976` against the type dump built from that install and compare the 56 SpellTemplate declarations with spell_template_properties.",
+    "Run `client types \"class <name>\"` for each of the six subclasses and compare the declarations after SpellTemplate's 56 with subclass_properties."
   ],
   "evidence": [
     "The built client tool listed 18,173 installed templates under Spells/; every entry was decoded in batches and returned m_sMagicSchoolName.",
     "Counts grouped by m_sMagicSchoolName were: Balance 1,736; Cantrips 162; CastleMagic 332; Death 1,785; Fire 1,796; Fishing 49; Gardening 146; Ice 1,769; Life 1,702; Moon 370; Myth 4,801; Shadow 874; Star 558; Storm 1,607; Sun 389; WhirlyBurly 94; empty 3. The counts sum to 18,173.",
     "Decoded template class counts were: SpellTemplate 14,856; TieredSpellTemplate 2,579; CastleMagicSpellTemplate 290; CantripsSpellTemplate 162; FishingSpellTemplate 49; GardenSpellTemplate 143; WhirlyBurlySpellTemplate 94. These counts sum to 18,173.",
-    "The type dump identifies class SpellTemplate with hash 1864220976 and 56 declared properties."
+    "The type dump identifies class SpellTemplate with hash 1864220976 and 56 declared properties.",
+    "Each of the six subclasses lists SpellTemplate's 56 declarations first, with the same ids, and adds its own after them: TieredSpellTemplate 5, CastleMagicSpellTemplate 5, CantripsSpellTemplate 11, FishingSpellTemplate 9, GardenSpellTemplate 21 and WhirlyBurlySpellTemplate 2, 53 in all, recorded in subclass_properties."
   ],
   "spell_template_properties": [
     "class BehaviorTemplate* m_behaviors [] *",
@@ -74,9 +76,76 @@
     "unsigned int m_spellFusion",
     "std::string m_requiredSchoolName"
   ],
-  "disproof": "A repeat against r806919 that finds a different Spells/ manifest count, a SpellTemplate declaration missing or added in the type dump, a decoded entry without m_sMagicSchoolName, or different grouped counts would disprove this catalog.",
+  "subclass_properties": {
+    "class TieredSpellTemplate": [
+      "bool m_retired",
+      "int m_shardCost",
+      "int m_newShardCost",
+      "class RequirementList* m_requirements *",
+      "std::string m_nextTierSpells []"
+    ],
+    "class CastleMagicSpellTemplate": [
+      "enum CastleMagicSpellTemplate::CastleMagicSpellType m_castleMagicSpellType",
+      "enum CastleMagicSpellTemplate::CastleMagicSpellEffect m_castleMagicSpellEffect",
+      "std::string m_animationKFM",
+      "std::string m_animationSequence",
+      "std::string m_effectSchool"
+    ],
+    "class CantripsSpellTemplate": [
+      "enum CantripsSpellTemplate::CantripsSpellType m_cantripsSpellType",
+      "int m_energyCost",
+      "std::string m_animationKFMs []",
+      "std::string m_animationNames []",
+      "std::string m_soundEffectName",
+      "float m_soundEffectGain",
+      "int m_cantripsSpellImageIndex",
+      "std::string m_cantripsSpellImageName",
+      "std::string m_effectParameter",
+      "enum CantripsSpellTemplate::CantripsSpellEffect m_cantripsSpellEffect",
+      "int m_cooldownSeconds"
+    ],
+    "class FishingSpellTemplate": [
+      "enum FishingSpellTemplate::FishingSpellType m_fishingSpellType",
+      "int m_energyCost",
+      "std::string m_animationKFM",
+      "std::string m_animationName",
+      "std::string m_soundEffectName",
+      "float m_soundEffectGain",
+      "int m_fishingSpellImageIndex",
+      "std::string m_fishingSpellImageName",
+      "std::string m_fishingSchoolFocus"
+    ],
+    "class GardenSpellTemplate": [
+      "enum GardenSpellTemplate::GardenSpellType m_gardenSpellType",
+      "std::string m_animationKFM",
+      "std::string m_animationName",
+      "std::string m_soundEffectName",
+      "unsigned int m_soilTemplateID",
+      "bool m_providesWater",
+      "bool m_providesSun",
+      "bool m_providesPollination",
+      "bool m_providesMagic",
+      "bool m_providesMusic",
+      "int m_bugZapLevel",
+      "unsigned int m_protectionTemplateID",
+      "float m_soundEffectGain",
+      "enum GardenSpellTemplate::UtilitySpellType m_utilitySpellType",
+      "int m_affectedRadius",
+      "float m_yOffset",
+      "int m_energyCost",
+      "int m_gardenSpellImageIndex",
+      "std::string m_gardenSpellImageName",
+      "std::string m_animationNameSmall",
+      "std::string m_animationNameLarge"
+    ],
+    "class WhirlyBurlySpellTemplate": [
+      "std::string m_unitMovement",
+      "std::string m_specialUnits"
+    ]
+  },
+  "disproof": "A repeat against r806919 that finds a different Spells/ manifest count, a SpellTemplate or subclass declaration missing or added in the type dump, a decoded entry without m_sMagicSchoolName, or different grouped counts would disprove this catalog.",
   "confidence": "high",
-  "submitted_by": "Copilot",
+  "submitted_by": "MeruneFleuruwu",
   "submitted_on": "2026-09-27",
   "status": "claimed"
 }

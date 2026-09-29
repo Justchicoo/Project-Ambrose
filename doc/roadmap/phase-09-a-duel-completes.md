@@ -275,7 +275,7 @@ A GM can start a duel at a combat sigil, and the real client shows the player an
 **Data sources**
 
 - Sigils/*.xml
-- Zone data: CombatSigilObjectInfo placements (from the WLD zone extractor)
+- Zone data: CombatSigilInfo placements (from the WLD zone extractor). The client program names no CombatSigilObjectInfo; CombatSigilInfo is hash 478486736, which the type dump lacks (finding F-65)
 - ObjectData mob template: NPCBehaviorTemplate m_nStartingHealth/m_nLevel/m_schoolOfFocus
 
 **Acceptance**

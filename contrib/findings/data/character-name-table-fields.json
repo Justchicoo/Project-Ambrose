@@ -18,7 +18,7 @@
   ],
   "disproof": "A repeat on the same revision that finds a different list property, a different row field name, type, or order in the dump, or that shows the extractor reads a different row shape, refutes this claim.",
   "confidence": "high",
-  "submitted_by": "lRayZ24",
+  "submitted_by": "MeruneFleuruwu",
   "submitted_on": "2026-09-27",
   "status": "claimed"
 }
