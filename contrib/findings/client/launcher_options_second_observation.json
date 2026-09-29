@@ -1,0 +1,30 @@
+{
+  "subject": "launcher_options_second_observation",
+  "area": "client",
+  "claim": "A second observation on r806919.Wizard_1_610 confirms that Ambrose's launcher applies the tested host, port, locale, window and run-folder options through an isolated prepared run while leaving the retail install unchanged.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "experiment",
+  "how_to_repeat": [
+    "Read Bin/revision.dat from your own install and confirm it reports r806919.Wizard_1_610.",
+    "Record SHA-256 hashes of every file in the retail install, sorted by relative path.",
+    "Run the built launcher with --client <install> --host 192.0.2.50 --port 54321 --locale es-MX --window 1600x900 --run-dir <temporary folder> --prepare.",
+    "Inspect the launcher output and the generated run-folder config.xml without starting WizardGraphicalClient.exe.",
+    "Repeat with a temporary launcher configuration that also sets WindowX = 100 and WindowY = 200, using another temporary run folder.",
+    "Hash the retail install again and compare the sorted before and after listings."
+  ],
+  "evidence": [
+    "The prepared command contained -L 192.0.2.50 54321, -P 0 and -A es-MX, and selected the requested temporary run folder.",
+    "The generated config.xml contained IsFullscreen = 0, Resolution = 1600x900, WindowedX = 100, WindowedY = 200 and an empty SilentMetricsURL.",
+    "The launcher reported the install revision as r806919.Wizard_1_610 and wrote config.xml, preferences.xml, revision.dat, data.dat and launcher.stamp only to the temporary run folder.",
+    "The complete retail-install hash listings contained 22,962 entries both before and after, with zero differences.",
+    "The prepared runs exited with status 0 and explicitly reported that nothing was started."
+  ],
+  "disproof": "A second observation on r806919.Wizard_1_610 that changes a retail-install hash, writes a generated launcher file inside the install, or omits one of the recorded command-line or configuration values would refute this finding.",
+  "confidence": "high",
+  "submitted_by": "Copilot",
+  "submitted_on": "2026-09-27",
+  "status": "verified",
+  "verified_by": "F-51 second local observation",
+  "verified_on": "2026-09-27",
+  "verified_how": "A read-only --prepare run and a second prepared run with explicit window coordinates reproduced the command and configuration values above; full SHA-256 listings of the retail install were identical before and after."
+}
