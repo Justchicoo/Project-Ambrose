@@ -30,4 +30,5 @@ void ObjectViews::RegisterAll(TypedViewRegistry& registry)
     registry.Add(SigilSubCircleView::Definition);
     registry.Add(RequirementListView::Definition);
     registry.Add(NamedEffectView::Definition);
+    registry.Add(QuickChatEntryView::Definition);
 }

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Draining is what this adds to a session, and dispatching what it can answer: the world calls DrainQueue on its own thread and the queued work runs there, bounded so one talkative client cannot hold the tick, and every handler is written knowing it runs on that thread and nowhere else. MSG_ATTACH is taken as soon as a client connects, because a client that has not attached has nothing else to say, and the key it carries is spent before the client is let in: the spend is one conditional update, so two clients holding the same key cannot both win it, and a spend that changed no row is read back only to say why, because the reason a client was turned away is worth knowing while the reason it was let in is not. A refused attach is told once and the socket closed behind it, and a session that was let in gives its wizard back when it goes. Entering the world is refused with MSG_ATTACHFAILED, the reason logged, when the wizard is missing, deleted or another account's, when its stats or spellbook cannot be read or its school has no level table, when its zone is one this server cannot load, when the instance has no mobile id left, or when its object cannot be built; the stats are read through the wizard's own row, so a failed read is never mistaken for a wizard with no stats yet, whose save would then write over what it has; a spell it knows that the spells this server holds do not name is left out of its book and named, and stays in its rows; the object is encoded with the transmit mask the owner's own object is read with, CriticalObjects names the zone's objects the client waits for before it leaves the loading screen, and is empty when there are none, which the client reads as nothing to wait for, and every object the zone instance holds follows as its own MSG_NEWOBJECT, as a change to them later is told to every wizard already in the instance. The wizard's own object is also encoded with the Public mask, the one the client reads another wizard with, and the session marks that it arrived, and when it leaves where it left from, for the world to show it to the wizards in the instance and take it away from them; showing another wizard sends that wizard's public object followed by its last move and, when it is moving, its state, taking one away sends MSG_REMOVEOBJECT, and at each flush the world hands a wizard's move and state to the others in its instance.
+ * Draining is what this adds to a session, and dispatching what it can answer: the world calls DrainQueue on its own thread and the queued work runs there, bounded so one talkative client cannot hold the tick, and every handler is written knowing it runs on that thread and nowhere else. MSG_ATTACH is taken as soon as a client connects, because a client that has not attached has nothing else to say, and the key it carries is spent before the client is let in: the spend is one conditional update, so two clients holding the same key cannot both win it, and a spend that changed no row is read back only to say why, because the reason a client was turned away is worth knowing while the reason it was let in is not. A refused attach is told once and the socket closed behind it, and a session that was let in gives its wizard back when it goes. Entering the world is refused with MSG_ATTACHFAILED, the reason logged, when the wizard is missing, deleted or another account's, when its stats or spellbook cannot be read or its school has no level table, when its zone is one this server cannot load, when the instance has no mobile id left, or when its object cannot be built; the stats are read through the wizard's own row, so a failed read is never mistaken for a wizard with no stats yet, whose save would then write over what it has; a spell it knows that the spells this server holds do not name is left out of its book and named, and stays in its rows; the object is encoded with the transmit mask the owner's own object is read with, CriticalObjects names the zone's objects the client waits for before it leaves the loading screen, and is empty when there are none, which the client reads as nothing to wait for, and every object the zone instance holds follows as its own MSG_NEWOBJECT, as a change to them later is told to every wizard already in the instance. The wizard's own object is also encoded with the Public mask, the one the client reads another wizard with, and the session marks that it arrived, and when it leaves where it left from, for the world to show it to the wizards in the instance and take it away from them; showing another wizard sends that wizard's public object followed by its last move and, when it is moving, its state, taking one away sends MSG_REMOVEOBJECT, and at each flush the world hands a wizard's move and state to the others in its instance. As a wizard enters, its name is packed as the client's name codec packs it, from its custom name when that fits and its name parts otherwise, and its chat level is read from the permissions it is sent.
  */
 
 #include "GameSession.h"
@@ -17,6 +17,7 @@
 #include "ObjectSchemaMgr.h"
 #include "ObjectTemplateMgr.h"
 #include "PlayerLevelMgr.h"
+#include "PackedName.h"
 #include "PlayerObjectBuilder.h"
 #include "Settings.h"
 #include "SpellMgr.h"
@@ -326,6 +327,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     _mapId = map.GetDynamicZoneId();
     _zonePath = character.Zone;
     _worldGuid = character.Guid;
+    _chatName = PackedName::ForWizard(character.CustomName, character.NameIndices, character.Appearance.Gender);
     placement.MobileId = *mobileId;
 
     PlayerSpellbook spellbook = PlayerSpellbook::FromStored(spells);
@@ -339,7 +341,8 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
     std::shared_ptr<BehaviorClientClasses const> const behaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
     std::shared_ptr<ObjectTemplate const> const playerTemplate = sObjectTemplateMgr.GetPlayer();
-    PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, character, *stats, trackers, placement, problem);
+    uint32 const permissions = sSettings.Get<uint32>("LoginComplete.Permissions");
+    PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, character, *stats, trackers, placement, permissions, problem);
     ObjectField const* const field = ObjectFields::Find("MSG_LOGINCOMPLETE", "Data");
     EncodeResult const data = player && field ? CoreObjectSerializer::EncodeField(*field, *player, *types) : EncodeResult{};
     if (!player || !field || !data.Ok())
@@ -369,7 +372,8 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     complete.ZoneId = StringHash::KiStringHash(character.Zone);
     complete.DynamicZoneId = map.GetDynamicZoneId();
     complete.DynamicServerProcId = map.GetDynamicZoneId();
-    complete.Permissions = sSettings.Get<uint32>("LoginComplete.Permissions");
+    complete.Permissions = permissions;
+    _chatFilter = ChatMgr::FilterFor(complete.Permissions);
     complete.IsCsr = _securityLevel.load(std::memory_order_relaxed) >= sSettings.Get<uint32>("LoginComplete.CSRSecurityLevel") ? 1 : 0;
     complete.TestServer = sSettings.Get<bool>("LoginComplete.TestServer") ? 1 : 0;
     complete.RealmName = sSettings.Get<std::string>("Realm.Name");
@@ -607,6 +611,7 @@ void GameSession::LeaveWorld()
     _publicObject.clear();
     _arrived = false;
     _jump.reset();
+    _speech.clear();
     if (Map* const map = sMapMgr.Find(*_mapId))
         sMapMgr.RemovePlayer(*map, _worldGuid);
     _mapId.reset();

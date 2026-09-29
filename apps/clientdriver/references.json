@@ -41,9 +41,14 @@
     "preset_next": {"at": [714, 625], "presses": "the arrow that takes the next ready-made look"},
     "appearance_next": {"at": [1213, 668], "presses": "the button that accepts the wizard's look"},
     "name_random": {"at": [730, 697], "presses": "the button that rolls a name"},
-    "name_done": {"at": [902, 697], "presses": "the button that submits the wizard"}
+    "name_done": {"at": [902, 697], "presses": "the button that submits the wizard"},
+    "quickchat_open": {"at": [31, 90], "presses": "the speech bubble at the top left that opens the quick chat menu"},
+    "quickchat_yes": {"at": [150, 570], "presses": "Yes, one of the phrases at the foot of the quick chat menu"},
+    "quickchat_hello": {"at": [150, 137], "presses": "the Hello/Goodbye category of the quick chat menu"},
+    "quickchat_hello_hi": {"at": [400, 166], "presses": "Hi, the first phrase of Hello/Goodbye, marked with the waving hand of the emote it plays"}
   },
   "client_writes": [
-    {"path": "^Data/GameData/CharacterRegistry/\\d+\\.xml$", "because": "the client keeps a registry file for each wizard that has entered the world, named by its character id, in its own data folder, and writes it itself on every entry"}
+    {"path": "^Data/GameData/CharacterRegistry/\\d+\\.xml$", "because": "the client keeps a registry file for each wizard that has entered the world, named by its character id, in its own data folder, and writes it itself on every entry"},
+    {"path": "^Data/GameData/QuickChat\\d+\\.fav$", "because": "the client keeps the quick chat phrases a wizard marks as favorites in a BINd file of its own in its data folder, named by the wizard's id, and writes it itself once the quick chat menu has been used"}
   ]
 }

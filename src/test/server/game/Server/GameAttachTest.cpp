@@ -52,7 +52,7 @@ TEST(GameAttachTest, AGameMessageWithNoRuleIsCountedRatherThanActedOn)
     ASSERT_TRUE(WaitForCondition([&] { session = server.Find(sessionId); return session != nullptr; }));
 
     ByteBuffer frame;
-    FrameWriter::WriteDml(frame, GameMessages::GameService, 200, std::vector<uint8>{});
+    FrameWriter::WriteDml(frame, GameMessages::GameService, 201, std::vector<uint8>{});
     client->Send(frame);
 
     ASSERT_TRUE(WaitForCondition([&] { return session->GetUnhandledMessageCount() > 0; })) << "a game message with no rule must be noticed";

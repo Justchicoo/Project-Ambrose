@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, each session is then given the tick's time, which is how one that never attaches is closed, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone; then the wizards that left an instance this tick are taken away from the wizards still in it and those that arrived are shown to the wizards already there, and those wizards to them, and a wizard that jumped is shown entering its jumping state to the others in its instance, and to its own client when it did not ask to be left out; after the instances are looked after, each is brought in line with its zone's objects, and the wizards in an instance whose objects changed are told which left and which came. When a movement flush is due, every wizard in an instance is asked for what changed of its movement since the last one, and what it gives is sent to every other wizard in the same instance. A wizard is in the world from the moment its session is sent its object until it is kicked or its socket closes, and work for one from another thread is queued on its session and waited for, run at once when the caller is the world thread itself, which could never wait on its own tick; each tick times its subsystems, showing wizards to each other, their jumps and the movement flush counted together as movement, and only while an operator has asked for a profile records a bounded Chrome trace of them.
+ * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, each session is then given the tick's time, which is how one that never attaches is closed, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone; then the wizards that left an instance this tick are taken away from the wizards still in it and those that arrived are shown to the wizards already there, and those wizards to them, and a wizard that jumped is shown entering its jumping state to the others in its instance, and to its own client when it did not ask to be left out; then what each wizard said or played since the last tick is shown to every other wizard in its instance within Chat.SayRange of it, a line never to the speaker, whose client shows its own, and an emote to the speaker too when it did not ask to be left out, timed as the chat part of the tick; after the instances are looked after, each is brought in line with its zone's objects, and the wizards in an instance whose objects changed are told which left and which came. When a movement flush is due, every wizard in an instance is asked for what changed of its movement since the last one, and what it gives is sent to every other wizard in the same instance. A wizard is in the world from the moment its session is sent its object until it is kicked or its socket closes, and work for one from another thread is queued on its session and waited for, run at once when the caller is the world thread itself, which could never wait on its own tick; each tick times its subsystems, showing wizards to each other, their jumps and the movement flush counted together as movement, and only while an operator has asked for a profile records a bounded Chrome trace of them.
  */
 
 #include "World.h"
+#include "ChatMgr.h"
 #include "GameSession.h"
 #include "Log.h"
 #include "MapMgr.h"
@@ -11,6 +12,8 @@
 #include "PlayerMeetings.h"
 #include "PlayerStates.h"
 #include "Settings.h"
+#include "SpeechMessages.h"
+#include "SpeechRelay.h"
 #include "ScriptMgr.h"
 #include "StringUtil.h"
 
@@ -22,6 +25,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -97,6 +101,51 @@ namespace
         }
     }
 
+    std::string SpeechName(Speech const& speech)
+    {
+        switch (speech.Kind)
+        {
+            case SpeechKind::Say: return "a chat line";
+            case SpeechKind::QuickChat: return fmt::format("quick chat phrase {}", speech.PhraseId);
+            case SpeechKind::QuickChatExt: return "an extended quick chat phrase";
+            case SpeechKind::Emote: return fmt::format("the emote {}", speech.Animation);
+        }
+        return "something";
+    }
+
+    void RelaySpeech(std::vector<std::shared_ptr<GameSession>> const& sessions, float range)
+    {
+        std::vector<std::pair<std::size_t, std::vector<Speech>>> spoken;
+        for (std::size_t index = 0; index < sessions.size(); ++index)
+            if (std::vector<Speech> said = sessions[index]->TakeSpeech(); !said.empty())
+                spoken.emplace_back(index, std::move(said));
+        if (spoken.empty())
+            return;
+        std::vector<SpeechListener> listeners;
+        listeners.reserve(sessions.size());
+        for (std::shared_ptr<GameSession> const& session : sessions)
+        {
+            PlayerPosition const& at = session->GetMovement().GetPosition();
+            listeners.push_back({ session->IsOpen(), session->GetMapId(), at.X, at.Y, at.Z });
+        }
+        for (auto const& [index, said] : spoken)
+        {
+            GameSession const& speaker = *sessions[index];
+            if (!speaker.IsOpen() || !speaker.IsShown())
+                continue;
+            ChatSpeaker const who{ speaker.GetChatName(), speaker.GetWorldGuid(), speaker.GetChatFilter() };
+            for (Speech const& speech : said)
+            {
+                std::vector<std::size_t> const hearers = PlanHearers(listeners, index, speech.SpeakerSees, range);
+                for (std::size_t const hearer : hearers)
+                    sessions[hearer]->HearSpeech(who, speech);
+                std::size_t const others = hearers.size() - (speech.SpeakerSees && std::find(hearers.begin(), hearers.end(), index) != hearers.end() ? 1 : 0);
+                LOG_DEBUG("server.world", "Session {}'s wizard {} sent {}, shown to {} other wizard(s){}", speaker.GetSessionId(), speaker.GetWorldGuid(), SpeechName(speech),
+                    others, speech.SpeakerSees ? " and to itself" : "");
+            }
+        }
+    }
+
     void FlushMovement(std::vector<std::shared_ptr<GameSession>> const& sessions, uint32 idleFlushes)
     {
         std::map<uint32, std::vector<GameSession*>> instances;
@@ -134,9 +183,9 @@ namespace
         Ambrose::Histogram* Samples;
     };
 
-    std::array<ComponentMetrics, 9>& TickComponents()
+    std::array<ComponentMetrics, 10>& TickComponents()
     {
-        static std::array<ComponentMetrics, 9> components = []
+        static std::array<ComponentMetrics, 10> components = []
         {
             struct Definition
             {
@@ -145,18 +194,19 @@ namespace
                 bool Available;
                 std::string_view UnavailableReason;
             };
-            constexpr std::array<Definition, 9> definitions{{
+            constexpr std::array<Definition, 10> definitions{{
                 { "network_drain", 5000000, true, "" },
                 { "session_update", 10000000, true, "" },
                 { "session_cleanup", 2000000, true, "" },
                 { "zone_instances", 5000000, true, "" },
                 { "movement", 5000000, true, "" },
+                { "chat", 2000000, true, "" },
                 { "scripting", 5000000, true, "" },
                 { "world_overhead", 3000000, true, "" },
                 { "database_waits", 0, false, "Database work runs on asynchronous workers outside the world tick" },
                 { "combat", 0, false, "Combat is not integrated into the world tick yet" }
             }};
-            std::array<ComponentMetrics, 9> registered{};
+            std::array<ComponentMetrics, 10> registered{};
             for (std::size_t index = 0; index < definitions.size(); ++index)
             {
                 Definition const& definition = definitions[index];
@@ -311,7 +361,7 @@ void World::Update(std::chrono::milliseconds diff)
     }
     _ticks.fetch_add(1, std::memory_order_relaxed);
     auto const started = std::chrono::steady_clock::now();
-    std::array<std::chrono::nanoseconds, 7> measured{};
+    std::array<std::chrono::nanoseconds, 8> measured{};
 
     std::vector<std::shared_ptr<GameSession>> sessions;
     {
@@ -353,6 +403,12 @@ void World::Update(std::chrono::milliseconds diff)
     measured[4] = std::chrono::duration_cast<std::chrono::nanoseconds>(meetingEnded - meetingStarted);
     RecordProfileEvent("movement", meetingStarted, meetingEnded);
 
+    auto const chatStarted = std::chrono::steady_clock::now();
+    RelaySpeech(sessions, sSettings.Get<float>("Chat.SayRange"));
+    auto const chatEnded = std::chrono::steady_clock::now();
+    measured[6] = std::chrono::duration_cast<std::chrono::nanoseconds>(chatEnded - chatStarted);
+    RecordProfileEvent("chat", chatStarted, chatEnded);
+
     auto const zonesStarted = std::chrono::steady_clock::now();
     for (uint32 const taken : sMapMgr.Update())
         LOG_DEBUG("server.world", "Took down zone instance {}, empty for longer than its unload delay", taken);
@@ -385,12 +441,12 @@ void World::Update(std::chrono::milliseconds diff)
     std::chrono::nanoseconds measuredTotal{};
     for (std::size_t index = 0; index < measured.size() - 1; ++index)
         measuredTotal += measured[index];
-    measured[6] = std::max(std::chrono::nanoseconds::zero(), tickElapsed - measuredTotal);
+    measured[7] = std::max(std::chrono::nanoseconds::zero(), tickElapsed - measuredTotal);
     RecordProfileEvent("world_overhead", scriptsEnded, tickEnded);
     RecordProfileEvent("world_tick", started, tickEnded);
 
-    constexpr std::array<std::string_view, 7> names{
-        "network_drain", "session_update", "session_cleanup", "zone_instances", "movement", "scripting", "world_overhead"
+    constexpr std::array<std::string_view, 8> names{
+        "network_drain", "session_update", "session_cleanup", "zone_instances", "movement", "scripting", "chat", "world_overhead"
     };
     for (std::size_t index = 0; index < names.size(); ++index)
         PublishComponent(names[index], measured[index]);

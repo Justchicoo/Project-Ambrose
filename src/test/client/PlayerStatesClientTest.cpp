@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the player's object states from the user's own r806919 install, when AMBROSE_CLIENT_DIR names it and AMBROSE_TYPE_DUMP_PATH its type dump: the player object template's object state behavior names the PlayerMobileStates set, whose Jump category holds the Jumping state that plays the Jump animation and falls back to NotJumping on its own, so the id the server sends for a jump is that state's; and the NotShopping state of the same set hashes to the id a retail server sent in MSG_ENTERSTATE, which pins the client's string hash as the one states are named by.
+ * Reads the player's object states from the user's own r806919 install, when AMBROSE_CLIENT_DIR names it and AMBROSE_TYPE_DUMP_PATH its type dump: the player object template's object state behavior names the PlayerMobileStates set, whose Jump category holds the Jumping state that plays the Jump animation and falls back to NotJumping on its own, so the id the server sends for a jump is that state's; its Expression category holds Emoting, an EmoteGameState whose own animations name nothing, so the animation its override names is the one that plays, and which leaves only for Unremarkable, the category's base state, with no state it returns to on its own; and the NotShopping state of the same set hashes to the id a retail server sent in MSG_ENTERSTATE, which pins the client's string hash as the one states are named by.
  */
 
 #include "BindFile.h"
@@ -91,6 +91,26 @@ TEST_F(PlayerStatesClientTest, ThePlayerObjectUsesTheStateSetWhoseJumpingStatePl
     EXPECT_NE(Named(jumping->Get("m_animations"), "m_assetName", "Jump"), nullptr);
     EXPECT_EQ(TextOf(*jumping, "m_autoState"), TextOf(*jump, "m_baseState"));
     EXPECT_EQ(PlayerStates::Jumping, StringHash::StringId(TextOf(*jumping, "m_stateName")));
+}
+
+TEST_F(PlayerStatesClientTest, TheExpressionCategorysEmotingStatePlaysTheAnimationItsOverrideNames)
+{
+    PropertyObjectPtr const states = ReadEntry("StateData/" + std::string(PlayerStates::StateSet) + ".xml");
+    ASSERT_TRUE(states);
+    PropertyObject const* const expression = Named(states->Get("m_categories"), "m_categoryName", PlayerStates::ExpressionCategory);
+    ASSERT_NE(expression, nullptr);
+    PropertyObject const* const emoting = Named(expression->Get("m_states"), "m_stateName", PlayerStates::EmotingName);
+    ASSERT_NE(emoting, nullptr);
+    EXPECT_EQ(TextOf(*emoting, "m_stateType"), "EmoteGameState");
+    PropertyValue const* const animations = emoting->Get("m_animations");
+    ASSERT_TRUE(animations && animations->GetList());
+    for (PropertyValue const& animation : *animations->GetList())
+        EXPECT_TRUE(animation.AsObject() && TextOf(*animation.AsObject(), "m_assetName").empty()) << "the state names no animation of its own";
+    EXPECT_EQ(TextOf(*expression, "m_baseState"), PlayerStates::UnremarkableName);
+    EXPECT_NE(Named(emoting->Get("m_transitions"), "m_targetState", PlayerStates::UnremarkableName), nullptr);
+    EXPECT_TRUE(TextOf(*emoting, "m_autoState").empty()) << "nothing takes the state back to Unremarkable on its own";
+    EXPECT_EQ(PlayerStates::Emoting, StringHash::StringId(TextOf(*emoting, "m_stateName")));
+    EXPECT_EQ(PlayerStates::Unremarkable, StringHash::StringId(TextOf(*expression, "m_baseState")));
 }
 
 TEST_F(PlayerStatesClientTest, AStateIsNamedByTheClientsStringHashAsARetailServerSentIt)

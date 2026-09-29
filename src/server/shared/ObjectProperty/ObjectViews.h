@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The built-in typed views game code reads client objects through: character creation info, core, client and wizard client objects, the core template every template derives from, game object and wizard item templates, the template manifest and its locations, spell templates with their effects and pip ranks, a tiered spell's retired flag and the group each tiered spell belongs to, the spellbook behavior and the tracker it keeps for each spell, sigils with their circles and a combat sigil's scalars and limits, requirement lists and named effects.
+ * The built-in typed views game code reads client objects through: character creation info, core, client and wizard client objects, the core template every template derives from, game object and wizard item templates, the template manifest and its locations, spell templates with their effects and pip ranks, a tiered spell's retired flag and the group each tiered spell belongs to, the spellbook behavior and the tracker it keeps for each spell, sigils with their circles and a combat sigil's scalars and limits, requirement lists, named effects, and the quick chat phrases with the ones filed under each.
  */
 
 #ifndef AMBROSE_OBJECTVIEWS_H
@@ -602,6 +602,38 @@ public:
     decltype(auto) GetOverrideName() const noexcept { return Read<OverrideName>(); }
 
     AMBROSE_TYPED_VIEW(NamedEffectView)
+};
+
+class QuickChatEntryView : public TypedView<QuickChatEntryView>
+{
+public:
+    enum Field : std::size_t { ChatId, Label, CharAnim, CategoryMask, DynFolder, MembersOnly, UnlockKey, FaceAnim, Sound, ChildEntries, FieldCount };
+    static constexpr std::array<ViewField, FieldCount> Fields{ {
+        ViewField::Of<uint32>(ChatId, "unsigned int", "m_chatID"),
+        ViewField::Of<std::string>(Label, "std::string", "m_label"),
+        ViewField::Of<std::string>(CharAnim, "std::string", "m_charAnim"),
+        ViewField::Of<uint32>(CategoryMask, "unsigned int", "m_categoryMask"),
+        ViewField::Of<int32>(DynFolder, "int", "m_dynFolder"),
+        ViewField::Of<bool>(MembersOnly, "bool", "m_membersOnly"),
+        ViewField::Of<std::string>(UnlockKey, "std::string", "m_unlockKey"),
+        ViewField::Of<std::string>(FaceAnim, "std::string", "m_faceAnim"),
+        ViewField::Of<std::string>(Sound, "std::string", "m_sound"),
+        ViewField::Of<PropertyValue::List>(ChildEntries, "class SharedPointer<class QuickChatEntry>", "m_childEntries"),
+    } };
+    static constexpr ViewDefinition Definition{ "QuickChatEntryView", "class QuickChatEntry", Fields };
+
+    decltype(auto) GetChatId() const noexcept { return Read<ChatId>(); }
+    decltype(auto) GetLabel() const noexcept { return Read<Label>(); }
+    decltype(auto) GetCharAnim() const noexcept { return Read<CharAnim>(); }
+    decltype(auto) GetCategoryMask() const noexcept { return Read<CategoryMask>(); }
+    decltype(auto) GetDynFolder() const noexcept { return Read<DynFolder>(); }
+    decltype(auto) IsMembersOnly() const noexcept { return Read<MembersOnly>(); }
+    decltype(auto) GetUnlockKey() const noexcept { return Read<UnlockKey>(); }
+    decltype(auto) GetFaceAnim() const noexcept { return Read<FaceAnim>(); }
+    decltype(auto) GetSound() const noexcept { return Read<Sound>(); }
+    decltype(auto) GetChildEntries() const noexcept { return Read<ChildEntries>(); }
+
+    AMBROSE_TYPED_VIEW(QuickChatEntryView)
 };
 
 namespace ObjectViews

@@ -19,7 +19,7 @@ ACTIONS = {
     "char": (("code",), ()),
     "key": (("vk",), ()),
     "hold_key": (("vk", "seconds"), ("moves", "watch", "watch_every", "watch_after")),
-    "click": (("target",), ("attempts", "dwell", "dwell_step", "on_screen", "until")),
+    "click": (("target",), ("attempts", "dwell", "dwell_step", "on_screen", "until", "watch", "watch_every", "watch_after")),
     "shot": ((), ("file", "settle")),
     "server_command": (("command",), ("pattern", "timeout")),
     "game_command": (("command",), ("pattern", "timeout")),
@@ -186,7 +186,7 @@ def _check_step(path, index, step):
         raise Refused(f"{where} ({name}) films the watched client every {WATCH_EVERY[0]} to {WATCH_EVERY[1]} seconds")
     if "watch_after" in step and (isinstance(step["watch_after"], bool) or not isinstance(step["watch_after"], (int, float))
                                   or not 0 <= step["watch_after"] <= MAX_WATCH_AFTER):
-        raise Refused(f"{where} ({name}) may go on watching for 0 to {MAX_WATCH_AFTER} seconds after the key is let go")
+        raise Refused(f"{where} ({name}) may go on watching for 0 to {MAX_WATCH_AFTER} seconds after the key is let go or the press is made")
     if action == "forbid_log" and step["side"] not in SIDES:
         raise Refused(f"{where} ({name}) must forbid a line on the {' or '.join(SIDES)} side")
     for key in ("pattern", "fail"):

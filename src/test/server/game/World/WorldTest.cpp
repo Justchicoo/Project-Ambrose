@@ -195,11 +195,14 @@ TEST_F(WorldTest, TickBreakdownNamesTheSlowSubsystemAndAddsToTheTick)
     ASSERT_NE(overBudget->AsGauge, nullptr);
     EXPECT_EQ(overBudget->AsGauge->Value(), 1);
 
-    std::optional<Ambrose::MetricEntry> const movement = FindMetric("ambrose_world_tick_subsystem_available", "movement");
-    ASSERT_TRUE(movement);
-    ASSERT_NE(movement->AsGauge, nullptr);
-    EXPECT_EQ(movement->AsGauge->Value(), 1);
-    ASSERT_TRUE(FindMetric("ambrose_world_tick_subsystem_nanoseconds", "movement"));
+    for (std::string_view const name : { "movement", "chat" })
+    {
+        std::optional<Ambrose::MetricEntry> const available = FindMetric("ambrose_world_tick_subsystem_available", name);
+        ASSERT_TRUE(available) << name;
+        ASSERT_NE(available->AsGauge, nullptr);
+        EXPECT_EQ(available->AsGauge->Value(), 1) << name;
+        ASSERT_TRUE(FindMetric("ambrose_world_tick_subsystem_nanoseconds", name)) << name;
+    }
 
     for (std::string_view const name : { "database_waits", "combat" })
     {

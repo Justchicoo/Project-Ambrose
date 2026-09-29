@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect; a step may drive a companion client instead of the main one, each client keeping its own last frame and its own restart, so one run can show two wizards to each other, and a held key, or several held together, may be watched, the other client filmed at a steady pace while it is held and for a while after it is let go.
+# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect; a step may drive a companion client instead of the main one, each client keeping its own last frame and its own restart, so one run can show two wizards to each other, and a held key, or several held together, or a press may be watched, the other client filmed at a steady pace while the key is held or the press made and for a while after.
 import os
 import re
 import threading
@@ -286,7 +286,7 @@ class Engine:
         before = self.client.frame()
         time.sleep(seconds)
         idle = self.client.frame()
-        filmed = self.watch_key(step, keys, seconds) if step.get("watch") else None
+        filmed = self.watch_while(step, lambda: self.hold(keys, seconds), "the key was held")[1] if step.get("watch") else None
         if filmed is None:
             self.hold(keys, seconds)
         time.sleep(SETTLE_SECONDS)
@@ -303,30 +303,31 @@ class Engine:
             said += f"; {filmed}"
         return said
 
-    def watch_key(self, step, keys, seconds):
+    def watch_while(self, step, act, doing):
         which = step["watch"]
         watched = self.clients.get(which)
         if watched is None:
             raise StepFailed(f"the step watches the {which} client, which this run did not start")
         every = float(step.get("watch_every", WATCH_EVERY))
         after = float(step.get("watch_after", 0))
-        name = step.get("name", "hold")
+        name = step.get("name", step["action"])
         failed = []
+        done = []
 
-        def hold():
+        def run():
             try:
-                self.hold(keys, seconds)
+                done.append(act())
             except Exception as error:
                 failed.append(error)
 
-        holding = threading.Thread(target=hold, name="held key", daemon=True)
+        acting = threading.Thread(target=run, name=doing, daemon=True)
         started = time.monotonic()
-        holding.start()
+        acting.start()
         frames = []
         stop_at = None
         while True:
             at = time.monotonic() - started
-            if not holding.is_alive() and stop_at is None:
+            if not acting.is_alive() and stop_at is None:
                 stop_at = at + after
             if stop_at is not None and at > stop_at:
                 break
@@ -339,10 +340,10 @@ class Engine:
                                      "client_holds_the_foreground": watched.is_foreground()})
             frames.append(file)
             time.sleep(max(0.0, every - (time.monotonic() - started - at)))
-        holding.join()
+        acting.join()
         if failed:
             raise failed[0]
-        return f"the {which} client was filmed {len(frames)} time(s), every {every}s, while the key was held and for {after}s after"
+        return (done[0] if done else None), f"the {which} client was filmed {len(frames)} time(s), every {every}s, while {doing} and for {after}s after"
 
     def act_server_command(self, step):
         return self.console_command(self.server, step)
@@ -373,7 +374,11 @@ class Engine:
                 time.sleep(step.get("dwell_step", 0.3) * attempt)
             if step.get("on_screen") and not self.on_screen(step["on_screen"]):
                 raise StepFailed(f"the {step['on_screen']} screen is no longer there, so {target} was not pressed")
-            said, active = self.client.click(x, y, dwell=dwell)
+            if step.get("watch"):
+                (said, active), filmed = self.watch_while(step, lambda: self.client.click(x, y, dwell=dwell), "the press was made")
+                said = f"{said}; {filmed}"
+            else:
+                said, active = self.client.click(x, y, dwell=dwell)
             self.current = None
             if until:
                 try:

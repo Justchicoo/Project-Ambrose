@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds the game object a wizard stands in the world as, the WizClientObject MSG_LOGINCOMPLETE carries: the CoreObject header the player template's class gives, its core type, which must build a WizClientObject, its template type and the template's id, the wizard's id as both its global and its character id, where it stands and faces, the mobile id its zone instance gave it, one behavior for each the player's template names in the template's own order, built as the class the client makes for that behavior or left empty where the client takes it empty, the look and name filled from the stored wizard, its school behavior and the stats object the player carries filled from its stats, and its spellbook behavior holding a tracker for each spell it knows, in the order it learned them.
+ * Builds the game object a wizard stands in the world as, the WizClientObject MSG_LOGINCOMPLETE carries: the CoreObject header the player template's class gives, its core type, which must build a WizClientObject, its template type and the template's id, the wizard's id as both its global and its character id, where it stands and faces, the mobile id its zone instance gave it, one behavior for each the player's template names in the template's own order, built as the class the client makes for that behavior or left empty where the client takes it empty, the look and name filled from the stored wizard, the name behavior carrying the permissions the account is given, whose chat bits choose the chat mark other clients draw beside the wizard's name, its school behavior and the stats object the player carries filled from its stats, and its spellbook behavior holding a tracker for each spell it knows, in the order it learned them.
  */
 
 #ifndef AMBROSE_PLAYEROBJECTBUILDER_H
@@ -35,7 +35,8 @@ public:
     PlayerObjectBuilder() = delete;
 
     static PropertyObjectPtr Build(TypeCatalogPtr const& catalog, CoreObjectTypeTable const& types, BehaviorClientClasses const& behaviors, ObjectTemplate const& playerTemplate,
-        CharacterSummary const& character, PlayerStats const& stats, std::vector<SpellTracker> const& spells, PlayerPlacement const& placement, std::string& problem);
+        CharacterSummary const& character, PlayerStats const& stats, std::vector<SpellTracker> const& spells, PlayerPlacement const& placement, uint32 permissions,
+        std::string& problem);
 };
 
 #endif
