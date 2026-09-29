@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Walks the class's properties in id order in the compact format, reading or writing a dirty-present bit where the property asks for one, and in the versionable format reads each object's size and each property's size and hash, fencing every value inside its declared bits, skipping and reporting unknown classes and properties and those the mask does not select, resynchronizing at a property's end when its value does not fit, and writes only the dirty-encoded properties the dirty test calls dirty; charges the depth and object count of every default inline object a written property takes; handles u16 or compact string lengths, u32 or compact counts, enums and flag integers as numbers or option names, bit fields at their width, and a class hash before every object, refusing counts the remaining bits cannot hold before allocating for them and charging every object, element, default, string and issue against the decode's memory budget; also opens and closes message fields by their envelope, class and null rules, and loads the decode limits from configuration into the snapshot each decode reads, through a per-thread copy refreshed when the snapshot changes, unless its options carry their own.
+ * Walks the class's properties in id order in the compact format, reading or writing a dirty-present bit where the property asks for one, and in the versionable format reads each object's size and each property's size and hash, fencing every value inside its declared bits, skipping and reporting unknown classes and properties and those the mask does not select, resynchronizing at a property's end when its value does not fit, each issue with a property naming the class that holds it, and writes only the dirty-encoded properties the dirty test calls dirty; charges the depth and object count of every default inline object a written property takes; handles u16 or compact string lengths, u32 or compact counts, enums and flag integers as numbers or option names, bit fields at their width, and a class hash before every object, refusing counts the remaining bits cannot hold before allocating for them and charging every object, element, default, string and issue against the decode's memory budget; also opens and closes message fields by their envelope, class and null rules, and loads the decode limits from configuration into the snapshot each decode reads, through a per-thread copy refreshed when the snapshot changes, unless its options carry their own.
  */
 
 #include "ObjectSerializer.h"
@@ -246,7 +246,7 @@ namespace
             return true;
         }
 
-        bool Recover(PropertyInfo const& property, uint64 bits, std::size_t pathDepth)
+        bool Recover(PropertyInfo const& property, uint32 owner, uint64 bits, std::size_t pathDepth)
         {
             DecodeIssueKind kind = DecodeIssueKind::SizeMismatch;
             switch (_status)
@@ -267,7 +267,7 @@ namespace
             _failure.clear();
             _reader.ClearFailure();
             _path.Truncate(pathDepth);
-            return Report(kind, property.Hash, bits, std::move(path), std::move(what));
+            return Report(kind, property.Hash, bits, std::move(path), std::move(what), owner);
         }
 
         bool ReadLength(bool text, uint64& length)
@@ -475,7 +475,7 @@ namespace
                 auto const found = type.PropertyByHash.find(hash);
                 if (found == type.PropertyByHash.end())
                 {
-                    if (!Report(DecodeIssueKind::UnknownProperty, hash, valueBits, _path.Format(_root), fmt::format("holds property hash {}, which {} does not list", hash, type.Name)))
+                    if (!Report(DecodeIssueKind::UnknownProperty, hash, valueBits, _path.Format(_root), fmt::format("holds property hash {}, which {} does not list", hash, type.Name), type.Hash))
                         return false;
                     _reader.SeekBit(end);
                     continue;
@@ -487,7 +487,7 @@ namespace
                 {
                     std::string what = property.HasFlag(PropertyFlag::Deprecated) ? fmt::format("holds {}, which is deprecated", property.Name)
                                                                                    : fmt::format("holds {}, whose flags {:#x} the mask {:#x} does not select", property.Name, property.Flags, _options.Mask);
-                    if (!Report(DecodeIssueKind::UnselectedProperty, hash, valueBits, _path.Format(_root), std::move(what)))
+                    if (!Report(DecodeIssueKind::UnselectedProperty, hash, valueBits, _path.Format(_root), std::move(what), type.Hash))
                         return false;
                     _reader.SeekBit(end);
                     continue;
@@ -501,13 +501,13 @@ namespace
                 _reader.SetLimit(objectEnd);
                 if (!read)
                 {
-                    if (!Recover(property, valueBits, pathDepth))
+                    if (!Recover(property, type.Hash, valueBits, pathDepth))
                         return false;
                 }
                 else
                 {
                     if (consumed != valueBits
-                        && !Report(DecodeIssueKind::SizeMismatch, property.Hash, valueBits, _path.Format(_root), fmt::format("fills {} of its {} bits", consumed, valueBits)))
+                        && !Report(DecodeIssueKind::SizeMismatch, property.Hash, valueBits, _path.Format(_root), fmt::format("fills {} of its {} bits", consumed, valueBits), type.Hash))
                         return false;
                     values[ordinal] = std::move(value);
                     seen[ordinal] = true;

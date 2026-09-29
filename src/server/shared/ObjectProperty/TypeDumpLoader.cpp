@@ -79,7 +79,7 @@ namespace
                     return JsonKind::Object;
                 return std::nullopt;
             case Level::Class:
-                if (key == "name")
+                if (key == "name" || key == "evidence")
                     return JsonKind::String;
                 if (key == "hash")
                     return JsonKind::Unsigned;
@@ -206,6 +206,8 @@ namespace
                 return false;
             if (Top() == Level::Class && _key == "name")
                 CurrentClass().Name = std::move(value);
+            else if (Top() == Level::Class && _key == "evidence")
+                CurrentClass().Evidence = std::move(value);
             else if (Top() == Level::Property && _key == "type")
                 CurrentProperty().Type = std::move(value);
             else if (Top() == Level::Property && _key == "container")

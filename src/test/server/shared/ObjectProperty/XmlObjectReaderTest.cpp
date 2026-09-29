@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the plain-XML ObjectProperty reader on classes and documents the test invents: nested lists of derived and null objects, a skipped object kept as a null list entry, whitespace, comment-split and CDATA text kept, list elements checked one by one, an explicit inline object replacing its default in the limits, repeated and refused values reported accurately, enums, flag lists, bools, numbers, wide text, colors and vectors read into objects, a byte order mark skipped, unknown classes, unknown properties, unreadable values, repeated static properties and objects of the wrong class skipped and reported with their path and line, and documents that are not XML, have a second root or stray text beside it, are not an Objects document or break the depth, object and memory limits refused.
+ * Tests the plain-XML ObjectProperty reader on classes and documents the test invents: nested lists of derived and null objects, a skipped object kept as a null list entry, whitespace, comment-split and CDATA text kept, list elements checked one by one, an explicit inline object replacing its default in the limits, repeated and refused values reported accurately, enums, flag lists, bools, numbers, wide text, colors and vectors read into objects, a byte order mark skipped, unknown classes, unknown properties, unreadable values, repeated static properties and objects of the wrong class skipped and reported with their path, line and the class that owns them, one value checked against a property's type on its own, and documents that are not XML, have a second root or stray text beside it, are not an Objects document or break the depth, object and memory limits refused.
  */
 
 #include "StringHash.h"
@@ -11,6 +11,7 @@
 #include <nlohmann/json.hpp>
 
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -196,6 +197,26 @@ TEST_F(XmlObjectReaderTest, UnknownAndUnreadableContentIsSkippedAndReportedWithI
     expect(6, DecodeIssueKind::InvalidValue, "class TestActionList.m_default.m_name", "appears more than once; the last one is kept on line 11");
     expect(7, DecodeIssueKind::InvalidValue, "class TestActionList.m_default.m_tint", "holds 'blue', which does not read as class Color on line 12");
     expect(8, DecodeIssueKind::UnknownProperty, "Objects", "holds <Stray> where a Class element belongs on line 15");
+
+    uint32 const listHash = StringHash::KiStringHash("class TestActionList");
+    uint32 const actionHash = StringHash::KiStringHash("class TestAction");
+    std::vector<uint32> const owners{ 0, listHash, listHash, listHash, actionHash, actionHash, actionHash, actionHash, 0 };
+    for (std::size_t index = 0; index < owners.size(); ++index)
+        EXPECT_EQ(read.Issues[index].Owner, owners[index]) << "issue " << index << " is owned by the class that holds it";
+}
+
+TEST_F(XmlObjectReaderTest, ReadsAsSaysWhetherOneValueReadsAsAPropertysType)
+{
+    ClassInfo const* const action = _catalog->FindClass("class TestAction");
+    ASSERT_NE(action, nullptr);
+    EXPECT_TRUE(XmlObjectReader::ReadsAs(*action->FindProperty("m_order"), " 12 "));
+    EXPECT_FALSE(XmlObjectReader::ReadsAs(*action->FindProperty("m_order"), "twelve"));
+    EXPECT_TRUE(XmlObjectReader::ReadsAs(*action->FindProperty("m_tint"), "FF0808AC"));
+    EXPECT_FALSE(XmlObjectReader::ReadsAs(*action->FindProperty("m_tint"), "blue"));
+    EXPECT_TRUE(XmlObjectReader::ReadsAs(*action->FindProperty("m_source"), "Steam"));
+    EXPECT_FALSE(XmlObjectReader::ReadsAs(*action->FindProperty("m_source"), "Gamepad"));
+    EXPECT_TRUE(XmlObjectReader::ReadsAs(*action->FindProperty("m_name"), ""));
+    EXPECT_FALSE(XmlObjectReader::ReadsAs(*_catalog->FindClass("class TestActionList")->FindProperty("m_actions"), "")) << "an object is never read from text";
 }
 
 TEST_F(XmlObjectReaderTest, ValuesKeepTheirTextAndListsCheckEachElement)

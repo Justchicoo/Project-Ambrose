@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the client's plain-XML ObjectProperty files, an Objects element holding Class elements named by class, each property an element named by the property with its value as text or a nested Class, and containers as repeated elements, into property objects; unknown classes, unknown properties and values that do not parse are skipped and reported with their path and line, while a document that is not such XML or breaks the decode limits is refused.
+ * Reads the client's plain-XML ObjectProperty files, an Objects element holding Class elements named by class, each property an element named by the property with its value as text or a nested Class, and containers as repeated elements, into property objects; unknown classes, unknown properties and values that do not parse are skipped and reported with their path, line and the class that owns them, while a document that is not such XML or breaks the decode limits is refused; ReadsAs says whether a property's text value reads as its type.
  */
 
 #ifndef AMBROSE_XMLOBJECTREADER_H
@@ -40,6 +40,7 @@ public:
     XmlObjectReader() = delete;
 
     static XmlReadResult Read(TypeCatalogPtr const& catalog, std::string_view text, std::optional<SerializerLimits> limits = std::nullopt);
+    static bool ReadsAs(PropertyInfo const& property, std::string_view text);
     static std::string_view GetStatusName(XmlReadStatus status) noexcept;
 };
 

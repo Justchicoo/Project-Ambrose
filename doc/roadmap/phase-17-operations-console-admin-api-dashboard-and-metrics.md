@@ -4599,7 +4599,7 @@ Added on 2026-09-27 at the maintainer's direction. This is the static catalog; t
   - A zone's template: its display name through 17.167, far clip, healing per minute, soft and hard limits, and no mounts.
   - Its named places, with position and direction.
   - Its placements, each with class, template, object id, position, orientation, scale, zone tag, start state, override name, flags, loading type and whether it is critical.
-- Which placements the server spawns, those whose loading type is DYNAMIC_SERVER, and which the client builds itself. The zone extraction records the entries it leaves out, per zone and class and with the reason, in a world table of its own, such as the sigils that wait for 6.10, and the page shows them.
+- Which placements the server spawns, those whose loading type is DYNAMIC_SERVER, and which the client builds itself. The zone extraction records the entries it leaves out, per zone and class and with the reason, in a world table of its own, such as the sigils whose class no source describes yet, and the page shows them.
 - A plan of the zone drawn from the decoded positions:
   - Named places and placements as marks on the zone's own coordinates.
   - Filters by class and loading type, with each mark opening its placement.

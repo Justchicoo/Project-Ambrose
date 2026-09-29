@@ -487,7 +487,7 @@ Every BINd client file (templates, spells, states, decks, the manifest) decodes 
 
 **Acceptance**
 
-- [ ] CharacterCreationConfig.xml decodes with non-empty m_creationOptions and m_schoolOptions (waits for 6.10: the file reads as well-formed, but the r806919 type dump lists none of WizCharacterCreationConfig, AllowedCreationOption or AllowedSchoolOption, so XmlObjectReaderClientTest checks that its root class is reported instead)
+- [x] CharacterCreationConfig.xml decodes with non-empty m_creationOptions and m_schoolOptions (`XmlObjectReaderClientTest.WithTheClassesTheInstallHoldsCreationChatterAndColorsReadAsObjects`: the r806919 type dump lists none of WizCharacterCreationConfig, AllowedCreationOption or AllowedSchoolOption, classes only the server reads, and since 6.10 they are server classes found in the install's plain-XML files with the server's own types; with them the file reads with no issue, its creation option and its seven schools, Fire first, while `DocumentsWhoseRootClassTheDumpLacksAreReported` still checks that the dump alone reports the root class)
 
 ### Detailed spec from OBJ-13: Text XML ObjectProperty reader
 
@@ -507,13 +507,13 @@ The handful of plain-XML ObjectProperty files (character creation config, action
 **Acceptance**
 
 - [x] Unit test on synthetic XML covers nested lists and enums (XmlObjectReaderTest, with flag lists, colors, vectors, wide text, reported problems and refused documents)
-- [ ] Client-gated test: CharacterCreation/CharacterCreationConfig.xml decodes to WizCharacterCreationConfig with non-empty m_creationOptions and m_schoolOptions; ActionList.xml, Chatter.xml, Colors.xml and InputBindings.xml parse with no unknown properties (partly passes in XmlObjectReaderClientTest: ActionList.xml and InputBindings.xml read with no issue at all. The r806919 type dump does not list the root classes of CharacterCreationConfig.xml, Chatter.xml or Colors.xml (WizCharacterCreationConfig, ChatterManager, ShoppingColors), so each reads as well-formed and reports only that class; decoding them waits for 6.10's supplemental schemas)
+- [x] Client-gated test: CharacterCreation/CharacterCreationConfig.xml decodes to WizCharacterCreationConfig with non-empty m_creationOptions and m_schoolOptions; ActionList.xml, Chatter.xml, Colors.xml and InputBindings.xml parse with no unknown properties (XmlObjectReaderClientTest: ActionList.xml and InputBindings.xml read with no issue on the dump alone, and with the classes the install holds that the dump does not describe, from the class file the extractor or the game server builds, all five read with no issue: the creation config with its creation option and seven schools, Chatter.xml with its 24 chatter lists and Colors.xml with its 14 primary colours for boys, run on r806919 on 2026-09-29)
 - [ ] Real client, with LOG wiring: the character-creation screen offers exactly the schools and options the server validates against
 
 **Risks**
 
 - Needs an XML parser dependency (pugixml or similar), which is not yet a listed stack decision. Resolved: pugixml was already in the stack for the message definitions
-- The character creation files' classes are missing from the r806919 type dump, so the server cannot validate creation against CharacterCreationConfig.xml through this reader until 6.10. The 3.14 extractor can read the school names from the XML directly
+- The character creation files' classes are missing from the r806919 type dump. Since 6.10 they are server classes found in the install's plain-XML files, so this reader reads CharacterCreationConfig.xml once the game server has written them, and creation can be validated against it. The 3.14 extractor can read the school names from the XML directly
 - The AARRGGBB order of colors follows the palette Colors.xml holds, which reads as sensible colors only in that order; no other source confirms it yet
 
 ## 3.13 Locale .lang loader and localetool (OBJ-14 + QST-1)

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Hands out the archive's entries to worker threads one index at a time, running on the calling thread and whichever workers could be started; each worker reads its entry through the archive's own lock, skips anything that is neither a BINd file nor a versionable object whose first word names a class the dump lists, decodes the rest in parallel and keeps its own tallies, which are merged in entry order afterwards so the report is the same however the work was split; an entry that throws is counted as unreadable or failed without letting the exception leave its thread, and issues are grouped by kind and hash, counted once per use and once per file with the first file, path and detail they appear with, a root class that stops a file from decoding included among the unknown classes, and each property of an unknown class grouped by the class and its own hash.
+ * Hands out the archive's entries, or those named in the list it is given, to worker threads one index at a time, running on the calling thread and whichever workers could be started; each worker reads its entry through the archive's own lock, skips anything that is neither a BINd file nor a versionable object whose first word names a class the dump lists, decodes the rest in parallel and keeps its own tallies, which are merged in entry order afterwards so the report is the same however the work was split; an entry that throws is counted as unreadable or failed without letting the exception leave its thread, and issues are grouped by kind, hash and the class that owns them, counted once per use and once per file with the first file, path and detail they appear with, a root class that stops a file from decoding included among the unknown classes, and each property of an unknown class grouped by the class and its own hash.
  */
 
 #include "BindSweep.h"
@@ -15,7 +15,9 @@
 #include <new>
 #include <set>
 #include <span>
+#include <string_view>
 #include <thread>
+#include <tuple>
 #include <utility>
 
 namespace
@@ -41,7 +43,7 @@ namespace
         std::map<uint64, uint64> BitSizes;
     };
 
-    using IssueKey = std::pair<DecodeIssueKind, uint32>;
+    using IssueKey = std::tuple<DecodeIssueKind, uint32, uint32>;
     using PropertyKey = std::pair<uint32, uint32>;
 
     struct Tally
@@ -55,6 +57,7 @@ namespace
         std::map<uint32, Use> Classes;
         std::map<PropertyKey, Use> ClassProperties;
         std::map<IssueKey, Use> Issues;
+        std::set<std::size_t> UnknownEntries;
     };
 
     void Count(Use& use, std::size_t entry, std::string_view path, std::string_view detail, bool newInFile)
@@ -124,10 +127,13 @@ namespace
                 CountBits(use, issue.Bits);
                 continue;
             }
-            IssueKey const key{ issue.Kind, issue.Hash };
+            IssueKey const key{ issue.Kind, issue.Hash, issue.Kind == DecodeIssueKind::UnknownClass ? 0u : issue.Owner };
             bool const newInFile = seen.insert(key).second;
             if (issue.Kind == DecodeIssueKind::UnknownClass)
+            {
                 Count(tally.Classes[issue.Hash], index, issue.Path, issue.Detail, newInFile);
+                tally.UnknownEntries.insert(index);
+            }
             else
             {
                 Count(tally.Issues[key], index, issue.Path, issue.Detail, newInFile);
@@ -172,6 +178,7 @@ namespace
             if (result.Decoded.Status == SerializerStatus::UnknownClass && result.RootClassHash != 0)
             {
                 Count(tally.Classes[result.RootClassHash], index, RootPath, result.Detail, true);
+                tally.UnknownEntries.insert(index);
                 CountIssues(tally, index, result.Decoded.Issues);
             }
             tally.Failures.emplace_back(index, BindSweepFailure{ entry.Name, result.Status, result.Decoded.Status, result.RootClassHash, result.Detail });
@@ -208,18 +215,33 @@ namespace
     }
 }
 
-BindSweepReport BindSweep::Run(KiwadArchive const& archive, TypeCatalogPtr const& catalog, unsigned threads, SerializerLimits const& limits)
+BindSweepReport BindSweep::Run(KiwadArchive const& archive, TypeCatalogPtr const& catalog, unsigned threads, SerializerLimits const& limits, std::vector<std::string> const* only)
 {
     std::vector<KiwadEntry> const& entries = archive.GetEntries();
+    std::vector<std::size_t> order;
+    if (only)
+    {
+        std::set<std::string_view> const wanted(only->begin(), only->end());
+        for (std::size_t index = 0; index < entries.size(); ++index)
+            if (wanted.contains(entries[index].Name))
+                order.push_back(index);
+    }
+    else
+    {
+        order.resize(entries.size());
+        for (std::size_t index = 0; index < entries.size(); ++index)
+            order[index] = index;
+    }
     unsigned const hardware = std::max(std::thread::hardware_concurrency(), 1u);
     std::size_t const requested = std::min<std::size_t>(threads == 0 ? hardware : threads, MaxThreads);
-    unsigned const workers = static_cast<unsigned>(std::clamp<std::size_t>(requested, 1, std::max<std::size_t>(entries.size(), 1)));
+    unsigned const workers = static_cast<unsigned>(std::clamp<std::size_t>(requested, 1, std::max<std::size_t>(order.size(), 1)));
     std::atomic<std::size_t> next{ 0 };
     std::vector<Tally> tallies(workers);
-    auto const work = [&archive, &catalog, &limits, &entries, &next](Tally& tally)
+    auto const work = [&archive, &catalog, &limits, &entries, &order, &next](Tally& tally)
     {
-        for (std::size_t index = next.fetch_add(1, std::memory_order_relaxed); index < entries.size(); index = next.fetch_add(1, std::memory_order_relaxed))
+        for (std::size_t slot = next.fetch_add(1, std::memory_order_relaxed); slot < order.size(); slot = next.fetch_add(1, std::memory_order_relaxed))
         {
+            std::size_t const index = order[slot];
             Stage stage = Stage::Reading;
             try
             {
@@ -250,7 +272,8 @@ BindSweepReport BindSweep::Run(KiwadArchive const& archive, TypeCatalogPtr const
         thread.join();
 
     BindSweepReport report;
-    report.Entries = entries.size();
+    report.Entries = order.size();
+    std::set<std::size_t> unknownEntries;
     std::vector<std::pair<std::size_t, BindSweepFailure>> failures;
     std::map<uint32, Use> classes;
     std::map<PropertyKey, Use> properties;
@@ -269,7 +292,10 @@ BindSweepReport BindSweep::Run(KiwadArchive const& archive, TypeCatalogPtr const
             Merge(properties[key], std::move(use));
         for (auto& [key, use] : tally.Issues)
             Merge(issues[key], std::move(use));
+        unknownEntries.insert(tally.UnknownEntries.begin(), tally.UnknownEntries.end());
     }
+    for (std::size_t const index : unknownEntries)
+        report.UnknownFiles.push_back(entries[index].Name);
     std::stable_sort(failures.begin(), failures.end(), [](auto const& left, auto const& right) { return left.first < right.first; });
     for (auto& failure : failures)
         report.Failures.push_back(std::move(failure.second));
@@ -278,7 +304,8 @@ BindSweepReport BindSweep::Run(KiwadArchive const& archive, TypeCatalogPtr const
     for (auto& [key, use] : properties)
         report.ClassProperties.push_back(BindSweepClassProperty{ key.first, key.second, use.Count, use.Files, entries[use.FirstEntry].Name, std::move(use.FirstPath), std::move(use.BitSizes) });
     for (auto& [key, use] : issues)
-        report.Issues.push_back(BindSweepIssue{ key.first, key.second, use.Count, use.Files, entries[use.FirstEntry].Name, std::move(use.FirstPath), std::move(use.FirstDetail), std::move(use.BitSizes) });
+        report.Issues.push_back(BindSweepIssue{ std::get<0>(key), std::get<1>(key), std::get<2>(key), use.Count, use.Files, entries[use.FirstEntry].Name, std::move(use.FirstPath), std::move(use.FirstDetail),
+            std::move(use.BitSizes) });
     std::sort(report.UnknownClasses.begin(), report.UnknownClasses.end(), [](BindSweepUnknownClass const& left, BindSweepUnknownClass const& right)
     {
         return left.Count != right.Count ? left.Count > right.Count : left.Hash < right.Hash;

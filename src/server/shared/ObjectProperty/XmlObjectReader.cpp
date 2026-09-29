@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Charges an upper bound of the parsed document against the memory budget before parsing it as UTF-8 with pugixml, which skips a byte order mark and keeps whitespace-only values; refuses text or a second element beside the root; walks each Class element into a default object of its class, fills each property from its element or, for containers, appends each element of that name in document order on its own, joins a value's text and CDATA across comments, reads numbers, bools, option names and flag lists, UTF-8 text, AARRGGBB colors and comma or space separated math types, reads objects from a single nested Class element, credits a default inline object an explicit one replaces, and charges every object, element and string against the decode limits; anything that cannot be read is reported with its property path and line and the property keeps its default or earlier value.
+ * Charges an upper bound of the parsed document against the memory budget before parsing it as UTF-8 with pugixml, which skips a byte order mark and keeps whitespace-only values; refuses text or a second element beside the root; walks each Class element into a default object of its class, fills each property from its element or, for containers, appends each element of that name in document order on its own, joins a value's text and CDATA across comments, reads numbers, bools, option names and flag lists, UTF-8 text, AARRGGBB colors and comma or space separated math types, reads objects from a single nested Class element, credits a default inline object an explicit one replaces, and charges every object, element and string against the decode limits; anything that cannot be read is reported with its property path and line and the class that owns it, the class holding the property for an unknown class, and the property keeps its default or earlier value; ReadsAs reads one value the same way and keeps nothing.
  */
 
 #include "XmlObjectReader.h"
@@ -232,7 +232,7 @@ namespace
             {
                 if (IsText(child))
                 {
-                    if (!Report(DecodeIssueKind::InvalidValue, 0, "Objects", child, "holds text where a Class element belongs"))
+                    if (!Report(DecodeIssueKind::InvalidValue, 0, 0, "Objects", child, "holds text where a Class element belongs"))
                         return Finish();
                     continue;
                 }
@@ -240,12 +240,12 @@ namespace
                     continue;
                 if (std::string_view(child.name()) != ClassElement)
                 {
-                    if (!Report(DecodeIssueKind::UnknownProperty, 0, "Objects", child, fmt::format("holds <{}> where a Class element belongs", child.name())))
+                    if (!Report(DecodeIssueKind::UnknownProperty, 0, 0, "Objects", child, fmt::format("holds <{}> where a Class element belongs", child.name())))
                         return Finish();
                     continue;
                 }
                 PropertyObjectPtr object;
-                if (!ReadClass(child, 1, nullptr, "Objects", object))
+                if (!ReadClass(child, 1, nullptr, 0, "Objects", object))
                     return Finish();
                 if (object)
                     _result.Objects.push_back(std::move(object));
@@ -326,25 +326,25 @@ namespace
             return true;
         }
 
-        bool Report(DecodeIssueKind kind, uint32 hash, std::string path, pugi::xml_node node, std::string what)
+        bool Report(DecodeIssueKind kind, uint32 hash, uint32 owner, std::string path, pugi::xml_node node, std::string what)
         {
             std::string detail = fmt::format("{} on line {}", what, Line(node));
             if (!Charge(sizeof(DecodeIssue) + path.size() + detail.size(), path, node))
                 return false;
-            _result.Issues.push_back(DecodeIssue{ kind, hash, 0, std::move(path), std::move(detail) });
+            _result.Issues.push_back(DecodeIssue{ kind, hash, 0, std::move(path), std::move(detail), owner });
             return true;
         }
 
-        bool ReadClass(pugi::xml_node node, uint32 depth, ClassInfo const* expected, std::string const& path, PropertyObjectPtr& out)
+        bool ReadClass(pugi::xml_node node, uint32 depth, ClassInfo const* expected, uint32 holder, std::string const& path, PropertyObjectPtr& out)
         {
             std::string_view const name = node.attribute(NameAttribute).value();
             ClassInfo const* const type = _catalog->FindClass(name);
             if (!type)
-                return Report(DecodeIssueKind::UnknownClass, StringHash::KiStringHash(name), path, node, fmt::format("names class '{}', which the type dump does not list", std::string_view(name).substr(0, ExcerptBytes)));
+                return Report(DecodeIssueKind::UnknownClass, StringHash::KiStringHash(name), holder, path, node, fmt::format("names class '{}', which the type dump does not list", std::string_view(name).substr(0, ExcerptBytes)));
             if (type->Kind != ClassKind::PropertyClass)
-                return Report(DecodeIssueKind::InvalidObject, type->Hash, path, node, fmt::format("names {}, which is not a property class", type->Name));
+                return Report(DecodeIssueKind::InvalidObject, type->Hash, holder, path, node, fmt::format("names {}, which is not a property class", type->Name));
             if (expected && !type->IsA(*expected))
-                return Report(DecodeIssueKind::InvalidObject, type->Hash, path, node, fmt::format("holds a {}, which is not a {}", type->Name, expected->Name));
+                return Report(DecodeIssueKind::InvalidObject, type->Hash, holder, path, node, fmt::format("holds a {}, which is not a {}", type->Name, expected->Name));
             if (depth + type->DefaultDepth - 1 > _depthLimit)
                 return Fail(XmlReadStatus::TooDeep, path, node, fmt::format("nests objects deeper than {}", _depthLimit));
             if (type->DefaultObjects > _limits.MaxObjects - std::min(_objects, _limits.MaxObjects))
@@ -355,7 +355,7 @@ namespace
 
             PropertyObjectPtr object = PropertyObject::Create(_catalog, *type);
             if (!object)
-                return Report(DecodeIssueKind::InvalidObject, type->Hash, path, node, fmt::format("names {}, which cannot be created", type->Name));
+                return Report(DecodeIssueKind::InvalidObject, type->Hash, holder, path, node, fmt::format("names {}, which cannot be created", type->Name));
             std::string const objectPath = depth == 1 ? type->Name : path;
             std::vector<bool> seen(type->Properties.size(), false);
             std::vector<std::size_t> positions(type->Properties.size(), 0);
@@ -363,7 +363,7 @@ namespace
             {
                 if (IsText(element))
                 {
-                    if (!Report(DecodeIssueKind::InvalidValue, 0, objectPath, element, "holds text outside any property"))
+                    if (!Report(DecodeIssueKind::InvalidValue, 0, type->Hash, objectPath, element, "holds text outside any property"))
                         return false;
                     continue;
                 }
@@ -373,7 +373,7 @@ namespace
                 PropertyInfo const* const property = type->FindProperty(propertyName);
                 if (!property)
                 {
-                    if (!Report(DecodeIssueKind::UnknownProperty, 0, objectPath, element, fmt::format("holds <{}>, which {} does not list", propertyName.substr(0, ExcerptBytes), type->Name)))
+                    if (!Report(DecodeIssueKind::UnknownProperty, 0, type->Hash, objectPath, element, fmt::format("holds <{}>, which {} does not list", propertyName.substr(0, ExcerptBytes), type->Name)))
                         return false;
                     continue;
                 }
@@ -394,12 +394,12 @@ namespace
                         return false;
                     PropertyValue value;
                     bool read = false;
-                    if (!ReadElement(*property, element, depth, propertyPath, value, read))
+                    if (!ReadElement(*property, type->Hash, element, depth, propertyPath, value, read))
                         return false;
                     if (!read)
                         continue;
                     if (PropertySetResult const set = object->SetElementAt(ordinal, index, std::move(value)); set != PropertySetResult::Ok
-                        && !Report(DecodeIssueKind::InvalidValue, property->Hash, propertyPath, element, fmt::format("was refused and left out: {}", PropertyObject::GetResultName(set))))
+                        && !Report(DecodeIssueKind::InvalidValue, property->Hash, type->Hash, propertyPath, element, fmt::format("was refused and left out: {}", PropertyObject::GetResultName(set))))
                         return false;
                     continue;
                 }
@@ -412,14 +412,14 @@ namespace
                 }
                 PropertyValue value;
                 bool read = false;
-                if (!ReadElement(*property, element, depth, propertyPath, value, read))
+                if (!ReadElement(*property, type->Hash, element, depth, propertyPath, value, read))
                     return false;
                 bool applied = false;
                 if (read)
                 {
                     PropertySetResult const set = object->SetAt(ordinal, std::move(value));
                     applied = set == PropertySetResult::Ok;
-                    if (!applied && !Report(DecodeIssueKind::InvalidValue, property->Hash, propertyPath, element,
+                    if (!applied && !Report(DecodeIssueKind::InvalidValue, property->Hash, type->Hash, propertyPath, element,
                             fmt::format("was refused: {}; the property keeps {}", PropertyObject::GetResultName(set), seen[ordinal] ? "its earlier value" : "its default")))
                         return false;
                 }
@@ -430,7 +430,7 @@ namespace
                 }
                 if (!applied)
                     continue;
-                if (seen[ordinal] && !Report(DecodeIssueKind::InvalidValue, property->Hash, propertyPath, element, "appears more than once; the last one is kept"))
+                if (seen[ordinal] && !Report(DecodeIssueKind::InvalidValue, property->Hash, type->Hash, propertyPath, element, "appears more than once; the last one is kept"))
                     return false;
                 seen[ordinal] = true;
             }
@@ -438,7 +438,7 @@ namespace
             return true;
         }
 
-        bool ReadElement(PropertyInfo const& property, pugi::xml_node element, uint32 depth, std::string const& path, PropertyValue& out, bool& read)
+        bool ReadElement(PropertyInfo const& property, uint32 owner, pugi::xml_node element, uint32 depth, std::string const& path, PropertyValue& out, bool& read)
         {
             std::string text;
             std::vector<pugi::xml_node> children;
@@ -455,7 +455,7 @@ namespace
             if (property.Kind == ValueKind::Object)
             {
                 if (!Ambrose::Trim(text).empty() || children.size() > 1 || (children.size() == 1 && std::string_view(children.front().name()) != ClassElement))
-                    return Report(DecodeIssueKind::InvalidValue, property.Hash, path, element, "holds something other than a single Class element or nothing");
+                    return Report(DecodeIssueKind::InvalidValue, property.Hash, owner, path, element, "holds something other than a single Class element or nothing");
                 if (children.empty())
                 {
                     if (property.Pointer)
@@ -464,11 +464,11 @@ namespace
                         read = true;
                     }
                     else if (property.Container != ContainerKind::Static)
-                        return Report(DecodeIssueKind::InvalidObject, property.Hash, path, element, "holds a null inline object");
+                        return Report(DecodeIssueKind::InvalidObject, property.Hash, owner, path, element, "holds a null inline object");
                     return true;
                 }
                 PropertyObjectPtr child;
-                if (!ReadClass(children.front(), depth + 1, property.Type, path, child))
+                if (!ReadClass(children.front(), depth + 1, property.Type, owner, path, child))
                     return false;
                 if (!child)
                 {
@@ -484,14 +484,14 @@ namespace
                 return true;
             }
             if (!children.empty())
-                return Report(DecodeIssueKind::InvalidValue, property.Hash, path, element, fmt::format("holds the element <{}> where a {} value belongs", children.front().name(), property.TypeName));
+                return Report(DecodeIssueKind::InvalidValue, property.Hash, owner, path, element, fmt::format("holds the element <{}> where a {} value belongs", children.front().name(), property.TypeName));
             std::optional<PropertyValue> value = ParseText(property, text);
             if (!value)
             {
                 DecodeIssueKind const kind = IsTextNumber(property) ? DecodeIssueKind::UnknownEnumName
                     : property.Kind == ValueKind::SerializedBuffer || property.Kind == ValueKind::SimpleVert || property.Kind == ValueKind::SimpleFace ? DecodeIssueKind::UnsupportedType
                                                                                                                                                    : DecodeIssueKind::InvalidValue;
-                return Report(kind, property.Hash, path, element, fmt::format("holds '{}', which does not read as {}", std::string_view(text).substr(0, ExcerptBytes), property.TypeName));
+                return Report(kind, property.Hash, owner, path, element, fmt::format("holds '{}', which does not read as {}", std::string_view(text).substr(0, ExcerptBytes), property.TypeName));
             }
             out = std::move(*value);
             read = true;
@@ -529,6 +529,11 @@ XmlReadResult XmlObjectReader::Read(TypeCatalogPtr const& catalog, std::string_v
         result.Detail = "memory ran out while reading";
         return result;
     }
+}
+
+bool XmlObjectReader::ReadsAs(PropertyInfo const& property, std::string_view text)
+{
+    return ParseText(property, text).has_value();
 }
 
 std::string_view XmlObjectReader::GetStatusName(XmlReadStatus status) noexcept

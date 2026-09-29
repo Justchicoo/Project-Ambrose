@@ -1,8 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the type registry on small dumps written by the test with invented classes: aliases collapsed into their class, into an unprefixed template class, or standing in for a missing one; base chains; properties in id order found by hash and name; per-property enum options in both directions with text options, integer and text defaults in dump order and the base class hint; value, primitive and bit kinds; the class kind counts; and loads refused while the active catalog keeps serving: bad hashes, unknown bases and types, broken, empty or misshapen JSON, fields of the wrong JSON type or missing, duplicates, id gaps, oversized values, bad containers, keys that differ from the hash, inconsistent base chains and inherited property ids, classes that hold themselves inline and the wrong version. A supplement of classes the dump does not describe joins the dump loaded before or after it, rebuilds the catalog into a new generation, is marked as coming from the supplement, gives way to the dump where the dump describes the same class, decodes and encodes versionable objects, and when a name or property does not hash to what it declares, or the rebuild fails, is refused with the catalog that was serving left in place.
+ * Tests the type registry on small dumps written by the test with invented classes: aliases collapsed into their class, into an unprefixed template class, or standing in for a missing one; base chains; properties in id order found by hash and name; per-property enum options in both directions with text options, integer and text defaults in dump order and the base class hint; value, primitive and bit kinds; the class kind counts; and loads refused while the active catalog keeps serving: bad hashes, unknown bases and types, broken, empty or misshapen JSON, fields of the wrong JSON type or missing, duplicates, id gaps, oversized values, bad containers, keys that differ from the hash, inconsistent base chains and inherited property ids, classes that hold themselves inline and the wrong version. A supplement of classes the dump does not describe joins the dump loaded before or after it, rebuilds the catalog into a new generation, is marked as coming from the supplement, decodes and encodes versionable objects, decodes from a BINd file inside a list of the dump class it extends, where a catalog without it reports an unknown class, hashes a pointer property's type as written as the dump does, gives way to the dump where the dump describes the same class, and when a name or property does not hash to what it declares, or the rebuild fails, is refused with the catalog that was serving left in place.
  */
 
+#include "BindFile.h"
 #include "ObjectSerializer.h"
 #include "PropertyObject.h"
 #include "StringHash.h"
@@ -639,6 +640,64 @@ TEST_F(TypeRegistryTest, ASupplementClassJoinsTheLoadedDumpInANewGeneration)
     ASSERT_TRUE(_registry.ClearSupplement(errors));
     EXPECT_EQ(_registry.GetCatalog()->FindClass(hash), nullptr);
     EXPECT_FALSE(_registry.IsFromSupplement(hash));
+}
+
+TEST_F(TypeRegistryTest, ASupplementClassDecodesInAListOfTheDumpClassItExtends)
+{
+    ASSERT_NO_FATAL_FAILURE(Activate());
+    std::vector<std::string> errors;
+    ASSERT_TRUE(_registry.SetSupplement(Supplement("TestServerBehavior", "class TestBase"), "test rows", errors)) << (errors.empty() ? std::string() : errors.front());
+    TypeCatalogPtr const catalog = _registry.GetCatalog();
+    PropertyObjectPtr child = PropertyObject::Create(catalog, "TestServerBehavior");
+    ASSERT_TRUE(child);
+    ASSERT_EQ(child->Set("m_id", uint64{ 77 }), PropertySetResult::Ok);
+    ASSERT_EQ(child->Set("m_name", "rowan"), PropertySetResult::Ok);
+    PropertyObjectPtr parent = PropertyObject::Create(catalog, "class TestDerived");
+    ASSERT_TRUE(parent);
+    PropertyValue::List children;
+    children.emplace_back(std::move(child));
+    ASSERT_EQ(parent->Set("m_children", std::move(children)), PropertySetResult::Ok);
+    EncodeResult const written = BindFile::Write(parent.get());
+    ASSERT_TRUE(written.Ok()) << written.Detail;
+
+    BindReadResult const read = BindFile::Read(catalog, written.Bytes);
+    ASSERT_TRUE(read.Ok()) << read.Detail;
+    EXPECT_TRUE(read.Decoded.Issues.empty());
+    PropertyValue const* const decoded = read.Decoded.Object->Get("m_children");
+    ASSERT_TRUE(decoded && decoded->GetList() && decoded->GetList()->size() == 1u);
+    PropertyObject const* const element = decoded->GetList()->front().AsObject();
+    ASSERT_NE(element, nullptr);
+    EXPECT_EQ(element->GetClass().Name, "TestServerBehavior") << "a list of the dump's base class holds the supplement's class, read by the class hash before it";
+    EXPECT_EQ(*element->Get("m_id")->GetIf<uint64>(), 77u);
+    EXPECT_EQ(*element->Get("m_name")->GetIf<std::string>(), "rowan");
+
+    BindReadResult const unknown = BindFile::Read(_active, written.Bytes);
+    ASSERT_TRUE(unknown.Ok()) << unknown.Detail;
+    ASSERT_FALSE(unknown.Decoded.Issues.empty());
+    EXPECT_EQ(unknown.Decoded.Issues.front().Kind, DecodeIssueKind::UnknownClass) << "without the supplement the same bytes hold a class nothing describes";
+}
+
+TEST_F(TypeRegistryTest, ASupplementPropertyHashesItsTypeAsWrittenAsTheDumpsOwnDo)
+{
+    ASSERT_NO_FATAL_FAILURE(Activate());
+    TypeDumpLoader::RawDump supplement = Supplement("TestServerBehavior", "class TestBase");
+    TypeDumpLoader::RawProperty children = supplement.Classes.front().Properties.back();
+    children.Name = "m_children";
+    children.Type = "class SharedPointer<class TestBase>";
+    children.Container = "Vector";
+    children.Dynamic = true;
+    children.Pointer = true;
+    children.Id = 2;
+    children.Hash = StringHash::PropertyHash("class SharedPointer<class TestBase>", "m_children");
+    supplement.Classes.front().Properties.push_back(children);
+    std::vector<std::string> errors;
+    EXPECT_TRUE(_registry.SetSupplement(supplement, "test rows", errors)) << (errors.empty() ? std::string() : errors.front());
+    EXPECT_EQ(StringHash::PropertyHash("class SharedPointer<class TestBase>", "m_children"), _active->FindClass("class TestDerived")->FindProperty("m_children")->Hash)
+        << "the dump hashes a shared pointer's whole type, as the supplement must";
+
+    errors.clear();
+    supplement.Classes.front().Properties.back().Hash = StringHash::PropertyHash("class TestBase", "m_children");
+    EXPECT_FALSE(_registry.SetSupplement(supplement, "test rows", errors)) << "the pointed-to class alone is not the type the hash is taken from";
 }
 
 TEST_F(TypeRegistryTest, ASupplementSetBeforeTheDumpJoinsItWhenItLoads)

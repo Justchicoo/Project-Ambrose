@@ -9,6 +9,7 @@
 #include "StringUtil.h"
 
 #include <algorithm>
+#include <cctype>
 #include <iterator>
 #include <limits>
 #include <span>
@@ -130,6 +131,29 @@ std::optional<ProgramString> ProgramStrings::ReadAt(PeImage const& image, uint64
     if (unit >= minimumLength && unit < units && UnitAt(bytes, unit) == 0)
         return ProgramString{ address, static_cast<uint32>(2 * unit), true, std::move(text) };
     return std::nullopt;
+}
+
+std::vector<std::string> ProgramStrings::PropertyNames() const
+{
+    auto const inName = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_'; };
+    std::vector<std::string> names;
+    for (ProgramString const& string : _strings)
+    {
+        std::string_view const text = string.Text;
+        for (std::size_t at = text.find("m_"); at != std::string_view::npos; at = text.find("m_", at + 2))
+        {
+            if (at > 0 && inName(text[at - 1]))
+                continue;
+            std::size_t end = at + 2;
+            while (end < text.size() && inName(text[end]))
+                ++end;
+            if (end > at + 2)
+                names.emplace_back(text.substr(at, end - at));
+        }
+    }
+    std::sort(names.begin(), names.end());
+    names.erase(std::unique(names.begin(), names.end()), names.end());
+    return names;
 }
 
 std::unordered_map<uint32, std::vector<std::string>> ProgramStrings::ClassNames() const

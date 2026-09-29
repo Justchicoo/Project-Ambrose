@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * extractor entry point: silences the log, reads its arguments and environment as UTF-8, refuses an option value that is itself an option and a command named twice, checks the world database, --sql and --dry-run before anything is searched, then when no install or type dump is named follows AMBROSE_SETUP_MODE: auto uses the newest install found and the type dump built from it, ask offers the finds and a build, off prints them with the flag to pass; opens the user's own Root.wad and a type dump bound to the views of every command named, extracts for each command in turn, the character names, disallowed names, schools and creation options for names, the level, school and stat tables for levels and every zone's settings, locations and placed objects from its own archive for zones, prints their counts, the problems found and the zone parts a type dump could not describe, then replaces every command's world tables in one transaction, writes the SQL to a file, or on a dry run writes nothing and checks the world tables of any database it was given; exits 0 on success, 1 when the install, dump, data or database fails, and 2 on bad usage.
+ * extractor entry point: silences the log, reads its arguments and environment as UTF-8, refuses an option value that is itself an option and a command named twice, checks the world database, --sql and --dry-run before anything is searched, then when no install or type dump is named follows AMBROSE_SETUP_MODE: auto uses the newest install found and the type dump built from it, ask offers the finds and a build, off prints them with the flag to pass; opens the user's own Root.wad and a type dump bound to the views of every command named, extracts for each command in turn, the character names, disallowed names, schools and creation options for names, the level, school and stat tables for levels, every zone's settings, locations and placed objects from its own archive for zones, and for classes the classes the install's archives hold that the type dump does not describe, from the class file schemaprobe builds once per revision in the Ambrose data folder, prints their counts, the problems found and the zone parts a type dump could not describe, then replaces every command's world tables in one transaction, writes the SQL to a file, or on a dry run writes nothing and checks the world tables of any database it was given; exits 0 on success, 1 when the install, dump, data or database fails, and 2 on bad usage.
  */
 
 #include "CharacterNameExtractor.h"
@@ -15,6 +15,8 @@
 #include "Log.h"
 #include "LogConfig.h"
 #include "NameViews.h"
+#include "ServerClassCache.h"
+#include "ServerClassScript.h"
 #include "TypedView.h"
 #include "ZoneExtractor.h"
 #include "ZoneScript.h"
@@ -54,6 +56,11 @@ Commands:
           stat settings with their crit, block and pip conversion bands
   zones   every zone's settings, named locations and placed objects, read from
           the gamedata.bin of each zone's own archive
+  classes the classes every archive of the install holds that the type dump
+          does not describe and every object of which then decodes cleanly,
+          with the evidence for each; schemaprobe finds them once per client
+          revision and keeps them in the Ambrose data folder's classes folder,
+          and only the classes marked install are replaced
 
 Options:
   --client <dir>      the install holding Data/GameData (default: AMBROSE_CLIENT_DIR)
@@ -133,7 +140,7 @@ database fails, 2 on bad usage.
         std::set<std::string> named;
         for (std::string const& word : parsed.Words)
         {
-            if (word != "names" && word != "levels" && word != "zones")
+            if (word != "names" && word != "levels" && word != "zones" && word != "classes")
                 error = fmt::format("unknown command '{}'", word);
             else if (!named.insert(word).second)
                 error = fmt::format("{} is named twice", word);
@@ -218,6 +225,40 @@ database fails, 2 on bad usage.
             std::cout << fmt::format("  {} entries of class hash {}, which the type dump does not list\n", count, hash);
         for (auto const& [hash, count] : partsByClass)
             std::cout << fmt::format("  {} parts of kept entries of class hash {}, which the type dump does not list\n", count, hash);
+    }
+
+    bool CollectClasses(std::string const& client, std::string const& typeDump, Extracted& extracted)
+    {
+        LocalClientSystem const system;
+        std::optional<ClientInstall> const install = ClientInstall::Inspect(system, LogConfig::Utf8Path(client));
+        std::string error;
+        std::optional<std::filesystem::path> classes;
+        if (!install)
+            error = fmt::format("{} is not a Wizard101 install", client);
+        else
+        {
+            ServerClassCacheOptions options;
+            options.DataFolder = ClientLocator::GetDataFolder(system);
+            options.Program = ServerClassCache::DefaultProgram(system.GetExecutableDirectory());
+            options.Report = [](std::string const& line) { std::cerr << line << '\n'; };
+            classes = ServerClassCache::Ensure(*install, LogConfig::Utf8Path(typeDump), options, error);
+        }
+        TypeDumpLoader::RawDump dump;
+        if (!classes || !ServerClassCache::Read(*classes, dump, error))
+        {
+            ++extracted.ErrorCount;
+            extracted.Errors.push_back(error);
+            return false;
+        }
+        std::size_t properties = 0;
+        for (TypeDumpLoader::RawClass const& type : dump.Classes)
+            properties += type.Properties.size();
+        std::cout << fmt::format("server_class: {} rows marked install, from {}\n", dump.Classes.size(), ConfigMgr::PathToUtf8(*classes));
+        std::cout << fmt::format("server_class_property: {} rows\n", properties);
+        extracted.Scripts.push_back(ServerClassScript::Build(dump));
+        std::vector<std::string_view> const tables = ServerClassScript::GetTables();
+        extracted.Tables.insert(extracted.Tables.end(), tables.begin(), tables.end());
+        return true;
     }
 
     template<typename Script, typename Extraction>
@@ -317,6 +358,8 @@ database fails, 2 on bad usage.
                 Collect<CharacterNameScript>(CharacterNameExtractor::Extract(*archive, registry.GetCatalog()), extracted);
             else if (command == "levels")
                 Collect<LevelScript>(LevelExtractor::Extract(*archive, registry.GetCatalog()), extracted);
+            else if (command == "classes")
+                CollectClasses(*arguments->Client, *arguments->TypeDump, extracted);
             else
                 Collect<ZoneScript>(ZoneExtractor::Extract(rootWad.parent_path(), registry.GetCatalog()), extracted);
         }

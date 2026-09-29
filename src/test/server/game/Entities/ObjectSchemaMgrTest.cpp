@@ -1,13 +1,16 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests what the world database's object schema tables promise, against a real world database when AMBROSE_TEST_DB is set and a small type dump the test writes: the updates create the tables with the rows that prove the player object, a server class joins the catalog in one build and extends a class the dump describes, the core object types load with the template classes' pairs and give the player template's header, the behavior classes load and are found, a behavior with no class stands for an empty slot, a row naming a class nothing describes or one of the wrong kind, and a template class nothing describes, fails its reload with the row named and keeps what was serving, and a server class whose property does not hash fails its reload with the catalog left as it was.
+ * Tests what the world database's object schema tables promise, against a real world database when AMBROSE_TEST_DB is set and a small type dump the test writes: the updates create the tables with the rows that prove the player object, a server class joins the catalog in one build and extends a class the dump describes, the core object types load with the template classes' pairs and give the player template's header, the behavior classes load and are found, a behavior with no class stands for an empty slot, a row naming a class nothing describes or one of the wrong kind, and a template class nothing describes, fails its reload with the row named and keeps what was serving, a server class whose property does not hash fails its reload with the catalog left as it was, and one added then joins and decodes without a restart, and the classes an install holds are written marked install with their enum options, read back on their own as the file they came from, whatever its evidence says, and unlike one read another way, replace the install classes written before them and leave the authored ones.
  */
 
+#include "BindFile.h"
 #include "DBUpdater.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
 #include "ObjectSchemaMgr.h"
+#include "PropertyObject.h"
 #include "ReloadMgr.h"
+#include "ServerClassScript.h"
 #include "StringHash.h"
 #include "TypeRegistry.h"
 #include "TypedView.h"
@@ -45,6 +48,7 @@ namespace
     {
         Json classes = Json::object();
         AddClass(classes, "class PropertyClass", Json::array(), Json::object());
+        AddClass(classes, "enum Shade", Json::array(), Json::object());
         Json object = Json::object();
         object["m_globalID.m_full"] = Property("unsigned __int64", "m_globalID.m_full", 0);
         AddClass(classes, "class CoreObject", Json::array({ "PropertyClass" }), object);
@@ -128,10 +132,42 @@ namespace
         {
             std::vector<std::string> errors;
             ASSERT_TRUE(sObjectSchemaMgr.LoadClasses(errors)) << (errors.empty() ? std::string() : errors.front());
-            ASSERT_TRUE(sTypeRegistry.LoadFromText(Dump(), "schema.json"));
+            ASSERT_TRUE(sTypeRegistry.LoadFromText(Dump(), "schema.json")) << (sTypeRegistry.GetErrors().empty() ? std::string() : sTypeRegistry.GetErrors().front());
             _loaded = sTypeRegistry.GetCatalog();
             ObjectSchemaLoadResult const tables = sObjectSchemaMgr.LoadTables();
             ASSERT_TRUE(tables.Loaded) << (tables.Errors.empty() ? std::string() : tables.Errors.front());
+        }
+
+        TypeDumpLoader::RawDump InstallClass(std::string const& name)
+        {
+            TypeDumpLoader::RawClass type;
+            type.Key = std::to_string(StringHash::KiStringHash(name));
+            type.Name = name;
+            type.Hash = StringHash::KiStringHash(name);
+            type.Bases = { "class BehaviorInstance", "class PropertyClass" };
+            type.Evidence = "seen by the test";
+            TypeDumpLoader::RawProperty id;
+            id.Name = "m_behaviorTemplateNameID";
+            id.Type = "unsigned int";
+            id.Container = "Static";
+            id.Id = 0;
+            id.Offset = 104;
+            id.Flags = Kept;
+            id.Hash = StringHash::PropertyHash("unsigned int", "m_behaviorTemplateNameID");
+            TypeDumpLoader::RawProperty shade;
+            shade.Name = "m_shade";
+            shade.Type = "enum Shade";
+            shade.Container = "Static";
+            shade.Id = 1;
+            shade.Flags = 1 | (1 << 21);
+            shade.Hash = StringHash::PropertyHash("enum Shade", "m_shade");
+            shade.Options = { { "Shade_Light", int64{ 0 } }, { "Shade_Dark", int64{ 1 } } };
+            type.Properties = { id, shade };
+            TypeDumpLoader::RawDump dump;
+            dump.Version = TypeDumpLoader::SupportedVersion;
+            dump.HasClasses = true;
+            dump.Classes.push_back(std::move(type));
+            return dump;
         }
 
         TypedViewRegistry _views;
@@ -155,8 +191,12 @@ TEST_F(ObjectSchemaMgrTest, TheUpdatesCreateTheTablesWithTheRowsThatProveThePlay
     EXPECT_EQ(templates->Fetch()[1].Get<uint8>(), 2u) << "the player template's class gives the 68 02 every accepted player object opens with";
     QueryResult const behaviors = WorldDatabase.Query("SELECT COUNT(*), SUM(`class_name` IS NULL) FROM `behavior_client_class`");
     ASSERT_TRUE(behaviors);
-    EXPECT_EQ(behaviors->Fetch()[0].Get<uint64>(), 79u) << "one row for every behavior PlayerObject.xml names and the forty more the templates of zone objects name";
-    EXPECT_EQ(behaviors->Fetch()[1].Get<uint64>(), 17u) << "the seven slots an accepted player object leaves empty and ten a zone object's template names that the client builds nothing the dump describes for";
+    EXPECT_EQ(behaviors->Fetch()[0].Get<uint64>(), 130u) << "one row for every behavior PlayerObject.xml names and every one the templates placed in zones name";
+    EXPECT_EQ(behaviors->Fetch()[1].Get<uint64>(), 44u) << "the seven slots an accepted player object leaves empty, ten a zone object's template names that the client builds nothing the dump describes for, "
+                                                           "and twenty-seven names the client program holds no string of";
+    QueryResult const trainer = WorldDatabase.Query("SELECT `class_name` IS NULL FROM `behavior_client_class` WHERE `behavior_name` = 'WizTrainingBehavior'");
+    ASSERT_TRUE(trainer);
+    EXPECT_EQ(trainer->Fetch()[0].Get<uint64>(), 1u) << "a trainer's behavior is the server's alone";
     QueryResult const npc = WorldDatabase.Query("SELECT `class_name` FROM `behavior_client_class` WHERE `behavior_name` = 'NPCBehavior'");
     ASSERT_TRUE(npc);
     EXPECT_EQ(npc->Fetch()[0].Get<std::string>(), "class NPCBehavior");
@@ -263,5 +303,56 @@ TEST_F(ObjectSchemaMgrTest, AServerClassThatDoesNotHashFailsItsReloadWithTheCata
     ReloadOutcome const added = sReloadMgr.Reload(ObjectSchemaMgr::ClassTarget);
     EXPECT_TRUE(added.Ok) << (added.Errors.empty() ? std::string() : added.Errors.front());
     EXPECT_EQ(sTypeRegistry.GetCatalog()->GetGeneration(), serving->GetGeneration() + 1);
-    EXPECT_NE(sTypeRegistry.GetCatalog()->FindClass("TestFishingBehavior"), nullptr) << "an added class decodes without a restart";
+    TypeCatalogPtr const reloaded = sTypeRegistry.GetCatalog();
+    ASSERT_NE(reloaded->FindClass("TestFishingBehavior"), nullptr) << "an added class joins without a restart";
+    PropertyObjectPtr const fishing = PropertyObject::Create(reloaded, "TestFishingBehavior");
+    ASSERT_TRUE(fishing);
+    ASSERT_EQ(fishing->Set("m_behaviorTemplateNameID", uint32{ 41 }), PropertySetResult::Ok);
+    EncodeResult const written = BindFile::Write(fishing.get());
+    ASSERT_TRUE(written.Ok()) << written.Detail;
+    BindReadResult const read = BindFile::Read(reloaded, written.Bytes);
+    ASSERT_TRUE(read.Ok()) << read.Detail;
+    EXPECT_EQ(read.Decoded.Object->GetClass().Name, "TestFishingBehavior") << "and decodes as itself";
+    EXPECT_EQ(*read.Decoded.Object->Get("m_behaviorTemplateNameID")->GetIf<uint32>(), 41u);
+}
+
+TEST_F(ObjectSchemaMgrTest, InstallClassesReplaceTheInstallClassesBeforeThemWithTheirEnumOptionsAndLeaveTheAuthoredOnes)
+{
+    std::string error;
+    ASSERT_TRUE(ServerClassScript::Build(InstallClass("TestShadeBehavior")).Apply(_worldInfo, error)) << error;
+    std::vector<std::string> loading;
+    ASSERT_TRUE(sObjectSchemaMgr.LoadClasses(loading)) << (loading.empty() ? std::string() : loading.front());
+    ASSERT_TRUE(sTypeRegistry.LoadFromText(Dump(), "schema.json"));
+    ClassInfo const* const shaded = sTypeRegistry.GetCatalog()->FindClass("TestShadeBehavior");
+    ASSERT_NE(shaded, nullptr);
+    PropertyInfo const* const shade = shaded->FindProperty("m_shade");
+    ASSERT_NE(shade, nullptr);
+    ASSERT_EQ(shade->Options.size(), 2u) << "an enum property's options travel through server_class_property_option";
+    EXPECT_EQ(shade->FindOptionValue("Shade_Dark"), 1);
+    QueryResult const marked = WorldDatabase.Query("SELECT `source`, `evidence` FROM `server_class` WHERE `name` = 'TestShadeBehavior'");
+    ASSERT_TRUE(marked);
+    EXPECT_EQ(marked->Fetch()[0].Get<std::string>(), "install");
+    EXPECT_EQ(marked->Fetch()[1].Get<std::string>(), "seen by the test");
+
+    TypeDumpLoader::RawDump held;
+    std::vector<std::string> reading;
+    ASSERT_TRUE(sObjectSchemaMgr.ReadInstallClasses(held, reading)) << (reading.empty() ? std::string() : reading.front());
+    ASSERT_EQ(held.Classes.size(), 1u) << "only the classes the install gave, not the authored ones";
+    EXPECT_TRUE(ServerClassScript::Matches(held, InstallClass("TestShadeBehavior"))) << "what was written reads back as the file it came from";
+    TypeDumpLoader::RawDump changed = InstallClass("TestShadeBehavior");
+    changed.Classes.front().Evidence = "seen another day";
+    EXPECT_TRUE(ServerClassScript::Matches(held, changed)) << "the evidence alone is no difference";
+    changed.Classes.front().Properties.back().Container = "List";
+    EXPECT_FALSE(ServerClassScript::Matches(held, changed)) << "a property read another way is";
+    EXPECT_FALSE(ServerClassScript::Matches(held, InstallClass("TestOtherBehavior")));
+
+    ASSERT_TRUE(ServerClassScript::Build(InstallClass("TestOtherBehavior")).Apply(_worldInfo, error)) << error;
+    std::vector<std::string> errors;
+    ASSERT_TRUE(sObjectSchemaMgr.LoadClasses(errors)) << (errors.empty() ? std::string() : errors.front());
+    EXPECT_EQ(sTypeRegistry.GetCatalog()->FindClass("TestShadeBehavior"), nullptr) << "a later extraction replaces what the one before it wrote";
+    EXPECT_NE(sTypeRegistry.GetCatalog()->FindClass("TestOtherBehavior"), nullptr);
+    EXPECT_NE(sTypeRegistry.GetCatalog()->FindClass("BasicMobileBehavior"), nullptr) << "the authored class stays";
+    QueryResult const options = WorldDatabase.Query("SELECT COUNT(*) FROM `server_class_property_option`");
+    ASSERT_TRUE(options);
+    EXPECT_EQ(options->Fetch()[0].Get<uint64>(), 2u) << "the replaced class's options went with it";
 }

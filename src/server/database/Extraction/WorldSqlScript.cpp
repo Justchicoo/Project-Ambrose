@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds a DELETE and batched multi-row INSERT statements per replaced table, renders whole numbers of either sign as decimals, fractions in the shortest form that reads back as the same double, text as X'..' hex or '' when empty and a value with none as NULL, writes the script wrapped in START TRANSACTION and COMMIT to a temporary file renamed over the target only once it is complete, commits the statements through the transaction task, telling a refused commit from one whose reply was lost, probes each table with an empty select, and names dbimport when a table does not exist.
+ * Builds a DELETE, of the whole table or of the rows a column's value marks, and batched multi-row INSERT statements per replaced table, renders whole numbers of either sign as decimals, fractions in the shortest form that reads back as the same double, text as X'..' hex or '' when empty and a value with none as NULL, writes the script wrapped in START TRANSACTION and COMMIT to a temporary file renamed over the target only once it is complete, commits the statements through the transaction task, telling a refused commit from one whose reply was lost, probes each table with an empty select, and names dbimport when a table does not exist.
  */
 
 #include "WorldSqlScript.h"
@@ -23,8 +23,19 @@ namespace
 
 void WorldSqlScript::ReplaceTable(std::string_view table, std::vector<std::string_view> const& columns, std::vector<Row> const& rows)
 {
+    _statements.push_back(fmt::format("DELETE FROM {}", DBUpdater::QuoteIdentifier(table)));
+    InsertRows(table, columns, rows);
+}
+
+void WorldSqlScript::ReplaceRows(std::string_view table, std::string_view column, Value const& value, std::vector<std::string_view> const& columns, std::vector<Row> const& rows)
+{
+    _statements.push_back(fmt::format("DELETE FROM {} WHERE {} = {}", DBUpdater::QuoteIdentifier(table), DBUpdater::QuoteIdentifier(column), Literal(value)));
+    InsertRows(table, columns, rows);
+}
+
+void WorldSqlScript::InsertRows(std::string_view table, std::vector<std::string_view> const& columns, std::vector<Row> const& rows)
+{
     std::string const quotedTable = DBUpdater::QuoteIdentifier(table);
-    _statements.push_back(fmt::format("DELETE FROM {}", quotedTable));
     std::string columnList;
     for (std::string_view const column : columns)
         columnList += (columnList.empty() ? "" : ", ") + DBUpdater::QuoteIdentifier(column);

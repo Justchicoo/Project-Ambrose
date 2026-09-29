@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a client type dump (format v2) into raw classes with a streaming JSON parser that checks the type of every field it knows, and builds a validated TypeCatalog from them: every hash recomputed, ids and base chains checked, aliases collapsed into their classes, and every property type classified.
+ * Reads a client type dump (format v2) into raw classes with a streaming JSON parser that checks the type of every field it knows, keeping the evidence a class the server adds carries for it, and builds a validated TypeCatalog from them: every hash recomputed, ids and base chains checked, aliases collapsed into their classes, and every property type classified.
  */
 
 #ifndef AMBROSE_TYPEDUMPLOADER_H
@@ -42,6 +42,7 @@ namespace TypeDumpLoader
         std::optional<uint64> Hash;
         std::vector<std::string> Bases;
         std::vector<RawProperty> Properties;
+        std::optional<std::string> Evidence;
     };
 
     struct RawDump

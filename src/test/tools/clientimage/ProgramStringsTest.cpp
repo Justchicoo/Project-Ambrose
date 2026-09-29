@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the program string scan over a PeBuilder image: ASCII and UTF-16LE strings in data sections are found by text whatever its case, with their addresses, while a run shorter than the minimum, one with no terminator and text inside a code section are not strings; an address inside a string finds it; and ReadAt reads from any address to the terminator, a suffix the linker shares among them, refusing code and text too short; and every string read as a class name is found by the hash the type system keys that class by.
+ * Tests the program string scan over a PeBuilder image: ASCII and UTF-16LE strings in data sections are found by text whatever its case, with their addresses, while a run shorter than the minimum, one with no terminator and text inside a code section are not strings; an address inside a string finds it; and ReadAt reads from any address to the terminator, a suffix the linker shares among them, refusing code and text too short; and every string read as a class name is found by the hash the type system keys that class by; and every property name a string is or holds is found where a word starts, once each, and none where m_ sits inside a longer word.
  */
 
 #include "PeBuilder.h"
@@ -149,4 +149,22 @@ TEST_F(ProgramStringsTest, EveryStringReadAsAClassNameIsFoundByItsClassHash)
     auto const plain = names.find(StringHash::KiStringHash("CoreObject::OnPostLoad"));
     ASSERT_NE(plain, names.end()) << "a string the program writes with its keyword already in place is taken as it stands";
     EXPECT_EQ(plain->second, std::vector<std::string>{ "CoreObject::OnPostLoad" });
+}
+
+TEST(ProgramStringsNamesTest, EveryPropertyNameAStringIsOrHoldsIsFoundOnceWhereAWordStarts)
+{
+    std::vector<uint8> code(0x20, 0xCC);
+    std::vector<uint8> rdata(0x80, 0);
+    Put(rdata, 0x00, Narrow("m_first"));
+    Put(rdata, 0x10, Narrow("set m_second=%d and m_third"));
+    Put(rdata, 0x30, Narrow("Random_Mob"));
+    Put(rdata, 0x40, Wide("m_first again"));
+    PeBuilder builder(Base);
+    builder.AddSection(".text", code, PeBuilder::CodeCharacteristics);
+    builder.AddSection(".rdata", rdata, PeBuilder::ReadOnlyCharacteristics);
+    std::string error;
+    std::unique_ptr<PeImage> const image = PeImage::Parse(builder.Build(), error);
+    ASSERT_NE(image, nullptr) << error;
+    EXPECT_EQ(ProgramStrings(*image).PropertyNames(), (std::vector<std::string>{ "m_first", "m_second", "m_third" }))
+        << "a format string holds the names it prints, and Random_Mob holds none";
 }

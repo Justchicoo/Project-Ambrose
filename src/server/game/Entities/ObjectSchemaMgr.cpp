@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads server_class with its bases and properties into the type dump's own raw shape, a class keyed by its hash as the dump keys it, and hands it to the type registry, which checks every hash and rebuilds its catalog with it; reads core_object_type with core_template_type in one snapshot, and behavior_client_class, into tables checked against the catalog then in use, where a class must be listed, a game object's must be a CoreObject, a template class a CoreTemplate and a behavior's a BehaviorInstance, so a row the client would never accept is refused with its name before anything is swapped. A base list with a gap or a class named twice is a refusal too, because either means a row was lost or doubled rather than meant.
+ * Reads server_class with its bases, properties and the options of its enum properties into the type dump's own raw shape, a class keyed by its hash as the dump keys it, and hands it to the type registry, which checks every hash and rebuilds its catalog with it, or reads only the classes marked install the same way, passing over the rows of the others; reads core_object_type with core_template_type in one snapshot, and behavior_client_class, into tables checked against the catalog then in use, where a class must be listed, a game object's must be a CoreObject, a template class a CoreTemplate and a behavior's a BehaviorInstance, so a row the client would never accept is refused with its name before anything is swapped. A base list with a gap or a class named twice is a refusal too, because either means a row was lost or doubled rather than meant.
  */
 
 #include "ObjectSchemaMgr.h"
@@ -19,7 +19,8 @@ namespace
 {
     constexpr char const* SchemaLog = "server.loading";
 
-    bool ReadClassRows(PreparedResultSet* classes, PreparedResultSet* bases, PreparedResultSet* properties, TypeDumpLoader::RawDump& dump, std::vector<std::string>& errors)
+    bool ReadClassRows(PreparedResultSet* classes, PreparedResultSet* bases, PreparedResultSet* properties, PreparedResultSet* options, TypeDumpLoader::RawDump& dump,
+        std::vector<std::string>& errors, bool selected = false)
     {
         std::size_t const before = errors.size();
         std::map<uint32, TypeDumpLoader::RawClass> byHash;
@@ -46,7 +47,8 @@ namespace
                 auto const found = byHash.find(hash);
                 if (found == byHash.end())
                 {
-                    errors.push_back(fmt::format("server_class_base gives a base to class hash {}, which server_class does not hold", hash));
+                    if (!selected)
+                        errors.push_back(fmt::format("server_class_base gives a base to class hash {}, which server_class does not hold", hash));
                     continue;
                 }
                 std::vector<std::string>& list = found->second.Bases;
@@ -67,7 +69,8 @@ namespace
                 auto const found = byHash.find(hash);
                 if (found == byHash.end())
                 {
-                    errors.push_back(fmt::format("server_class_property gives a property to class hash {}, which server_class does not hold", hash));
+                    if (!selected)
+                        errors.push_back(fmt::format("server_class_property gives a property to class hash {}, which server_class does not hold", hash));
                     continue;
                 }
                 TypeDumpLoader::RawProperty property;
@@ -83,6 +86,28 @@ namespace
                 property.Pointer = row[10].Get<bool>();
                 found->second.Properties.push_back(std::move(property));
             } while (properties->NextRow());
+        }
+        if (options && options->GetRowCount() > 0)
+        {
+            do
+            {
+                Field const* const row = options->Fetch();
+                uint32 const hash = row[0].Get<uint32>();
+                uint32 const id = row[1].Get<uint32>();
+                auto const found = byHash.find(hash);
+                TypeDumpLoader::RawProperty* property = nullptr;
+                if (found != byHash.end())
+                    for (TypeDumpLoader::RawProperty& candidate : found->second.Properties)
+                        if (candidate.Id == id)
+                            property = &candidate;
+                if (!property)
+                {
+                    if (!selected || found != byHash.end())
+                        errors.push_back(fmt::format("server_class_property_option gives an option to property {} of class hash {}, which server_class_property does not hold", id, hash));
+                    continue;
+                }
+                property->Options.emplace_back(row[3].Get<std::string>(), row[4].Get<int64>());
+            } while (options->NextRow());
         }
         dump.Version = TypeDumpLoader::SupportedVersion;
         dump.HasClasses = true;
@@ -211,21 +236,42 @@ bool ObjectSchemaMgr::LoadClasses(std::vector<std::string>& errors)
     auto const classes = WorldDatabase.IsOpen() ? WorldDatabase.GetPreparedStatement(WORLD_SEL_SERVER_CLASSES) : nullptr;
     auto const bases = WorldDatabase.IsOpen() ? WorldDatabase.GetPreparedStatement(WORLD_SEL_SERVER_CLASS_BASES) : nullptr;
     auto const properties = WorldDatabase.IsOpen() ? WorldDatabase.GetPreparedStatement(WORLD_SEL_SERVER_CLASS_PROPERTIES) : nullptr;
-    if (!classes || !bases || !properties)
+    auto const options = WorldDatabase.IsOpen() ? WorldDatabase.GetPreparedStatement(WORLD_SEL_SERVER_CLASS_PROPERTY_OPTIONS) : nullptr;
+    if (!classes || !bases || !properties || !options)
     {
         errors.emplace_back("the world database is not open, so the classes the type dump does not describe cannot be read");
         return false;
     }
     std::vector<PreparedQueryResult> results;
-    if (!WorldDatabase.QuerySnapshot({ classes.get(), bases.get(), properties.get() }, results))
+    if (!WorldDatabase.QuerySnapshot({ classes.get(), bases.get(), properties.get(), options.get() }, results))
     {
-        errors.emplace_back("server_class, server_class_base and server_class_property cannot be read from the world database");
+        errors.emplace_back("server_class, server_class_base, server_class_property and server_class_property_option cannot be read from the world database");
         return false;
     }
     TypeDumpLoader::RawDump dump;
-    if (!ReadClassRows(results[0].get(), results[1].get(), results[2].get(), dump, errors))
+    if (!ReadClassRows(results[0].get(), results[1].get(), results[2].get(), results[3].get(), dump, errors))
         return false;
     return sTypeRegistry.SetSupplement(std::move(dump), std::string(ClassSource), errors);
+}
+
+bool ObjectSchemaMgr::ReadInstallClasses(TypeDumpLoader::RawDump& dump, std::vector<std::string>& errors)
+{
+    auto const classes = WorldDatabase.IsOpen() ? WorldDatabase.GetPreparedStatement(WORLD_SEL_SERVER_CLASSES_INSTALLED) : nullptr;
+    auto const bases = WorldDatabase.IsOpen() ? WorldDatabase.GetPreparedStatement(WORLD_SEL_SERVER_CLASS_BASES) : nullptr;
+    auto const properties = WorldDatabase.IsOpen() ? WorldDatabase.GetPreparedStatement(WORLD_SEL_SERVER_CLASS_PROPERTIES) : nullptr;
+    auto const options = WorldDatabase.IsOpen() ? WorldDatabase.GetPreparedStatement(WORLD_SEL_SERVER_CLASS_PROPERTY_OPTIONS) : nullptr;
+    if (!classes || !bases || !properties || !options)
+    {
+        errors.emplace_back("the world database is not open, so the classes it holds from the install cannot be read");
+        return false;
+    }
+    std::vector<PreparedQueryResult> results;
+    if (!WorldDatabase.QuerySnapshot({ classes.get(), bases.get(), properties.get(), options.get() }, results))
+    {
+        errors.emplace_back("the classes the world database holds from the install cannot be read from it");
+        return false;
+    }
+    return ReadClassRows(results[0].get(), results[1].get(), results[2].get(), results[3].get(), dump, errors, true);
 }
 
 bool ObjectSchemaMgr::LoadCoreObjectTypes(std::vector<std::string>& errors)

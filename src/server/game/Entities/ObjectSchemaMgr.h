@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What the world database knows about the client's object classes that the type dump cannot say (sObjectSchemaMgr): the classes the dump does not describe, which it hands to the type registry to rebuild its catalog with; the class each core type builds and the core type and template type each template class gives, which together make the header a game object is created from; and the class the client builds for each behavior a template names, or none where the client takes that behavior's slot empty. Each is read in one snapshot of its tables, built and checked off to the side against the catalog in use and swapped in whole, a build that fails keeps what was serving and names every row at fault, and each reloads alone, the core object types and behavior classes after the classes they may name.
+ * What the world database knows about the client's object classes that the type dump cannot say (sObjectSchemaMgr): the classes the dump does not describe, which it hands to the type registry to rebuild its catalog with, and reads back on their own those the install gave it, so the game server can tell whether they are still the ones the install's class file holds; the class each core type builds and the core type and template type each template class gives, which together make the header a game object is created from; and the class the client builds for each behavior a template names, or none where the client takes that behavior's slot empty. Each is read in one snapshot of its tables, built and checked off to the side against the catalog in use and swapped in whole, a build that fails keeps what was serving and names every row at fault, and each reloads alone, the core object types and behavior classes after the classes they may name.
  */
 
 #ifndef AMBROSE_OBJECTSCHEMAMGR_H
@@ -8,6 +8,7 @@
 
 #include "CoreObjectSerializer.h"
 #include "ReloadableStore.h"
+#include "TypeDumpLoader.h"
 #include "Types.h"
 
 #include <chrono>
@@ -72,6 +73,7 @@ public:
     void RegisterClassReloadTarget();
     void RegisterReloadTargets();
     bool LoadClasses(std::vector<std::string>& errors);
+    bool ReadInstallClasses(TypeDumpLoader::RawDump& dump, std::vector<std::string>& errors);
     bool LoadCoreObjectTypes(std::vector<std::string>& errors);
     bool LoadBehaviorClientClasses(std::vector<std::string>& errors);
     ObjectSchemaLoadResult LoadTables();

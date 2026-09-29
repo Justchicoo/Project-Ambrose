@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables and the level and stat tables after the world database takes one, loads the character name tables and the level and stat tables when the world database is open and, when either set is empty, extracts it from the install and loads it again, automatically in auto mode, after a yes in ask mode and never in off mode, registering the level and stat sets as reload targets, loads the zones, the named places inside them and the objects placed in them, extracting them from the install first when the world database holds none, the same way it does the level tables, with each extraction, each zone archive and each write to the world database reported as a start step with the time it may take, so a supervisor waits for a first run that is still working and ends only one that stalls, and registers each as a reload target, refusing to start when they cannot be read, has every zone instance filled with the objects its zone places that the server sends, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close, after every wizard still in the world has left it and so been saved. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits, template cache or realm heartbeat is applied on the world thread. It reads the template manifest before the player's template and then every spell and sigil, each a reload target.
+ * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables and the level and stat tables after the world database takes one, writes the classes the install holds that its type dump does not describe to the world database when it holds none marked install, from the class file schemaprobe builds once per revision, the same way it asks before other extractions and starting without them when that fails, loads the character name tables and the level and stat tables when the world database is open and, when either set is empty, extracts it from the install and loads it again, automatically in auto mode, after a yes in ask mode and never in off mode, registering the level and stat sets as reload targets, loads the zones, the named places inside them and the objects placed in them, extracting them from the install first when the world database holds none, the same way it does the level tables, with each extraction, each zone archive and each write to the world database reported as a start step with the time it may take, so a supervisor waits for a first run that is still working and ends only one that stalls, and registers each as a reload target, refusing to start when they cannot be read, has every zone instance filled with the objects its zone places that the server sends, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close, after every wizard still in the world has left it and so been saved. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits, template cache or realm heartbeat is applied on the world thread. It reads the template manifest before the player's template and then every spell and sigil, each a reload target.
  */
 
 #include "TypeDumpCache.h"
@@ -25,6 +25,9 @@
 #include "MapObjectSpawner.h"
 #include "ZoneExtractor.h"
 #include "ZoneScript.h"
+#include "ServerClassCache.h"
+#include "ServerClassScript.h"
+#include "StringUtil.h"
 #include "StartProgress.h"
 #include "PlayerLevelMgr.h"
 #include "AccountMgr.h"
@@ -312,6 +315,7 @@ namespace
                 return false;
             }
             _settingsSubscription = sSettings.Subscribe([this](SettingChange const& change) { ApplySetting(change); });
+            ExtractServerClasses(setup, system, *prompt);
             if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup) || !LoadSpells(setup) || !LoadSigils(setup))
             {
                 _databases.Close();
@@ -543,29 +547,88 @@ namespace
         static constexpr std::chrono::minutes ArchiveAllowance{ 2 };
         static constexpr std::chrono::minutes WriteAllowance{ 15 };
 
-        bool ConfirmExtraction(ClientSetupResult const& setup, SetupPrompt& prompt, std::string_view tables, std::string_view command)
+        bool ConfirmExtraction(ClientSetupResult const& setup, SetupPrompt& prompt, std::string_view tables, std::string_view command, std::string_view state = "has no")
         {
             if (!setup.Install || !setup.TypeDump)
                 return false;
             std::string const install = setup.Install->Describe();
             if (setup.Mode == SetupMode::Off)
             {
-                LOG_WARN("server.gameserver", "The world database has no {}, and Setup.Mode is off, so they are not extracted from {}; set Setup.Mode = auto, or run the extractor's {} command", tables, install, command);
+                LOG_WARN("server.gameserver", "The world database {} {}, and Setup.Mode is off, so they are not extracted from {}; set Setup.Mode = auto, or run the extractor's {} command", state, tables, install, command);
                 return false;
             }
             if (setup.Mode == SetupMode::Ask)
             {
                 if (!prompt.IsInteractive())
                 {
-                    LOG_WARN("server.gameserver", "The world database has no {}, and setup could not ask whether to extract them from {}; start the game server in a terminal, set Setup.Mode = auto, or run the extractor's {} command", tables, install, command);
+                    LOG_WARN("server.gameserver", "The world database {} {}, and setup could not ask whether to extract them from {}; start the game server in a terminal, set Setup.Mode = auto, or run the extractor's {} command", state, tables, install, command);
                     return false;
                 }
-                if (!prompt.Confirm(fmt::format("The world database has no {}. Extract them now from your install {}?", tables, install)))
+                if (!prompt.Confirm(fmt::format("The world database {} {}. Extract them now from your install {}?", state, tables, install)))
                     return false;
             }
             else
-                LOG_INFO("server.gameserver", "The world database has no {}, so they are extracted from {}", tables, install);
+                LOG_INFO("server.gameserver", "The world database {} {}, so they are extracted from {}", state, tables, install);
             return true;
+        }
+
+        void ExtractServerClasses(ClientSetupResult const& setup, ClientSystem const& system, SetupPrompt& prompt)
+        {
+            if (!WorldDatabase.IsOpen() || !setup.Install || !setup.TypeDump)
+                return;
+            TypeDumpLoader::RawDump held;
+            std::vector<std::string> problems;
+            if (!sObjectSchemaMgr.ReadInstallClasses(held, problems))
+            {
+                LOG_WARN("server.gameserver", "The classes the world database holds from the install cannot be read, so they are left as they are: {}",
+                    problems.empty() ? std::string("no reason was given") : problems.front());
+                return;
+            }
+            std::string const program(Ambrose::Trim(Config().GetOption<std::string>("Setup.SchemaProbe", "", true)));
+            ServerClassCacheOptions options;
+            options.DataFolder = ClientLocator::GetDataFolder(system);
+            options.Program = program.empty() ? ServerClassCache::DefaultProgram(system.GetExecutableDirectory()) : ConfigMgr::PathFromUtf8(program);
+            options.Timeout = std::chrono::seconds(Config().GetOption<uint32>("Setup.SchemaProbeTimeout", 3600, true));
+            options.Report = [](std::string const& line)
+            {
+                StartProgress::Report("finding the classes the install holds", ExtractionAllowance);
+                LOG_INFO("server.gameserver", "{}", line);
+            };
+            std::string error;
+            TypeDumpLoader::RawDump found;
+            if (!held.Classes.empty())
+            {
+                std::optional<std::filesystem::path> const cached = ServerClassCache::PathFor(options.DataFolder, setup.Install->Revision);
+                if (cached && ServerClassCache::IsCurrent(*cached, *setup.TypeDump) && ServerClassCache::Read(*cached, found, error) && ServerClassScript::Matches(held, found))
+                    return;
+                found = {};
+                error.clear();
+            }
+            if (!ConfirmExtraction(setup, prompt, "classes from the install", "classes", held.Classes.empty() ? "has no" : "holds out-of-date"))
+                return;
+            StartProgress::Report("finding the classes the install holds", ExtractionAllowance);
+            std::optional<std::filesystem::path> const classes = ServerClassCache::Ensure(*setup.Install, *setup.TypeDump, options, error);
+            std::optional<MySQLConnectionInfo> const world = MySQLConnectionInfo::Parse(Config().GetOption<std::string>("WorldDatabaseInfo", "", true), &error);
+            if (!classes || !ServerClassCache::Read(*classes, found, error) || !world)
+            {
+                LOG_WARN("server.gameserver", "The classes {} holds that its type dump does not describe are not found, so the server starts with {}: {}", setup.Install->Describe(),
+                    held.Classes.empty() ? "none of them" : "the ones the world database held", error);
+                return;
+            }
+            if (!held.Classes.empty() && ServerClassScript::Matches(held, found))
+            {
+                LOG_INFO("server.gameserver", "The world database already holds the {} class(es) {} holds that its type dump does not describe", found.Classes.size(), setup.Install->Describe());
+                return;
+            }
+            StartProgress::Report("writing the classes the install holds to the world database", WriteAllowance);
+            if (!ServerClassScript::Build(found).Apply(*world, error))
+            {
+                LOG_WARN("server.gameserver", "The classes {} holds cannot be written to the world database, so the server starts with {}: {}", setup.Install->Describe(),
+                    held.Classes.empty() ? "none of them" : "the ones it held", error);
+                return;
+            }
+            LOG_INFO("server.gameserver", "{} the {} class(es) {} holds that its type dump does not describe, from {}", held.Classes.empty() ? "Wrote" : "Replaced the classes from the install with",
+                found.Classes.size(), setup.Install->Describe(), ConfigMgr::PathToUtf8(*classes));
         }
 
         bool ExtractNames(ClientSetupResult const& setup, SetupPrompt& prompt)
