@@ -98,6 +98,8 @@ namespace
             Text("Realm.DefaultRealm", "", "64", "Realms", Login, Live, "The realm a player is sent to when their client names none; a name no realm online has falls through to the least-full realm."),
 
             Text("GM.CommandPrefix", ".", "8", "Commands", Game, Live, "What a chat line starts with to be read as a command."),
+            Flag("GM.PlayerCommandsAsChat", "true", "Commands", Game, Live,
+                "Whether a player's chat line that starts with the command prefix is said as an ordinary line; when off it is refused and the player told so. An account above player level runs such a line as a command."),
             Float("Chat.SayRange", "0", "0", "100000", "world units", "Chat", Game, Live,
                 "How far a wizard's typed chat, quick chat and emotes reach the other wizards in its instance, read at each tick; 0 reaches the whole instance."),
             Flag("GM.LogCommands", "true", "Commands", Game, Live, "Whether every command run is written to the log."),

@@ -1,8 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the chat rules: a line shows under the chat level the speaker's permissions give it, open chat before menu chat and neither as 0, the default permissions open chat; a line is a command when it starts with the command prefix, whatever that prefix is, and nothing is a command without one; and a listener hears a speaker within the say range, and anywhere when the range is 0; a typed line is shown unless it is a command, empty or does not read as the client packs it; and an extended phrase is shown only when the client's own parser would read it.
+ * Tests the chat rules: a line shows under the chat level the speaker's permissions give it, open chat before menu chat and neither as 0, the default permissions open chat; a line is a command when it starts with the command prefix, whatever that prefix is, and nothing is a command without one; and a listener hears a speaker within the say range, and anywhere when the range is 0; a typed line is shown unless it is a command, empty or does not read as the client packs it; an account above player level runs a command line while a player's is said or refused as the setting says; and an extended phrase is shown only when the client's own parser would read it.
  */
 
+#include "AccountMgr.h"
 #include "ChatMgr.h"
 #include "ChatText.h"
 
@@ -58,4 +59,12 @@ TEST(ChatMgrTest, AnExtendedPhraseIsShownOnlyWhenTheClientsParserWouldReadIt)
     EXPECT_FALSE(ChatMgr::IsExtendedPhrase("quest a b")) << "kinds are compared exactly";
     EXPECT_FALSE(ChatMgr::IsExtendedPhrase("Questx a b"));
     EXPECT_FALSE(ChatMgr::IsExtendedPhrase(""));
+}
+
+TEST(ChatMgrTest, AStaffAccountRunsACommandLineAndAPlayersIsSaidOrRefused)
+{
+    EXPECT_EQ(ChatMgr::FateOf(SEC_GAMEMASTER, true), CommandLine::Run);
+    EXPECT_EQ(ChatMgr::FateOf(SEC_MODERATOR, false), CommandLine::Run);
+    EXPECT_EQ(ChatMgr::FateOf(SEC_PLAYER, true), CommandLine::Chat) << "a player's line is said as it was typed";
+    EXPECT_EQ(ChatMgr::FateOf(SEC_PLAYER, false), CommandLine::Refuse);
 }

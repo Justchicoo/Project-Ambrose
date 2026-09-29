@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Open chat outranks menu chat as the speaker's client ranks them, an empty prefix makes nothing a command, the prefix is compared unit by unit once read as UTF-16, a typed line is judged from its text as the client packs it, an extended phrase is split at spaces with the empty words between two spaces dropped, as the client's own split drops them, and the range is compared squared so no root is taken.
+ * Open chat outranks menu chat as the speaker's client ranks them, only an account above player level runs a command from chat, an empty prefix makes nothing a command, the prefix is compared unit by unit once read as UTF-16, a typed line is judged from its text as the client packs it, an extended phrase is split at spaces with the empty words between two spaces dropped, as the client's own split drops them, and the range is compared squared so no root is taken.
  */
 
 #include "ChatMgr.h"
+#include "AccountMgr.h"
 #include "ChatText.h"
 #include "Utf.h"
 
@@ -49,6 +50,13 @@ bool ChatMgr::IsExtendedPhrase(std::string_view message)
         start = space + 1;
     }
     return words.size() >= MinPhraseWords && std::ranges::find(PhraseKinds, words.front()) != PhraseKinds.end();
+}
+
+CommandLine ChatMgr::FateOf(uint8 securityLevel, bool playersChat) noexcept
+{
+    if (securityLevel > SEC_PLAYER)
+        return CommandLine::Run;
+    return playersChat ? CommandLine::Chat : CommandLine::Refuse;
 }
 
 bool ChatMgr::CanHear(float dx, float dy, float dz, float range) noexcept

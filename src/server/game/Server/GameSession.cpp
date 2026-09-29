@@ -319,7 +319,7 @@ void GameSession::LoadAccount(LoginKeyClaim const& claim)
             return;
         }
         AccountInfo const account = AccountMgr::ReadAccountRow(*result);
-        _securityLevel.store(account.SecurityLevel, std::memory_order_relaxed);
+        SetSecurityLevel(account.SecurityLevel);
         LoadCharacter(claim);
     }));
 }

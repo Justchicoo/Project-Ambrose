@@ -1,15 +1,22 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives the chat a client sends through a real game session over loopback: a typed line, a quick chat phrase, an extended phrase and an emote from a wizard that has its object are each taken and queued for the world thread rather than counted as messages the server does not handle, and shown to nobody while the wizard does not yet stand shown in an instance; and a client that has not attached is not listened to at all.
+ * Drives the chat a client sends through a real game session over loopback: a typed line, a quick chat phrase, an extended phrase and an emote from a wizard that has its object are each taken and queued for the world thread rather than counted as messages the server does not handle, and shown to nobody while the wizard does not yet stand shown in an instance; a line starting with the command prefix from a game master's account runs the command, whose reply comes back as one MSG_SERVERMESSAGE, a line too long for one split across several, before the wizard stands anywhere; and a client that has not attached is not listened to at all.
  */
 
+#include "AccountMgr.h"
+#include "ChatCommand.h"
 #include "ChatText.h"
+#include "CommandCaller.h"
+#include "CommandMgr.h"
 #include "GameTestHarness.h"
 
 #include <gtest/gtest.h>
 
 #include <chrono>
 #include <memory>
+#include <optional>
+#include <string>
+#include <vector>
 
 namespace
 {
@@ -54,6 +61,18 @@ namespace
         GameDefinitions _definitions;
         GameListener _server;
     };
+
+    template<DeclaredMessage T>
+    std::optional<T> ReadReply(FakeSessionClient& client)
+    {
+        std::optional<DmlMessageData> const reply = ReadNextDml(client);
+        if (!reply || !Is<T>(*reply))
+            return std::nullopt;
+        T message;
+        if (sMessageRegistry.GetCatalog()->Decode(reply->Body, message) != MessageDecodeStatus::Ok)
+            return std::nullopt;
+        return message;
+    }
 }
 
 TEST_F(ChatHandlerTest, ChatIsQueuedForTheWorldAndShownToNobodyBeforeTheWizardStandsInAnInstance)
@@ -79,4 +98,51 @@ TEST_F(ChatHandlerTest, AClientThatHasNotAttachedIsNotListenedTo)
     SendEach(*client);
     EXPECT_FALSE(ReadNextDml(*client, std::chrono::milliseconds(500)));
     EXPECT_EQ(session->GetQueuedMessageCount(), 0u) << "nothing a client says before it attaches reaches the world";
+}
+
+TEST_F(ChatHandlerTest, AGameMastersCommandRunsAndItsRepliesComeBackAsServerMessages)
+{
+    sCommandMgr.Clear();
+    sCommandMgr.Load({ { .Name = "ping", .SecurityLevel = SEC_GAMEMASTER, .Help = "answer", .Run = [](CommandCaller& caller, std::vector<std::string> const&)
+    {
+        caller.Reply("pong");
+        caller.Reply("again");
+        return true;
+    } } });
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Connect(client, true);
+    ASSERT_TRUE(session);
+    session->SetSecurityLevel(SEC_GAMEMASTER);
+
+    GameMessages::RequestRadialChat line;
+    line.Message = ChatText::Write(u".ping");
+    Send(*client, line);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 1; }));
+    EXPECT_EQ(session->DrainQueue(), 1u);
+    std::optional<SystemMessages::ServerMessage> const reply = ReadReply<SystemMessages::ServerMessage>(*client);
+    ASSERT_TRUE(reply) << "the command's reply goes to the chat window of the one who typed it";
+    EXPECT_EQ(reply->Message, u"pong\nagain") << "one message for the whole reply, so its client shows one notice";
+    EXPECT_EQ(reply->Modal, 0);
+    EXPECT_TRUE(session->TakeSpeech().empty()) << "a command is never said";
+
+    sCommandMgr.Clear();
+    sCommandMgr.Load({ { .Name = "long", .SecurityLevel = SEC_GAMEMASTER, .Help = "answer at length", .Run = [](CommandCaller& caller, std::vector<std::string> const&)
+    {
+        caller.Reply(std::string(4000, 'a'));
+        return true;
+    } } });
+    line.Message = ChatText::Write(u".long");
+    Send(*client, line);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 1; }));
+    EXPECT_EQ(session->DrainQueue(), 1u);
+    std::size_t received = 0;
+    for (int part = 0; part < 3; ++part)
+    {
+        std::optional<SystemMessages::ServerMessage> const piece = ReadReply<SystemMessages::ServerMessage>(*client);
+        ASSERT_TRUE(piece) << "part " << part;
+        EXPECT_LE(piece->Message.size(), 1500u) << "a line too long for one message is split";
+        received += piece->Message.size();
+    }
+    EXPECT_EQ(received, 4000u);
+    sCommandMgr.Clear();
 }

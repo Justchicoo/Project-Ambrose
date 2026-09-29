@@ -2150,12 +2150,16 @@ int main(int argc, char** argv)
         if (arguments->List)
         {
             std::string const pattern = arguments->Subjects.empty() ? std::string() : arguments->Subjects.front();
-            std::vector<std::string> const keys = table->FindKeys(pattern);
-            for (std::string const& key : keys)
-                if (std::string const* const text = table->Find(key))
-                    std::cout << fmt::format("{}\t{}\n", key, *text);
-            std::cerr << fmt::format("client: {} key(s) of the {} locale hold that text, out of {}\n", keys.size(), table->GetLocale(), table->GetKeyCount());
-            return keys.empty() ? Failure : Success;
+            std::size_t held = 0;
+            for (std::string const& stem : table->GetStems())
+                for (auto const& [key, text] : table->GetEntries(stem))
+                    if (text.find(pattern) != std::string::npos)
+                    {
+                        std::cout << fmt::format("{}\t{}\n", key, text);
+                        ++held;
+                    }
+            std::cerr << fmt::format("client: {} key(s) of the {} locale hold that text, out of {}\n", held, table->GetLocale(), table->GetKeyCount());
+            return held == 0 ? Failure : Success;
         }
         int status = Success;
         for (std::string const& key : arguments->Subjects)

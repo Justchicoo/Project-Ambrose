@@ -1,20 +1,25 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests what a command is allowed to be and who is allowed to run it: a line is split into the deepest command that matches and the arguments left over, an account below a command's level is told there is no such command and the command does not run, a command_security row raising a level refuses somebody who could run it before, a group named on its own lists only what its caller may see, a console and a chat line each reach only the commands offered to them, the prefix a client types is taken off before the words are read while a console that types none is still understood, the words a console has already split reach the command as they are, a quoted word with its spaces, and are refused when too long, a command marked sensitive is described for the log without its arguments while an ordinary one keeps them, and the commands the scripts actually ship are found by the names an operator would type.
+ * Tests what a command is allowed to be and who is allowed to run it: a line is split into the deepest command that matches and the arguments left over, an account below a command's level is told there is no such command and the command does not run, a command_security row raising a level refuses somebody who could run it before, a group named on its own lists only what its caller may see, a console and a chat line each reach only the commands offered to them, the prefix a client types is taken off before the words are read while a console that types none is still understood, the words a console has already split reach the command as they are, a quoted word with its spaces, and are refused when too long, a command marked sensitive is described for the log without its arguments while an ordinary one keeps them, the commands the scripts actually ship are found by the names an operator would type, the shipped help lists in game only what its caller may run, and turning the command log off stops it from the next command.
  */
 
 #include "AccountMgr.h"
 #include "ChatCommand.h"
 #include "CommandCaller.h"
 #include "CommandMgr.h"
+#include "Log.h"
+#include "LogTestConfig.h"
 #include "ScriptLoader.h"
 #include "ScriptMgr.h"
+#include "TestAppender.h"
 
 #include <gtest/gtest.h>
 
 #include <algorithm>
 #include <map>
+#include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace
@@ -245,4 +250,66 @@ TEST_F(CommandMgrTest, ACommandMarkedSensitiveIsDescribedWithoutItsArguments)
     sCommandMgr.SetLogging(false);
     EXPECT_FALSE(sCommandMgr.GetLogging());
     sCommandMgr.SetLogging(true);
+}
+
+TEST_F(CommandMgrTest, TheShippedHelpListsWhatItsCallerMayRunInGame)
+{
+    sScriptMgr.Unload();
+    sScriptMgr.LoadScripts(&AddScripts);
+    sCommandMgr.Clear();
+    sCommandMgr.Load(sScriptMgr.GetCommands());
+    auto const holds = [](RecordingCaller const& caller, std::string_view start)
+    {
+        return std::ranges::any_of(caller.GetLines(), [start](std::string const& line) { return line.starts_with(start); });
+    };
+
+    RecordingCaller gameMaster(SEC_GAMEMASTER, false);
+    EXPECT_EQ(sCommandMgr.Execute(gameMaster, ".help"), CommandResult::Ran);
+    EXPECT_TRUE(holds(gameMaster, "help - "));
+    EXPECT_TRUE(holds(gameMaster, "kick - "));
+    EXPECT_FALSE(holds(gameMaster, "reload - ")) << "an administrator's command stays hidden from a game master";
+
+    RecordingCaller player(SEC_PLAYER, false);
+    EXPECT_EQ(sCommandMgr.Execute(player, "help"), CommandResult::Ran);
+    EXPECT_TRUE(holds(player, "server info - "));
+    EXPECT_FALSE(holds(player, "kick - "));
+
+    RecordingCaller filtered(SEC_GAMEMASTER, false);
+    EXPECT_EQ(sCommandMgr.Execute(filtered, "help server"), CommandResult::Ran);
+    EXPECT_FALSE(filtered.GetLines().empty());
+    for (std::string const& line : filtered.GetLines())
+        EXPECT_TRUE(line.starts_with("server")) << line;
+
+    RecordingCaller console(SEC_CONSOLE, true);
+    EXPECT_EQ(sCommandMgr.Execute(console, "help"), CommandResult::Unknown) << "a console has help of its own";
+    sScriptMgr.Unload();
+}
+
+TEST_F(CommandMgrTest, TurningTheCommandLogOffStopsItFromTheNextCommand)
+{
+    auto const store = std::make_shared<TestAppenderStore>();
+    sLog.RegisterAppenderType(TestAppender::GetTypeInfo(store));
+    ASSERT_TRUE(sLog.Apply(LogTestConfig::Settings("Appender.Capture = 200,1,0\nLogger.root = 1,Capture\n")).Succeeded());
+    auto const logged = [&store]
+    {
+        std::size_t lines = 0;
+        for (LogMessage const& message : store->Messages("Capture"))
+            if (message.Text.find("ran server info") != std::string::npos)
+                ++lines;
+        return lines;
+    };
+    RecordingCaller caller(SEC_GAMEMASTER, false, "the tester");
+
+    sCommandMgr.SetLogging(true);
+    EXPECT_EQ(sCommandMgr.Execute(caller, "server info"), CommandResult::Ran);
+    EXPECT_EQ(logged(), 1u);
+
+    sCommandMgr.SetLogging(false);
+    EXPECT_EQ(sCommandMgr.Execute(caller, "server info"), CommandResult::Ran);
+    EXPECT_EQ(logged(), 1u) << "the next command after the change is not logged";
+
+    sCommandMgr.SetLogging(true);
+    EXPECT_EQ(sCommandMgr.Execute(caller, "server info"), CommandResult::Ran);
+    EXPECT_EQ(logged(), 2u);
+    sLog.Reset();
 }

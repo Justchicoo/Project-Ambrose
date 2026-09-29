@@ -1,0 +1,541 @@
+{
+  "title": "A game master's commands in chat, and a player's",
+  "include": "parts/common.json",
+  "notes": [
+    "The main account is made a game master on the login server's console before it logs in, and two wizards enter the Commons",
+    "as two-wizards.json has them. The main wizard types .help, which the game server runs and answers with MSG_SERVERMESSAGE lines",
+    "its chat window shows, while the companion, a player, sees no bubble. The companion's own .help is said as an ordinary line,",
+    "then refused once GM.PlayerCommandsAsChat is turned off on the game server's console. With GM.LogCommands off, .help server",
+    "still answers but is not logged, and once it is back on the next command, .help kick, is logged again."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Zone.MobileIdReleaseDelay=60000"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "companion": {
+    "wizard": {
+      "school": 2343174,
+      "zone": "WizardCity/WC_Hub",
+      "zone_display": "The Commons",
+      "locale": "en-US",
+      "first": 2,
+      "middle": 3,
+      "last": 4,
+      "appearance": {
+        "gender": 1,
+        "race": 79806088,
+        "hair_model": 6,
+        "hair_color": 60,
+        "hat_color": 2,
+        "hat_decal": 4,
+        "torso_color": 2,
+        "torso_decal": 4,
+        "feet_color": 2,
+        "feet_decal": 12
+      }
+    }
+  },
+  "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "hold_key",
+      "name": "the main wizard backs away from the start",
+      "vk": "0x53",
+      "seconds": 1.5
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard alone",
+      "file": "main-alone",
+      "settle": 1
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up (companion)",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen (companion)",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "log in (companion)",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password (companion)",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted (companion)",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30,
+      "client": "companion"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads (companion)",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen (companion)",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90,
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "press play (companion)",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{companion_wizard_guid}",
+        "record": true
+      },
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key (companion)",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{companion_wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons (companion)",
+      "pattern": "put wizard {companion_wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true,
+      "keep": "companion_mobile"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the two wizards are shown to each other",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} and the (\\d+) wizard\\(s\\) already in instance \\d+ were shown to each other",
+      "timeout": 10,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it (companion)",
+      "pattern": "loaded (\\S+), and wizard {companion_wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the companion arrive",
+      "file": "main-sees-companion",
+      "settle": 3
+    },
+    {
+      "action": "shot",
+      "name": "the companion faces away from the main wizard",
+      "file": "companion-faces-away",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "hold_key",
+      "name": "the companion turns to face the main wizard",
+      "vk": "0x44",
+      "seconds": 1.27,
+      "client": "companion",
+      "watch": "main",
+      "watch_every": 0.25,
+      "watch_after": 1
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the main wizard",
+      "file": "companion-sees-main",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "the companion shows its chat box",
+      "vk": "0x4F",
+      "client": "companion"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .help",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .help",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .help",
+      "text": ".help"
+    },
+    {
+      "action": "char",
+      "name": "send .help",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server runs help for the game master",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran help, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the game master reads the command list",
+      "file": "main-help",
+      "settle": 1
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees no bubble",
+      "file": "companion-no-bubble",
+      "client": "companion",
+      "settle": 0.5
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .help (companion)",
+      "vk": "0xBF",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .help (companion)",
+      "code": 8,
+      "client": "companion"
+    },
+    {
+      "action": "type",
+      "name": "type .help (companion)",
+      "text": ".help",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "send .help (companion)",
+      "code": 13,
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "a player's .help is said as a line",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} sent a chat line, shown to (\\d+) other wizard",
+      "timeout": 20,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the game master sees the player's line",
+      "file": "main-sees-player-line",
+      "settle": 0.5
+    },
+    {
+      "action": "game_command",
+      "name": "refuse players' command lines",
+      "command": "settings set GM.PlayerCommandsAsChat false the 6.04 player check",
+      "pattern": "GM\\.PlayerCommandsAsChat is now false",
+      "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the companion before its refused line",
+      "file": "companion-before-refused",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .help (companion, refused)",
+      "vk": "0xBF",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .help (companion, refused)",
+      "code": 8,
+      "client": "companion"
+    },
+    {
+      "action": "type",
+      "name": "type .help (companion, refused)",
+      "text": ".help",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "send .help (companion, refused)",
+      "code": 13,
+      "client": "companion"
+    },
+    {
+      "action": "shot",
+      "name": "the companion after its refused line",
+      "file": "companion-after-refused",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "wait_game_log",
+      "name": "a player's .help is refused",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} typed a command at player level, which GM\\.PlayerCommandsAsChat refuses",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the player reads the refusal",
+      "file": "companion-refused",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "game_command",
+      "name": "say players' command lines again",
+      "command": "settings reset GM.PlayerCommandsAsChat the 6.04 player check",
+      "pattern": "GM\\.PlayerCommandsAsChat is back to true",
+      "timeout": 20
+    },
+    {
+      "action": "game_command",
+      "name": "stop logging commands",
+      "command": "settings set GM.LogCommands false the 6.04 log check",
+      "pattern": "GM\\.LogCommands is now false",
+      "timeout": 20
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .help server",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .help server",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .help server",
+      "text": ".help server"
+    },
+    {
+      "action": "char",
+      "name": "send .help server",
+      "code": 13
+    },
+    {
+      "action": "shot",
+      "name": "the game master reads the server commands",
+      "file": "main-help-server",
+      "settle": 1
+    },
+    {
+      "action": "game_command",
+      "name": "log commands again",
+      "command": "settings reset GM.LogCommands the 6.04 log check",
+      "pattern": "GM\\.LogCommands is back to true",
+      "timeout": 20
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .help kick",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .help kick",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .help kick",
+      "text": ".help kick"
+    },
+    {
+      "action": "char",
+      "name": "send .help kick",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the next command is logged again",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran help kick, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the game master reads the kick command",
+      "file": "main-help-kick",
+      "settle": 1
+    }
+  ],
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ]
+}

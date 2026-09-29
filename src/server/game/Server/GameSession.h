@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook and stats stay with the world thread and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it.
+ * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook and stats stay with the world thread and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window.
  */
 
 #ifndef AMBROSE_GAMESESSION_H
@@ -102,6 +102,8 @@ public:
     void HearSpeech(ChatSpeaker const& speaker, Speech const& speech);
     std::string const& GetChatName() const noexcept { return _chatName; }
     uint8 GetChatFilter() const noexcept { return _chatFilter; }
+    uint8 GetSecurityLevel() const noexcept { return _securityLevel.load(std::memory_order_relaxed); }
+    void SetSecurityLevel(uint8 level) noexcept { _securityLevel.store(level, std::memory_order_relaxed); }
     MovementUpdate TakeMovementUpdate(uint32 idleFlushes);
     void ShowMovementOf(GameSession const& mover, MovementUpdate const& update);
     void SendObjectChanges(MapObjectChanges const& changes);
@@ -159,6 +161,7 @@ private:
     void QueueEmote(std::string_view name, uint8 excludeOriginator, std::string_view what);
     void MarkOffline();
     void TransferWorldStateTo(GameSession& replacement);
+    bool TakeCommandLine(std::string_view packed);
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
     AsyncCallbackProcessor<QueryCallback> _queryCallbacks;
@@ -196,6 +199,7 @@ private:
     std::vector<Speech> _speech;
     std::string _chatName;
     uint8 _chatFilter = 0;
+    bool _hideNextChatEmote = false;
     uint16 _mobileId = 0;
     uint64 _characterRevision = 0;
     mutable std::mutex _nameMutex;

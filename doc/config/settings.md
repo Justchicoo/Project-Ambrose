@@ -36,6 +36,7 @@ Access says who may see and change a setting over the admin API and the panel. A
 |---|---|---|---|---|---|---|---|
 | `GM.CommandPrefix` | string | . | at most 8 bytes | live | gameserver | normal | What a chat line starts with to be read as a command. |
 | `GM.LogCommands` | bool | true | none | live | gameserver | normal | Whether every command run is written to the log. |
+| `GM.PlayerCommandsAsChat` | bool | true | none | live | gameserver | normal | Whether a player's chat line that starts with the command prefix is said as an ordinary line; when off it is refused and the player told so. An account above player level runs such a line as a command. |
 
 ## Files
 

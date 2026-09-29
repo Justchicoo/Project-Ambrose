@@ -1,14 +1,16 @@
 /*
  * Project Ambrose by Imjustchico
- * Commands that belong to no group. 'kick' disconnects a wizard in the world, found by its character id or by its name as its client shows it, with MSG_FORCE_DISCONNECT giving the reason CSR, so the client says a game master disconnected it rather than that its connection was lost; a name two wizards share names neither, and the ids to choose between are listed instead.
+ * Commands that belong to no group. 'help' lists every command its caller may run in game with what it does, or those starting with the words given, which is what a game master types first in chat. 'kick' disconnects a wizard in the world, found by its character id or by its name as its client shows it, with MSG_FORCE_DISCONNECT giving the reason CSR, so the client says a game master disconnected it rather than that its connection was lost; a name two wizards share names neither, and the ids to choose between are listed instead.
  */
 
 #include "AccountMgr.h"
 #include "ChatCommand.h"
 #include "CommandCaller.h"
+#include "CommandMgr.h"
 #include "DisconnectReason.h"
 #include "GameSession.h"
 #include "ScriptMgr.h"
+#include "StringUtil.h"
 #include "World.h"
 
 #include <fmt/format.h>
@@ -28,11 +30,27 @@ namespace
         std::vector<ChatCommand> GetCommands() const override
         {
             return {
+                { .Name = "help", .SecurityLevel = SEC_PLAYER, .AvailableOnConsole = false, .Help = "list the commands you may use, or those starting with the words given", .Run = Help },
                 { .Name = "kick", .SecurityLevel = SEC_GAMEMASTER, .Help = "disconnect a wizard in the world, named by character id or by name", .Run = Kick },
             };
         }
 
     private:
+        static bool Help(CommandCaller& caller, std::vector<std::string> const& arguments)
+        {
+            std::string const start = Ambrose::ToLower(fmt::format("{}", fmt::join(arguments, " ")));
+            std::size_t listed = 0;
+            for (std::string const& line : sCommandMgr.Describe(caller.GetSecurityLevel(), caller.IsConsole()))
+                if (start.empty() || line.starts_with(start))
+                {
+                    caller.Reply(line);
+                    ++listed;
+                }
+            if (listed == 0)
+                caller.Reply(start.empty() ? std::string("There are no commands you may use") : fmt::format("No command you may use starts with {}", start));
+            return true;
+        }
+
         static bool Kick(CommandCaller& caller, std::vector<std::string> const& arguments)
         {
             if (arguments.empty())

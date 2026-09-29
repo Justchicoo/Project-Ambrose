@@ -172,9 +172,9 @@ Built as src/server/game/Chat/ChatMgr, ChatText and QuickChatMgr, src/server/gam
 
 **Acceptance**
 
-- [ ] GM '.help' lists commands with no bubble for others
-- [ ] Player account text is chat or refused per config
-- [ ] GM.LogCommands changes apply from the next command
+- [x] GM '.help' lists commands with no bubble for others
+- [x] Player account text is chat or refused per config
+- [x] GM.LogCommands changes apply from the next command
 
 ### Detailed spec from WIZ-5: Account security levels and GM command framework
 
@@ -190,6 +190,16 @@ An account's security level decides which chat-prefixed GM commands it may run, 
 - gameserver.conf.dist: GM.CommandPrefix, GM.LogCommands, live settings applied from the next command
 - src/test/server/game/CommandMgrTest.cpp
 
+Built on 4.02's CommandMgr, account levels and command_security. GameSession::TakeCommandLine in src/server/game/Handlers/ChatHandler.cpp runs a command line for an account above player level. It sends the reply back as EXTENDEDBASE MSG_SERVERMESSAGE and hides the talking emote the client sends with the line. ChatMgr::FateOf decides what happens to a player's line under the live setting GM.PlayerCommandsAsChat. cs_misc.cpp gained the in-game `help`. The settled rules are under Commands in chat in doc/ARCHITECTURE.md.
+
+MSG_CLIENTNOTIFYTEXT is not a reply channel: its text is a locale key. The client sends MSG_COMMAND only from its customer service windows, and MSG_COMMANDRESULT fires a script event for them.
+
+Four deliverables wait on other work:
+- `.gm on`, `off` and `visible` stay unavailable until visibility sets arrive in 6.15 and 6.16, because hiding a game master means leaving it out of them.
+- `.character heal`, like the level, gold and experience commands, waits for the milestone that sends a wizard's changed stats to its client.
+- A spell is looked up by name with `spell info <text>`, which already lists every spell whose name holds the text. A second command would repeat that search. Looking up an item waits for item templates.
+- LOGINCOMPLETE `IsCSR` has followed the security level since 4.x, and an account's own `Permissions` come with 6.05.
+
 **Client messages:** GAME MSG_COMMAND, GAME MSG_COMMANDRESULT, SYSTEM MSG_SERVERMESSAGE, GAME MSG_CLIENTNOTIFYTEXT
 
 **Database tables**
@@ -200,14 +210,19 @@ An account's security level decides which chat-prefixed GM commands it may run, 
 
 **Acceptance**
 
-- [ ] Unit test: a PLAYER-level account running a GAMEMASTER command gets 'no such command' and nothing executes
-- [ ] Unit test: the command table parses '.character gold 500' into (character, gold, [500])
-- [ ] Unit test: turning GM.LogCommands off stops logging from the next command without a restart
-- [ ] Real client, GM account: typing '.help' shows the command list in the chat window, and nearby players see no bubble. The same text from a player account shows up as normal chat or is refused, depending on config.
+- [x] Unit test: a PLAYER-level account running a GAMEMASTER command gets 'no such command' and nothing executes. `CommandMgrTest.AnAccountBelowACommandsLevelIsToldThereIsNoSuchCommand`, from 4.02. In chat, `ChatMgrTest.AStaffAccountRunsACommandLineAndAPlayersIsSaidOrRefused` shows that a player-level account runs no command line at all.
+- [x] Unit test: the command table parses '.character gold 500' into (character, gold, [500]). `CommandMgrTest.ACommandIsTheDeepestNameThatMatchesAndTheRestAreArguments` and `TheClientsPrefixIsTakenOffBeforeTheWordsAreRead`, from 4.02.
+- [x] Unit test: turning GM.LogCommands off stops logging from the next command without a restart. `CommandMgrTest.TurningTheCommandLogOffStopsItFromTheNextCommand` logs one command, drops the next once logging is off, and logs again once it is back on. The game server applies a GM.LogCommands change to CommandMgr as the change arrives.
+- [x] Real client, GM account: typing '.help' shows the command list in the chat window, and nearby players see no bubble. The same text from a player account shows up as normal chat or is refused, depending on config. The client driver's gm-commands-in-chat.json run 20260929-194726 on r806919 made the main account a game master on the login server's console before two wizards entered the Commons.
+  - The game master's `.help` was run and logged. Its client's chat window shows the command list as Server Message lines, and the companion, a player, shows no bubble over it. No talking emote from the game master was passed on.
+  - The companion's own `.help` was said as a line, which the game master's shot shows over the companion.
+  - After `settings set GM.PlayerCommandsAsChat false` on the game server's console, the companion's next `.help` was refused, and its chat window says so.
+  - With `GM.LogCommands` off, `.help server` still answered but was not logged. Once the setting was reset, the next command, `.help kick`, was logged again.
+  - `ChatHandlerTest.AGameMastersCommandRunsAndItsRepliesComeBackAsServerMessages` holds the reply path over loopback, one MSG_SERVERMESSAGE for a two-line reply.
 
 **Risks**
 
-- Whether the stock client ever sends GAME MSG_COMMAND itself is unverified. The capture only shows '.mod ...' arriving as REQUESTRADIALCHAT.
+- Whether the stock client ever sends GAME MSG_COMMAND itself is unverified. The capture only shows '.mod ...' arriving as REQUESTRADIALCHAT. Resolved in 6.04: the client sends MSG_COMMAND only from its customer service CharacterEditWindow, so a typed command always arrives as MSG_REQUESTRADIALCHAT.
 - The bit meanings of LOGINCOMPLETE Permissions are unverified. The reference sends a constant 207 (0b11001111).
 
 ## 6.05 GM account, ban, character commands (LOG-17)
