@@ -113,7 +113,6 @@ Everything not in the table above, including every milestone whose dependencies 
 | 1.18 | Answered against the maintainer's own capture of a session |
 | 2.14 | Built but for its real-client checks: a banned account refused with a visible message, which contributor item C-77 turns into a scenario, and an optional sniffer check |
 | 3.02 | Built but for one check, which waits on a real client being sent MSG_BADGES, which NET and WIZ have not built yet |
-| 3.20 | Built but for one check, which has to be run on a real terminal against a real install |
 | 3.12 | Its remaining checks wait for 6.10 and for a real client session |
 | 3.23 | Next in the maintainer's own queue |
 | 4.02 | Built and passing every automated check; its one real-client check needs the maintainer's own client |
@@ -152,6 +151,7 @@ A row that says **before the reset** came from a pull request that was on the re
 
 | ID | Who | Sent as | What landed |
 |---|---|---|---|
+| 3.20 | MeruneFleuruwu | [#43](https://github.com/Justchicoo/Project-Ambrose/pull/43) | The last check of finding client data on the machine: on a real Windows terminal a game server with empty name tables offered the extraction, and once accepted it loaded 63 tables and 7955 names across 7 locales without a restart, the counts the install holds. All five checks earned |
 | 9.01 | MeruneFleuruwu | [#11](https://github.com/Justchicoo/Project-Ambrose/pull/11) | The combat service's 36 messages registered at the orders the r806919 install gives them, MSG_COMBATMOVE and MSG_COMBATPHASEFORSPECTATORS round-tripping their wire fields, and the first in-world combat stubs, with MSG_COMBATMOVE refused outside the world and logged decoded inside it. All seven checks earned |
 | 4.04 | MeruneFleuruwu | before the reset | The world's wire math, a position and a yaw packed into bytes, and the location string character select sends, earned by its own tests. Its last check, the MSG_ATTACH a real client sends after Play, was earned by the maintainer's session in the client driver's enter-world run on 2026-09-25 |
 | 8.14 | MeruneFleuruwu | before the reset | A versionable object decoded from the client re-encodes byte for byte on the hat template, TemplateManifest.xml and a 2000-file sample. All four checks earned, the last two found by an audit to share the short list's evidence. Its property-order preservation is inert on every file tested, which the phase's review notes record |
