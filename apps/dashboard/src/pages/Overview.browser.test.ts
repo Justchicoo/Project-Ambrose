@@ -65,6 +65,7 @@ beforeEach(() => {
                                         series: [
                                             { labels: { component: "network_drain" }, value: 15000000 },
                                             { labels: { component: "movement" }, value: 2000000 },
+                                            { labels: { component: "chat" }, value: 1000000 },
                                             { labels: { component: "database_waits" }, value: 0 },
                                             { labels: { component: "combat" }, value: 0 },
                                         ],
@@ -80,6 +81,7 @@ beforeEach(() => {
                                         series: [
                                             { labels: { component: "network_drain" }, value: 1 },
                                             { labels: { component: "movement", reason: "" }, value: 1 },
+                                            { labels: { component: "chat", reason: "" }, value: 1 },
                                             {
                                                 labels: {
                                                     component: "database_waits",
@@ -161,6 +163,8 @@ describe("the overview", () => {
         expect(host.textContent).toContain("Outside tick");
         expect(host.textContent).toContain("Movement");
         expect(host.textContent).toContain("2.000 ms");
+        expect(host.textContent).toContain("Chat");
+        expect(host.textContent).toContain("1.000 ms");
         expect(host.textContent).not.toContain("Not separately measured");
         expect(host.textContent).toContain("Combat");
         expect(host.textContent).toContain("Not landed");
