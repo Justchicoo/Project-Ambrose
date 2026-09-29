@@ -866,7 +866,7 @@ Pending SQL from merged PRs becomes correctly numbered dated files, and CI prove
 - [ ] A PR editing data/sql/updates/db_world/2026_01_01_00.sql fails ci-sql-check
 - [ ] Merging a PR with pending_db_world/rev_1767225600_npc.sql produces updates/db_world/<today>_00.sql, or _01 if _00 exists
 - [ ] A PR whose pending SQL has a syntax error fails the DB job, naming the file
-- [x] Real client: n/a (the database updater has no client-facing behavior)
+- [ ] Real client: n/a
 
 **Risks**
 
