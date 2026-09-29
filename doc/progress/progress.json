@@ -6,9 +6,9 @@
     "percent": 20.0
   },
   "checks": {
-    "done": 821,
+    "done": 826,
     "total": 2866,
-    "percent": 28.6
+    "percent": 28.8
   },
   "contributor_track": {
     "merged": 90,
@@ -60,7 +60,7 @@
       "title": "Other players are visible",
       "milestones_done": 2,
       "milestones_total": 18,
-      "checks_done": 22,
+      "checks_done": 27,
       "checks_total": 139
     },
     {

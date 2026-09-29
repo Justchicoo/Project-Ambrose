@@ -433,9 +433,9 @@ Unknown class and property hashes found in client data can be named and typed by
 
 **Acceptance**
 
-- [ ] A supplemental class extends a dump base and decodes
-- [ ] A name/type not hashing to its declared hash is rejected
-- [ ] A failed `.reload server_class_schema` keeps the old registry
+- [x] A supplemental class extends a dump base and decodes (TypeRegistryTest.ASupplementClassJoinsTheLoadedDumpInANewGeneration, which round-trips a synthetic versionable object of the supplemental class and checks its inherited base relationship)
+- [x] A name/type not hashing to its declared hash is rejected (TypeRegistryTest.ASupplementThatDoesNotHashIsRefusedAndTheCatalogKeepsServing, which rejects the bad property hash and leaves the active catalog unchanged)
+- [x] A failed `.reload server_class_schema` keeps the old registry (ObjectSchemaMgrTest.AServerClassThatDoesNotHashFailsItsReloadWithTheCatalogUntouched, run against a database)
 
 ### Detailed spec from OBJ-12: Supplemental server-side class schemas
 
@@ -450,8 +450,8 @@ Classes that exist in client data or server logic but not in the client dump dec
 
 **Acceptance**
 
-- [ ] Unit test: a supplemental class extends a dump base class and decodes a synthetic versionable blob
-- [ ] Unit test: a supplemental entry whose name and type do not hash to its declared property hash is rejected
+- [x] Unit test: a supplemental class extends a dump base class and decodes a synthetic versionable blob (TypeRegistryTest.ASupplementClassJoinsTheLoadedDumpInANewGeneration)
+- [x] Unit test: a supplemental entry whose name and type do not hash to its declared property hash is rejected (TypeRegistryTest.ASupplementThatDoesNotHashIsRefusedAndTheCatalogKeepsServing)
 - [ ] Unit test: `.reload server_class_schema` with an added class decodes it without a restart, and a supplement with a bad hash keeps the old registry and reports the error
 - [ ] Client-gated sweep: the unknown-class count from OBJ-6 drops for every class added; the sweep result is recorded
 

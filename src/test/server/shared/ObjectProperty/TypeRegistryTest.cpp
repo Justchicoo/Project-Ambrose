@@ -1,8 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the type registry on small dumps written by the test with invented classes: aliases collapsed into their class, into an unprefixed template class, or standing in for a missing one; base chains; properties in id order found by hash and name; per-property enum options in both directions with text options, integer and text defaults in dump order and the base class hint; value, primitive and bit kinds; the class kind counts; and loads refused while the active catalog keeps serving: bad hashes, unknown bases and types, broken, empty or misshapen JSON, fields of the wrong JSON type or missing, duplicates, id gaps, oversized values, bad containers, keys that differ from the hash, inconsistent base chains and inherited property ids, classes that hold themselves inline and the wrong version. A supplement of classes the dump does not describe joins the dump loaded before or after it, rebuilds the catalog into a new generation, is marked as coming from the supplement, gives way to the dump where the dump describes the same class, and when a name or property does not hash to what it declares, or the rebuild fails, is refused with the catalog that was serving left in place.
+ * Tests the type registry on small dumps written by the test with invented classes: aliases collapsed into their class, into an unprefixed template class, or standing in for a missing one; base chains; properties in id order found by hash and name; per-property enum options in both directions with text options, integer and text defaults in dump order and the base class hint; value, primitive and bit kinds; the class kind counts; and loads refused while the active catalog keeps serving: bad hashes, unknown bases and types, broken, empty or misshapen JSON, fields of the wrong JSON type or missing, duplicates, id gaps, oversized values, bad containers, keys that differ from the hash, inconsistent base chains and inherited property ids, classes that hold themselves inline and the wrong version. A supplement of classes the dump does not describe joins the dump loaded before or after it, rebuilds the catalog into a new generation, is marked as coming from the supplement, gives way to the dump where the dump describes the same class, decodes and encodes versionable objects, and when a name or property does not hash to what it declares, or the rebuild fails, is refused with the catalog that was serving left in place.
  */
 
+#include "ObjectSerializer.h"
+#include "PropertyObject.h"
 #include "StringHash.h"
 #include "TypeDumpLoader.h"
 #include "TypeRegistry.h"
@@ -611,6 +613,25 @@ TEST_F(TypeRegistryTest, ASupplementClassJoinsTheLoadedDumpInANewGeneration)
     EXPECT_FALSE(_registry.IsFromSupplement(base->Hash));
     EXPECT_EQ(_registry.GetSupplementClassCount(), 1u);
     EXPECT_EQ(_active->FindClass(hash), nullptr) << "a catalog already handed out keeps what it held";
+
+    PropertyObjectPtr object = PropertyObject::Create(rebuilt, "TestServerBehavior");
+    ASSERT_TRUE(object);
+    ASSERT_EQ(object->Set("m_id", uint64{ 42 }), PropertySetResult::Ok);
+    ASSERT_EQ(object->Set("m_name", std::string("supplement")), PropertySetResult::Ok);
+    SerializerOptions options;
+    options.Versionable = true;
+    EncodeResult const encoded = ObjectSerializer::Encode(object.get(), options);
+    ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
+    DecodeResult const decoded = ObjectSerializer::Decode(rebuilt, encoded.Bytes, options);
+    ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
+    ASSERT_TRUE(decoded.Object);
+    EXPECT_EQ(decoded.Object->GetClass().Name, "TestServerBehavior");
+    ASSERT_NE(decoded.Object->Get("m_id"), nullptr);
+    ASSERT_NE(decoded.Object->Get("m_id")->GetIf<uint64>(), nullptr);
+    EXPECT_EQ(*decoded.Object->Get("m_id")->GetIf<uint64>(), 42u);
+    ASSERT_NE(decoded.Object->Get("m_name"), nullptr);
+    ASSERT_NE(decoded.Object->Get("m_name")->GetIf<std::string>(), nullptr);
+    EXPECT_EQ(*decoded.Object->Get("m_name")->GetIf<std::string>(), "supplement");
 
     ASSERT_TRUE(_registry.LoadFromText(SyntheticDump().dump(), "synthetic-again.json"));
     EXPECT_NE(_registry.GetCatalog()->FindClass(hash), nullptr) << "the supplement joins every later load too";
