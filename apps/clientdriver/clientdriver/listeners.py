@@ -1,5 +1,6 @@
 # Project Ambrose by Imjustchico
-# The ports a scenario asks to watch: each listener binds its own address and port for the whole run, accepts every connection made to it and closes it at once, and records who connected and when, so a run can show that nothing reached a port the client should never reach, or that something did reach one it should; a port that is already taken is a refusal before the client starts rather than a listener that watches nothing.
+# The ports a scenario asks to watch: each listener binds its own address and port for the whole run, accepts every connection made to it and closes it at once, and records who connected and when, so a run can show that nothing reached a port the client should never reach, or that something did reach one it should; a port that is already taken is a refusal before the client starts rather than a listener that watches nothing, while a port whose earlier connections are still winding down is free to listen on again, as Windows already treats it.
+import os
 import socket
 import threading
 import time
@@ -24,6 +25,8 @@ class PortListener(threading.Thread):
 
     def open(self):
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if os.name != "nt":
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             server.bind((self.address, self.port))
             server.listen(16)

@@ -62,7 +62,7 @@ async function password(page: Page) {
 }
 
 test.beforeAll(async () => {
-    panel = await startPanelListener(port(40), port(41), port(42), ["Panel.TwoFactorRequired = everyone"]);
+    panel = await startPanelListener(port(50), port(51), port(52), ["Panel.TwoFactorRequired = everyone"]);
 });
 
 test.afterAll(async () => {
