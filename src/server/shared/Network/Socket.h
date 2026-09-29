@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One TCP connection: an async read loop into the frame reassembler, a coalescing write queue capped in bytes, a periodic update its network thread runs, and immediate or delayed close, all on its network thread.
+ * One TCP connection: an async read loop into the frame reassembler, a live-bounded coalescing write queue, a periodic update its network thread runs, and immediate or delayed close, all on its network thread.
  */
 
 #ifndef AMBROSE_SOCKET_H
@@ -16,6 +16,7 @@
 #include <atomic>
 #include <chrono>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <system_error>
 #include <vector>
@@ -39,6 +40,8 @@ public:
     void CloseSocket();
     void DelayedCloseSocket();
     void SetFrameLimits(FrameLimits limits);
+    void SetSendQueueHighWater(std::size_t bytes);
+    void SetCloseHandler(std::function<void()> handler);
     virtual void Update();
 
     bool IsOpen() const noexcept { return !_closed.load(std::memory_order_relaxed); }
@@ -79,6 +82,7 @@ private:
     std::atomic<std::size_t> _maxQueuedBytes;
     std::atomic<bool> _queueOverflowed{ false };
     std::atomic<LongFrameLength> _longLength{ LongFrameLength::BodyOnly };
+    std::function<void()> _closeHandler;
 };
 
 #endif

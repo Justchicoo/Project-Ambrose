@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Per-app message dispatch: rules that handle a declared message in given session statuses, list one as not handled yet, or refuse it as server-only, resolved by tag against each loaded catalog, with strikes for protocol violations, a per-session budget on dropped-message logging, a report of each message not handled yet the first time a session sends it rather than every time, and declarations of the messages the app sends.
+ * Per-app message dispatch: rules that handle a declared message in given session statuses, list one as not handled yet, or refuse it as server-only, resolved by tag against each loaded catalog, with strict body decoding, strikes for protocol violations, a per-session budget on dropped-message logging, a report of each message not handled yet the first time a session sends it rather than every time, and declarations of the messages the app sends.
  */
 
 #ifndef AMBROSE_MESSAGEHANDLERTABLE_H
@@ -61,7 +61,7 @@ enum class DispatchResult : uint8
 enum class MessageInvokeStatus : uint8
 {
     Handled,
-    HandledWithTrailingBytes,
+    TrailingBytes,
     Truncated,
     NotDeclared
 };
@@ -198,8 +198,10 @@ void MessageHandlerTable<SessionT>::Accept(SessionStatusMask statuses, MessagePr
         MessageDecodeStatus const status = catalog.Decode(body, message);
         if (status == MessageDecodeStatus::Truncated)
             return MessageInvokeStatus::Truncated;
+        if (status == MessageDecodeStatus::TrailingBytes)
+            return MessageInvokeStatus::TrailingBytes;
         (session.*Handler)(message);
-        return status == MessageDecodeStatus::TrailingBytes ? MessageInvokeStatus::HandledWithTrailingBytes : MessageInvokeStatus::Handled;
+        return MessageInvokeStatus::Handled;
     };
 }
 
@@ -352,9 +354,10 @@ DispatchResult MessageHandlerTable<SessionT>::Run(SessionT& session, MessageCata
         case MessageInvokeStatus::Truncated:
             Violation(session, fmt::format("Dropped {} from session {}: its {}-byte body is shorter than the definition", name, session.GetSessionId(), body.size()), fmt::format("{} with a truncated body", name));
             return DispatchResult::DecodeFailed;
-        case MessageInvokeStatus::HandledWithTrailingBytes:
-            LOG_DEBUG(LogCategory, "{} from session {} carried bytes past its definition", name, session.GetSessionId());
-            break;
+        case MessageInvokeStatus::TrailingBytes:
+            Violation(session, fmt::format("Dropped {} from session {}: its body carries bytes past its definition", name, session.GetSessionId()),
+                fmt::format("{} with trailing bytes past its definition", name));
+            return DispatchResult::DecodeFailed;
         case MessageInvokeStatus::Handled:
             break;
     }

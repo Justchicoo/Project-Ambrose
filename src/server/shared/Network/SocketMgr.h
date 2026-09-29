@@ -1,15 +1,17 @@
 /*
  * Project Ambrose by Imjustchico
- * Starts an app's listener and network threads, places each accepted socket on the least-loaded thread, visits every open socket on its own thread, stops accepting ahead of a shutdown, and applies setting changes live.
+ * Starts an app's listener and network threads, rate-limits accepted peers by IP, places sockets on the least-loaded thread, visits each open socket on its own thread, and applies network settings live.
  */
 
 #ifndef AMBROSE_SOCKETMGR_H
 #define AMBROSE_SOCKETMGR_H
 
 #include "AsyncAcceptor.h"
+#include "IpAddress.h"
 #include "Log.h"
 #include "NetworkSettings.h"
 #include "NetworkThread.h"
+#include "TokenBucket.h"
 
 #include <asio/executor_work_guard.hpp>
 #include <asio/io_context.hpp>
@@ -26,6 +28,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 template<typename SocketType>
@@ -36,6 +39,7 @@ public:
     using ThreadPtr = std::unique_ptr<NetworkThread<SocketType>>;
 
     static constexpr std::chrono::milliseconds RetireSweepInterval{ 100 };
+    static constexpr std::size_t MaxTrackedAddresses = 65536;
 
     explicit SocketMgr(Factory factory = DefaultFactory()) : _factory(std::move(factory))
     {
@@ -105,12 +109,15 @@ public:
             _settings.Limits = settings.Limits;
             _settings.OutKBuff = settings.OutKBuff;
             _settings.TcpNoDelay = settings.TcpNoDelay;
+            _settings.MaxConnectionsPerIP = settings.MaxConnectionsPerIP;
+            _settings.AcceptRatePerSecond = settings.AcceptRatePerSecond;
             std::size_t const threads = std::clamp<std::size_t>(settings.Threads, 1, NetworkSettings::MaxThreads);
             shrunk = threads < _threads.size();
             ResizeThreads(threads);
             _settings.Threads = _threads.size();
             current = _acceptor;
         }
+        ForEachSocket([highWater = settings.Limits.MaxSendQueueBytes](std::shared_ptr<SocketType> const& socket) { socket->SetSendQueueHighWater(highWater); });
         bool const listening = current && current->IsOpen();
         if (shrunk && listening)
             current->Cancel();
@@ -322,32 +329,99 @@ private:
     {
         if (!error)
         {
-            FrameLimits limits;
-            int32 outKBuff = -1;
-            bool noDelay = true;
+            NetworkSettings settings;
             {
                 std::lock_guard<std::mutex> state(_stateMutex);
-                limits = _settings.Limits;
-                outKBuff = _settings.OutKBuff;
-                noDelay = _settings.TcpNoDelay;
+                settings = _settings;
+            }
+            std::error_code endpointError;
+            asio::ip::tcp::endpoint const endpoint = socket.remote_endpoint(endpointError);
+            if (endpointError)
+            {
+                LOG_WARN("network", "Closing an accepted socket because its remote address could not be read: {}", endpointError.message());
+                std::error_code ignored;
+                socket.close(ignored);
+                thread->ReleaseAccept();
+                return;
+            }
+            std::string const address = Ambrose::Asio::Unmap(endpoint.address()).to_string();
+            if (!ReserveAddress(address, settings))
+            {
+                LOG_WARN("network", "Rejecting a new connection from {}: the per-IP connection or accept-rate limit is reached", address);
+                std::error_code ignored;
+                socket.close(ignored);
+                thread->ReleaseAccept();
+                return;
             }
             std::error_code ignored;
-            socket.set_option(asio::ip::tcp::no_delay(noDelay), ignored);
-            if (outKBuff >= 0)
-                socket.set_option(asio::socket_base::send_buffer_size(outKBuff), ignored);
+            socket.set_option(asio::ip::tcp::no_delay(settings.TcpNoDelay), ignored);
+            if (settings.OutKBuff >= 0)
+                socket.set_option(asio::socket_base::send_buffer_size(settings.OutKBuff), ignored);
             try
             {
-                std::shared_ptr<SocketType> created = _factory(std::move(socket), limits);
+                std::shared_ptr<SocketType> created = _factory(std::move(socket), settings.Limits);
                 if (created)
+                {
+                    created->SetCloseHandler([this, address] { ReleaseAddress(address); });
                     thread->AddSocket(std::move(created));
+                }
+                else
+                {
+                    ReleaseAddress(address);
+                    LOG_ERROR("network", "The socket factory returned no socket for an accepted connection from {}", address);
+                }
             }
             catch (std::exception const& exception)
             {
+                ReleaseAddress(address);
                 LOG_ERROR("network", "Creating a socket failed: {}", exception.what());
             }
         }
         thread->ReleaseAccept();
     }
+
+    bool ReserveAddress(std::string const& address, NetworkSettings const& settings)
+    {
+        std::lock_guard const lock(_addressMutex);
+        auto found = _addressStates.find(address);
+        if (found == _addressStates.end())
+        {
+            if (_addressStates.size() >= MaxTrackedAddresses)
+            {
+                std::erase_if(_addressStates, [](auto& item)
+                {
+                    IpState& state = item.second;
+                    return state.Active == 0 && state.AcceptBudget.GetAvailableTokens() >= state.AcceptBudget.GetCapacity();
+                });
+                if (_addressStates.size() >= MaxTrackedAddresses)
+                    return false;
+            }
+            found = _addressStates.try_emplace(address, settings.AcceptRatePerSecond).first;
+        }
+
+        IpState& state = found->second;
+        state.AcceptBudget.SetLimits(settings.AcceptRatePerSecond, settings.AcceptRatePerSecond);
+        if (state.Active >= settings.MaxConnectionsPerIP || !state.AcceptBudget.TryConsume())
+            return false;
+        ++state.Active;
+        return true;
+    }
+
+    void ReleaseAddress(std::string const& address)
+    {
+        std::lock_guard const lock(_addressMutex);
+        auto const found = _addressStates.find(address);
+        if (found != _addressStates.end() && found->second.Active != 0)
+            --found->second.Active;
+    }
+
+    struct IpState
+    {
+        explicit IpState(uint32 rate) : AcceptBudget(rate, rate) {}
+
+        TokenBucket AcceptBudget;
+        std::size_t Active = 0;
+    };
 
     void ScheduleRetireSweep()
     {
@@ -375,6 +449,8 @@ private:
     std::mutex _lifecycleMutex;
     mutable std::mutex _stateMutex;
     NetworkSettings _settings;
+    std::mutex _addressMutex;
+    std::unordered_map<std::string, IpState> _addressStates;
     bool _running = false;
     std::optional<asio::io_context> _acceptContext;
     std::optional<asio::executor_work_guard<asio::io_context::executor_type>> _acceptWork;

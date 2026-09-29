@@ -67,14 +67,19 @@ Access says who may see and change a setting over the admin API and the panel. A
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
 | `Attach.Timeout` | unsigned | 30 s | from 1 to 3600 s | next connection or operation | gameserver | normal | How long a new game connection may go without MSG_ATTACH before it is closed. |
+| `Network.AcceptRatePerSecond` | unsigned | 50 | from 1 to 100000 | live | gameserver, loginserver | normal | How many new client connections one IP address may establish per second. |
 | `Network.DroppedMessageBurst` | unsigned | 64 | from 1 to 100000 | next connection or operation | gameserver, loginserver | normal | How many messages a connection may send that are dropped unread before a drop counts as a strike. |
 | `Network.DroppedMessagesPerSecond` | unsigned | 16 | from 1 to 100000 | next connection or operation | gameserver, loginserver | normal | How fast that allowance of dropped messages refills, per second. |
 | `Network.HandoffGrace` | unsigned | 30 s | from 1 to 3600 s | next connection or operation | loginserver | normal | How long a client sent to a game server may keep its login connection open. |
 | `Network.KeepAliveInterval` | unsigned | 60 s | from 0 to 3600 s | next connection or operation | gameserver, loginserver | normal | How often an idle connection is asked whether it is still there; 0 never asks. |
 | `Network.KeepAliveTimeout` | unsigned | 15 s | from 1 to 3600 s | next connection or operation | gameserver, loginserver | normal | How long a keepalive may go unanswered before the connection is closed. |
+| `Network.MaxConnectionsPerIP` | unsigned | 100 | from 1 to 100000 | live | gameserver, loginserver | normal | How many simultaneous client connections one IP address may hold. |
 | `Network.MaxStrikes` | unsigned | 10 | from 1 to 1000 | next connection or operation | gameserver, loginserver | normal | How many refused or malformed messages a connection may send before it is closed. |
 | `Network.PingBurst` | unsigned | 16 | from 1 to 100000 | next connection or operation | gameserver, loginserver | normal | How many pings a connection may send at once before a ping counts as a strike. |
 | `Network.PingsPerSecond` | unsigned | 4 | from 1 to 100000 | next connection or operation | gameserver, loginserver | normal | How fast that allowance of pings refills, per second. |
+| `Network.RateLimit.Burst` | unsigned | 150 | from 1 to 100000 | live | gameserver, loginserver | normal | How many inbound frames a session may receive in a burst before frames count against its per-second rate. |
+| `Network.RateLimit.PerSecond` | unsigned | 50 | from 1 to 100000 | live | gameserver, loginserver | normal | How fast a session's inbound frame allowance refills, per second. |
+| `Network.SendQueueHighWater` | unsigned | 16777216 bytes | from 1048576 to 1073741824 bytes | live | gameserver, loginserver | normal | How many bytes one connection may have waiting to be sent before it is closed; applies to existing connections immediately. |
 | `Network.SessionAcceptTimeout` | unsigned | 15 s | from 1 to 3600 s | next connection or operation | gameserver, loginserver | normal | How long a new connection may take to finish its handshake. |
 
 ## Rates

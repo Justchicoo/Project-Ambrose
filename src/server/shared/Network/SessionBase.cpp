@@ -30,7 +30,7 @@ namespace
 }
 
 SessionBase::SessionBase(asio::ip::tcp::socket&& socket, FrameLimits limits, std::shared_ptr<SessionContext> context)
-    : Socket(std::move(socket), limits), _context(std::move(context)), _dropBudget(_context->GetSettings().DroppedMessageBurst, _context->GetSettings().DroppedMessagesPerSecond), _pingBudget(_context->GetSettings().PingBurst, _context->GetSettings().PingsPerSecond), _acceptTimer(GetExecutor()), _keepAliveTimer(GetExecutor()), _keepAliveResponseTimer(GetExecutor())
+    : Socket(std::move(socket), limits), _context(std::move(context)), _dropBudget(_context->GetSettings().DroppedMessageBurst, _context->GetSettings().DroppedMessagesPerSecond), _pingBudget(_context->GetSettings().PingBurst, _context->GetSettings().PingsPerSecond), _frameBudget(_context->GetSettings().RateLimitBurst, _context->GetSettings().RateLimitPerSecond), _acceptTimer(GetExecutor()), _keepAliveTimer(GetExecutor()), _keepAliveResponseTimer(GetExecutor())
 {
     if (std::optional<uint16> const id = _context->AllocateId())
         _sessionId = *id;
@@ -229,6 +229,19 @@ void SessionBase::OnFrame(Frame& frame)
 {
     if (IsKicked())
         return;
+    SessionSettings const settings = _context->GetSettings();
+    bool allowed = false;
+    {
+        std::lock_guard const lock(_budgetMutex);
+        _frameBudget.SetLimits(settings.RateLimitBurst, settings.RateLimitPerSecond);
+        allowed = _frameBudget.TryConsume();
+    }
+    if (!allowed)
+    {
+        _rateLimitViolations.fetch_add(1, std::memory_order_relaxed);
+        AddStrike("frames arrived faster than the session's rate limit allows");
+        return;
+    }
     _lastInbound = std::chrono::steady_clock::now();
     if (frame.IsControl)
     {
@@ -275,7 +288,7 @@ void SessionBase::HandleControl(Frame& frame)
     std::optional<ControlOpcode> const opcode = ControlMessages::GetOpcode(frame);
     if (!opcode)
     {
-        LOG_DEBUG(SessionLog, "Session {} ignored control opcode {}", _sessionId, frame.Opcode);
+        AddStrike(fmt::format("unknown control opcode {}", frame.Opcode));
         return;
     }
     switch (*opcode)

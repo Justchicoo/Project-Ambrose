@@ -354,7 +354,7 @@ TEST_F(MessageHandlerTableTest, BodiesBelowTheMinimumSizeStrikeBeforeTheirStatus
     EXPECT_FALSE(log.Contains("in state Connected"));
 }
 
-TEST_F(MessageHandlerTableTest, TruncatedBodiesStrikeAndTrailingBytesStillHandle)
+TEST_F(MessageHandlerTableTest, TruncatedAndTrailingBodiesStrikeBeforeHandling)
 {
     CapturedLog log;
     DmlMessageData truncated = Message(7, 1, { 20, 0, 'W', '.', '1', '.', '6', '1', '0', '.' });
@@ -367,9 +367,10 @@ TEST_F(MessageHandlerTableTest, TruncatedBodiesStrikeAndTrailingBytesStillHandle
     hello.Version = "v";
     DmlMessageData padded = Encoded(*_catalog, hello, 1);
     padded.Body.push_back(0xAB);
-    EXPECT_EQ(_table.Dispatch(_session, _catalog, padded), DispatchResult::Handled);
-    EXPECT_EQ(_session.Hellos.size(), 1u);
-    EXPECT_EQ(_session.Strikes.size(), 1u);
+    EXPECT_EQ(_table.Dispatch(_session, _catalog, padded), DispatchResult::DecodeFailed);
+    EXPECT_EQ(_session.Hellos.size(), 0u);
+    EXPECT_EQ(_session.Strikes.size(), 2u);
+    EXPECT_TRUE(log.Contains("Dropped LOGIN MSG_HELLO (7:1) from session 42: its body carries bytes past its definition"));
 }
 
 TEST_F(MessageHandlerTableTest, QueuedMessagesRunWhenDrainedAndCheckTheStatusAgain)

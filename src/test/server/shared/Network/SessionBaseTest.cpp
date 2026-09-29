@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Fake-client tests of the session handshake: offer bytes, accept matching, accept timeout, keepalive echo and proof of life, queued early messages, id allocation, live settings, protocol strikes, kicks and queued inbound work.
+ * Fake-client tests of the session handshake, live inbound frame budgets, keepalives, queued work, session ids, protocol strikes and kicks.
  */
 
 #include "ConfigMgr.h"
@@ -19,6 +19,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -27,7 +28,10 @@
 #include <functional>
 #include <mutex>
 #include <set>
+#include <span>
+#include <system_error>
 #include <thread>
+#include <utility>
 
 namespace
 {
@@ -241,6 +245,25 @@ TEST(SessionSettingsTest, TheAttachTimeoutLoadsItsDefaultAndIsNeverUnderASecond)
     EXPECT_EQ(problems.size(), 1u);
 }
 
+TEST(SessionSettingsTest, LoadsAndClampsLiveFrameRateLimits)
+{
+    LogTestDirectory directory;
+    std::filesystem::path const file = directory.Path() / "session-rate.conf";
+    std::ofstream(file) << "Network.RateLimit.Burst = 0\nNetwork.RateLimit.PerSecond = 200000\n";
+    ConfigMgr config;
+    ASSERT_TRUE(config.LoadInitial(file).Succeeded());
+
+    std::vector<std::string> problems;
+    SessionSettings const settings = SessionSettings::Load(config, &problems);
+
+    EXPECT_EQ(settings.RateLimitBurst, 1u);
+    EXPECT_EQ(settings.RateLimitPerSecond, SessionSettings::MaxBudgetRate);
+    EXPECT_EQ(problems, (std::vector<std::string>{
+        "Network.RateLimit.Burst = 0 is outside 1-100000; using 1",
+        "Network.RateLimit.PerSecond = 200000 is outside 1-100000; using 100000"
+    }));
+}
+
 TEST_F(SessionBaseTest, OfferIsTheFirstFrameWithTheSessionIdAndOfferTime)
 {
     FakeSessionClient client(Start(Timing(std::chrono::seconds(30))));
@@ -304,6 +327,100 @@ TEST_F(SessionBaseTest, MatchingAcceptDeliversEarlyAndLaterMessagesInOrder)
     ASSERT_EQ(FrameLayout::SplitDmlMessages(echo->Payload, echoed), FrameError::None);
     ASSERT_EQ(echoed.size(), 1u);
     EXPECT_EQ(echoed[0], (DmlMessageData{ 7, 27, { 1, 2, 3 } }));
+}
+
+TEST_F(SessionBaseTest, LoweringTheFrameRateAppliesToTheNextInboundFrame)
+{
+    FakeSessionClient client(Start(Timing(std::chrono::seconds(30))));
+    ASSERT_NE(client.Handshake(), 0);
+    ASSERT_TRUE(WaitForCondition([&] { return _events.Accepted.load() == 1; }));
+
+    SessionSettings lowered = _context->GetSettings();
+    lowered.RateLimitPerSecond = 1;
+    _context->SetSettings(lowered);
+
+    ByteBuffer frames;
+    FrameWriter::WriteDml(frames, 7, 27, std::vector<uint8>{ 1 });
+    FrameWriter::WriteDml(frames, 7, 28, std::vector<uint8>{ 2 });
+    client.Send(frames);
+
+    std::shared_ptr<RecordingSession> const session = SessionAt(0);
+    ASSERT_TRUE(session);
+    ASSERT_TRUE(WaitForCondition([&] { return MessageCount() == 1 && session->GetStrikes() == 1; }, std::chrono::seconds(1)));
+    EXPECT_EQ(session->GetStrikes(), 1u);
+    EXPECT_EQ(session->GetRateLimitViolations(), 1u);
+    EXPECT_TRUE(session->IsOpen());
+}
+
+TEST_F(SessionBaseTest, FrameFloodDisconnectsWithoutStallingAnotherSession)
+{
+    FakeSessionClient flooder(Start(Timing(std::chrono::seconds(30))));
+    ASSERT_NE(flooder.Handshake(), 0);
+    ASSERT_TRUE(WaitForCondition([&] { return _events.Accepted.load() == 1; }));
+    FakeSessionClient survivor(_manager->GetPort());
+    ASSERT_NE(survivor.Handshake(), 0);
+    ASSERT_TRUE(WaitForCondition([&] { return _events.Accepted.load() == 2; }));
+    std::shared_ptr<RecordingSession> const floodSession = SessionAt(0);
+    ASSERT_TRUE(floodSession);
+
+    SessionSettings lowered = _context->GetSettings();
+    lowered.RateLimitBurst = 1;
+    lowered.RateLimitPerSecond = 1;
+    _context->SetSettings(lowered);
+
+    ByteBuffer flood;
+    for (std::size_t index = 0; index < 10000; ++index)
+        FrameWriter::WriteDml(flood, 7, 27, std::vector<uint8>{ 0 });
+
+    auto const floodStart = std::chrono::steady_clock::now();
+    std::atomic<bool> writeInterrupted{ false };
+    std::thread sender([&]
+    {
+        try
+        {
+            flooder.Send(flood);
+        }
+        catch (asio::system_error const&)
+        {
+            writeInterrupted.store(true);
+        }
+    });
+    auto const survivorStart = std::chrono::steady_clock::now();
+    ByteBuffer message;
+    FrameWriter::WriteDml(message, 7, 28, std::vector<uint8>{ 0xEE });
+    survivor.Send(message);
+    bool const survivorHandled = WaitForCondition([&]
+    {
+        std::lock_guard<std::mutex> lock(_events.Mutex);
+        return std::find(_events.Messages.begin(), _events.Messages.end(), DmlMessageData{ 7, 28, { 0xEE } }) != _events.Messages.end();
+    }, std::chrono::seconds(1));
+    sender.join();
+    EXPECT_TRUE(!writeInterrupted.load() || floodSession->IsKicked());
+    EXPECT_TRUE(survivorHandled);
+    EXPECT_LT(std::chrono::steady_clock::now() - survivorStart, std::chrono::milliseconds(500));
+
+    EXPECT_TRUE(flooder.WaitForClose(std::chrono::seconds(1)));
+    EXPECT_LT(std::chrono::steady_clock::now() - floodStart, std::chrono::seconds(1));
+    EXPECT_TRUE(WaitForCondition([&] { return floodSession->IsKicked(); }));
+    EXPECT_GE(floodSession->GetRateLimitViolations(), 1u);
+}
+
+TEST_F(SessionBaseTest, UnknownControlOpcodeAddsAProtocolStrike)
+{
+    SessionSettings settings = Timing(std::chrono::seconds(30));
+    settings.MaxStrikes = 1;
+    FakeSessionClient client(Start(settings));
+    ASSERT_NE(client.Handshake(), 0);
+    ASSERT_TRUE(WaitForCondition([&] { return _events.Accepted.load() == 1; }));
+    std::shared_ptr<RecordingSession> const session = SessionAt(0);
+    ASSERT_TRUE(session);
+
+    ByteBuffer unknown;
+    FrameWriter::WriteControl(unknown, 0xFF, std::span<uint8 const>());
+    client.Send(unknown);
+
+    EXPECT_TRUE(client.WaitForClose());
+    EXPECT_EQ(session->GetStrikes(), 1u);
 }
 
 TEST_F(SessionBaseTest, AcceptWithTheWrongIdClosesAndFreesTheId)

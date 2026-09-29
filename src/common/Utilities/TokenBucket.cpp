@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Refills tokens by elapsed time up to capacity and consumes them on request.
+ * Refills tokens by elapsed time up to capacity, applies live limits and consumes tokens on request.
  */
 
 #include "TokenBucket.h"
@@ -35,6 +35,21 @@ double TokenBucket::GetAvailableTokens()
 uint32 TokenBucket::GetCapacity() const
 {
     return _capacity;
+}
+
+double TokenBucket::GetTokensPerSecond() const
+{
+    return _tokensPerSecond;
+}
+
+void TokenBucket::SetLimits(uint32 capacity, double tokensPerSecond)
+{
+    Refill();
+    if (_capacity != capacity || _tokensPerSecond != tokensPerSecond)
+        _tokens = std::min(_tokens, std::min(static_cast<double>(capacity), tokensPerSecond));
+    _capacity = capacity;
+    _tokensPerSecond = tokensPerSecond;
+    _tokens = std::min(_tokens, static_cast<double>(_capacity));
 }
 
 void TokenBucket::Refill()

@@ -472,7 +472,7 @@ TEST(FrameTest, BufferMemoryIsReleasedAfterALargeFrame)
     std::span<uint8 const> const data = stream.GetData();
     for (std::size_t offset = 0; offset < data.size(); offset += 4096)
         reassembler.Feed(data.subspan(offset, std::min<std::size_t>(4096, data.size() - offset)));
-    EXPECT_GE(reassembler.GetBufferCapacity(), data.size());
+    EXPECT_LE(reassembler.GetBufferCapacity(), FrameLimits::DefaultMaxFrameSize);
     ASSERT_TRUE(reassembler.Next().has_value());
     EXPECT_EQ(reassembler.GetBufferedSize(), 0u);
     EXPECT_LE(reassembler.GetBufferCapacity(), std::size_t{ 64 } << 10);

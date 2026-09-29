@@ -109,6 +109,22 @@ void Socket::SetFrameLimits(FrameLimits limits)
     asio::post(_socket.get_executor(), [self = shared_from_this(), limits] { self->_reassembler.SetLimits(limits); });
 }
 
+void Socket::SetSendQueueHighWater(std::size_t bytes)
+{
+    _maxQueuedBytes.store(bytes, std::memory_order_relaxed);
+    std::size_t const queued = _queuedBytes.load(std::memory_order_relaxed);
+    if (queued > bytes && !_queueOverflowed.exchange(true, std::memory_order_relaxed))
+    {
+        LOG_WARN("network", "Closing {}:{}: the send queue already has {} bytes waiting, over the new {}-byte high-water mark", _remoteAddress.to_string(), _remotePort, queued, bytes);
+        CloseSocket();
+    }
+}
+
+void Socket::SetCloseHandler(std::function<void()> handler)
+{
+    _closeHandler = std::move(handler);
+}
+
 void Socket::OnStart()
 {
 }
@@ -222,5 +238,7 @@ void Socket::CloseNow()
         pending += bytes.size();
     _queue.clear();
     _queuedBytes.fetch_sub(pending, std::memory_order_relaxed);
+    if (_closeHandler)
+        _closeHandler();
     OnClose();
 }

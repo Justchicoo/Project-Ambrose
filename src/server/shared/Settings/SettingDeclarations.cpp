@@ -105,6 +105,11 @@ namespace
             Unsigned("Network.DroppedMessagesPerSecond", "16", "1", "100000", "", "Network", Game | Login, NextUse, "How fast that allowance of dropped messages refills, per second."),
             Unsigned("Network.PingBurst", "16", "1", "100000", "", "Network", Game | Login, NextUse, "How many pings a connection may send at once before a ping counts as a strike."),
             Unsigned("Network.PingsPerSecond", "4", "1", "100000", "", "Network", Game | Login, NextUse, "How fast that allowance of pings refills, per second."),
+            Unsigned("Network.RateLimit.Burst", "150", "1", "100000", "", "Network", Game | Login, Live, "How many inbound frames a session may receive in a burst before frames count against its per-second rate."),
+            Unsigned("Network.RateLimit.PerSecond", "50", "1", "100000", "", "Network", Game | Login, Live, "How fast a session's inbound frame allowance refills, per second."),
+            Unsigned("Network.MaxConnectionsPerIP", "100", "1", "100000", "", "Network", Game | Login, Live, "How many simultaneous client connections one IP address may hold."),
+            Unsigned("Network.AcceptRatePerSecond", "50", "1", "100000", "", "Network", Game | Login, Live, "How many new client connections one IP address may establish per second."),
+            Unsigned("Network.SendQueueHighWater", "16777216", "1048576", "1073741824", "bytes", "Network", Game | Login, Live, "How many bytes one connection may have waiting to be sent before it is closed; applies to existing connections immediately."),
             Unsigned("Network.HandoffGrace", "30", "1", "3600", "s", "Network", Login, NextUse, "How long a client sent to a game server may keep its login connection open."),
             Unsigned("Attach.Timeout", "30", "1", "3600", "s", "Network", Game, NextUse, "How long a new game connection may go without MSG_ATTACH before it is closed."),
 

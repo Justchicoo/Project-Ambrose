@@ -384,6 +384,16 @@ namespace
                 _context->SetSettings(SessionSettings::Load(Config(), &problems));
                 for (std::string const& problem : problems)
                     LOG_WARN("server.loginserver", "{}", problem);
+                if (_sockets)
+                {
+                    problems.clear();
+                    NetworkSettings const settings = NetworkSettings::Load(Config(), "LoginServerPort", DefaultPort, &problems);
+                    std::string error;
+                    if (!_sockets->ApplySettings(settings, error))
+                        LOG_WARN("server.loginserver", "Cannot apply network settings: {}", error);
+                    for (std::string const& problem : problems)
+                        LOG_WARN("server.loginserver", "{}", problem);
+                }
             }
         }
 
