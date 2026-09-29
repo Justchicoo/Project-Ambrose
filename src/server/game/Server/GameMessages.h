@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, each object of that zone the server sends it, as the unwrapped CoreObject Data the client builds it from, and the id of one that leaves its view, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; and the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits.
+ * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, each object of that zone the server sends it, as the unwrapped CoreObject Data the client builds it from, and the id of one that leaves its view, another wizard's move as its client packed it with that wizard's mobile id and its movement state with its global id, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; and the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits.
  */
 
 #ifndef AMBROSE_GAMEMESSAGES_H
@@ -177,6 +177,55 @@ namespace GameMessages
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("ExcludeOriginator", &Jump::ExcludeOriginator) };
+        }
+    };
+
+    struct ServerMove
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_SERVERMOVE";
+
+        uint16 LocationX = 0;
+        uint16 LocationY = 0;
+        uint16 LocationZ = 0;
+        uint8 Direction = 0;
+        uint16 MobileId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("LocationX", &ServerMove::LocationX), DmlField("LocationY", &ServerMove::LocationY), DmlField("LocationZ", &ServerMove::LocationZ),
+                DmlField("Direction", &ServerMove::Direction), DmlField("MobileID", &ServerMove::MobileId) };
+        }
+    };
+
+    struct EnterState
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_ENTERSTATE";
+
+        uint64 GameObjectId = 0;
+        uint32 State = 0;
+        std::string Data;
+        uint8 IgnoreIfCurrentStateIsOff = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GameObjectID", &EnterState::GameObjectId), DmlField("State", &EnterState::State), DmlField("Data", &EnterState::Data),
+                DmlField("IgnoreIfCurrentStateIsOff", &EnterState::IgnoreIfCurrentStateIsOff) };
+        }
+    };
+
+    struct MoveState
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_MOVESTATE";
+
+        uint64 GlobalId = 0;
+        int8 NewState = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GlobalID", &MoveState::GlobalId), DmlField("NewState", &MoveState::NewState) };
         }
     };
 

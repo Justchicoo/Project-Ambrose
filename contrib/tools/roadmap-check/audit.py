@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Checks roadmap milestone identities, dependencies and sizes, counting only the deliverables a milestone lists before any subsection, so a detailed spec appended to it is not counted twice, and judging no size for a milestone that lists none, and with --require-evidence also a ticked acceptance box that carries none.
+# Checks roadmap milestone identities, dependencies and sizes, counting only the top-level deliverables a milestone lists before any subsection, so a detailed spec appended to it is not counted twice and the bullets detailing a deliverable are not counted as more, and judging no size for a milestone that lists none, and with --require-evidence also a ticked acceptance box that carries none.
 
 import argparse
 import json
@@ -16,7 +16,7 @@ DEPENDENCY_RE = re.compile(r"\*\*Depends on:\*\*\s*(.*)")
 CHECK_RE = re.compile(r"^\s*-\s*\[([ xX])\]\s*(.*)$")
 ID_RE = re.compile(r"\b\d+\.\d+\b")
 SIZE_RE = re.compile(r"\*\*Size:\*\*\s*([SML])\.")
-EXCEPTIONS = {"17.24", "17.51"}
+EXCEPTIONS = {"17.51"}
 
 
 def relative(path, root):
@@ -89,7 +89,7 @@ def parse_phase(path, root):
         if line.startswith("### ") or line.startswith("**Risks**") or line.startswith("## "):
             deliverables = False
             collect_checks = False
-        if deliverables and re.match(r"^\s*-\s+", line):
+        if deliverables and re.match(r"^-\s+", line):
             current["deliverables"] += 1
         check = CHECK_RE.match(line)
         if check and collect_checks:

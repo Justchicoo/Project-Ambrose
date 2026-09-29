@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps the apps behind a shared lock that only starting and stopping the supervisor takes alone, so a request always finds a whole list; the saved state and each app's output live under the data folder unless Supervisor.StateFile or Supervisor.OutputDir says otherwise; a power request names its action and, for a stop or restart, a countdown, and anything else in it is refused field by field; a relayed request keeps its method, path, query, body and request id, a settings request also names its caller and the rights they hold that the route can use, a settings batch pays its cost on the panel's limit first, and each relayed settings or reload answer is handed on to be recorded; and is let through only for a method and path whose permission the relay knows, the same one the app's own route asks for, so a caller who could not reach a route on the app cannot reach it through the supervisor and a path the relay does not know is answered as absent, each judged by the listener the request came in on, since the admin token on the supervisor's own API and a panel user's session on the panel are different callers; sessions stay the supervisor's own and are never relayed, and an app that is not running or has its admin API off is answered 503 with the reason.
+ * Keeps the apps behind a shared lock that only starting and stopping the supervisor takes alone, so a request always finds a whole list; the saved state and each app's output live under the data folder unless Supervisor.StateFile or Supervisor.OutputDir says otherwise; a power request names its action and, for a stop or restart, a countdown, and anything else in it is refused field by field; a relayed request keeps its method, path, query, body and request id, a settings request also names its caller and the rights they hold that the route can use, a settings batch pays its cost on the panel's limit first, and each relayed settings or reload answer is handed on to be recorded; and is let through only for a method and path whose permission the relay knows, the same one the app's own route asks for, so a caller who could not reach a route on the app cannot reach it through the supervisor and a path the relay does not know is answered as absent, each judged by the listener the request came in on, since the admin token on the supervisor's own API and a panel user's session on the panel are different callers; sessions stay the supervisor's own and are never relayed, and an app that is not running or has its admin API off is answered 503 with the reason. Each app is given the forwarder to the status observer before it starts watching, so the first state it enters is handed on too. A permission that is allowed is followed by the listener's own fresh-check rule before it is used, and a read that asks to reveal secrets by a caller who may see them, or a change naming a setting the declarations mark restricted by a caller who may change those, asks for a check every time, a dry run excepted since it changes nothing.
  */
 
 #include "Supervisor.h"
@@ -9,6 +9,7 @@
 #include "AdminSettingsView.h"
 #include "ConfigMgr.h"
 #include "Log.h"
+#include "SettingDeclarations.h"
 #include "StringUtil.h"
 
 #include <fmt/format.h>
@@ -30,6 +31,38 @@ namespace
     nlohmann::json TextOrNull(std::string const& text)
     {
         return text.empty() ? nlohmann::json(nullptr) : nlohmann::json(text);
+    }
+
+    bool IsRestricted(std::string_view key)
+    {
+        SettingDeclaration const* const declared = SettingDeclarations::Find(key);
+        return declared && declared->Edit == SettingEditClass::Restricted;
+    }
+
+    bool NamesRestricted(AdminRequest const& request, std::string_view method, std::string_view tail)
+    {
+        constexpr std::string_view SettingPrefix = "/api/settings/";
+        if (tail.starts_with(SettingPrefix) && tail != "/api/settings/batch")
+        {
+            std::string_view const key = tail.substr(SettingPrefix.size());
+            return (method == "PUT" || method == "DELETE") && key.find('/') == std::string_view::npos && IsRestricted(key);
+        }
+        if (tail != "/api/settings/batch" && tail != "/api/settings")
+            return false;
+        nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
+        if (!body.is_object())
+            return false;
+        if (auto const dry = body.find("dry_run"); dry != body.end() && dry->is_boolean() && dry->get<bool>())
+            return false;
+        if (auto const entries = body.find("entries"); entries != body.end() && entries->is_array())
+            for (nlohmann::json const& entry : *entries)
+                if (entry.is_object() && entry.contains("key") && entry["key"].is_string() && IsRestricted(entry["key"].get_ref<std::string const&>()))
+                    return true;
+        if (auto const values = body.find("values"); values != body.end() && values->is_object())
+            for (auto const& [key, value] : values->items())
+                if (IsRestricted(key))
+                    return true;
+        return false;
     }
 
     nlohmann::json ExitJson(AppExit const& exit)
@@ -84,6 +117,24 @@ namespace
         return body;
     }
 
+    std::string AuditAction(AdminRequest const& request, std::string_view tail)
+    {
+        if (tail == "/power")
+        {
+            nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
+            if (body.is_object())
+                if (auto const action = body.find("action"); action != body.end() && action->is_string())
+                    if (std::optional<PowerAction> const parsed = ManagedApp::ParseAction(action->get<std::string>()))
+                        return "app:power." + std::string(ManagedApp::ActionName(*parsed));
+            return "app:power.refused";
+        }
+        if (tail == "/api/command")
+            return "app:console.command";
+        if (tail == "/api/shutdown")
+            return "app:power.stop";
+        return "app:api.change";
+    }
+
     std::filesystem::path ConfiguredPath(ConfigMgr const& config, std::string const& key, std::filesystem::path const& fallback, std::filesystem::path const& workingFolder)
     {
         std::filesystem::path const value = ConfigMgr::PathFromUtf8(Ambrose::Trim(config.GetOption<std::string>(key, "", true)));
@@ -135,7 +186,10 @@ bool Supervisor::Start(ConfigMgr const& config, SupervisorSettings const& settin
         return false;
     std::vector<std::unique_ptr<ManagedApp>> apps;
     for (AppDefinition& definition : definitions)
+    {
         apps.push_back(std::make_unique<ManagedApp>(std::move(definition), *state, settings.OutputFolder, settings.MaxOutputBytes, settings.DataFolder, _sendBreak, _log));
+        apps.back()->SetStatusObserver([this](AppSnapshot const& snapshot) { ForwardStatus(snapshot); });
+    }
     {
         std::unique_lock<std::shared_mutex> const lock(_mutex);
         _state = std::move(state);
@@ -236,12 +290,75 @@ std::string Supervisor::OutputJson(std::string_view name, OutputRun run, std::ve
     return body.dump();
 }
 
+std::string Supervisor::PrepareCommandRelayBody(std::string_view body, uint8 maximumLevel)
+{
+    nlohmann::json command = nlohmann::json::parse(body, nullptr, false);
+    if (!command.is_object())
+        return std::string(body);
+    for (auto field = command.begin(); field != command.end();)
+    {
+        std::string const key = Ambrose::ToLower(field.key());
+        if (key == "token" || key == "app_token" || key == "admin_token" || key == "authorization")
+            field = command.erase(field);
+        else
+            ++field;
+    }
+    auto const requested = command.find("level");
+    if (requested != command.end() && requested->is_number_unsigned() && requested->get<uint64>() <= 4)
+        command["level"] = std::min(maximumLevel, static_cast<uint8>(requested->get<uint64>()));
+    else if (requested == command.end())
+        command["level"] = maximumLevel;
+    return command.dump();
+}
+
 void Supervisor::Register(AdminRouter& router, std::function<AdminStatusSnapshot()> self)
 {
     router.AddGuarded("GET", "/api/apps", "status.read", [this, self](AdminRequest const&) { return AdminResponse::Json(200, AppsJson(self(), Snapshots())); });
     router.AddGuarded("GET", "/api/supervisor", "status.read", [this](AdminRequest const&) { return AdminResponse::Json(200, SupervisionJson(Snapshots())); });
+    auto const permission = [](AdminRequest const& request)
+    {
+        constexpr std::string_view Prefix = "/api/apps/";
+        std::string_view const rest = std::string_view(request.Path).substr(Prefix.size());
+        std::size_t const slash = rest.find('/');
+        std::string_view const tail = slash == std::string_view::npos ? std::string_view() : rest.substr(slash);
+        if (tail.empty() || tail == "/")
+            return std::string("status.read");
+        if (tail == "/power")
+        {
+            nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
+            if (body.is_object())
+                if (auto const action = body.find("action"); action != body.end() && action->is_string())
+                    if (std::optional<PowerAction> const parsed = ManagedApp::ParseAction(action->get<std::string>()))
+                        return std::string("power.") + std::string(ManagedApp::ActionName(*parsed));
+            return std::string("status.read");
+        }
+        if (tail == "/output/current" || tail == "/output/previous")
+            return std::string("console.read");
+        if (std::optional<std::string_view> const required = PermissionFor(Ambrose::ToUpper(request.Method), tail))
+            return std::string(*required);
+        return std::string("status.read");
+    };
     for (char const* method : { "GET", "POST", "PUT", "PATCH", "DELETE" })
-        router.AddGuardedPrefix(method, "/api/apps/", "status.read", [this, &router](AdminRequest const& request) { return Answer(request, router); });
+        router.AddDynamicGuardedPrefix(method, "/api/apps/", "status.read", permission,
+            [this, &router](AdminRequest const& request) { return Answer(request, router); });
+}
+
+void Supervisor::SetAuditRecorder(SupervisorAuditRecorder recorder)
+{
+    _auditRecorder = std::move(recorder);
+}
+
+void Supervisor::SetCommandContext(SupervisorCommandLevel level, SupervisorActorName actor)
+{
+    _commandLevel = std::move(level);
+    _actorName = std::move(actor);
+}
+
+AdminResponse Supervisor::Audited(AdminRequest const& request, std::string_view app, std::string_view action, std::function<AdminResponse()> operation)
+{
+    if (request.Method == "GET" || !_auditRecorder)
+        return operation();
+    return _auditRecorder(request, app, action, std::move(operation));
 }
 
 std::optional<std::string_view> Supervisor::PermissionFor(std::string_view method, std::string_view tail) noexcept
@@ -249,6 +366,10 @@ std::optional<std::string_view> Supervisor::PermissionFor(std::string_view metho
     bool const read = method == "GET";
     if (tail == "/api/command")
         return method == "POST" ? std::optional<std::string_view>("console.write") : std::nullopt;
+    if (tail == "/api/tick-profile")
+        return (method == "GET" || method == "POST") ? std::optional<std::string_view>("metrics.profile") : std::nullopt;
+    if (tail == "/api/tick-profile/trace")
+        return method == "GET" ? std::optional<std::string_view>("metrics.profile") : std::nullopt;
     if (tail.starts_with("/api/logs/after/"))
         return read ? std::optional<std::string_view>("console.read") : std::nullopt;
     if (tail == "/api/settings")
@@ -300,7 +421,7 @@ std::optional<AdminResponse> Supervisor::Refuse(AdminRequest const& request, std
     switch (router.MayI(request, permission))
     {
         case PermissionVerdict::Allowed:
-            return std::nullopt;
+            return router.StepUp(request, permission, StepUpWhen::Changing);
         case PermissionVerdict::OutOfScope:
             return AdminResponse::Problem(404, "not_found", fmt::format("The supervisor has nothing at {}", request.Path));
         case PermissionVerdict::Forbidden:
@@ -309,7 +430,33 @@ std::optional<AdminResponse> Supervisor::Refuse(AdminRequest const& request, std
     return std::nullopt;
 }
 
+std::optional<AdminResponse> Supervisor::StepUpFor(AdminRequest const& request, AdminRouter const& router, std::string_view method, std::string_view tail)
+{
+    if (method == "GET")
+    {
+        if (tail == "/api/settings" && AdminConfigView::AsksToReveal(request) && router.MayI(request, "settings.secrets.read") == PermissionVerdict::Allowed)
+            return router.StepUp(request, "settings.secrets.read", StepUpWhen::Always);
+        return std::nullopt;
+    }
+    if (!tail.starts_with("/api/settings") || !NamesRestricted(request, method, tail))
+        return std::nullopt;
+    if (router.MayI(request, AdminSettingsView::RestrictedPermission) != PermissionVerdict::Allowed)
+        return std::nullopt;
+    return router.StepUp(request, AdminSettingsView::RestrictedPermission, StepUpWhen::Always);
+}
+
 AdminResponse Supervisor::Answer(AdminRequest const& request, AdminRouter const& router)
+{
+    constexpr std::string_view Prefix = "/api/apps/";
+    std::string_view const rest = std::string_view(request.Path).substr(Prefix.size());
+    std::size_t const slash = rest.find('/');
+    std::string_view const name = rest.substr(0, slash);
+    std::string_view const tail = slash == std::string_view::npos ? std::string_view() : rest.substr(slash);
+    std::string const action = AuditAction(request, tail);
+    return Audited(request, name, action, [this, &request, &router] { return AnswerCore(request, router); });
+}
+
+AdminResponse Supervisor::AnswerCore(AdminRequest const& request, AdminRouter const& router)
 {
     constexpr std::string_view Prefix = "/api/apps/";
     std::string_view const rest = std::string_view(request.Path).substr(Prefix.size());
@@ -354,12 +501,15 @@ AdminResponse Supervisor::Answer(AdminRequest const& request, AdminRouter const&
         return AdminResponse::Problem(404, "not_found", fmt::format("The supervisor relays nothing at {} {}", method, request.Path));
     if (std::optional<AdminResponse> refused = Refuse(request, *permission, router))
         return std::move(*refused);
+    if (std::optional<AdminResponse> asked = StepUpFor(request, router, method, tail))
+        return std::move(*asked);
     if (method == "POST" && tail == "/api/settings/batch")
         if (std::optional<AdminResponse> held = router.Charge(request, AdminSettingsView::BatchCost))
             return std::move(*held);
     std::string const actor = _hooks.NameOf ? _hooks.NameOf(request) : std::string();
     AdminResponse response = Relay(*app, request, tail, ForwardedHeaders(request, router, method, tail, *permission, actor));
-    if (_hooks.Relayed && (tail.starts_with("/api/settings") || tail.starts_with("/api/reload")))
+    if (_hooks.Relayed && (tail.starts_with("/api/settings") || tail.starts_with("/api/reload"))
+        && (method == "GET" || !_auditRecorder))
         _hooks.Relayed(request, RelayedAnswer{ std::string(name), method, std::string(tail) + QueryString(request), response.Status, response.Body });
     return response;
 }
@@ -367,6 +517,33 @@ AdminResponse Supervisor::Answer(AdminRequest const& request, AdminRouter const&
 void Supervisor::SetRelayHooks(SupervisorRelayHooks hooks)
 {
     _hooks = std::move(hooks);
+}
+
+void Supervisor::SetStatusObserver(AppStatusObserver observer)
+{
+    std::lock_guard<std::mutex> const lock(_observerMutex);
+    _statusObserver = std::move(observer);
+}
+
+void Supervisor::ForwardStatus(AppSnapshot const& snapshot)
+{
+    std::lock_guard<std::mutex> const lock(_observerMutex);
+    if (_statusObserver)
+        _statusObserver(snapshot);
+}
+
+std::string Supervisor::StatusData(AppSnapshot const& snapshot)
+{
+    bool const alive = snapshot.State == AppState::Starting || snapshot.State == AppState::Running || snapshot.State == AppState::Stopping;
+    nlohmann::json data;
+    data["app"] = snapshot.Name;
+    data["state"] = std::string(ManagedApp::StateName(snapshot.State));
+    data["since"] = snapshot.StateSinceEpochMs;
+    data["pid"] = snapshot.ProcessId ? nlohmann::json(*snapshot.ProcessId) : nlohmann::json(nullptr);
+    data["exit_code"] = !alive && !snapshot.Exits.empty() && snapshot.Exits.back().Code ? nlohmann::json(*snapshot.Exits.back().Code) : nlohmann::json(nullptr);
+    data["crashes"] = snapshot.Crashes;
+    data["next_restart"] = OptionalNumber(snapshot.RestartEpochMs);
+    return data.dump();
 }
 
 std::vector<std::pair<std::string, std::string>> Supervisor::ForwardedHeaders(AdminRequest const& request, AdminRouter const& router, std::string_view method, std::string_view tail,
@@ -503,9 +680,41 @@ AdminResponse Supervisor::Relay(ManagedApp& app, AdminRequest const& request, st
         return AdminResponse::Problem(503, "app_admin_off", fmt::format("The admin API of {} cannot be reached: {}", name, snapshot.AdminProblem.empty() ? std::string("it is not set up") : snapshot.AdminProblem));
     if (!snapshot.ProcessId)
         return AdminResponse::Problem(503, "app_not_running", fmt::format("{} is {}, so its admin API is not answering", name, ManagedApp::StateName(snapshot.State)));
-    AdminClientResponse const answer = admin->Send({ request.Method, std::string(path) + QueryString(request), request.Body, "application/json", request.Id, std::move(headers) }, RelayTimeout);
+    return Forward(app, request, path, RelayTimeout, std::move(headers));
+}
+
+AdminResponse Supervisor::Forward(ManagedApp& app, AdminRequest const& request, std::string_view path, std::chrono::milliseconds timeout,
+    std::vector<std::pair<std::string, std::string>> headers)
+{
+    std::string const& name = app.GetDefinition().Name;
+    AppSnapshot const snapshot = app.Snapshot();
+    std::optional<AdminClient> const admin = app.GetAdminClient();
+    if (!admin)
+        return AdminResponse::Problem(503, "app_admin_off", fmt::format("The admin API of {} cannot be reached: {}", name, snapshot.AdminProblem.empty() ? std::string("it is not set up") : snapshot.AdminProblem));
+    if (!snapshot.ProcessId)
+        return AdminResponse::Problem(503, "app_not_running", fmt::format("{} is {}, so its admin API is not answering", name, ManagedApp::StateName(snapshot.State)));
+
+    std::string body = request.Body;
+    if (path == "/api/command")
+    {
+        uint8 const maximum = _commandLevel ? _commandLevel(request) : uint8(4);
+        body = PrepareCommandRelayBody(body, maximum);
+        if (_actorName)
+        {
+            std::string const actor = _actorName(request);
+            if (!actor.empty())
+                headers.emplace_back("X-Ambrose-Panel-User", actor);
+        }
+    }
+    AdminClientResponse const answer = admin->Send(
+        { request.Method, std::string(path) + QueryString(request), std::move(body), "application/json", request.Id, std::move(headers) }, timeout);
     if (!answer.Answered)
-        return AdminResponse::Problem(502, "app_unreachable", fmt::format("{} did not answer: {}", name, answer.Error));
+    {
+        std::string const code = answer.TimedOut ? "app_timeout" : "app_unreachable";
+        return AdminResponse::Problem(502, code, fmt::format("{} did not answer: {}", name, answer.Error));
+    }
+    if (answer.Status == 401 || answer.Status == 403)
+        return AdminResponse::Problem(502, "app_invalid_token", fmt::format("{} refused the supervisor's app token", name));
     AdminResponse response;
     response.Status = answer.Status;
     response.ContentType = answer.ContentType.empty() ? std::string("application/json") : answer.ContentType;

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests admin API routing without sockets: authentication runs before the table, a wrong token is rate limited while the right one still answers, a request naming no caller address is refused, an oversized body is refused before the handler, a known method and path reaches its handler, another method answers 405, an unknown path answers 404, a handler that throws becomes a 500 problem, a host header is read down to its name and only an IP address, localhost or an allowed name is answered, every answer carries a request id and the security headers with the id in any error body, a 422 names each field, paths outside /api and public routes need no token, and a browser session authenticates by cookie with its origin and CSRF token checked where a request changes something or upgrades, and that a route ships only when it says which permission it needs or that any signed-in member may call it, that one naming a permission nothing holds is never served and is kept among the refused routes, and that a route without its permission answers 403 while one in a scope the caller cannot see answers 404 saying nothing about what was wanted.
+ * Tests admin API routing without sockets: authentication runs before the table, a wrong token is rate limited while the right one still answers, a request naming no caller address is refused, an oversized body is refused before the handler, a known method and path reaches its handler, another method answers 405, an unknown path answers 404, a handler that throws becomes a 500 problem, a host header is read down to its name and only an IP address, localhost or an allowed name is answered, every answer carries a request id and the security headers with the id in any error body, a 422 names each field, paths outside /api and public routes need no token, and a browser session authenticates by cookie with its origin and CSRF token checked where a request changes something or upgrades, and that a route ships only when it says which permission it needs or that any signed-in member may call it, that one naming a permission nothing holds is never served and is kept among the refused routes, and that a route without its permission answers 403 while one in a scope the caller cannot see answers 404 saying nothing about what was wanted; that a listener's admission rule holds every authenticated route and socket except the exact routes registered for meeting it, after authentication and never for a public route, and that a fresh-check hook runs only after a permission is allowed, told whether a change or any use is asking, with its answer standing in for the handler's.
  */
 
 #include "AdminAuth.h"
@@ -11,8 +11,11 @@
 
 #include <gtest/gtest.h>
 
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 namespace
@@ -394,4 +397,116 @@ TEST(AdminRouterTest, ARouteOutsideApiIsServedAndGuardedWhileEveryOtherPathGoesT
     AdminResponse const page = routes.Dispatch(Get("/panel/index.html"));
     EXPECT_EQ(page.Status, 200);
     EXPECT_EQ(page.Body, "\"files:/panel/index.html\"") << "a path no route claims still goes to the panel's files";
+}
+
+TEST(AdminRouterTest, AnAdmissionHookHoldsEveryRouteButThoseMarkedForEnrollment)
+{
+    AdminAuth auth(10, 1.0);
+    auth.SetToken(Token);
+    AdminRouter routes(auth);
+    routes.SetPermissionCheck([](AdminRequest const&, std::string_view) { return PermissionVerdict::Allowed; });
+    auto const answer = [](AdminRequest const&) { return AdminResponse::Json(200, "{}"); };
+    routes.AddOpen("GET", "/api/panel/permissions", answer);
+    routes.AddGuarded("GET", "/api/status", "status.read", answer);
+    routes.AddEnrollment("GET", "/api/panel/me", answer);
+    routes.AddEnrollment("POST", "/api/panel/me/two-factor/setup", answer);
+    routes.AddPublic("POST", "/api/panel/session", answer);
+
+    int admitted = 0;
+    routes.SetAdmission([&admitted](AdminRequest const&) -> std::optional<AdminResponse>
+    {
+        ++admitted;
+        return AdminResponse::Problem(403, "two_factor_required", "Turn on two-factor sign-in to carry on");
+    });
+
+    AdminResponse const open = routes.Dispatch(Get("/api/panel/permissions"));
+    EXPECT_EQ(open.Status, 403);
+    EXPECT_EQ(nlohmann::json::parse(open.Body)["error"], "two_factor_required");
+    EXPECT_EQ(routes.Dispatch(Get("/api/status")).Status, 403) << "a guarded route is held before its permission is asked";
+    EXPECT_EQ(routes.Dispatch(Get("/api/nothing/here")).Status, 403) << "a path no route claims is held too, so the rule says nothing about what exists";
+    EXPECT_EQ(admitted, 3);
+
+    EXPECT_EQ(routes.Dispatch(Get("/api/panel/me")).Status, 200) << "the routes that meet the rule still answer";
+    AdminRequest setup = Get("/api/panel/me/two-factor/setup");
+    setup.Method = "POST";
+    EXPECT_EQ(routes.Dispatch(setup).Status, 200);
+    EXPECT_EQ(admitted, 3);
+    EXPECT_EQ(routes.Dispatch(Get("/api/panel/me/two-factor/setup")).Status, 403) << "only the exact method and path registered for enrollment is exempt";
+
+    AdminRequest signIn = Get("/api/panel/session", "");
+    signIn.Method = "POST";
+    EXPECT_EQ(routes.Dispatch(signIn).Status, 200) << "a public route runs before anyone is known, so the rule never sees it";
+    EXPECT_EQ(routes.Dispatch(Get("/api/status", "")).Status, 401) << "and a caller nobody knows is refused before the rule is asked";
+    EXPECT_EQ(admitted, 4);
+
+    AdminRequest socket = Get("/api/panel/me");
+    socket.Upgrade = true;
+    std::optional<AdminResponse> const upgrade = routes.Admit(socket);
+    ASSERT_TRUE(upgrade.has_value()) << "a socket is never an enrollment route";
+    EXPECT_EQ(upgrade->Status, 403);
+
+    routes.SetAdmission({});
+    EXPECT_EQ(routes.Dispatch(Get("/api/status")).Status, 200);
+    EXPECT_FALSE(routes.Admit(socket).has_value());
+}
+
+TEST(AdminRouterTest, TheStepUpHookRunsAfterAnAllowedPermissionAndItsAnswerStopsTheHandler)
+{
+    AdminAuth auth(10, 1.0);
+    auth.SetToken(Token);
+    AdminRouter routes(auth);
+    int ran = 0;
+    routes.AddGuarded("POST", "/api/apps/gameserver/power", "power.kill", [&ran](AdminRequest const&)
+    {
+        ++ran;
+        return AdminResponse::Json(202, "{}");
+    });
+    routes.AddGuarded("GET", "/api/status", "status.read", [](AdminRequest const&) { return AdminResponse::Json(200, "{}"); });
+    routes.AddOpen("GET", "/api/panel/permissions", [](AdminRequest const&) { return AdminResponse::Json(200, "{}"); });
+
+    PermissionVerdict verdict = PermissionVerdict::Allowed;
+    routes.SetPermissionCheck([&verdict](AdminRequest const&, std::string_view) { return verdict; });
+    std::vector<std::pair<std::string, StepUpWhen>> asked;
+    std::optional<AdminResponse> stepUp = AdminResponse::Problem(403, "step_up_required", "Confirm it is you");
+    routes.SetStepUp([&asked, &stepUp](AdminRequest const&, std::string_view permission, StepUpWhen when)
+    {
+        asked.emplace_back(std::string(permission), when);
+        return stepUp;
+    });
+
+    AdminRequest kill = Get("/api/apps/gameserver/power");
+    kill.Method = "POST";
+    AdminResponse const held = routes.Dispatch(kill);
+    EXPECT_EQ(held.Status, 403);
+    EXPECT_EQ(nlohmann::json::parse(held.Body)["error"], "step_up_required");
+    EXPECT_EQ(ran, 0) << "the answer of the check stands in for the handler's";
+    ASSERT_EQ(asked.size(), 1u);
+    EXPECT_EQ(asked[0].first, "power.kill");
+    EXPECT_TRUE(asked[0].second == StepUpWhen::Changing) << "a route asks only when it changes something; the listener decides what counts";
+
+    stepUp.reset();
+    EXPECT_EQ(routes.Dispatch(kill).Status, 202);
+    EXPECT_EQ(ran, 1);
+
+    verdict = PermissionVerdict::Forbidden;
+    EXPECT_EQ(routes.Dispatch(kill).Status, 403);
+    EXPECT_EQ(asked.size(), 2u) << "a refused permission never reaches the check";
+    verdict = PermissionVerdict::OutOfScope;
+    EXPECT_EQ(routes.Dispatch(kill).Status, 404);
+    EXPECT_EQ(asked.size(), 2u);
+
+    verdict = PermissionVerdict::Allowed;
+    EXPECT_EQ(routes.Dispatch(Get("/api/status")).Status, 200);
+    ASSERT_EQ(asked.size(), 3u);
+    EXPECT_EQ(asked[2].first, "status.read");
+    EXPECT_EQ(routes.Dispatch(Get("/api/panel/permissions")).Status, 200);
+    EXPECT_EQ(asked.size(), 3u) << "a route any member may call names no permission to check";
+
+    std::optional<AdminResponse> const always = routes.StepUp(Get("/api/settings"), "settings.secrets.read", StepUpWhen::Always);
+    EXPECT_FALSE(always.has_value());
+    ASSERT_EQ(asked.size(), 4u);
+    EXPECT_TRUE(asked[3].second == StepUpWhen::Always) << "a caller outside a route may ask for a check every time";
+
+    routes.SetStepUp({});
+    EXPECT_FALSE(routes.StepUp(kill, "power.kill", StepUpWhen::Always).has_value()) << "a listener with no hook asks for nothing";
 }

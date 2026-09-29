@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# One run end to end: it drops and lets the server rebuild its own databases, starts the capture, the login server and its account, and for a scenario that enters the world loads the zone rows into its world database, starts the game server, which announces its realm to the login server, and seeds the scenario's wizard, then snapshots the install, opens the ports the scenario watches, starts the client through the launcher, or from the command the launcher prepared less its -P 0 for a scenario that follows the client's own patching default, with the install's PatchConfig.xml copied into the run folder and pointed at a local port first when the scenario asks, whichever way the client starts, and guards it from the moment it exists against any connection off this machine, runs the scenario, then asks the client to quit or ends it outright when its own log says quitting would reach off the machine, stops everything in the order it started it with the guard watching until last, and writes the report over both servers' logs whether the scenario passed or failed.
+# One run end to end: it drops and lets the server rebuild its own databases, starts the capture, the login server and its account, and for a scenario that enters the world loads the zone rows into its world database, starts the game server, which announces its realm to the login server, and seeds the scenario's wizard, then snapshots the install, opens the ports the scenario watches, starts the client through the launcher, or from the command the launcher prepared less its -P 0 for a scenario that follows the client's own patching default, with the install's PatchConfig.xml copied into the run folder and pointed at a local port first when the scenario asks, whichever way the client starts, and guards it from the moment it exists against any connection off this machine, starts a companion client the same way for a scenario that shows two wizards to each other, on an account and with a wizard of its own and under the same guard, runs the scenario, then asks each client to quit or ends it outright when its own log says quitting would reach off the machine, stops everything in the order it started it with the guard watching until last, and writes the report over both servers' logs whether the scenario passed or failed.
 import os
 import re
 import secrets
@@ -51,6 +51,7 @@ class Run:
         self.prepared = []
         self.failed = None
         self.force_close = False
+        self.companion = None
 
     def note(self, what, value):
         say(f"{what}: {value}")
@@ -94,11 +95,20 @@ class Run:
                         os.path.join(self.folder, "client"), options["host"], options["port"],
                         self.references.window, client_dir=options.get("client"), locale=options.get("locale"),
                         install=self.environment.get("install"), revision=self.environment.get("revision"),
-                        patching=self.scenario.patching, patch_config=self.scenario.patch_config)
+                        patching=self.scenario.patching, patch_config=self.scenario.patch_config, monitor=options.get("monitor"))
+        companion = None
+        if self.scenario.companion:
+            companion = Client(os.path.join(self.environment["binaries"], paths.program("launcher")),
+                               os.path.join(self.folder, "companion"), options["host"], options["port"],
+                               self.references.window, client_dir=options.get("client"), locale=options.get("locale"),
+                               install=self.environment.get("install"), revision=self.environment.get("revision"), label="companion",
+                               monitor=options.get("monitor"))
+            variables.update(companion_user=variables["user"] + "2", companion_password=secrets.token_urlsafe(12))
+        self.companion = companion
         listeners = [PortListener(listener["name"], listener["address"], listener["port"], listener["expect"], listener.get("at_least", False))
                      for listener in self.scenario.listeners]
         store = screens.Store(self.references, options["refs"])
-        engine = self.make_engine(client, server, store, variables, databases)
+        engine = self.make_engine(client, server, store, variables, databases, companion)
         engine.game = game
         engine.listeners = {listener.label: listener for listener in listeners}
         guard = None
@@ -113,6 +123,8 @@ class Run:
             self.cleanups.append(("stop the login server", server.stop))
             self.note("the login server", server.start(timeout=options["server_timeout"]))
             self.note("the account", server.ensure_account(variables["user"], password))
+            if companion is not None:
+                self.note("the companion's account", server.ensure_account(variables["companion_user"], variables["companion_password"]))
             if game is not None:
                 sql, how = zones.ensure(self.environment["binaries"], self.environment.get("install"), self.environment.get("revision"))
                 self.note("the zone rows", how)
@@ -128,6 +140,12 @@ class Run:
                     variables["wizard"] = name
                     variables["wizard_guid"] = str(guid)
                     self.note("the wizard", f"{name}, guid {guid}, in {wizard['zone']}")
+                if companion is not None:
+                    other = self.scenario.companion["wizard"]
+                    guid, name = databases.seed_character(variables["companion_user"], other)
+                    variables["companion_wizard"] = name
+                    variables["companion_wizard_guid"] = str(guid)
+                    self.note("the companion's wizard", f"{name}, guid {guid}, in {other['zone']}")
             for listener in listeners:
                 self.cleanups.append((f"stop {listener.label}", listener.stop))
                 self.note(listener.label, listener.open())
@@ -144,6 +162,15 @@ class Run:
                                                f"{self.references.window[0]}x{self.references.window[1]}")
                 if options.get("background", True):
                     self.note("the foreground", client.to_background())
+            if companion is not None:
+                self.cleanups.append(("close the companion", lambda: companion.close(force=self.force_close)))
+                self.note("the companion", companion.start(timeout=options["client_timeout"]))
+                guard.remember(companion.pids)
+                engine.restarts["companion"] = lambda timeout: self.restart_client(companion, guard, timeout, options)
+                self.cleanups.append(("decide how the companion is stopped", lambda: self.quit_safely(companion)))
+                self.note("the companion's window", f"{companion.find_window(timeout=options['client_timeout']):#x}")
+                if options.get("background", True):
+                    self.note("the companion's foreground", companion.to_background())
             engine.run()
         except Exception as error:
             self.failed = str(error)
@@ -183,6 +210,8 @@ class Run:
                 "game_command": " ".join(game.command()) if game else None,
                 "game_log": game.log.path if game else None,
                 "client_log": client.log.path,
+                "companion": {"client_log": companion.log.path, "run_folder": companion.run_folder, "command": companion.command}
+                if companion is not None else None,
                 "steps": self.prepared + engine.steps,
                 "screenshots": engine.screenshots,
                 "recorded_lines": engine.notes,
@@ -208,7 +237,8 @@ class Run:
     def record(self, facts, server, client, game=None):
         try:
             server_lines = read_lines(server.log.path) + (read_lines(game.log.path) if game else [])
-            written = report.build(facts, server_lines, read_lines(client.log.path, "latin-1"))
+            client_lines = read_lines(client.log.path, "latin-1") + (read_lines(self.companion.log.path, "latin-1") if self.companion else [])
+            written = report.build(facts, server_lines, client_lines)
         except Exception as error:
             self.failure("build the report", error)
             written = dict(facts, clean=False, result="FAILED",
@@ -233,10 +263,11 @@ class Run:
             said += f"; {client.to_background()}"
         return said
 
-    def make_engine(self, client, server, store, variables, databases):
-        return Engine(self.scenario, client, server, store, self.shots, variables, databases)
+    def make_engine(self, client, server, store, variables, databases, companion=None):
+        return Engine(self.scenario, client, server, store, self.shots, variables, databases, companion)
 
     def quit_safely(self, client):
+        self.force_close = False
         rules = self.references.never_quit_after
         if not rules:
             return "the reference file names nothing that makes this client unsafe to be asked to quit"

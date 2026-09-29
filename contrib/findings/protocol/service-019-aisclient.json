@@ -1,0 +1,47 @@
+{
+    "subject":  "F-41 service 19 AISCLIENT",
+    "area":  "protocol",
+    "claim":  "The r806919 Wizard 1.610 Root.wad message definitions identify service 19 as AISCLIENT and define its ordered message tags and field types as catalogued here.",
+    "revision":  "r806919.Wizard_1_610",
+    "method":  "static",
+    "how_to_repeat":  [
+                          "Read AISClientMessages.xml from Root.wad in your own r806919 install with `bindecode` --client \u003cinstall\u003e --text AISClientMessages.xml.",
+                          "Read ServiceID and ProtocolType from _ProtocolInfo/RECORD; enumerate each message RECORD and retain each non-metadata field name and its TYPE (or the supported TPYE/TYP spelling, with GlobalID inferred as GID).",
+                          "Use explicit _MsgOrder or _MsgType where the first message has it; otherwise sort distinct message element tags by byte-ordinal order and number them from 1, collapsing repeated tags only when their fields match.",
+                          "Run `bindecode --client \u003cinstall\u003e --sweep` as an archive-decode check; the sweep covers BINd entries, not the XML message definitions."
+                      ],
+    "evidence":  [
+                     "`bindecode` --client \u003cinstall\u003e --text AISClientMessages.xml read this definition from the local r806919 Root.wad; it declares service id 19, protocol name AISCLIENT, and 1 distinct ordered messages with 2 fields.",
+                     "The service uses tag-ordinal order; the catalog records every message tag/name, resolved order, and field name/type, excluding underscore-prefixed metadata.",
+                     "`bindecode --client \u003cinstall\u003e --sweep --threads 8` reported 173088 entries, 134640 BINd files, 134635 decoded, 5 unknown-root-class failures and 0 unreadable entries; those five BINd failures do not validate or contradict this XML catalog."
+                 ],
+    "disproof":  "A repeat read of AISClientMessages.xml from another r806919 install that yields a different service id/name, distinct message order, or field name/type under the stated ordering rule.",
+    "confidence":  "high",
+    "submitted_by":  "MeruneFleuruwu",
+    "submitted_on":  "2026-09-27",
+    "status":  "claimed",
+    "service":  {
+                    "id":  19,
+                    "name":  "AISCLIENT",
+                    "version":  1,
+                    "entry":  "AISClientMessages.xml",
+                    "ordering":  "tag-ordinal",
+                    "messages":  [
+                                     {
+                                         "tag":  "MSG_AISMESSAGE",
+                                         "name":  "MSG_AISMESSAGE",
+                                         "order":  1,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Message",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Modal",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     }
+                                 ]
+                }
+}

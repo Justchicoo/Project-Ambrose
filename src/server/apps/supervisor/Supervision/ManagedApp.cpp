@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs one app's controller: commands queue under a lock and run on the controller thread, which every tenth of a second reads the app's new output, notices its exit, looks for readiness while it starts and ends a start that runs past its timeout and past the time any step the app reported asked for, naming that step, escalates a stop that has not finished, and starts it again once a restart falls due; the app's admin API is found from the app's own config and token exactly as the app finds them, an adopted app with its admin API off counts as running at once because nothing else could say so, a process it would not take back is said so at the top of the run that replaces it, and a start that never became ready is recorded and not tried again until someone starts it.
+ * Runs one app's controller: commands queue under a lock and run on the controller thread, which every tenth of a second reads the app's new output, notices its exit, looks for readiness while it starts and ends a start that runs past its timeout and past the time any step the app reported asked for, naming that step, escalates a stop that has not finished, and starts it again once a restart falls due; the app's admin API is found from the app's own config and token exactly as the app finds them, an adopted app with its admin API off counts as running at once because nothing else could say so, a process it would not take back is said so at the top of the run that replaces it, and a start that never became ready is recorded and not tried again until someone starts it. Every state is entered at the end of the locked section that set everything else about it, so the copy queued for the status observer is whole, and the queue is handed over after each step the controller takes, outside the app's lock, in the order the changes happened; Power only queues a command, so every change comes from the controller thread.
  */
 
 #include "ManagedApp.h"
@@ -15,7 +15,9 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <exception>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -182,10 +184,53 @@ void ManagedApp::Shutdown()
         _thread.join();
 }
 
+void ManagedApp::SetStatusObserver(AppStatusObserver observer)
+{
+    std::lock_guard<std::mutex> const lock(_deliveryMutex);
+    _observer = std::move(observer);
+}
+
+void ManagedApp::EnterState(AppState state)
+{
+    bool const changed = _view.StateSinceEpochMs == 0 || _view.State != state;
+    if (changed)
+        _view.StateSinceEpochMs = NowEpochMs();
+    _view.State = state;
+    StatusMark const mark{ state, _view.ProcessId, _view.Crashes, _view.RestartEpochMs, _view.Exits.size() };
+    if (!changed && _statusMark && *_statusMark == mark)
+        return;
+    _statusMark = mark;
+    _statusQueue.push_back(_view);
+}
+
+void ManagedApp::DeliverStatus()
+{
+    std::lock_guard<std::mutex> const delivering(_deliveryMutex);
+    std::vector<AppSnapshot> queued;
+    {
+        std::lock_guard<std::mutex> const lock(_mutex);
+        queued.swap(_statusQueue);
+    }
+    if (!_observer)
+        return;
+    for (AppSnapshot const& snapshot : queued)
+    {
+        try
+        {
+            _observer(snapshot);
+        }
+        catch (std::exception const& failure)
+        {
+            AMBROSE_LOG(_log, LogLevel::Error, "server.supervisor", "The status of {} could not be handed on: {}", _definition.Name, failure.what());
+        }
+    }
+}
+
 void ManagedApp::Run()
 {
     Ambrose::Threading::SetCurrentThreadName(fmt::format("Supervise {}", _definition.Name));
     Begin();
+    DeliverStatus();
     std::unique_lock<std::mutex> lock(_mutex);
     while (!_quit)
     {
@@ -195,12 +240,14 @@ void ManagedApp::Run()
             _commands.pop_front();
             lock.unlock();
             Handle(command);
+            DeliverStatus();
             lock.lock();
         }
         if (_quit)
             break;
         lock.unlock();
         Step();
+        DeliverStatus();
         lock.lock();
         _wake.wait_for(lock, TickInterval, [this] { return _quit || !_commands.empty(); });
     }
@@ -226,12 +273,12 @@ void ManagedApp::Begin()
             bool admin = false;
             {
                 std::lock_guard<std::mutex> const lock(_mutex);
-                _view.State = AppState::Starting;
                 _view.ProcessId = _process.GetIdentity().Id;
                 _view.Adopted = true;
                 _view.StartedEpochMs = saved->StartedEpochMs;
                 _view.ReadyEpochMs = 0;
                 admin = _admin.has_value();
+                EnterState(AppState::Starting);
             }
             Note(fmt::format("Took back {} as process {}, which it has been since before the supervisor restarted", _definition.Name, _process.GetIdentity().Id));
             if (!admin)
@@ -254,7 +301,7 @@ void ManagedApp::Begin()
     }
     _output.Attach();
     std::lock_guard<std::mutex> const lock(_mutex);
-    _view.State = AppState::Offline;
+    EnterState(AppState::Offline);
 }
 
 void ManagedApp::LoadAdmin()
@@ -318,9 +365,9 @@ void ManagedApp::Launch()
             if (_view.Exits.size() > MaxExits)
                 _view.Exits.erase(_view.Exits.begin());
             ++_view.FailedStarts;
-            _view.State = AppState::Crashed;
             _view.ProcessId.reset();
             _view.Message = error;
+            EnterState(AppState::Crashed);
         }
         Note(fmt::format("{} could not be started: {}", _definition.Name, error), true);
         Save();
@@ -337,7 +384,6 @@ void ManagedApp::Launch()
     _watchStart = true;
     {
         std::lock_guard<std::mutex> const lock(_mutex);
-        _view.State = AppState::Starting;
         _view.ProcessId = _process.GetIdentity().Id;
         _view.Adopted = false;
         _view.StartedEpochMs = now;
@@ -349,6 +395,7 @@ void ManagedApp::Launch()
         _view.RestartEpochMs = 0;
         _view.Message.clear();
         _view.Identity = AppIdentity{};
+        EnterState(AppState::Starting);
     }
     Note(fmt::format("Started {} as process {}", _definition.Name, _process.GetIdentity().Id));
     Save();
@@ -393,8 +440,8 @@ void ManagedApp::Handle(Command const& command)
     {
         {
             std::lock_guard<std::mutex> const lock(_mutex);
-            _view.State = AppState::Offline;
             _view.RestartEpochMs = 0;
+            EnterState(AppState::Offline);
         }
         Save();
         return;
@@ -411,9 +458,9 @@ void ManagedApp::Handle(Command const& command)
     _endAt = Clock::now() + _definition.StopTimeout;
     {
         std::lock_guard<std::mutex> const lock(_mutex);
-        _view.State = AppState::Stopping;
         _view.Stop = StopMethod::EndTree;
         _view.StopRequestedEpochMs = NowEpochMs();
+        EnterState(AppState::Stopping);
     }
     std::string error;
     if (_process.EndTree(error))
@@ -474,9 +521,9 @@ void ManagedApp::BeginStop(uint32 countdown)
     _endAt = now + std::chrono::seconds(countdown) + _definition.StopTimeout;
     {
         std::lock_guard<std::mutex> const lock(_mutex);
-        _view.State = AppState::Stopping;
         _view.Stop = method;
         _view.StopRequestedEpochMs = NowEpochMs();
+        EnterState(AppState::Stopping);
     }
     std::string text = fmt::format("Stopping {} {}", _definition.Name, DescribeStop(method, countdown));
     for (std::string const& miss : misses)
@@ -572,10 +619,10 @@ void ManagedApp::MarkReady(std::string const& reason)
         std::lock_guard<std::mutex> const lock(_mutex);
         if (_view.State != AppState::Starting)
             return;
-        _view.State = AppState::Running;
         _view.ReadyEpochMs = NowEpochMs();
         _view.StartStage.clear();
         _view.StartUntilEpochMs = 0;
+        EnterState(AppState::Running);
     }
     Note(fmt::format("{} is ready: {}", _definition.Name, reason));
     FetchIdentity();
@@ -646,7 +693,7 @@ void ManagedApp::OnExit()
         }
         {
             std::lock_guard<std::mutex> const lock(_mutex);
-            _view.State = AppState::Offline;
+            EnterState(AppState::Offline);
         }
         Save();
         return;
@@ -665,8 +712,8 @@ void ManagedApp::OnExit()
             ++_view.FailedStarts;
             _view.Message = _startTimedOut ? "It " + StartLate(_view.StartStage) : "It exited before it was ready; start it again once the cause in its output is fixed";
         }
-        _view.State = AppState::Crashed;
         _view.RestartEpochMs = restart ? now + std::chrono::duration_cast<std::chrono::milliseconds>(RestartDelay).count() : 0;
+        EnterState(AppState::Crashed);
     }
     _restartPending = restart;
     _restartAt = Clock::now() + RestartDelay;

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Hashes with Botan's Argon2id at a cost a sign-in can afford to wait for, keeping only the PHC string it produces, which carries its own parameters so a row hashed at an older cost still opens after the cost is raised; a sign-in that names nobody, or a disabled account, still spends one verify against a hash made at start, so an attacker cannot tell the three refusals apart by how long they took, and every refusal answers the same way.
+ * Hashes with Botan's Argon2id at a cost a sign-in can afford to wait for, keeping only the PHC string it produces, which carries its own parameters so a row hashed at an older cost still opens after the cost is raised; a sign-in that names nobody, or a disabled account, still spends one verify against a hash made at start, so an attacker cannot tell the three refusals apart by how long they took, and every refusal answers the same way. Whether two-factor sign-in is on is read with every user from the two-factor table, and a generation bump returns the generation it moved to, so the one session that made a change can be carried across to it.
  */
 
 #include "PanelUsers.h"
@@ -148,13 +148,15 @@ PanelUser PanelUsers::Read(PanelStore::Statement const& row)
         user.SignedInEpochMs = row.Int64(10);
     if (!PanelPermissions::ParseRole(row.Text(11), user.Role))
         user.Role = user.IsOwner ? PanelRole::Owner : PanelRole::Viewer;
+    user.TwoFactor = row.Int64(12) != 0;
     return user;
 }
 
 namespace
 {
     constexpr std::string_view UserColumns =
-        "id, username, COALESCE(display_name, ''), COALESCE(email, ''), generation, disabled, must_change, is_owner, created_epoch_ms, password_set_epoch_ms, signed_in_epoch_ms, role";
+        "id, username, COALESCE(display_name, ''), COALESCE(email, ''), generation, disabled, must_change, is_owner, created_epoch_ms, password_set_epoch_ms, signed_in_epoch_ms, role,"
+        " (SELECT COUNT(*) FROM panel_two_factor t WHERE t.user_id = panel_user.id AND t.secret IS NOT NULL)";
 }
 
 bool PanelUsers::IsEmpty(std::string& error)
@@ -267,6 +269,47 @@ PanelUserResult PanelUsers::Authenticate(std::string_view username, std::string_
         return PanelUserResult::WrongPassword;
     user = *found;
     return PanelUserResult::Ok;
+}
+
+PanelUserResult PanelUsers::CheckPassword(int64 id, std::string_view password, std::string& error)
+{
+    std::optional<PanelStore::Statement> rows = _store.Prepare("SELECT password_hash, disabled FROM panel_user WHERE id = ?", error);
+    if (!rows)
+        return PanelUserResult::StoreFailed;
+    rows->Bind(1, id);
+    if (!rows->Step(error))
+    {
+        if (!error.empty())
+            return PanelUserResult::StoreFailed;
+        StartDecoy();
+        PasswordMatches(DecoyHash, password);
+        return PanelUserResult::UnknownUser;
+    }
+    std::string const hash = rows->Text(0);
+    bool const disabled = rows->Int64(1) != 0;
+    rows.reset();
+    bool const matches = PasswordMatches(hash, password);
+    if (disabled)
+        return PanelUserResult::Disabled;
+    return matches ? PanelUserResult::Ok : PanelUserResult::WrongPassword;
+}
+
+std::optional<int64> PanelUsers::BumpGeneration(int64 id, std::string& error)
+{
+    std::optional<PanelStore::Statement> update = _store.Prepare("UPDATE panel_user SET generation = generation + 1 WHERE id = ? RETURNING generation", error);
+    if (!update)
+        return std::nullopt;
+    update->Bind(1, id);
+    if (!update->Step(error))
+    {
+        if (error.empty())
+            error = "there is no such operator";
+        return std::nullopt;
+    }
+    int64 const generation = update->Int64(0);
+    if (!update->Run(error))
+        return std::nullopt;
+    return generation;
 }
 
 PanelUserResult PanelUsers::SetPassword(int64 id, std::string_view password, bool mustChange, std::string& error)

@@ -1,0 +1,24 @@
+{
+  "subject": "character_name_table_fields",
+  "area": "data",
+  "claim": "On revision r806919.Wizard_1_610, each disallowed-name row is a DisallowedName object with five unsigned-int fields, linked from the DisallowedNameList object's m_disallowedNameList collection.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Run typeextract against your own r806919.Wizard_1_610 install and inspect the DisallowedNameList and DisallowedName class properties in its JSON type dump.",
+    "Compare the dump's property names, types, and order with the registered fields in Ambrose's NameViews.h.",
+    "Run extractor --client <install> --type-dump <dump> --dry-run names and confirm that it reads the local disallowed-name list without reporting an extraction error."
+  ],
+  "evidence": [
+    "The local type dump identifies revision r806919.Wizard_1_610 and contains 6,986 class entries.",
+    "The dump's class DisallowedNameList has one reflected property, m_disallowedNameList, with type class SharedPointer<class DisallowedName>.",
+    "The dump's class DisallowedName has exactly five properties in order: m_locale, m_gender, m_first, m_middle, and m_last; each is unsigned int.",
+    "Ambrose's DisallowedNameView registers those same five unsigned-int fields in that order, and ReadDisallowed reads them into each row while assigning its Id from the list position.",
+    "The offline extractor dry run against the local install and matching type dump completed successfully and reported four disallowed-name rows; no name values are included here."
+  ],
+  "disproof": "A repeat on the same revision that finds a different list property, a different row field name, type, or order in the dump, or that shows the extractor reads a different row shape, refutes this claim.",
+  "confidence": "high",
+  "submitted_by": "MeruneFleuruwu",
+  "submitted_on": "2026-09-27",
+  "status": "claimed"
+}

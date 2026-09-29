@@ -15,10 +15,14 @@ PanelAuthorization::PanelAuthorization(PanelGrants& grants, Finder finder, Recor
 
 std::string PanelAuthorization::AppInPath(std::string_view path)
 {
-    constexpr std::string_view Prefix = "/api/apps/";
-    if (!path.starts_with(Prefix))
+    constexpr std::string_view AppPrefix = "/api/apps/";
+    constexpr std::string_view PanelPrefix = "/api/panel/apps/";
+    if (path.starts_with(PanelPrefix))
+        path.remove_prefix(PanelPrefix.size());
+    else if (path.starts_with(AppPrefix))
+        path.remove_prefix(AppPrefix.size());
+    else
         return {};
-    path.remove_prefix(Prefix.size());
     std::size_t const end = path.find('/');
     return std::string(end == std::string_view::npos ? path : path.substr(0, end));
 }
@@ -62,6 +66,16 @@ PermissionVerdict PanelAuthorization::Decide(AdminRequest const& request, std::s
 
     PanelPermission const* const held = PanelPermissions::Find(permission);
     if (_recorder && held && held->Danger)
-        _recorder(request, permission, app, verdict == PermissionVerdict::Allowed);
+        _recorder(request, permission, app, verdict);
     return verdict;
+}
+
+uint8 PanelAuthorization::CommandLevel(AdminRequest const& request)
+{
+    std::optional<PanelUser> const user = _finder ? _finder(request) : std::nullopt;
+    if (!user)
+        return 0;
+    if (user->Role == PanelRole::Owner || user->Role == PanelRole::Admin)
+        return 4;
+    return 2;
 }

@@ -490,7 +490,7 @@ void ServerApp::RegisterStandardRoutes(AdminRouter& routes)
     AdminActivityView::Register(routes, CommandAuditFile());
     if (_usesClient)
         AdminClientView::Register(routes, [this]() -> ClientSetupResult const& { return _clientSetup; });
-    AdminCommand::Register(routes, _commands, _info.Name, CommandAuditFile());
+    RegisterAdminCommand(routes);
     routes.AddGuarded("POST", "/api/shutdown", "power.stop", [this](AdminRequest const& request)
     {
         nlohmann::json const body = request.Body.empty() ? nlohmann::json::object() : nlohmann::json::parse(request.Body, nullptr, false);
@@ -508,6 +508,7 @@ void ServerApp::RegisterStandardRoutes(AdminRouter& routes)
             else
                 fields.emplace_back("cancel", "Give cancel as true or false");
         }
+
         std::optional<int64> seconds;
         if (body.contains("seconds"))
         {
@@ -540,6 +541,11 @@ void ServerApp::RegisterStandardRoutes(AdminRouter& routes)
         answer["stopping_in"] = delay;
         return AdminResponse::Json(202, answer.dump());
     });
+}
+
+void ServerApp::RegisterAdminCommand(AdminRouter& routes)
+{
+    AdminCommand::Register(routes, _commands, _info.Name, CommandAuditFile());
 }
 
 bool ServerApp::ReloadAdminApi()

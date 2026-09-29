@@ -1,18 +1,18 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 87,
-    "total": 447,
-    "percent": 19.5
+    "done": 93,
+    "total": 469,
+    "percent": 19.8
   },
   "checks": {
-    "done": 768,
-    "total": 2738,
-    "percent": 28.0
+    "done": 816,
+    "total": 2866,
+    "percent": 28.5
   },
   "contributor_track": {
-    "merged": 71,
-    "open": 79
+    "merged": 90,
+    "open": 60
   },
   "phases": [
     {
@@ -34,18 +34,18 @@
     {
       "phase": 3,
       "title": "Create list and delete a wizard",
-      "milestones_done": 15,
+      "milestones_done": 16,
       "milestones_total": 28,
-      "checks_done": 130,
+      "checks_done": 131,
       "checks_total": 178
     },
     {
       "phase": 4,
       "title": "A wizard stands in ravenwood",
-      "milestones_done": 12,
+      "milestones_done": 13,
       "milestones_total": 16,
       "checks_done": 118,
-      "checks_total": 128
+      "checks_total": 127
     },
     {
       "phase": 5,
@@ -58,9 +58,9 @@
     {
       "phase": 6,
       "title": "Other players are visible",
-      "milestones_done": 1,
+      "milestones_done": 2,
       "milestones_total": 18,
-      "checks_done": 6,
+      "checks_done": 22,
       "checks_total": 139
     },
     {
@@ -146,10 +146,10 @@
     {
       "phase": 17,
       "title": "Operations console admin api dashboard and metrics",
-      "milestones_done": 17,
-      "milestones_total": 164,
-      "checks_done": 122,
-      "checks_total": 984
+      "milestones_done": 20,
+      "milestones_total": 186,
+      "checks_done": 153,
+      "checks_total": 1113
     }
   ]
 }

@@ -8,7 +8,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        doc/MILESTONE-TRACK.md lists the milestones open to outside help and says what finishing one means. A milestone not in its "Open now" table is reserved, and a pull request for one is closed, so check the table first. `python apps/progress/ready.py --open` prints the same list from a clone.
+        doc/MILESTONE-TRACK.md lists the milestones open to outside help and says what finishing one means. A milestone not in its "Open now" table is held or still waiting on another, so check the table first. `python apps/progress/ready.py --open` prints the same list from a clone.
 
         Opening a draft pull request holds a milestone just as well as this form, and sooner.
   - type: input

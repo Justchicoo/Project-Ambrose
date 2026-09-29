@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Takes the admin API token from Admin.Token or its token file, generating 32 random bytes into a file it creates itself so the owner and the permissions are always the ones built here, keeping that file in the data folder or, where the machine names none, in the folder the config file came from, putting that owner and those permissions back on a file that already exists, and refusing a token that is too short or holds anything but printable characters.
+ * Takes the admin API token from Admin.Token or its token file, generating 32 random bytes into a file it creates itself so the owner and the permissions are always the ones built here, keeping that file in the data folder or, where the machine names none, in the folder the config file came from, putting that owner and those permissions back on a file that already exists, and refusing a token that is too short or holds anything but printable characters; on Windows a file kept for the machine also names the local system account and the Administrators group in an access list that inherits nothing, while elsewhere every such file is the owner's alone with mode 0600.
  */
 
 #include "AdminToken.h"
@@ -12,6 +12,7 @@
 
 #include <fmt/format.h>
 
+#include <array>
 #include <cstddef>
 #include <fstream>
 #include <iterator>
@@ -51,7 +52,7 @@ namespace
         return reinterpret_cast<TOKEN_USER const*>(user.data())->User.Sid;
     }
 
-    bool BuildOwnerOnlyAcl(PACL& list, std::vector<uint8>& user, std::string& error)
+    bool BuildAcl(PACL& list, std::vector<uint8>& user, AdminToken::SecretReaders readers, std::string& error)
     {
         HANDLE processToken = nullptr;
         if (!::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &processToken))
@@ -70,16 +71,42 @@ namespace
         }
         ::CloseHandle(processToken);
 
-        EXPLICIT_ACCESS_W access{};
-        access.grfAccessPermissions = FILE_ALL_ACCESS;
-        access.grfAccessMode = SET_ACCESS;
-        access.grfInheritance = NO_INHERITANCE;
-        access.Trustee.TrusteeForm = TRUSTEE_IS_SID;
-        access.Trustee.TrusteeType = TRUSTEE_IS_USER;
-        access.Trustee.ptstrName = static_cast<LPWSTR>(UserSid(user));
+        std::array<EXPLICIT_ACCESS_W, 3> access{};
+        ULONG count = 0;
+        auto const allow = [&access, &count](PSID sid, TRUSTEE_TYPE type)
+        {
+            EXPLICIT_ACCESS_W& entry = access[count++];
+            entry.grfAccessPermissions = FILE_ALL_ACCESS;
+            entry.grfAccessMode = SET_ACCESS;
+            entry.grfInheritance = NO_INHERITANCE;
+            entry.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+            entry.Trustee.TrusteeType = type;
+            entry.Trustee.ptstrName = static_cast<LPWSTR>(sid);
+        };
+        allow(UserSid(user), TRUSTEE_IS_USER);
+
+        alignas(DWORD) std::array<uint8, SECURITY_MAX_SID_SIZE> localSystem{};
+        alignas(DWORD) std::array<uint8, SECURITY_MAX_SID_SIZE> administrators{};
+        if (readers == AdminToken::SecretReaders::OwnerAndAdministrators)
+        {
+            DWORD size = static_cast<DWORD>(localSystem.size());
+            if (!::CreateWellKnownSid(WinLocalSystemSid, nullptr, localSystem.data(), &size))
+            {
+                error = LastError();
+                return false;
+            }
+            size = static_cast<DWORD>(administrators.size());
+            if (!::CreateWellKnownSid(WinBuiltinAdministratorsSid, nullptr, administrators.data(), &size))
+            {
+                error = LastError();
+                return false;
+            }
+            allow(localSystem.data(), TRUSTEE_IS_WELL_KNOWN_GROUP);
+            allow(administrators.data(), TRUSTEE_IS_WELL_KNOWN_GROUP);
+        }
 
         list = nullptr;
-        if (DWORD const result = ::SetEntriesInAclW(1, &access, nullptr, &list); result != ERROR_SUCCESS)
+        if (DWORD const result = ::SetEntriesInAclW(count, access.data(), nullptr, &list); result != ERROR_SUCCESS)
         {
             error = ErrorText(result);
             return false;
@@ -87,11 +114,11 @@ namespace
         return true;
     }
 
-    bool SecureOwnerOnly(std::filesystem::path const& file, std::string& error)
+    bool SecureOwnerOnly(std::filesystem::path const& file, AdminToken::SecretReaders readers, std::string& error)
     {
         std::vector<uint8> user;
         PACL list = nullptr;
-        if (!BuildOwnerOnlyAcl(list, user, error))
+        if (!BuildAcl(list, user, readers, error))
             return false;
         std::wstring name = file.wstring();
         DWORD result = ::SetNamedSecurityInfoW(name.data(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, nullptr, nullptr, list, nullptr);
@@ -106,11 +133,11 @@ namespace
         return true;
     }
 
-    bool WriteOwnerOnly(std::filesystem::path const& file, std::string_view text, std::string& error)
+    bool WriteOwnerOnly(std::filesystem::path const& file, std::string_view text, AdminToken::SecretReaders readers, std::string& error)
     {
         std::vector<uint8> user;
         PACL list = nullptr;
-        if (!BuildOwnerOnlyAcl(list, user, error))
+        if (!BuildAcl(list, user, readers, error))
             return false;
         SECURITY_DESCRIPTOR descriptor{};
         bool prepared = ::InitializeSecurityDescriptor(&descriptor, SECURITY_DESCRIPTOR_REVISION) != FALSE;
@@ -148,7 +175,7 @@ namespace
         return true;
     }
 #else
-    bool SecureOwnerOnly(std::filesystem::path const& file, std::string& error)
+    bool SecureOwnerOnly(std::filesystem::path const& file, AdminToken::SecretReaders, std::string& error)
     {
         struct stat status{};
         if (::stat(file.c_str(), &status) != 0)
@@ -166,7 +193,7 @@ namespace
         return true;
     }
 
-    bool WriteOwnerOnly(std::filesystem::path const& file, std::string_view text, std::string& error)
+    bool WriteOwnerOnly(std::filesystem::path const& file, std::string_view text, AdminToken::SecretReaders, std::string& error)
     {
         int const descriptor = ::open(file.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR);
         if (descriptor < 0)
@@ -234,7 +261,7 @@ std::filesystem::path AdminToken::DefaultFile(std::string const& appName, std::f
     return folder / "admin" / (appName + ".token");
 }
 
-bool AdminToken::WriteSecretFile(std::filesystem::path const& file, std::string_view text, std::string& error)
+bool AdminToken::WriteSecretFile(std::filesystem::path const& file, std::string_view text, std::string& error, SecretReaders readers)
 {
     std::error_code code;
     std::filesystem::path const folder = file.parent_path();
@@ -253,12 +280,12 @@ bool AdminToken::WriteSecretFile(std::filesystem::path const& file, std::string_
         error = code.message();
         return false;
     }
-    return WriteOwnerOnly(file, text, error);
+    return WriteOwnerOnly(file, text, readers, error);
 }
 
-bool AdminToken::SecureFile(std::filesystem::path const& file, std::string& error)
+bool AdminToken::SecureFile(std::filesystem::path const& file, std::string& error, SecretReaders readers)
 {
-    return SecureOwnerOnly(file, error);
+    return SecureOwnerOnly(file, readers, error);
 }
 
 AdminTokenResult AdminToken::Resolve(ListenerSettings const& settings, std::string const& appName, std::filesystem::path const& dataFolder, std::filesystem::path const& fallbackFolder)

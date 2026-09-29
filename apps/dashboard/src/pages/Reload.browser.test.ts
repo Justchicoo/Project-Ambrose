@@ -74,6 +74,8 @@ function signIn(permissions: string[]) {
         permissions,
         grants: {},
         must_change_password: false,
+        two_factor: false,
+        two_factor_required: false,
     };
 }
 

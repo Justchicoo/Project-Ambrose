@@ -30,9 +30,9 @@
 | 3.22 | Automatic first-run setup | M | 3.21 |
 | 3.23 | Keep up with KingsIsle's client revisions | M | 3.22 |
 | 3.24 | Drive the retail client in tests | L | 3.25, 2.14 |
-| 3.25 | Ambrose client launcher | M | 3.22, 1.21 |
+| 3.25 | Ambrose client launcher | L | 3.22, 1.21 |
 | 3.26 | Launcher window | L | 3.25, 1.04, 17.73 |
-| 3.27 | Launcher as its own app | M | 3.26 |
+| 3.27 | Launcher as its own app | M | 3.26, 17.105, 17.183, 17.184 |
 | 3.28 | A type dump from any client, not only the two we tried | M | 3.21 |
 
 ## Review notes for this phase
@@ -887,7 +887,7 @@ Added on 2026-09-16 at the maintainer's direction, and built before 3.15: whenev
 - [x] A fake install tree is found through a Steam library file, a KingsIsle default folder and the environment, validated, de-duplicated, and its revision read from Bin/revision.dat (ClientLocatorTest, which also covers installed programs, Wine, Lutris and Proton prefixes, WSL drives, both libraryfolders.vdf layouts and the folder budget)
 - [x] On a terminal, a server with an empty ClientDir lists the installs it found, and choosing one writes conf.d/client-data.conf and starts with it; a run whose input is not a terminal never waits and logs the installs and the setting to add (ClientSetupTest with scripted answers, SetupPromptTest, and the AppSmoke tests, whose piped runs must never print the question)
 - [x] bindecode, localetool and extractor without --client use an install the user confirms, and print the installs and the flag to pass when not on a terminal (ClientSetupTest for the shared flow; the Extractor CTest runs the tool without a terminal)
-- [ ] The game server with empty name tables offers to extract them from the install and loads them without a restart when accepted (built: the offer runs the in-process extraction and reloads the names; a run on a real terminal is still to be recorded)
+- [x] The game server with empty name tables offers to extract them from the install and loads them without a restart when accepted (Windows console run with `Setup.Mode = ask`, a fresh world database and the installed r806919 client: accepted the prompt; logged extraction of 63 name tables holding 7955 names, loaded all 63 across 7 locales with 4 disallowed names, then reported ready; database query confirmed 7955 name parts, 7 schools and 4 disallowed names)
 - [x] Real client: the maintainer's own retail install is found (ClientLocatorClientTest printed C:/ProgramData/KingsIsle Entertainment/Wizard101 (r806919.Wizard_1_610), found through the installed program Wizard101)
 
 ### Detailed spec
@@ -1095,43 +1095,65 @@ Added on 2026-09-17 at the maintainer's direction, who approved the look in doc/
 
 - doc/DESIGN.md holds the tokens and the rules this window follows, and 17.06 builds the panel from the same ones; a component either lives in the shared set or in exactly one of them
 - The page never reads the user's install or the network by itself: every fact it shows comes from the launcher, which already knows how to find them
-- 17.24's desktop app is the later, larger program that also starts and watches the servers; this window is only the launcher
+- The panel program of 17.181, with 17.24's hosting, is the later, larger program that also starts and watches the servers; this window is only the launcher
 
 ## 3.27 Launcher as its own app
 
 **Goal:** The launcher is a program of its own, the way a published game's launcher is: installed on its own with its own icon and shortcut, holding the servers and accounts a player uses, updating itself, and working on a machine that has no Ambrose server on it at all.
 
-**Size:** M. **Depends on:** 3.26
+**Size:** M. **Depends on:** 3.26, 17.105, 17.183, 17.184
 
 Added on 2026-09-18 at the maintainer's direction, who asked why the launcher is not its own program as it is for published games. It already is a separate program, but it is installed inside the server's folder and started from a script; this milestone gives it its own install, identity and life cycle. 16.13 later adds patching from an Ambrose patch server to this same app.
 
+Changed on 2026-09-27 at the maintainer's direction, who asked for the panel as its own installable program:
+
+- This app's package comes from the pipeline 17.183 builds for both desktop programs.
+- Its self-update comes from the updater 17.184 shares with the panel program.
+- It joins 17.105's release workflow, rather than 17.105 waiting for it.
+- A local server is started, and its panel opened, by the panel program, so a desktop's supervisor has one owner.
+- Its manifest is signed with the project's release key rather than an operator's, since the project releases this program.
+- Saved passwords rest on the credential store decision, settled on 2026-09-27 and recorded under Desktop programs and client data in doc/ARCHITECTURE.md.
+
 **Deliverables**
 
-- A package per platform built from the repository: on Windows an installer that puts the app in the user's own programs folder with a Start menu and desktop shortcut, an icon, a version, and an uninstaller, plus a portable archive that needs no installer; elsewhere an archive with a desktop entry
-- Its own data folder, `ProjectAmbrose/Launcher` beside the other Ambrose data, holding `launcher.conf`, the server list, its log and the folders the client runs from. The launcher no longer lives beside the server's programs, and a server install is no longer required for it to work
-- A server list in the window: add an Ambrose server by name, host and port, edit and remove one, see which answer, and remember the one last played. Each server remembers its account name, and a password is saved only when the player asks, through the operating system's own credential store, never in a file
-- Standalone by default: on a machine with no Ambrose server of its own, the launcher installs, adds someone else's server and plays. When a local server install is found, and only then, the window also offers to start it and to open its panel
-- Self-update: an update channel named in its configuration, a manifest signed with the operator's key and a SHA-256 for every file, staged into a new version folder, swapped in, and rolled back when the new version does not start. The version is shown in the window, an update never touches the game install, and a run with no update channel configured never reaches the network
+- A package per platform built by 17.183's pipeline from the repository:
+  - On Windows, an installer that puts the app in the user's own programs folder with a Start menu and desktop shortcut, an icon, a version and an uninstaller, plus a portable archive that needs no installer.
+  - Elsewhere, an archive with a desktop entry.
+- Its own data folder, `ProjectAmbrose/Launcher` beside the other Ambrose data, holding `launcher.conf`, the server list, its log and the folders the client runs from. The launcher no longer lives beside the server's programs, and a server install is no longer required for it to work.
+- A server list in the window:
+  - Add an Ambrose server by name, host and port, edit and remove one, see which answer, and remember the one last played.
+  - Each server remembers its account name.
+  - A password is saved only when the player asks, and only in the operating system's own credential store, never in a file, through the credential store wrapper in `src/tools/shell` that 17.186 uses too.
+- Standalone by default: on a machine with no Ambrose server of its own, the launcher installs, adds someone else's server and plays. When a local server install is found, and only then, the window also offers to start it and to open its panel. It hands both to the panel program of 17.181 and 17.24 when that is installed, and names the panel program as what does both when it is not.
+- Self-update through 17.184's updater:
+  - An update channel named in its configuration, and a manifest signed with the release key, with a SHA-256 for every file.
+  - The update is staged into a new version folder, swapped in, and rolled back when the new version does not start.
+  - The version is shown in the window, an update never touches the game install, and a run with no update channel configured never reaches the network.
 - The identity doc/DESIGN.md sets: the icon, the window title and the taskbar entry, drawn from the same tokens as the window itself
-- Tests: unit tests over the server list, the credential store behind a fake, and the update manifest checks (a wrong signature, a wrong hash, a missing file, an interrupted swap); a packaging test that builds the package and checks its contents; and a dev-gated install and run on the maintainer's machine
+- Tests:
+  - Unit tests over the server list and the credential store behind a fake.
+  - The update manifest checks (a wrong signature, a wrong hash, a missing file, an interrupted swap) run against the launcher's own manifest.
+  - 17.183's packaging test building the launcher's package and checking its contents.
+  - The launcher added to 17.105's release workflow.
+  - A dev-gated install and run on the maintainer's machine.
 
 **Acceptance**
 
 - [ ] Dev-gated (the maintainer's machine): installing the package adds a shortcut and an icon, the launcher opens by itself, a server added by host and port is remembered, and Play starts the game against it
-- [ ] On a machine with no Ambrose server installed, the launcher installs, runs and plays against a server on another machine; with a local server present it also offers to start it and open its panel
-- [ ] An update whose signature or hash does not match is refused and the running version keeps working; an update that fails to start rolls back to the previous version, and both are logged
-- [ ] A saved password lives in the operating system's credential store, and no configuration file holds it
-- [ ] Uninstalling removes the app and its shortcuts, removes its own data when asked, and leaves the game install and any Ambrose server install untouched
-- [ ] With no update channel configured, a whole run makes no connection except to the server the player chose, shown by a capture
-- [ ] Unit tests cover the server list, the update checks and the credential store through a fake, and the packaging test runs in CI
+- [ ] Dev-gated (a machine with no Ambrose server installed): the launcher installs, runs and plays against a server on another machine; with a local server present it also offers to start it and open its panel, through the panel program
+- [ ] An update whose signature or hash does not match is refused and the running version keeps working; an update that fails to start rolls back to the previous version, and both are logged (unit tests against a fixture channel)
+- [ ] A saved password lives in the operating system's credential store, and no configuration file holds it (unit test behind a fake store, and a search of the data folder)
+- [ ] Uninstalling removes the app and its shortcuts, removes its own data when asked, and leaves the game install and any Ambrose server install untouched (unit tests over the uninstall plan)
+- [ ] With no update channel configured, a whole run makes no connection except to the server the player chose (the fake transport records none, and a capture on the dev-gated run)
+- [ ] The packaging test builds the launcher's package in CI, and a tag's release carries the launcher for Windows and Linux with a SHA-256 beside each
 
 ### Detailed spec
 
 **Notes**
 
 - The console launcher from 3.25 stays underneath: the app is the same program with its window, so the driver in 3.24 and the servers keep using it unchanged
-- A player who only wants to play needs this app and their own copy of the game. The realms a player picks in the game itself are world shards the server's own realm registry serves in 4.03; what this app chooses is which Ambrose server to log in to. Nothing else about Ambrose has to be installed
-- 16.13 adds patching a copy of the install from an Ambrose patch server to this app, and 17.24's desktop app remains the separate, larger program for running servers
+- A player who only wants to play needs this app and their own copy of the game. The realms a player picks in the game itself are world shards the server's own realm registry serves in 4.03. What this app chooses is which Ambrose server to log in to. Nothing else about Ambrose has to be installed.
+- 16.13 adds to this app the patching of a copy of the install from an Ambrose patch server. The panel program of 17.181 and 17.24 remains the separate program for running and managing servers.
 
 ## 3.23 Keep up with KingsIsle's client revisions
 

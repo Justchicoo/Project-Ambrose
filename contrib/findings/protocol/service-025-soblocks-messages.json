@@ -1,0 +1,366 @@
+{
+    "subject":  "F-41 service 25 SOBLOCKS_MESSAGES",
+    "area":  "protocol",
+    "claim":  "The r806919 Wizard 1.610 Root.wad message definitions identify service 25 as SOBLOCKS_MESSAGES and define its ordered message tags and field types as catalogued here.",
+    "revision":  "r806919.Wizard_1_610",
+    "method":  "static",
+    "how_to_repeat":  [
+                          "Read Messages/SoblocksMessages.xml from Root.wad in your own r806919 install with `bindecode` --client \u003cinstall\u003e --text Messages/SoblocksMessages.xml.",
+                          "Read ServiceID and ProtocolType from _ProtocolInfo/RECORD; enumerate each message RECORD and retain each non-metadata field name and its TYPE (or the supported TPYE/TYP spelling, with GlobalID inferred as GID).",
+                          "Use explicit _MsgOrder or _MsgType where the first message has it; otherwise sort distinct message element tags by byte-ordinal order and number them from 1, collapsing repeated tags only when their fields match.",
+                          "Run `bindecode --client \u003cinstall\u003e --sweep` as an archive-decode check; the sweep covers BINd entries, not the XML message definitions."
+                      ],
+    "evidence":  [
+                     "`bindecode` --client \u003cinstall\u003e --text Messages/SoblocksMessages.xml read this definition from the local r806919 Root.wad; it declares service id 25, protocol name SOBLOCKS_MESSAGES, and 23 distinct ordered messages with 40 fields.",
+                     "The service uses tag-ordinal order; the catalog records every message tag/name, resolved order, and field name/type, excluding underscore-prefixed metadata.",
+                     "`bindecode --client \u003cinstall\u003e --sweep --threads 8` reported 173088 entries, 134640 BINd files, 134635 decoded, 5 unknown-root-class failures and 0 unreadable entries; those five BINd failures do not validate or contradict this XML catalog."
+                 ],
+    "disproof":  "A repeat read of Messages/SoblocksMessages.xml from another r806919 install that yields a different service id/name, distinct message order, or field name/type under the stated ordering rule.",
+    "confidence":  "high",
+    "submitted_by":  "MeruneFleuruwu",
+    "submitted_on":  "2026-09-27",
+    "status":  "claimed",
+    "service":  {
+                    "id":  25,
+                    "name":  "SOBLOCKS_MESSAGES",
+                    "version":  1,
+                    "entry":  "Messages/SoblocksMessages.xml",
+                    "ordering":  "tag-ordinal",
+                    "messages":  [
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_ADVANCEOFF",
+                                         "name":  "MSG_SOBLOCKS_ADVANCEOFF",
+                                         "order":  1,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_ADVANCEON",
+                                         "name":  "MSG_SOBLOCKS_ADVANCEON",
+                                         "order":  2,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_ATTACK",
+                                         "name":  "MSG_SOBLOCKS_ATTACK",
+                                         "order":  3,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Index1",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index2",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index3",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index4",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index5",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index6",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index7",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_COUNTDOWN",
+                                         "name":  "MSG_SOBLOCKS_COUNTDOWN",
+                                         "order":  4,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Number",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_ENDGAME",
+                                         "name":  "MSG_SOBLOCKS_ENDGAME",
+                                         "order":  5,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Score",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_FREEZEBLOCKS",
+                                         "name":  "MSG_SOBLOCKS_FREEZEBLOCKS",
+                                         "order":  6,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Amount",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_INFO",
+                                         "name":  "MSG_SOBLOCKS_INFO",
+                                         "order":  7,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Name",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_LEVELUP",
+                                         "name":  "MSG_SOBLOCKS_LEVELUP",
+                                         "order":  8,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_LOSS",
+                                         "name":  "MSG_SOBLOCKS_LOSS",
+                                         "order":  9,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_PAUSE",
+                                         "name":  "MSG_SOBLOCKS_PAUSE",
+                                         "order":  10,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_PAUSEOFF",
+                                         "name":  "MSG_SOBLOCKS_PAUSEOFF",
+                                         "order":  11,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_PAUSEON",
+                                         "name":  "MSG_SOBLOCKS_PAUSEON",
+                                         "order":  12,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_READY",
+                                         "name":  "MSG_SOBLOCKS_READY",
+                                         "order":  13,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_REQUESTROW",
+                                         "name":  "MSG_SOBLOCKS_REQUESTROW",
+                                         "order":  14,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_RESETGAME",
+                                         "name":  "MSG_SOBLOCKS_RESETGAME",
+                                         "order":  15,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_ROCKDROP",
+                                         "name":  "MSG_SOBLOCKS_ROCKDROP",
+                                         "order":  16,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_ROWINFO",
+                                         "name":  "MSG_SOBLOCKS_ROWINFO",
+                                         "order":  17,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Index1",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index2",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index3",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index4",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index5",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index6",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index7",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_SELECTGAME",
+                                         "name":  "MSG_SOBLOCKS_SELECTGAME",
+                                         "order":  18,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GameType",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_SENDROW",
+                                         "name":  "MSG_SOBLOCKS_SENDROW",
+                                         "order":  19,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Index1",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index2",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index3",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index4",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index5",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index6",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index7",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_SETLEVEL",
+                                         "name":  "MSG_SOBLOCKS_SETLEVEL",
+                                         "order":  20,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Speed",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "SpeedUp",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "FallSpeed",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "RemoveSpeed",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Bonus",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "ComboTime",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "MultiTime",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_STARTSWAP",
+                                         "name":  "MSG_SOBLOCKS_STARTSWAP",
+                                         "order":  21,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_TIMEDDROP",
+                                         "name":  "MSG_SOBLOCKS_TIMEDDROP",
+                                         "order":  22,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Index1",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index2",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index3",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index4",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index5",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index6",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Index7",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SOBLOCKS_WIN",
+                                         "name":  "MSG_SOBLOCKS_WIN",
+                                         "order":  23,
+                                         "fields":  [
+
+                                                    ]
+                                     }
+                                 ]
+                }
+}

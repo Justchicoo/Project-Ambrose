@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Opens a session by handing the browser a random secret and keeping only its SHA-256, so a stolen store file signs nobody in; the CSRF token is derived from that same secret rather than stored, so it cannot leak from the store either and a caller who cannot read the cookie cannot compute it; and holding a session checks in one statement that it has not ended, has not passed either expiry, and still carries the generation its user has now, so a password change or a disable stops every session that user had without hunting for them.
+ * Opens a session by handing the browser a random secret and keeping only its SHA-256, so a stolen store file signs nobody in; the CSRF token is derived from that same secret rather than stored, so it cannot leak from the store either and a caller who cannot read the cookie cannot compute it; and holding a session checks in one statement that it has not ended, has not passed either expiry, and still carries the generation its user has now, so a password change or a disable stops every session that user had without hunting for them. A session opens checked at the moment its password or second factor was, a later check moves that time forward, and keeping only one session moves it to its user's new generation and ends the others with a reason, inside whatever transaction the caller holds.
  */
 
 #include "PanelSessions.h"
@@ -44,7 +44,7 @@ void PanelSessions::SetLifetimes(std::chrono::seconds idle, std::chrono::seconds
     _absolute = absolute;
 }
 
-std::optional<PanelSessionOpened> PanelSessions::Open(int64 userId, int64 generation, std::string_view address, std::string_view userAgent, std::string& error)
+std::optional<PanelSessionOpened> PanelSessions::Open(int64 userId, int64 generation, std::string_view address, std::string_view userAgent, int64 checkedEpochMs, std::string& error)
 {
     std::lock_guard const lock(_mutex);
     PanelSessionOpened opened;
@@ -53,8 +53,8 @@ std::optional<PanelSessionOpened> PanelSessions::Open(int64 userId, int64 genera
     opened.Id = Digest(opened.Secret).substr(0, 16);
 
     std::optional<PanelStore::Statement> insert = _store.Prepare(
-        "INSERT INTO panel_session (id, token_hash, user_id, generation, created_epoch_ms, seen_epoch_ms, idle_expires_epoch_ms, absolute_expires_epoch_ms, address, user_agent)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", error);
+        "INSERT INTO panel_session (id, token_hash, user_id, generation, created_epoch_ms, seen_epoch_ms, idle_expires_epoch_ms, absolute_expires_epoch_ms, address, user_agent,"
+        " checked_epoch_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", error);
     if (!insert)
         return std::nullopt;
     int64 const now = PanelStore::NowEpochMs();
@@ -74,6 +74,10 @@ std::optional<PanelSessionOpened> PanelSessions::Open(int64 userId, int64 genera
         insert->BindNull(10);
     else
         insert->Bind(10, userAgent);
+    if (checkedEpochMs > 0)
+        insert->Bind(11, checkedEpochMs);
+    else
+        insert->BindNull(11);
     if (!insert->Run(error))
         return std::nullopt;
     return opened;
@@ -113,6 +117,59 @@ std::optional<SessionHolder> PanelSessions::Hold(std::string_view secret)
         touch->Run(error);
     }
     return SessionHolder{ CsrfOf(secret), fmt::format("user:{}", userId) };
+}
+
+bool PanelSessions::MarkChecked(std::string_view secret, std::string& error)
+{
+    std::lock_guard const lock(_mutex);
+    std::optional<PanelStore::Statement> update = _store.Prepare("UPDATE panel_session SET checked_epoch_ms = ? WHERE token_hash = ? AND ended_epoch_ms IS NULL RETURNING id", error);
+    if (!update)
+        return false;
+    update->Bind(1, PanelStore::NowEpochMs());
+    update->Bind(2, Digest(secret));
+    bool const marked = update->Step(error);
+    if (!error.empty())
+        return false;
+    return marked && update->Run(error);
+}
+
+std::optional<int64> PanelSessions::CheckedAt(std::string_view secret)
+{
+    if (secret.empty() || secret.size() > 512)
+        return std::nullopt;
+    std::lock_guard const lock(_mutex);
+    std::string error;
+    std::optional<PanelStore::Statement> rows = _store.Prepare("SELECT checked_epoch_ms FROM panel_session WHERE token_hash = ? AND ended_epoch_ms IS NULL", error);
+    if (!rows)
+        return std::nullopt;
+    rows->Bind(1, Digest(secret));
+    if (!rows->Step(error) || rows->IsNull(0))
+        return std::nullopt;
+    return rows->Int64(0);
+}
+
+bool PanelSessions::KeepOnly(int64 userId, std::string_view secret, int64 generation, std::string_view reason, std::string& error)
+{
+    std::lock_guard const lock(_mutex);
+    std::string const hash = Digest(secret);
+    std::optional<PanelStore::Statement> move = _store.Prepare("UPDATE panel_session SET generation = ? WHERE token_hash = ? AND user_id = ? AND ended_epoch_ms IS NULL", error);
+    if (!move)
+        return false;
+    move->Bind(1, generation);
+    move->Bind(2, hash);
+    move->Bind(3, userId);
+    if (!move->Run(error))
+        return false;
+    move.reset();
+    std::optional<PanelStore::Statement> end = _store.Prepare(
+        "UPDATE panel_session SET ended_epoch_ms = ?, ended_reason = ? WHERE user_id = ? AND token_hash <> ? AND ended_epoch_ms IS NULL", error);
+    if (!end)
+        return false;
+    end->Bind(1, PanelStore::NowEpochMs());
+    end->Bind(2, reason);
+    end->Bind(3, userId);
+    end->Bind(4, hash);
+    return end->Run(error);
 }
 
 bool PanelSessions::Close(std::string_view secret, std::string_view reason, std::string& error)
@@ -161,8 +218,8 @@ std::vector<PanelSessionInfo> PanelSessions::List(int64 userId, std::string& err
     std::lock_guard const lock(_mutex);
     std::vector<PanelSessionInfo> sessions;
     std::optional<PanelStore::Statement> rows = _store.Prepare(
-        "SELECT id, user_id, generation, created_epoch_ms, seen_epoch_ms, idle_expires_epoch_ms, absolute_expires_epoch_ms, COALESCE(address, ''), COALESCE(user_agent, '')"
-        " FROM panel_session WHERE ended_epoch_ms IS NULL AND (? = 0 OR user_id = ?) ORDER BY seen_epoch_ms DESC", error);
+        "SELECT id, user_id, generation, created_epoch_ms, seen_epoch_ms, idle_expires_epoch_ms, absolute_expires_epoch_ms, COALESCE(address, ''), COALESCE(user_agent, ''),"
+        " COALESCE(checked_epoch_ms, 0) FROM panel_session WHERE ended_epoch_ms IS NULL AND (? = 0 OR user_id = ?) ORDER BY seen_epoch_ms DESC", error);
     if (!rows)
         return sessions;
     rows->Bind(1, userId);
@@ -179,6 +236,7 @@ std::vector<PanelSessionInfo> PanelSessions::List(int64 userId, std::string& err
         session.AbsoluteExpiresEpochMs = rows->Int64(6);
         session.Address = rows->Text(7);
         session.UserAgent = rows->Text(8);
+        session.CheckedEpochMs = rows->Int64(9);
         sessions.push_back(std::move(session));
     }
     return sessions;

@@ -14,6 +14,7 @@
 #include <vector>
 
 class PanelStore;
+struct AdminRequest;
 
 enum class AuditActor : uint8
 {
@@ -53,9 +54,24 @@ struct AuditEvent
     std::string Error;
     std::string Reason;
     std::string Properties = "{}";
+    int64 DatabaseId = 0;
+    int64 CreatedEpochMs = 0;
     std::vector<AuditSubject> Subjects;
 
     AuditEvent& On(std::string kind, std::string id, std::string name = {});
+};
+
+class AuditScope
+{
+public:
+    AuditScope(AdminRequest const& request, std::string name);
+
+    AuditEvent& Event() { return _event; }
+    AuditEvent const& Event() const { return _event; }
+    AuditScope& Subject(std::string kind, std::string id, std::string name = {});
+
+private:
+    AuditEvent _event;
 };
 
 namespace PanelAudit
@@ -66,6 +82,8 @@ namespace PanelAudit
 
     bool Write(PanelStore& store, AuditEvent const& event, std::string& error);
     bool Record(PanelStore& store, AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error);
+    bool Record(PanelStore& store, AuditEvent& event, std::function<bool(AuditEvent& event, std::string& error)> const& change, std::string& error);
+    bool EnsureChain(PanelStore& store, std::string& error);
     int64 Count(PanelStore& store, std::string_view name);
 }
 

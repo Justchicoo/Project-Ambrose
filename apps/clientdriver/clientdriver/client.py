@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Drives the user's own client: the Ambrose launcher starts it, the window is found by class and size, text and keys are posted as window messages so the machine stays usable, a press borrows the cursor and the foreground for about a second and raises the window above anything covering the point it presses, because the client's interface drops mouse messages while its window is not the active one and hit-tests a press against the real cursor, and says whether it got them, and frames come from the composited window surface so a covered window still reads, with a blank frame, which the client gives while it swaps what it draws, tried again a few times before a step fails on it.
+# Drives the user's own client: the Ambrose launcher starts it, the window is found by class and size, text and keys are posted as window messages so the machine stays usable, a press borrows the cursor and the foreground for about a second and raises the window above anything covering the point it presses, because the client's interface drops mouse messages while its window is not the active one and hit-tests a press against the real cursor, and says whether it got them, several keys can be held down together, the window can be moved to a screen of the user's choosing, the main client to its top left and a companion to its bottom right, so the user can keep using another screen, a second client of the same run keeps a launcher log of its own, and frames come from the composited window surface so a covered window still reads, with a blank frame, which the client gives while it swaps what it draws, tried again a few times before a step fails on it.
 import contextlib
 import ctypes
 import os
@@ -101,6 +101,32 @@ def force_foreground(handle, timeout=2.0):
     return False
 
 
+def screen_spot(work, size, corner):
+    left, top, right, bottom = work
+    width, height = size
+    if corner == "bottom right":
+        return max(left, right - width), max(top, bottom - height)
+    return left, top
+
+
+def screen_work_area(monitor):
+    import win32api
+
+    screens = [win32api.GetMonitorInfo(handle) for handle, _dc, _rect in win32api.EnumDisplayMonitors()]
+    wanted = str(monitor).lower()
+    if wanted == "primary":
+        chosen = [screen for screen in screens if screen["Flags"] & 1]
+    elif wanted == "secondary":
+        chosen = [screen for screen in screens if not screen["Flags"] & 1]
+    elif wanted.isdigit() and int(wanted) < len(screens):
+        chosen = [screens[int(wanted)]]
+    else:
+        chosen = []
+    if not chosen:
+        raise StepFailed(f"there is no {monitor} screen; this machine has {len(screens)}")
+    return chosen[0]["Work"]
+
+
 PATCH_FLAG = " -P 0"
 PATCH_CONFIG = "PatchConfig.xml"
 PATCH_HOST = re.compile(r'(<PatchServerHostname\s+host=")[^"]*(")')
@@ -123,7 +149,7 @@ def without_patch_flag(command):
 
 class Client:
     def __init__(self, launcher, run_folder, host, port, window, client_dir=None, locale=None, log=None,
-                 install=None, revision=None, character=None, patching="off", patch_config=None):
+                 install=None, revision=None, character=None, patching="off", patch_config=None, label=None, monitor=None):
         self.launcher = launcher
         self.run_folder = run_folder
         self.host = host
@@ -133,7 +159,9 @@ class Client:
         self.locale = locale
         self.character = character
         self.launcher_process = None
-        self.launcher_output = os.path.join(os.path.dirname(run_folder), "launcher.txt")
+        self.launcher_output = os.path.join(os.path.dirname(run_folder), f"launcher-{label}.txt" if label else "launcher.txt")
+        self.label = label
+        self.monitor = monitor
         self.launcher_log = LogTail(self.launcher_output)
         self.log = LogTail(log or os.path.join(run_folder, LOG_NAME), encoding="latin-1")
         self.pid = None
@@ -266,9 +294,20 @@ class Client:
                 if (width, height) != tuple(self.window):
                     raise StepFailed(f"the client area is {width}x{height} and the references were measured at "
                                      f"{self.window[0]}x{self.window[1]}, so every press would land in the wrong place")
+                if self.monitor is not None:
+                    self.place()
                 return self.handle
             time.sleep(0.2)
         raise StepFailed(f"the client window did not appear within {timeout}s")
+
+    def place(self):
+        import win32con
+        import win32gui
+
+        left, top, right, bottom = win32gui.GetWindowRect(self.handle)
+        x, y = screen_spot(screen_work_area(self.monitor), (right - left, bottom - top), "bottom right" if self.label else "top left")
+        win32gui.SetWindowPos(self.handle, 0, x, y, 0, 0, win32con.SWP_NOSIZE | win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
+        return x, y
 
     def is_foreground(self):
         import win32gui
@@ -405,18 +444,25 @@ class Client:
             time.sleep(delay)
 
     def key(self, virtual_key, hold=0.05):
+        self.keys([virtual_key], hold)
+
+    def keys(self, virtual_keys, hold=0.05):
         import win32api
         import win32con
         import win32gui
 
-        if virtual_key == win32con.VK_RETURN:
+        if win32con.VK_RETURN in virtual_keys:
             raise StepFailed("send Enter as character 13: a VK_RETURN key-up with Alt held switches the client to fullscreen")
         wait_until_released(modifiers_held, "a modifier key")
-        scan = win32api.MapVirtualKey(virtual_key, 0)
-        extended = 1 << 24 if virtual_key in EXTENDED_KEYS else 0
-        win32gui.PostMessage(self.handle, win32con.WM_KEYDOWN, virtual_key, 1 | (scan << 16) | extended)
+
+        def parameter(virtual_key):
+            return 1 | (win32api.MapVirtualKey(virtual_key, 0) << 16) | (1 << 24 if virtual_key in EXTENDED_KEYS else 0)
+
+        for virtual_key in virtual_keys:
+            win32gui.PostMessage(self.handle, win32con.WM_KEYDOWN, virtual_key, parameter(virtual_key))
         time.sleep(hold)
-        win32gui.PostMessage(self.handle, win32con.WM_KEYUP, virtual_key, 1 | (scan << 16) | extended | (3 << 30))
+        for virtual_key in reversed(virtual_keys):
+            win32gui.PostMessage(self.handle, win32con.WM_KEYUP, virtual_key, parameter(virtual_key) | (3 << 30))
 
     @contextlib.contextmanager
     def cursor_at(self, x, y):

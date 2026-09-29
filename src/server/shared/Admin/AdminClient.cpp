@@ -271,6 +271,7 @@ AdminClientResponse AdminClient::Send(AdminClientRequest const& request, std::ch
         socket.close(ignored);
         context.restart();
         context.poll();
+        response.TimedOut = true;
         response.Error = fmt::format("the admin API on {} gave no answer within {} ms", host, timeout.count());
         return response;
     }

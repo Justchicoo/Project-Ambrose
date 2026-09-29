@@ -1,0 +1,63 @@
+{
+    "subject":  "F-41 service 43 MG2_MESSAGES",
+    "area":  "protocol",
+    "claim":  "The r806919 Wizard 1.610 Root.wad message definitions identify service 43 as MG2_MESSAGES and define its ordered message tags and field types as catalogued here.",
+    "revision":  "r806919.Wizard_1_610",
+    "method":  "static",
+    "how_to_repeat":  [
+                          "Read Messages/HotShotsMessages.xml from Root.wad in your own r806919 install with `bindecode` --client \u003cinstall\u003e --text Messages/HotShotsMessages.xml.",
+                          "Read ServiceID and ProtocolType from _ProtocolInfo/RECORD; enumerate each message RECORD and retain each non-metadata field name and its TYPE (or the supported TPYE/TYP spelling, with GlobalID inferred as GID).",
+                          "Use explicit _MsgOrder or _MsgType where the first message has it; otherwise sort distinct message element tags by byte-ordinal order and number them from 1, collapsing repeated tags only when their fields match.",
+                          "Run `bindecode --client \u003cinstall\u003e --sweep` as an archive-decode check; the sweep covers BINd entries, not the XML message definitions."
+                      ],
+    "evidence":  [
+                     "`bindecode` --client \u003cinstall\u003e --text Messages/HotShotsMessages.xml read this definition from the local r806919 Root.wad; it declares service id 43, protocol name MG2_MESSAGES, and 3 distinct ordered messages with 2 fields.",
+                     "The service uses tag-ordinal order; the catalog records every message tag/name, resolved order, and field name/type, excluding underscore-prefixed metadata.",
+                     "`bindecode --client \u003cinstall\u003e --sweep --threads 8` reported 173088 entries, 134640 BINd files, 134635 decoded, 5 unknown-root-class failures and 0 unreadable entries; those five BINd failures do not validate or contradict this XML catalog."
+                 ],
+    "disproof":  "A repeat read of Messages/HotShotsMessages.xml from another r806919 install that yields a different service id/name, distinct message order, or field name/type under the stated ordering rule.",
+    "confidence":  "high",
+    "submitted_by":  "MeruneFleuruwu",
+    "submitted_on":  "2026-09-27",
+    "status":  "claimed",
+    "service":  {
+                    "id":  43,
+                    "name":  "MG2_MESSAGES",
+                    "version":  1,
+                    "entry":  "Messages/HotShotsMessages.xml",
+                    "ordering":  "tag-ordinal",
+                    "messages":  [
+                                     {
+                                         "tag":  "MSG_MG2_CONNECT",
+                                         "name":  "MSG_MG2_CONNECT",
+                                         "order":  1,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_MG2_MOVED",
+                                         "name":  "MSG_MG2_MOVED",
+                                         "order":  2,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_MG2_REWARDS",
+                                         "name":  "MSG_MG2_REWARDS",
+                                         "order":  3,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "score",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "gameName",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     }
+                                 ]
+                }
+}

@@ -7,9 +7,12 @@
 #include "AdminRouter.h"
 #include "Log.h"
 #include "LogRedaction.h"
+#include "LogStream.h"
 #include "StringUtil.h"
 
 #include <nlohmann/json.hpp>
+
+#include <algorithm>
 
 namespace
 {
@@ -27,7 +30,7 @@ std::vector<std::string> const& AdminStatus::StatusFields()
 
 std::vector<std::string> const& AdminStatus::ErrorFields()
 {
-    static std::vector<std::string> const fields{ "app", "revision", "level", "category", "file", "line", "function", "template", "count", "first_epoch_ms", "last_epoch_ms", "last_message" };
+    static std::vector<std::string> const fields{ "app", "revision", "level", "category", "file", "line", "function", "template", "count", "first_epoch_ms", "last_epoch_ms", "last_message", "context_before" };
     return fields;
 }
 
@@ -99,6 +102,7 @@ std::string AdminStatus::AppsJson(AdminStatusSnapshot const& snapshot)
 std::string AdminStatus::ErrorsJson(std::string const& appName)
 {
     nlohmann::json groups = nlohmann::json::array();
+    std::vector<LogStreamHub::RecordPtr> const backlog = sLog.GetStreamHub().GetBacklog();
     for (LogErrorGroup const& group : sLog.GetErrors().Groups())
     {
         nlohmann::json entry;
@@ -114,6 +118,19 @@ std::string AdminStatus::ErrorsJson(std::string const& appName)
         entry["first_epoch_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(group.FirstSeen.time_since_epoch()).count();
         entry["last_epoch_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(group.LastSeen.time_since_epoch()).count();
         entry["last_message"] = LogRedaction::Redact(group.LastMessage);
+        nlohmann::json context = nlohmann::json::array();
+        auto const occurrence = std::find_if(backlog.begin(), backlog.end(), [&group](LogStreamHub::RecordPtr const& record)
+        {
+            return record->Sequence == group.LastSequence;
+        });
+        if (occurrence != backlog.end())
+        {
+            std::size_t const occurrenceIndex = static_cast<std::size_t>(std::distance(backlog.begin(), occurrence));
+            std::size_t const first = occurrenceIndex > 8 ? occurrenceIndex - 8 : 0;
+            for (std::size_t index = first; index < occurrenceIndex; ++index)
+                context.push_back(nlohmann::json::parse(LogStreamService::EncodeRecord(*backlog[index])));
+        }
+        entry["context_before"] = std::move(context);
         groups.push_back(std::move(entry));
     }
     nlohmann::json body;

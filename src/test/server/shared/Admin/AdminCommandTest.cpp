@@ -248,3 +248,37 @@ TEST(AdminCommandRouteTest, ARefusalIsAnsweredAndRecordedWithItsReason)
     EXPECT_NE(written.find("\"refused\":true"), std::string::npos) << written;
     EXPECT_NE(written.find("there is no such command"), std::string::npos) << written;
 }
+
+TEST(AdminCommandRouteTest, ACommandAboveTheRunnerLevelIsRefusedWithoutExecution)
+{
+    LogTestDirectory directory;
+    std::filesystem::path const audit = directory.Path() / "audit" / "commands.jsonl";
+    ConsoleCommandTable table;
+    Fill(table);
+    AdminAuth auth(10, 1.0);
+    auth.SetToken(Token);
+    AdminRouter router(auth);
+    uint32 executions = 0;
+    AdminCommand::Register(router, [&executions](std::string const&, uint8 level, bool)
+    {
+        AdminCommandOutcome outcome;
+        if (level < 3)
+        {
+            outcome.Refused = true;
+            outcome.Reason = "there is no such command";
+            return outcome;
+        }
+        ++executions;
+        outcome.Ran = true;
+        return outcome;
+    }, table, "gameserver", audit);
+
+    AdminResponse const refused = router.Dispatch(Post(R"({"command":"privileged","level":2})"));
+
+    EXPECT_EQ(refused.Status, 409) << refused.Body;
+    EXPECT_EQ(executions, 0u);
+    nlohmann::json const body = nlohmann::json::parse(refused.Body, nullptr, false);
+    ASSERT_TRUE(body.is_object()) << refused.Body;
+    EXPECT_TRUE(body["refused"].get<bool>());
+    EXPECT_EQ(body["reason"], "there is no such command");
+}

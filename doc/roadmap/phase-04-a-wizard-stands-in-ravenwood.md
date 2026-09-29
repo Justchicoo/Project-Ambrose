@@ -92,7 +92,7 @@ An account's security level decides which chat-prefixed GM commands it may run, 
 - [x] Unit test: a PLAYER-level account running a GAMEMASTER command gets 'no such command' and nothing executes. `CommandMgrTest.AnAccountBelowACommandsLevelIsToldThereIsNoSuchCommand`
 - [x] Unit test: the command table parses '.character gold 500' into (character, gold, [500]). `CommandMgrTest.ACommandIsTheDeepestNameThatMatchesAndTheRestAreArguments`
 - [x] Unit test: a command_security row raising a command to ADMINISTRATOR refuses a GAMEMASTER account. `CommandMgrTest.ACommandSecurityRowOverridesTheLevelTheScriptGave`, and `AChildIsNeverEasierToReachThanItsGroup` shows raising a group carries its commands with it
-- [ ] Real client, GM account: typing '.help' shows the command list in the chat window, and nearby players see no bubble. The same text from a player account shows up as normal chat or is refused, depending on config. This one waits on more than the maintainer's machine: nothing carries a typed line from the client to CommandMgr until the game server has its message handlers in 4.05, so the table, the levels and the parsing are built and tested while the path a client's words take to them is not.
+The real-client check this milestone once listed, a GM typing '.help' and reading the command list in the chat window while nearby players see no bubble, with a player's same text shown as chat or refused as configured, is 6.04's, which lists it word for word. It moved there on 2026-09-28: a typed line reaches CommandMgr only once 6.03 carries chat, and 6.03, 6.06 and 6.18 each depend on this milestone, so while it stayed here none of them could start and the check could never be earned.
 
 **Risks**
 

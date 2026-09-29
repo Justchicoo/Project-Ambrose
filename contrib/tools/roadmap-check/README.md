@@ -13,8 +13,10 @@ It reports:
 
 The counting rule is the one stated in the phase 17 review notes: `S` has at
 most four deliverables and five acceptance checks, `L` has eight or more of
-either, and `M` is the remaining range. The two judgment-sized milestones
-named by the roadmap, 17.24 and 17.51, are exempt from the count comparison.
+either, and `M` is the remaining range. A deliverable is a top-level bullet of
+the milestone's Deliverables list; the bullets nested under one detail it and
+are not counted. The one judgment-sized milestone named by the roadmap, 17.51,
+is exempt from the count comparison.
 
 ## Run
 

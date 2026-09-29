@@ -1,11 +1,11 @@
 <!-- Project Ambrose by Imjustchico: Every live setting, written from the declarations in src/server/shared/Settings. -->
 # Live settings
 
-Every setting here can be changed while its app runs with `.settings set <key> <value> [reason]` in game or `settings set` on the app's console, and returned to its config value with `settings reset`. A change is checked against the type and bounds below, persisted in the `settings` table of the database the app owns (`characters` for the game server, `login` for the login server), and written to `setting_audit` with who made it and why. A setting also set by an `AMBROSE_` environment variable or a command-line override is locked and cannot be changed live. The layers are described in [README.md](README.md).
+Every setting here can be changed while its app runs with `.settings set <key> <value> [reason]` in game or `settings set` on the app's console, and returned to its config value with `settings reset`. A change is checked against the type and bounds below, persisted in the `settings` table of the database the app owns (`characters` for the game server, `login` for the login server, and the panel store for the supervisor), and written to `setting_audit` with who made it and why. A setting also set by an `AMBROSE_` environment variable or a command-line override is locked and cannot be changed live. The layers are described in [README.md](README.md).
 
 Applies says when a change takes hold: live at once, or from the next connection or operation that reads it.
 
-Access says who may see and change a setting over the admin API and the panel. A secret's value is shown masked, in `setting_audit` too, unless the caller asks for it with the right to see secrets, and every such reveal is audited. A restricted setting is one whose wrong value stops the app or locks players out, so changing it takes its own right besides the right to change settings.
+Access says who may see and change a setting over the admin API and the panel. A secret's value is shown masked, in `setting_audit` too, unless the caller asks for it with the right to see secrets, and every such reveal is audited. The admin and panel tokens and the password in each database connection string are secrets too, although only config holds them, and are masked the same way wherever they are shown, a configuration file read through the panel included. A restricted setting is one whose wrong value stops the app or locks players out, so changing it takes its own right besides the right to change settings.
 
 ## Accounts
 
@@ -30,6 +30,15 @@ Access says who may see and change a setting over the admin API and the panel. A
 |---|---|---|---|---|---|---|---|
 | `GM.CommandPrefix` | string | . | at most 8 bytes | live | gameserver | normal | What a chat line starts with to be read as a command. |
 | `GM.LogCommands` | bool | true | none | live | gameserver | normal | Whether every command run is written to the log. |
+
+## Files
+
+| Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
+|---|---|---|---|---|---|---|---|
+| `Files.ListMaxEntries` | unsigned | 100000 entries | from 1000 to 10000000 entries | live | supervisor | normal | The most entries a folder listing reads before it stops and says the folder held more. |
+| `Files.MinFreeBytes` | unsigned | 1073741824 bytes | from 0 to 1125899906842624 bytes | live | supervisor | normal | The least free space a volume must keep after any write the panel makes; the larger of this and Files.MinFreePercent holds. |
+| `Files.MinFreePercent` | unsigned | 5 % | from 0 to 90 % | live | supervisor | normal | The least free space a volume must keep after any write the panel makes, as a share of the volume; the larger of this and Files.MinFreeBytes holds. |
+| `Files.ReadMaxBytes` | unsigned | 4194304 bytes | from 65536 to 67108864 bytes | live | supervisor | normal | The most of a file one read hands the panel; a file this size or smaller also carries its content hash, and a configuration file larger than this is not shown. |
 
 ## Locale
 
@@ -58,14 +67,19 @@ Access says who may see and change a setting over the admin API and the panel. A
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
 | `Attach.Timeout` | unsigned | 30 s | from 1 to 3600 s | next connection or operation | gameserver | normal | How long a new game connection may go without MSG_ATTACH before it is closed. |
+| `Network.AcceptRatePerSecond` | unsigned | 50 | from 1 to 100000 | live | gameserver, loginserver | normal | How many new client connections one IP address may establish per second. |
 | `Network.DroppedMessageBurst` | unsigned | 64 | from 1 to 100000 | next connection or operation | gameserver, loginserver | normal | How many messages a connection may send that are dropped unread before a drop counts as a strike. |
 | `Network.DroppedMessagesPerSecond` | unsigned | 16 | from 1 to 100000 | next connection or operation | gameserver, loginserver | normal | How fast that allowance of dropped messages refills, per second. |
 | `Network.HandoffGrace` | unsigned | 30 s | from 1 to 3600 s | next connection or operation | loginserver | normal | How long a client sent to a game server may keep its login connection open. |
 | `Network.KeepAliveInterval` | unsigned | 60 s | from 0 to 3600 s | next connection or operation | gameserver, loginserver | normal | How often an idle connection is asked whether it is still there; 0 never asks. |
 | `Network.KeepAliveTimeout` | unsigned | 15 s | from 1 to 3600 s | next connection or operation | gameserver, loginserver | normal | How long a keepalive may go unanswered before the connection is closed. |
+| `Network.MaxConnectionsPerIP` | unsigned | 100 | from 1 to 100000 | live | gameserver, loginserver | normal | How many simultaneous client connections one IP address may hold. |
 | `Network.MaxStrikes` | unsigned | 10 | from 1 to 1000 | next connection or operation | gameserver, loginserver | normal | How many refused or malformed messages a connection may send before it is closed. |
 | `Network.PingBurst` | unsigned | 16 | from 1 to 100000 | next connection or operation | gameserver, loginserver | normal | How many pings a connection may send at once before a ping counts as a strike. |
 | `Network.PingsPerSecond` | unsigned | 4 | from 1 to 100000 | next connection or operation | gameserver, loginserver | normal | How fast that allowance of pings refills, per second. |
+| `Network.RateLimit.Burst` | unsigned | 150 | from 1 to 100000 | live | gameserver, loginserver | normal | How many inbound frames a session may receive in a burst before frames count against its per-second rate. |
+| `Network.RateLimit.PerSecond` | unsigned | 50 | from 1 to 100000 | live | gameserver, loginserver | normal | How fast a session's inbound frame allowance refills, per second. |
+| `Network.SendQueueHighWater` | unsigned | 16777216 bytes | from 1048576 to 1073741824 bytes | live | gameserver, loginserver | normal | How many bytes one connection may have waiting to be sent before it is closed; applies to existing connections immediately. |
 | `Network.SessionAcceptTimeout` | unsigned | 15 s | from 1 to 3600 s | next connection or operation | gameserver, loginserver | normal | How long a new connection may take to finish its handshake. |
 
 ## Rates
@@ -107,4 +121,6 @@ Access says who may see and change a setting over the admin API and the panel. A
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
 | `Zone.MobileIdReleaseDelay` | unsigned | 2000 ms | from 0 to 60000 ms | next connection or operation | gameserver | normal | How long a mobile id rests after its wizard leaves before another wizard may take it. |
+| `Zone.MoveFlushInterval` | unsigned | 250 ms | from 50 to 5000 ms | next connection or operation | gameserver | normal | How often the moves and movement states of the wizards in an instance are sent to the others in it, read at each flush. |
+| `Zone.MoveIdleIntervals` | unsigned | 2 | from 1 to 100 | next connection or operation | gameserver | normal | How many flushes a wizard said to be moving may pass without a new move before the others are told it is standing, read at each flush. |
 | `Zone.UnloadDelay` | unsigned | 60 s | from 0 to 86400 s | next connection or operation | gameserver | normal | How long an empty zone instance stays loaded, read when its last wizard leaves. |

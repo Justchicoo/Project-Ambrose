@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The shapes the panel accepts from the admin API, checked at the boundary with Valibot: the session, the app list with what the supervisor knows about each app, the status, the capabilities, the captured output, a power answer, the settings an app has loaded with their changes, batches, history and events and its databases with their update files, each loose so a field a newer server adds is kept rather than refused, since these schemas only ever gain fields.
+ * The shapes the panel accepts from the admin API, checked at the boundary with Valibot: the session, a sign-in that asks for a second factor, the operator's two-factor state, its setup secret, the recovery codes shown once, a step-up check and the refusal that asks for one, the app list with what the supervisor knows about each app, the status, the capabilities, the captured output, a power answer, the settings an app has loaded with their changes, batches, history and events, its databases with their update files, and the supervisor's file roots with their policies, a folder's listing, a window of a file and a root's protected patterns, each loose so a field a newer server adds is kept rather than refused, since these schemas only ever gain fields.
  */
 
 import * as v from "valibot";
@@ -23,6 +23,8 @@ export const PanelUser = v.looseObject({
     permissions: v.optional(v.array(v.string()), []),
     grants: v.optional(v.record(v.string(), v.array(v.string())), {}),
     must_change_password: v.boolean(),
+    two_factor: v.optional(v.boolean(), false),
+    two_factor_required: v.optional(v.boolean(), false),
 });
 
 export const PanelSessionAnswer = v.looseObject({
@@ -39,6 +41,57 @@ export const PanelSessionAnswer = v.looseObject({
 export const PanelSignedIn = v.looseObject({
     csrf: v.string(),
     user: PanelUser,
+});
+
+export const SecondFactorAsked = v.looseObject({
+    second_factor: v.literal(true),
+    methods: v.array(v.string()),
+    expires_seconds: v.number(),
+});
+
+export const PanelSignInAnswer = v.union([SecondFactorAsked, PanelSignedIn]);
+
+export const TwoFactorState = v.looseObject({
+    enabled: v.boolean(),
+    pending: v.boolean(),
+    required: v.boolean(),
+    recovery_codes_left: v.number(),
+    enabled_epoch_ms: v.nullable(v.number()),
+    window_steps: v.optional(v.number(), 1),
+    issuer: v.optional(v.string(), ""),
+});
+
+export const TwoFactorSetup = v.looseObject({
+    secret: v.string(),
+    uri: v.string(),
+    issuer: v.string(),
+    account: v.string(),
+    algorithm: v.string(),
+    digits: v.number(),
+    period: v.number(),
+    fresh: v.boolean(),
+});
+
+export const RecoveryCodesIssued = v.looseObject({
+    recovery_codes: v.array(v.string()),
+    recovery_codes_left: v.number(),
+    user: v.optional(v.nullable(PanelUser)),
+});
+
+export const TwoFactorTurnedOff = v.looseObject({
+    user: v.nullable(PanelUser),
+});
+
+export const StepUpAnswer = v.looseObject({
+    checked_epoch_ms: v.number(),
+    window_seconds: v.number(),
+});
+
+export const StepUpAsked = v.looseObject({
+    error: v.literal("step_up_required"),
+    permission: v.string(),
+    methods: v.array(v.string()),
+    window_seconds: v.number(),
 });
 
 export const AppExit = v.looseObject({
@@ -117,6 +170,12 @@ export const CommandAnswer = v.looseObject({
     reason: v.string(),
     request_id: v.string(),
     lines: v.array(v.string()),
+});
+
+export const CommandHistoryAnswer = v.looseObject({
+    schema: v.number(),
+    app: v.string(),
+    commands: v.array(v.string()),
 });
 
 export const Problem = v.looseObject({
@@ -283,6 +342,69 @@ export const PanelSettingsAnswer = v.looseObject({
     ),
 });
 
+export const ErrorGroup = v.looseObject({
+    id: v.number(),
+    app: v.string(),
+    category: v.string(),
+    level: v.string(),
+    file: v.string(),
+    line: v.number(),
+    function: v.string(),
+    template: v.string(),
+    revision: v.string(),
+    count: v.number(),
+    total_count: v.number(),
+    first_epoch_ms: v.number(),
+    last_epoch_ms: v.number(),
+    last_message: v.string(),
+    context_before: v.array(LogRecord),
+    new_since_cleared: v.boolean(),
+});
+
+export const ErrorsAnswer = v.looseObject({
+    schema: v.number(),
+    groups: v.array(ErrorGroup),
+});
+
+export const ErrorClearAnswer = v.looseObject({
+    schema: v.number(),
+    cleared: v.boolean(),
+});
+
+export const ErrorReport = v.looseObject({
+    format: v.string(),
+    schema: v.number(),
+    product: v.looseObject({
+        name: v.string(),
+        version: v.string(),
+        commit: v.string(),
+        branch: v.string(),
+    }),
+    operating_system: v.string(),
+    apps: v.record(v.string(), v.string()),
+    groups: v.array(
+        v.looseObject({
+            app: v.string(),
+            revision: v.string(),
+            level: v.string(),
+            category: v.string(),
+            source: v.looseObject({ file: v.string(), line: v.number(), function: v.string() }),
+            template: v.string(),
+            count: v.number(),
+            total_count: v.number(),
+            first_epoch_ms: v.number(),
+            last_epoch_ms: v.number(),
+            rendered_message: v.optional(v.string()),
+            log_lines_before: v.optional(v.array(LogRecord)),
+        }),
+    ),
+});
+
+export const ErrorReportAnswer = v.looseObject({
+    schema: v.number(),
+    report: ErrorReport,
+});
+
 export const DatabaseAnswer = v.looseObject({
     schema: v.number(),
     databases: v.array(
@@ -359,6 +481,13 @@ export const DatabaseApplyAnswer = v.looseObject({
 export type SessionAnswer = v.InferOutput<typeof SessionAnswer>;
 export type PanelUser = v.InferOutput<typeof PanelUser>;
 export type PanelSessionAnswer = v.InferOutput<typeof PanelSessionAnswer>;
+export type SecondFactorAsked = v.InferOutput<typeof SecondFactorAsked>;
+export type PanelSignInAnswer = v.InferOutput<typeof PanelSignInAnswer>;
+export type TwoFactorState = v.InferOutput<typeof TwoFactorState>;
+export type TwoFactorSetup = v.InferOutput<typeof TwoFactorSetup>;
+export type RecoveryCodesIssued = v.InferOutput<typeof RecoveryCodesIssued>;
+export type StepUpAnswer = v.InferOutput<typeof StepUpAnswer>;
+export type StepUpAsked = v.InferOutput<typeof StepUpAsked>;
 export type AppEntry = v.InferOutput<typeof AppEntry>;
 export type LogRecord = v.InferOutput<typeof LogRecord>;
 export type LogAnswer = v.InferOutput<typeof LogAnswer>;
@@ -484,6 +613,23 @@ export const MetricsAnswer = v.looseObject({
     metrics: v.optional(v.array(MetricFamily), []),
 });
 
+export const TickProfileAnswer = v.looseObject({
+    schema: v.number(),
+    active: v.boolean(),
+    complete: v.boolean(),
+    truncated: v.boolean(),
+    requested_seconds: v.number(),
+    events: v.number(),
+});
+
+export const TickProfileTraceAnswer = v.looseObject({
+    schema: v.number(),
+    requested_seconds: v.number(),
+    truncated: v.boolean(),
+    events: v.number(),
+    trace: v.string(),
+});
+
 export const ActivityRow = v.looseObject({
     time: v.optional(v.string(), ""),
     epoch_ms: v.optional(v.number(), 0),
@@ -533,6 +679,114 @@ export const ClientAnswer = v.looseObject({
     saved_to: v.string(),
 });
 
+export const FileOperationState = v.looseObject({
+    allowed: v.boolean(),
+    code: v.optional(v.string(), ""),
+    reason: v.optional(v.string(), ""),
+    rule: v.optional(v.nullable(v.string()), null),
+});
+
+export const FilePolicy = v.looseObject({
+    summary: v.string(),
+    client_derived: v.optional(v.boolean(), false),
+    read_only: v.optional(v.boolean(), false),
+    operations: v.record(v.string(), FileOperationState),
+});
+
+export const FileRule = v.looseObject({
+    pattern: v.string(),
+    effect: v.string(),
+    origin: v.optional(v.string(), "built_in"),
+    why: v.string(),
+});
+
+export const FileVolume = v.looseObject({
+    name: v.string(),
+    free: v.number(),
+    total: v.number(),
+    minimum: v.number(),
+    reserved: v.number(),
+});
+
+export const FileRoot = v.looseObject({
+    id: v.string(),
+    label: v.string(),
+    kind: v.string(),
+    apps: v.array(v.string()),
+    present: v.boolean(),
+    problem: v.nullable(v.string()),
+    client_derived: v.boolean(),
+    read_only: v.boolean(),
+    policy: FilePolicy,
+    volume: v.nullable(FileVolume),
+    rules: v.array(FileRule),
+});
+
+export const FileRootsAnswer = v.looseObject({
+    schema: v.number(),
+    generation: v.optional(v.number(), 0),
+    roots: v.array(FileRoot),
+    apps: v.optional(v.array(v.looseObject({ name: v.string(), program: v.string() })), []),
+    notes: v.optional(v.array(v.string()), []),
+});
+
+export const FileEntry = v.looseObject({
+    name: v.string(),
+    kind: v.string(),
+    size: v.number(),
+    modified_ms: v.number(),
+    openable: v.boolean(),
+    problem: v.nullable(v.string()),
+    rule: v.nullable(FileRule),
+});
+
+export const FileListing = v.looseObject({
+    schema: v.number(),
+    root: v.string(),
+    path: v.string(),
+    modified_ms: v.optional(v.number(), 0),
+    policy: FilePolicy,
+    rule: v.optional(v.nullable(FileRule), null),
+    entries: v.array(FileEntry),
+    total: v.number(),
+    offset: v.number(),
+    limit: v.number(),
+    truncated: v.boolean(),
+    sort: v.string(),
+    order: v.string(),
+    filter: v.string(),
+});
+
+export const FileContent = v.looseObject({
+    schema: v.number(),
+    root: v.string(),
+    path: v.string(),
+    name: v.string(),
+    size: v.number(),
+    modified_ms: v.number(),
+    etag: v.nullable(v.string()),
+    offset: v.number(),
+    length: v.number(),
+    next_offset: v.nullable(v.number()),
+    eof: v.boolean(),
+    binary: v.boolean(),
+    bom: v.optional(v.boolean(), false),
+    text: v.nullable(v.string()),
+    redacted: v.boolean(),
+    redacted_keys: v.array(v.string()),
+    revealed: v.boolean(),
+    revealed_keys: v.optional(v.array(v.string()), []),
+});
+
+export const FileRulesAnswer = v.looseObject({
+    schema: v.number(),
+    root: v.string(),
+    built_in: v.array(v.looseObject({ pattern: v.string(), effect: v.string(), why: v.string() })),
+    patterns: v.array(v.string()),
+    rebuilt: v.optional(v.boolean(), true),
+    errors: v.optional(v.array(v.string()), []),
+});
+
 export type OutputAnswer = v.InferOutput<typeof OutputAnswer>;
 export type SettingsAnswer = v.InferOutput<typeof SettingsAnswer>;
 export type SettingLock = v.InferOutput<typeof SettingLock>;
@@ -560,6 +814,18 @@ export type MetricBucket = v.InferOutput<typeof MetricBucket>;
 export type MetricSeries = v.InferOutput<typeof MetricSeries>;
 export type MetricFamily = v.InferOutput<typeof MetricFamily>;
 export type MetricsAnswer = v.InferOutput<typeof MetricsAnswer>;
+export type TickProfileAnswer = v.InferOutput<typeof TickProfileAnswer>;
+export type TickProfileTraceAnswer = v.InferOutput<typeof TickProfileTraceAnswer>;
 export type ActivityRow = v.InferOutput<typeof ActivityRow>;
 export type ActivityAnswer = v.InferOutput<typeof ActivityAnswer>;
 export type ClientAnswer = v.InferOutput<typeof ClientAnswer>;
+export type FileOperationState = v.InferOutput<typeof FileOperationState>;
+export type FilePolicy = v.InferOutput<typeof FilePolicy>;
+export type FileRule = v.InferOutput<typeof FileRule>;
+export type FileVolume = v.InferOutput<typeof FileVolume>;
+export type FileRoot = v.InferOutput<typeof FileRoot>;
+export type FileRootsAnswer = v.InferOutput<typeof FileRootsAnswer>;
+export type FileEntry = v.InferOutput<typeof FileEntry>;
+export type FileListing = v.InferOutput<typeof FileListing>;
+export type FileContent = v.InferOutput<typeof FileContent>;
+export type FileRulesAnswer = v.InferOutput<typeof FileRulesAnswer>;

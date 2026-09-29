@@ -38,6 +38,8 @@ def add_common(parser):
     parser.add_argument("--no-capture", dest="capture", action="store_false", help="do not capture the loopback traffic")
     parser.add_argument("--server-timeout", type=float, default=300, help="seconds to wait for the login server to report itself ready")
     parser.add_argument("--client-timeout", type=float, default=180, help="seconds to wait for the client and its window")
+    parser.add_argument("--monitor", help="screen the client windows are moved to: primary, secondary or a number in the order Windows lists its screens; "
+                                          "the main client goes to its top left and a companion to its bottom right")
 
 
 def options_of(args, need_crops=True):
@@ -61,6 +63,7 @@ def options_of(args, need_crops=True):
         "need_crops": need_crops,
         "server_timeout": args.server_timeout,
         "client_timeout": args.client_timeout,
+        "monitor": getattr(args, "monitor", None),
         "set": list(getattr(args, "set", None) or []),
         "label": getattr(args, "label", None),
         "user": getattr(args, "user", None),

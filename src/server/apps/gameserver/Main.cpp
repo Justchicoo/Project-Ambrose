@@ -8,6 +8,7 @@
 #include "Settings.h"
 #include "RealmList.h"
 #include "AdminDatabaseView.h"
+#include "AdminRouter.h"
 #include "AdminServer.h"
 #include "AppenderDB.h"
 #include "CharacterNameExtractor.h"
@@ -27,7 +28,9 @@
 #include "StartProgress.h"
 #include "PlayerLevelMgr.h"
 #include "AccountMgr.h"
+#include "AdminCommand.h"
 #include "ClientSetup.h"
+#include "CommandCaller.h"
 #include "CommandMgr.h"
 #include "ConfigMgr.h"
 #include "DatabaseEnv.h"
@@ -51,6 +54,8 @@
 
 #include <fmt/format.h>
 
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -64,6 +69,18 @@
 
 namespace
 {
+    nlohmann::json TickProfileState(WorldTickProfileSnapshot const& profile)
+    {
+        return {
+            { "schema", 1 },
+            { "active", profile.Active },
+            { "complete", profile.Complete },
+            { "truncated", profile.Truncated },
+            { "requested_seconds", profile.RequestedSeconds },
+            { "events", profile.Events.size() }
+        };
+    }
+
     class GameServerApp : public ServerApp
     {
     public:
@@ -99,9 +116,105 @@ namespace
         }
 
     protected:
+        void RegisterAdminCommand(AdminRouter& routes) override
+        {
+            AdminCommand::Register(routes,
+                [](std::string const& line, uint8 level, bool confirmed)
+                {
+                    AdminCommandOutcome outcome;
+                    outcome.Command = sCommandMgr.DescribeForLog(line);
+                    CommandMatch const match = sCommandMgr.Parse(line);
+                    if (!match.Found || level < match.SecurityLevel)
+                    {
+                        outcome.Refused = true;
+                        outcome.Reason = "there is no such command";
+                        return outcome;
+                    }
+                    if (AdminCommand::IsDestructive(line) && !confirmed)
+                    {
+                        outcome.Refused = true;
+                        outcome.NeedsConfirm = true;
+                        outcome.Reason = "this command changes something that cannot be undone, so it needs confirm";
+                        return outcome;
+                    }
+                    RecordingCaller caller(level, true, "panel operator");
+                    CommandResult const result = sCommandMgr.Execute(caller, line);
+                    outcome.Lines = caller.GetLines();
+                    outcome.Ran = result == CommandResult::Ran;
+                    outcome.Refused = !outcome.Ran;
+                    if (result == CommandResult::Unknown)
+                        outcome.Reason = "there is no such command";
+                    else if (result == CommandResult::Usage)
+                        outcome.Reason = "the command was not used the way it takes";
+                    else if (result == CommandResult::Empty)
+                        outcome.Reason = "there was no command to run";
+                    else if (result == CommandResult::Refused)
+                        outcome.Reason = "the command refused to run";
+                    return outcome;
+                }, Commands(), GetInfo().Name, CommandAuditFile(),
+                [](std::string_view line) { return sCommandMgr.DescribeForLog(line); });
+        }
+
         void OnAdminApiReady(AdminServer& admin) override
         {
             _databaseView.Register(admin.Routes());
+            admin.Routes().AddGuarded("POST", "/api/tick-profile", "metrics.profile", [](AdminRequest const& request)
+            {
+                nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
+                if (!body.is_object())
+                    return AdminResponse::Invalid("A tick profile request takes a JSON object", { { "seconds", "Choose a duration from 1 to 30 seconds" } });
+                std::vector<std::pair<std::string, std::string>> fields;
+                std::optional<uint32> duration;
+                for (auto const& [key, value] : body.items())
+                {
+                    if (key != "seconds")
+                        fields.emplace_back(key, "A tick profile request takes only seconds");
+                    else if (value.is_number_unsigned())
+                    {
+                        uint64 const seconds = value.get<uint64>();
+                        if (seconds < 1 || seconds > 30)
+                            fields.emplace_back("seconds", "Choose a whole number of seconds from 1 to 30");
+                        else
+                            duration = static_cast<uint32>(seconds);
+                    }
+                    else if (value.is_number_integer())
+                    {
+                        int64 const seconds = value.get<int64>();
+                        if (seconds < 1 || seconds > 30)
+                            fields.emplace_back("seconds", "Choose a whole number of seconds from 1 to 30");
+                        else
+                            duration = static_cast<uint32>(seconds);
+                    }
+                    else
+                        fields.emplace_back("seconds", "Choose a whole number of seconds from 1 to 30");
+                }
+                if (!body.contains("seconds"))
+                    fields.emplace_back("seconds", "Choose a whole number of seconds from 1 to 30");
+                if (!fields.empty())
+                    return AdminResponse::Invalid("The tick profile request has problems", std::move(fields));
+                if (!sWorld.StartTickProfile(*duration))
+                    return AdminResponse::Problem(409, "profile_active", "A world tick profile is already running");
+                return AdminResponse::Json(202, TickProfileState(sWorld.GetTickProfile(false)).dump());
+            });
+            admin.Routes().AddGuarded("GET", "/api/tick-profile", "metrics.profile", [](AdminRequest const&)
+            {
+                return AdminResponse::Json(200, TickProfileState(sWorld.GetTickProfile(false)).dump());
+            });
+            admin.Routes().AddGuarded("GET", "/api/tick-profile/trace", "metrics.profile", [](AdminRequest const&)
+            {
+                WorldTickProfileSnapshot const profile = sWorld.GetTickProfile();
+                if (profile.Active)
+                    return AdminResponse::Problem(409, "profile_running", "The tick profile has not finished");
+                if (!profile.Complete)
+                    return AdminResponse::Problem(404, "profile_missing", "No completed tick profile is available");
+                return AdminResponse::Json(200, nlohmann::json{
+                    { "schema", 1 },
+                    { "requested_seconds", profile.RequestedSeconds },
+                    { "truncated", profile.Truncated },
+                    { "events", profile.Events.size() },
+                    { "trace", World::TickProfileTraceJson(profile) }
+                }.dump());
+            });
         }
 
         std::vector<RestartRequiredOption> GetRestartRequiredOptions() const override
@@ -639,6 +752,16 @@ namespace
                 _context->SetSettings(SessionSettings::Load(Config(), &problems));
                 for (std::string const& problem : problems)
                     LOG_WARN("server.gameserver", "{}", problem);
+                if (_sockets && key.starts_with("Network."))
+                {
+                    problems.clear();
+                    NetworkSettings const settings = NetworkSettings::Load(Config(), "WorldServerPort", DefaultWorldPort, &problems);
+                    std::string error;
+                    if (!_sockets->ApplySettings(settings, error))
+                        LOG_WARN("server.gameserver", "Cannot apply network settings: {}", error);
+                    for (std::string const& problem : problems)
+                        LOG_WARN("server.gameserver", "{}", problem);
+                }
             }
         }
 

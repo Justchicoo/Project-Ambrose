@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, a seeded wizard's stat it does not carry or a negative one, a patching mode other than off or default, a listener without a name, an address, a port or the number of connections it should see, or a wait on a listener the scenario does not name, before anything is started.
+# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, a seeded wizard's stat it does not carry or a negative one, a patching mode other than off or default, a companion without a wizard of its own, a step that drives or watches a client the run does not start, a watch that films too often or too long, a held key list that is empty or holds more than four keys, a listener without a name, an address, a port or the number of connections it should see, or a wait on a listener the scenario does not name, before anything is started.
 import json
 import os
 import re
@@ -18,7 +18,7 @@ ACTIONS = {
     "type": (("text",), ()),
     "char": (("code",), ()),
     "key": (("vk",), ()),
-    "hold_key": (("vk", "seconds"), ("moves",)),
+    "hold_key": (("vk", "seconds"), ("moves", "watch", "watch_every", "watch_after")),
     "click": (("target",), ("attempts", "dwell", "dwell_step", "on_screen", "until")),
     "shot": ((), ("file", "settle")),
     "server_command": (("command",), ("pattern", "timeout")),
@@ -27,10 +27,14 @@ ACTIONS = {
     "restart_client": ((), ("timeout",)),
     "wait_listener": (("listener", "timeout"), ()),
 }
-COMMON_KEYS = ("action", "name")
+COMMON_KEYS = ("action", "name", "client")
+CLIENTS = ("main", "companion")
+CLIENT_ACTIONS = ("wait_client_log", "forbid_log", "wait_screen", "submit_login", "type", "char", "key", "hold_key", "click", "shot",
+                  "restart_client", "wait_listener")
 ALLOW_LISTS = ("pending_allowed", "dropped_allowed", "server_log_allowed", "client_log_allowed")
-TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "game_settings", "wizard", "variables", "expect", "steps",
+TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "game_settings", "wizard", "companion", "variables", "expect", "steps",
              "patching", "listeners", "patch_config") + ALLOW_LISTS
+COMPANION = ("wizard",)
 PATCHING = ("off", "default")
 LISTENER_KEYS = ("name", "address", "port", "expect")
 LISTENER_OPTIONAL = ("at_least",)
@@ -42,7 +46,10 @@ SIDES = ("server", "client")
 OUTCOMES = ("pass", "failure")
 MAX_HOLD_SECONDS = 30
 MAX_SETTLE_SECONDS = 30
-RUN_VARIABLES = ("user", "password", "wizard", "wizard_guid")
+WATCH_EVERY = (0.1, 5)
+MAX_WATCH_AFTER = 10
+MAX_HELD_KEYS = 4
+RUN_VARIABLES = ("user", "password", "wizard", "wizard_guid", "companion_user", "companion_password", "companion_wizard", "companion_wizard_guid")
 KEPT_NAME = re.compile(r"^\w+$")
 
 
@@ -81,6 +88,7 @@ class Scenario:
         self.server_settings = list(document.get("server_settings") or [])
         self.game_settings = list(document.get("game_settings") or [])
         self.wizard = document.get("wizard")
+        self.companion = dict(document["companion"]) if document.get("companion") else None
         self.variables = dict(document.get("variables") or {})
         for name in ALLOW_LISTS:
             setattr(self, name, list(document.get(name) or []))
@@ -163,6 +171,22 @@ def _check_step(path, index, step):
         raise Refused(f"{where} ({name}) may wait more than 0 and at most 600 seconds for the client to come back")
     if action == "shot" and "settle" in step and (not isinstance(step["settle"], (int, float)) or isinstance(step["settle"], bool) or not 0 <= step["settle"] <= MAX_SETTLE_SECONDS):
         raise Refused(f"{where} ({name}) may let the screen settle for 0 to {MAX_SETTLE_SECONDS} seconds before its shot")
+    if "client" in step and step["client"] not in CLIENTS:
+        raise Refused(f"{where} ({name}) drives the client {step['client']!r}; a run drives {' or '.join(CLIENTS)}")
+    if "client" in step and action not in CLIENT_ACTIONS:
+        raise Refused(f"{where} ({name}) names a client, but its {action} action drives none")
+    if action == "hold_key" and isinstance(step["vk"], list) and not 0 < len(step["vk"]) <= MAX_HELD_KEYS:
+        raise Refused(f"{where} ({name}) holds a list of 1 to {MAX_HELD_KEYS} keys at once")
+    if "watch" in step and step["watch"] not in CLIENTS:
+        raise Refused(f"{where} ({name}) watches the client {step['watch']!r}; a run drives {' or '.join(CLIENTS)}")
+    if ("watch_every" in step or "watch_after" in step) and "watch" not in step:
+        raise Refused(f"{where} ({name}) says how to watch but not which client it watches")
+    if "watch_every" in step and (isinstance(step["watch_every"], bool) or not isinstance(step["watch_every"], (int, float))
+                                  or not WATCH_EVERY[0] <= step["watch_every"] <= WATCH_EVERY[1]):
+        raise Refused(f"{where} ({name}) films the watched client every {WATCH_EVERY[0]} to {WATCH_EVERY[1]} seconds")
+    if "watch_after" in step and (isinstance(step["watch_after"], bool) or not isinstance(step["watch_after"], (int, float))
+                                  or not 0 <= step["watch_after"] <= MAX_WATCH_AFTER):
+        raise Refused(f"{where} ({name}) may go on watching for 0 to {MAX_WATCH_AFTER} seconds after the key is let go")
     if action == "forbid_log" and step["side"] not in SIDES:
         raise Refused(f"{where} ({name}) must forbid a line on the {' or '.join(SIDES)} side")
     for key in ("pattern", "fail"):
@@ -170,6 +194,23 @@ def _check_step(path, index, step):
             _check_pattern(f"{where} ({name})", key, step[key])
     if action == "click" and isinstance(step.get("until"), dict):
         _check_step(path, index, dict(step["until"], name=f"{name}: the check that it took"))
+
+
+def _check_wizard(path, wizard, what):
+    if not isinstance(wizard, dict):
+        raise Refused(f"{path}: {what} must be an object")
+    missing = [key for key in WIZARD if key not in wizard]
+    if missing:
+        raise Refused(f"{path}: {what} needs {', '.join(missing)}")
+    stats = wizard.get("stats")
+    if stats is not None:
+        if not isinstance(stats, dict):
+            raise Refused(f"{path}: {what}'s stats must be an object")
+        for key, value in stats.items():
+            if key not in WIZARD_STATS:
+                raise Refused(f"{path}: {what}'s stats have {key!r}, which a wizard does not carry; it carries {', '.join(WIZARD_STATS)}")
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+                raise Refused(f"{path}: {what}'s {key} must be a number of zero or more")
 
 
 def _check_document(path, document):
@@ -185,22 +226,16 @@ def _check_document(path, document):
             raise Refused(f"{path} requires {key!r}, which the driver does not know")
     wizard = document.get("wizard")
     if wizard is not None:
-        if not isinstance(wizard, dict):
-            raise Refused(f"{path}: wizard must be an object")
-        missing = [key for key in WIZARD if key not in wizard]
-        if missing:
-            raise Refused(f"{path}: the wizard needs {', '.join(missing)}")
-        stats = wizard.get("stats")
-        if stats is not None:
-            if not isinstance(stats, dict):
-                raise Refused(f"{path}: the wizard's stats must be an object")
-            for key, value in stats.items():
-                if key not in WIZARD_STATS:
-                    raise Refused(f"{path}: the wizard's stats have {key!r}, which a wizard does not carry; it carries {', '.join(WIZARD_STATS)}")
-                if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
-                    raise Refused(f"{path}: the wizard's {key} must be a number of zero or more")
+        _check_wizard(path, wizard, "the wizard")
         if not (document.get("requires") or {}).get("gameserver"):
             raise Refused(f"{path} seeds a wizard but does not require the game server it enters the world on")
+    companion = document.get("companion")
+    if companion is not None:
+        if not isinstance(companion, dict) or sorted(companion) != sorted(COMPANION):
+            raise Refused(f"{path}: the companion needs exactly {', '.join(COMPANION)}")
+        _check_wizard(path, companion["wizard"], "the companion's wizard")
+        if not (document.get("requires") or {}).get("gameserver"):
+            raise Refused(f"{path} starts a companion but does not require the game server its wizard enters the world on")
     if document.get("patching", "off") not in PATCHING:
         raise Refused(f"{path} asks for patching {document['patching']!r}; a scenario runs the client with patching {' or '.join(PATCHING)}")
     listeners = document.get("listeners")
@@ -276,6 +311,7 @@ def _merge(base, scenario):
     scenario.needs_gameserver = base.needs_gameserver or scenario.needs_gameserver
     scenario.game_settings = base.game_settings + [value for value in scenario.game_settings if value not in base.game_settings]
     scenario.wizard = scenario.wizard or base.wizard
+    scenario.companion = scenario.companion or base.companion
     scenario.expect_failure = base.expect_failure or scenario.expect_failure
     scenario.notes = base.notes + scenario.notes
     scenario.listeners = base.listeners + scenario.listeners
@@ -306,4 +342,9 @@ def load(path, search=(), seen=()):
     if included:
         base = load(included, search=list(search) + [os.path.dirname(resolved)], seen=seen + (resolved,))
         scenario = _merge(base, scenario)
+    if scenario.companion is None:
+        for index, step in enumerate(scenario.steps):
+            if step.get("client") == "companion" or step.get("watch") == "companion":
+                raise Refused(f"{scenario.path} step {index + 1} ({step.get('name') or step['action']}) drives the companion client, "
+                              "but the scenario starts no companion")
     return scenario

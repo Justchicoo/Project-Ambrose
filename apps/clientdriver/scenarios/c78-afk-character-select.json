@@ -1,0 +1,73 @@
+{
+  "title": "C-78: character select shows the AFK disconnect",
+  "include": "parts/common.json",
+  "notes": [
+    "The run seeds one wizard so sign-in reaches character select instead of the new-account creation flow.",
+    "Three no-input settling captures give the client time to finish loading character select; the last records the wizard before the AFK timeout.",
+    "The client log must identify GUI_ConnectionAFK, and the rendered message is captured for visual review."
+  ],
+  "requires": {"gameserver": true},
+  "server_settings": ["Login.AfkTimeout=150"],
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "steps": [
+    {"action": "wait_client_log", "name": "the client brings its renderer up",
+     "pattern": "About to initialize graphical client\\.", "timeout": 180},
+    {"action": "wait_screen", "name": "the login window is on the screen", "screens": ["login"], "timeout": 120},
+    {"action": "submit_login", "name": "submit the test account", "password": "{password}"},
+    {"action": "wait_client_log", "name": "the client sends its authentication request",
+     "pattern": "Send MSG_USER_AUTHEN to Login Server", "timeout": 30},
+    {"action": "wait_server_log", "name": "the server admits the account",
+     "pattern": "authenticated as {user} \\(id \\d+\\)", "timeout": 20},
+    {"action": "wait_client_log", "name": "the client is admitted",
+     "pattern": "The LoginServer has admitted the user", "timeout": 30},
+    {"action": "wait_server_log", "name": "the login server lists the seeded wizard",
+     "pattern": "listed (\\d+) character\\(s\\) of account \\d+", "timeout": 30, "expect": "1", "record": true},
+    {"action": "wait_client_log", "name": "the character selection scene loads",
+     "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.", "timeout": 120},
+    {"action": "shot", "name": "the character selection scene is still loading",
+     "file": "character-select-loading-1", "settle": 30},
+    {"action": "shot", "name": "the character selection scene continues loading",
+     "file": "character-select-loading-2", "settle": 30},
+    {"action": "shot", "name": "the selected wizard on character select before the idle timeout",
+     "file": "character-select-before-afk", "settle": 30},
+    {"action": "wait_server_log", "name": "the server sends the AFK disconnect after the timeout",
+     "pattern": "Session \\d+ from \\S+ was idle for \\d+ s, reaching Login\\.AfkTimeout of 150 s; sent MSG_DISCONNECT_LOGIN_AFK Warning=(-?\\d+) and closed the session",
+     "timeout": 180, "record": true},
+    {"action": "wait_client_log", "name": "the client chooses its AFK disconnect message",
+     "pattern": "msg string key = GUI_ConnectionAFK",
+     "timeout": 30, "record": true},
+    {"action": "shot", "name": "the client-visible AFK disconnect",
+     "file": "afk-disconnect"},
+    {"action": "forbid_log", "name": "the client does not report a generic lost connection",
+     "side": "client", "pattern": "(?i)connection lost|lost connection|connection.*lost|lost.*connection"}
+  ]
+}

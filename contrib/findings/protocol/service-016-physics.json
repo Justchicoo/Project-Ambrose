@@ -1,0 +1,362 @@
+{
+    "subject":  "F-41 service 16 PHYSICS",
+    "area":  "protocol",
+    "claim":  "The r806919 Wizard 1.610 Root.wad message definitions identify service 16 as PHYSICS and define its ordered message tags and field types as catalogued here.",
+    "revision":  "r806919.Wizard_1_610",
+    "method":  "static",
+    "how_to_repeat":  [
+                          "Read Messages/PhysicsBehaviorMessages.xml from Root.wad in your own r806919 install with `bindecode` --client \u003cinstall\u003e --text Messages/PhysicsBehaviorMessages.xml.",
+                          "Read ServiceID and ProtocolType from _ProtocolInfo/RECORD; enumerate each message RECORD and retain each non-metadata field name and its TYPE (or the supported TPYE/TYP spelling, with GlobalID inferred as GID).",
+                          "Use explicit _MsgOrder or _MsgType where the first message has it; otherwise sort distinct message element tags by byte-ordinal order and number them from 1, collapsing repeated tags only when their fields match.",
+                          "Run `bindecode --client \u003cinstall\u003e --sweep` as an archive-decode check; the sweep covers BINd entries, not the XML message definitions."
+                      ],
+    "evidence":  [
+                     "`bindecode` --client \u003cinstall\u003e --text Messages/PhysicsBehaviorMessages.xml read this definition from the local r806919 Root.wad; it declares service id 16, protocol name PHYSICS, and 6 distinct ordered messages with 72 fields.",
+                     "The service uses tag-ordinal order; the catalog records every message tag/name, resolved order, and field name/type, excluding underscore-prefixed metadata.",
+                     "`bindecode --client \u003cinstall\u003e --sweep --threads 8` reported 173088 entries, 134640 BINd files, 134635 decoded, 5 unknown-root-class failures and 0 unreadable entries; those five BINd failures do not validate or contradict this XML catalog."
+                 ],
+    "disproof":  "A repeat read of Messages/PhysicsBehaviorMessages.xml from another r806919 install that yields a different service id/name, distinct message order, or field name/type under the stated ordering rule.",
+    "confidence":  "high",
+    "submitted_by":  "MeruneFleuruwu",
+    "submitted_on":  "2026-09-27",
+    "status":  "claimed",
+    "service":  {
+                    "id":  16,
+                    "name":  "PHYSICS",
+                    "version":  1,
+                    "entry":  "Messages/PhysicsBehaviorMessages.xml",
+                    "ordering":  "tag-ordinal",
+                    "messages":  [
+                                     {
+                                         "tag":  "MSG_PHYSICS_FORCE",
+                                         "name":  "MSG_PHYSICS_FORCE",
+                                         "order":  1,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PositionX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "PositionY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "PositionZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "RotationX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "RotationY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "RotationZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "VelocityX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "VelocityY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "VelocityZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "AngularVelocityX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "AngularVelocityY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "AngularVelocityZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "ForceX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "ForceY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "ForceZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PHYSICS_FORCE_AT_POS",
+                                         "name":  "MSG_PHYSICS_FORCE_AT_POS",
+                                         "order":  2,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PositionX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "PositionY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "PositionZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "RotationX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "RotationY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "RotationZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "VelocityX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "VelocityY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "VelocityZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "AngularVelocityX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "AngularVelocityY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "AngularVelocityZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "ForceX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "ForceY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "ForceZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "ForcePosX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "ForcePosY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "ForcePosZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PHYSICS_GRAB",
+                                         "name":  "MSG_PHYSICS_GRAB",
+                                         "order":  3,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "HolderID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "OffsetX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "OffsetY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "OffsetZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "Force",
+                                                            "type":  "FLT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PHYSICS_RELEASE",
+                                         "name":  "MSG_PHYSICS_RELEASE",
+                                         "order":  4,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "HolderID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PHYSICS_STATE",
+                                         "name":  "MSG_PHYSICS_STATE",
+                                         "order":  5,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PositionX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "PositionY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "PositionZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "RotationX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "RotationY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "RotationZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "VelocityX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "VelocityY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "VelocityZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "AngularVelocityX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "AngularVelocityY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "AngularVelocityZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PHYSICS_TORQUE",
+                                         "name":  "MSG_PHYSICS_TORQUE",
+                                         "order":  6,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PositionX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "PositionY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "PositionZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "RotationX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "RotationY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "RotationZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "VelocityX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "VelocityY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "VelocityZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "AngularVelocityX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "AngularVelocityY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "AngularVelocityZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "TorqueX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "TorqueY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "TorqueZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     }
+                                 ]
+                }
+}

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, waits past its timeout for a start step a stand-in admin API reports until the app is ready and ends one that runs past the time it asked for, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant.
+ * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, hands every state the app passes through to the status observer once and in order with when each began and the data the panel's status event carries, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, waits past its timeout for a start step a stand-in admin API reports until the app is ready and ends one that runs past the time it asked for, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant.
  */
 
 #include "AdminAuth.h"
@@ -11,14 +11,17 @@
 #include "ConfigMgr.h"
 #include "LogTestDirectory.h"
 #include "LogTestHarness.h"
+#include "Panel.h"
 #include "Supervisor.h"
 
+#include <asio.hpp>
 #include <fmt/format.h>
 
 #include <nlohmann/json.hpp>
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <fstream>
 #include <functional>
@@ -26,6 +29,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace
@@ -94,11 +98,13 @@ namespace
     class Rig
     {
     public:
-        explicit Rig(std::vector<std::string> const& script, std::string const& extra = {})
+        explicit Rig(std::vector<std::string> const& script, std::string const& extra = {}, std::string const& appSettings = {})
         {
             std::string lines;
             for (std::string const& line : script)
-                lines += line + "\n";
+                lines += appSettings.empty() ? line + "\n" : "#" + line + "\n";
+            if (!appSettings.empty())
+                lines += appSettings;
             std::filesystem::path const scriptFile = _directory.Write("helper.conf", lines);
             std::string const settings = fmt::format(
                 "Supervisor.Apps = helper\nApp.helper.Program = \"{}\"\nApp.helper.Config = \"{}\"\nSupervisor.StateFile = \"{}\"\nSupervisor.OutputDir = \"{}\"\n{}",
@@ -115,9 +121,10 @@ namespace
                 EndFromOutside(*process);
         }
 
-        bool Open()
+        bool Open(AppStatusObserver observer = {})
         {
             _instance = std::make_unique<Supervisor>(_harness.GetLog(), HelperBreak());
+            _instance->SetStatusObserver(std::move(observer));
             std::vector<std::string> problems;
             std::string error;
             SupervisorSettings const settings = SupervisorSettings::Load(_config, _directory.Path() / "data", HelperPath().parent_path(), _directory.Path(), problems);
@@ -171,6 +178,55 @@ namespace
         std::unique_ptr<Supervisor> _instance;
     };
 
+    class RepeatedResponseServer
+    {
+    public:
+        explicit RepeatedResponseServer(int status)
+            : _acceptor(_context, { asio::ip::make_address("127.0.0.1"), 0 })
+        {
+            _acceptor.non_blocking(true);
+            _worker = std::thread([this, status]
+            {
+                while (!_stopping.load())
+                {
+                    asio::ip::tcp::socket socket(_context);
+                    asio::error_code error;
+                    _acceptor.accept(socket, error);
+                    if (!error)
+                    {
+                        std::string const reason = status == 401 ? "Unauthorized" : "Forbidden";
+                        std::string const response = fmt::format(
+                            "HTTP/1.1 {} {}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}",
+                            status, reason);
+                        asio::write(socket, asio::buffer(response), error);
+                        continue;
+                    }
+                    if (error != asio::error::would_block && error != asio::error::try_again)
+                        return;
+                    std::this_thread::sleep_for(5ms);
+                }
+            });
+        }
+
+        ~RepeatedResponseServer()
+        {
+            _stopping = true;
+            if (_worker.joinable())
+                _worker.join();
+        }
+
+        uint16 Port() const
+        {
+            return _acceptor.local_endpoint().port();
+        }
+
+    private:
+        asio::io_context _context;
+        asio::ip::tcp::acceptor _acceptor;
+        std::thread _worker;
+        std::atomic_bool _stopping = false;
+    };
+
     std::vector<std::string> ServerScript()
     {
         return { "echo", ReadyLine, "wait-for-stop" };
@@ -202,6 +258,59 @@ TEST(SupervisorTest, StartsAnAppOnItsReadyLineAndStopsItThroughItsInput)
     EXPECT_EQ(stopped.Crashes, 0u);
     EXPECT_TRUE(rig.Said("Stopping helper with a shutdown line on its input"));
     EXPECT_TRUE(rig.Said("stopped by shutdown"));
+}
+
+TEST(SupervisorTest, EveryStateTheAppPassesThroughReachesTheStatusObserverOnceAndInOrder)
+{
+    std::mutex mutex;
+    std::vector<AppSnapshot> seen;
+    AppStatusObserver const observer = [&mutex, &seen](AppSnapshot const& snapshot)
+    {
+        std::lock_guard const lock(mutex);
+        seen.push_back(snapshot);
+    };
+    Rig rig(ServerScript());
+    ASSERT_TRUE(rig.Open(observer));
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Running; }));
+    EXPECT_TRUE(rig.Instance().Power("helper", PowerAction::Stop, 0).Accepted);
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Offline; }));
+    auto const until = std::chrono::steady_clock::now() + 10s;
+    while (std::chrono::steady_clock::now() < until)
+    {
+        {
+            std::lock_guard const lock(mutex);
+            if (!seen.empty() && seen.back().State == AppState::Offline)
+                break;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+    rig.Close();
+
+    std::lock_guard const lock(mutex);
+    std::vector<std::string> states;
+    for (AppSnapshot const& snapshot : seen)
+        states.emplace_back(ManagedApp::StateName(snapshot.State));
+    EXPECT_EQ(states, (std::vector<std::string>{ "starting", "running", "stopping", "offline" }));
+    for (std::size_t index = 1; index < seen.size(); ++index)
+    {
+        EXPECT_GE(seen[index].StateSinceEpochMs, seen[index - 1].StateSinceEpochMs) << "each state begins no earlier than the one before it";
+    }
+    if (seen.size() == 4)
+    {
+        EXPECT_TRUE(seen[0].ProcessId.has_value()) << "a start is handed on with the process it started";
+        EXPECT_EQ(seen[1].ProcessId, seen[0].ProcessId);
+        EXPECT_GT(seen[0].StateSinceEpochMs, 0);
+        nlohmann::json const offline = nlohmann::json::parse(Supervisor::StatusData(seen[3]));
+        EXPECT_EQ(offline["app"], "helper");
+        EXPECT_EQ(offline["state"], "offline");
+        EXPECT_TRUE(offline["pid"].is_null());
+        EXPECT_EQ(offline["exit_code"], 0) << "an app that is down carries the code it exited with";
+        EXPECT_EQ(offline["crashes"], 0);
+        EXPECT_TRUE(offline["next_restart"].is_null());
+        nlohmann::json const running = nlohmann::json::parse(Supervisor::StatusData(seen[1]));
+        EXPECT_EQ(running["pid"], *seen[1].ProcessId);
+        EXPECT_TRUE(running["exit_code"].is_null());
+    }
 }
 
 TEST(SupervisorTest, ARestartStartsTheAppAgainAsANewProcess)
@@ -497,4 +606,112 @@ TEST(SupervisorTest, EachListenerJudgesTheRequestsThatCameInOnIt)
     EXPECT_EQ(admin.Dispatch(Request("POST", "/api/apps/helper/power", "{\"action\":\"start\"}")).Status, 409) << "and may ask for power";
     EXPECT_EQ(panel.Dispatch(Request("GET", "/api/apps/helper/api/status")).Status, 403) << "while the panel's own check still refuses its caller";
     EXPECT_EQ(panel.Dispatch(Request("POST", "/api/apps/helper/power", "{\"action\":\"start\"}")).Status, 403);
+}
+
+TEST(SupervisorTest, ARestartOnlyGrantCanRestartWithoutRequiringStatusRead)
+{
+    Rig rig(ServerScript());
+    ASSERT_TRUE(rig.Open());
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Running; }));
+
+    AdminAuth auth(10, 1.0);
+    auth.SetToken(Token);
+    AdminRouter panel(auth);
+    panel.SetPermissionCheck([](AdminRequest const&, std::string_view permission)
+    {
+        return permission == "power.restart" ? PermissionVerdict::Allowed : PermissionVerdict::Forbidden;
+    });
+    rig.Instance().Register(panel, [] { return AdminStatusSnapshot{}; });
+
+    AdminResponse const restarted = panel.Dispatch(Request("POST", "/api/apps/helper/power", "{\"action\":\"restart\"}"));
+    ASSERT_EQ(restarted.Status, 202) << restarted.Body;
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.Restarts == 1 && app.State == AppState::Running; }));
+    EXPECT_EQ(panel.Dispatch(Request("GET", "/api/apps/helper")).Status, 403);
+}
+
+TEST(SupervisorTest, TheRelayRemovesClientCredentialsAndCapsCommandLevels)
+{
+    std::string const body = Supervisor::PrepareCommandRelayBody(
+        R"({"command":"account create player passphrase","level":4,"AdMiN_ToKeN":"app-secret","Authorization":"secret"})", 2);
+    nlohmann::json const relayed = nlohmann::json::parse(body);
+    EXPECT_EQ(relayed["command"], "account create player passphrase");
+    EXPECT_EQ(relayed["level"], 2);
+    EXPECT_FALSE(relayed.contains("AdMiN_ToKeN"));
+    EXPECT_FALSE(relayed.contains("Authorization"));
+    EXPECT_EQ(body.find("app-secret"), std::string::npos);
+
+    nlohmann::json const lower = nlohmann::json::parse(Supervisor::PrepareCommandRelayBody(R"({"command":"ping","level":1})", 2));
+    EXPECT_EQ(lower["level"], 1);
+}
+
+TEST(SupervisorTest, StoppedAppAndInvalidTokenRelayFailuresAreDistinctAndAudited)
+{
+    LogTestHarness harness;
+    LogTestDirectory directory;
+    ConfigMgr panelConfig;
+    ASSERT_TRUE(panelConfig.LoadInitial(directory.Write("panel.conf", "Panel.Enable = 1\nPanel.Port = 0\n")).Succeeded());
+    Panel panel(harness.GetLog(), directory.Path() / "data", directory.Path());
+    std::string error;
+    ASSERT_TRUE(panel.Start(panelConfig, error)) << error;
+    auto const recordThroughPanel = [&panel](Supervisor& supervisor)
+    {
+        supervisor.SetAuditRecorder([&panel](AdminRequest const& request, std::string_view app, std::string_view action, std::function<AdminResponse()> operation)
+        {
+            return panel.AuditRequest(request, app, action, std::move(operation));
+        });
+    };
+
+    std::string const unusedAdmin = fmt::format(
+        "Admin.Enable = 1\nAdmin.BindIP = 127.0.0.1\nAdmin.Port = 1\nAdmin.Token = {}\n", Token);
+    Rig stopped(ServerScript(), {}, unusedAdmin);
+    ASSERT_TRUE(stopped.Open());
+    ASSERT_TRUE(stopped.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Running; }));
+    recordThroughPanel(stopped.Instance());
+    AdminAuth stoppedAuth(10, 1.0);
+    stoppedAuth.SetToken(Token);
+    AdminRouter stoppedRouter(stoppedAuth);
+    stopped.Instance().Register(stoppedRouter, [] { return AdminStatusSnapshot{}; });
+    AdminResponse const stop = stoppedRouter.Dispatch(Request("POST", "/api/apps/helper/power", "{\"action\":\"stop\"}"));
+    ASSERT_EQ(stop.Status, 202) << stop.Body;
+    ASSERT_TRUE(stopped.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Offline; }));
+    AdminResponse const notRunning = stoppedRouter.Dispatch(Request("POST", "/api/apps/helper/api/command", R"({"command":"ping"})"));
+    ASSERT_EQ(notRunning.Status, 503) << notRunning.Body;
+    EXPECT_EQ(nlohmann::json::parse(notRunning.Body)["error"], "app_not_running");
+
+    RepeatedResponseServer invalidToken(401);
+    std::string const invalidAdmin = fmt::format(
+        "Admin.Enable = 1\nAdmin.BindIP = 127.0.0.1\nAdmin.Port = {}\nAdmin.Token = {}\n", invalidToken.Port(), Token);
+    Rig invalid(ServerScript(), {}, invalidAdmin);
+    ASSERT_TRUE(invalid.Open());
+    ASSERT_TRUE(invalid.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Running; }));
+    ASSERT_TRUE(invalid.App().AdminEnabled);
+    ASSERT_EQ(invalid.App().AdminPort, invalidToken.Port());
+    recordThroughPanel(invalid.Instance());
+    AdminAuth invalidAuth(10, 1.0);
+    invalidAuth.SetToken(Token);
+    AdminRouter invalidRouter(invalidAuth);
+    invalid.Instance().Register(invalidRouter, [] { return AdminStatusSnapshot{}; });
+    AdminResponse const tokenRefused = invalidRouter.Dispatch(Request("POST", "/api/apps/helper/api/command", R"({"command":"ping"})"));
+    ASSERT_EQ(tokenRefused.Status, 502) << tokenRefused.Body;
+    EXPECT_EQ(nlohmann::json::parse(tokenRefused.Body)["error"], "app_invalid_token");
+
+    std::size_t relayedSettings = 0;
+    invalid.Instance().SetRelayHooks({ [](AdminRequest const&) { return std::string("operator"); },
+        [&relayedSettings](AdminRequest const&, RelayedAnswer const&) { ++relayedSettings; } });
+    AdminResponse const settingRefused = invalidRouter.Dispatch(
+        Request("PUT", "/api/apps/helper/api/settings/Database.Host", R"({"value":"localhost","reason":"test"})"));
+    ASSERT_EQ(settingRefused.Status, 502) << settingRefused.Body;
+    EXPECT_EQ(relayedSettings, 0u);
+
+    std::optional<PanelStore::Statement> rows = panel.Store().Prepare(
+        "SELECT result, error FROM audit_event WHERE name = 'app:console.command' ORDER BY id", error);
+    ASSERT_TRUE(rows.has_value()) << error;
+    ASSERT_TRUE(rows->Step(error)) << error;
+    EXPECT_EQ(rows->Text(0), "failed");
+    EXPECT_EQ(nlohmann::json::parse(rows->Text(1))["error"], "app_not_running");
+    ASSERT_TRUE(rows->Step(error)) << error;
+    EXPECT_EQ(rows->Text(0), "failed");
+    EXPECT_EQ(nlohmann::json::parse(rows->Text(1))["error"], "app_invalid_token");
+    EXPECT_FALSE(rows->Step(error));
+    EXPECT_TRUE(error.empty()) << error;
 }

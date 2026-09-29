@@ -29,6 +29,7 @@ struct AdminClientRequest
 struct AdminClientResponse
 {
     bool Answered = false;
+    bool TimedOut = false;
     int Status = 0;
     std::string ContentType;
     std::string RequestId;

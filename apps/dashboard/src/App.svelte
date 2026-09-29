@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The panel frame: it asks the server that served it whether this browser is signed in, shows the sign-in page when it is not and a plain notice when the server cannot be reached, and once signed in draws a skip link that moves focus to the page without touching the address, the shadcn-svelte sidebar from the route table, a top bar with the breadcrumb, the command palette's search button and the connection's state, a bar that says when the server stopped answering with a countdown and a retry, the user's menu with the light and dark choice and signing out, and the page the address names, which is the page itself, the milestone that brings it, or the access-denied page. -->
+<!-- Project Ambrose by Imjustchico: The panel frame: it asks the server that served it whether this browser is signed in, shows the sign-in page when it is not and a plain notice when the server cannot be reached, shows only the two-factor enrollment page, asking the server for nothing else, while the panel requires two-factor sign-in of an operator who has not turned it on, keeps the question a danger action asks for a fresh check of who the operator is ready on every page, and once signed in opens the panel's one event socket while a panel session holds it, follows the status stream wherever the socket's permissions let it read status, and draws a skip link that moves focus to the page without touching the address, the shadcn-svelte sidebar from the route table, a top bar with the breadcrumb, the command palette's search button and the connection's state, a bar that says when the server stopped answering with a countdown and a retry, the user's menu naming the operator with the light and dark choice, their two-factor sign-in and signing out, and the page the address names, read from the address up to any query so a page can keep its own place after it, which is the page itself, the milestone that brings it, or the access-denied page. -->
 <script lang="ts">
     import * as Breadcrumb from "$lib/components/ui/breadcrumb/index.js";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
@@ -9,27 +9,31 @@
     import { Skeleton } from "$lib/components/ui/skeleton/index.js";
     import { Toaster } from "$lib/components/ui/sonner/index.js";
     import { probeSession, session, signOut } from "$lib/api.svelte.js";
+    import { connectEvents, disconnectEvents, events, follow, readableScopes } from "$lib/events.svelte.js";
     import { formatAge } from "$lib/format.js";
     import { isStale, live, retryNow, stop, watch } from "$lib/status.svelte.js";
     import { chooseTheme, theme, type ThemeChoice } from "$lib/theme.svelte.js";
     import ChevronsUpDownIcon from "@lucide/svelte/icons/chevrons-up-down";
     import KeyRoundIcon from "@lucide/svelte/icons/key-round";
     import LogOutIcon from "@lucide/svelte/icons/log-out";
+    import ShieldCheckIcon from "@lucide/svelte/icons/shield-check";
     import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
     import SearchIcon from "@lucide/svelte/icons/search";
     import { onMount } from "svelte";
     import { toast } from "svelte-sonner";
     import CommandPalette from "./components/CommandPalette.svelte";
     import StatusBadge from "./components/StatusBadge.svelte";
+    import StepUp from "./components/StepUp.svelte";
     import { everything, navigation, resolve } from "./routes";
     import Denied from "./pages/Denied.svelte";
+    import Enroll from "./pages/Enroll.svelte";
     import SignIn from "./pages/SignIn.svelte";
     import Unavailable from "./pages/Unavailable.svelte";
 
-    const granted = everything;
+    const granted = $derived(session.panel ? new Set(session.user?.permissions ?? []) : everything);
 
     function readPath(): string {
-        const path = window.location.hash.replace(/^#\/?/, "");
+        const path = window.location.hash.replace(/^#\/?/, "").split("?")[0];
         return path === "" ? "overview" : path;
     }
 
@@ -48,18 +52,31 @@
     });
 
     $effect(() => {
-        if (session.state !== "signed-in") return;
+        if (session.state !== "signed-in" || session.mustEnroll) return;
         watch();
         return () => stop();
     });
 
+    $effect(() => {
+        if (session.state !== "signed-in" || !session.panel || session.via !== "session" || !session.csrf) return;
+        connectEvents();
+        return () => disconnectEvents();
+    });
+
+    $effect(() => {
+        if (events.state !== "ready") return;
+        for (const scope of readableScopes("status.read", events.permissions)) follow("status", scope);
+    });
+
     const shown = $derived(resolve(path, granted));
     const title = $derived(shown.kind === "missing" ? "Not found" : shown.route.title);
-    const reachable = navigation(granted);
-    const groups = (["Servers", "Game", "Panel"] as const).map((heading) => ({
-        heading,
-        entries: reachable.filter((entry) => entry.group === heading),
-    }));
+    const reachable = $derived(navigation(granted));
+    const groups = $derived(
+        (["Servers", "Game", "Panel"] as const).map((heading) => ({
+            heading,
+            entries: reachable.filter((entry) => entry.group === heading),
+        })),
+    );
     const stale = $derived(live.receivedAt !== 0 && isStale(live.receivedAt, live.now));
     const countdown = $derived(Math.max(0, Math.ceil((live.retryAt - live.now) / 1000)));
     const connection = $derived.by((): { tone: "healthy" | "waiting" | "unknown"; word: string } => {
@@ -91,6 +108,8 @@
     </main>
 {:else if session.state === "signed-out"}
     <SignIn />
+{:else if session.mustEnroll}
+    <Enroll />
 {:else}
     <a
         href="#content"
@@ -157,9 +176,15 @@
                                             <KeyRoundIcon class="size-4" />
                                         </div>
                                         <div class="grid flex-1 text-left text-sm leading-tight">
-                                            <span class="truncate font-medium">Admin token</span>
+                                            <span class="truncate font-medium"
+                                                >{session.user ? session.user.display_name : "Admin token"}</span
+                                            >
                                             <span class="truncate text-xs text-muted-foreground"
-                                                >{session.via === "session" ? "Browser session" : "Bearer token"}</span
+                                                >{session.user
+                                                    ? session.user.role
+                                                    : session.via === "session"
+                                                      ? "Browser session"
+                                                      : "Bearer token"}</span
                                             >
                                         </div>
                                         <ChevronsUpDownIcon class="ml-auto size-4" />
@@ -168,11 +193,23 @@
                             </DropdownMenu.Trigger>
                             <DropdownMenu.Content class="w-60 rounded-lg" side="right" align="end" sideOffset={4}>
                                 <DropdownMenu.Label class="font-normal">
-                                    <div class="text-sm font-medium">Signed in with the admin token</div>
-                                    <div class="text-xs text-muted-foreground">
-                                        Panel users with their own passwords arrive with milestone 17.46.
-                                    </div>
+                                    {#if session.user}
+                                        <div class="text-sm font-medium">Signed in as {session.user.username}</div>
+                                        <div class="text-xs text-muted-foreground">
+                                            {session.user.two_factor ? "With two-factor sign-in" : "With a password alone"}
+                                        </div>
+                                    {:else}
+                                        <div class="text-sm font-medium">Signed in with the admin token</div>
+                                        <div class="text-xs text-muted-foreground">
+                                            Operators with their own names and passwords sign in on the panel's own listener.
+                                        </div>
+                                    {/if}
                                 </DropdownMenu.Label>
+                                {#if session.user}
+                                    <DropdownMenu.Item onSelect={() => (window.location.hash = "#two-factor")}
+                                        ><ShieldCheckIcon />Two-factor sign-in</DropdownMenu.Item
+                                    >
+                                {/if}
                                 <DropdownMenu.Separator />
                                 <DropdownMenu.Label class="text-xs font-normal text-muted-foreground">Theme</DropdownMenu.Label>
                                 <DropdownMenu.RadioGroup
@@ -292,5 +329,8 @@
         </Sidebar.Inset>
     </Sidebar.Provider>
     <CommandPalette bind:open={paletteOpen} pages={reachable} />
+{/if}
+{#if session.state === "signed-in"}
+    <StepUp />
 {/if}
 <Toaster position="bottom-right" />

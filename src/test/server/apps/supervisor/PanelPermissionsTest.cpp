@@ -66,10 +66,17 @@ TEST(PanelPermissionsTest, AViewerLooksAndDoesNotAct)
 {
     for (std::string_view const reading : { "status.read", "console.read", "settings.read", "players.read", "activity.read" })
         EXPECT_TRUE(PanelPermissions::RoleAllows(PanelRole::Viewer, reading)) << reading;
+    EXPECT_TRUE(PanelPermissions::RoleAllows(PanelRole::Viewer, "errors.read"));
+    EXPECT_FALSE(PanelPermissions::RoleAllows(PanelRole::Viewer, "errors.report"));
     for (std::string_view const acting : { "console.write", "power.restart", "settings.edit", "accounts.ban", "files.write", "backups.restore" })
         EXPECT_FALSE(PanelPermissions::RoleAllows(PanelRole::Viewer, acting)) << acting << " is not a viewer's to do";
 
     EXPECT_TRUE(PanelPermissions::RoleAllows(PanelRole::Operator, "console.write"));
+    EXPECT_TRUE(PanelPermissions::RoleAllows(PanelRole::Operator, "metrics.profile"));
+    EXPECT_FALSE(PanelPermissions::RoleAllows(PanelRole::GameMaster, "metrics.profile"));
+    EXPECT_FALSE(PanelPermissions::RoleAllows(PanelRole::Viewer, "metrics.profile"));
+    EXPECT_TRUE(PanelPermissions::RoleAllows(PanelRole::Operator, "errors.read"));
+    EXPECT_TRUE(PanelPermissions::RoleAllows(PanelRole::Operator, "errors.report"));
     EXPECT_FALSE(PanelPermissions::RoleAllows(PanelRole::Operator, "accounts.delete")) << "running the servers is not owning the accounts";
     EXPECT_TRUE(PanelPermissions::RoleAllows(PanelRole::GameMaster, "players.kick"));
     EXPECT_FALSE(PanelPermissions::RoleAllows(PanelRole::GameMaster, "power.restart")) << "a game master acts on the game, not on the process";

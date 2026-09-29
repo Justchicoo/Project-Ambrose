@@ -129,6 +129,7 @@ namespace
             { "announcements", "events.manage", "Run timed events", false, false, false },
 
             { "metrics", "metrics.read", "See figures, graphs and the analytics pages", false, false, false },
+            { "metrics", "metrics.profile", "Capture and download a bounded world tick profile", false, false, false },
             { "metrics", "alerts.read", "See alert rules and what they fired on", false, false, false },
             { "metrics", "alerts.manage", "Add and change alert rules", false, false, false },
 
@@ -152,6 +153,10 @@ namespace
             { "panel", "panel.status", "Post on the public status page", false, false, false },
 
             { "debug", "debug.errors", "See full error text instead of a correlation id", false, false, false },
+
+            { "errors", "errors.read", "See grouped errors and preview a report", false, false, false },
+            { "errors", "errors.clear", "Mark an error group cleared until it is raised again", false, false, false },
+            { "errors", "errors.report", "Create and download an audited error report", false, false, false },
         };
     }
 
@@ -173,7 +178,7 @@ namespace
         "settings.read", "reload.read", "reload.run", "files.list", "files.read", "files.download",
         "backups.read", "backups.create", "schedules.read", "schedules.edit", "schedules.run",
         "clientdata.read", "database.read", "realms.read", "players.read", "players.kick",
-        "metrics.read", "alerts.read", "activity.read", "users.read", "nodes.read", "updates.read", "launch.read", "network.read"
+        "metrics.read", "metrics.profile", "alerts.read", "activity.read", "users.read", "nodes.read", "updates.read", "launch.read", "network.read", "errors.read", "errors.clear", "errors.report"
     };
 
     std::vector<std::string_view> const GameMasterKeys{
@@ -188,7 +193,7 @@ namespace
         "status.read", "console.read", "settings.read", "reload.read", "files.list", "files.read",
         "backups.read", "schedules.read", "updates.read", "clientdata.read", "database.read", "world.read",
         "realms.read", "accounts.read", "characters.read", "players.read", "reports.read",
-        "metrics.read", "alerts.read", "activity.read", "users.read", "nodes.read", "launch.read", "network.read"
+        "metrics.read", "alerts.read", "activity.read", "users.read", "nodes.read", "launch.read", "network.read", "errors.read"
     };
 }
 

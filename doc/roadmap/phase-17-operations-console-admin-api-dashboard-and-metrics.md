@@ -25,21 +25,21 @@
 | 17.17 | One-click updates and rollback | M | 17.16, 17.51, 17.52, 3.23 |
 | 17.18 | File roots, the path jail and browsing | L | 17.12, 17.48 |
 | 17.19 | Built-in resource graphs | M | 17.03, 17.06, 17.09 |
-| 17.20 | Client data and revisions page | S | 17.06, 3.23 |
-| 17.21 | Accounts, bans, characters and online players pages | M | 17.05, 17.48, 3.17, 6.05 |
+| 17.20 | Client data and revisions page | M | 17.06, 3.23 |
+| 17.21 | Accounts and bans pages | M | 17.05, 17.48, 17.49, 2.13 |
 | 17.22 | Nodes: one panel for servers on several machines | L | 17.26, 17.28, 17.29, 17.32, 17.49 |
 | 17.23 | Operating system services, Docker image and Pterodactyl egg | M | 17.08 |
-| 17.24 | Desktop control app | L | 17.06, 17.08, 17.46, 1.21, 3.22 |
+| 17.24 | Desktop control app: hosting a game on this computer | L | 17.08, 17.181, 3.22, 3.25 |
 | 17.25 | Activity log pages | M | 17.05, 17.49 |
 | 17.26 | Panel event socket: envelope, tickets and generated types | M | 17.04, 17.12, 17.48 |
 | 17.27 | App states, operation locks and power targets | M | 17.08, 17.26 |
 | 17.28 | Launch and startup settings | M | 17.08, 17.13, 17.48 |
 | 17.29 | Port allocations and listen addresses | M | 17.28 |
 | 17.30 | Database hosts and credential rotation | M | 17.08, 17.47, 17.48, 2.08, 4.16 |
-| 17.31 | Realms and zones pages | M | 17.06, 17.26, 17.48, 4.03, 4.09 |
+| 17.31 | Realms and zones pages | M | 17.06, 17.26, 17.48, 17.175, 4.03, 4.09 |
 | 17.32 | Realm maintenance mode | S | 17.15, 17.31, 4.05, 6.01, 6.05 |
 | 17.33 | Announcements and timed game events | M | 17.12, 17.15, 6.01, 6.04 |
-| 17.34 | World database edits page | M | 17.13, 17.25, 4.15, 5.01 |
+| 17.34 | World database edits page | M | 17.13, 17.25, 17.173, 4.15 |
 | 17.35 | Panel settings: general, mail and security | M | 17.14, 17.48 |
 | 17.36 | Personal API keys | M | 17.48, 17.25 |
 | 17.37 | Invites and the grant editor | M | 17.48, 17.25 |
@@ -68,7 +68,7 @@
 | 17.60 | Exit classification, backoff and crash records | M | 17.27, 17.28 |
 | 17.61 | Reconciling stale online and session rows after a crash | M | 17.60, 4.07, 2.13 |
 | 17.62 | Player account registration and password recovery | M | 17.35, 2.13 |
-| 17.63 | Moderation queue, chat search and mute history | M | 17.21, 17.25, 12.07 |
+| 17.63 | Moderation queue, chat search and mute history | M | 17.21, 17.25, 17.177, 12.07 |
 | 17.64 | Installation maintenance mode | M | 17.12, 17.14, 2.14 |
 | 17.65 | Patch server operations: manifest, revisions and signing key | M | 17.14, 17.47, 17.48, 16.03, 16.08 |
 | 17.66 | Dashboard localization | S | 17.06, 17.35, 17.38 |
@@ -97,10 +97,10 @@
 | 17.89 | Kill switches | S | 17.12, 17.13, 17.27 |
 | 17.90 | Slow query and database health page | M | 17.08, 17.09, 17.30 |
 | 17.91 | Tick breakdown and on-demand profiles | M | 17.09, 17.19 |
-| 17.92 | Per-session network quality and the player inspector | M | 17.19, 17.21, 17.80 |
+| 17.92 | Per-session network quality and the player inspector | M | 17.19, 17.80, 17.175, 17.177 |
 | 17.93 | Tamper-evident audit chain and audit streaming | S | 17.14, 17.49 |
 | 17.94 | Uptime history and incident timeline | S | 17.70, 17.81 |
-| 17.95 | Character point-in-time restore and undelete | M | 17.16, 17.21, 17.51, 3.17 |
+| 17.95 | Character point-in-time restore and undelete | M | 17.16, 17.51, 17.177, 3.17 |
 | 17.96 | Operations calendar | S | 17.15, 17.32, 17.33, 17.64, 17.68 |
 | 17.97 | Daily operations digest | S | 17.67, 17.69, 17.86 |
 | 17.98 | Capacity forecasts and the weekly load heatmap | S | 17.19, 17.44, 17.69 |
@@ -110,10 +110,10 @@
 | 17.102 | Outbound event webhooks | S | 17.26, 17.67 |
 | 17.103 | Item and currency ledger with anomaly rules | M | 17.25, 17.69, 8.08 |
 | 17.104 | Compensation grants and mass mail | M | 17.21, 17.33, 17.69, 8.08 |
-| 17.105 | Releases: the launcher and the panel as downloadable builds | M | 3.27, 17.24, 17.14 |
-| 17.106 | Error reports: source locations, grouping and a report file | M | 17.04, 17.08, 17.14 |
+| 17.105 | Releases: the panel program and the launcher as downloadable builds | M | 17.14, 17.24, 17.183 |
+| 17.106 | Error reports: source locations, grouping and a report file | L | 17.04, 17.08, 17.14 |
 | 17.107 | A value in a log line is a place you can go | M | 17.07, 17.76, 17.106 |
-| 17.108 | A panel nobody has to click past a warning to use | M | 17.14, 17.24 |
+| 17.108 | A panel nobody has to click past a warning to use | M | 17.14, 17.181 |
 | 17.109 | Plugins: what one is, and the tab that installs it | M | 17.101, 17.48, 17.18 |
 | 17.110 | A panel tool runs without being trusted | L | 17.109 |
 | 17.111 | Plugins ship with the panel, from this repository | L | 17.109, 17.110, 17.105 |
@@ -170,6 +170,28 @@
 | 17.162 | Comment threads, mentions and an inbox | M | 17.26, 17.57, 17.67, 17.86, 17.159 |
 | 17.163 | On-call rotations, escalation and shift handoff | L | 17.25, 17.67, 17.85, 17.86, 17.96, 17.97 |
 | 17.164 | Staff task board and recurring chores | M | 17.15, 17.48, 17.82, 17.86, 17.96, 17.97, 17.159 |
+| 17.165 | Type registry browser and the decoded data routes | M | 17.06, 17.14, 17.48, 17.73, 3.03, 3.07 |
+| 17.166 | Archive browser: every archive and entry, decoded where a decoder exists | S | 17.165, 3.11, 3.13 |
+| 17.167 | Locale text browser and a live locale reload | S | 17.165, 3.13, 4.15 |
+| 17.168 | Template explorer with cross-links and where each is used | S | 17.166, 17.167, 5.01, 5.02 |
+| 17.169 | Protocol browser: message definitions and what each server does with them | S | 17.165, 1.15, 2.09, 4.01 |
+| 17.170 | Client scans from the panel: census, decode sweep, schema probe and program scans | M | 17.166, 17.169, 3.11, 6.09 |
+| 17.171 | Client program reader, opt-in | M | 17.170 |
+| 17.172 | Progression and character creation data | S | 17.165, 17.19, 3.14, 5.04 |
+| 17.173 | World tables browser and the world schema the servers publish | M | 17.168, 17.08, 4.09, 4.15, 5.04 |
+| 17.174 | Zone catalog: templates, named places and placements on a plan | S | 17.173, 4.09, 5.02 |
+| 17.175 | Live world: zone instances, spawned objects and wizards in the world | M | 17.165, 17.49, 4.10, 5.02, 5.03, 5.05 |
+| 17.176 | Spells and sigils pages | M | 17.167, 17.168, 17.175, 8.04, 8.05, 9.02 |
+| 17.177 | Characters and online players pages | S | 17.21, 17.175, 3.17, 6.05 |
+| 17.178 | Client driver runs from the panel, opt-in | M | 17.06, 17.14, 17.48, 3.24 |
+| 17.179 | One desktop shell for the launcher and the panel program | L | 1.04, 3.25, 17.14, 17.73 |
+| 17.180 | Sign-in links for a desktop program | M | 17.05, 17.14, 17.46 |
+| 17.181 | The panel program: its own window and a list of panels | L | 17.06, 17.179, 17.180 |
+| 17.182 | The panel program in the tray | M | 17.24 |
+| 17.183 | Installing the panel program: installer, uninstaller and portable archive | M | 17.24 |
+| 17.184 | Signed updates for the desktop programs | M | 17.105, 17.183 |
+| 17.185 | The Ambrose service from the panel program | S | 17.23, 17.24 |
+| 17.186 | Reaching a panel through SSH | M | 17.180, 17.181 |
 
 ## Review notes for this phase
 
@@ -181,16 +203,16 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Hosting panel parity.** 17.14-17.24 were added on 2026-09-17 at the maintainer's request to manage everything in one place the way game server hosting panels such as Pterodactyl do. The supervisor from 17.08 becomes the panel's single entry point, much as a Pterodactyl node daemon serves its panel: operators sign in to it once, and it relays each app's admin API. The panel milestones, 17.14 and everything above it, start after 3.23 and run alongside the gameplay phases. The choices are recorded under Decisions, Operations in doc/ARCHITECTURE.md: Argon2id for panel passwords, from Botan since 2026-09-22, TOTP for two-factor sign-in, zstd for backup archives, and the supervisor's own SQLite file for panel users, schedules and backup records, so the panel works before any game database exists.
 - **Pterodactyl source.** Settled on 2026-09-17 at the maintainer's direction: Ambrose owns its panel, tailored to Wizard101, and uses the MIT-licensed Pterodactyl panel and Wings source only as a reference for behavior, with no code copied and no Wings. The Ambrose panel is not a fork: the Pterodactyl panel is PHP 8.2 with Laravel, React, Redis, a web server and a queue worker on Linux, and Wings is Go and runs only on Linux with Docker, not on Windows. A fork would break the desktop run that sets itself up with no steps, and the TypeScript with Svelte dashboard and C++ supervisor settled under Decisions, Operations. Its generic model of a container with a console also cannot reach typed Ambrose features such as live settings, reloads, accounts and client data. Instead, this phase studies its source as the reference for features and behavior: the permission names and sub-users, schedules and task chains, backups, the file manager and the console socket. Operators who already run Pterodactyl use the 17.23 egg. A maintained fork stays an opt-in idea, planned, not yet scheduled.
 - **Built first.** Settled on 2026-09-18 at the maintainer's direction: the panel's foundation comes before the rest of the game, so later systems are built into it rather than fitted to it. The order is 17.01, 17.74, 17.02, 17.03, 17.04, 17.73 and 17.06 first, which need nothing that is not already built, with 17.74 immediately after 17.01 because the console line is the surface the maintainer reads on every day of the rest of this project, and 17.73 before 17.06 because the panel and the launcher window are both built from it; then 4.01 and 4.02, which the game needs next anyway and which 17.05 waits on; then 17.05, 17.08, 17.09, 17.11, 17.14 and 17.46-17.50. On 2026-09-22 the maintainer asked for panel accounts that can each be given any role, so after 17.06 the order is 17.08, 17.14 and 17.46, then 4.01, 4.02 and 17.05, then 17.47-17.50, then 17.09 and 17.11. The same day the maintainer asked for error reports an operator sends to the maintainer, so 17.106 follows 17.46. The same day the maintainer asked that a colored value in a log line be a link with a hovercard that opens whatever it names, so 17.107 follows the milestones it reads from, which are 17.76 for the runs, 17.106 for the source location and 17.07 for the log viewer. Everything else in this phase arrives with the system it shows, under the rule in doc/ROADMAP.md that every subsystem ships with its panel surface, so the pages for realms, players, settings, world edits and client data are built by the milestones that build those systems.
-- **Order.** Ids are allocation order, not build order. Within this phase the dependency graph gives the build order, so a dependency may name a higher id: 17.15 and 17.16 wait for 17.27 and 17.46-17.48, 17.22 waits for 17.26, 17.28, 17.29, 17.32 and 17.49, 17.31 waits for 17.26, and 17.24 waits for 17.46. 17.01-17.24 keep the ids they were published with, and everything added later takes an id from 17.25 up. Nothing added on 2026-09-18 breaks the rule the other way either: 17.85 waits for 17.22, 17.92 for 17.80, 17.94 for 17.81 and 17.100 for 17.99, all lower ids. Three pairs are built in their own order and are worth naming, since each second half is worthless without its first: 17.78 then 17.79, 17.80 then 17.92, and 17.103 then 17.104. A check never rests on a milestone outside its own dependency closure: where one did, the dependency was added or the check was narrowed to what exists at that point. The fifty-three milestones added on 2026-09-27, 17.112-17.164, take ids from 17.112 up in the order they were grouped, reliability, hosting, security, automation, experience and teamwork, after 17.112 itself; among them 17.135 waits for 17.140; 17.148 waits for 17.149; 17.158 waits for 17.159 and 17.164, and 17.129 waits for 17.116 so a staging copy reuses the drill's scratch copy.
-- **Splits.** 17.14 became six milestones, 17.16 three, 17.18 five, 17.26 three and 17.27 four. Each keeps its id for its first part and the rest take ids from 17.46 up (17.46-17.50 from 17.14, 17.51 and 17.52 from 17.16, 17.53-17.56 from 17.18, 17.57 and 17.58 from 17.26, 17.59-17.61 from 17.27). Three published titles narrowed to what their milestone now holds: 17.16, 17.18 and 17.19, whose alerts moved to 17.67 so graphs no longer wait for mail settings. Two titles changed because their milestone grew instead: 17.14 now names the audit store, which the panel needs from its first milestone, and 17.50 the roles page.
-- **Sizes.** A size is read off the milestone's own content, so a label can be checked against the text: S is at most 4 deliverables and at most 5 acceptance checks, L is 8 or more deliverables or 8 or more acceptance checks, and M is everything between. Two milestones carry L on judgment instead of count, 17.24 because it installs and runs on two desktop operating systems and 17.51 because it is one operation from end to end, and the Oversized note names both with the rest. Recounting moved sizes that were already published, without touching any id: 17.01 and 17.07 to S, 17.03, 17.04 and 17.12 to M, and 17.06, 17.14, 17.15 and 17.16 to L. Of the milestones added later, 17.50 moved to M with its roles page, 17.64 to M on its count, 17.106 carries L on its eight deliverables, 17.107 carries M on six deliverables and six checks, and of the three plugin milestones added on 2026-09-23, 17.109 carries M while 17.110 carries L on its nine acceptance checks and 17.111 on its ten deliverables. Of the thirty-one added on 2026-09-18, the thirteen marked S each carry at most 4 deliverables and at most 5 checks, and none of the eighteen marked M reaches 8 of either, so nothing new is large and the Oversized note's list of nine stands as it is. Where a 2026-09-18 deliverable was added to a milestone that already existed, it was folded into a deliverable already there wherever a new bullet would have changed that milestone's size, which is why 17.21 and 17.70 gained a clause rather than a line. Of the fifty-three added on 2026-09-27, 1 carry S, 32 carry M and 20 carry L, each read off its own count: 17.112, 17.113, 17.114, 17.115, 17.116, 17.118, 17.119, 17.121, 17.126, 17.129, 17.133, 17.135, 17.139, 17.141, 17.142, 17.147, 17.152, 17.156, 17.158, 17.163 each reach 8 deliverables or 8 checks.
-- **Oversized.** The large milestones are the twelve carrying L: 17.110 the frame a panel tool runs in and 17.111 plugins shipping with the panel, and 17.06 dashboard app and overview page, 17.14 panel listener and audit store, 17.15 schedules, 17.16 backups, 17.18 file roots and the path jail, 17.22 nodes, 17.24 desktop control app, 17.51 backup restore, 17.73 the design system and 17.106 error reports. No other milestone in this phase is large. Split 17.106 along these lines if a focused stretch cannot finish it: the source location on every record with its grouping, and the errors page with its report file. Split 17.73 along these lines if a focused stretch cannot finish it: the token pipeline with its generator and gates, and the component set with its gallery and tests. The twenty L milestones added on 2026-09-27 split along these lines if a focused stretch cannot finish one: 17.112 into the tome format with its reader, checks and the supervisor's ready checks, and the Tomes page with export and upgrades; 17.113 into the per-thread progress counters with the hung restart, and the operating system watchdogs with the outside heartbeat; 17.114 into keep-awake and a graceful operating system shutdown, and the update, reboot and clock findings; 17.115 into the runbook format with its built-in set and coverage test, and the action buttons with the steps recorded on an alert; 17.116 into the restore drill with its badge and finding, and the update rehearsal; 17.118 into configuration and settings drift, and installed files and schema drift; 17.119 into drives and their health, and memory pressure, steal time and handle limits; 17.121 into spans with their propagation, and the trace view with the service map; 17.126 into capturing and shipping binary logs, and the timeline restore; 17.129 into staging copies with scrubbed personal data, and pull request previews; 17.133 into generic OIDC with linking, and Discord and GitHub with role mapping and break-glass owners; 17.135 into canary credentials with their alerts, and the lockdown with its review; 17.139 into player data export, and erasure with retention; 17.141 into approval policies on chosen actions, and change requests; 17.142 into account linking with slash commands, and alert buttons with live status messages; 17.147 into the sandboxed runner with its capabilities, and the Scripts page with versions, dry runs and tasks; 17.152 into boards and widgets, and the wall display with its pairing; 17.156 into undo from the activity record, and selection with bulk actions; 17.158 into the incident workspace with its timeline, and postmortems with their actions; 17.163 into rotations with escalation, and handoff with the shift log. Split any of them again if a focused stretch cannot finish it, along these lines: 17.14 into the listener with its TLS and the sessions, limiter and audit store; 17.15 into the engine with its triggers and the tasks with their completion and countdowns; 17.16 into the dumps with their snapshot record and the archive with its verification; 17.06 into the app shell with its route table and the overview cards; 17.18 into the jail with its roots and the listing and reading page; 17.22 into the join with its heartbeat and the nodes page with placement.
+- **Order.** Ids are allocation order, not build order. Within this phase the dependency graph gives the build order, so a dependency may name a higher id: 17.15 and 17.16 wait for 17.27 and 17.46-17.48, 17.22 waits for 17.26, 17.28, 17.29, 17.32 and 17.49, and 17.31 waits for 17.26. 17.01-17.24 keep the ids they were published with, and everything added later takes an id from 17.25 up. Nothing added on 2026-09-18 breaks the rule the other way either: 17.85 waits for 17.22, 17.92 for 17.80, 17.94 for 17.81 and 17.100 for 17.99, all lower ids. Three pairs are built in their own order and are worth naming, since each second half is worthless without its first: 17.78 then 17.79, 17.80 then 17.92, and 17.103 then 17.104. A check never rests on a milestone outside its own dependency closure: where one did, the dependency was added or the check was narrowed to what exists at that point. The fifty-three milestones added on 2026-09-27, 17.112-17.164, take ids from 17.112 up in the order they were grouped, reliability, hosting, security, automation, experience and teamwork, after 17.112 itself; among them 17.135 waits for 17.140; 17.148 waits for 17.149; 17.158 waits for 17.159 and 17.164, and 17.129 waits for 17.116 so a staging copy reuses the drill's scratch copy. The twenty-two milestones added later on 2026-09-27, 17.165-17.186, take ids from 17.165 up: 17.165 to 17.178 are the game data pages and 17.179 to 17.186 the desktop program. Lower ids wait on higher ones here: 17.21 on 17.49, 17.24 on 17.181, 17.31 on 17.175, 17.34 on 17.173, 17.63 and 17.95 on 17.177, 17.92 on 17.175 and 17.177, 17.105 on 17.183, and 17.108 on 17.181.
+- **Splits.** 17.14 became six milestones, 17.16 three, 17.18 five, 17.26 three and 17.27 four. Each keeps its id for its first part and the rest take ids from 17.46 up (17.46-17.50 from 17.14, 17.51 and 17.52 from 17.16, 17.53-17.56 from 17.18, 17.57 and 17.58 from 17.26, 17.59-17.61 from 17.27). Three published titles narrowed to what their milestone now holds: 17.16, 17.18 and 17.19, whose alerts moved to 17.67 so graphs no longer wait for mail settings. Two titles changed because their milestone grew instead: 17.14 now names the audit store, which the panel needs from its first milestone, and 17.50 the roles page. On 2026-09-27 two more were divided, each keeping its id for the part that stayed: 17.21 kept accounts and bans and 17.177 took characters and online players, and 17.24 kept its goal, hosting a game on this computer with its private database and Play, while the program it runs in, its tray and its installer went to 17.181, 17.182 and 17.183. Their titles changed with them, and 17.105's now names the panel program before the launcher. 17.20 grew instead, from S to M, when it came to list every install, the caches built per revision and the extracted world table sets.
+- **Sizes.** A size is read off the milestone's own content, so a label can be checked against the text: S is at most 4 deliverables and at most 5 acceptance checks, L is 8 or more deliverables or 8 or more acceptance checks, and M is everything between. A deliverable is a top-level bullet of the Deliverables list, and the bullets nested under one detail it and are not counted. One milestone carries L on judgment instead of count, 17.51, because it is one operation from end to end; 17.24 did too, because it installed and ran on two desktop operating systems, until 2026-09-27, when it came to carry L on its eight deliverables. The Oversized note names both with the rest. Recounting moved sizes that were already published, without touching any id: 17.01 and 17.07 to S, 17.03, 17.04 and 17.12 to M, and 17.06, 17.14, 17.15 and 17.16 to L. Of the milestones added later, 17.50 moved to M with its roles page, 17.64 to M on its count, 17.106 carries L on its eight deliverables, 17.107 carries M on six deliverables and six checks, and of the three plugin milestones added on 2026-09-23, 17.109 carries M while 17.110 carries L on its nine acceptance checks and 17.111 on its ten deliverables. Of the thirty-one added on 2026-09-18, the thirteen marked S each carry at most 4 deliverables and at most 5 checks, and none of the eighteen marked M reaches 8 of either, so nothing new is large and the Oversized note's list of nine stands as it is. Where a 2026-09-18 deliverable was added to a milestone that already existed, it was folded into a deliverable already there wherever a new bullet would have changed that milestone's size, which is why 17.21 and 17.70 gained a clause rather than a line. Of the fifty-three added on 2026-09-27, 1 carry S, 32 carry M and 20 carry L, each read off its own count: 17.112, 17.113, 17.114, 17.115, 17.116, 17.118, 17.119, 17.121, 17.126, 17.129, 17.133, 17.135, 17.139, 17.141, 17.142, 17.147, 17.152, 17.156, 17.158, 17.163 each reach 8 deliverables or 8 checks. Of the twenty-two added later that day with the game data pages and the desktop program, 8 carry S, 12 carry M, and 17.179 and 17.181 carry L on count; 17.20 moved from S to M on its count when it grew.
+- **Oversized.** The large milestones published before 2026-09-27 are the twelve carrying L: 17.110 the frame a panel tool runs in and 17.111 plugins shipping with the panel, and 17.06 dashboard app and overview page, 17.14 panel listener and audit store, 17.15 schedules, 17.16 backups, 17.18 file roots and the path jail, 17.22 nodes, 17.24 hosting a game on this computer, 17.51 backup restore, 17.73 the design system and 17.106 error reports. No other milestone published before then is large. Split 17.106 along these lines if a focused stretch cannot finish it: the source location on every record with its grouping, and the errors page with its report file. Split 17.73 along these lines if a focused stretch cannot finish it: the token pipeline with its generator and gates, and the component set with its gallery and tests. The twenty L milestones added on 2026-09-27 split along these lines if a focused stretch cannot finish one: 17.112 into the tome format with its reader, checks and the supervisor's ready checks, and the Tomes page with export and upgrades; 17.113 into the per-thread progress counters with the hung restart, and the operating system watchdogs with the outside heartbeat; 17.114 into keep-awake and a graceful operating system shutdown, and the update, reboot and clock findings; 17.115 into the runbook format with its built-in set and coverage test, and the action buttons with the steps recorded on an alert; 17.116 into the restore drill with its badge and finding, and the update rehearsal; 17.118 into configuration and settings drift, and installed files and schema drift; 17.119 into drives and their health, and memory pressure, steal time and handle limits; 17.121 into spans with their propagation, and the trace view with the service map; 17.126 into capturing and shipping binary logs, and the timeline restore; 17.129 into staging copies with scrubbed personal data, and pull request previews; 17.133 into generic OIDC with linking, and Discord and GitHub with role mapping and break-glass owners; 17.135 into canary credentials with their alerts, and the lockdown with its review; 17.139 into player data export, and erasure with retention; 17.141 into approval policies on chosen actions, and change requests; 17.142 into account linking with slash commands, and alert buttons with live status messages; 17.147 into the sandboxed runner with its capabilities, and the Scripts page with versions, dry runs and tasks; 17.152 into boards and widgets, and the wall display with its pairing; 17.156 into undo from the activity record, and selection with bulk actions; 17.158 into the incident workspace with its timeline, and postmortems with their actions; 17.163 into rotations with escalation, and handoff with the shift log. Split any of them again if a focused stretch cannot finish it, along these lines: 17.14 into the listener with its TLS and the sessions, limiter and audit store; 17.15 into the engine with its triggers and the tasks with their completion and countdowns; 17.16 into the dumps with their snapshot record and the archive with its verification; 17.06 into the app shell with its route table and the overview cards; 17.18 into the jail with its roots and the listing and reading page; 17.22 into the join with its heartbeat and the nodes page with placement. The L milestones of the desktop program split along these lines if a focused stretch cannot finish one: 17.179 into the shared host with the embedded pages, and the bound view with its origin gate, pin hook and profiles; 17.181 into the program with its list and local opening, and remote panels with pairing, pinning and the probe; and 17.24 into hosting with the first start, and the private database with Play.
 - **Gated checks.** A check that needs the maintainer's own machine, a second machine, a security key, a desktop SFTP client, a Pterodactyl install or a retail client session is marked `Dev-gated:` with what it needs, the form phase 16 already uses; a check an environment variable turns on is marked `Env-gated` with that variable, as the Tests section of doc/ARCHITECTURE.md describes. doc/ROADMAP.md's Where we are paragraph lists the phase 17 checks that wait for the maintainer.
-- **Proposals.** doc/PANEL.md proposed the choices this phase rests on, and every one of them is settled. On 2026-09-22, when 17.14 built it, the admin API's remote-access rule was extended to the panel's own listener, under Panel option names. On 2026-09-25 the rest were settled at the maintainer's direction: the time zone data source under Time zones in doc/ARCHITECTURE.md, and under Panel operations in doc/ARCHITECTURE.md the scope tree with its default role bundles, the command security level cap on `console.write`, the keyring, the cipher and keyed hashes, outbound HTTP, certificates for a hostname, the event socket protocol, backup sealing and structured dumps, the S3 client, the login-screen countdown, where a node's schedules run, the file editor and archive libraries with the default archive format, SFTP and remote pull, WebAuthn, the QR renderer, the trash and version stores, database credential rotation, the maintenance bypass levels, world edit exports, player registration, the patch signing key, the sequential ramp, the one search engine and the installation file's format. Each milestone below names the entry it rests on. Until the milestones that build nodes, clusters and realms land, grants are the per-app sub-user grants and every acceptance check here stays at app scope.
+- **Proposals.** doc/PANEL.md proposed the choices this phase rests on, and every one of them is settled. On 2026-09-22, when 17.14 built it, the admin API's remote-access rule was extended to the panel's own listener, under Panel option names. On 2026-09-25 the rest were settled at the maintainer's direction: the time zone data source under Time zones in doc/ARCHITECTURE.md, and under Panel operations in doc/ARCHITECTURE.md the scope tree with its default role bundles, the command security level cap on `console.write`, the keyring, the cipher and keyed hashes, outbound HTTP, certificates for a hostname, the event socket protocol, backup sealing and structured dumps, the S3 client, the login-screen countdown, where a node's schedules run, the file editor and archive libraries with the default archive format, SFTP and remote pull, WebAuthn, the QR renderer, the trash and version stores, database credential rotation, the maintenance bypass levels, world edit exports, player registration, the patch signing key, the sequential ramp, the one search engine and the installation file's format. On 2026-09-27 the thirteen choices the game data pages and the desktop program rest on were settled at the maintainer's standing direction to take the recommended option, under Desktop programs and client data in doc/ARCHITECTURE.md. Each milestone below names the entry it rests on. Until the milestones that build nodes, clusters and realms land, grants are the per-app sub-user grants and every acceptance check here stays at app scope.
 - **Docs.** The supervisor is a fourth executable and the panel's host. The commit that adds this file also adds it to doc/ARCHITECTURE.md's Processes table, its repository layout block and its Operations paragraph, so nothing is left to do there. The panel listener's own bind and TLS rule was recorded under Decisions, Operations on 2026-09-22, when 17.14 built it, so nothing is left open there either.
 - **Security first.** Trusted proxies and the client-address rule land with the panel listener in 17.14, and required two-factor with 17.47, not behind 17.19 and 17.35. Sign-in throttles, rate limits and audit addresses are wrong without them.
 - **One of each.** One stream layer with backlog, sequence numbers and resume (17.04), which 17.12 and 17.26 reuse; one app list (17.06); one browser socket (17.26); one audit store (17.14) with one scope that writes into it (17.49); one stored command history (17.49). No milestone builds a second copy of a subsystem. The one piece of rework is transport: the 17.06 overview and the live pages of 17.07 and 17.13 ship on the per-app streams of 17.04 and 17.12, and 17.58 moves them onto the panel socket so the dashboard ends with one socket client and one reconnect policy. What is replaced there is the transport, not the pages.
-- **Client-derived data.** Backup archives and file roots carry the type dump and extracted data built from the operator's own install, and opt-in patch components can carry client files. 17.16, 17.18, 17.43 and 17.65 follow the bring-your-own-files rule under Decisions, Experimental features: the client install root is never downloadable through the panel, and off-machine storage is the operator's own bucket with the archive's contents stated.
+- **Client-derived data.** Backup archives and file roots carry the type dump and extracted data built from the operator's own install, and opt-in patch components can carry client files. 17.16, 17.18, 17.43 and 17.65 follow the bring-your-own-files rule under Decisions, Experimental features: the client install root is never downloadable through the panel, and off-machine storage is the operator's own bucket with the archive's contents stated. The game data pages, 17.165-17.178, show decoded values from the operator's own install and never serve an install file, its bytes, a texture, model or screenshot, or an export of what was decoded or extracted, which the 17.165 route sweep proves on every data route; 17.18 names every client-derived folder of the data root from one list.
 - **Correction.** 17.15's deliverable said to skip a run when no players are online, while its acceptance check described a schedule that runs only when no one is online. Both are useful and opposite, so 17.44 offers both conditions by name, `skip_if_empty` and `only_when_empty`, and 17.15's checks name neither.
 - **Request size.** 17.02 bounds what the admin API accepts with `Admin.MaxRequestBytes`, checked after the token and before any handler, and the same value caps a WebSocket message. Crow buffers a request body in memory before any handler or middleware runs and offers no hook to refuse one earlier, so that setting bounds what an endpoint sees, not what an unauthenticated peer can make the process allocate. Closing that needs a patched Crow parser or another HTTP library, and it is listed here so a later milestone decides rather than the gap going unrecorded.
 - **Listening socket.** Crow's acceptor sets `SO_REUSEADDR` on the socket it listens on and offers no way to choose otherwise, so on Windows another process running under any account on the same machine can bind the same address and port as a running admin API and receive the connections meant for it, reading the bearer token an operator's dashboard or `curl` then sends. 17.02's pre-flight check already skips the option for exactly this reason, but the socket Crow binds is beyond its reach. Closing it needs `SO_EXCLUSIVEADDRUSE` on that socket, which means either a project-owned acceptor handed to `crow::Server` in place of `App::run_async`, or a patched Crow port, the same choice the Request size note asks for, so both are listed here for one decision rather than two. Until then the admin port is only as private as the machine's local accounts, and `doc/config/<app>.md` says so beside `Admin.BindIP`.
@@ -605,27 +627,47 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Size:** L. **Depends on:** 17.12, 17.48
 
+Changed on 2026-09-27: the data root is client-derived by default. Only what the supervisor itself keeps there is left out, so a folder any tool writes later is refused for download from the day it appears, rather than waiting for somebody to add it to a list. The launcher's run folders are covered this way, because they hold copies of the install's own files.
+
 **Deliverables**
 
-- Named roots with policies: install (read-only), config, logs, data (type dumps read-only, lock files hidden), custom SQL, backups (read-only here) and the user's client installs (read-only and never downloadable); the supervisor's store, keyring, token files and TLS keys sit outside every root and are refused
-- A jail that resolves each request to a root handle and checks each component: one decoding pass, no absolute paths, drive letters, UNC prefixes, backslashes, empty, `.` or `..` components, control characters, names Windows cannot hold or reserved device names on any system; on Linux `openat2` beneath the root or a component-by-component walk without following links, and on Windows handle-relative opens that refuse reparse points and compare the final path with the root; FIFOs, devices and sockets are refused before any read
+- Named roots with policies:
+  - Install (read-only), config, logs, data (type dumps read-only, lock files hidden), custom SQL, backups (read-only here), and the user's client installs (read-only and never downloadable).
+  - Within data, everything is client-derived except what the supervisor itself keeps there, `supervisor/` and `launcher-window.json`, with `admin/`, `panel/`, the keyring and lock files hidden. That covers, without naming them one by one:
+    - the type dumps and their fast copies;
+    - the client tool's caches of messages, handlers, behaviors and functions;
+    - decompiled output and its Ghidra project;
+    - the launcher's `client/<revision>` run folders, which hold copies of the install's own `revision.dat` and `data.dat`;
+    - the client driver's runs, reference crops and zone caches;
+    - 17.170's scan results;
+    - any folder a later milestone adds.
+  - The supervisor's store, keyring, token files and TLS keys sit outside every root and are refused.
+- A jail that resolves each request to a root handle and checks each component:
+  - One decoding pass.
+  - No absolute paths, drive letters, UNC prefixes, backslashes, empty, `.` or `..` components, control characters, names Windows cannot hold, or reserved device names, on any system.
+  - On Linux, `openat2` beneath the root, or a component-by-component walk without following links.
+  - On Windows, handle-relative opens that refuse reparse points and compare the final path with the root.
+  - FIFOs, devices and sockets are refused before any read.
 - Protected path patterns per root, matched on the resolved path and applied to every operation, and secret `.conf` values shown redacted without `settings.secrets.read`
-- A space guard with a minimum free space per volume and a reservation that every writer takes before streaming
+- A space guard with a minimum free space per volume, and a reservation that every writer takes before streaming
 - Listing and reading with paging, sorting, size, type and modification time, and each root's policy in the response, so the page disables what the root refuses instead of failing on submit
 - Roots marked client-derived refuse download, archive and any share path for every caller whatever their permissions, as the Client-derived data review note requires
 - Every refused traversal audited with the resolved path, while the response never shows it
-- A files page per root and per app with breadcrumbs, selection, a context menu and mass actions, rendered from the root's policy in the listing response so a control the root refuses is disabled rather than failing on submit, with a bottom sheet at phone width; uploads, downloads and mass copy are 17.54 and archives and search 17.39
+- A files page per root and per app:
+  - Breadcrumbs, selection, a context menu and mass actions, with a bottom sheet at phone width.
+  - Rendered from the root's policy in the listing response, so a control the root refuses is disabled rather than failing on submit.
+  - Uploads, downloads and mass copy are 17.54, and archives and search 17.39.
 
 **Acceptance**
 
-- [ ] Requests for `../`, an absolute path, an encoded traversal, a device name such as `CON`, or a symbolic link or junction leaving the roots are refused with 403 and audited with the resolved path, which the response does not carry
-- [ ] A download of a file under the client install root is refused for an owner as well as a viewer, on every path including a share link
-- [ ] Reading a `.conf` file without `settings.secrets.read` shows every secret value redacted
-- [ ] A write that would leave less than the minimum free space is refused with the volume and the figure named, before any byte reaches the disk
-- [ ] A FIFO, a device node and a unix socket placed inside a root are refused before they are opened
-- [ ] The jail's component and link checks pass in the unit tests on Windows and on Linux
-- [ ] A protected path is refused for listing, reading and every write operation, not only for writes
-- [ ] The files page walks into a folder by its breadcrumbs, selects a filtered set and shows its count, and on a read-only root every write control is disabled with the root's policy named
+- [x] Requests for `../`, an absolute path, an encoded traversal, a device name such as `CON`, or a symbolic link or junction leaving the roots are refused with 403 and audited with the resolved path, which the response does not carry (route tests on Windows and Linux) (FilesServiceTest.TraversalAbsoluteEncodedDeviceAndEscapingLinkRequestsAre403AndAuditedWithTheResolvedPath covers `../x`, `/etc/passwd`, `C:/Windows`, `%2e%2e%2fx`, `CON`, `nul.txt` and a link as the path or as a folder on it, each 403 with no host path in the body and one audit row naming the resolved path; it and FileJailTest.RefusesALinkedFolderLeavingTheRoot fail with the jail's link and outside checks taken out; run on Windows and on Linux under WSL, and again through tests/e2e/files.spec.ts against a real supervisor)
+- [ ] A download of a file under the client install root, or anywhere in the data root outside what the supervisor itself keeps, is refused for an owner as well as a viewer, on every path including a share link (route tests over each path), and a folder a test creates in the data root under a new name is refused the same way
+- [x] Reading a `.conf` file without `settings.secrets.read` shows every secret value redacted (route test) (FilesServiceTest.AConfFileReadWithoutTheSecretsRightShowsEverySecretRedacted: a viewer asking to reveal and an owner not asking both see Admin.Token, Panel.Token, the database password and the verifier keys masked with the keys named, copies such as `supervisor.conf.bak` included, and only an owner who asks sees them, with the reveal audited)
+- [x] A write that would leave less than the minimum free space is refused with the volume and the figure named, before any byte reaches the disk (unit test with a fake volume) (SpaceGuardTest.AWriteThatWouldLeaveLessThanTheMinimumIsRefusedWithTheVolumeAndFigureBeforeAnyByte names the volume, the free space, the minimum and the size asked for, and no file exists afterwards)
+- [x] A FIFO, a device node and a unix socket placed inside a root are refused before they are opened (unit test on Linux) (FileJailTest.RefusesAFifoADeviceNodeAndASocketBeforeOpeningThem, run on Linux under WSL, kernel 6.6, where each is refused from its O_PATH descriptor's fstat before any open; on Windows the same test refuses a device path and an AF_UNIX socket)
+- [x] The jail's component and link checks pass in the unit tests on Windows and on Linux (JailPathTest, FileJailTest, PathRulesTest and FolderPageTest pass on Windows and on Linux under WSL: 50 on Windows with the file-symbolic-link case skipped only because an unprivileged Windows account cannot make one, and 91 with the panel suites on Linux, where only the 8.3 short-name case skips because Linux keeps none)
+- [x] A protected path is refused for listing, reading and every write operation, not only for writes (route tests) (FilesServiceTest and PanelFileRulesTest: an owner's pattern and the built-in ones refuse list, read and each write operation alike, and PathRulesTest holds the gitignore matching, a pattern of hundreds of `**/` segments included)
+- [x] The files page walks into a folder by its breadcrumbs, selects a filtered set and shows its count, and on a read-only root every write control is disabled with the root's policy named (browser test) (apps/dashboard/src/pages/Files.browser.test.ts, and tests/e2e/files.spec.ts against a real supervisor)
 
 ## 17.19 Built-in resource graphs
 
@@ -653,49 +695,69 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 ## 17.20 Client data and revisions page
 
-**Goal:** Operators see which client install and type data each server uses, and rebuild it from the panel.
+**Goal:** Operators see which client install and type data each server uses, what has been built and extracted from it, and rebuild it from the panel.
 
-**Size:** S. **Depends on:** 17.06, 3.23
+**Size:** M. **Depends on:** 17.06, 3.23
+
+Widened on 2026-09-27 at the maintainer's direction, who asked that everything the client work can read be seen from the panel. The page now also lists every install found, the caches built per revision and the world table sets extracted from the install. Browsing what those hold is 17.165 onward; this page remains the one that says what exists and whether it is current.
 
 **Deliverables**
 
-- A page listing the client installs found, the revision each server uses, the type dump in use with its revision, executable hash, extractor version and build time, and the message definitions, name tables and creation config loaded
+- A page listing:
+  - The client installs `ClientLocator` finds, each with its revision, whether it holds the client program, and how many archives it has.
+  - The revision each server uses.
+  - The type dump in use, with its revision, executable hash, extractor version and build time, and whether its fast copy is current.
+  - The message definitions, name tables and creation config loaded.
+- The caches built per revision in the Ambrose data folder, by kind: type dumps and fast copies, message definitions, handlers, behaviors, functions, decompiled output, the launcher's run folders, and 17.170's scan results once it lands. Each is listed with its revision, size and build time, as facts and never as files.
+- The world table sets extracted from the install (names, levels and stats, zones), each with its row count and the revision it was extracted from. Each set records that revision, as 3.23 makes the name tables do, and a set from another revision than the install's is marked.
 - The revision following state from 3.23: the newest revision seen, whether data for it is built, and any build in progress with its live output
-- Buttons to rebuild client data and to switch a server to a different install or revision, each checked, audited, run as the protected setup state so power actions wait, and applied live where 3.23 supports it
-- The page reads the user's own install at runtime and never serves or copies client files
+- Buttons to rebuild client data and to switch a server to a different install or revision:
+  - Each is checked against `clientdata.rebuild` or `clientdata.switch`, and audited.
+  - Each runs as the protected setup state, so power actions wait, and is applied live where 3.23 supports it.
+- The page reads the user's own install at run time and never serves or copies client files
 
 **Acceptance**
 
-- [ ] After a client revision change, the page shows the new revision within a minute and the rebuild's live output while it runs
-- [ ] A failed rebuild shows the extractor's error, and the servers keep using the previous data
-- [ ] A restart requested during a rebuild is refused with the rebuild named
-- [ ] No response from this page carries a client file's bytes, and the install root stays outside every downloadable root
+- [ ] After a client revision change, the page shows the new revision within a minute and the rebuild's live output while it runs (integration test with a fixture install whose revision.dat changes)
+- [ ] A failed rebuild shows the extractor's error, and the servers keep using the previous data (integration test with a fake extractor that fails)
+- [ ] A restart requested during a rebuild is refused with the rebuild named (route test)
+- [ ] No response from this page carries a client file's bytes, and the install root and every client-derived folder stay outside every downloadable root (route test over a fixture install whose files hold marker runs)
+- [ ] Every install `ClientLocator` finds is listed with the revision and archive count the locator reports, and the one each server uses is marked (route test over a fixture tree)
+- [ ] An extracted set from another revision is marked, and once 3.23 has extracted it again the page shows the install's revision and the new row count (database integration test)
 
-## 17.21 Accounts, bans, characters and online players pages
+## 17.21 Accounts and bans pages
 
-**Goal:** Game masters manage accounts, bans, characters and online players from the panel.
+**Goal:** Game masters manage accounts and bans from the panel.
 
-**Size:** M. **Depends on:** 17.05, 17.48, 3.17, 6.05
+**Size:** M. **Depends on:** 17.05, 17.48, 17.49, 2.13
+
+Split on 2026-09-27 at the maintainer's direction, who asked to manage everything from the panel. Accounts and bans need only AccountMgr from 2.13 and the command levels 17.49 passes to the apps, so they keep this id. Characters and online players moved to 17.177, which waits for 3.17 and 6.05.
 
 **Deliverables**
 
-- An accounts page with search by username, email, address or MachineID, create, password reset, lock and unlock, security level, email and last sign-in address, backed by AccountMgr from 2.13; a password reset seals the verifier with the active key, deletes `account_session` and kicks live sessions, and a generated password is shown once and never logged
+- An accounts page backed by AccountMgr from 2.13:
+  - Search by username, email, address or MachineID.
+  - Create, password reset, lock and unlock, and security level.
+  - Each account's email and last sign-in address.
+  - A password reset seals the verifier with the active key, deletes `account_session` and kicks live sessions. A generated password is shown once and never logged.
 - Email, address and MachineID hidden from users without `accounts.pii.read`
-- A bans page for account, address and machine bans with duration, reason, who and when, and unban with a reason, matching the 6.05 console commands
-- A characters page per account listing characters with level, school and location, with rename, restore of a deleted character and delete as 3.17 and later phases support them, and an edit form whose fields are those the running build reports as editable through `GET /api/capabilities`, such as gold and level once later phases make them so, each applied through its own GM command
-- An online players page with realm, zone and session time, joins and leaves arriving live, kick, mute and teleport actions from 6.05, 12.07 and 6.06 once those exist, and the row's own slot reserved for the per-session quality chart 17.92 fills, so that milestone adds a column rather than reworking a finished table
-- Every action goes through CommandMgr with the panel user's permissions and command level, refuses to act on an account at or above the user's own security level, requires a reason for bans, locks and security level changes, and is audited, refused attempts included
-- A search in the top bar over accounts, characters and the apps the caller may see, each result checked against the caller's own permissions before it is returned and each row opening its page
+- A bans page for account, address and machine bans, each with its duration, reason, who and when, and unban with a reason:
+  - AccountMgr gains address and machine bans. They write the `ip_banned` and `machine_banned` rows the login server's sign-in check already reads and nothing writes today, with login console commands for them.
+  - 6.05's `ban ip` and `ban machine` call the same functions rather than writing the rows a second way.
+  - 17.138's address rules are a separate list of its own.
+- Each account's characters listed read-only, with level, school, location and whether each is deleted, under `characters.read`. Renaming, restoring, deleting and editing them are 17.177.
+- Every action goes through CommandMgr at the panel user's command level. It refuses to act on an account at or above that level, requires a reason for bans, locks and security level changes, and is audited, refused attempts included.
+- A search in the top bar over accounts and the apps the caller may see. Each result is checked against the caller's own permissions before it is returned, and each row opens its page. 17.177 adds characters to it.
 
 **Acceptance**
 
-- [ ] Banning an account from the panel while its player is on character select disconnects that client with the ban message, through the 6.05 ban path
-- [ ] An operator without `accounts.ban` cannot ban, and the attempt is audited
-- [ ] Dev-gated: creating an account from the panel lets a real client sign in with it. Needs the maintainer's own retail client, as doc/PATCHING.md describes
-- [ ] A panel user linked to a game master account cannot ban or reset an administrator account
-- [ ] A user without `accounts.pii.read` sees no email, address or MachineID in any account response
-- [ ] The top-bar search finds an account by username and a character by name, and returns nothing for an app or account the caller holds nothing on
-- [ ] The character edit form offers only the fields the build reports as editable, and a field the build does not report cannot be submitted
+- [ ] An operator without `accounts.ban` cannot ban, and the attempt is audited (route test)
+- [ ] A panel user whose grants carry the game master command level, as the operator and game master roles do, cannot ban or reset an administrator account, and the attempt is audited (route test)
+- [ ] A user without `accounts.pii.read` sees no email, address or MachineID in any account response (route test over every account route)
+- [ ] An account ban, an address ban and a machine ban from the panel each write the row the sign-in check reads, with who, why and until, and the login server then refuses that account, address and machine; an unban records its reason (database integration test)
+- [ ] A password reset from the panel stores the new verifier sealed with the active key, removes the account's `account_session` rows, and shows the generated password once and in no log line or audit row (database integration test)
+- [ ] The top-bar search finds an account by username, and returns nothing for an app or account the caller holds nothing on (browser test)
+- [ ] Dev-gated: an account created from the panel signs a real client in. Needs the maintainer's own retail client, as doc/PATCHING.md describes
 
 ## 17.22 Nodes: one panel for servers on several machines
 
@@ -747,25 +809,56 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 - [ ] Dev-gated: stopping the egg's server from Pterodactyl leaves no crash message in its console. Needs the maintainer's own Pterodactyl install
 - [x] The image resolves America/New_York, Europe/London and Australia/Lord_Howe from the system time zone database rather than the standard library's built-in copy, and an image built without tzdata fails this check rather than starting (the build prints `time-zone check: libstdc++ resolved all required zones from system tzdata 2026c`, and the same image built without tzdata stops at `time-zone check: /usr/share/zoneinfo/tzdata.zi is missing or has no version header`)
 
-## 17.24 Desktop control app
+## 17.24 Desktop control app: hosting a game on this computer
 
 **Goal:** A player hosting on their own computer starts the database, servers, panel and client from one icon.
 
-**Size:** L. **Depends on:** 17.06, 17.08, 17.46, 1.21, 3.22
+**Size:** L. **Depends on:** 17.08, 17.181, 3.22, 3.25
+
+Changed on 2026-09-27 at the maintainer's direction, who asked for the panel as its own installable program.
+
+- **What this milestone keeps.** The program this app runs in is 17.181, over the shell of 17.179 and the local link of 17.180, and its tray and installer are 17.182 and 17.183. This milestone keeps what its goal names: hosting the stack on this computer, its database and Play.
+- **The client.** It starts through 3.25's launcher, as Client launcher in doc/ARCHITECTURE.md already says, rather than through 1.21, whose scripts 3.25 replaced.
+- **The private database.** It rests on the private database decision, settled on 2026-09-27 and recorded under Desktop programs and client data in doc/ARCHITECTURE.md: MariaDB bundled in the package's optional server component.
+- **Size.** It now carries L on its count of deliverables rather than on judgment.
 
 **Deliverables**
 
-- `apps/desktop/`, an installer and tray app for Windows and Linux desktops that installs Ambrose, starts and stops the supervisor, opens the panel, and launches the client through the 1.21 launcher once the loginserver is ready
-- Opening the panel from the tray through a fresh 17.46 one-time owner link bound to the local machine, so the player never types a panel password
-- Database setup with no steps: it uses a MariaDB or MySQL server it finds, with credentials the user gives, or else installs a private MariaDB into the Ambrose data folder, checked against its published checksum and bound to localhost with generated credentials, and registers it as a database host once 17.30 lands
-- First start runs 3.22's automatic setup and shows its progress, and the tray shows server status, players online and update notices from 17.17
+- The server programs are the ones beside the program, as a build tree and 17.183's server component lay them out, or the ones `Host.Supervisor` in `panel.conf` names. With neither, the program runs connect-only: it offers no hosting, says which package carries the server programs, and opens panels on other machines as before.
+- A first host asks nothing:
+  - It makes a server home in the Ambrose data folder, holding the configuration, `conf.d` and the logs.
+  - It copies the running build's `.conf.dist` files into the home at each start, and makes each `.conf` from its `.conf.dist` when it is missing, never over an edited one, the way the `conf` step in apps/installer does.
+  - It writes one file of the program's own in `conf.d`, which turns the panel on at 127.0.0.1 on a free port (12080 when free) and is remembered.
+  - When the server programs are present, the first open hosts without asking unless `Host.Automatic = 0`.
+- Database setup with no steps:
+  - The program uses a MariaDB or MySQL server it finds on this machine, with credentials the user gives.
+  - Otherwise it runs a private MariaDB from the package's server component, as the private database decision sets. The private database is checked against its published checksum before any of it runs, bound to localhost with generated credentials written to the program's own `conf.d` file (readable only by the user), started before the supervisor and stopped after it.
+  - The database is registered as a database host once 17.30 lands.
+- Start and stop:
+  - The supervisor is started detached through `ChildProcess` under the operator's own account, so closing the window leaves it running, and the next open finds it again through its admin API on loopback.
+  - Stop asks for the supervisor's own graceful shutdown over that API and waits for its stop timeout. A supervisor that does not stop is reported, and only then does the program offer to end it.
+  - A second copy of the program never starts a second supervisor.
+- The first start shown as it happens:
+  - Until the panel answers, the program's own screen shows each app's start step with its numbers from the supervisor's status. That includes 3.22's install discovery, the type dump build, the name, level and zone extraction, and any problem record with its message and fix.
+  - Once the panel answers, the program opens it through a local link.
+- Play, on the program's This computer screen, starts the client through 3.25's `launcher` against the local login server once the supervisor reports the login server ready, and says what it waits for until then. On a machine that is not Windows, Play names the launcher's own refusal.
+- Quit with stop chosen closes the client connection cleanly and stops the servers and the private database, and the next start keeps accounts and characters
+- Tests and docs:
+  - Unit tests over the configuration step, connect-only mode, start, find and stop against a fake supervisor, and Play against the launcher's `--dry-run`.
+  - An integration test that hosts a real supervisor from `panel-core`, reads its apps' start steps, stops it gracefully and hosts it again on the same data.
+  - doc/config/panel.md and doc/OPERATIONS.md describe hosting from the program.
 
 **Acceptance**
 
-- [ ] Dev-gated: on a clean Windows machine with Wizard101 installed, installing the app and clicking Play reaches the login screen against the local server with no other steps. Needs the maintainer's own machine and client
-- [ ] Quitting from the tray closes the client connection cleanly and stops the servers and the private database, and the next start keeps accounts and characters
-- [ ] A private MariaDB download with a wrong checksum is refused, and the app says what failed
-- [ ] The tray's panel link signs in once and cannot be reused from another machine
+- [ ] Dev-gated: on a clean Windows machine with Wizard101 installed, installing the program and clicking Play reaches the login screen against the local server with no other steps. Needs the maintainer's own machine and client
+- [ ] With the server programs beside it and nothing configured, the first open starts a supervisor with its panel on loopback and opens that panel signed in, asking nothing (integration test with fixture apps)
+- [ ] Writing the configuration twice never overwrites an edited `.conf`, and a taken panel port moves to the next free one and is remembered (unit tests)
+- [ ] Closing the program leaves the supervisor running, opening it again finds that supervisor and starts no second one, and Stop ends it gracefully within its stop timeout (integration test)
+- [ ] With no server programs beside it and none configured, the program offers no hosting, says why, and still opens panels on other machines (unit test)
+- [ ] A start that meets an unreachable database shows that problem's message and fix on the program's own screen (integration test with the database pointed at a closed port)
+- [ ] Play waits until the supervisor reports the login server ready, then starts the launcher with the local login server's address and port (unit test with a fake supervisor and the launcher's `--dry-run`)
+- [ ] A private MariaDB whose checksum is wrong is refused before any of it runs, and the program says what failed (unit test)
+- [ ] Dev-gated: with a wizard in the world, Quit with stop chosen saves and disconnects the client cleanly and stops the servers and the private database, and the next start keeps the account and the wizard. Needs the maintainer's own machine and client
 
 ## 17.25 Activity log pages
 
@@ -807,11 +900,11 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Acceptance**
 
-- [ ] A socket opened with a foreign Origin is refused, and a ticket works once and only within 30 seconds
-- [ ] A page reconnecting after 10 seconds offline receives exactly the missed records or a dropped marker, with no duplicates, through the 17.04 layer's own tests
-- [ ] The contract test fails when a server event type is added without a dashboard handler
-- [ ] A ticket sent in the URL rather than the first frame is refused, and the URL appears in no log
-- [ ] A caller without `debug.errors` receives a correlation id that matches a line in the supervisor log, and no error text
+- [x] A socket opened with a foreign Origin is refused, and a ticket works once and only within 30 seconds (PanelEventSocketTest.AForeignOriginIsRefusedAtTheUpgradeWhileTheSameOriginSignsIn answers a foreign origin and `*` with 403 cross_origin at the upgrade while the panel's own origin reaches ready, and fails when the origin check is taken out; PanelEventTicketsTest.ATicketIsGoodForThirtySecondsAndOneUseFromItsOwnAddress holds a ticket good at 29.999 s and gone at 30 s, once, from the address it was minted for; PanelEventSocketTest.ATicketSignsASocketInOnceAndASecondUseClosesWith4401 does it over a real listener)
+- [x] A page reconnecting after 10 seconds offline receives exactly the missed records or a dropped marker, with no duplicates, through the 17.04 layer's own tests (PanelEventStreamTest runs the shared StreamLayerCases against the panel feed, and PanelEventSocketTest.AReconnectingPageGetsExactlyTheMissedStatusRecordsOrADroppedMarker resumes from 3 to receive exactly 4 to 7, and after a trimmed backlog one dropped frame for 8 to 25, count 18, then 26 to 30; events.test.ts covers the page resuming after its last sequence and skipping what it already has)
+- [x] The contract test fails when a server event type is added without a dashboard handler (apps/dashboard/src/lib/events.test.ts "every type the server can send has a dashboard handler" names a missing handler, the handler map is typed over every sent type so svelte-check refuses a gap, and PanelEventCatalogTest.TheDashboardTypesAreWhatTheCatalogRenders holds apps/dashboard/src/lib/protocol.ts to the C++ catalog)
+- [x] A ticket sent in the URL rather than the first frame is refused, and the URL appears in no log (PanelEventSocketTest.ATicketInTheUrlIsRefusedBurnedAndNeverLogged: `?ticket=` answers 400 credentials_in_url, the ticket is burned so its later hello closes with 4401, and no captured log line carries it; AdminServerTest.ARouteThatAdmitsItsOwnUpgradesNeedsNoTokenMayRefuseAndLogsNoQuery holds the listener to the same)
+- [x] A caller without `debug.errors` receives a correlation id that matches a line in the supervisor log, and no error text (PanelEventSocketTest.AnInternalFailureShowsItsTextOnlyToDebugErrorsAndItsCorrelationIsLogged: a viewer gets the generic message with a correlation id that a server.panel line carries with the full text, and only an owner holding debug.errors sees the text; the signed-in panel opens exactly one socket in tests/e2e/panel-listener.spec.ts, run against a real supervisor)
 
 ## 17.27 App states, operation locks and power targets
 
@@ -912,25 +1005,30 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Goal:** Operators see every realm's population, health and zones, and change a realm's limits and flags from the panel.
 
-**Size:** M. **Depends on:** 17.06, 17.26, 17.48, 4.03, 4.09
+**Size:** M. **Depends on:** 17.06, 17.26, 17.48, 17.175, 4.03, 4.09
+
+Changed on 2026-09-27: the zone instances a realm has loaded are read from 17.175's live world routes, so this page shows them per realm without a second instance listing.
 
 **Deliverables**
 
-- A realms page listing each `realmlist` row: name with its display name read from the user's install, address and local address, port, flags, population against player limit, last heartbeat, and the gameserver app and node behind it
+- A realms page listing each `realmlist` row: its name with the display name read from the user's install, address and local address, port, flags, population against the player limit, last heartbeat, and the gameserver app and node behind it
 - Editing a realm's player limit, flags and the default realm through the realm settings, applied from the next realmlist refresh and audited with a reason
-- A realm page with population over time, players at character select headed there, the zones the realm has loaded with players per zone, and public instances with their capacity once 12.17 lands
-- Zone actions checked and audited: reload a zone's data through 4.15, and move or kick everyone in a zone once 6.06 and 6.05 exist
+- A realm page showing:
+  - Population over time, and the players at character select headed there.
+  - The zones the realm has loaded, with players per zone, read from the 17.175 instance routes and opening its instance pages.
+  - Public instances with their capacity, once 12.17 lands.
+- Zone actions, each checked and audited: reload a zone's data through 4.15, and move or kick everyone in a zone once 6.06 and 6.05 exist
 - Realm and zone changes streamed live as realm events on the 17.26 socket
-- Authorization is at the scope of the realm's own gameserver app, as settled under Decisions, Operations; a realm scope of its own follows the scope tree settled under Panel operations in doc/ARCHITECTURE.md once the realm scope is built
+- Authorization is at the scope of the realm's own gameserver app, as settled under Decisions, Operations. A realm scope of its own follows the scope tree settled under Panel operations in doc/ARCHITECTURE.md, once the realm scope is built.
 
 **Acceptance**
 
-- [ ] Starting a second gameserver adds its realm to the page with a fresh heartbeat within one heartbeat interval, and stopping it marks the realm offline
-- [ ] Lowering a realm's player limit from the panel applies at the next realmlist refresh without a restart, and the audit row shows who and why
-- [ ] A user who holds nothing on a realm's gameserver app gets 404 for that realm, and a user holding `realms.read` on it sees only that realm
-- [ ] A zone reload with broken data keeps the previous zone data serving and shows the errors
-- [ ] A realm's page draws its population over time and lists the zones the realm has loaded with players per zone, and a zone that unloads leaves the list within one refresh
-- [ ] Changing a realm's flags sends one realm event on the 17.26 socket to holders of `realms.read` and nothing to a user who holds nothing on that realm
+- [ ] Starting a second gameserver adds its realm to the page with a fresh heartbeat within one heartbeat interval, and stopping it marks the realm offline (integration test)
+- [ ] Lowering a realm's player limit from the panel applies at the next realmlist refresh without a restart, and the audit row shows who and why (integration test)
+- [ ] A user who holds nothing on a realm's gameserver app gets 404 for that realm, and a user holding `realms.read` on it sees only that realm (route test)
+- [ ] A zone reload with broken data keeps the previous zone data serving and shows the errors (route test)
+- [ ] A realm's page draws its population over time and lists the zones the realm has loaded with players per zone, and a zone that unloads leaves the list within one refresh (integration test)
+- [ ] Changing a realm's flags sends one realm event on the 17.26 socket to holders of `realms.read`, and nothing to a user who holds nothing on that realm (socket test)
 
 ## 17.32 Realm maintenance mode
 
@@ -980,24 +1078,30 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Goal:** Operators edit world content from the panel with typed forms, see every live edit in the journal, and export edits as SQL updates.
 
-**Size:** M. **Depends on:** 17.13, 17.25, 4.15, 5.01
+**Size:** M. **Depends on:** 17.13, 17.25, 17.173, 4.15
+
+Changed on 2026-09-27. The tables browser, and the world schema its forms are built from, are 17.173's, so this milestone adds editing, the journal and export on top of them rather than a second schema. The export follows the settled rules: it writes only into `data/sql/custom/db_world`, as World edit exports under Panel operations settles, and it never exports rows extracted from the install, as World threads, zone data and extracted tables settles. Templates are read from the install at run time and are never in the world database, as Object templates settles, so the first check now edits a placement.
 
 **Deliverables**
 
-- A world edits page over the content tables the game server loads, starting with those that exist when it lands and gaining spawns, doors, vendors and quests as later phases add them
-- Table forms built from a schema the game server publishes with types, bounds and references, so a foreign key is chosen from its table
-- Edits sent to the game server, which applies them to the world database, records them in the 4.15 world edit journal with the panel user as author, and reloads the affected stores; a group of edits applies as one change set and reloads together
+- A world edits page over the content tables the game server loads, built on the 17.173 tables browser. It starts with the tables that exist when it lands, and gains spawns, doors, vendors and quests as later phases add them.
+- Table forms built from the world schema 17.173 publishes, with its types, bounds and references, so a foreign key is chosen from its table
+- Edits sent to the game server, which applies them to the world database, records them in the 4.15 world edit journal with the panel user as author, and reloads the affected stores. A group of edits applies as one change set and reloads together.
 - A failed reload rolls back the database change and keeps the previous store serving, with every error shown
-- A journal view with who, when, source (the panel or a GM command) and statement, and export of chosen entries as a local-only SQL file into `data/sql/custom/db_world`, which the repository sanctions for local SQL; writing into a `pending_db_<name>` tree waits for the pending naming decision that blocks 3.19
+- A journal view and its export:
+  - The view shows who, when, source (the panel or a GM command) and statement.
+  - Chosen entries export as a local-only SQL file into `data/sql/custom/db_world` and never into a pending folder.
+  - An entry that changed a table the schema marks as extracted from the install is refused for export, with the table named.
 - Every edit, rollback and export audited
 
 **Acceptance**
 
-- [ ] Editing a template field from the panel changes it in game after the reload, and the journal names the panel user
-- [ ] An edit whose reload fails leaves the database and the running store as they were and shows the errors
-- [ ] Exported journal entries apply cleanly to a fresh world database
-- [ ] An export writes only under `data/sql/custom/db_world`, and a request naming any other folder is refused
-- [ ] A user without `world.edit` can browse rows but gets 403 on a save
+- [ ] Editing a `zone_object` row's position from the panel moves that object in game after the reload, and the journal names the panel user (integration test with a test client in the zone)
+- [ ] An edit whose reload fails leaves the database and the running store as they were and shows the errors (database integration test)
+- [ ] Exported journal entries of an authored table such as `playercreateinfo` apply cleanly to a fresh world database (database integration test)
+- [ ] An export writes only under `data/sql/custom/db_world`, and a request naming any other folder is refused (route test)
+- [ ] A user without `world.edit` can browse rows but gets 403 on a save (route test)
+- [ ] Exporting an entry that changed an extracted table, such as `zone_object`, is refused with the table named, and nothing is written (route test)
 
 ## 17.35 Panel settings: general, mail and security
 
@@ -1289,11 +1393,11 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Acceptance**
 
-- [ ] With two-factor on, a correct password without a valid code is refused, a code already accepted once is refused the second time, and each recovery code works once
+- [x] With two-factor on, a correct password without a valid code is refused, a code already accepted once is refused the second time, and each recovery code works once (PanelTwoFactorTest.APasswordWithoutAValidCodeOpensNoSession, ACodeAcceptedOnceIsRefusedTheSecondTime on sign-in, on enabling and on a step-up check, and EachRecoveryCodeWorksOnce; PanelStepUpTest.AStepUpCodeCannotBeOneAlreadyAccepted and TotpTest.AcceptsOneStepEitherSideAndNothingAtOrBelowTheLastAccepted fail with the step check taken out of the code match and the store's update; tests/e2e/two-factor.spec.ts signs in with a recovery code once and is refused the second time against a real supervisor)
 - [ ] Setting two-factor required for everyone sends a user without it to enrollment on their next request, and their API key requests answer 403 with `two_factor_required`
-- [ ] A danger action attempted with a second factor older than the freshness window asks again and changes nothing
-- [ ] Disabling two-factor without a current code is refused, and disabling it with one ends that user's other sessions
-- [ ] A recovery code appears in no response, no log and no audit row after the dialog that issued it, and the store holds only its keyed hash
+- [x] A danger action attempted with a second factor older than the freshness window asks again and changes nothing (PanelStepUpTest.ADangerActionPastTheFreshnessWindowAsksAgainAndChangesNothing answers 403 step_up_required with Panel.Name unchanged and no settings.changed row; AFreshCheckAuthorizesTheActionAndTheAuditRowSaysWhat, ASecretRevealAsksForAFreshCheckEveryTime and PanelRoutesTest.TheRelayAsksForAFreshCheckBeforeARevealAKillOrARestrictedChange cover the relay)
+- [x] Disabling two-factor without a current code is refused, and disabling it with one ends that user's other sessions (PanelTwoFactorTest.DisablingWithoutACurrentCodeIsRefusedAndWithOneEndsTheOtherSessions: the password alone answers 422 and a wrong or replayed code 403, while a correct one ends the other session and deletes the secret and codes; DisablingIsRefusedWhileTheRequirementCoversTheUser)
+- [x] A recovery code appears in no response, no log and no audit row after the dialog that issued it, and the store holds only its keyed hash (PanelTwoFactorTest.ARecoveryCodeIsShownOnceAndTheStoreHoldsOnlyItsKeyedHash scans every later answer, audit_event and audit_subject, the captured log, the store file, its write-ahead log and the keyring, and finds only the keyring's HMAC-SHA-256 of each code; tests/e2e/two-factor.spec.ts checks the page and the browser's storage after the dialog closes)
 
 ## 17.48 Permission catalog, roles and grants
 
@@ -1337,12 +1441,12 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Acceptance**
 
-- [ ] A restart run through the panel appears once in the audit log with the panel user, the client address and the app as subject
-- [ ] A command refused for being above the caller's level writes a refused audit row and runs nothing
-- [ ] A forced failure of the audit insert leaves the change unapplied, since both are one transaction
-- [ ] No response body or browser storage holds an app token, and a request that tries to pass one is ignored by the relay
-- [ ] A command run in one browser appears in that user's history in another browser, with a password argument redacted
-- [ ] A relay call to a stopped app and one to an app refusing its token give different errors, both recorded
+- [x] A restart run through the panel appears once in the audit log with the panel user, the client address and the app as subject (PanelTest.APanelRestartIsRecordedOnceWithItsUserAddressAppAndChainHash)
+- [x] A command refused for being above the caller's level writes a refused audit row and runs nothing (PanelTest.ARefusedCommandIsAuditedWithoutRunningIt; AdminCommandRouteTest.ACommandAboveTheRunnerLevelIsRefusedWithoutExecution)
+- [x] A forced failure of the audit insert leaves the change unapplied, since both are one transaction (PanelTest.AChangeWhoseRecordCannotBeWrittenIsNotApplied)
+- [x] No response body or browser storage holds an app token, and a request that tries to pass one is ignored by the relay (SupervisorTest.TheRelayRemovesClientCredentialsAndCapsCommandLevels; Console.browser.test.ts, where the history stays on the server and browser storage stays empty)
+- [x] A command run in one browser appears in that user's history in another browser, with a password argument redacted (PanelTest.CommandHistoryIsStoredPerUserAndReturnsOnlyTheRedactedCommand; Console.browser.test.ts, which loads the shared history after the page is reopened)
+- [x] A relay call to a stopped app and one to an app refusing its token give different errors, both recorded (SupervisorTest.StoppedAppAndInvalidTokenRelayFailuresAreDistinctAndAudited)
 
 ## 17.50 Panel users, roles and grants pages
 
@@ -1639,25 +1743,30 @@ Done on 2026-09-22. The supervisor is a fourth executable in `src/server/apps/su
 
 **Goal:** A reported player reaches a moderator with the evidence attached, and every mute leaves a history.
 
-**Size:** M. **Depends on:** 17.21, 17.25, 12.07
+**Size:** M. **Depends on:** 17.21, 17.25, 17.177, 12.07
+
+Changed on 2026-09-27: mute and kick moved with the online players page to 17.177 when 17.21 was split, so actions taken from a report use 17.177's paths for those and 17.21's for bans.
 
 **Deliverables**
 
 - A report queue over 12.07's moderation records: player reports and house reports with reporter, subject, category, text, realm, zone, time and state (new, claimed, actioned, dismissed), claimed by one moderator at a time with the claim visible
 - Chat search for a reported player over 12.07's chat records, bounded by time range and result count, with the lines around a match, filtering by channel, and the bound reported when it stops early
-- Mute history per account and character with who, why, how long, when it ends, and the kicks and bans the same moderator issued, plus a repeat count per subject
-- Actions taken from a report go through 17.21's checked paths for mute, kick and ban, each linked to the report it came from and each requiring a reason
-- A live chat tab beside the search, on the same socket and under the same channel filter and permission, with its own rate limit and the rule that an operator speaks as an operator and never as a player, because an incident is watched as it happens and the page and the socket already exist
-- Queue counts need `players.read`; reporter identity and chat text need the moderation permissions, and every read of chat text is audited with the subject
+- Mute history per account and character: who, why, how long and when it ends, plus the kicks and bans the same moderator issued and a repeat count per subject
+- Actions taken from a report go through the checked paths of 17.177 for mute and kick and of 17.21 for bans, each linked to the report it came from and each requiring a reason
+- A live chat tab beside the search:
+  - It runs on the same socket, under the same channel filter and permission, with its own rate limit.
+  - An operator speaks as an operator and never as a player.
+  - It exists because an incident is watched as it happens, and the page and the socket already exist.
+- Queue counts need `players.read`. Reporter identity and chat text need the moderation permissions, and every read of chat text is audited with the subject.
 
 **Acceptance**
 
-- [ ] A report filed in game appears in the queue with its subject, realm and zone, and claiming it blocks a second moderator with the claim shown
-- [ ] A chat search for a reported player returns that player's lines with their surrounding lines and nothing from an unrelated account
-- [ ] Muting from a report links the mute to that report and shows in the subject's mute history with who, why and how long
-- [ ] A user with `players.read` and no moderation permission sees queue counts and no chat text, and the refusal is audited
-- [ ] Dismissing a report records who and why and leaves it searchable
-- [ ] Every read of chat text writes an audit row naming the subject and the range read
+- [ ] A report filed in game appears in the queue with its subject, realm and zone, and claiming it blocks a second moderator with the claim shown (integration test with a test client filing a report)
+- [ ] A chat search for a reported player returns that player's lines with their surrounding lines, and nothing from an unrelated account (database integration test)
+- [ ] Muting from a report links the mute to that report and shows in the subject's mute history with who, why and how long (integration test)
+- [ ] A user with `players.read` and no moderation permission sees queue counts and no chat text, and the refusal is audited (route test)
+- [ ] Dismissing a report records who and why and leaves it searchable (route test)
+- [ ] Every read of chat text writes an audit row naming the subject and the range read (route test)
 
 ## 17.64 Installation maintenance mode
 
@@ -2295,34 +2404,39 @@ Added on 2026-09-18 at the maintainer's direction. 17.01 shipped a console where
 
 **Acceptance**
 
-- [ ] A test that makes one subsystem slow shows that subsystem growing, and the parts sum to the tick time inside a stated tolerance
+- [x] A test that makes one subsystem slow shows that subsystem growing, and the parts sum to the tick time inside a stated tolerance (WorldTest.TickBreakdownNamesTheSlowSubsystemAndAddsToTheTick: an injected 15 ms queue delay identifies network_drain, and the subsystem nanoseconds sum to the tick histogram within 0.5 ms)
 - [ ] The accumulators cost nothing measurable while nothing subscribes, proved by a benchmark
-- [ ] A capture runs for the requested seconds, produces a file, and leaves nothing listening afterwards
+- [x] A capture runs for the requested seconds, produces a file, and leaves nothing listening afterwards (WorldTest.TickProfileIsBoundedTimedAndReadableAsAChromeTrace and WorldTest.TickProfileStopsAtItsEventBound; Overview.browser.test.ts downloads the Chrome trace; npm run test:browser -- --project dashboard-browser apps/dashboard/src/pages/Overview.browser.test.ts passed 6/6; capture uses the existing admin API and opens no listener)
 - [ ] A tick alert names the subsystem that grew
-- [ ] A subsystem whose milestone has not landed reads as unavailable naming it, never as zero
+- [x] A subsystem whose milestone has not landed reads as unavailable naming it, never as zero (WorldTest.TickBreakdownNamesTheSlowSubsystemAndAddsToTheTick reads database_waits and combat as unavailable with their reasons and movement, which 6.01 landed, as timed; Overview.browser.test.ts names each unavailable subsystem rather than showing 0; browser suite passed 6/6)
 
 ## 17.92 Per-session network quality and the player inspector
 
 **Goal:** When a player says the game is laggy, the panel answers with that session's own figures.
 
-**Size:** M. **Depends on:** 17.19, 17.21, 17.80
+**Size:** M. **Depends on:** 17.19, 17.80, 17.175, 17.177
+
+Changed on 2026-09-27: the player inspector is the 17.175 wizard page grown, and the online players list is 17.177's, so this milestone adds to both rather than building a second player page.
 
 **Deliverables**
 
-- Counters per session in the game and login servers: round-trip time from the protocol's own exchanges, loss where the transport reports it, jitter, bytes and messages a second, kept as a rolling window on the session
-- The figures on the online players list as a small chart per row and in full on the player's own page, with the session's history for as long as the session has lasted
-- A player page gathering the session, its realm and zone, its recent log lines joined by correlation id, its recent actions from the audit log and its open reports, each behind the permission that covers it
+- Counters per session in the game and login servers: round-trip time from the protocol's own exchanges, loss where the transport reports it, jitter, and bytes and messages a second, kept as a rolling window on the session
+- The figures shown as a small chart per row in the slot 17.177's online players list reserves, and in full on the wizard's page, with the session's history for as long as the session has lasted
+- The 17.175 wizard page becomes the player inspector, adding, each behind the permission that covers it:
+  - The session's recent log lines, joined by correlation id.
+  - Its recent actions from the audit log.
+  - Its open reports.
 - Session quality added to the graphs per realm as a distribution, so a realm-wide problem is visible without opening any player
 - Every identity field behind the permission that covers it, so a game master sees the quality without the account
 
 **Acceptance**
 
-- [ ] A session with a deliberately delayed client shows a higher round-trip time than a healthy one, measured from the server's own exchanges
-- [ ] The figures on the row and on the player page are the same figures at the same moment
-- [ ] The log lines shown for a session are that session's, joined by correlation id
-- [ ] A user without the identity permission sees the quality figures and not the account
-- [ ] A realm-wide slowdown is visible in the distribution without opening a player
-- [ ] The counters cost nothing measurable per message, proved by a benchmark
+- [ ] A session with a deliberately delayed client shows a higher round-trip time than a healthy one, measured from the server's own exchanges (integration test with two test clients, one behind an added delay)
+- [ ] The figures on the row and on the player page are the same figures at the same moment (browser test)
+- [ ] The log lines shown for a session are that session's, joined by correlation id (integration test)
+- [ ] A user without the identity permission sees the quality figures and not the account (route test)
+- [ ] A realm-wide slowdown is visible in the distribution without opening a player (integration test that delays every test client on a realm)
+- [ ] The counters add less than one percent to the handling time `ambrose_message_handle_seconds` measures per message (benchmark)
 
 ## 17.93 Tamper-evident audit chain and audit streaming
 
@@ -2369,7 +2483,9 @@ Added on 2026-09-18 at the maintainer's direction. 17.01 shipped a console where
 
 **Goal:** One player's loss is repaired without rolling the whole database back on everybody else.
 
-**Size:** M. **Depends on:** 17.16, 17.21, 17.51, 3.17
+**Size:** M. **Depends on:** 17.16, 17.51, 17.177, 3.17
+
+Changed on 2026-09-27: the characters page moved from 17.21 to 17.177, so this milestone waits for 17.177.
 
 **Deliverables**
 
@@ -2377,18 +2493,21 @@ Added on 2026-09-18 at the maintainer's direction. 17.01 shipped a console where
 - A difference between the snapshot and the live rows, per table, shown before anything is written
 - Applying a chosen subset inside one transaction, with an audit row naming the operator, the reason, the snapshot and every table touched
 - Undelete of a character through the delete path phase 3 already owns, inside the window that delete keeps
-- The duplication guard that makes this safe: a restore invalidates the source rows in the same transaction, refuses to run twice on the same snapshot and target without an explicit override, and writes everything it creates into the ledger
+- The duplication guard that makes this safe:
+  - A restore invalidates the source rows in the same transaction.
+  - It refuses to run twice on the same snapshot and target without an explicit override.
+  - It writes everything it creates into the ledger.
 - A dry run as the default, and the whole operation behind its own permission with a step-up check
 
 **Acceptance**
 
-- [ ] Items restored from a snapshot exist exactly once, with the source rows invalidated in the same transaction
-- [ ] Running the same restore twice is refused without an override, and the override is audited naming who gave it
-- [ ] The difference shown before the write is what the write actually changes
-- [ ] A restore aimed at a character who is online is refused with the reason, or waits until they are offline, whichever this milestone settles
-- [ ] An undelete inside the window returns the character, and outside it is refused naming the window
-- [ ] A dry run changes nothing and produces the same report the real run does
-- [ ] A user without the permission, or without the step-up check, is refused and the attempt is audited
+- [ ] Items restored from a snapshot exist exactly once, with the source rows invalidated in the same transaction (database integration test)
+- [ ] Running the same restore twice is refused without an override, and the override is audited naming who gave it (route test)
+- [ ] The difference shown before the write is what the write actually changes (database integration test)
+- [ ] A restore aimed at a character who is in the world is refused, naming why (integration test)
+- [ ] An undelete inside the window returns the character, and outside it is refused naming the window (database integration test)
+- [ ] A dry run changes nothing and produces the same report the real run does (database integration test)
+- [ ] A user without the permission, or without the step-up check, is refused and the attempt is audited (route test)
 
 ## 17.96 Operations calendar
 
@@ -2592,30 +2711,43 @@ Added on 2026-09-18 at the maintainer's direction. 17.01 shipped a console where
 - [ ] A user without the permission is refused and the attempt is audited
 - [ ] While the mail milestone has not landed the page says so and offers only what exists
 
-## 17.105 Releases: the launcher and the panel as downloadable builds
+## 17.105 Releases: the panel program and the launcher as downloadable builds
 
-**Goal:** Somebody who does not build from source downloads the launcher and the panel from the repository's releases page, runs them, and plays with the game as it stands, and each release is rebuilt by CI rather than by hand.
+**Goal:** Somebody who does not build from source downloads the panel program, and the launcher once 3.27 makes it an app of its own, from the repository's releases page. They install them and run a server or play with the game as it stands, and each release is rebuilt by CI rather than by hand.
 
-**Size:** M. **Depends on:** 3.27, 17.24, 17.14
+**Size:** M. **Depends on:** 17.14, 17.24, 17.183
 
 Added on 2026-09-22 at the maintainer's direction: the panel and the launcher are the two programs a player or an operator touches, and both have to be handed to people who will never open a compiler. A release is a tag, and the tag is what builds it, so the page never carries a build a human assembled.
 
+Changed on 2026-09-27 at the maintainer's direction, who asked for the panel as its own installable program:
+
+- The panel no longer waits for the launcher's app in 3.27. The workflow publishes the panel program of 17.181 with its hosting (17.24), packaged by 17.183.
+- 3.27 adds the launcher to the workflow, and 17.184 adds the signed update manifest.
+- Operating system code signing follows the code signing decision, settled on 2026-09-27 and recorded under Desktop programs and client data in doc/ARCHITECTURE.md: the project applies for SignPath Foundation's free signing for open-source projects, and until then ships unsigned builds with SHA-256 sums and the signed manifest.
+
 **Deliverables**
 
-- A release workflow that runs on a version tag: it builds the launcher (3.27) and the desktop control app carrying the panel (17.24) for Windows and Linux with the release presets, runs the same checks the pull request job runs, and publishes the artefacts to a GitHub release under the tag, with a SHA-256 beside each file
-- Each artefact standalone: the launcher as one executable beside its `launcher.conf.dist`, and the panel as one installable program that carries the dashboard, the supervisor and everything they load, so nothing is fetched at first run from anywhere but the user's own installation
-- A version the programs report and the panel shows, read from the tag, so an operator can say which release they run and the panel can tell them a newer one exists without checking on its own
+- A release workflow that runs on a version tag:
+  - It builds the panel program with its server component for Windows and Linux with the release presets, and runs the same checks the pull request job runs.
+  - It packages the program through 17.183's pipeline and publishes each package to a GitHub release under the tag, with a SHA-256 beside each file.
+  - 3.27 adds the launcher and 17.184 the signed manifest to the same workflow.
+- Each package standalone:
+  - It carries the program's own screens, the supervisor with the dashboard compiled in (17.179), the apps and the tools they run, so nothing is fetched at first run from anywhere but the user's own installation.
+  - It carries the install manifest 17.183 writes, which 17.118 reads.
+  - No package carries a client file, a type dump or extracted data, and the workflow checks each against its content list.
+- A version read from the tag, reported by `--version` on the panel program, the supervisor and every app, and shown on the panel's about page. An operator can say which release they run, and the panel can tell them a newer one exists without checking on its own.
 - Release notes generated from the merged milestones and merged contributor items since the previous tag, in the roadmap's own words, with a hand-written line at the top for what a player will notice
 - A pre-release mark until the game reaches the milestone the maintainer names as the first playable one, so nobody mistakes a build for a finished game, and the README's front page linking the latest release beside the Discord and the Reddit
+- Executables signed for the operating system through SignPath Foundation's free signing for open-source projects once it is granted, as the code signing decision settles. Until then the release page says the build is unsigned and how to check its SHA-256 and, once 17.184 adds it, the signed manifest.
 
 **Acceptance**
 
-- [ ] Pushing a tag produces a release carrying the launcher and the panel for Windows and Linux, each with a SHA-256, and a tag that fails a check produces no release
-- [ ] A downloaded launcher on a clean machine with a client installed starts the client against a named server without anything else installed
-- [ ] A downloaded panel on a clean machine starts, opens the dashboard, and reaches a running server, with no Node, Python or compiler present
-- [ ] `--version` on both programs and the panel's about page report the tag that built them
-- [ ] The release notes name every milestone and contributor item merged since the previous tag and nothing else
-- [ ] Dev-gated: the maintainer downloads a release on a machine that has never built Ambrose and records the run
+- [ ] Pushing a tag produces a release carrying the panel program for Windows and Linux, each with a SHA-256, and a tag that fails a check produces no release (the workflow's own run on a test tag)
+- [ ] The workflow fails a package that carries a file from a client install, a type dump or extracted data (the workflow run over a fixture package that carries one)
+- [ ] A smoke job installs the downloaded Windows and Linux packages on fresh runners with Node, Python and every compiler removed from the path, starts the packaged supervisor and reaches its panel's overview
+- [ ] `--version` on the panel program, the supervisor and each app, and the panel's about page, report the tag that built them (the smoke job)
+- [ ] The release notes name every milestone and contributor item merged since the previous tag and nothing else (unit test over the generator with a fixture history)
+- [ ] Dev-gated: the maintainer downloads a release on a machine that has never built Ambrose, installs it, reaches the overview and records the run. Needs a machine that has never built Ambrose
 
 ## 17.106 Error reports: source locations, grouping and a report file
 
@@ -2638,12 +2770,12 @@ Added on 2026-09-22 at the maintainer's direction: errors an operator meets shou
 
 **Acceptance**
 
-- [ ] An error logged in a test build appears on the page with its repository-relative file, line and function, and the build revision it came from
-- [ ] The same error logged three times is one group with a count of three, a different line is a different group, and a group survives a restart of the app and of the supervisor
-- [ ] A report built from groups of two apps names both apps' revisions and each group's location, and a known secret, a known account verifier and a known account name appear nowhere in its bytes while rendered text is left out
-- [ ] Ticking rendered messages shows them in the preview and puts exactly those lines in the file
-- [ ] The console and file log lines are byte for byte what they were before, and the stream's version-one fields are all still there
-- [ ] Creating a report writes an audit row
+- [x] An error logged in a test build appears on the page with its repository-relative file, line and function, and the build revision it came from (SLogSourceTest.ARecordCarriesTheFileLineAndFunctionOfItsCall; AdminStatusTest.TheErrorsRouteReportsAGroupPerPlaceAnErrorWasRaised; Errors.browser.test.ts)
+- [x] The same error logged three times is one group with a count of three, a different line is a different group, and a group survives a restart of the app and of the supervisor (LogErrorStoreTest.OneLineRaisedManyTimesIsOneGroupWithACount; LogErrorStoreTest.TheSameWordsFromDifferentPlacesAreDifferentGroups; PanelErrorsTest.ACountThatWentBackwardsIsAnAppThatRestarted; PanelErrorsTest.TheContextBeforeAnErrorSurvivesClosingAndReopeningThePanelStore)
+- [x] A report built from groups of two apps names both apps' revisions and each group's location, and a known secret, a known account verifier and a known account name appear nowhere in its bytes while rendered text is left out (PanelTest.ErrorReportsPreviewPrivacyAndAuditExactlyTheSelectedGroups)
+- [x] Ticking rendered messages shows them in the preview and puts exactly those lines in the file (Errors.browser.test.ts; PanelTest.ErrorReportsPreviewPrivacyAndAuditExactlyTheSelectedGroups, where the created report equals the preview with rendered text ticked)
+- [x] The console and file log lines are byte for byte what they were before, and the stream's version-one fields are all still there (LogMessageTest.PrefixSegmentsFollowFlagsInFixedOrder; AppenderConsoleTest.RedirectedOutputKeepsTheFullDateAndTheUnpaddedCategory; SyncAndAsync/SLogFileTest.WritesServerLogInLogsDirWithPrefix/0 and /1; LogStreamServiceTest.ARecordCarriesWhereItWasWrittenAndWhatItWasWrittenFrom)
+- [x] Creating a report writes an audit row (PanelTest.ErrorReportsPreviewPrivacyAndAuditExactlyTheSelectedGroups)
 
 ## 17.107 A value in a log line is a place you can go
 
@@ -2676,27 +2808,35 @@ Added on 2026-09-22 at the maintainer's direction: a colored run should be a lin
 
 **Goal:** Somebody who installs Ambrose reaches their panel without a browser telling them it is unsafe, whichever of the three situations they are in, and without being taught what a certificate is. What they are asked for is the situation, not the cryptography.
 
-**Size:** M. **Depends on:** 17.14, 17.24
+**Size:** M. **Depends on:** 17.14, 17.181
 
-Added on 2026-09-22 at the maintainer's direction, from running the panel: 17.14 gives the panel TLS and writes it a certificate that signed itself, which is correct and which every browser calls not secure, so every operator meets a warning on their first visit and the connections a page makes behind itself can be refused outright. Deciding what a certificate should be is settled; getting a trusted one into an operator's hands is not, and that is what this milestone is.
+Added on 2026-09-22 at the maintainer's direction, from running the panel. 17.14 gives the panel TLS and writes it a certificate that signed itself, which is correct and which every browser calls not secure. Every operator therefore meets a warning on their first visit, and the connections a page makes behind itself can be refused outright. Deciding what a certificate should be is settled; getting a trusted one into an operator's hands is not, and that is what this milestone is.
+
+Changed on 2026-09-27: the trusting moves from 17.24's desktop app to the panel program of 17.181, so this milestone no longer waits for hosting. The program's own window pins a panel's certificate itself and needs no store entry; the store entry is for the operator's browsers.
 
 **Deliverables**
 
-- Loopback served over plain HTTP by default, because a browser already treats `http://127.0.0.1` as a secure context, so the commonest case, a panel on the machine it manages, has no warning and no certificate at all; TLS stays required the moment the bind leaves loopback, which is the rule 17.14 settled, and the option that chooses is one the operator reads as a situation rather than a protocol
-- A name the operator owns, answered by ACME: they give the hostname, the panel obtains and renews its certificate with no further action, renews early enough to survive a failed attempt, keeps serving the old one until the new one is in hand, and says on the panel what the state of it is
-- No name and not loopback, which is a private network: the certificate that signed itself stays, and the operator is walked through trusting it once, with the fingerprint shown on the page, in the log and in the launcher, and the same fingerprint checked after
-- The trusting done by the desktop app of 17.24, which is already on the operator's machine and can ask properly: it names the store it will write to, asks once, writes only the panel's own certificate to the current user rather than the machine, and can undo it, with the command printed for anyone who would rather run it themselves
+- Loopback served over plain HTTP by default, because a browser already treats `http://127.0.0.1` as a secure context, so the commonest case, a panel on the machine it manages, has no warning and no certificate at all. TLS stays required the moment the bind leaves loopback, which is the rule 17.14 settled, and the option that chooses is one the operator reads as a situation rather than a protocol.
+- A name the operator owns, answered by ACME:
+  - The operator gives the hostname, and the panel obtains and renews its certificate with no further action.
+  - It renews early enough to survive a failed attempt, and keeps serving the old certificate until the new one is in hand.
+  - It says on the panel what the state of it is.
+- No name and not loopback, which is a private network: the certificate that signed itself stays, and the operator is walked through trusting it once, with the fingerprint shown on the page, in the log and in the panel program, and the same fingerprint checked after
+- The trusting is done by the panel program of 17.181, which is already on the operator's machine and can ask properly:
+  - It names the store it will write to and asks once.
+  - It writes only the panel's own certificate, to the current user rather than the machine, and can undo it.
+  - It prints the command for anyone who would rather run it themselves.
 - The panel saying which of the three it is on its settings page, with what to do next when the answer is the warning, so nobody has to find this out from a log line
 - Nothing weakened to make this easy: no trust added without being asked, no key written where another user can read it, no certificate accepted because it merely matches a name, and a fingerprint checked before trust is granted rather than after
 
 **Acceptance**
 
-- [ ] A first start bound to loopback serves the panel with no certificate and no browser warning, and the same configuration bound beyond loopback refuses to start until TLS is configured
-- [ ] Given a hostname that resolves to the machine, the panel obtains a certificate, serves it, and renews it in a test that moves the clock, keeping the old one serving until the new one is in hand
-- [ ] A failed renewal keeps the old certificate serving, says so on the panel, and retries rather than falling back to one that signed itself
-- [ ] The desktop app names the store, asks once, and after the operator agrees the browser reaches the panel with no warning; refusing leaves the store untouched
-- [ ] The fingerprint on the page, in the log and in the desktop app are the same string, and it is the certificate actually served
-- [ ] Undoing the trust removes exactly the one certificate it added and nothing else
+- [ ] A first start bound to loopback serves the panel with no certificate and no browser warning, and the same configuration bound beyond loopback refuses to start until TLS is configured (end-to-end run against a supervisor started with each bind)
+- [ ] Given a hostname that resolves to the machine, the panel obtains a certificate, serves it, and renews it in a test that moves the clock, keeping the old one serving until the new one is in hand (integration test against a local ACME test server)
+- [ ] A failed renewal keeps the old certificate serving, says so on the panel, and retries rather than falling back to one that signed itself (the same integration test with the server refusing the order)
+- [ ] The panel program names the store and asks once, and after the operator agrees the browser reaches the panel with no warning; refusing leaves the store untouched (unit tests with the store behind a fake, and Dev-gated on the maintainer's Windows and Linux desktops for a real browser)
+- [ ] The fingerprint on the page, in the log and in the panel program are the same string, and it is the certificate actually served (integration test reading each)
+- [ ] Undoing the trust removes exactly the one certificate it added and nothing else (unit test with the store behind a fake)
 
 ## 17.109 Plugins: what one is, and the tab that installs it
 
@@ -3907,7 +4047,7 @@ Settled on 2026-09-27 at the maintainer's direction: Ambrose's panel is its own 
 - Views saved by name, personal or shared with a role, and made a page's default for a user or for a role, kept in the supervisor's store; a shared view opens under each viewer's own rights, and a view naming a filter its page no longer has says so rather than opening wrong
 - Stars on any app, realm, node, schedule, backup, setting key, alert rule or file, each kind as its milestone lands, gathered in a Starred section of the side bar, with a starred object the user can no longer see leaving the list rather than showing as a broken link
 - A Recent list of the objects and pages each user opened, kept in the store so it follows them between the desktop and a phone, and clearable by its owner
-- One search registry that 17.21's top-bar search and 17.88's palette both read, which today reach accounts, characters, apps, routes and page actions, extended to settings, schedules, backups, alert rules, crash and error groups, panel users and saved views, each kind registering its own provider as its milestone lands and every result filtered by the caller's permissions on the server; shared views are audited when created, shared and removed, while stars and recents stay a user's own
+- One search registry that 17.21's top-bar search and 17.88's palette both read, which reach accounts, apps, routes and page actions, and characters once 17.177 lands, extended to settings, schedules, backups, alert rules, crash and error groups, panel users and saved views, each kind registering its own provider as its milestone lands and every result filtered by the caller's permissions on the server; shared views are audited when created, shared and removed, while stars and recents stay a user's own
 
 **Acceptance**
 
@@ -4147,3 +4287,759 @@ Settled on 2026-09-27 at the maintainer's direction: Ambrose's panel is its own 
 - [ ] Moving a card from a stale view answers 409 and changes nothing, and a card moves between columns by keyboard alone and passes the accessibility gate, proved by a browser test
 - [ ] A task linked to a backup shows that link only to users who can read the backup, and a user without the task read permission gets 403, proved by a unit test
 - [ ] Assigning a task notifies the assignee through their channels, and every change writes an audit row, proved by a unit test
+
+## 17.165 Type registry browser and the decoded data routes
+
+**Goal:** An operator opens any class a running server's type registry holds, with its bases, derived classes, properties, flags and enum options, and every game data page after this one is built on the same guarded routes, the same byte-free writer and the same object view.
+
+**Size:** M. **Depends on:** 17.06, 17.14, 17.48, 17.73, 3.03, 3.07
+
+Added on 2026-09-27 at the maintainer's direction, who asked that the panel hold everything the client work can read and everything the servers hold. Every page built on these routes shows decoded values, read at run time from the installation's own client install, to an operator who holds the permission. None of them serves, downloads or exports the install's bytes, as Operations in doc/ARCHITECTURE.md and this phase's Client-derived data note require. The routes, the writer and the object view are built once here, under One of each. The registry already knows which classes came from the `server_class` tables, so this milestone also gives 6.10's supplement its panel surface without 6.10 waiting for the panel. The session-only mark rests on the decoded client data and API keys decision, settled on 2026-09-27 and recorded under Desktop programs and client data in doc/ARCHITECTURE.md.
+
+**Deliverables**
+
+- `AdminDataView` in src/server/shared/Admin: the `/api/data/<kind>/` route family an app registers for each kind of decoded data it holds.
+  - Pages of at most 200 rows with an opaque cursor, a search and filters.
+  - Every answer stamped with the install's revision, the type dump's program SHA-256 and the generation of the store it read.
+  - Every answer sent with `Cache-Control: no-store` and never with `Content-Disposition`.
+  - No export, download or bulk route in the family.
+- One writer every data answer is built through. It writes numbers, text, booleans, enum option names, class and property names, nested objects and containers. It cannot carry a byte buffer: a property that holds raw bytes is written only as its length and CRC-32.
+- Budgets:
+  - Data requests run on the admin API's threads and never on the world thread, as World threads, zone data and extracted tables settles.
+  - At most two decodes run at once per app, each held to a time budget and a byte budget that are live settings. A request past either answers 503 naming it.
+  - The relay gives the family a cost, so the 17.14 limiter holds each user to its rate and answers 429.
+- The relay learns the family:
+  - `Supervisor::PermissionFor` maps each `/api/data/` prefix to its permission.
+  - `/api/capabilities` is relayed, so the panel learns which kinds each app serves and at which generation.
+  - The catalog gains `clientdata.browse`, "Browse the game data decoded from the client install", at app, node and panel scope. It is held by the operator, game master and viewer roles as well as the owner and admin, and marked session-only so no API key can hold it.
+- Type routes on every app that loads a type registry:
+  - Classes a page at a time, searched by name or hash and filtered by kind and property flag.
+  - A class with its bases in order, its derived classes, its properties (id, name, type, container, flags by name, offset and hash) and its enum options, including `__DEFAULT` and `__BASECLASS`.
+  - Whether the class came from the type dump or from `server_class`, with that row's evidence.
+  - The typed views bound to it, from one table the typed views register in.
+- `ObjectTree` and `RecordLink` in packages/ui, with their stories:
+  - `ObjectTree`: a typed property tree that expands nested objects, pages long containers on demand, and names flags and enum options.
+  - `RecordLink`: a link that opens another record's page by its address.
+- A Types page under a Game data heading in the Game group, for the app chosen among those `/api/capabilities` lists:
+  - Search, the class page, and links between a class, its bases, its derived classes and its property types.
+  - The revision stamp on every view.
+  - Each data kind joins 17.155's search registry when that lands.
+
+**Acceptance**
+
+- [ ] A class's properties on the page, with their names, types, flags and hashes, equal what `client types <class>` prints from the same dump, proved by a route test over a fixture dump and a Client-gated test on the installed revision
+- [ ] The data route sweep, which every later data milestone extends with its own routes, runs every registered `/api/data/` route against a fixture install whose byte-buffer properties, plain text entries and program code hold 64-byte marker runs. No answer holds a 32-byte run of any marker raw, in hex or in base64; every answer carries the install revision, the program SHA-256, the store generation and `Cache-Control: no-store`; and none carries `Content-Disposition`
+- [ ] Through the relay, a user without `clientdata.browse` gets 403 on every data route, a user who holds nothing on the app gets 404, and a data route registered without a permission fails the route registry test
+- [ ] A page asked for more than 200 rows, a request past its time or byte budget, and a user past the rate limit are each refused with the limit named (route tests)
+- [ ] With twenty concurrent data requests, the 99th percentile of `ambrose_world_tick_seconds` over a minute stays within 10 percent of the same minute without them, recorded by a benchmark
+- [ ] A class added through `server_class` shows as the server's with its evidence, and is gone after its rows are removed and `server_class_schema` reloads (database integration test)
+- [ ] The Types page finds a class by name and by hash and walks to a base and back, and its component and accessibility tests pass in Chromium and WebKit
+
+## 17.166 Archive browser: every archive and entry, decoded where a decoder exists
+
+**Goal:** An operator walks the install's archives and opens any entry as the typed object it holds, and the panel never hands out the entry itself.
+
+**Size:** S. **Depends on:** 17.165, 3.11, 3.13
+
+Added on 2026-09-27 at the maintainer's direction. It brings the browsing half of doc/TOOLS.md's wadview into the panel, so there is one client data browser rather than a second local web app. Nothing the panel serves carries a file from the install, as Operations in doc/ARCHITECTURE.md settles, so no view renders an entry's texture, model, sound, layout or text.
+
+**Deliverables**
+
+- Archive routes on the game server:
+  - The install's archives, each with its entry count, stored size and unpacked size.
+  - An archive's entries a page at a time, filtered by path prefix, extension and kind (BINd, headerless object, locale table, plain text or other). Each entry shows its offset, size, compressed size, compressed flag and CRC, and whether the CRC matches the client's own variant.
+  - A path search over one archive or all of them.
+- An entry opens as what it holds, through `KiwadArchive` and the decoders the suite has:
+  - A BINd file or a headerless versionable object opens through `ObjectSerializer` into the 17.165 tree.
+  - A `.lang` file opens as its keys and text.
+  - Any other kind shows its facts and the decoder it waits for, never its text or its bytes.
+- Decode problems shown on the entry as the versionable decoder reports them: an unknown root class by its hash, and nested objects of classes the registry lacks, each with its properties' hashes and bit sizes
+- An Archives page with a tree of archives and folders, search by path, and the entry view, whose address other pages link to
+
+**Acceptance**
+
+- [ ] Client-gated: Root.wad shows as many entries as `client wad --list` prints for the same install, and a sampled entry's size, compressed size and CRC equal the header `KiwadArchive` reads for it
+- [ ] Client-gated: a BINd entry opens with the classes and values `bindecode` prints for it, and a zone's headerless gamedata.bin opens as WizZoneData
+- [ ] An entry whose root class the registry lacks shows its class hash and each property's hash and bit size, and no bytes (fixture test)
+- [ ] Client-gated: LoginMessages.xml shows its size, its kind and the decoder it waits for, and no answer carries its text; the 17.165 sweep covers every archive route
+- [ ] Client-gated: a path search over every archive answers its first page within the request budget
+
+## 17.167 Locale text browser and a live locale reload
+
+**Goal:** An operator finds any text the client shows, in every locale the install has, and sees which keys a locale lacks.
+
+**Size:** S. **Depends on:** 17.165, 3.13, 4.15
+
+Added on 2026-09-27 at the maintainer's direction. The locale store is not a reload target today, which the Live reload and live settings rule in doc/ARCHITECTURE.md does not allow, so this milestone makes it one.
+
+**Deliverables**
+
+- Locale routes on the game server over `sLocaleStore`:
+  - The install's locales, each with its file and entry counts.
+  - A locale's files, and a file's keys and text a page at a time.
+  - Search by key and by text.
+  - One key's text in every locale, side by side.
+- The comparison `localetool check` makes:
+  - Keys the default locale has and another lacks.
+  - Keys repeated within a locale, with both texts.
+  - Files a locale does not carry.
+- `locale` becomes a reload target:
+  - The default locale is built again from Root.wad off to the side and swapped in whole.
+  - The other locales are dropped, so they are built again on first use.
+  - A failure keeps the tables serving and names every error.
+- A Locale page, which every locale key the panel shows opens through `RecordLink`
+
+**Acceptance**
+
+- [ ] Client-gated: en-US shows the file and entry counts `localetool locales` reports for the same install
+- [ ] Client-gated: searching a phrase finds its key, and the key's page shows its text in every locale that has it and names each locale that does not
+- [ ] Client-gated: the missing-keys view for pl against en-US lists the keys `localetool check` lists
+- [ ] A `locale` reload from an archive that cannot be read keeps the tables serving and reports the error, and a good reload shows a new generation (unit test)
+- [ ] The 17.165 sweep covers the locale routes, and none answers more than 200 entries
+
+## 17.168 Template explorer with cross-links and where each is used
+
+**Goal:** Any template in the install is found by id, name or class and shown with its real property names, linked to the text, zones and other records it names.
+
+**Size:** S. **Depends on:** 17.166, 17.167, 5.01, 5.02
+
+Added on 2026-09-27 at the maintainer's direction. Templates stay decoded from the install at run time and are never stored, as Object templates in doc/ARCHITECTURE.md settles. This page reads `sObjectTemplateMgr` and keeps nothing.
+
+**Deliverables**
+
+- Template routes on the game server over `sObjectTemplateMgr`:
+  - The manifest a page at a time, searched by id, name, class and archive.
+  - A template with its class, name and archive entry; its behaviors in the order the store builds them, with empty slots kept; its adjectives; and its decoded object.
+  - The store's figures from `GetCacheStats` (templates held, bytes against `Templates.CacheSize`, hits, misses and evictions), with its generation.
+- Cross-links from one table declared beside the typed views, which names what a field means: a template id, a zone path, a locale key, a spell or a school. A text value is also linked when it is exactly a key in the locale store in use. No number is linked on a guess.
+- Where a template is used: the `zone_object` placements that name it, each with its zone and position, shown to a holder of `world.read`
+- A Templates page with search, the template view and its links, whose archive entry opens in 17.166
+
+**Acceptance**
+
+- [ ] Client-gated: template 1 opens as Player Object with its 39 behaviors in the order the store builds them
+- [ ] Client-gated: a template found by name and the same template found by id are one record, and the manifest's total equals the count `client template --list` prints
+- [ ] Client-gated: the Ravenwood NPC template 38232 lists the placements that use it, each with its zone and position
+- [ ] A field the link table names opens the linked record, a text that is not a locale key is not linked, and a number the table does not name is not linked (unit test)
+- [ ] Decoding a template moves the cache figures, and a `templates` reload shows the new generation within one refresh (route test)
+
+## 17.169 Protocol browser: message definitions and what each server does with them
+
+**Goal:** An operator or developer sees every message the client can send or receive, its fields, and whether each server handles it.
+
+**Size:** S. **Depends on:** 17.165, 1.15, 2.09, 4.01
+
+Added on 2026-09-27 at the maintainer's direction. The panel shows only a count of message definitions today.
+
+**Deliverables**
+
+- Message routes on every app over its `MessageRegistry`:
+  - Protocols with their service id, version and record counts.
+  - Messages a page at a time, searched by name, tag and service, each with its id, fields, DML types and description.
+  - The load warnings.
+  - The duplicates merged by service and tag.
+- The app's `MessageHandlerTable` beside the definitions: each message handled, pending or refused as its rule says, with the session statuses it is accepted in and whether it is processed in place or queued
+- Per-message counts kept in memory since the app started: received, handled, dropped and not handled. They show on the message's page and are kept out of the Prometheus register, which they would swell by about fifteen hundred series per app.
+- A Protocol page with a summary per service of messages defined, handled, pending and refused, and a page per message
+
+**Acceptance**
+
+- [ ] Client-gated: the page lists as many protocols, records and ids as `client messages` prints for the same install (29, 1448 and 1446 on r806919), with the same count of fields per DML type
+- [ ] A message the login server handles shows as handled with its statuses, and one its table refuses shows as refused (route test)
+- [ ] A message the server does not handle, sent by a test client, raises its not-handled count by one on the page (integration test)
+- [ ] Each service's summary equals the counts in the apps' handler tables (unit test)
+
+## 17.170 Client scans from the panel: census, decode sweep, schema probe and program scans
+
+**Goal:** The tool suite's install-wide reports run from the panel with live progress and show as tables, so an operator sees what the install holds, and what Ambrose cannot decode yet, without a terminal.
+
+**Size:** M. **Depends on:** 17.166, 17.169, 3.11, 6.09
+
+Added on 2026-09-27 at the maintainer's direction. No server holds these results. The app runs the tools that make them the way `TypeDumpCache` runs typeextract, from src/server/shared/ClientData, because the app knows its install and type dump and the supervisor does not. Where a tool cannot yet report in a form a program reads, the tool learns to, and the panel never parses its text.
+
+**Deliverables**
+
+- `ClientScans` beside `TypeDumpCache` starts a program from src/tools against the app's install through `ChildProcess`:
+  - It passes an exact argument list, applies a timeout and a lowered priority, and runs one scan per install at a time across every app on the machine.
+  - A cancel ends the tool and everything it started.
+  - Each output line goes on a stream the page follows through the relay.
+  - Starting a scan needs `clientdata.scan`, a new key at app scope held by the owner, admin and operator roles, and every start is audited.
+- The tools learn `--format json` where they lack it:
+  - `client census` reports the install's archives, entries and unpacked size, and each kind of file with its count and whether Ambrose decodes it.
+  - `bindecode --sweep` reports its results as JSON.
+  - schemaprobe's report is already JSON, and the `client handlers`, `behaviors` and `functions` answers are already JSON caches per revision, which are read rather than asked again.
+- Results kept per revision in the Ambrose data folder beside the tools' caches, in a folder on 17.18's client-derived list, and never served as files
+- The results shown as decoded tables:
+  - The census.
+  - The sweep's clean files, unknown root classes, nested unknown classes and re-encode mismatches, each opening its entry in 17.166.
+  - The schema probe's unknown classes by hash, with the name the program's strings give, each property's hash, bit size and proven name, and the draft schema.
+  - The handler registrations, joined to 17.169's messages.
+  - The behavior classes set against `behavior_client_class`, with each difference named.
+  - The functions whose log lines name them.
+- A Scans page listing each scan with when it last ran, on which revision, how long it took and its result, with a button to run it
+
+**Acceptance**
+
+- [ ] Client-gated: a census gives the archive and entry counts that opening every archive of the install with `KiwadArchive` gives, and lists cinematics, state machines, Lua scripts, GUI layouts and SWF screens as kinds with no decoder yet
+- [ ] Client-gated: the schema probe over Root.wad lists by hash the unknown classes `schemaprobe` prints, with the same names
+- [ ] Client-gated: the behavior scan lists as many registrations as `client behaviors --list`, and marks every `behavior_client_class` row whose class differs from the one the program registers
+- [ ] Cancelling a scan ends the tool and every process it started within a second, and a second scan of the same install is refused while one runs, from the same app or another (unit test with a fake tool)
+- [ ] The 17.165 sweep covers the scan routes, and none answers with a result file
+- [ ] A user without `clientdata.scan` cannot start a scan, and the refusal is audited (route test)
+
+## 17.171 Client program reader, opt-in
+
+**Goal:** A developer reads the client program's own code from the panel instead of a terminal: its strings, cross-references, disassembly and vtables, and, with their own copy of Ghidra, its decompiled functions.
+
+**Size:** M. **Depends on:** 17.170
+
+Added on 2026-09-27 at the maintainer's direction. It is an experimental feature under Decisions, Experimental features, off by default. It reads only the operator's own client program from disk and shows decoded instructions, names and text, never the program's bytes. That it belongs in the panel at all rests on the developer pages decision, settled on 2026-09-27 and recorded under Desktop programs and client data in doc/ARCHITECTURE.md.
+
+**Deliverables**
+
+- `ClientData.ProgramReader`, a live setting off by default, and `clientdata.program`, a danger key marked opt-in as `files.pull` is, so the owner holds it and an administrator only when granted. While the setting is off, every program route answers 404
+- Program routes through 17.170's runner, over `--format json` output the `client` tool learns for `strings`, `xrefs`, `disasm`, `vtable` and `functions`:
+  - Strings searched by text, with their addresses.
+  - The cross-references to an address.
+  - A function's disassembly, annotated with the names the code index knows.
+  - A class's vtable and the RTTI class names.
+  - A function decompiled through the operator's own Ghidra when `client decompile` finds one, served from its cache.
+- No view of the program's bytes: there is no hex view, instructions show only as mnemonics and operands, and the program's code sections are among the 17.165 sweep's markers
+- Every program request audited with who made it, the address or query, and the program SHA-256 it read
+- A Program page with search and an address view that walks cross-references and calls, opened from 17.170's handler registrations and function lists
+
+**Acceptance**
+
+- [ ] With the setting off, every program route answers 404 whatever the caller holds (route test)
+- [ ] Client-gated: the disassembly of a handler address from the handler scan equals what `client disasm` prints for it, and a string search finds the addresses `client strings` finds
+- [ ] Without Ghidra installed, a decompile request answers that Ghidra is missing and how to install it, and every other program route still answers (unit test)
+- [ ] The 17.165 sweep over the program routes finds no 32-byte run of the program's code, raw, in hex or in base64
+- [ ] Each program request writes one audit row naming its address or query (route test)
+
+## 17.172 Progression and character creation data
+
+**Goal:** An operator sees the level curves, schools, stat bands, name tables and creation data the servers loaded, as charts and tables rather than rows.
+
+**Size:** S. **Depends on:** 17.165, 17.19, 3.14, 5.04
+
+Added on 2026-09-27 at the maintainer's direction. These are world tables the servers extracted from the install, so they are shown under `world.read`, and changing one is a world edit through 17.34.
+
+**Deliverables**
+
+- Routes on the game server under `world.read`, over `sPlayerLevelMgr` and the stat effect set:
+  - Per school and level: experience, health, mana, gold cap, pip chance, training points, crafting slots, pet energy, pip conversion values, shadow pip rating, archmastery and level name.
+  - The magic schools with their badges.
+  - The XP config and its encounter factors.
+  - The mob rank levels.
+  - The stat effect settings, with the crit, block and pip conversion bands.
+- Routes on the login server over `sCharacterNameMgr` and `sCharacterCreateStore`:
+  - The name parts per table and locale.
+  - The disallowed names.
+  - The creation schools and the `playercreateinfo` starting state.
+  - A name check through `CharacterNameMgr::Check` that says whether a first, middle and last choice is allowed, and why not when it is refused.
+- A Progression page:
+  - A chart per value across levels, one line per school, drawn with uPlot with the table view every chart carries, as Charts and live data in doc/ARCHITECTURE.md settles.
+  - The bands as tables.
+  - Each chart and table naming the world table it came from.
+- A Character creation page with the name tables, the disallowed list, the schools and the starting state
+
+**Acceptance**
+
+- [ ] Client-gated, after extraction: each school's curves cover levels 0 to 180 with the values `player_level_stats` holds
+- [ ] Changing a `player_level_stats` value and reloading `player_level_stats` redraws that chart with the new value (database integration test)
+- [ ] The name check refuses a disallowed name with the reason and accepts an allowed one (unit test)
+- [ ] The name part counts per locale equal the rows the name store loaded (route test)
+
+## 17.173 World tables browser and the world schema the servers publish
+
+**Goal:** Every world table the servers read can be browsed from the panel, showing where each row came from and what each column points to, and the schema 17.34's edit forms are built from exists.
+
+**Size:** M. **Depends on:** 17.168, 17.08, 4.09, 4.15, 5.04
+
+Added on 2026-09-27 at the maintainer's direction. Tables filled from the install stay local and are never exported, as World threads, zone data and extracted tables settles, so every view carries that mark. `command_security` stays read at start until 6.05 makes it a reload target, and the page says so. Where the schema is declared rests on the world schema decision, and the session-only rule on the decoded client data and API keys decision, both settled on 2026-09-27 and recorded under Desktop programs and client data in doc/ARCHITECTURE.md.
+
+**Deliverables**
+
+- A world schema each store publishes when it registers its reload target:
+  - The tables it reads.
+  - Each table's source: extracted from the install, authored in the repository, or imported with the import's source. Where a table's source column mixes them, each row gives its own source.
+  - Each table's key.
+  - Each column's type as the database reports it.
+  - The reference a column carries: another table's row, a template, a locale key, a class or a client blob.
+- World table routes on the game and login servers, under `world.read`:
+  - The tables, each with its row count, source and generation.
+  - Rows a page at a time, sorted and filtered.
+  - One row, with each reference opening its record.
+- Client blobs and extracted tables:
+  - A client blob held in a column, such as a placement's spawn requirements, is shown decoded through the registry, or as its length and CRC-32 when it does not decode, and never as bytes.
+  - An extracted table offers no export, and its routes are marked session-only in the route registry.
+- Tables no store reads, such as `character_create_option` and `zone_teleport`, listed as read by nothing
+- A World tables page in the Game group
+
+**Acceptance**
+
+- [ ] Every table a store reads appears with its reload target and source, and a store that registers a table without a source or a key fails its unit test
+- [ ] A placement's spawn requirements show decoded as a requirement list, and a blob that does not decode shows its length and CRC-32 and no bytes (Client-gated test and fixture test)
+- [ ] A template reference opens its 17.168 template and a locale key reference opens its 17.167 key (route test)
+- [ ] Through the relay, a user without `world.read` gets 403 on every world table route, and every extracted table's route is marked session-only (route test and route registry test)
+- [ ] The 17.165 sweep covers the world table routes, and none answers more than 200 rows or offers an export
+
+## 17.174 Zone catalog: templates, named places and placements on a plan
+
+**Goal:** An operator sees every zone the install has, with its template, its named places and its placements laid out on a plan, and which of those the server spawns.
+
+**Size:** S. **Depends on:** 17.173, 4.09, 5.02
+
+Added on 2026-09-27 at the maintainer's direction. This is the static catalog; the instances a realm has loaded are 17.175 and 17.31. The plan is drawn from decoded positions, with no client art.
+
+**Deliverables**
+
+- Zone routes on the game server over `sZoneMgr`, under `world.read`:
+  - Zones a page at a time, searched by path and display name.
+  - A zone's template: its display name through 17.167, far clip, healing per minute, soft and hard limits, and no mounts.
+  - Its named places, with position and direction.
+  - Its placements, each with class, template, object id, position, orientation, scale, zone tag, start state, override name, flags, loading type and whether it is critical.
+- Which placements the server spawns, those whose loading type is DYNAMIC_SERVER, and which the client builds itself. The zone extraction records the entries it leaves out, per zone and class and with the reason, in a world table of its own, such as the sigils that wait for 6.10, and the page shows them.
+- A plan of the zone drawn from the decoded positions:
+  - Named places and placements as marks on the zone's own coordinates.
+  - Filters by class and loading type, with each mark opening its placement.
+  - The placements table as the plan's table view.
+- A Zones page in the Game group. Each zone opens its archive in 17.166, each placement opens its template in 17.168, and a zone path anywhere in the panel opens its zone.
+
+**Acceptance**
+
+- [ ] Client-gated: the Commons shows 31 named places and 177 placements, 123 of them spawned by the server and 1 critical, and its 6 MinigameSigilInfo entries as left out with the reason
+- [ ] Client-gated: Ravenwood shows 93 placements, and its 4 sigil entries as left out by class, with the reason
+- [ ] The zone count equals the rows `zone_template` holds (route test)
+- [ ] A `zone_object` reload shows the new generation, and the plan redraws within one refresh (route test)
+
+## 17.175 Live world: zone instances, spawned objects and wizards in the world
+
+**Goal:** An operator sees what a game server is running right now: each zone instance, the objects spawned in it, and every wizard in the world with their state.
+
+**Size:** M. **Depends on:** 17.165, 17.49, 4.10, 5.02, 5.03, 5.05
+
+Added on 2026-09-27 at the maintainer's direction. The realms page of 17.31, the online players page of 17.177 and the player inspector of 17.92 build on these routes, so there is no second listing of instances or sessions. 17.49 is here because a kick runs at the caller's command level, which 17.49 passes to the app.
+
+**Deliverables**
+
+- A world snapshot the world thread builds on request, at most once a second, and hands to the admin API, so no route reads an instance or a session off the world thread, as World threads, zone data and extracted tables settles. It holds the tick count and times, the sessions, the instances and the scripts loaded.
+- Instance routes under `realms.read`:
+  - Each instance with its dynamic zone id, zone path, public or private, players, objects, mobile ids held and cooling, unload time and the generations it was built from.
+  - An instance's objects, each with global id, perm id, mobile id, template, class, position and critical flag.
+  - Each object as the server sent it, decoded through the registry and never as its bytes.
+- Wizard routes under `players.read`. Each session shows:
+  - Its account, character, security level, state, zone and instance, position and yaw.
+  - Its school, level, experience, health, mana, gold and training points.
+  - Its count of messages not handled.
+  - Its address, only to a holder of `accounts.pii.read`.
+- Kick from a wizard's row through the existing `kick` command at the caller's command level, which needs `players.kick` and a reason and is audited
+- The login server's `/api/players` names every wizard, those named by name indices included, through the name store
+- A Live world page in the Game group, with the instances, an instance page with its objects and players, and a wizard page. Each refreshes through the relay every two seconds until 17.58 moves it onto the panel socket.
+
+**Acceptance**
+
+- [ ] A wizard appears on the page within one refresh with its zone, instance and position, and leaves it when it detaches (integration test that attaches a wizard)
+- [ ] An instance's objects are the placements the server spawned for it, and one opens decoded through the registry with no bytes in the answer (integration test)
+- [ ] With the page open and refreshing, the 99th percentile of `ambrose_world_tick_seconds` over a minute stays within 10 percent of the same minute without it (benchmark)
+- [ ] Kicking from the page closes that session with the reason, and a user without `players.kick` gets 403 and the attempt is audited (integration test)
+- [ ] `/api/players` names a wizard whose name is made of name indices (unit test)
+- [ ] A user without `players.read` sees no wizard, and a user without `accounts.pii.read` sees no address (route test)
+
+## 17.176 Spells and sigils pages
+
+**Goal:** An operator looks up any spell or sigil as the server holds it, with its school, pips, accuracy, effects, tiers and text, and teaches a spell to a wizard in the world or takes one away.
+
+**Size:** M. **Depends on:** 17.167, 17.168, 17.175, 8.04, 8.05, 9.02
+
+Added on 2026-09-27 at the maintainer's direction. It brings the read-only half of doc/TOOLS.md's Spell and deck inspector into the panel, and decks join this page in the milestone that loads them. 8.04, 8.05 and 9.02 have only real-client checks left, which wait for 6.04. Until then, 17.168 already shows every spell's template decoded.
+
+**Deliverables**
+
+- Spell routes on the game server over `sSpellMgr`, under `clientdata.browse`:
+  - Spells a page at a time, filtered by school, secondary and required school, type, level restriction, PvP and PvE, treasure card, tiered, retired and cantrip, and searched by name and id.
+  - A spell with its pips per school, accuracy, training cost, source and flags.
+  - Its effect tree, with each type, target and disposition named from the type dump's enums, and each conditional element marked with its requirements.
+- Tiered groups from `TieredSpellsGroupInfo.xml`, each with its members, and each tiered spell's group and retired flag
+- Sigil routes over `sSigilMgr`:
+  - Each sigil's circles with their slot, angle and radius, drawn and also given as a table.
+  - Its engage radius, battlefield effects, shadow thresholds, and PvP and PvE scalars and limits.
+- The spells that failed the last `spells` reload, each with how it failed
+- A wizard's known spells on the 17.175 wizard page, each opening its spell. A spell is learned or unlearned for a wizard in the world through the existing `learn` and `unlearn` commands at the caller's command level, which needs `characters.edit` and a reason and is audited.
+- Spells and Sigils pages. The name and description open 17.167, and the template opens 17.168.
+
+**Acceptance**
+
+- [ ] Client-gated: Fire Cat shows school Fire, rank 1, accuracy 75%, type Damage, and its random effect with five kDamage Fire amounts on kEnemySingle, the lines `.spell info Fire Cat` gives on the game server's console
+- [ ] Client-gated: tiered group 4 lists Fire Cat among its members
+- [ ] Client-gated: a sigil's circles and limits on the page equal what `.sigil info` gives for it
+- [ ] Learning a spell from the panel adds it to that wizard's book and to `character_spell`, and a user without `characters.edit` gets 403 and the attempt is audited (integration test)
+- [ ] The spell and effect counts equal the set the server loaded, and a `spells` reload that fails shows its errors while the old set keeps serving (route test)
+
+## 17.177 Characters and online players pages
+
+**Goal:** Game masters rename, restore, delete and edit characters, and act on players online, from the panel.
+
+**Size:** S. **Depends on:** 17.21, 17.175, 3.17, 6.05
+
+Split from 17.21 on 2026-09-27 at the maintainer's direction, under this phase's Splits note. This part waits for character deletion in 3.17 and the GM ban and character commands in 6.05, so the accounts and bans of 17.21 are not held back by it.
+
+**Deliverables**
+
+- On each account's character list from 17.21:
+  - Rename, restore of a deleted character, and delete, as 3.17 and later phases support them.
+  - An edit form offering the fields the running build reports as editable through `GET /api/capabilities`, such as gold and level once later phases make them so, each applied through its own GM command.
+- The 17.175 wizard rows become the online players page:
+  - Joins and leaves.
+  - A ban that disconnects the player through the 6.05 ban path.
+  - Mute and teleport from 12.07 and 6.06, once those exist.
+  - A slot in each row reserved for the per-session quality chart 17.92 fills, so that milestone adds a column rather than reworking a finished table.
+- The top-bar search from 17.21 gains characters by name, each result checked against the caller's own permissions
+- Every action goes through CommandMgr at the panel user's command level, refuses to act on an account at or above that level, requires a reason, and is audited, refused attempts included
+
+**Acceptance**
+
+- [ ] Banning an account from the panel while its player is on character select disconnects that client with the ban message, through the 6.05 ban path (integration test with a test client)
+- [ ] Restoring a deleted character from the panel returns it to the account's list, and a user without `characters.restore` gets 403 and the attempt is audited (database integration test)
+- [ ] The top-bar search finds a character by name, and returns nothing for a character on an app the caller holds nothing on (browser test)
+- [ ] The character edit form offers only the fields the build reports as editable, and a field the build does not report cannot be submitted (browser test and route test)
+
+## 17.178 Client driver runs from the panel, opt-in
+
+**Goal:** The maintainer starts a client driver scenario from the panel and reads its report there, so the real-client checks that hold milestones back are run and read in one place.
+
+**Size:** M. **Depends on:** 17.06, 17.14, 17.48, 3.24
+
+Added on 2026-09-27 at the maintainer's direction. It is an experimental feature, off by default, resting on the developer pages decision, settled on 2026-09-27 and recorded under Desktop programs and client data in doc/ARCHITECTURE.md. The driver starts the operator's own retail client on the machine the supervisor runs on, exactly as 3.24's driver does from a terminal. It is repository tooling in Python, so it runs only from a checkout.
+
+**Deliverables**
+
+- The settings and the key:
+  - `ClientDriver.Enable`, off by default.
+  - `ClientDriver.Folder`, which names a checkout's apps/clientdriver.
+  - `clientdata.drive`, a danger key marked opt-in, so only the owner holds it by default.
+  - While the driver is off or its folder is not named, every driver route answers 404.
+- Driver routes in the supervisor:
+  - The scenarios, with their steps.
+  - The runs under the data folder's `clientdriver/runs`, each with scenario, start, duration, verdict and each check's result.
+  - A run's report, with the messages the server did not handle named by service and tag, and the warnings from either side.
+- Starting a scenario runs the driver through `ChildProcess`:
+  - Only when the supervisor runs in the signed-in user's desktop session and a client install is present.
+  - One run at a time, with its progress on a stream the page follows.
+  - A stop that ends the driver and the client it started.
+  - A refusal that says why a run cannot start.
+  - Each start and stop is audited.
+- Screens the driver captures are judged on the machine and shown only as verdicts and scores, never as images. The driver's runs, reference crops and zone caches are on 17.18's client-derived list.
+- A Client driver page in the Game group
+
+**Acceptance**
+
+- [ ] With the driver off, every driver route answers 404 whatever the caller holds (route test)
+- [ ] A finished run's page shows the verdict and the messages not handled that its report.json holds (unit test over a fixture run folder)
+- [ ] A second run is refused while one is going, and stopping a run ends the driver and the client it started within five seconds (integration test with a fake driver)
+- [ ] A supervisor running as a service lists the runs and refuses to start one, naming why (unit test)
+- [ ] No driver route serves a screenshot or a crop (route test)
+- [ ] Dev-gated: on the maintainer's machine, the enter-world.json scenario started from the panel reaches the world and its report shows on the page. Needs the maintainer's own client
+
+## 17.179 One desktop shell for the launcher and the panel program
+
+**Goal:** The launcher and the panel program open their windows through one host, so every safeguard lands once: pages compiled into the program, a remote panel held to its own origin with no way to reach the program, certificates accepted only by pin, and nothing written beside the executable.
+
+**Size:** L. **Depends on:** 1.04, 3.25, 17.14, 17.73
+
+Added on 2026-09-27 at the maintainer's direction, who asked for the panel as its own installable program. Nothing here is a new choice:
+
+- The window is the operating system's own web view opened by a C++ program, as the Look and Front-end layout rows under Decisions, Operations and doc/UI-STACK.md settle.
+- Built pages are compiled into the program, as Serving the built files from C++ in doc/UI-STACK.md settles.
+
+The window host 3.26 began inside `launcher-core` moves to where a second program can use it, under One of each, and 3.26 keeps its checks, earned on this shell. It fixes four places where the host as built falls short of doc/UI-STACK.md:
+
+- WebView2 is created with no user data folder, so it writes beside the executable.
+- The Windows page is served on `http://launcher.ambrose`, which a web view does not treat as a secure context.
+- The WebKitGTK scheme is registered as CORS-enabled but not as secure.
+- The pages are copied beside the programs rather than compiled in.
+
+**Deliverables**
+
+- `src/tools/shell/`, a `desktop-shell` library holding the window host moved out of `launcher-core` with its behaviour unchanged: the WebView2 window on Windows, the WebKitGTK window elsewhere, the remembered place and the message loop. `launcher-core` links it, and the launcher's options, window and tests behave as before.
+- `ambrose_embed_page`, a CMake step that turns a built Vite folder into one generated translation unit, never committed, holding each file's path, media type, entity tag and bytes:
+  - The shell serves it from memory on the program's own `https` origin: through a web resource handler on WebView2, and through a custom scheme registered as both secure and CORS-enabled on WebKitGTK.
+  - Hashed assets get an immutable cache header and `index.html` gets `no-cache`.
+  - Any other path outside the API prefix gets `index.html`, and the API prefix never falls back.
+  - The launcher's page moves from the `launcher-ui` folder beside it into its binary, and a build without the front-end option embeds a page that says so.
+- The supervisor serves the dashboard compiled into its own binary when `Panel.DashboardDir` and `Admin.DashboardDir` are empty, with the headers `AdminFiles` sends today. A named folder still wins, so a developer can point at a fresh build.
+- A view bound to one remote origin, `http://127.0.0.1:<port>` or `https://<host>:<port>`:
+  - A navigation to any other origin, a new window or a `target=_blank` link opens in the system browser instead.
+  - A download is saved only through a save dialog the program shows.
+- The host channel serves only the program's own origin:
+  - A remote-bound view has web messages turned off and no message handler.
+  - A message from any other origin is dropped, and its origin logged once.
+  - `hostKind()` in packages/ui picks a native host only on the program's own origin.
+- A certificate hook:
+  - When the web view meets a certificate it cannot verify, the shell hands its SHA-256 fingerprint to the program, which accepts it only when it equals the pin held for that host and port.
+  - Every other certificate error is refused with the fingerprint named.
+  - A publicly trusted certificate needs no pin.
+- Web view data kept in a folder of each program's own under the Ambrose data folder, never beside the executable. Each remote origin gets a profile of its own, whose cookies and storage no other profile sees, and a profile can be deleted with everything in it.
+- Tests and docs:
+  - Unit tests over the embedded manifest, the origin gate, the navigation rule, the pin decision and the remembered place.
+  - A smoke test, skipped where no web view exists, that opens the launcher's page from memory off screen and closes it.
+  - The launcher's existing tests, unchanged.
+  - doc/ARCHITECTURE.md's repository layout and Client launcher entry, doc/UI-STACK.md's serving section and doc/TOOLS.md name the shell and the embedding step.
+
+**Acceptance**
+
+- [ ] Every Launcher test passes unchanged, and `launcher --window-ui` from a build tree with no `launcher-ui` folder opens its page from memory (the Launcher tests and the shell smoke test)
+- [ ] Under both web views the page reports `window.isSecureContext` as true and can write local storage (the smoke test on Windows, and on Linux under a virtual display)
+- [ ] A window run from a folder the user cannot write opens, and the run writes nothing beside the executable (a smoke test that lists the program's folder before and after)
+- [ ] The embedded page answers `index.html` for an unknown path and 404 for an unknown path under the API prefix, gives each file its media type and entity tag, and puts an immutable cache header only on hashed assets (unit tests over the generated manifest)
+- [ ] A supervisor with both dashboard options empty serves the dashboard from its own binary with the headers it sent before, and one naming a folder serves that folder (`tests/e2e/panel-listener.spec.ts` against the compiled copy, and a supervisor test for the folder)
+- [ ] A page at a remote origin that posts to the host channel gets no answer, the program logs that origin once, and `hostKind()` answers `http` on any origin but the program's own (a smoke test with a page served from a loopback listener, and a unit test in packages/ui)
+- [ ] A view bound to an origin sends a navigation to another origin, and a new-window request, to the system browser, and stays where it was (unit tests over the navigation rule, and the smoke test)
+- [ ] A self-signed certificate is accepted only when its fingerprint equals the pin, a second certificate on the same host and port is refused with both fingerprints named, and with no pin every certificate error is refused (unit tests over the pin decision, and a smoke test against a loopback listener serving two `supervisor --panel-self-signed` certificates in turn)
+- [ ] Two remote profiles share no cookie, and deleting one leaves no file of it (the smoke test)
+
+## 17.180 Sign-in links for a desktop program
+
+**Goal:** A program on the panel's own machine opens the panel signed in without anyone typing a password, and an operator pairs a desktop with a panel on another machine from that machine's console, the pairing carrying the certificate to trust so it is never guessed.
+
+**Size:** M. **Depends on:** 17.05, 17.14, 17.46
+
+Added on 2026-09-27 at the maintainer's direction. 17.24 promised that a player hosting at home opens the panel through a one-time link bound to the machine. But 17.46's owner link only makes the first owner, once, and its password links set a password, so nothing signs an existing owner in. Holding the supervisor's admin token already allows everything the console allows, `panel user create` among it, so a link minted with that token grants nothing the token did not. The pairing link is a new way to open a session, so this milestone rests on the desktop sign-in links decision, settled on 2026-09-27 and recorded under Desktop programs and client data in doc/ARCHITECTURE.md.
+
+**Deliverables**
+
+- `panel_link` in the supervisor's store, from a dated update in `data/sql/panel/`:
+  - It holds each link's kind (owner claim, password, local or pairing), user, issuer, expiry and time of use, with the token kept only as its hash.
+  - 17.46's owner claim and password links move into it from memory, so there is one store of single-use links and each survives a supervisor restart.
+  - 17.152's display pairing codes use it when that lands.
+- `POST /api/panel-links` on the supervisor's admin API, behind its bearer token:
+  - A local link lasts 60 seconds and is honoured only from a loopback peer on the panel listener.
+  - A pairing link lasts 10 minutes and is honoured from any address. It is refused for a listener serving plain HTTP beyond loopback, and for a name `Panel.AllowedHosts` would refuse.
+  - On a panel with no user yet, a local link makes the owner as `panel user create` does: under the name given, or `owner`, with an unguessable password nobody is told. A desktop's first run therefore asks nothing.
+- Command-line and console access:
+  - `supervisor --panel-link [username]` and `supervisor --panel-pair <username> --address <host[:port]>` read the admin token as the supervisor does and ask the running supervisor.
+  - The console commands `panel user link` and `panel user pair` do the same from an attached console.
+  - A pairing prints one line holding the address, the port, the fingerprint of the certificate the listener serves, and the token.
+- `POST /api/panel/link` on the panel listener, and a `#link` page beside the claim and password pages, trade a link for a session through the path sign-in takes:
+  - The session id is regenerated and the sign-in is recorded.
+  - A wrong or spent token counts against the 17.46 throttles, and a disabled user is refused.
+  - No second factor is skipped; 17.47 adds its step here when it lands.
+- Auditing:
+  - `panel:link.issued` is audited with the kind, user, issuer and expiry, and `panel:session.opened` names the link it came from.
+  - The token reaches only the caller that asked for it: no log file, audit row or command history holds it.
+- doc/PANEL.md's Panel users and Sign-in sections, doc/config/supervisor.md and the console's help describe both links
+
+**Acceptance**
+
+- [ ] A local link signs in once and only from loopback: a second use answers 410, a use from a peer that is not loopback answers 403, and a use after 60 seconds answers 410 (PanelLinkTest over HTTP, with a clock moved through the window)
+- [ ] Without the admin token the route answers 401. With it, on a panel with no users, it makes the owner under the name given and returns a link that signs them in, and no password for that owner appears anywhere (PanelLinkTest)
+- [ ] An owner claim link printed before a supervisor restart claims once after it, and never twice (PanelLinkTest)
+- [ ] Against a running supervisor, `supervisor --panel-link` prints a link that opens a session, and `--panel-pair` prints the fingerprint of the certificate the listener actually serves (an AppSmoke run that reads the fingerprint back through `AdminClient`)
+- [ ] Env-gated on `AMBROSE_TEST_ADMIN_REMOTE_BIND`: a pairing token signs in once over TLS from an address that is not loopback, and a pairing asked of a listener serving plain HTTP beyond loopback is refused with the reason
+- [ ] Twenty wrong or spent tokens from one address within a minute answer 429, as failed sign-ins do, and a disabled user's link is refused (PanelLinkTest)
+- [ ] After a link is issued and used, the token is in no log file, audit row or command history, and the store holds only its hash (a test that searches each for the token)
+
+## 17.181 The panel program: its own window and a list of panels
+
+**Goal:** Anyone running Ambrose opens one program, picks a panel from its list and manages it in the program's own window, whether the panel is on this computer or on a server elsewhere. Every connection is checked, and the program holds no panel password.
+
+**Size:** L. **Depends on:** 17.06, 17.179, 17.180
+
+Added on 2026-09-27 at the maintainer's direction, who asked for the panel as its own program, opened from an executable, so people can manage their servers on their own machine or live on another.
+
+- **Why a program of its own.** It is not a mode of the launcher, because the launcher is for players and must work where no server is (3.27). It shares the launcher's shell through 17.179.
+- **No copy of the dashboard.** The program carries none for the panels it opens: each panel is shown from its own origin, so a panel and its pages are always the same version. Every page a later milestone adds, the game data pages among them, appears in the program with no change to it.
+- **Relation to 17.154.** 17.154 lets a browser install one panel as a web app. This is the native program, with its list of panels, and later hosting (17.24), a tray (17.182) and packages (17.183).
+- **Passkeys.** Chromium refuses WebAuthn on a page it loaded past a certificate error, so passkeys (17.45) inside the program need the trusted certificate 17.108 gives.
+
+It rests on the panel program decision, settled on 2026-09-27 and recorded under Desktop programs and client data in doc/ARCHITECTURE.md.
+
+**Deliverables**
+
+- `src/tools/panel`, the `panel` executable over a `panel-core` library that links the 17.179 shell and `shared`:
+  - Its own screens live in `apps/panelui`, built from packages/ui and compiled in through `ambrose_embed_page`.
+  - `panel.conf.dist` sits beside it, documented in doc/config/panel.md.
+  - Its data lives in `PanelApp` in the Ambrose data folder.
+- The server list, in the program's own SQLite file:
+  - Each entry holds a name, an address, a certificate mode (loopback, publicly trusted, pinned to a SHA-256 fingerprint, or plain HTTP the operator opted into), the username last used and when it was last opened.
+  - Entries are added, renamed, edited and forgotten, and forgetting one deletes its profile.
+  - A supervisor on this machine is listed as This computer without being added, when its admin API answers on loopback and its token is in the default file under the Ambrose data folder. One whose panel listener is off is listed with the setting that turns it on.
+- A panel on another machine is added in one of three ways:
+  - From a 17.180 pairing line, which carries the address and the pin together.
+  - From an address whose certificate a public authority vouches for.
+  - From an address with a self-signed certificate. The program shows the fingerprint grouped for comparison with the one the supervisor printed, and pins it only once the operator confirms they match.
+
+  Plain HTTP beyond loopback is refused unless the operator takes the per-entry opt-in. The opt-in says the password and the session then cross the network unencrypted, as `Panel.AllowPlainHttpRemote` does.
+- Each panel opens in a window of the program's own, through a 17.179 view bound to its origin, with its own profile and no channel to the program:
+  - This computer opens through a 17.180 local link.
+  - A paired panel opens through its pairing link once, then through its own sign-in page whenever its session ends.
+  - Any other panel opens through its own sign-in page, as does one that answers 404 to the link route.
+  - The program never asks for, sees or stores a panel password.
+- A pinned panel whose certificate changes is refused before any request is sent. The program shows the old and new fingerprints, with the choice to confirm the new one against the supervisor's log or to pair again.
+- The list shows which panels answer, through a probe per entry:
+  - The probe goes through libcurl over OpenSSL, as the Outbound HTTP row settles.
+  - It checks the pin before sending anything, and reads only the panel's public `GET /api/panel/session`.
+  - It names each state: answering, unreachable, certificate changed, or not an Ambrose panel.
+  - Probes run only while the list is shown.
+- `panel --version` and `--help`, and an about screen showing the program's version and revision, the web view runtime's version, and the revision of This computer's supervisor from its health
+- On a machine with no web view, the chosen panel opens in the default browser, This computer through its local link, and the program says once why
+- Tests and docs:
+  - Unit tests over the server list, the certificate modes, the pairing parser, the plain HTTP refusal and the probe states against fake answers.
+  - An integration test that runs a supervisor on loopback with a self-signed certificate and proves the probe accepts the pin and refuses a swapped certificate.
+  - A smoke test, skipped with no web view, that opens This computer through a local link and reaches the overview.
+  - The front-end job builds and tests `apps/panelui`.
+  - doc/DESIGN.md's Surfaces, doc/TOOLS.md and the repository layout in doc/ARCHITECTURE.md name the program.
+
+**Acceptance**
+
+- [ ] With a supervisor serving its panel on loopback, `panel` lists This computer without being told, and opening it reaches the overview signed in as the owner with nothing typed (the smoke test)
+- [ ] A panel over TLS with a self-signed certificate opens once its fingerprint is confirmed or paired, and after the certificate on that port is replaced the program sends the panel no request and names both fingerprints (the integration test with two `--panel-self-signed` certificates)
+- [ ] Dev-gated: from the maintainer's desktop, a panel on a second machine or virtual machine is paired from its console and opened in the program's window, signed in once by the pairing line and afterwards through its own sign-in page. Needs a second machine or a virtual machine
+- [ ] A plain HTTP address beyond loopback is refused without the opt-in and accepted with it, and the entry then carries its warning (unit tests)
+- [ ] After a sign-in to a remote panel, the program's data folder, SQLite file, log and configuration hold no panel password, and forgetting the panel leaves no file of its profile (a test that searches the folder for the typed password)
+- [ ] A panel page that posts to the host channel gets no answer, and a link on it to another site opens in the system browser (the smoke test against the dashboard)
+- [ ] With no remote entries, the program opens no connection off this machine (the probe's fake transport records none)
+- [ ] `panel --version` and the about screen report the version and revision the build carries, and the about screen shows the local supervisor's revision (a unit test and the smoke test)
+- [ ] On a machine with no web view, choosing This computer opens the default browser at a local link that signs in once (a test with a fake browser opener)
+
+## 17.182 The panel program in the tray
+
+**Goal:** While a server runs on this computer, the panel program stays out of the way in the tray, its icon says whether the server is healthy and how many players are on, and it opens, starts and stops the server.
+
+**Size:** M. **Depends on:** 17.24
+
+Added on 2026-09-27 at the maintainer's direction; the tray moves here from 17.24. It rests on the tray decision, settled on 2026-09-27 and recorded under Desktop programs and client data in doc/ARCHITECTURE.md. Alerts reach an operator through 17.154's channel inside the panel's window, so the tray raises no notification of its own.
+
+**Deliverables**
+
+- A tray icon in the identity doc/DESIGN.md sets, whose state follows this computer's supervisor: stopped, starting with its step, running with the players online, or a problem. Its menu holds Open panel, Servers, Start or Stop this computer, Play and Quit, and shows a line when 17.17 reports an update.
+- Closing the window keeps the program in the tray while this computer's server runs. Quit asks whether to stop the server, stops it through 17.24's graceful path when told to, and leaves it serving otherwise.
+- Start at sign-in, opt-in and off by default, through the per-user Run key on Windows and an autostart desktop entry elsewhere, removed when turned off
+- A desktop with no tray host, such as GNOME without an extension, keeps the window in the taskbar and says so once
+- Tests: unit tests over the state and menu for each status with the tray behind a fake, and a smoke test on each operating system, skipped where there is no tray host
+
+**Acceptance**
+
+- [ ] The icon follows the supervisor within one status interval: stopped, starting with its step, running with the player count, and a problem (unit tests over the fake tray, and an integration test with a fake supervisor)
+- [ ] Closing the window keeps the server running and the icon present. Quit with stop chosen stops the supervisor gracefully and exits, and Quit without it leaves the supervisor serving (integration test)
+- [ ] Turning start at sign-in on writes exactly one entry, and turning it off removes it (unit tests against a fake registry and folder)
+- [ ] On a desktop with no tray host, the window stays in the taskbar and the program says once why (a Linux smoke test with no StatusNotifier host)
+- [ ] Dev-gated: on the maintainer's Windows and Linux desktops, the icon and its menu appear and follow a restart of the stack. Needs the maintainer's desktops
+
+## 17.183 Installing the panel program: installer, uninstaller and portable archive
+
+**Goal:** The panel program installs like any desktop program on Windows and Linux, with an icon, shortcuts, a version and a clean uninstall, from packages CI builds at no cost.
+
+**Size:** M. **Depends on:** 17.24
+
+Added on 2026-09-27 at the maintainer's direction; the installer moves here from 17.24. It rests on the installer format decision, settled on 2026-09-27 and recorded under Desktop programs and client data in doc/ARCHITECTURE.md. The launcher's own package comes from this pipeline once 3.27 lands, so the two programs install and uninstall one way.
+
+**Deliverables**
+
+- One packaging pipeline in `apps/packaging/desktop/`, run from the release presets:
+  - On Windows: a per-user installer into the user's own programs folder that needs no administrator, with Start menu and desktop shortcuts, an icon and version resource drawn from the tokens, and an entry in the system's installed apps; plus a portable zip.
+  - On Linux: an archive whose program installs its desktop entry and icon for the current user on first run, and a Debian package that declares the web view as a dependency.
+- The program and the server component are each laid into a version folder of their own, beside a small starter that runs the current program. This is the layout 17.184 switches with one pointer change.
+- An optional server component, chosen at install and on by default:
+  - It holds the supervisor, the apps, their `.conf.dist` files, the tools they and the panel run (typeextract, extractor, client, bindecode, schemaprobe and localetool), and the private database on the terms the private database decision sets.
+  - Without it, the program installs connect-only.
+- An install manifest in every package, listing each file with its size and SHA-256, which 17.118 checks for drift and 17.184 signs. No package holds a file from a client install, a type dump or extracted data, and each is checked against its content list.
+- Uninstalling:
+  - It removes the program, its shortcuts, its desktop entry and its start-at-sign-in entry, and stops a supervisor the program started.
+  - It removes the program's own data and the hosted server's data only when the operator ticks each.
+  - It never touches the game install.
+- On Windows the installer checks for the WebView2 runtime. When it is missing, the installer says so and offers Microsoft's installer only with the operator's consent. Without the runtime, the program opens panels in the default browser.
+- Tests and docs: a packaging test in CI that builds each package on its own platform and checks its content list and manifest, unit tests over the uninstall plan, and doc/INSTALL.md describing how the program is installed
+
+**Acceptance**
+
+- [ ] The packaging test builds the Windows installer and zip and the Linux archive and Debian package in CI, each holding exactly its content list: no file from a client install, no type dump and no extracted data
+- [ ] A package built without the server component installs a program that runs connect-only (packaging test)
+- [ ] Each package's install manifest lists every file it carries with the SHA-256 of its bytes, and a file changed after packaging fails the check (packaging test)
+- [ ] The uninstall plan removes the program, its shortcuts and its entries, keeps the program's data and the server's data unless each is ticked, and touches nothing the install did not write (unit tests over the plan, and the portable package installed into and removed from a temporary folder)
+- [ ] Dev-gated: on a clean Windows machine the installer needs no administrator and adds both shortcuts with the icon and version, the program opens from them, and it uninstalls cleanly. Needs a clean Windows machine
+- [ ] Dev-gated: on a clean Ubuntu desktop the archive's program installs its desktop entry on first run and opens from the application menu, and the Debian package installs with its web view dependency. Needs a clean Ubuntu desktop
+
+## 17.184 Signed updates for the desktop programs
+
+**Goal:** The panel program and the launcher update themselves from a signed release: they stage the new version beside the old, switch in one step, and roll back when the new version will not start. The server's own programs are left to 17.17.
+
+**Size:** M. **Depends on:** 17.105, 17.183
+
+Added on 2026-09-27 at the maintainer's direction. 3.27 asks for a launcher that updates itself, and nothing planned how the panel program updates itself, so this is one updater for both. Downloads go through libcurl, as the Outbound HTTP row settles. The manifest is signed with the project release key that the release signing key decision, settled on 2026-09-27 and recorded under Desktop programs and client data in doc/ARCHITECTURE.md, sets on the patch signing key's terms: Ed25519 through Botan, with overlapping rotation.
+
+**Deliverables**
+
+- A shared updater in `src/tools/shell`, with a channel named in the program's configuration and off by default:
+  - The manifest is 17.183's install manifest with the version and the lowest version it updates from, signed with the release key.
+  - The public keys are compiled in, and a configuration may add one more for an operator's own channel.
+  - A rotated key is accepted across its overlap window.
+- Staging and switching:
+  - Each file is downloaded into a new version folder beside the running one and checked against the manifest before anything switches.
+  - The switch is one pointer change of 17.183's starter.
+  - A new version that does not report itself started within a set time is replaced by the previous one. The failed version is kept aside, and both are logged.
+  - 17.17 wraps this same staging and switch with its backup, check and health wait when it lands, rather than building a second updater.
+- An update touches only the program's own version folders: never the game install, the Ambrose data folder, or the server component, whose builds 17.17 switches. A server build that arrives in a package is staged for 17.17, and until 17.17 lands the program says the server programs stay at their version.
+- Each program's about screen shows the running version and the channel. An update is offered, never forced, and a program with no channel configured makes no connection off the machine.
+- 17.105's release workflow publishes the signed manifest beside each package
+- Tests and docs: unit tests over the manifest checks against a local fixture channel, a rollback test, an interrupted-switch test, and doc/config/panel.md describing the channel
+
+**Acceptance**
+
+- [ ] A manifest with a wrong signature, a file with a wrong hash or size, a missing file, or a version older than the running one is refused before anything switches, and the running version keeps working (unit tests against the fixture channel)
+- [ ] A new version that exits at start is replaced by the previous one, and the failure and the rollback are both logged (rollback test)
+- [ ] A switch interrupted at any of its steps leaves one complete version that starts (interrupted-switch test)
+- [ ] An update writes nothing inside the game install, the Ambrose data folder or the server component's folders (a test that lists each before and after)
+- [ ] With no channel configured, a whole run opens no connection off the machine (the fake transport records none)
+
+## 17.185 The Ambrose service from the panel program
+
+**Goal:** On a machine where Ambrose runs as a service, the panel program shows and controls that service instead of starting a second server, and opens its panel.
+
+**Size:** S. **Depends on:** 17.23, 17.24
+
+Added on 2026-09-27 at the maintainer's direction. 17.23's service runs as a dedicated user whose admin token and keyring the operator's own account cannot read. The program therefore cannot treat it as its own process, and must never start a second supervisor beside it. It rests on the service control decision, settled on 2026-09-27 and recorded under Desktop programs and client data in doc/ARCHITECTURE.md.
+
+**Deliverables**
+
+- The service `--install-service` registers, `AmbroseSupervisor` on Windows and `ambrose.service` elsewhere, is detected and listed as This computer (service) with its state, and the program starts no supervisor of its own beside it
+- Start and Stop go through the operating system's own elevation, the administrator prompt on Windows and polkit elsewhere, with the command shown for anyone who would rather run it
+- The service's panel opens through its own sign-in page, as the service control decision sets, and through a 17.180 local link only when the operator's account can already read the service's admin token. Opening it never asks for elevation.
+- Unit tests over detection, the commands and the refusal to start a second supervisor, with the service manager behind a fake
+
+**Acceptance**
+
+- [ ] With a service registered, the program lists it with its state and refuses to start a supervisor of its own, naming the service (unit tests with a fake service manager)
+- [ ] Start and Stop go through the elevation prompt, and declining it changes nothing (unit tests)
+- [ ] Opening the service's panel never asks for elevation (unit tests)
+- [ ] Dev-gated: after `--install-service` on the maintainer's Windows and Linux machines, the program shows the service, stops and starts it, and opens its panel. Needs the maintainer's machines
+
+## 17.186 Reaching a panel through SSH
+
+**Goal:** An operator manages a VPS whose panel stays bound to that machine's own loopback, never exposed to the internet, through an SSH connection the panel program opens with a pinned host key.
+
+**Size:** M. **Depends on:** 17.180, 17.181
+
+Added on 2026-09-27 at the maintainer's direction, as an opt-in beside TLS and pairing. Through a forward, the panel sees the program as a loopback peer, so 17.180's local links work and nothing about the panel listens beyond the machine. It rests on the SSH client and credential store decisions, settled on 2026-09-27 and recorded under Desktop programs and client data in doc/ARCHITECTURE.md.
+
+**Deliverables**
+
+- An SSH entry in the server list:
+  - It holds the host, port and user, and the host key's SHA-256 fingerprint, pinned only after the operator confirms it or given in advance.
+  - Sign-in uses the operator's SSH agent or a key file.
+  - A key file's passphrase is kept in the operating system's credential store only when asked, and never in a file, through a credential store wrapper in `src/tools/shell`. Whichever of this milestone and 3.27 lands first builds that wrapper, and the other uses it.
+- A forward from a loopback port the program picks to the panel's address on the remote machine:
+  - It opens with the panel's window and closes with it.
+  - The view is bound to that loopback origin, with a profile of the entry's own.
+  - Any host key but the pinned one is refused before authentication.
+- Sign-in needs no password when the SSH user may run `supervisor --panel-link` on the remote machine; otherwise the panel's own sign-in page is used
+- libssh in `vcpkg.json` and in THIRD-PARTY-NOTICES.md, loaded as a shared library, as its LGPL-2.1 licence asks
+- Tests: unit tests over the entry and the host key pin, and an integration test against a local SSH server that forwards to a supervisor on that server's loopback and opens its panel, Env-gated on `AMBROSE_TEST_SSH`
+
+**Acceptance**
+
+- [ ] Env-gated on `AMBROSE_TEST_SSH`: a host key other than the pinned one is refused before authentication, naming both fingerprints
+- [ ] Env-gated on `AMBROSE_TEST_SSH`: through the forward, the program opens a panel bound only to the remote machine's loopback, and signs in with no password when the SSH user may run the link command
+- [ ] A saved passphrase lives only in the credential store, and the program's data folder holds none (unit tests behind a fake store, and a search of the folder)
+- [ ] Closing the panel's window closes the forward and leaves no port open (the integration test)
+- [ ] Dev-gated: from the maintainer's desktop, a panel on a VPS or virtual machine bound to 127.0.0.1 is managed through SSH. Needs a second machine or a virtual machine

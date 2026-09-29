@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Finds the message handlers a client program registers: each goes in under a debug name Class::MSG_Name, with the plain MSG_Name and a pointer to its function, so the names are read from the program's data sections, the code that refers to a debug name and also reads its plain name is found through the code index, and the function whose address that code loads before it is the handler.
+ * Finds the message handlers a client program registers: each goes in under a debug name Class::MSG_Name, with the plain MSG_Name and a pointer to its function, so the names are read from the program's data sections, the code that refers to a debug name and also reads its plain name is found through the code index, and the function whose address that code loads before it is the handler; a behavior's handler goes in under a key Behavior_MSG_Name instead, the behavior's class name joined to the plain name by an underscore, found the same way except that the plain name is read after the key rather than before it.
  */
 
 #ifndef AMBROSE_MESSAGEHANDLERS_H
@@ -28,6 +28,7 @@ struct MessageHandlerRegistration
 namespace MessageHandlers
 {
     std::optional<std::size_t> SplitName(std::string_view text);
+    std::optional<std::size_t> SplitBehaviorName(std::string_view text);
     std::vector<MessageHandlerRegistration> Find(PeImage const& image, CodeIndex const& index);
 }
 

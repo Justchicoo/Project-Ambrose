@@ -35,10 +35,10 @@
 
 **Acceptance**
 
-- [ ] Two clients see each other with correct name and gear
-- [ ] B sees A's smooth run and idle within ~0.5 s; jumps relay
-- [ ] A logs out and vanishes on B at once; quick relog shows no ghost
-- [ ] Changing Zone.MoveFlushInterval applies from the next flush
+- [x] Two clients see each other with correct name and gear
+- [x] B sees A's smooth run and idle within ~0.5 s; jumps relay
+- [x] A logs out and vanishes on B at once; quick relog shows no ghost
+- [x] Changing Zone.MoveFlushInterval applies from the next flush
 
 ### Detailed spec from WLD-10: Players see each other (whole-zone broadcast)
 
@@ -46,26 +46,27 @@ Two real clients in the same zone instance see each other appear, walk, jump, an
 
 **Deliverables**
 
-- Map::AddPlayer: send the newcomer's public WizClientObject to everyone present, and every present player's object to the newcomer, via MSG_NEWOBJECT with the Public flag mask
-- MovementHandler: relay MSG_SERVERMOVE (the player's MobileID) and MSG_MOVESTATE (GlobalID) to others, batched on Zone.MoveFlushInterval; relay MSG_JUMP when ExcludeOriginator is set
-- Idle detection: after no MSG_CLIENTMOVE for Zone.MoveIdleIntervals flush intervals (default 2), broadcast MSG_MOVESTATE NewState=0 once
+- src/server/game/World/PlayerMeetings and World::Update (built in place of the Map::AddPlayer and Map::RemovePlayer this spec first named, because a session may not reach the world that owns it and Map holds no sessions): a session marks that its wizard arrived, with its public WizClientObject encoded once under the Public mask, and when it left; each tick the world takes the departures first, sending MSG_REMOVEOBJECT to every wizard still in the instance, then shows each newcomer and the wizards already there to each other with MSG_NEWOBJECT, each followed by the other's last move and its state when it is moving, two newcomers of one tick meeting once and a wizard never shown to or taken from a session holding the same wizard
+- src/server/game/Entities/Player/MovementRelay and World::FlushMovement: at each Zone.MoveFlushInterval flush every wizard's new move goes to the others in its instance as MSG_SERVERMOVE under its mobile id, as its client packed it, and its movement state as MSG_MOVESTATE under its global id when that changed
+- Idle detection: a wizard whose client sends no new move for Zone.MoveIdleIntervals flushes (default 2) is shown standing, MSG_MOVESTATE NewState=0 once; this is the relay's own view, kept apart from the state the client said, so its next move or state shows the client's own again
 - Zone.MoveFlushInterval and Zone.MoveIdleIntervals are live settings applied from the next flush
-- Map::RemovePlayer: MSG_REMOVEOBJECT (GameObjectID) to the remaining players
+- Jumps: the client handles no MSG_JUMP from the server. A jump is the player object's Jumping state, which the world tells the other wizards in the instance with MSG_ENTERSTATE at its next tick, and the jumper's own client too when its MSG_JUMP did not set ExcludeOriginator; src/server/game/Entities/Player/PlayerStates names the state
 
 **Client messages:** MSG_NEWOBJECT, MSG_REMOVEOBJECT, MSG_SERVERMOVE, MSG_MOVESTATE, MSG_CLIENTMOVESTATE, MSG_JUMP, MSG_CLIENTMOVE
 
 **Acceptance**
 
-- [ ] Two real clients A and B log into WC_Hub: each sees the other's wizard with correct name and gear
-- [ ] A walks in a circle: B sees smooth motion with the run animation, and A stops animating within about half a second of stopping
-- [ ] A jumps: B sees the jump
-- [ ] A logs out: A's model vanishes on B's screen at once
-- [ ] A logs back in quickly and gets a new mobile id: B sees one A, not a ghost
-- [ ] Unit: changing Zone.MoveFlushInterval or Zone.MoveIdleIntervals applies from the next flush without a restart
+- [x] Two real clients A and B log into WC_Hub: each sees the other's wizard with correct name and gear. Earned on 2026-09-28 by the client driver's two-wizards.json on r806919 (run 20260928-203426), which starts a second client, the companion, on an account and a wizard of its own: the main wizard backs away from the Commons' Start, the companion enters there, and the game server logs that the two were shown to each other. The main client's shot shows Adrian AshBloom under his name in the yellow hat, robe and boots his row gives him, and the companion's, once it has turned around, shows Adam AngleBane in blue. `PlayerMeetingsTest` holds who is shown to whom, including two wizards arriving in one tick meeting once.
+- [x] A walks in a circle: B sees smooth motion with the run animation, and A stops animating within about half a second of stopping. The same run holds W and D together on the companion for 2.5 seconds, one full circle at the 2.47 rad/s turn an earlier run's saved facings measured, while the main client is filmed about every 0.4 seconds: the frames show the companion running along the circle in the run pose, still running 0.3 seconds after the keys are let go and standing 0.7 seconds after, a span that includes the capture's own delay and the client's interpolation. The client's MSG_MoveState handler, read in Ghidra, queues the state with the moves: 1 makes WizardNetworkMovementBehavior carry the wizard on along its last heading until a newer move arrives and 0 stops it at the last move, so a stopped wizard would slide on unless the idle state goes out, which `MovementRelayTest` holds.
+- [x] A jumps: B sees the jump. The client has no handler for an MSG_JUMP from the server: the tool finds none registered, and GamebryoClient::HandleEmoteJump plays the Jump animation on the jumper's own object after sending MSG_JUMP with ExcludeOriginator set. Another client plays it when told the jumper's object entered Jumping, the state the player's state set, StateData/PlayerMobileStates.xml, keeps in its Jump category with the Jump animation and a return to NotJumping after two seconds; MSG_ENTERSTATE names a state by the client's string hash, which a retail capture confirms, its NotShopping arriving as 1685237158 (`PlayerStatesClientTest`). The run logs the companion's jump shown to one other wizard, and in run 20260928-202543, on the same server build, the main client's frame 0.4 seconds into the jump shows the companion crouched mid-jump and the next one standing again.
+- [x] A logs out: A's model vanishes on B's screen at once. The companion's client quits: the game server logs the companion taken away from the one wizard still in the instance, and the main client's shot a second later shows no Adrian AshBloom.
+- [x] A logs back in quickly and gets a new mobile id: B sees one A, not a ghost. The run raises Zone.MobileIdReleaseDelay to a minute so a returning wizard cannot take its old id back, and the scenario rejects the old one: the companion returns with mobile id 49154 where it had 49153, is shown to the main wizard again, and the main client's shot shows one Adrian AshBloom where he stood.
+- [x] Unit: changing Zone.MoveFlushInterval or Zone.MoveIdleIntervals applies from the next flush without a restart. `MovementRelayTest.TheFlushClockTakesAChangedIntervalFromTheNextFlush` and `TheIdleCountAppliesFromTheNextFlush`; the world reads both settings at each tick.
 
 **Risks**
 
-- The capture shows MSG_SERVERMOVE and MSG_MOVESTATE in equal counts (3141 each), so they are likely paired per update; how often the client expects them is unverified
+- The capture shows MSG_SERVERMOVE and MSG_MOVESTATE in equal counts (3141 each), each MSG_MOVESTATE there with NewState 0 for a creature; the client keeps the last state it was sent, so the server sends a player's only when it changes
+- A client asks with MSG_RIDERSLIST for the riders of another wizard once it sees one; the answer loads a RidableBehavior's rider list, and no milestone answers it yet, so two-wizards.json expects it unanswered
 - Public versus authority property masks for other players' objects come from WIZ. A wrong mask leaks private data or crashes the viewer.
 
 ## 6.02 PLAYERWIZBANG broadcast (WIZ-1 remainder)
@@ -772,9 +773,9 @@ In big or busy zones each client gets only objects and players within range, wit
 **Acceptance**
 
 - [ ] 10-minute fuzz: no crash, no allocation above MaxFrameSize
-- [ ] 10k frames/s flooder disconnected within 1 s
-- [ ] A never-reading client disconnected at the high-water mark
-- [ ] Changing Network.RateLimit.PerSecond applies to connected sessions from the next frame
+- [x] 10k frames/s flooder disconnected within 1 s (SessionBaseTest.FrameFloodDisconnectsWithoutStallingAnotherSession: 10,000-frame stream closed within 1 s; survivor handled within 500 ms)
+- [x] A never-reading client disconnected at the high-water mark (OutboundMessagesTest.AClientThatStopsReadingIsClosedAtTheSendQueueLimit)
+- [x] Changing Network.RateLimit.PerSecond applies to connected sessions from the next frame (SessionBaseTest.LoweringTheFrameRateAppliesToTheNextInboundFrame)
 
 ### Detailed spec from NET-11: Network hardening
 
@@ -796,9 +797,9 @@ Malformed, oversized or abusive traffic can't crash or stall a server and is dis
 **Acceptance**
 
 - [ ] Fuzz run of 10 minutes on the frame and decode paths has no crash, no ASan report and no allocation above MaxFrameSize
-- [ ] A test client flooding 10k frames/s is disconnected within 1s, and other sessions show no latency spike above a threshold in the integration test
-- [ ] A test client that never reads is disconnected when its send queue passes the high-water mark
-- [ ] Integration test: lowering Network.RateLimit.PerSecond while a client is connected throttles that client from the next frame without a restart
+- [x] A test client flooding 10k frames/s is disconnected within 1s, and other sessions show no latency spike above a threshold in the integration test (SessionBaseTest.FrameFloodDisconnectsWithoutStallingAnotherSession: 10,000-frame stream closed within 1 s; survivor handled within 500 ms)
+- [x] A test client that never reads is disconnected when its send queue passes the high-water mark (OutboundMessagesTest.AClientThatStopsReadingIsClosedAtTheSendQueueLimit)
+- [x] Integration test: lowering Network.RateLimit.PerSecond while a client is connected throttles that client from the next frame without a restart (SessionBaseTest.LoweringTheFrameRateAppliesToTheNextInboundFrame)
 
 **Risks**
 

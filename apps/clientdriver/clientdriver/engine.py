@@ -1,7 +1,8 @@
 # Project Ambrose by Imjustchico
-# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect.
+# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect; a step may drive a companion client instead of the main one, each client keeping its own last frame and its own restart, so one run can show two wizards to each other, and a held key, or several held together, may be watched, the other client filmed at a steady pace while it is held and for a while after it is let go.
 import os
 import re
+import threading
 import time
 
 from . import screens
@@ -18,7 +19,12 @@ def answered(said, wanted):
 
 
 SETTLE_SECONDS = 0.3
+WATCH_EVERY = 0.5
 MOVE_MARGIN = 0.2
+
+
+def keys_of(vk):
+    return [value if isinstance(value, int) else int(str(value), 0) for value in (vk if isinstance(vk, list) else [vk])]
 
 
 def held_key_moved(still, held, margin=MOVE_MARGIN):
@@ -26,9 +32,14 @@ def held_key_moved(still, held, margin=MOVE_MARGIN):
 
 
 class Engine:
-    def __init__(self, scenario, client, server, store, shots, variables, databases=None):
+    def __init__(self, scenario, client, server, store, shots, variables, databases=None, companion=None):
         self.scenario = scenario
         self.client = client
+        self.clients = {"main": client}
+        if companion is not None:
+            self.clients["companion"] = companion
+        self.which = "main"
+        self.frames = {}
         self.server = server
         self.game = None
         self.store = store
@@ -42,6 +53,7 @@ class Engine:
         self.previous = None
         self.current = None
         self.restart = None
+        self.restarts = {}
         self.listeners = {}
 
     def fill(self, value):
@@ -59,6 +71,9 @@ class Engine:
         self.steps.append(record)
         self.current = None
         try:
+            self.use(step.get("client", "main"))
+            if self.which != "main":
+                record["client"] = self.which
             record["result"] = self.perform(step)
             record["ok"] = True
         except Exception as error:
@@ -70,6 +85,16 @@ class Engine:
         record["seconds"] = round(time.monotonic() - started, 2)
         record["screen"] = self.look(name)
         return record["result"]
+
+    def use(self, which):
+        if which == self.which:
+            return
+        if which not in self.clients:
+            raise StepFailed(f"the step drives the {which} client, which this run did not start")
+        self.frames[self.which] = self.previous
+        self.which = which
+        self.client = self.clients[which]
+        self.previous = self.frames.get(which)
 
     def perform(self, step):
         action = getattr(self, "act_" + step["action"], None)
@@ -111,7 +136,10 @@ class Engine:
             self.taken -= 1
             self.notes.append({"note": f"no screenshot for {name}: {error}"})
             return None
-        self.screenshots.append({"shot": base, "step": name, "client_holds_the_foreground": self.client.is_foreground()})
+        taken = {"shot": base, "step": name, "client_holds_the_foreground": self.client.is_foreground()}
+        if self.which != "main":
+            taken["client"] = self.which
+        self.screenshots.append(taken)
         return base
 
     def act_shot(self, step):
@@ -206,7 +234,7 @@ class Engine:
             return None, error
 
     def act_submit_login(self, step):
-        user = self.fill(step.get("user", "{user}"))
+        user = self.fill(step.get("user", "{user}" if self.which == "main" else "{companion_user}"))
         self.client.type(user)
         self.client.post_char(9)
         self.client.type(self.fill(step["password"]))
@@ -241,27 +269,80 @@ class Engine:
         raise StepFailed(f"nothing connected to {listener.label} on {listener.address}:{listener.port} within {step['timeout']}s")
 
     def act_restart_client(self, step):
-        if self.restart is None:
-            raise StepFailed("this run has no client it can start again")
-        return self.restart(float(step.get("timeout", 180)))
+        restart = self.restarts.get(self.which) or (self.restart if self.which == "main" else None)
+        if restart is None:
+            raise StepFailed("this run has no client it can start again" if self.which == "main" else f"this run has no {self.which} client it can start again")
+        return restart(float(step.get("timeout", 180)))
+
+    def hold(self, keys, seconds):
+        if len(keys) == 1:
+            self.client.key(keys[0], hold=seconds)
+        else:
+            self.client.keys(keys, hold=seconds)
 
     def act_hold_key(self, step):
-        virtual_key = step["vk"] if isinstance(step["vk"], int) else int(str(step["vk"]), 0)
+        keys = keys_of(step["vk"])
         seconds = float(step["seconds"])
         before = self.client.frame()
         time.sleep(seconds)
         idle = self.client.frame()
-        self.client.key(virtual_key, hold=seconds)
+        filmed = self.watch_key(step, keys, seconds) if step.get("watch") else None
+        if filmed is None:
+            self.hold(keys, seconds)
         time.sleep(SETTLE_SECONDS)
         after = self.client.frame()
         self.current = after
         still = screens.matching(before, idle)
         held = screens.matching(idle, after)
-        said = (f"held the key {virtual_key:#x} for {seconds}s: {held:.3f} of the frame stayed the same while it was held, "
+        held_keys = f"the key {keys[0]:#x}" if len(keys) == 1 else "the keys " + " and ".join(f"{key:#x}" for key in keys)
+        said = (f"held {held_keys} for {seconds}s: {held:.3f} of the frame stayed the same while it was held, "
                 f"against {still:.3f} over the same time with no key")
         if step.get("moves") and not held_key_moved(still, held):
             raise StepFailed(f"{said}, which is not the view moving")
+        if filmed is not None:
+            said += f"; {filmed}"
         return said
+
+    def watch_key(self, step, keys, seconds):
+        which = step["watch"]
+        watched = self.clients.get(which)
+        if watched is None:
+            raise StepFailed(f"the step watches the {which} client, which this run did not start")
+        every = float(step.get("watch_every", WATCH_EVERY))
+        after = float(step.get("watch_after", 0))
+        name = step.get("name", "hold")
+        failed = []
+
+        def hold():
+            try:
+                self.hold(keys, seconds)
+            except Exception as error:
+                failed.append(error)
+
+        holding = threading.Thread(target=hold, name="held key", daemon=True)
+        started = time.monotonic()
+        holding.start()
+        frames = []
+        stop_at = None
+        while True:
+            at = time.monotonic() - started
+            if not holding.is_alive() and stop_at is None:
+                stop_at = at + after
+            if stop_at is not None and at > stop_at:
+                break
+            picture = watched.frame()
+            base = f"{name} seen by the {which} client at {at:.1f}s"
+            self.taken += 1
+            file = f"{self.taken:02d}-{re.sub(r'[^a-z0-9]+', '-', base.lower()).strip('-')}.png"
+            watched.screenshot(os.path.join(self.shots, file), picture)
+            self.screenshots.append({"shot": file, "step": name, "client": which, "at": round(at, 2), "held": stop_at is None,
+                                     "client_holds_the_foreground": watched.is_foreground()})
+            frames.append(file)
+            time.sleep(max(0.0, every - (time.monotonic() - started - at)))
+        holding.join()
+        if failed:
+            raise failed[0]
+        return f"the {which} client was filmed {len(frames)} time(s), every {every}s, while the key was held and for {after}s after"
 
     def act_server_command(self, step):
         return self.console_command(self.server, step)

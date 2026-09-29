@@ -1,0 +1,342 @@
+{
+    "subject":  "F-41 service 57 CantripsMessages",
+    "area":  "protocol",
+    "claim":  "The r806919 Wizard 1.610 Root.wad message definitions identify service 57 as CantripsMessages and define its ordered message tags and field types as catalogued here.",
+    "revision":  "r806919.Wizard_1_610",
+    "method":  "static",
+    "how_to_repeat":  [
+                          "Read Messages/CantripsMessages.xml from Root.wad in your own r806919 install with `bindecode` --client \u003cinstall\u003e --text Messages/CantripsMessages.xml.",
+                          "Read ServiceID and ProtocolType from _ProtocolInfo/RECORD; enumerate each message RECORD and retain each non-metadata field name and its TYPE (or the supported TPYE/TYP spelling, with GlobalID inferred as GID).",
+                          "Use explicit _MsgOrder or _MsgType where the first message has it; otherwise sort distinct message element tags by byte-ordinal order and number them from 1, collapsing repeated tags only when their fields match.",
+                          "Run `bindecode --client \u003cinstall\u003e --sweep` as an archive-decode check; the sweep covers BINd entries, not the XML message definitions."
+                      ],
+    "evidence":  [
+                     "`bindecode` --client \u003cinstall\u003e --text Messages/CantripsMessages.xml read this definition from the local r806919 Root.wad; it declares service id 57, protocol name CantripsMessages, and 18 distinct ordered messages with 46 fields.",
+                     "The service uses tag-ordinal order; the catalog records every message tag/name, resolved order, and field name/type, excluding underscore-prefixed metadata.",
+                     "`bindecode --client \u003cinstall\u003e --sweep --threads 8` reported 173088 entries, 134640 BINd files, 134635 decoded, 5 unknown-root-class failures and 0 unreadable entries; those five BINd failures do not validate or contradict this XML catalog."
+                 ],
+    "disproof":  "A repeat read of Messages/CantripsMessages.xml from another r806919 install that yields a different service id/name, distinct message order, or field name/type under the stated ordering rule.",
+    "confidence":  "high",
+    "submitted_by":  "MeruneFleuruwu",
+    "submitted_on":  "2026-09-27",
+    "status":  "claimed",
+    "service":  {
+                    "id":  57,
+                    "name":  "CantripsMessages",
+                    "version":  1,
+                    "entry":  "Messages/CantripsMessages.xml",
+                    "ordering":  "tag-ordinal",
+                    "messages":  [
+                                     {
+                                         "tag":  "MSG_BENEFICIALLUCKUPDATE",
+                                         "name":  "MSG_BENEFICIALLUCKUPDATE",
+                                         "order":  1,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "LuckOffset",
+                                                            "type":  "FLT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CANCELINVISIBLITY",
+                                         "name":  "MSG_CANCELINVISIBLITY",
+                                         "order":  2,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CANTRIPAFFECTEDPLAYER",
+                                         "name":  "MSG_CANTRIPAFFECTEDPLAYER",
+                                         "order":  3,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GameObjectID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CANTRIPENDLOOP",
+                                         "name":  "MSG_CANTRIPENDLOOP",
+                                         "order":  4,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GameObjectID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CANTRIPLEVELUP",
+                                         "name":  "MSG_CANTRIPLEVELUP",
+                                         "order":  5,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "NewLevel",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CANTRIPNOAGGRO",
+                                         "name":  "MSG_CANTRIPNOAGGRO",
+                                         "order":  6,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CANTRIPSIGILSPELL",
+                                         "name":  "MSG_CANTRIPSIGILSPELL",
+                                         "order":  7,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "CasterGID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "TargetObjectID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "TargetX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "TargetY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "TargetZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "SpellTemplateID",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CANTRIPSRESPONSE",
+                                         "name":  "MSG_CANTRIPSRESPONSE",
+                                         "order":  8,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "EnergyUsed",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "CooldownSeconds",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "OutOfEnergy",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CANTRIPSRESPONSEERROR",
+                                         "name":  "MSG_CANTRIPSRESPONSEERROR",
+                                         "order":  9,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "ProblemType",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CANTRIPSSPELLCAST",
+                                         "name":  "MSG_CANTRIPSSPELLCAST",
+                                         "order":  10,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "SpellTemplateID",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "IsTreasureCard",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CANTRIPTUTORIALEFFECT",
+                                         "name":  "MSG_CANTRIPTUTORIALEFFECT",
+                                         "order":  11,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CASTEFFECT",
+                                         "name":  "MSG_CASTEFFECT",
+                                         "order":  12,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GameObjectID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "SpellTemplateID",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "AnimationKFM",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "AnimationName",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CASTRITUAL",
+                                         "name":  "MSG_CASTRITUAL",
+                                         "order":  13,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "CasterGID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "SpellTemplateID",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "TargetObjectID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "TargetX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "TargetY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "TargetZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "SchoolID",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "Phase",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CONTROLVISIBLITY",
+                                         "name":  "MSG_CONTROLVISIBLITY",
+                                         "order":  14,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "IsVisible",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_ENTERBENEFICIALOBJECT",
+                                         "name":  "MSG_ENTERBENEFICIALOBJECT",
+                                         "order":  15,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "BenefitType",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_EXITBENEFICIALOBJECT",
+                                         "name":  "MSG_EXITBENEFICIALOBJECT",
+                                         "order":  16,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "BenefitType",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_UPDATECANTRIPXP",
+                                         "name":  "MSG_UPDATECANTRIPXP",
+                                         "order":  17,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "XP",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Level",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_UPDATERITUALOBJECT",
+                                         "name":  "MSG_UPDATERITUALOBJECT",
+                                         "order":  18,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "CasterGID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "ObjectGID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Uses",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "Count",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     }
+                                 ]
+                }
+}

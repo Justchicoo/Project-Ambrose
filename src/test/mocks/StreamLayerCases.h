@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The stream layer's own cases, written once and run against every feed built on it, the live log and the admin events alike: a new session gets the hello and the whole backlog in order, a resume after N gets exactly what came after N, a resume after a sequence the backlog no longer holds gets a dropped marker naming the missed range, a resume at the latest sequence gets nothing but the hello, a full queue drops the oldest and names how many and which, sequence numbers never go backwards across pump batches, and the backlog read over HTTP after a sequence number says what it could no longer show. A feed passes by naming its hub, service, request, the type its records are sent as and how to publish a run of them.
+ * The stream layer's own cases, written once and run against every feed built on it, the live log, the admin events and the panel's event socket alike: a new session gets the hello and the whole backlog in order, a resume after N gets exactly what came after N, a resume after a sequence the backlog no longer holds gets a dropped marker naming the missed range, a resume at the latest sequence gets nothing but the hello, a full queue drops the oldest and names how many and which, sequence numbers never go backwards across pump batches, and the backlog read over HTTP after a sequence number says what it could no longer show. A feed passes by naming its hub, service, request, the type its records are sent as and how to publish a run of them, and, when its records say so differently, the field that carries their sequence and the time stamps each one carries, which default to sequence, time and epoch_ms.
  */
 
 #ifndef AMBROSE_STREAMLAYERCASES_H
@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -24,7 +25,8 @@
 class RecordingStreamSink final : public StreamSink
 {
 public:
-    explicit RecordingStreamSink(std::string recordType = "record") : _recordType(std::move(recordType))
+    explicit RecordingStreamSink(std::string recordType = "record", std::string sequenceField = "sequence")
+        : _recordType(std::move(recordType)), _sequenceField(std::move(sequenceField))
     {
     }
 
@@ -60,7 +62,7 @@ public:
     {
         std::vector<uint64> out;
         for (nlohmann::json const& record : OfType(_recordType))
-            out.push_back(record["sequence"].get<uint64>());
+            out.push_back(record[_sequenceField].get<uint64>());
         return out;
     }
 
@@ -70,8 +72,15 @@ public:
         return _closed;
     }
 
+    std::string CloseReason() const
+    {
+        std::lock_guard const lock(_mutex);
+        return _closeReason;
+    }
+
 private:
     std::string _recordType;
+    std::string _sequenceField;
     mutable std::mutex _mutex;
     std::vector<nlohmann::json> _messages;
     std::string _closeReason;
@@ -93,9 +102,25 @@ struct StreamLayerCases
     using Service = typename Source::Service;
     using Request = typename Source::Request;
 
+    static std::string SequenceField()
+    {
+        if constexpr (requires { Source::SequenceField; })
+            return std::string(Source::SequenceField);
+        else
+            return "sequence";
+    }
+
+    static std::vector<std::string> StampFields()
+    {
+        if constexpr (requires { Source::StampFields; })
+            return std::vector<std::string>(std::begin(Source::StampFields), std::end(Source::StampFields));
+        else
+            return { "time", "epoch_ms" };
+    }
+
     static std::shared_ptr<RecordingStreamSink> Sink()
     {
-        return std::make_shared<RecordingStreamSink>(std::string(Source::RecordType));
+        return std::make_shared<RecordingStreamSink>(std::string(Source::RecordType), SequenceField());
     }
 
     static auto Open(Service& service, std::shared_ptr<RecordingStreamSink> const& sink, Request const& request = {})
@@ -121,8 +146,10 @@ struct StreamLayerCases
         EXPECT_EQ(messages.front()["backlog"], 25u);
         EXPECT_EQ(sink->Sequences(), SequenceRange(1, 25));
         nlohmann::json const first = sink->OfType(std::string(Source::RecordType)).front();
-        EXPECT_TRUE(first.contains("time"));
-        EXPECT_TRUE(first.contains("epoch_ms"));
+        for (std::string const& stamp : StampFields())
+        {
+            EXPECT_TRUE(first.contains(stamp)) << stamp;
+        }
     }
 
     static void ResumeAfterN(Hub& hub, Service& service)
@@ -240,7 +267,7 @@ struct StreamLayerCases
 
         nlohmann::json const page = nlohmann::json::parse(Service::BacklogJson(hub, 20, 4), nullptr, false);
         ASSERT_EQ(page["records"].size(), 4u) << "a page is capped and the caller comes back for more";
-        EXPECT_EQ(page["records"][0]["sequence"], 21u);
+        EXPECT_EQ(page["records"][0][SequenceField()], 21u);
     }
 };
 

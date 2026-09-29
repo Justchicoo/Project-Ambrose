@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Session rules for one app: how long to wait for SessionAccept, how often the server sends keepalives, how long it waits for proof of life, how many protocol strikes close a session, how many dropped messages a session may send before each further one strikes, and how fast a session's pings are answered.
+ * Session rules for one app: handshake and keepalive timing, protocol strikes, dropped-message and ping budgets, and the live inbound frame-rate budget.
  */
 
 #ifndef AMBROSE_SESSIONSETTINGS_H
@@ -28,6 +28,8 @@ struct SessionSettings
     static constexpr uint32 DefaultDroppedMessagesPerSecond = 16;
     static constexpr uint32 DefaultPingBurst = 16;
     static constexpr uint32 DefaultPingsPerSecond = 4;
+    static constexpr uint32 DefaultRateLimitBurst = 150;
+    static constexpr uint32 DefaultRateLimitPerSecond = 50;
     static constexpr uint32 MaxBudgetRate = 100000;
 
     std::chrono::milliseconds AcceptTimeout{ std::chrono::seconds(DefaultAcceptTimeoutSeconds) };
@@ -40,6 +42,8 @@ struct SessionSettings
     uint32 DroppedMessagesPerSecond = DefaultDroppedMessagesPerSecond;
     uint32 PingBurst = DefaultPingBurst;
     uint32 PingsPerSecond = DefaultPingsPerSecond;
+    uint32 RateLimitBurst = DefaultRateLimitBurst;
+    uint32 RateLimitPerSecond = DefaultRateLimitPerSecond;
 
     static SessionSettings Load(ConfigMgr const& config, std::vector<std::string>* problems = nullptr);
 

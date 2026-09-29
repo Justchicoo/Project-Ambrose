@@ -58,3 +58,18 @@ TEST(TokenBucketTest, ClockGoingBackwardsDoesNotRefill)
     clock.now -= std::chrono::seconds(5);
     EXPECT_FALSE(bucket.TryConsume());
 }
+
+TEST(TokenBucketTest, LoweringLiveLimitsCapsTheAvailableBurstImmediately)
+{
+    FakeClock clock;
+    TokenBucket bucket(150, 50.0, clock.Source());
+    ASSERT_TRUE(bucket.TryConsume(10));
+
+    bucket.SetLimits(150, 1.0);
+
+    EXPECT_DOUBLE_EQ(bucket.GetAvailableTokens(), 1.0);
+    EXPECT_TRUE(bucket.TryConsume());
+    EXPECT_FALSE(bucket.TryConsume());
+    clock.now += std::chrono::seconds(1);
+    EXPECT_TRUE(bucket.TryConsume());
+}

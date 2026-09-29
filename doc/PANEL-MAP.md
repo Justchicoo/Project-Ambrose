@@ -521,8 +521,8 @@ A hosting panel manages a container with a console. These milestones exist becau
 | Prometheus metrics and provisioned Grafana dashboards | 17.09, 17.10 | Graphs of game figures such as tick time and players per zone |
 | Terminal dashboard mode | 17.11 | For an operator on a shell with no browser |
 | Live settings and reload pages | 17.12, 17.13 | Typed, bounded game settings that apply without a restart |
-| Game accounts, bans, characters and online players | 17.21 | A hosting panel has no player accounts to manage |
-| Desktop control app that starts everything from one icon | 17.24 | A player hosting for themselves, not a hosting customer |
+| Game accounts, bans, characters and online players | 17.21, 17.177 | A hosting panel has no player accounts to manage |
+| A desktop panel program that hosts everything from one icon and opens panels on other machines | 17.181, 17.24 | A player hosting for themselves, not a hosting customer |
 | Realms and zones, with population and zone actions | 17.31 | Wizard101 realms and loaded zones |
 | Realm maintenance with a bypass level | 17.32 | Closing one realm to players while game masters check it |
 | Announcements and timed game events | 17.33 | In-game messages and reverting rate changes |

@@ -9,6 +9,7 @@ packages/ui/src/tokens/tokens.css
 packages/ui/src/tokens/tokens.ts
 packages/ui/src/tokens/variables.css
 packages/ui/src/icons/icons.ts
+apps/dashboard/src/lib/protocol.ts
 packages/ui/src/fonts/
 design/icons/
 /src/

@@ -1,0 +1,294 @@
+{
+    "subject":  "F-41 service 10 SCRIPT",
+    "area":  "protocol",
+    "claim":  "The r806919 Wizard 1.610 Root.wad message definitions identify service 10 as SCRIPT and define its ordered message tags and field types as catalogued here.",
+    "revision":  "r806919.Wizard_1_610",
+    "method":  "static",
+    "how_to_repeat":  [
+                          "Read ScriptDebuggerMessages.xml from Root.wad in your own r806919 install with `bindecode` --client \u003cinstall\u003e --text ScriptDebuggerMessages.xml.",
+                          "Read ServiceID and ProtocolType from _ProtocolInfo/RECORD; enumerate each message RECORD and retain each non-metadata field name and its TYPE (or the supported TPYE/TYP spelling, with GlobalID inferred as GID).",
+                          "Use explicit _MsgOrder or _MsgType where the first message has it; otherwise sort distinct message element tags by byte-ordinal order and number them from 1, collapsing repeated tags only when their fields match.",
+                          "Run `bindecode --client \u003cinstall\u003e --sweep` as an archive-decode check; the sweep covers BINd entries, not the XML message definitions."
+                      ],
+    "evidence":  [
+                     "`bindecode` --client \u003cinstall\u003e --text ScriptDebuggerMessages.xml read this definition from the local r806919 Root.wad; it declares service id 10, protocol name SCRIPT, and 20 distinct ordered messages with 29 fields.",
+                     "The service uses tag-ordinal order; the catalog records every message tag/name, resolved order, and field name/type, excluding underscore-prefixed metadata.",
+                     "`bindecode --client \u003cinstall\u003e --sweep --threads 8` reported 173088 entries, 134640 BINd files, 134635 decoded, 5 unknown-root-class failures and 0 unreadable entries; those five BINd failures do not validate or contradict this XML catalog."
+                 ],
+    "disproof":  "A repeat read of ScriptDebuggerMessages.xml from another r806919 install that yields a different service id/name, distinct message order, or field name/type under the stated ordering rule.",
+    "confidence":  "high",
+    "submitted_by":  "MeruneFleuruwu",
+    "submitted_on":  "2026-09-27",
+    "status":  "claimed",
+    "service":  {
+                    "id":  10,
+                    "name":  "SCRIPT",
+                    "version":  1,
+                    "entry":  "ScriptDebuggerMessages.xml",
+                    "ordering":  "tag-ordinal",
+                    "messages":  [
+                                     {
+                                         "tag":  "MSG_ADD_BREAKPOINT",
+                                         "name":  "MSG_ADD_BREAKPOINT",
+                                         "order":  1,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "File",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Line",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_ADD_MESSAGE",
+                                         "name":  "MSG_ADD_MESSAGE",
+                                         "order":  2,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Message",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_ADD_PROCESS",
+                                         "name":  "MSG_ADD_PROCESS",
+                                         "order":  3,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PID",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "Root",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Zone",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Name",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Status",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_ADD_WATCH",
+                                         "name":  "MSG_ADD_WATCH",
+                                         "order":  4,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Variable",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_ATTACH_PROCESS",
+                                         "name":  "MSG_ATTACH_PROCESS",
+                                         "order":  5,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PID",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_BREAK_PROCESS",
+                                         "name":  "MSG_BREAK_PROCESS",
+                                         "order":  6,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DEL_BREAKPOINT",
+                                         "name":  "MSG_DEL_BREAKPOINT",
+                                         "order":  7,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "File",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Line",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DEL_WATCH",
+                                         "name":  "MSG_DEL_WATCH",
+                                         "order":  8,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Variable",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DETACH_PROCESS",
+                                         "name":  "MSG_DETACH_PROCESS",
+                                         "order":  9,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PID",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_ENUM_PROCESS",
+                                         "name":  "MSG_ENUM_PROCESS",
+                                         "order":  10,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_KILL_PROCESS",
+                                         "name":  "MSG_KILL_PROCESS",
+                                         "order":  11,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PID",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PROCESS_STATE",
+                                         "name":  "MSG_PROCESS_STATE",
+                                         "order":  12,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PID",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "State",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PROCESS_STATUS",
+                                         "name":  "MSG_PROCESS_STATUS",
+                                         "order":  13,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PID",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "Status",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_REMOVE_PROCESS",
+                                         "name":  "MSG_REMOVE_PROCESS",
+                                         "order":  14,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PID",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "Name",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Status",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_RUN_PROCESS",
+                                         "name":  "MSG_RUN_PROCESS",
+                                         "order":  15,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SEND_STATE",
+                                         "name":  "MSG_SEND_STATE",
+                                         "order":  16,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SET_VARIABLE",
+                                         "name":  "MSG_SET_VARIABLE",
+                                         "order":  17,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Variable",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Value",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_START_PROCESS",
+                                         "name":  "MSG_START_PROCESS",
+                                         "order":  18,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "DataRoot",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Zone",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Script",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "StartAttached",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "StartRunning",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_STEPOVER_PROCESS",
+                                         "name":  "MSG_STEPOVER_PROCESS",
+                                         "order":  19,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_STEP_PROCESS",
+                                         "name":  "MSG_STEP_PROCESS",
+                                         "order":  20,
+                                         "fields":  [
+
+                                                    ]
+                                     }
+                                 ]
+                }
+}

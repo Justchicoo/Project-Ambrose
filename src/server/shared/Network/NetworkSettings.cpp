@@ -40,9 +40,21 @@ NetworkSettings NetworkSettings::Load(ConfigMgr const& config, std::string const
         report("Network.MaxDmlMessages = 0 would reject every DML frame; using 1");
 
     uint64 const sendQueue = config.GetOption<uint64>("Network.MaxSendQueueBytes", FrameLimits::DefaultMaxSendQueueBytes, true);
-    settings.Limits.MaxSendQueueBytes = static_cast<std::size_t>(std::clamp<uint64>(sendQueue, MinSendQueueBytes, MaxSendQueueBytesLimit));
-    if (settings.Limits.MaxSendQueueBytes != sendQueue)
-        report(fmt::format("Network.MaxSendQueueBytes = {} is outside {}-{}; using {}", sendQueue, MinSendQueueBytes, MaxSendQueueBytesLimit, settings.Limits.MaxSendQueueBytes));
+    uint64 const highWater = config.GetOption<uint64>("Network.SendQueueHighWater", sendQueue, true);
+    settings.Limits.MaxSendQueueBytes = static_cast<std::size_t>(std::clamp<uint64>(highWater, MinSendQueueBytes, MaxSendQueueBytesLimit));
+    if (settings.Limits.MaxSendQueueBytes != highWater)
+        report(fmt::format("Network.SendQueueHighWater = {} is outside {}-{}; using {}", highWater, MinSendQueueBytes, MaxSendQueueBytesLimit, settings.Limits.MaxSendQueueBytes));
+
+    auto perIpLimit = [&](std::string const& option, uint32 fallback)
+    {
+        uint32 const configured = config.GetOption<uint32>(option, fallback, true);
+        uint32 const value = std::clamp<uint32>(configured, 1, MaxPerIPLimit);
+        if (value != configured)
+            report(fmt::format("{} = {} is outside 1-{}; using {}", option, configured, MaxPerIPLimit, value));
+        return value;
+    };
+    settings.MaxConnectionsPerIP = perIpLimit("Network.MaxConnectionsPerIP", DefaultMaxConnectionsPerIP);
+    settings.AcceptRatePerSecond = perIpLimit("Network.AcceptRatePerSecond", DefaultAcceptRatePerSecond);
 
     std::string const longLength = config.GetOption<std::string>("Network.LongFrameLength", "BodyOnly", true);
     if (Ambrose::EqualsIgnoreCase(longLength, "HeaderAndBody"))
@@ -59,5 +71,6 @@ bool NetworkSettings::operator==(NetworkSettings const& other) const noexcept
 {
     return BindIp == other.BindIp && Port == other.Port && Threads == other.Threads && Limits.MaxFrameSize == other.Limits.MaxFrameSize
         && Limits.LongLength == other.Limits.LongLength && Limits.MaxDmlMessages == other.Limits.MaxDmlMessages
-        && Limits.MaxSendQueueBytes == other.Limits.MaxSendQueueBytes && OutKBuff == other.OutKBuff && TcpNoDelay == other.TcpNoDelay;
+        && Limits.MaxSendQueueBytes == other.Limits.MaxSendQueueBytes && MaxConnectionsPerIP == other.MaxConnectionsPerIP
+        && AcceptRatePerSecond == other.AcceptRatePerSecond && OutKBuff == other.OutKBuff && TcpNoDelay == other.TcpNoDelay;
 }

@@ -1,0 +1,858 @@
+{
+    "subject":  "F-41 service 9 PET",
+    "area":  "protocol",
+    "claim":  "The r806919 Wizard 1.610 Root.wad message definitions identify service 9 as PET and define its ordered message tags and field types as catalogued here.",
+    "revision":  "r806919.Wizard_1_610",
+    "method":  "static",
+    "how_to_repeat":  [
+                          "Read PetMessages.xml from Root.wad in your own r806919 install with `bindecode` --client \u003cinstall\u003e --text PetMessages.xml.",
+                          "Read ServiceID and ProtocolType from _ProtocolInfo/RECORD; enumerate each message RECORD and retain each non-metadata field name and its TYPE (or the supported TPYE/TYP spelling, with GlobalID inferred as GID).",
+                          "Use explicit _MsgOrder or _MsgType where the first message has it; otherwise sort distinct message element tags by byte-ordinal order and number them from 1, collapsing repeated tags only when their fields match.",
+                          "Run `bindecode --client \u003cinstall\u003e --sweep` as an archive-decode check; the sweep covers BINd entries, not the XML message definitions."
+                      ],
+    "evidence":  [
+                     "`bindecode` --client \u003cinstall\u003e --text PetMessages.xml read this definition from the local r806919 Root.wad; it declares service id 9, protocol name PET, and 55 distinct ordered messages with 109 fields.",
+                     "The service uses tag-ordinal order; the catalog records every message tag/name, resolved order, and field name/type, excluding underscore-prefixed metadata.",
+                     "`bindecode --client \u003cinstall\u003e --sweep --threads 8` reported 173088 entries, 134640 BINd files, 134635 decoded, 5 unknown-root-class failures and 0 unreadable entries; those five BINd failures do not validate or contradict this XML catalog."
+                 ],
+    "disproof":  "A repeat read of PetMessages.xml from another r806919 install that yields a different service id/name, distinct message order, or field name/type under the stated ordering rule.",
+    "confidence":  "high",
+    "submitted_by":  "MeruneFleuruwu",
+    "submitted_on":  "2026-09-27",
+    "status":  "claimed",
+    "service":  {
+                    "id":  9,
+                    "name":  "PET",
+                    "version":  1,
+                    "entry":  "PetMessages.xml",
+                    "ordering":  "tag-ordinal",
+                    "messages":  [
+                                     {
+                                         "tag":  "MSG_CHEERCOSTMAPUPDATE",
+                                         "name":  "MSG_CHEERCOSTMAPUPDATE",
+                                         "order":  1,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "CheerCostMods",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DERBYEFFECTAPPLY",
+                                         "name":  "MSG_DERBYEFFECTAPPLY",
+                                         "order":  2,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Game",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DERBYEFFECTREMOVE",
+                                         "name":  "MSG_DERBYEFFECTREMOVE",
+                                         "order":  3,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Game",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "ID",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DERBYEFFECTSLISTUPDATE",
+                                         "name":  "MSG_DERBYEFFECTSLISTUPDATE",
+                                         "order":  4,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DERBYLOCATION",
+                                         "name":  "MSG_DERBYLOCATION",
+                                         "order":  5,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "RacerId",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "TargetId",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "XLoc",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "YLoc",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "ZLoc",
+                                                            "type":  "FLT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DERBYPETENERGYINFO",
+                                         "name":  "MSG_DERBYPETENERGYINFO",
+                                         "order":  6,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Cost",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Current",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Maximum",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "GID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DERBYSTATMOD",
+                                         "name":  "MSG_DERBYSTATMOD",
+                                         "order":  7,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DERBYSYNC",
+                                         "name":  "MSG_DERBYSYNC",
+                                         "order":  8,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "RacerId",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "RacePositionX",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "RacePositionY",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "RacePositionZ",
+                                                            "type":  "FLT"
+                                                        },
+                                                        {
+                                                            "name":  "Lane",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_HATCHEGGNOW",
+                                         "name":  "MSG_HATCHEGGNOW",
+                                         "order":  9,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "EggGID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Gold",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_LENTPET",
+                                         "name":  "MSG_LENTPET",
+                                         "order":  10,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETDERBYBUFF",
+                                         "name":  "MSG_PETDERBYBUFF",
+                                         "order":  11,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Add",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "Type",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "PetID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETDERBYCHEER",
+                                         "name":  "MSG_PETDERBYCHEER",
+                                         "order":  12,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PetIndex",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETDERBYJUMPDUCK",
+                                         "name":  "MSG_PETDERBYJUMPDUCK",
+                                         "order":  13,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PetIndex",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETDERBYLAP",
+                                         "name":  "MSG_PETDERBYLAP",
+                                         "order":  14,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PetIndex",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "Count",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETDERBYMODIFYSTAT",
+                                         "name":  "MSG_PETDERBYMODIFYSTAT",
+                                         "order":  15,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Name",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "Value",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Type",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETDERBYMORALE",
+                                         "name":  "MSG_PETDERBYMORALE",
+                                         "order":  16,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PetIndex",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "Morale",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETDERBYPHOTOFINISH",
+                                         "name":  "MSG_PETDERBYPHOTOFINISH",
+                                         "order":  17,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Rank",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "PetIndex",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETDERBYPLAYERLEFT",
+                                         "name":  "MSG_PETDERBYPLAYERLEFT",
+                                         "order":  18,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PetIndex",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETDERBYSLOW",
+                                         "name":  "MSG_PETDERBYSLOW",
+                                         "order":  19,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PetIndex",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETDERBYSPEED",
+                                         "name":  "MSG_PETDERBYSPEED",
+                                         "order":  20,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PetIndex",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "Speed",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETDERBYSTART",
+                                         "name":  "MSG_PETDERBYSTART",
+                                         "order":  21,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GoGoGo",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETDERBYSWITCHLANE",
+                                         "name":  "MSG_PETDERBYSWITCHLANE",
+                                         "order":  22,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PetIndex",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "Lane",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "MsgID",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETDERBYSWITCHLANEFAIL",
+                                         "name":  "MSG_PETDERBYSWITCHLANEFAIL",
+                                         "order":  23,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETDERBYUSETALENT",
+                                         "name":  "MSG_PETDERBYUSETALENT",
+                                         "order":  24,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "TalentID",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "Used",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "PetIndex",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETEGGMORPHED",
+                                         "name":  "MSG_PETEGGMORPHED",
+                                         "order":  25,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PetTemplateGID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "PetName",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "HatchTime",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETENERGYMAX",
+                                         "name":  "MSG_PETENERGYMAX",
+                                         "order":  26,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "MaxEnergy",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETENERGYTICK",
+                                         "name":  "MSG_PETENERGYTICK",
+                                         "order":  27,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Energy",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "MaxEnergy",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "TickTime",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMEDANCE",
+                                         "name":  "MSG_PETGAMEDANCE",
+                                         "order":  28,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Moves",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMEDATA",
+                                         "name":  "MSG_PETGAMEDATA",
+                                         "order":  29,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Game",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMEDERBYRESULTS",
+                                         "name":  "MSG_PETGAMEDERBYRESULTS",
+                                         "order":  30,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMEDROPBONUS",
+                                         "name":  "MSG_PETGAMEDROPBONUS",
+                                         "order":  31,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GameCommand",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "Bonus",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMEDROPOBJECT",
+                                         "name":  "MSG_PETGAMEDROPOBJECT",
+                                         "order":  32,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GameCommand",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "GID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMEEND",
+                                         "name":  "MSG_PETGAMEEND",
+                                         "order":  33,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Game",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMEENDING",
+                                         "name":  "MSG_PETGAMEENDING",
+                                         "order":  34,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Game",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMEINDIVIDUALRESULTS",
+                                         "name":  "MSG_PETGAMEINDIVIDUALRESULTS",
+                                         "order":  35,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMEINIT",
+                                         "name":  "MSG_PETGAMEINIT",
+                                         "order":  36,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Game",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "MinLevel",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "Track",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMEJOIN",
+                                         "name":  "MSG_PETGAMEJOIN",
+                                         "order":  37,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Game",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Track",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMEJOINRSP",
+                                         "name":  "MSG_PETGAMEJOINRSP",
+                                         "order":  38,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Game",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Success",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMEJUMP",
+                                         "name":  "MSG_PETGAMEJUMP",
+                                         "order":  39,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMEMAZE",
+                                         "name":  "MSG_PETGAMEMAZE",
+                                         "order":  40,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GameCommand",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "GameData",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "ObjectID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMEREADY",
+                                         "name":  "MSG_PETGAMEREADY",
+                                         "order":  41,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMESNACKFEEDFAILED",
+                                         "name":  "MSG_PETGAMESNACKFEEDFAILED",
+                                         "order":  42,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMESNACKFEEDSUCCESS",
+                                         "name":  "MSG_PETGAMESNACKFEEDSUCCESS",
+                                         "order":  43,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETGAMESTART",
+                                         "name":  "MSG_PETGAMESTART",
+                                         "order":  44,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Game",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETHATCHED",
+                                         "name":  "MSG_PETHATCHED",
+                                         "order":  45,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "TemplateID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETLEVELUP",
+                                         "name":  "MSG_PETLEVELUP",
+                                         "order":  46,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "OverallRating",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "ActiveRating",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "PetLevel",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "NewTalent",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "NewDerbyPower",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "NewJewel",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "Display",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETMORPHCANAFFORD",
+                                         "name":  "MSG_PETMORPHCANAFFORD",
+                                         "order":  47,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "CanAfford",
+                                                            "type":  "BYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETMORPHINGSLOT",
+                                         "name":  "MSG_PETMORPHINGSLOT",
+                                         "order":  48,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Removed",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "ExpireTimeCount",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETMORPHREADY",
+                                         "name":  "MSG_PETMORPHREADY",
+                                         "order":  49,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Confirmed",
+                                                            "type":  "BYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETMORPHSET",
+                                         "name":  "MSG_PETMORPHSET",
+                                         "order":  50,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "PetID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETSNACKADD",
+                                         "name":  "MSG_PETSNACKADD",
+                                         "order":  51,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETSNACKREMOVE",
+                                         "name":  "MSG_PETSNACKREMOVE",
+                                         "order":  52,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "ItemID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETSNACKREMOVEREQUEST",
+                                         "name":  "MSG_PETSNACKREMOVEREQUEST",
+                                         "order":  53,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETSNACKUPDATE",
+                                         "name":  "MSG_PETSNACKUPDATE",
+                                         "order":  54,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "ItemID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Quantity",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_PETUPDATEBEHAVIOR",
+                                         "name":  "MSG_PETUPDATEBEHAVIOR",
+                                         "order":  55,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "GlobalID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Data",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     }
+                                 ]
+                }
+}

@@ -96,9 +96,9 @@ void AdminCommand::Register(AdminRouter& router, ConsoleCommandTable const& tabl
         table, std::move(appName), std::move(auditFile));
 }
 
-void AdminCommand::Register(AdminRouter& router, Runner runner, ConsoleCommandTable const& table, std::string appName, std::filesystem::path auditFile)
+void AdminCommand::Register(AdminRouter& router, Runner runner, ConsoleCommandTable const& table, std::string appName, std::filesystem::path auditFile, Describer describe)
 {
-    router.AddGuarded("POST", "/api/command", "console.write", [runner = std::move(runner), &table, appName = std::move(appName), auditFile = std::move(auditFile)](AdminRequest const& request)
+    router.AddGuarded("POST", "/api/command", "console.write", [runner = std::move(runner), describe = std::move(describe), &table, appName = std::move(appName), auditFile = std::move(auditFile)](AdminRequest const& request)
     {
         if (request.Body.size() > MaxCommandBytes)
             return AdminResponse::Invalid("A command is at most 4096 bytes", { { "command", "this is longer than 4096 bytes" } });
@@ -126,32 +126,34 @@ void AdminCommand::Register(AdminRouter& router, Runner runner, ConsoleCommandTa
         std::string const line(Ambrose::Trim(command->get_ref<std::string const&>()));
         uint8 const asked = level == body.end() ? ConsoleLevel : static_cast<uint8>(level->get<uint64>());
         bool const confirmed = confirm != body.end() && confirm->get<bool>();
-        std::string const written = table.DescribeForLog(line);
+        std::string const written = describe ? describe(line) : table.DescribeForLog(line);
 
-        AdminCommandOutcome const outcome = runner(line, asked, confirmed);
+        AdminCommandOutcome outcome = runner(line, asked, confirmed);
+        std::string const recordedCommand = outcome.Command.empty() ? written : outcome.Command;
         auto const now = std::chrono::system_clock::now();
 
         nlohmann::json row;
         row["time"] = std::string(LogTimestamp::FormatPrefix(now, true));
         row["epoch_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
         row["app"] = appName;
-        row["who"] = request.Principal;
+        std::string const actor = request.ForwardedActor.empty() ? request.Principal : request.ForwardedActor;
+        row["who"] = actor;
         row["address"] = request.RemoteAddress;
         row["request"] = request.Id;
-        row["command"] = written;
+        row["command"] = recordedCommand;
         row["level"] = asked;
         row["confirmed"] = confirmed;
         row["ran"] = outcome.Ran;
         row["refused"] = outcome.Refused;
         row["reason"] = outcome.Reason;
         Append(auditFile, row);
-        LOG_INFO(CommandCategory, "{} from {} {} {} (request {})", request.Principal.empty() ? std::string("an operator") : request.Principal,
-            request.RemoteAddress, outcome.Ran ? "ran" : "was refused", written, request.Id);
+        LOG_INFO(CommandCategory, "{} from {} {} {} (request {})", actor.empty() ? std::string("an operator") : actor,
+            request.RemoteAddress, outcome.Ran ? "ran" : "was refused", recordedCommand, request.Id);
         if (outcome.Refused)
-            LOG_INFO(CommandCategory, "{} was refused because {}", written, outcome.Reason);
+            LOG_INFO(CommandCategory, "{} was refused because {}", recordedCommand, outcome.Reason);
 
         nlohmann::json answer;
-        answer["command"] = written;
+        answer["command"] = recordedCommand;
         answer["success"] = outcome.Ran;
         answer["refused"] = outcome.Refused;
         answer["needs_confirm"] = outcome.NeedsConfirm;

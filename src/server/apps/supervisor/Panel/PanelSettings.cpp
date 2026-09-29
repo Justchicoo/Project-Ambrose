@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads and writes the panel's general, mail and security settings with explicit types and bounds, keeps secrets out of answers and audit properties, and refuses listener-owned options instead of letting this page become their enforcement point.
+ * Reads and writes the panel's general, mail and security settings with explicit types and bounds, keeps secrets out of answers and audit properties, refuses listener-owned options instead of letting this page become their enforcement point, and answers an option the panel enforces from its own config with the value and layer it was handed rather than a default, so the page shows what is in force.
  */
 
 #include "PanelSettings.h"
@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <map>
 #include <stdexcept>
+#include <vector>
 
 namespace
 {
@@ -54,6 +55,7 @@ namespace
         Definition{ "security", "Panel.TrustedProxies", "", false, true, "environment", 0, 0 },
         Definition{ "security", "Panel.BindIP", "127.0.0.1", false, true, "config", 0, 0 },
         Definition{ "security", "Panel.AllowPlainHttpRemote", "0", false, true, "config", 0, 1 },
+        Definition{ "security", "Panel.TwoFactorRequired", "none", false, true, "config", 0, 0 },
     };
 
     Definition const* Find(std::string_view key)
@@ -112,14 +114,28 @@ nlohmann::json PanelSettings::Answer(std::string_view group, std::string& error)
     if (!error.empty())
         return {};
 
+    std::map<std::string, std::pair<std::string, std::string>, std::less<>> owned;
+    {
+        std::lock_guard const lock(_ownedMutex);
+        owned = _owned;
+    }
     for (Definition const& definition : Definitions)
     {
         if (!group.empty() && definition.Group != group)
             continue;
         std::string value = saved.contains(std::string(definition.Key)) ? saved[std::string(definition.Key)] : std::string(definition.Default);
+        std::string layer(definition.Layer);
         std::string const environment = EnvironmentValue("AMBROSE_PANEL_TRUSTED_PROXIES");
         if (definition.Key == "Panel.TrustedProxies" && !environment.empty())
+        {
             value = environment;
+            layer = "environment";
+        }
+        if (auto const pushed = owned.find(definition.Key); definition.Locked && pushed != owned.end())
+        {
+            value = pushed->second.first;
+            layer = pushed->second.second;
+        }
         nlohmann::json row{
             { "key", definition.Key },
             { "group", definition.Group },
@@ -127,7 +143,7 @@ nlohmann::json PanelSettings::Answer(std::string_view group, std::string& error)
             { "default", definition.Secret && !definition.Default.empty() ? "***" : definition.Default },
             { "secret", definition.Secret },
             { "locked", definition.Locked },
-            { "layer", definition.Key == "Panel.TrustedProxies" && !environment.empty() ? "environment" : definition.Layer },
+            { "layer", layer },
             { "minimum", definition.Minimum },
             { "maximum", definition.Maximum },
         };
@@ -136,22 +152,42 @@ nlohmann::json PanelSettings::Answer(std::string_view group, std::string& error)
     return nlohmann::json{ { "schema", 1 }, { "settings", std::move(settings) } };
 }
 
-bool PanelSettings::Update(nlohmann::json const& values, int64 userId, std::string& error)
+void PanelSettings::SetOwned(std::string_view key, std::string value, std::string layer)
 {
+    std::lock_guard const lock(_ownedMutex);
+    _owned.insert_or_assign(std::string(key), std::pair{ std::move(value), std::move(layer) });
+}
+
+std::string PanelSettings::ValueOf(std::string_view key) const
+{
+    Definition const* const definition = Find(key);
+    if (!definition)
+        return {};
+    std::string error;
+    std::optional<PanelStore::Statement> rows = _store.Prepare("SELECT value FROM panel_setting WHERE key = ?", error);
+    if (!rows)
+        return std::string(definition->Default);
+    rows->Bind(1, key);
+    if (!rows->Step(error))
+        return std::string(definition->Default);
+    return rows->Text(0);
+}
+
+bool PanelSettings::Update(nlohmann::json const& values, int64 userId, std::string& error, bool transactionAlreadyOpen)
+{
+    error.clear();
     if (!values.is_object())
     {
         error = "settings must be an object";
         return false;
     }
-    if (!_store.Begin(error))
-        return false;
+    std::vector<std::pair<Definition const*, std::string>> validated;
     for (auto const& [key, raw] : values.items())
     {
         Definition const* definition = Find(key);
         if (!definition || definition->Locked || !raw.is_string())
         {
             error = definition && definition->Locked ? std::string(key) + " is locked by " + std::string(definition->Layer) : "unknown or invalid setting " + key;
-            _store.Rollback();
             return false;
         }
         std::string const value = raw.get<std::string>();
@@ -160,31 +196,55 @@ bool PanelSettings::Update(nlohmann::json const& values, int64 userId, std::stri
         if (!NumberInRange(value, *definition))
         {
             error = std::string(key) + " is outside its allowed range";
-            _store.Rollback();
             return false;
         }
+        validated.emplace_back(definition, value);
+    }
+    if (!transactionAlreadyOpen && !_store.Begin(error))
+        return false;
+    if (transactionAlreadyOpen && !_store.Execute("SAVEPOINT panel_settings_update", error))
+        return false;
+    auto const rollback = [&]
+    {
+        if (transactionAlreadyOpen)
+        {
+            std::string ignored;
+            _store.Execute("ROLLBACK TO SAVEPOINT panel_settings_update", ignored);
+            _store.Execute("RELEASE SAVEPOINT panel_settings_update", ignored);
+        }
+        else
+            _store.Rollback();
+    };
+    for (std::pair<Definition const*, std::string> const& setting : validated)
+    {
+        Definition const& definition = *setting.first;
         std::optional<PanelStore::Statement> write = _store.Prepare(
             "INSERT INTO panel_setting (key, group_name, value, secret, updated_epoch_ms, updated_by) VALUES (?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_epoch_ms = excluded.updated_epoch_ms, updated_by = excluded.updated_by",
             error);
         if (!write)
         {
-            _store.Rollback();
+            rollback();
             return false;
         }
-        write->Bind(1, key);
-        write->Bind(2, definition->Group);
-        write->Bind(3, value);
-        write->Bind(4, definition->Secret ? 1 : 0);
+        write->Bind(1, definition.Key);
+        write->Bind(2, definition.Group);
+        write->Bind(3, setting.second);
+        write->Bind(4, definition.Secret ? 1 : 0);
         write->Bind(5, PanelStore::NowEpochMs());
         write->Bind(6, userId);
         if (!write->Run(error))
         {
-            _store.Rollback();
+            rollback();
             return false;
         }
     }
-    if (!_store.Commit(error))
+    if (transactionAlreadyOpen && !_store.Execute("RELEASE SAVEPOINT panel_settings_update", error))
+    {
+        rollback();
+        return false;
+    }
+    if (!transactionAlreadyOpen && !_store.Commit(error))
     {
         _store.Rollback();
         return false;

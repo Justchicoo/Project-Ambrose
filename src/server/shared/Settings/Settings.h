@@ -72,6 +72,7 @@ namespace SettingApps
     inline constexpr uint8 Game = 1;
     inline constexpr uint8 Login = 2;
     inline constexpr uint8 Patch = 4;
+    inline constexpr uint8 Supervisor = 8;
     inline constexpr uint8 Servers = Game | Login | Patch;
 }
 

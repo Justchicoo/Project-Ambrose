@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests that the world owns its thread: work queued on a session from any other thread runs on the one that calls Update and on no other, which is the whole reason the queue exists; the tick drains every session it holds before it runs the scripts, so a script sees what the messages of that tick left behind, a session removed while it holds queued work is not drained again, and the world says which thread it belongs to.
+ * Tests the world thread, the order of session and script work, named tick component timing and budgets, and bounded on-demand Chrome trace capture.
  */
 
 #include "GameSession.h"
+#include "MetricRegistry.h"
 #include "ScriptMgr.h"
 #include "SessionContext.h"
 #include "World.h"
@@ -12,10 +13,15 @@
 #include <asio/ip/tcp.hpp>
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <chrono>
 #include <atomic>
 #include <memory>
+#include <optional>
 #include <thread>
+#include <string>
 #include <vector>
 
 namespace
@@ -55,6 +61,25 @@ namespace
     private:
         std::vector<std::string>& _log;
     };
+
+    std::optional<Ambrose::MetricEntry> FindMetric(std::string_view name, std::string_view component)
+    {
+        std::vector<Ambrose::MetricEntry> const entries = sMetrics.Collect();
+        for (Ambrose::MetricEntry const& entry : entries)
+            if (entry.Name == name && std::find(entry.Labels.begin(), entry.Labels.end(),
+                std::pair<std::string, std::string>{ "component", std::string(component) }) != entry.Labels.end())
+                return entry;
+        return std::nullopt;
+    }
+
+    double HistogramSum(std::string_view name)
+    {
+        std::vector<Ambrose::MetricEntry> const entries = sMetrics.Collect();
+        for (Ambrose::MetricEntry const& entry : entries)
+            if (entry.Name == name && entry.AsHistogram)
+                return entry.AsHistogram->Sum();
+        return 0.0;
+    }
 }
 
 TEST_F(WorldTest, QueuedWorkRunsOnTheThreadThatCallsUpdate)
@@ -141,4 +166,87 @@ TEST_F(WorldTest, ASessionTheWorldNoLongerHoldsIsNotDrained)
     sWorld.Update(std::chrono::milliseconds(50));
     EXPECT_FALSE(ran) << "a session the world let go was still drained";
     EXPECT_EQ(session->GetQueuedMessageCount(), 1u);
+}
+
+TEST_F(WorldTest, TickBreakdownNamesTheSlowSubsystemAndAddsToTheTick)
+{
+    std::shared_ptr<GameSession> const session = MakeSession();
+    session->SetStatus(SessionStatus::Authenticated);
+    sWorld.AddSession(session);
+    ASSERT_TRUE(session->QueueInbound([] { std::this_thread::sleep_for(std::chrono::milliseconds(15)); }));
+
+    double const tickBefore = HistogramSum("ambrose_world_tick_seconds");
+    sWorld.Update(std::chrono::milliseconds(50));
+    double const tickSeconds = HistogramSum("ambrose_world_tick_seconds") - tickBefore;
+
+    std::optional<Ambrose::MetricEntry> const drain = FindMetric("ambrose_world_tick_subsystem_nanoseconds", "network_drain");
+    ASSERT_TRUE(drain);
+    ASSERT_NE(drain->AsGauge, nullptr);
+    EXPECT_GT(drain->AsGauge->Value(), 10000000);
+
+    double componentSeconds = 0.0;
+    for (Ambrose::MetricEntry const& entry : sMetrics.Collect())
+        if (entry.Name == "ambrose_world_tick_subsystem_nanoseconds" && entry.AsGauge)
+            componentSeconds += static_cast<double>(entry.AsGauge->Value()) / 1000000000.0;
+    EXPECT_NEAR(componentSeconds, tickSeconds, 0.0005);
+
+    std::optional<Ambrose::MetricEntry> const overBudget = FindMetric("ambrose_world_tick_subsystem_over_budget", "network_drain");
+    ASSERT_TRUE(overBudget);
+    ASSERT_NE(overBudget->AsGauge, nullptr);
+    EXPECT_EQ(overBudget->AsGauge->Value(), 1);
+
+    std::optional<Ambrose::MetricEntry> const movement = FindMetric("ambrose_world_tick_subsystem_available", "movement");
+    ASSERT_TRUE(movement);
+    ASSERT_NE(movement->AsGauge, nullptr);
+    EXPECT_EQ(movement->AsGauge->Value(), 1);
+    ASSERT_TRUE(FindMetric("ambrose_world_tick_subsystem_nanoseconds", "movement"));
+
+    for (std::string_view const name : { "database_waits", "combat" })
+    {
+        std::optional<Ambrose::MetricEntry> const unavailable = FindMetric("ambrose_world_tick_subsystem_available", name);
+        ASSERT_TRUE(unavailable) << name;
+        ASSERT_NE(unavailable->AsGauge, nullptr);
+        EXPECT_EQ(unavailable->AsGauge->Value(), 0) << name;
+    }
+}
+
+TEST_F(WorldTest, TickProfileIsBoundedTimedAndReadableAsAChromeTrace)
+{
+    EXPECT_FALSE(sWorld.StartTickProfile(0));
+    EXPECT_FALSE(sWorld.StartTickProfile(31));
+    ASSERT_TRUE(sWorld.StartTickProfile(1));
+    EXPECT_FALSE(sWorld.StartTickProfile(1));
+
+    sWorld.Update(std::chrono::milliseconds(50));
+    std::this_thread::sleep_for(std::chrono::milliseconds(1050));
+    sWorld.Update(std::chrono::milliseconds(50));
+
+    WorldTickProfileSnapshot const profile = sWorld.GetTickProfile();
+    EXPECT_FALSE(profile.Active);
+    EXPECT_TRUE(profile.Complete);
+    EXPECT_FALSE(profile.Truncated);
+    EXPECT_EQ(profile.RequestedSeconds, 1u);
+    ASSERT_FALSE(profile.Events.empty());
+
+    nlohmann::json const trace = nlohmann::json::parse(World::TickProfileTraceJson(profile));
+    ASSERT_TRUE(trace["traceEvents"].is_array());
+    EXPECT_FALSE(trace["traceEvents"].empty());
+    EXPECT_EQ(trace["metadata"]["requested_seconds"], 1);
+    EXPECT_FALSE(trace["metadata"]["truncated"].get<bool>());
+    EXPECT_EQ(trace["traceEvents"].front()["ph"], "X");
+    EXPECT_EQ(trace["traceEvents"].front()["cat"], "world_tick");
+}
+
+TEST_F(WorldTest, TickProfileStopsAtItsEventBound)
+{
+    ASSERT_TRUE(sWorld.StartTickProfile(30));
+    for (std::size_t tick = 0; tick < 12000; ++tick)
+        sWorld.Update(std::chrono::milliseconds(50));
+
+    WorldTickProfileSnapshot const profile = sWorld.GetTickProfile();
+    EXPECT_FALSE(profile.Active);
+    EXPECT_TRUE(profile.Complete);
+    EXPECT_TRUE(profile.Truncated);
+    EXPECT_LE(profile.Events.size(), 50000u);
+    EXPECT_EQ(profile.Events.size(), 50000u);
 }

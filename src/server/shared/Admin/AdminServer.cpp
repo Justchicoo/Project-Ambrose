@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the admin API on Crow: it resolves the token, tells every route whose socket is still open when the listener stops and detaches the handle first so nothing reaches a connection Crow has let go, refuses a bind the remote-access rule forbids, says out loud what a bind it allows still costs, proves no other socket holds the address before Crow takes it, answers every request from the shared table in a middleware that runs before Crow's own routing, with the host, origin, cookie and CSRF headers a browser session is checked by and a caller's request id when it has the router's form, answers from the same table again after it the requests Crow replies to before a connection has an address of its own, such as OPTIONS, reads the caller a relaying supervisor names and the rights it forwards, hands only a real WebSocket upgrade to the route registered for it under the same host check, authentication and the route's own permission, serves the built panel and its sign-in, which trades the token once for a session cookie named after the port because cookies ignore ports, logs every error with its request id, gives each open socket a handle a route may keep and write to from any thread until the socket closes, owning every socket's binding in the listener so one Crow drops without a close is still freed, queues a close behind the frames sent before it, and on a reload rotates the token live and ends every session with the old one, applies the panel folder, allowed hosts and session lifetimes without rebinding, rebinds a changed address, or brings the old listener back when the new one cannot bind.
+ * Runs the admin API on Crow: it hands every route the query as it was sent beside Crow's decoded values, resolves the token, tells every route whose socket is still open when the listener stops and detaches the handle first so nothing reaches a connection Crow has let go, refuses a bind the remote-access rule forbids, says out loud what a bind it allows still costs, proves no other socket holds the address before Crow takes it, answers every request from the shared table in a middleware that runs before Crow's own routing, with the host, origin, cookie and CSRF headers a browser session is checked by and a caller's request id when it has the router's form, answers from the same table again after it the requests Crow replies to before a connection has an address of its own, such as OPTIONS, reads the caller a relaying supervisor names and the rights it forwards, hands only a real WebSocket upgrade to the route registered for it under the same host check, authentication, admission rule and the route's own permission, or, for a route that admits its own upgrades, under the host check and that route's admission alone, logging a refusal by its path and never its query, keeps the request that opened each socket for the route to read, serves the built panel and its sign-in, which trades the token once for a session cookie named after the port because cookies ignore ports, logs every error with its request id, gives each open socket a handle a route may keep and write to from any thread until the socket closes, owning every socket's binding in the listener so one Crow drops without a close is still freed, queues a close, with the code its route chose, behind the frames sent before it, and on a reload rotates the token live and ends every session with the old one, applies the panel folder, allowed hosts and session lifetimes without rebinding, rebinds a changed address, or brings the old listener back when the new one cannot bind; an answer that sets more than one cookie sends every one of them.
  */
 
 #include "AdminServer.h"
@@ -77,12 +77,12 @@ namespace
         return bridge;
     }
 
-    void CloseAfterPendingFrames(crow::websocket::connection& connection, std::string reason);
+    void CloseAfterPendingFrames(crow::websocket::connection& connection, std::string reason, uint16 code);
 
     class CrowAdminSocket : public AdminSocket
     {
     public:
-        explicit CrowAdminSocket(crow::websocket::connection& connection) : _connection(&connection) {}
+        explicit CrowAdminSocket(crow::websocket::connection& connection, AdminRequest upgrade = {}) : _connection(&connection), _upgrade(std::move(upgrade)) {}
 
         void SendText(std::string text) override
         {
@@ -93,9 +93,14 @@ namespace
 
         void Close(std::string reason) override
         {
+            CloseWith(crow::websocket::CloseStatusCode::NormalClosure, std::move(reason));
+        }
+
+        void CloseWith(uint16 code, std::string reason) override
+        {
             std::lock_guard const lock(_mutex);
             if (_connection)
-                CloseAfterPendingFrames(*_connection, std::move(reason));
+                CloseAfterPendingFrames(*_connection, std::move(reason), code);
         }
 
         std::string GetRemoteAddress() override
@@ -103,6 +108,8 @@ namespace
             std::lock_guard const lock(_mutex);
             return _connection ? _connection->get_remote_ip() : std::string();
         }
+
+        AdminRequest const& GetUpgrade() const override { return _upgrade; }
 
         std::shared_ptr<AdminSocket> Keep() override { return _self.lock(); }
 
@@ -117,6 +124,7 @@ namespace
     private:
         std::mutex _mutex;
         crow::websocket::connection* _connection;
+        AdminRequest const _upgrade;
         std::weak_ptr<CrowAdminSocket> _self;
     };
 
@@ -124,15 +132,16 @@ namespace
     {
         AdminSocketRoute const* Route = nullptr;
         std::shared_ptr<CrowAdminSocket> Socket;
+        AdminRequest Upgrade = {};
     };
 
     class OpenSockets
     {
     public:
-        SocketBinding* Accept(AdminSocketRoute const* route)
+        SocketBinding* Accept(AdminSocketRoute const* route, AdminRequest upgrade)
         {
             std::lock_guard const lock(_mutex);
-            return _bindings.emplace_back(std::make_unique<SocketBinding>(SocketBinding{ route, nullptr })).get();
+            return _bindings.emplace_back(std::make_unique<SocketBinding>(SocketBinding{ route, nullptr, std::move(upgrade) })).get();
         }
 
         std::shared_ptr<CrowAdminSocket> Open(SocketBinding* binding, crow::websocket::connection& connection)
@@ -140,7 +149,7 @@ namespace
             std::lock_guard const lock(_mutex);
             if (std::ranges::none_of(_bindings, [binding](std::unique_ptr<SocketBinding> const& held) { return held.get() == binding; }))
                 return nullptr;
-            binding->Socket = std::make_shared<CrowAdminSocket>(connection);
+            binding->Socket = std::make_shared<CrowAdminSocket>(connection, binding->Upgrade);
             binding->Socket->Bind(binding->Socket);
             return binding->Socket;
         }
@@ -175,6 +184,7 @@ namespace
         incoming.RemoteAddress = router.ResolveAddress(request.remote_ip_address, request.get_header_value("x-forwarded-for"));
         incoming.UserAgent = request.get_header_value("user-agent");
         incoming.Authorization = request.get_header_value("Authorization");
+        incoming.ForwardedActor = request.get_header_value("X-Ambrose-Panel-User");
         incoming.Body = request.body;
         incoming.Host = request.get_header_value("Host");
         incoming.Origin = request.get_header_value("Origin");
@@ -183,6 +193,9 @@ namespace
         for (std::string const& key : request.url_params.keys())
             if (char const* const value = request.url_params.get(key))
                 incoming.QueryValues.emplace(key, value);
+        incoming.HasQuery = request.raw_url.find('?') != std::string::npos;
+        if (std::size_t const question = request.raw_url.find('?'); question != std::string::npos)
+            incoming.RawQuery = request.raw_url.substr(question + 1);
         if (std::string const offered = request.get_header_value("X-Request-Id"); AdminRouter::IsRequestId(offered))
             incoming.Id = offered;
         incoming.Actor = Ambrose::ForLog(request.get_header_value("X-Ambrose-Actor"), 128);
@@ -206,7 +219,12 @@ namespace
         if (!answer.ContentType.empty())
             response.set_header("Content-Type", answer.ContentType);
         for (std::pair<std::string, std::string> const& header : answer.Headers)
-            response.set_header(header.first, header.second);
+        {
+            if (Ambrose::EqualsIgnoreCase(header.first, "Set-Cookie"))
+                response.add_header(header.first, header.second);
+            else
+                response.set_header(header.first, header.second);
+        }
     }
 
     crow::response ToCrowResponse(AdminResponse const& answer)
@@ -253,15 +271,15 @@ namespace
 
     using AdminApp = crow::App<AdminGate>;
 
-    void CloseAfterPendingFrames(crow::websocket::connection& connection, std::string reason)
+    void CloseAfterPendingFrames(crow::websocket::connection& connection, std::string reason, uint16 code)
     {
         using PlainConnection = crow::websocket::Connection<crow::SocketAdaptor, AdminApp>;
         if (PlainConnection* const plain = dynamic_cast<PlainConnection*>(&connection))
         {
-            plain->post([plain, reason = std::move(reason)] { plain->close(reason, crow::websocket::CloseStatusCode::NormalClosure); });
+            plain->post([plain, reason = std::move(reason), code] { plain->close(reason, code); });
             return;
         }
-        connection.close(reason);
+        connection.close(reason, code);
     }
 
     std::optional<uint16> ReserveEndpoint(std::string const& bindIp, uint16 port, std::string& error)
@@ -445,6 +463,12 @@ std::string AdminServer::SessionCookie(std::string const& value, bool clear) con
 {
     AdminBrowserAccess const browser = _router.GetBrowserAccess();
     return fmt::format("{}={}; Path=/; HttpOnly; SameSite=Strict{}{}", browser.CookieName, value, browser.Secure ? "; Secure" : "", clear ? "; Max-Age=0" : "");
+}
+
+std::string AdminServer::MakeCookie(std::string_view suffix, std::string const& value, int64 maxAgeSeconds) const
+{
+    AdminBrowserAccess const browser = _router.GetBrowserAccess();
+    return fmt::format("{}{}={}; Path=/; HttpOnly; SameSite=Strict{}; Max-Age={}", browser.CookieName, suffix, value, browser.Secure ? "; Secure" : "", std::max<int64>(maxAgeSeconds, 0));
 }
 
 void AdminServer::ApplyLiveSettings(ListenerSettings const& settings)
@@ -734,13 +758,28 @@ bool AdminServer::Open(ListenerSettings const& settings, std::string const& toke
                     refuse(AdminRouter::HostRefused(incoming.Host));
                     return;
                 }
+                AdminSocketRoute const* const route = FindSocket(incoming.Path);
+                if (route && route->Admit)
+                {
+                    if (std::optional<AdminResponse> answer = route->Admit(incoming))
+                    {
+                        refuse(std::move(*answer));
+                        return;
+                    }
+                    *userdata = open->Accept(route, std::move(incoming));
+                    return;
+                }
                 AdminAuthResult const result = _router.Authenticate(incoming);
                 if (result != AdminAuthResult::Ok)
                 {
                     refuse(AdminRouter::Refused(result));
                     return;
                 }
-                AdminSocketRoute const* const route = FindSocket(incoming.Path);
+                if (std::optional<AdminResponse> held = _router.Admit(incoming))
+                {
+                    refuse(std::move(*held));
+                    return;
+                }
                 if (!route)
                 {
                     refuse(AdminResponse::Problem(404, "not_found", "The admin API has no WebSocket on " + incoming.Path));
@@ -760,7 +799,7 @@ bool AdminServer::Open(ListenerSettings const& settings, std::string const& toke
                         return;
                     }
                 }
-                *userdata = open->Accept(route);
+                *userdata = open->Accept(route, std::move(incoming));
             })
             .onopen([open = listener->Open](crow::websocket::connection& connection)
             {

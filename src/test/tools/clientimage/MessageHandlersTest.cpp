@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the message handler finder over a hand-assembled PeBuilder image laid out the way the client registers its handlers: a function that loads each handler's address, reads its plain MSG_Name, once as a string of its own and once as the tail of the debug name, and then loads its Class::MSG_Name, a registration that copies both names with mov and movups rather than loading them, two registrations in a row that each pass their handler to the registering call after the name, a second reference to one debug name in the same registration, a handler that reads its own plain and debug names as it posts itself for later, a registration that loads no function address, a function that only names itself in a log call, and a plain message name and an unreferenced debug name that register nothing; and which strings read as Class::MSG_Name at all.
+ * Tests the message handler finder over a hand-assembled PeBuilder image laid out the way the client registers its handlers: a function that loads each handler's address, reads its plain MSG_Name, once as a string of its own and once as the tail of the debug name, and then loads its Class::MSG_Name, a registration that copies both names with mov and movups rather than loading them, two registrations in a row that each pass their handler to the registering call after the name, a second reference to one debug name in the same registration, a handler that reads its own plain and debug names as it posts itself for later, a registration that loads no function address, a function that only names itself in a log call, and a plain message name and an unreferenced debug name that register nothing; a behavior that loads its handler, names its key Behavior_MSG_Name and a debug name of its own and then reads the plain name, and a key whose plain name is never read after it, which registers nothing; and which strings read as Class::MSG_Name or as a behavior's key at all.
  */
 
 #include "CodeBuffer.h"
@@ -33,6 +33,10 @@ namespace
     constexpr uint32 Register = Text + 0x140;
     constexpr uint32 HandlerX = Text + 0x150;
     constexpr uint32 HandlerY = Text + 0x160;
+    constexpr uint32 Rider = Text + 0x170;
+    constexpr uint32 HandlerZ = Text + 0x1A0;
+    constexpr uint32 Quiet = Text + 0x1B0;
+    constexpr uint32 HandlerQ = Text + 0x1D0;
     constexpr uint32 DebugA = Rdata + 0x10;
     constexpr uint32 DebugB = Rdata + 0x30;
     constexpr uint32 DebugC = Rdata + 0x50;
@@ -45,6 +49,10 @@ namespace
     constexpr uint32 PlainX = Rdata + 0x120;
     constexpr uint32 DebugY = Rdata + 0x130;
     constexpr uint32 PlainY = Rdata + 0x150;
+    constexpr uint32 KeyZ = Rdata + 0x160;
+    constexpr uint32 DebugZ = Rdata + 0x180;
+    constexpr uint32 PlainZ = Rdata + 0x1A8;
+    constexpr uint32 KeyQ = Rdata + 0x1B8;
 
     void Place(std::vector<uint8>& data, uint32 rva, std::string_view text)
     {
@@ -95,8 +103,18 @@ namespace
         code.Put(Register, { 0xC3 });
         code.Put(HandlerX, { 0xC3 });
         code.Put(HandlerY, { 0xC3 });
+        code.Lea(Rider + 0x00, 0x48, 0x05, HandlerZ);
+        code.Lea(Rider + 0x07, 0x48, 0x15, KeyZ);
+        code.Lea(Rider + 0x0E, 0x48, 0x05, DebugZ);
+        code.Lea(Rider + 0x15, 0x48, 0x15, PlainZ);
+        code.Put(Rider + 0x1C, { 0xC3 });
+        code.Put(HandlerZ, { 0xC3 });
+        code.Lea(Quiet + 0x00, 0x48, 0x05, HandlerQ);
+        code.Lea(Quiet + 0x07, 0x48, 0x15, KeyQ);
+        code.Put(Quiet + 0x0E, { 0xC3 });
+        code.Put(HandlerQ, { 0xC3 });
 
-        std::vector<uint8> rdata(0x180, 0);
+        std::vector<uint8> rdata(0x1E0, 0);
         Place(rdata, DebugA, "Window::MSG_Ping");
         Place(rdata, DebugB, "ns::Other<int>::MSG_Pong");
         Place(rdata, DebugC, "Loose::MSG_NoHandler");
@@ -109,6 +127,10 @@ namespace
         Place(rdata, PlainX, "MSG_PostX");
         Place(rdata, DebugY, "Poster::MSG_PostY");
         Place(rdata, PlainY, "MSG_PostY");
+        Place(rdata, KeyZ, "ZapBehavior_MSG_Zap");
+        Place(rdata, DebugZ, "ZapBehavior_ZapBehavior::MSG_Zap");
+        Place(rdata, PlainZ, "MSG_Zap");
+        Place(rdata, KeyQ, "QuietBehavior_MSG_Hush");
 
         PeBuilder builder(Base);
         EXPECT_EQ(builder.AddSection(".text", code.Bytes(), PeBuilder::CodeCharacteristics), Text);
@@ -124,6 +146,10 @@ namespace
         builder.AddFunction(Register, Register + 1);
         builder.AddFunction(HandlerX, HandlerX + 1);
         builder.AddFunction(HandlerY, HandlerY + 1);
+        builder.AddFunction(Rider, Rider + 0x1D);
+        builder.AddFunction(HandlerZ, HandlerZ + 1);
+        builder.AddFunction(Quiet, Quiet + 0x0F);
+        builder.AddFunction(HandlerQ, HandlerQ + 1);
         return builder.Build();
     }
 }
@@ -136,7 +162,7 @@ TEST(MessageHandlersTest, ARegistrationReadsThePlainNameAndLoadsTheHandlerBefore
     CodeIndex const index(*image);
 
     std::vector<MessageHandlerRegistration> const found = MessageHandlers::Find(*image, index);
-    ASSERT_EQ(found.size(), 6u) << "the log call naming its own function, the plain name alone and the debug name nothing refers to register nothing";
+    ASSERT_EQ(found.size(), 7u) << "the log call naming its own function, the plain name alone, the debug name nothing refers to and the key whose plain name is never read register nothing";
 
     EXPECT_EQ(found[0].Owner, "Mover");
     EXPECT_EQ(found[0].Handler, "MSG_ByMoveLongName");
@@ -163,6 +189,22 @@ TEST(MessageHandlersTest, ARegistrationReadsThePlainNameAndLoadsTheHandlerBefore
     EXPECT_EQ(found[4].Address, Base + HandlerX) << "a handler passed to the registering call after its name is found after it";
     EXPECT_EQ(found[5].Handler, "MSG_PostY");
     EXPECT_EQ(found[5].Address, Base + HandlerY) << "and the previous registration's handler, loaded before this name, is not taken for it";
+
+    EXPECT_EQ(found[6].Owner, "ZapBehavior");
+    EXPECT_EQ(found[6].Handler, "MSG_Zap");
+    EXPECT_EQ(found[6].Site, Base + Rider + 0x07) << "a behavior registers under its key";
+    EXPECT_EQ(found[6].Address, Base + HandlerZ) << "with the handler loaded before the key, and its own debug name read before the plain name is not a registration of its own";
+}
+
+TEST(MessageHandlersTest, ABehaviorsKeyIsItsClassAndAMessageNameAroundTheFirstUnderscore)
+{
+    EXPECT_EQ(MessageHandlers::SplitBehaviorName("RidableBehavior_MSG_RidersList"), 15u);
+    EXPECT_EQ(MessageHandlers::SplitBehaviorName("ClientEquipmentBehavior_MSG_EquipmentBehavior_EquipItem"), 23u);
+    EXPECT_EQ(MessageHandlers::SplitBehaviorName("ClientExpansionBehavior_Msg_UpdateExpansion"), 23u);
+    EXPECT_FALSE(MessageHandlers::SplitBehaviorName("Window_MSG_Ping")) << "only a behavior registers under a key";
+    EXPECT_FALSE(MessageHandlers::SplitBehaviorName("RidableBehavior_RidableBehavior::MSG_RideObject"));
+    EXPECT_FALSE(MessageHandlers::SplitBehaviorName("RidableBehavior_MSG_"));
+    EXPECT_FALSE(MessageHandlers::SplitBehaviorName("RidableBehavior_Ride"));
 }
 
 TEST(MessageHandlersTest, ADebugNameIsAnOwnerAndAMessageNameAroundTheLastSeparator)

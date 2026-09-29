@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds the common library of game-agnostic foundations.
+# Builds the common library of game-agnostic foundations, linking the Windows shell API and ntdll, whose NtCreateFile the file jail opens each path component relative to its parent through.
 ambrose_add_library(common "${CMAKE_CURRENT_SOURCE_DIR}")
 
 if(TARGET botan::botan)
@@ -24,5 +24,5 @@ target_link_libraries(common
         ZLIB::ZLIB)
 
 if(WIN32)
-    target_link_libraries(common PRIVATE shell32)
+    target_link_libraries(common PRIVATE shell32 ntdll)
 endif()

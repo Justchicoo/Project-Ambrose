@@ -1,0 +1,59 @@
+{
+  "title": "C-79: keep the real client at the login prompt for five minutes while keepalives pass both ways",
+  "include": "parts/common.json",
+  "notes": [
+    "The client accepts a session only after a login attempt, so submit the run's deliberately wrong password and leave its retry prompt untouched.",
+    "Six server keepalive exchanges are scheduled at 60-second intervals; waiting for six after the retry prompt proves at least five minutes idle there.",
+    "Each interval also waits for a client-to-server keepalive; the session-close check runs before the driver shuts the client down."
+  ],
+  "requires": {"client": true, "capture": true},
+  "server_settings": [
+    "Login.AfkTimeout=600",
+    "Network.KeepAliveInterval=60",
+    "Network.KeepAliveTimeout=15",
+    "Logger.network.session=2,Console Server Errors Stream"
+  ],
+  "steps": [
+    {"action": "wait_client_log", "name": "the client brings its renderer up", "pattern": "About to initialize graphical client\\.", "timeout": 180},
+    {"action": "wait_screen", "name": "the login window is on the screen", "screens": ["login"], "timeout": 120},
+    {"action": "shot", "name": "the login window before the attempt", "file": "login-window-start"},
+    {"action": "submit_login", "name": "start a local session with a wrong password", "password": "{wrongpassword}"},
+    {"action": "wait_client_log", "name": "the client sends its authentication request", "pattern": "Send MSG_USER_AUTHEN to Login Server", "timeout": 30},
+    {"action": "wait_server_log", "name": "the server reads the authentication request", "pattern": "LOGIN MSG_USER_AUTHEN_V3 \\(\\d+:\\d+\\) from session (\\d+)", "timeout": 30, "keep": "session"},
+    {"action": "wait_server_log", "name": "the server accepted that session", "pattern": "Session {session} accepted by .* after \\d+ ms", "timeout": 10, "from": "start"},
+    {"action": "wait_server_log", "name": "the server refuses the wrong password", "pattern": "failed to authenticate as {user}: the password is wrong; sent MSG_USER_AUTHEN_RSP Error=(\\S+)", "timeout": 20, "expect": "AuthenFailed"},
+    {"action": "wait_client_log", "name": "the client is told login failed", "pattern": "LOGIN RESPONSE: Error=(-?\\d+)", "timeout": 30, "reject": "0"},
+    {"action": "wait_client_log", "name": "the client displays its retry prompt", "pattern": "DisplayMessageBox\\(.*msg string key = (\\S+?),", "timeout": 20, "expect": "GUI_InvalidNameOrPasword"},
+    {"action": "wait_screen", "name": "the client is idle at the login retry prompt", "screens": ["invalid"], "timeout": 60},
+    {"action": "shot", "name": "the login retry prompt before the idle interval", "file": "login-retry-start"},
+
+    {"action": "wait_server_log", "name": "client keepalive one is answered", "pattern": "Session {session} keepalive from the client at \\d+ minutes, answered", "timeout": 70},
+    {"action": "wait_server_log", "name": "server keepalive one is sent", "pattern": "Session {session} keepalive sent to the client", "timeout": 70},
+    {"action": "wait_server_log", "name": "server keepalive one is answered", "pattern": "Session {session} keepalive answered by the client after \\d+ ms", "timeout": 15},
+
+    {"action": "wait_server_log", "name": "client keepalive two is answered", "pattern": "Session {session} keepalive from the client at \\d+ minutes, answered", "timeout": 70},
+    {"action": "wait_server_log", "name": "server keepalive two is sent", "pattern": "Session {session} keepalive sent to the client", "timeout": 70},
+    {"action": "wait_server_log", "name": "server keepalive two is answered", "pattern": "Session {session} keepalive answered by the client after \\d+ ms", "timeout": 15},
+
+    {"action": "wait_server_log", "name": "client keepalive three is answered", "pattern": "Session {session} keepalive from the client at \\d+ minutes, answered", "timeout": 70},
+    {"action": "wait_server_log", "name": "server keepalive three is sent", "pattern": "Session {session} keepalive sent to the client", "timeout": 70},
+    {"action": "wait_server_log", "name": "server keepalive three is answered", "pattern": "Session {session} keepalive answered by the client after \\d+ ms", "timeout": 15},
+
+    {"action": "wait_server_log", "name": "client keepalive four is answered", "pattern": "Session {session} keepalive from the client at \\d+ minutes, answered", "timeout": 70},
+    {"action": "wait_server_log", "name": "server keepalive four is sent", "pattern": "Session {session} keepalive sent to the client", "timeout": 70},
+    {"action": "wait_server_log", "name": "server keepalive four is answered", "pattern": "Session {session} keepalive answered by the client after \\d+ ms", "timeout": 15},
+
+    {"action": "wait_server_log", "name": "client keepalive five is answered", "pattern": "Session {session} keepalive from the client at \\d+ minutes, answered", "timeout": 70},
+    {"action": "wait_server_log", "name": "server keepalive five is sent", "pattern": "Session {session} keepalive sent to the client", "timeout": 70},
+    {"action": "wait_server_log", "name": "server keepalive five is answered", "pattern": "Session {session} keepalive answered by the client after \\d+ ms", "timeout": 15},
+
+    {"action": "wait_server_log", "name": "client keepalive six is answered", "pattern": "Session {session} keepalive from the client at \\d+ minutes, answered", "timeout": 70},
+    {"action": "wait_server_log", "name": "server keepalive six is sent", "pattern": "Session {session} keepalive sent to the client", "timeout": 70},
+    {"action": "wait_server_log", "name": "server keepalive six is answered", "pattern": "Session {session} keepalive answered by the client after \\d+ ms", "timeout": 15},
+
+    {"action": "wait_screen", "name": "the client remains at the login retry prompt after five minutes", "screens": ["invalid"], "timeout": 30},
+    {"action": "shot", "name": "the login retry prompt after five minutes", "file": "login-retry-five-minutes"},
+    {"action": "forbid_log", "name": "the server did not close the session or authenticate the account", "side": "server", "pattern": "Closing session {session} from .*|Session {session} closed|authenticated as {user} \\(id \\d+\\)"},
+    {"action": "forbid_log", "name": "the client did not leave the failed-login prompt", "side": "client", "pattern": "The LoginServer has admitted the user"}
+  ]
+}

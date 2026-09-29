@@ -1,0 +1,62 @@
+{
+  "subject": "Custom emote template catalog",
+  "area": "data",
+  "claim": "The r806919.Wizard_1_610 client stores its custom emote item templates in Root.wad ObjectData/Emotes/*.xml: the folder lists 171 WizItemTemplate objects, each with exactly one CustomEmoteBehaviorTemplate.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Read Bin/revision.dat from your own client installation and confirm it identifies r806919.Wizard_1_610.",
+    "Run the project's client template command with `--list ObjectData/Emotes/` against that installation and record the matching manifest entries.",
+    "Run bindecode with `--list ObjectData/Emotes/` against Root.wad, then decode every returned entry using one `--compact` invocation and the type dump from that installation.",
+    "For every decoded object, count the m_behaviors entries whose class is CustomEmoteBehaviorTemplate and group them by m_emoteType; confirm all folder entries decode as WizItemTemplate with exactly one matching behavior.",
+    "Run the project's client types command for CustomEmoteBehaviorTemplate against the same type dump and record its class hash, property names and types, and m_emoteType enum options."
+  ],
+  "evidence": [
+    "The local installation revision.dat contains r806919.Wizard_1_610; the local version-2 type dump has SHA-256 AA18B288B04DF8BD4854F9B02C0850645CE58ED4B710E4292A8EA0706E4135BF.",
+    "The client's TemplateManifest query for ObjectData/Emotes/ returns 171 entries. Root.wad's bindecode listing for ObjectData/Emotes/ also returns 171 entries.",
+    "All 171 listed entries decoded successfully as class WizItemTemplate, and every object has exactly one CustomEmoteBehaviorTemplate in m_behaviors.",
+    "The 171 behavior instances are 34 CE_Dance, 72 CE_Emote, and 65 CE_Teleport.",
+    "CustomEmoteBehaviorTemplate has hash 1038212901 and 10 properties: m_behaviorName (std::string), m_animation1 (std::string), m_animation2 (std::string), m_sound1 (std::string), m_sound2 (std::string), m_emoteText (std::string), m_emoteType (enum CustomEmoteType), m_isMemberEmote (bool), m_isDefaultEmote (bool), and m_bitFieldNumber (int).",
+    "The type dump defines CustomEmoteType values CE_Emote=0, CE_Teleport=1, and CE_Dance=2."
+  ],
+  "disproof": "A fresh manifest query and complete decode from the same client revision returns a different number of entries, root or behavior classes, per-type counts, CustomEmoteBehaviorTemplate hash or property schema, or CustomEmoteType values.",
+  "confidence": "high",
+  "submitted_by": "MeruneFleuruwu",
+  "submitted_on": "2026-09-28",
+  "status": "claimed",
+  "archive": "Root.wad",
+  "entry_pattern": "ObjectData/Emotes/*.xml",
+  "template_count": 171,
+  "behavior_count_by_type": {
+    "CE_Dance": 34,
+    "CE_Emote": 72,
+    "CE_Teleport": 65
+  },
+  "parent_class": {
+    "name": "class WizItemTemplate",
+    "hash": 991922385,
+    "behavior_property": "m_behaviors"
+  },
+  "behavior_class": {
+    "name": "class CustomEmoteBehaviorTemplate",
+    "hash": 1038212901,
+    "property_count": 10,
+    "properties": {
+      "m_behaviorName": "std::string",
+      "m_animation1": "std::string",
+      "m_animation2": "std::string",
+      "m_sound1": "std::string",
+      "m_sound2": "std::string",
+      "m_emoteText": "std::string",
+      "m_emoteType": "enum CustomEmoteType",
+      "m_isMemberEmote": "bool",
+      "m_isDefaultEmote": "bool",
+      "m_bitFieldNumber": "int"
+    }
+  },
+  "emote_type_values": {
+    "CE_Emote": 0,
+    "CE_Teleport": 1,
+    "CE_Dance": 2
+  }
+}

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The table of live settings with the default, bounds and unit each reader already used, grouped by category, and the page doc/config/settings.md is: one table per category, with the apps that read each setting, when a change takes hold and who may see and change it; the secrets are the table's secret settings and the options only config holds, the admin token and the database connection strings.
+ * The table of live settings with the default, bounds and unit each reader already used, grouped by category, and the page doc/config/settings.md is: one table per category, with the apps that read each setting, the supervisor among them, when a change takes hold and who may see and change it; the secrets are the table's secret settings and the options only config holds, the admin and panel tokens and the database connection strings.
  */
 
 #include "SettingDeclarations.h"
@@ -78,6 +78,9 @@ namespace
 
             Unsigned("Zone.UnloadDelay", "60", "0", "86400", "s", "Zones", Game, NextUse, "How long an empty zone instance stays loaded, read when its last wizard leaves."),
             Unsigned("Zone.MobileIdReleaseDelay", "2000", "0", "60000", "ms", "Zones", Game, NextUse, "How long a mobile id rests after its wizard leaves before another wizard may take it."),
+            Unsigned("Zone.MoveFlushInterval", "250", "50", "5000", "ms", "Zones", Game, NextUse, "How often the moves and movement states of the wizards in an instance are sent to the others in it, read at each flush."),
+            Unsigned("Zone.MoveIdleIntervals", "2", "1", "100", "", "Zones", Game, NextUse,
+                "How many flushes a wizard said to be moving may pass without a new move before the others are told it is standing, read at each flush."),
 
             Text("Realm.Name", "Ambrose", "64", "Realms", Game, NextUse, "The realm's name, announced to the login server with each heartbeat and sent in MSG_LOGINCOMPLETE."),
             Text("Realm.Address", "", "255", "Realms", Game, NextUse, "The address the login server sends players to for this realm; empty uses PublicAddress, then BindIP."),
@@ -102,6 +105,11 @@ namespace
             Unsigned("Network.DroppedMessagesPerSecond", "16", "1", "100000", "", "Network", Game | Login, NextUse, "How fast that allowance of dropped messages refills, per second."),
             Unsigned("Network.PingBurst", "16", "1", "100000", "", "Network", Game | Login, NextUse, "How many pings a connection may send at once before a ping counts as a strike."),
             Unsigned("Network.PingsPerSecond", "4", "1", "100000", "", "Network", Game | Login, NextUse, "How fast that allowance of pings refills, per second."),
+            Unsigned("Network.RateLimit.Burst", "150", "1", "100000", "", "Network", Game | Login, Live, "How many inbound frames a session may receive in a burst before frames count against its per-second rate."),
+            Unsigned("Network.RateLimit.PerSecond", "50", "1", "100000", "", "Network", Game | Login, Live, "How fast a session's inbound frame allowance refills, per second."),
+            Unsigned("Network.MaxConnectionsPerIP", "100", "1", "100000", "", "Network", Game | Login, Live, "How many simultaneous client connections one IP address may hold."),
+            Unsigned("Network.AcceptRatePerSecond", "50", "1", "100000", "", "Network", Game | Login, Live, "How many new client connections one IP address may establish per second."),
+            Unsigned("Network.SendQueueHighWater", "16777216", "1048576", "1073741824", "bytes", "Network", Game | Login, Live, "How many bytes one connection may have waiting to be sent before it is closed; applies to existing connections immediately."),
             Unsigned("Network.HandoffGrace", "30", "1", "3600", "s", "Network", Login, NextUse, "How long a client sent to a game server may keep its login connection open."),
             Unsigned("Attach.Timeout", "30", "1", "3600", "s", "Network", Game, NextUse, "How long a new game connection may go without MSG_ATTACH before it is closed."),
 
@@ -135,6 +143,15 @@ namespace
                 "The key id that seals new and changed verifiers, which Account.VerifierKeys must list; 0 stores them unencrypted and is refused while keys are listed.")),
             Restricted(Flag("Account.AllowPlainVerifiers", "true", "Accounts", Login, NextUse,
                 "Whether an account whose verifier is still unencrypted may log in while a verifier key is active.")),
+
+            Unsigned("Files.MinFreeBytes", "1073741824", "0", "1125899906842624", "bytes", "Files", Supervisor, Live,
+                "The least free space a volume must keep after any write the panel makes; the larger of this and Files.MinFreePercent holds."),
+            Unsigned("Files.MinFreePercent", "5", "0", "90", "%", "Files", Supervisor, Live,
+                "The least free space a volume must keep after any write the panel makes, as a share of the volume; the larger of this and Files.MinFreeBytes holds."),
+            Unsigned("Files.ReadMaxBytes", "4194304", "65536", "67108864", "bytes", "Files", Supervisor, Live,
+                "The most of a file one read hands the panel; a file this size or smaller also carries its content hash, and a configuration file larger than this is not shown."),
+            Unsigned("Files.ListMaxEntries", "100000", "1000", "10000000", "entries", "Files", Supervisor, Live,
+                "The most entries a folder listing reads before it stops and says the folder held more."),
         };
         std::sort(table.begin(), table.end(), [](SettingDeclaration const& left, SettingDeclaration const& right) { return left.Key < right.Key; });
         return table;
@@ -149,6 +166,8 @@ namespace
             names.push_back("loginserver");
         if (apps & SettingApps::Patch)
             names.push_back("patchserver");
+        if (apps & SettingApps::Supervisor)
+            names.push_back("supervisor");
         return fmt::format("{}", fmt::join(names, ", "));
     }
 
@@ -194,7 +213,7 @@ bool SettingDeclarations::IsSecret(std::string_view key)
                 keys.push_back(declaration.Key);
         return keys;
     }();
-    if (Ambrose::EqualsIgnoreCase(key, "Admin.Token") || EndsWithIgnoreCase(key, "DatabaseInfo"))
+    if (Ambrose::EqualsIgnoreCase(key, "Admin.Token") || Ambrose::EqualsIgnoreCase(key, "Panel.Token") || EndsWithIgnoreCase(key, "DatabaseInfo"))
         return true;
     return std::any_of(secrets.begin(), secrets.end(), [key](std::string const& secret) { return Ambrose::EqualsIgnoreCase(secret, key); });
 }
@@ -209,12 +228,13 @@ std::string SettingDeclarations::RenderDocument()
     page += "# Live settings\n\n";
     page += "Every setting here can be changed while its app runs with `.settings set <key> <value> [reason]` in game or `settings set` on the app's console, and returned to its "
             "config value with `settings reset`. A change is checked against the type and bounds below, persisted in the `settings` table of the database the app owns "
-            "(`characters` for the game server, `login` for the login server), and written to `setting_audit` with who made it and why. A setting also set by an "
-            "`AMBROSE_` environment variable or a command-line override is locked and cannot be changed live. The layers are described in [README.md](README.md).\n\n";
+            "(`characters` for the game server, `login` for the login server, and the panel store for the supervisor), and written to `setting_audit` with who made it and why. "
+            "A setting also set by an `AMBROSE_` environment variable or a command-line override is locked and cannot be changed live. The layers are described in [README.md](README.md).\n\n";
     page += "Applies says when a change takes hold: live at once, or from the next connection or operation that reads it.\n\n";
     page += "Access says who may see and change a setting over the admin API and the panel. A secret's value is shown masked, in `setting_audit` too, unless the caller asks "
-            "for it with the right to see secrets, and every such reveal is audited. A restricted setting is one whose wrong value stops the app or locks players out, so "
-            "changing it takes its own right besides the right to change settings.\n";
+            "for it with the right to see secrets, and every such reveal is audited. The admin and panel tokens and the password in each database connection string are secrets "
+            "too, although only config holds them, and are masked the same way wherever they are shown, a configuration file read through the panel included. A restricted "
+            "setting is one whose wrong value stops the app or locks players out, so changing it takes its own right besides the right to change settings.\n";
     for (auto const& [category, declarations] : byCategory)
     {
         page += fmt::format("\n## {}\n\n", category);

@@ -1,0 +1,658 @@
+{
+    "subject":  "F-41 service 7 LOGIN",
+    "area":  "protocol",
+    "claim":  "The r806919 Wizard 1.610 Root.wad message definitions identify service 7 as LOGIN and define its ordered message tags and field types as catalogued here.",
+    "revision":  "r806919.Wizard_1_610",
+    "method":  "static",
+    "how_to_repeat":  [
+                          "Read LoginMessages.xml from Root.wad in your own r806919 install with `bindecode` --client \u003cinstall\u003e --text LoginMessages.xml.",
+                          "Read ServiceID and ProtocolType from _ProtocolInfo/RECORD; enumerate each message RECORD and retain each non-metadata field name and its TYPE (or the supported TPYE/TYP spelling, with GlobalID inferred as GID).",
+                          "Use explicit _MsgOrder or _MsgType where the first message has it; otherwise sort distinct message element tags by byte-ordinal order and number them from 1, collapsing repeated tags only when their fields match.",
+                          "Run `bindecode --client \u003cinstall\u003e --sweep` as an archive-decode check; the sweep covers BINd entries, not the XML message definitions."
+                      ],
+    "evidence":  [
+                     "`bindecode` --client \u003cinstall\u003e --text LoginMessages.xml read this definition from the local r806919 Root.wad; it declares service id 7, protocol name LOGIN, and 29 distinct ordered messages with 105 fields.",
+                     "The service uses explicit order; the catalog records every message tag/name, resolved order, and field name/type, excluding underscore-prefixed metadata.",
+                     "`bindecode --client \u003cinstall\u003e --sweep --threads 8` reported 173088 entries, 134640 BINd files, 134635 decoded, 5 unknown-root-class failures and 0 unreadable entries; those five BINd failures do not validate or contradict this XML catalog."
+                 ],
+    "disproof":  "A repeat read of LoginMessages.xml from another r806919 install that yields a different service id/name, distinct message order, or field name/type under the stated ordering rule.",
+    "confidence":  "high",
+    "submitted_by":  "MeruneFleuruwu",
+    "submitted_on":  "2026-09-27",
+    "status":  "claimed",
+    "service":  {
+                    "id":  7,
+                    "name":  "LOGIN",
+                    "version":  1,
+                    "entry":  "LoginMessages.xml",
+                    "ordering":  "explicit",
+                    "messages":  [
+                                     {
+                                         "tag":  "MSG_CHARACTERINFO",
+                                         "name":  "MSG_CHARACTERINFO",
+                                         "order":  1,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "CharacterInfo",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CHARACTERLIST",
+                                         "name":  "MSG_CHARACTERLIST",
+                                         "order":  2,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Error",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CHARACTERSELECTED",
+                                         "name":  "MSG_CHARACTERSELECTED",
+                                         "order":  3,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "IP",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "TCPPort",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "UDPPort",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Key",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "UserID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "CharID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "ZoneID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "ZoneName",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Location",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Slot",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "PrepPhase",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Error",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "LoginServer",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PlatformType",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CREATECHARACTER",
+                                         "name":  "MSG_CREATECHARACTER",
+                                         "order":  4,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "CreationInfo",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CREATECHARACTERRESPONSE",
+                                         "name":  "MSG_CREATECHARACTERRESPONSE",
+                                         "order":  5,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "ErrorCode",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DELETECHARACTER",
+                                         "name":  "MSG_DELETECHARACTER",
+                                         "order":  6,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "CharID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DELETECHARACTERRESPONSE",
+                                         "name":  "MSG_DELETECHARACTERRESPONSE",
+                                         "order":  7,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "ErrorCode",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_REQUESTCHARACTERLIST",
+                                         "name":  "MSG_REQUESTCHARACTERLIST",
+                                         "order":  8,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_REQUESTSERVERLIST",
+                                         "name":  "MSG_REQUESTSERVERLIST",
+                                         "order":  9,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SELECTCHARACTER",
+                                         "name":  "MSG_SELECTCHARACTER",
+                                         "order":  10,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "CharID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "ServerName",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SERVERLIST",
+                                         "name":  "MSG_SERVERLIST",
+                                         "order":  11,
+                                         "fields":  [
+
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_STARTCHARACTERLIST",
+                                         "name":  "MSG_STARTCHARACTERLIST",
+                                         "order":  12,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "LoginServer",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PurchasedCharacterSlots",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_USER_AUTHEN",
+                                         "name":  "MSG_USER_AUTHEN",
+                                         "order":  13,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Rec1",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Version",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Revision",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "DataRevision",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "CRC",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "MachineID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "PatchClientID",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PlatformChatID",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_USER_AUTHEN_RSP",
+                                         "name":  "MSG_USER_AUTHEN_RSP",
+                                         "order":  14,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Error",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "UserID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Rec1",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Reason",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "TimeStamp",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PayingUser",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Flags",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "SupportID",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PublicPlayerName",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_USER_VALIDATE",
+                                         "name":  "MSG_USER_VALIDATE",
+                                         "order":  15,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "UserID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "PassKey3",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "MachineID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Locale",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PatchClientID",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PlatformChatID",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_USER_VALIDATE_RSP",
+                                         "name":  "MSG_USER_VALIDATE_RSP",
+                                         "order":  16,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Error",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Reason",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "UserID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "TimeStamp",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PayingUser",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Flags",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "SupportID",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_DISCONNECT_LOGIN_AFK",
+                                         "name":  "MSG_DISCONNECT_LOGIN_AFK",
+                                         "order":  17,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Warning",
+                                                            "type":  "BYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_LOGIN_NOT_AFK",
+                                         "name":  "MSG_LOGIN_NOT_AFK",
+                                         "order":  18,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "BadgeNameID",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_LOGINSERVERSHUTDOWN",
+                                         "name":  "MSG_LOGINSERVERSHUTDOWN",
+                                         "order":  19,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Message",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_USER_ADMIT_IND",
+                                         "name":  "MSG_USER_ADMIT_IND",
+                                         "order":  20,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Status",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "PositionInQueue",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_WEBCHARACTERINFO",
+                                         "name":  "MSG_WEBCHARACTERINFO",
+                                         "order":  21,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Name",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "Gender",
+                                                            "type":  "INT"
+                                                        },
+                                                        {
+                                                            "name":  "School",
+                                                            "type":  "INT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_USER_AUTHEN_V2",
+                                         "name":  "MSG_USER_AUTHEN_V2",
+                                         "order":  22,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Rec1",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Version",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Revision",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "DataRevision",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "CRC",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "MachineID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Locale",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PatchClientID",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PlatformChatID",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_SAVECHARACTER",
+                                         "name":  "MSG_SAVECHARACTER",
+                                         "order":  23,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "CharID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Success",
+                                                            "type":  "UBYT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_WEB_AUTHEN",
+                                         "name":  "MSG_WEB_AUTHEN",
+                                         "order":  24,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Rec1",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Version",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Revision",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "DataRevision",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "CRC",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "MachineID",
+                                                            "type":  "GID"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_WEB_VALIDATE",
+                                         "name":  "MSG_WEB_VALIDATE",
+                                         "order":  25,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "UserID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "PassKey3",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "MachineID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Locale",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_CHANGECHARACTERNAME",
+                                         "name":  "MSG_CHANGECHARACTERNAME",
+                                         "order":  26,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "CharID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "NewName",
+                                                            "type":  "WSTR"
+                                                        },
+                                                        {
+                                                            "name":  "ServerName",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_USER_AUTHEN_V3",
+                                         "name":  "MSG_USER_AUTHEN_V3",
+                                         "order":  27,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Rec1",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Version",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Revision",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "DataRevision",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "CRC",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "MachineID",
+                                                            "type":  "GID"
+                                                        },
+                                                        {
+                                                            "name":  "Locale",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "PatchClientID",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "IsSteamPatcher",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "ConsoleType",
+                                                            "type":  "UBYT"
+                                                        },
+                                                        {
+                                                            "name":  "PlatformChatID",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "SteamID",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "SteamAuthTicket",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_LOGINLOGCHARACTERCREATION",
+                                         "name":  "MSG_LOGINLOGCHARACTERCREATION",
+                                         "order":  28,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Stage",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "Parameter",
+                                                            "type":  "UINT"
+                                                        }
+                                                    ]
+                                     },
+                                     {
+                                         "tag":  "MSG_FULFILLPROMOCODE",
+                                         "name":  "MSG_FULFILLPROMOCODE",
+                                         "order":  29,
+                                         "fields":  [
+                                                        {
+                                                            "name":  "Code",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "Success",
+                                                            "type":  "UINT"
+                                                        },
+                                                        {
+                                                            "name":  "ItemList",
+                                                            "type":  "STR"
+                                                        },
+                                                        {
+                                                            "name":  "ErrorDesc",
+                                                            "type":  "STR"
+                                                        }
+                                                    ]
+                                     }
+                                 ]
+                }
+}

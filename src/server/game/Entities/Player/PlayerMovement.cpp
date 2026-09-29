@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a move with the client's own unpacking and ignores one sent under another zone counter, which the client stamps on every move and resets to 0 when it attaches, so a move from before a transfer never lands in the zone after it. However many moves arrive, one write is pending until it is taken.
+ * Reads a move with the client's own unpacking and ignores one sent under another zone counter, which the client stamps on every move and resets to 0 when it attaches, so a move from before a transfer never lands in the zone after it. However many moves arrive, one write is pending until it is taken, and a move that repeats the one before it is not a change.
  */
 
 #include "PlayerMovement.h"
@@ -12,6 +12,8 @@ void PlayerMovement::Reset(PlayerPosition const& start, uint8 zoneCounter)
     _zoneCounter = zoneCounter;
     _moveState = 0;
     _moves = 0;
+    _packed.reset();
+    _changes = 0;
     _moved = false;
 }
 
@@ -23,6 +25,12 @@ MoveResult PlayerMovement::Apply(uint16 locationX, uint16 locationY, uint16 loca
     _position.Y = MovementPacking::UnpackLocation(static_cast<int16>(locationY));
     _position.Z = MovementPacking::UnpackLocation(static_cast<int16>(locationZ));
     _position.Yaw = MovementPacking::UnpackYaw(direction);
+    PackedMove const packed{ locationX, locationY, locationZ, direction };
+    if (!_packed || *_packed != packed)
+    {
+        _packed = packed;
+        ++_changes;
+    }
     ++_moves;
     _moved = true;
     return MoveResult::Moved;

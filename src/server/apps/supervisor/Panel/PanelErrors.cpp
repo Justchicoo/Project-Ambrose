@@ -38,7 +38,7 @@ bool PanelErrors::Record(std::string_view app, std::vector<PanelErrorGroup> cons
             found.reset();
 
             std::optional<PanelStore::Statement> update = _store.Prepare(
-                "UPDATE panel_error_group SET function = ?1, level = ?2, revision = ?3, count = ?4, total_count = ?5, first_epoch_ms = ?6, last_epoch_ms = ?7, last_message = ?8 WHERE id = ?9", error);
+                "UPDATE panel_error_group SET function = ?1, level = ?2, revision = ?3, count = ?4, total_count = ?5, first_epoch_ms = ?6, last_epoch_ms = ?7, last_message = ?8, context_before_json = ?9 WHERE id = ?10", error);
             if (!update)
                 return false;
             update->Bind(1, group.Function);
@@ -49,7 +49,8 @@ bool PanelErrors::Record(std::string_view app, std::vector<PanelErrorGroup> cons
             update->Bind(6, first < group.FirstEpochMs && first != 0 ? first : group.FirstEpochMs);
             update->Bind(7, group.LastEpochMs);
             update->Bind(8, group.LastMessage);
-            update->Bind(9, id);
+            update->Bind(9, group.ContextBeforeJson);
+            update->Bind(10, id);
             if (!update->Run(error))
                 return false;
             continue;
@@ -57,8 +58,8 @@ bool PanelErrors::Record(std::string_view app, std::vector<PanelErrorGroup> cons
         found.reset();
 
         std::optional<PanelStore::Statement> insert = _store.Prepare(
-            "INSERT INTO panel_error_group (app, category, file, line, function, template, level, revision, count, total_count, first_epoch_ms, last_epoch_ms, last_message)"
-            " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)", error);
+            "INSERT INTO panel_error_group (app, category, file, line, function, template, level, revision, count, total_count, first_epoch_ms, last_epoch_ms, last_message, context_before_json)"
+            " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)", error);
         if (!insert)
             return false;
         insert->Bind(1, app);
@@ -74,6 +75,7 @@ bool PanelErrors::Record(std::string_view app, std::vector<PanelErrorGroup> cons
         insert->Bind(11, group.FirstEpochMs);
         insert->Bind(12, group.LastEpochMs);
         insert->Bind(13, group.LastMessage);
+        insert->Bind(14, group.ContextBeforeJson);
         if (!insert->Run(error))
             return false;
     }
@@ -84,7 +86,7 @@ std::vector<PanelErrorGroup> PanelErrors::List(std::string& error) const
 {
     std::vector<PanelErrorGroup> out;
     std::optional<PanelStore::Statement> rows = _store.Prepare(
-        "SELECT id, app, category, file, line, function, template, level, revision, count, total_count, first_epoch_ms, last_epoch_ms, last_message, cleared_epoch_ms"
+        "SELECT id, app, category, file, line, function, template, level, revision, count, total_count, first_epoch_ms, last_epoch_ms, last_message, context_before_json, cleared_epoch_ms"
         " FROM panel_error_group ORDER BY last_epoch_ms DESC, total_count DESC", error);
     if (!rows)
         return out;
@@ -105,8 +107,9 @@ std::vector<PanelErrorGroup> PanelErrors::List(std::string& error) const
         group.FirstEpochMs = rows->Int64(11);
         group.LastEpochMs = rows->Int64(12);
         group.LastMessage = rows->Text(13);
-        if (!rows->IsNull(14))
-            group.ClearedEpochMs = rows->Int64(14);
+        group.ContextBeforeJson = rows->Text(14);
+        if (!rows->IsNull(15))
+            group.ClearedEpochMs = rows->Int64(15);
         out.push_back(std::move(group));
     }
     if (!error.empty())

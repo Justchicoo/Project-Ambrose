@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server, the scratch game server's settings, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both.
+# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both.
 import json
 import os
 import socket
@@ -405,6 +405,37 @@ class WorldEntryTests(TemporaryFolder):
         self.assertTrue(walk.needs_gameserver)
         self.assertIn("restart_client", [step["action"] for step in walk.steps])
 
+    def test_a_companion_brings_a_wizard_of_its_own_and_only_its_steps_drive_it(self):
+        search = (os.path.join(self.folder, "scenarios"),)
+        step = {"action": "hold_key", "name": "walk", "vk": "0x57", "seconds": 1, "client": "companion"}
+        self.scenario_file("two.json", {"title": "two", "requires": {"gameserver": True}, "wizard": self.WIZARD,
+                                        "companion": {"wizard": self.WIZARD}, "steps": [step]})
+        loaded = scenario.load("two.json", search=search)
+        self.assertEqual(loaded.companion["wizard"]["zone"], "WizardCity/WC_Ravenwood")
+        for document, said in (
+                ({"steps": [step]}, "starts no companion"),
+                ({"companion": {"wizard": self.WIZARD}, "steps": [dict(step, client="third")]}, "a run drives main or companion"),
+                ({"companion": {"wizard": self.WIZARD}, "steps": [{"action": "wait_game_log", "name": "in", "pattern": "x", "timeout": 1, "client": "companion"}]},
+                 "its wait_game_log action drives none"),
+                ({"companion": {"wizard": {"school": 1}}, "steps": []}, "the companion's wizard needs zone"),
+                ({"companion": {}, "steps": []}, "the companion needs exactly wizard"),
+                ({"companion": {"wizard": self.WIZARD, "user": "x"}, "steps": []}, "the companion needs exactly wizard"),
+                ({"steps": [dict(step, client="main", watch="companion")]}, "starts no companion"),
+                ({"companion": {"wizard": self.WIZARD}, "steps": [dict(step, watch="third")]}, "watches the client 'third'"),
+                ({"companion": {"wizard": self.WIZARD}, "steps": [dict(step, watch_every=1)]}, "not which client it watches"),
+                ({"companion": {"wizard": self.WIZARD}, "steps": [dict(step, watch="main", watch_every=0.01)]}, "every 0.1 to 5 seconds"),
+                ({"companion": {"wizard": self.WIZARD}, "steps": [dict(step, watch="main", watch_after=11)]}, "for 0 to 10 seconds")):
+            self.scenario_file("bad.json", dict({"title": "bad", "requires": {"gameserver": True}, "wizard": self.WIZARD}, **document))
+            with self.assertRaises(Refused) as raised:
+                scenario.load("bad.json", search=search)
+            self.assertIn(said, str(raised.exception))
+        self.scenario_file("alone.json", {"title": "alone", "companion": {"wizard": self.WIZARD}, "steps": []})
+        with self.assertRaises(Refused) as raised:
+            scenario.load("alone.json", search=search)
+        self.assertIn("does not require the game server", str(raised.exception))
+        self.scenario_file("more.json", {"title": "more", "include": "two.json", "steps": [dict(step, name="walk again")]})
+        self.assertEqual(scenario.load("more.json", search=search).companion["wizard"]["first"], 1)
+
     def test_the_shipped_enter_world_scenario_loads_with_its_game_server_and_wizard(self):
         loaded = scenario.load("enter-world.json", search=(paths.SCENARIOS,))
         self.assertTrue(loaded.needs_gameserver)
@@ -693,6 +724,12 @@ class FakeClient:
     def key(self, virtual_key, hold=0.05):
         self.typed.append(virtual_key)
         self.held = hold
+        time.sleep(hold)
+
+    def keys(self, virtual_keys, hold=0.05):
+        self.typed.append(tuple(virtual_keys))
+        self.held = hold
+        time.sleep(hold)
 
     def click(self, x, y, dwell=0.35):
         self.presses.append((x, y, round(dwell, 2)))
@@ -731,10 +768,12 @@ class FakeDatabases:
 
 
 class EngineTests(TemporaryFolder):
-    def build(self, steps, picture=None, answers=("0",), variables=None, expect_failure=False):
+    def build(self, steps, picture=None, answers=("0",), variables=None, expect_failure=False, companion=False):
         document = {"title": "a scenario for the tests", "steps": steps}
         if expect_failure:
             document["expect"] = "failure"
+        if companion:
+            document.update(requires={"gameserver": True}, companion={"wizard": WorldEntryTests.WIZARD})
         path = self.write_json(os.path.join("scenarios", "test.json"), document)
         loaded = scenario.load(path)
         self.server_log = self.write(os.path.join("server", "Login.log"), [])
@@ -747,8 +786,13 @@ class EngineTests(TemporaryFolder):
         store = screens.Store(described, "unused", loader=lambda path: crops[os.path.basename(path)[:-4]])
         self.shots = os.path.join(self.folder, "shots")
         os.makedirs(self.shots, exist_ok=True)
+        self.companion = None
+        if companion:
+            self.companion_log = self.write(os.path.join("companion", "WizardClient.log"), [])
+            self.companion = FakeClient(self.companion_log, picture if picture is not None else frame_of(RED, BLUE))
         return engine.Engine(loaded, self.client, self.server, store, self.shots,
-                             dict(variables or {}, user="clientdriver", password="secret"), FakeDatabases(answers))
+                             dict(variables or {}, user="clientdriver", password="secret", companion_user="clientdriver2"),
+                             FakeDatabases(answers), companion=self.companion)
 
     def test_a_step_waits_on_a_server_line_and_checks_what_it_says(self):
         running = self.build([{"action": "wait_server_log", "name": "the password is refused",
@@ -817,6 +861,51 @@ class EngineTests(TemporaryFolder):
         again.run()
         self.assertEqual(asked, [180.0])
         self.assertEqual(again.steps[0]["result"], "started again")
+
+    def test_a_step_that_names_the_companion_drives_it_and_the_next_one_drives_the_main_client_again(self):
+        running = self.build([
+            {"action": "submit_login", "name": "the companion logs in", "password": "other", "client": "companion"},
+            {"action": "wait_client_log", "name": "the companion is admitted", "pattern": "admitted", "timeout": 1, "client": "companion"},
+            {"action": "hold_key", "name": "the companion walks", "vk": "0x57", "seconds": 0.01, "client": "companion"},
+            {"action": "shot", "name": "the main client sees it"},
+            {"action": "shot", "name": "the companion sees itself", "client": "companion"},
+            {"action": "restart_client", "name": "the companion comes back", "client": "companion"}], companion=True)
+        self.write(os.path.join("companion", "WizardClient.log"), ["The LoginServer has admitted the user"], encoding="latin-1")
+        restarted = []
+        running.restart = lambda timeout: restarted.append("main")
+        running.restarts["companion"] = lambda timeout: restarted.append("companion") or "started again"
+        running.run()
+        self.assertEqual(self.companion.typed, ["clientdriver2", chr(9), "other", chr(13), 0x57])
+        self.assertEqual(self.client.typed, [])
+        self.assertEqual(restarted, ["companion"])
+        self.assertEqual([taken.get("client") for taken in running.screenshots if taken["step"].startswith("the ") and "sees" in taken["step"]],
+                         [None, "companion"])
+        self.assertEqual(running.steps[0]["client"], "companion")
+        self.assertNotIn("client", running.steps[3])
+        self.assertIn("the companion sees itself", " ".join(self.companion.shots).replace("-", " "))
+
+    def test_a_watched_hold_films_the_other_client_while_the_key_is_held_and_after(self):
+        running = self.build([{"action": "hold_key", "name": "the companion walks", "vk": "0x57", "seconds": 0.3, "client": "companion",
+                               "watch": "main", "watch_every": 0.1, "watch_after": 0.2}], companion=True)
+        running.run()
+        filmed = [taken for taken in running.screenshots if taken.get("client") == "main"]
+        self.assertGreaterEqual(len(filmed), 4)
+        self.assertTrue(filmed[0]["held"])
+        self.assertFalse(filmed[-1]["held"])
+        self.assertEqual(len(self.client.shots), len(filmed))
+        self.assertEqual(self.companion.typed, [0x57])
+        self.assertEqual(self.companion.held, 0.3)
+        self.assertIn(f"filmed {len(filmed)} time(s)", running.steps[0]["result"])
+
+    def test_several_keys_held_together_go_down_together_and_a_list_is_bounded(self):
+        running = self.build([{"action": "hold_key", "name": "circle", "vk": ["0x57", 0x44], "seconds": 0.01}])
+        running.run()
+        self.assertEqual(self.client.typed, [(0x57, 0x44)])
+        self.assertIn("held the keys 0x57 and 0x44", running.steps[0]["result"])
+        for keys in ([], ["0x57"] * 5):
+            with self.assertRaises(Refused) as raised:
+                self.build([{"action": "hold_key", "name": "circle", "vk": keys, "seconds": 0.01}])
+            self.assertIn("1 to 4 keys", str(raised.exception))
 
     def test_a_recorded_line_is_kept_for_the_report(self):
         running = self.build([{"action": "wait_server_log", "name": "the character list", "record": True,
@@ -1152,6 +1241,14 @@ class QuitSafelyTests(TemporaryFolder):
             self.assertFalse(run.holds([line for line in recorded if "Error=0" in line], pattern))
 
 
+class ScreenSpotTests(unittest.TestCase):
+    def test_the_main_client_goes_top_left_and_a_companion_bottom_right_of_the_chosen_screen(self):
+        work = (-1920, 0, 0, 1032)
+        self.assertEqual(client.screen_spot(work, (1296, 759), "top left"), (-1920, 0))
+        self.assertEqual(client.screen_spot(work, (1296, 759), "bottom right"), (-1296, 273))
+        self.assertEqual(client.screen_spot((0, 0, 800, 600), (1296, 759), "bottom right"), (0, 0), "a window larger than the screen starts at its corner")
+
+
 class RunOrderTests(TemporaryFolder):
     def parts(self, server_fails=False, window_fails=False):
         events = self.events = []
@@ -1186,7 +1283,7 @@ class RunOrderTests(TemporaryFolder):
                 return "ready"
 
             def ensure_account(self, user, password):
-                events.append("the account was made")
+                events.append(f"the account {user} was made")
                 return user
 
             def stop(self):
@@ -1195,7 +1292,8 @@ class RunOrderTests(TemporaryFolder):
 
         class FakeRunClient(FakeClient):
             def __init__(self, *arguments, **keywords):
-                super().__init__(os.path.join(logs, "client", "WizardClient.log"), frame_of(RED, BLUE))
+                self.label = keywords.get("label") or "client"
+                super().__init__(os.path.join(logs, self.label, "WizardClient.log"), frame_of(RED, BLUE))
                 self.install = "C:/Wizard101"
                 self.revision = "r806919.Wizard_1_610"
                 self.run_folder = logs
@@ -1205,21 +1303,21 @@ class RunOrderTests(TemporaryFolder):
                 self.pids = [20, 10]
 
             def start(self, timeout=None):
-                events.append("the client started")
+                events.append(f"the {self.label} started")
                 return "started"
 
             def find_window(self, timeout=None):
-                events.append("the window was looked for")
+                events.append("the window was looked for" if self.label == "client" else f"the {self.label}'s window was looked for")
                 if window_fails:
                     raise StepFailed("the client window did not appear")
                 return 0x1234
 
             def to_background(self):
-                events.append("the client went to the back")
+                events.append(f"the {self.label} went to the back")
                 return "at the bottom"
 
             def close(self, force=False):
-                events.append("the client was closed")
+                events.append(f"the {self.label} was closed")
                 return "closed"
 
         class FakeGuard:
@@ -1229,6 +1327,9 @@ class RunOrderTests(TemporaryFolder):
 
             def start(self):
                 events.append("the guard started")
+
+            def remember(self, pids):
+                events.append(f"the guard remembered {len(pids)} process(es)")
 
             def stop(self):
                 events.append("the guard stopped")
@@ -1242,6 +1343,7 @@ class RunOrderTests(TemporaryFolder):
                 self.steps = []
                 self.screenshots = []
                 self.notes = []
+                self.restarts = {}
 
             def run(self):
                 events.append("the scenario ran")
@@ -1263,10 +1365,10 @@ class RunOrderTests(TemporaryFolder):
                 "Engine": FakeEngine, "Scratch": FakeScratch, "kill_leftovers": lambda started, known=(): [],
                 "prepare_process": lambda: None, "say": lambda message: None}
 
-    def execute(self, **behavior):
+    def execute(self, companion=False, **behavior):
         install_root = os.path.join(self.folder, "install")
         self.write(os.path.join("install", "Bin", "revision.dat"), ["r806919"])
-        loaded = scenario.Scenario("test.json", {"title": "x", "steps": []})
+        loaded = scenario.Scenario("test.json", dict({"title": "x", "steps": []}, **({"companion": {"wizard": WorldEntryTests.WIZARD}} if companion else {})))
         described = references.References("references.json", REFERENCE_DOCUMENT)
         options = {"runs": os.path.join(self.folder, "runs"), "host": "127.0.0.2", "port": 12100,
                    "db_host": "127.0.0.1", "db_port": 3307, "db_user": "ambrose", "db_password": "ambrose",
@@ -1281,11 +1383,22 @@ class RunOrderTests(TemporaryFolder):
     def test_the_run_starts_and_stops_everything_in_the_order_it_started_it(self):
         running, code = self.execute()
         self.assertEqual(self.events, [
-            "the databases were dropped", "the capture started", "the login server started", "the account was made",
+            "the databases were dropped", "the capture started", "the login server started", "the account clientdriver was made",
             "the client started", "the guard started", "the window was looked for", "the client went to the back",
             "the scenario ran", "the client was closed", "the login server stopped", "the capture stopped",
             "the guard stopped", "the databases were dropped"])
         self.assertEqual(code, 0)
+
+    def test_a_companion_starts_after_the_main_client_under_the_same_guard_and_stops_before_it(self):
+        running, code = self.execute(companion=True)
+        self.assertEqual(self.events, [
+            "the databases were dropped", "the capture started", "the login server started", "the account clientdriver was made",
+            "the account clientdriver2 was made", "the client started", "the guard started", "the window was looked for",
+            "the client went to the back", "the companion started", "the guard remembered 2 process(es)", "the companion's window was looked for",
+            "the companion went to the back", "the scenario ran", "the companion was closed", "the client was closed", "the login server stopped",
+            "the capture stopped", "the guard stopped", "the databases were dropped"])
+        self.assertEqual(code, 0)
+        self.assertTrue(running.companion.log.path.endswith(os.path.join("companion", "WizardClient.log")))
 
     def test_a_login_server_that_never_reports_itself_ready_is_still_stopped(self):
         running, code = self.execute(server_fails=True)

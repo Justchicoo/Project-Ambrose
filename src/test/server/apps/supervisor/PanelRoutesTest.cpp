@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests that the panel and the apps agree on what each admin route needs: every route an app or the supervisor serves asks for a permission the panel's catalog holds, so no page is lost from the panel unseen, the supervisor's relay asks the same permission the app's own route asks for, method by method, settings changes, resets, batches, history and events included, and a write the relay does not know, or a sign-in, is never relayed at all; a settings relay names the caller and forwards only the rights they hold, and the query goes with it encoded.
+ * Tests that the panel and the apps agree on what each admin route needs: every route an app or the supervisor serves asks for a permission the panel's catalog holds, so no page is lost from the panel unseen, the supervisor's relay asks the same permission the app's own route asks for, method by method, settings changes, resets, batches, history and events included, and a write the relay does not know, or a sign-in, is never relayed at all; a settings relay names the caller and forwards only the rights they hold, and the query goes with it encoded; and before relaying a reveal of secrets, a change naming a restricted setting or a kill, the relay asks the listener for a fresh check of who the caller is, which it never asks for a caller refused the permission or a dry run.
  */
 
 #include "AdminActivityView.h"
@@ -22,6 +22,8 @@
 #include "SeriesStore.h"
 #include "Settings.h"
 #include "Supervisor.h"
+
+#include <nlohmann/json.hpp>
 
 #include <gtest/gtest.h>
 
@@ -55,6 +57,9 @@ namespace
         AdminSettingsView::Register(routes, settings);
         AdminReloadView::Register(routes);
         AdminMetricsView::Register(routes);
+        routes.AddGuarded("POST", "/api/tick-profile", "metrics.profile", [](AdminRequest const&) { return AdminResponse::Json(202, "{}"); });
+        routes.AddGuarded("GET", "/api/tick-profile", "metrics.profile", [](AdminRequest const&) { return AdminResponse::Json(200, "{}"); });
+        routes.AddGuarded("GET", "/api/tick-profile/trace", "metrics.profile", [](AdminRequest const&) { return AdminResponse::Json(200, "{}"); });
         AdminActivityView::Register(routes, "activity.jsonl");
         AdminClientView::Register(routes, [] () -> ClientSetupResult const& { return NoClient(); });
         AdminCommand::Register(routes, commands, "gameserver", "activity.jsonl");
@@ -127,6 +132,10 @@ TEST(PanelRoutesTest, AWriteTheRelayDoesNotKnowOrASignInIsNeverRelayed)
     EXPECT_EQ(Supervisor::PermissionFor("POST", "/api/database/reload"), std::optional<std::string_view>("reload.run"));
     EXPECT_EQ(Supervisor::PermissionFor("GET", "/api/logs/after/0"), std::optional<std::string_view>("console.read"));
     EXPECT_EQ(Supervisor::PermissionFor("POST", "/api/shutdown"), std::optional<std::string_view>("power.stop"));
+    EXPECT_EQ(Supervisor::PermissionFor("POST", "/api/tick-profile"), std::optional<std::string_view>("metrics.profile"));
+    EXPECT_EQ(Supervisor::PermissionFor("GET", "/api/tick-profile"), std::optional<std::string_view>("metrics.profile"));
+    EXPECT_EQ(Supervisor::PermissionFor("GET", "/api/tick-profile/trace"), std::optional<std::string_view>("metrics.profile"));
+    EXPECT_FALSE(Supervisor::PermissionFor("POST", "/api/tick-profile/trace").has_value());
     EXPECT_EQ(Supervisor::PermissionFor("PATCH", "/api/settings"), std::optional<std::string_view>("settings.edit"));
     EXPECT_EQ(Supervisor::PermissionFor("PUT", "/api/settings/World.UpdateInterval"), std::optional<std::string_view>("settings.edit"));
     EXPECT_EQ(Supervisor::PermissionFor("GET", "/api/settings/World.UpdateInterval/history"), std::optional<std::string_view>("settings.read"));
@@ -143,7 +152,7 @@ TEST(PanelRoutesTest, AWriteTheRelayDoesNotKnowOrASignInIsNeverRelayed)
     EXPECT_FALSE(Supervisor::PermissionFor("DELETE", "/api/settings").has_value());
     EXPECT_FALSE(Supervisor::PermissionFor("GET", "/api/nothing").has_value()) << "a path the relay does not know is not relayed under a looser permission";
     EXPECT_FALSE(Supervisor::PermissionFor("GET", "/api/database/apply").has_value());
-    for (std::string_view const key : { "database.read", "updates.apply", "reload.run", "console.read", "power.stop", "settings.edit", "clientdata.read", "activity.read", "metrics.read" })
+    for (std::string_view const key : { "database.read", "updates.apply", "reload.run", "console.read", "power.stop", "settings.edit", "clientdata.read", "activity.read", "metrics.read", "metrics.profile" })
         EXPECT_TRUE(PanelPermissions::Holds(key)) << key;
 }
 
@@ -179,4 +188,70 @@ TEST(PanelRoutesTest, ASettingsRelayNamesTheCallerAndForwardsOnlyTheRightsTheyHo
     request.QueryValues["q"] = "a b&c";
     EXPECT_EQ(Supervisor::QueryString(request), "?q=a%20b%26c&reveal=1");
     EXPECT_EQ(Supervisor::QueryString(AdminRequest{}), "");
+}
+
+TEST(PanelRoutesTest, TheRelayAsksForAFreshCheckBeforeARevealAKillOrARestrictedChange)
+{
+    AdminAuth auth(10, 1.0);
+    AdminRouter routes(auth);
+    std::set<std::string, std::less<>> held{ "settings.read", "settings.edit", "settings.edit.restricted", "settings.secrets.read", "power.kill" };
+    routes.SetPermissionCheck([&held](AdminRequest const&, std::string_view permission) { return held.contains(permission) ? PermissionVerdict::Allowed : PermissionVerdict::Forbidden; });
+    std::vector<std::pair<std::string, StepUpWhen>> asked;
+    routes.SetStepUp([&asked](AdminRequest const&, std::string_view permission, StepUpWhen when) -> std::optional<AdminResponse>
+    {
+        asked.emplace_back(std::string(permission), when);
+        return AdminResponse::Problem(403, "step_up_required", "Confirm it is you");
+    });
+    auto const request = [](std::string method, std::string body = {})
+    {
+        AdminRequest built;
+        built.Method = std::move(method);
+        built.Principal = "user:3";
+        built.Body = std::move(body);
+        return built;
+    };
+    auto const last = [&asked]() { return asked.empty() ? std::pair<std::string, StepUpWhen>{} : asked.back(); };
+
+    AdminRequest reveal = request("GET");
+    reveal.QueryValues["reveal"] = "1";
+    std::optional<AdminResponse> const revealed = Supervisor::StepUpFor(reveal, routes, "GET", "/api/settings");
+    ASSERT_TRUE(revealed.has_value());
+    EXPECT_EQ(revealed->Status, 403);
+    EXPECT_EQ(last(), (std::pair<std::string, StepUpWhen>{ "settings.secrets.read", StepUpWhen::Always }));
+
+    std::size_t const before = asked.size();
+    EXPECT_FALSE(Supervisor::StepUpFor(request("GET"), routes, "GET", "/api/settings").has_value()) << "a read that reveals nothing asks nothing";
+    EXPECT_FALSE(Supervisor::StepUpFor(request("PUT", R"({"value":"100"})"), routes, "PUT", "/api/settings/World.UpdateInterval").has_value())
+        << "a setting the declarations do not restrict asks nothing beyond its danger rule";
+    EXPECT_FALSE(Supervisor::StepUpFor(request("POST", R"({"entries":[{"key":"Account.VerifierActiveKey","value":"1"}],"dry_run":true})"), routes, "POST", "/api/settings/batch")
+                     .has_value())
+        << "a dry run changes nothing, so it asks nothing";
+    EXPECT_EQ(asked.size(), before);
+
+    ASSERT_TRUE(Supervisor::StepUpFor(request("PUT", R"({"value":"2"})"), routes, "PUT", "/api/settings/Account.VerifierActiveKey").has_value());
+    EXPECT_EQ(last(), (std::pair<std::string, StepUpWhen>{ "settings.edit.restricted", StepUpWhen::Always }));
+    ASSERT_TRUE(Supervisor::StepUpFor(request("DELETE"), routes, "DELETE", "/api/settings/Account.VerifierKeys").has_value());
+    ASSERT_TRUE(Supervisor::StepUpFor(request("POST", R"({"entries":[{"key":"World.UpdateInterval","value":"60"},{"key":"Account.AllowPlainVerifiers","value":"false"}]})"), routes,
+        "POST", "/api/settings/batch")
+                    .has_value())
+        << "a batch naming one restricted key among others asks";
+    EXPECT_EQ(last(), (std::pair<std::string, StepUpWhen>{ "settings.edit.restricted", StepUpWhen::Always }));
+
+    std::optional<AdminResponse> const killed = Supervisor::Refuse(request("POST", R"({"action":"kill"})"), "power.kill", routes);
+    ASSERT_TRUE(killed.has_value());
+    EXPECT_EQ(nlohmann::json::parse(killed->Body)["error"], "step_up_required") << "an allowed kill still asks the listener before it goes ahead";
+    EXPECT_EQ(last(), (std::pair<std::string, StepUpWhen>{ "power.kill", StepUpWhen::Changing }));
+
+    held.erase("settings.secrets.read");
+    held.erase("settings.edit.restricted");
+    held.erase("power.kill");
+    std::size_t const refusedBefore = asked.size();
+    EXPECT_FALSE(Supervisor::StepUpFor(reveal, routes, "GET", "/api/settings").has_value()) << "a caller who may not see secrets is shown the mask and asked nothing";
+    EXPECT_FALSE(Supervisor::StepUpFor(request("PUT", R"({"value":"2"})"), routes, "PUT", "/api/settings/Account.VerifierActiveKey").has_value())
+        << "the app refuses a restricted change to a caller without the right, so nothing is asked first";
+    std::optional<AdminResponse> const forbidden = Supervisor::Refuse(request("POST"), "power.kill", routes);
+    ASSERT_TRUE(forbidden.has_value());
+    EXPECT_EQ(forbidden->Status, 403);
+    EXPECT_EQ(nlohmann::json::parse(forbidden->Body)["error"], "forbidden");
+    EXPECT_EQ(asked.size(), refusedBefore) << "a refused permission is never followed by a check";
 }
