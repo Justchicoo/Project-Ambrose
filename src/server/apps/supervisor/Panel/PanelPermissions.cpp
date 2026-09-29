@@ -129,6 +129,7 @@ namespace
             { "announcements", "events.manage", "Run timed events", false, false, false },
 
             { "metrics", "metrics.read", "See figures, graphs and the analytics pages", false, false, false },
+            { "metrics", "metrics.profile", "Capture and download a bounded world tick profile", false, false, false },
             { "metrics", "alerts.read", "See alert rules and what they fired on", false, false, false },
             { "metrics", "alerts.manage", "Add and change alert rules", false, false, false },
 
@@ -173,7 +174,7 @@ namespace
         "settings.read", "reload.read", "reload.run", "files.list", "files.read", "files.download",
         "backups.read", "backups.create", "schedules.read", "schedules.edit", "schedules.run",
         "clientdata.read", "database.read", "realms.read", "players.read", "players.kick",
-        "metrics.read", "alerts.read", "activity.read", "users.read", "nodes.read", "updates.read", "launch.read", "network.read"
+        "metrics.read", "metrics.profile", "alerts.read", "activity.read", "users.read", "nodes.read", "updates.read", "launch.read", "network.read"
     };
 
     std::vector<std::string_view> const GameMasterKeys{

@@ -70,6 +70,9 @@ TEST(PanelPermissionsTest, AViewerLooksAndDoesNotAct)
         EXPECT_FALSE(PanelPermissions::RoleAllows(PanelRole::Viewer, acting)) << acting << " is not a viewer's to do";
 
     EXPECT_TRUE(PanelPermissions::RoleAllows(PanelRole::Operator, "console.write"));
+    EXPECT_TRUE(PanelPermissions::RoleAllows(PanelRole::Operator, "metrics.profile"));
+    EXPECT_FALSE(PanelPermissions::RoleAllows(PanelRole::GameMaster, "metrics.profile"));
+    EXPECT_FALSE(PanelPermissions::RoleAllows(PanelRole::Viewer, "metrics.profile"));
     EXPECT_FALSE(PanelPermissions::RoleAllows(PanelRole::Operator, "accounts.delete")) << "running the servers is not owning the accounts";
     EXPECT_TRUE(PanelPermissions::RoleAllows(PanelRole::GameMaster, "players.kick"));
     EXPECT_FALSE(PanelPermissions::RoleAllows(PanelRole::GameMaster, "power.restart")) << "a game master acts on the game, not on the process";

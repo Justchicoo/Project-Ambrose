@@ -6,9 +6,9 @@
     "percent": 19.4
   },
   "checks": {
-    "done": 801,
+    "done": 804,
     "total": 2866,
-    "percent": 27.9
+    "percent": 28.1
   },
   "contributor_track": {
     "merged": 71,
@@ -148,7 +148,7 @@
       "title": "Operations console admin api dashboard and metrics",
       "milestones_done": 18,
       "milestones_total": 186,
-      "checks_done": 138,
+      "checks_done": 141,
       "checks_total": 1113
     }
   ]

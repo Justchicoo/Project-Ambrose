@@ -33,6 +33,8 @@ import {
     FileListing,
     FileRootsAnswer,
     FileRulesAnswer,
+    TickProfileAnswer,
+    TickProfileTraceAnswer,
     type AppEntry,
 } from "./schemas";
 
@@ -178,6 +180,18 @@ export function graphRange(subject: string, series: string, fromEpochMs: number,
 
 export function metricsOf(app: string, signal?: AbortSignal) {
     return request("GET", pathFor(app, "metrics"), MetricsAnswer, undefined, signal);
+}
+
+export function startTickProfile(app: string, seconds: number) {
+    return request("POST", pathFor(app, "tick-profile"), TickProfileAnswer, { seconds });
+}
+
+export function tickProfileOf(app: string, signal?: AbortSignal) {
+    return request("GET", pathFor(app, "tick-profile"), TickProfileAnswer, undefined, signal);
+}
+
+export function tickProfileTraceOf(app: string) {
+    return request("GET", pathFor(app, "tick-profile/trace"), TickProfileTraceAnswer);
 }
 
 export function reloadTargetsOf(app: string, signal?: AbortSignal) {

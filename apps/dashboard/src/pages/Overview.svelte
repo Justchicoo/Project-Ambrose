@@ -1,13 +1,21 @@
-<!-- Project Ambrose by Imjustchico: The overview of the app that served the panel, read live, and, when the supervisor served it, a card for every app it runs with the state, uptime and crashes the supervisor reports: headline figures and a card with its state, place, uptime, build, sessions, memory, threads and tick times, badges and problems with the button that fixes each where the build reports the problem, every figure carrying the age of its sample and demoted once it goes stale, and the last fifteen minutes of what it reports over time. -->
+<!-- Project Ambrose by Imjustchico: The live app overview and its world tick graph, named subsystem budget breakdown and bounded on-demand Chrome trace capture. -->
 <script lang="ts">
     import { Sparkline, TimeSeries } from "@ambrose/ui";
     import * as Card from "$lib/components/ui/card/index.js";
     import { Button } from "$lib/components/ui/button/index.js";
     import { formatAge, formatBytes, formatUptime } from "$lib/format.js";
     import { history, isStale, live } from "$lib/status.svelte.js";
-    import { supervised, supervisorServes } from "$lib/supervision.svelte.js";
+    import {
+        metricsOf,
+        startTickProfile,
+        supervised,
+        supervisorServes,
+        tickProfileOf,
+        tickProfileTraceOf,
+    } from "$lib/supervision.svelte.js";
     import { theme } from "$lib/theme.svelte.js";
-    import type { Problem } from "$lib/schemas.js";
+    import { ApiError } from "$lib/api.svelte.js";
+    import type { MetricFamily, MetricsAnswer, Problem } from "$lib/schemas.js";
     import CircleAlertIcon from "@lucide/svelte/icons/circle-alert";
     import PageHeader from "../components/PageHeader.svelte";
     import StatusBadge from "../components/StatusBadge.svelte";
@@ -25,6 +33,9 @@
 
     const status = $derived(live.status);
     const app = $derived(live.apps[0]);
+    const gameApp = $derived.by(() =>
+        live.status?.role === "game" ? live.status.app : (live.apps.find((entry) => entry.role === "game")?.name ?? ""),
+    );
     const watched = $derived(supervised());
     const runs = $derived(supervisorServes());
     const running = $derived(watched.filter((entry) => entry.supervision?.state === "running").length);
@@ -34,8 +45,32 @@
     const age = $derived(live.receivedAt === 0 ? "" : formatAge(live.now - live.receivedAt));
     const known = $derived(new Set((live.capabilities?.problem_codes ?? []).map((entry) => entry.code)));
     const problems = $derived(status?.problems ?? []);
+    let tickMetrics = $state<MetricsAnswer | null>(null);
+    let tickMetricsFailure = $state("");
+    let captureSeconds = $state(5);
+    let captureActive = $state(false);
+    let captureMessage = $state("");
 
-    const state = $derived.by((): { tone: Tone; word: string } => {
+    $effect(() => {
+        const target = gameApp;
+        const beat = live.now;
+        void beat;
+        if (target === "") return;
+        const controller = new AbortController();
+        void (async () => {
+            try {
+                tickMetrics = await metricsOf(target, controller.signal);
+                tickMetricsFailure = "";
+            } catch (problem) {
+                if (controller.signal.aborted) return;
+                tickMetrics = null;
+                tickMetricsFailure = problem instanceof ApiError ? problem.message : "The tick breakdown could not be read";
+            }
+        })();
+        return () => controller.abort();
+    });
+
+    const overallState = $derived.by((): { tone: Tone; word: string } => {
         if (!status || !reachable) return { tone: "unknown", word: live.connection === "disconnected" ? "Signed out" : "Not answering" };
         if (status.state === "running")
             return problems.length > 0 ? { tone: "waiting", word: "Needs attention" } : { tone: "healthy", word: "Running" };
@@ -46,7 +81,12 @@
 
     const place = $derived(!app ? "" : app.address === "" || app.port === 0 ? "No client listener" : `${app.address}:${app.port}`);
     const figures = $derived([
-        { label: "State", value: state.word, number: false, detail: app ? `${app.role}, ${place.toLowerCase()}` : "Reading the app list" },
+        {
+            label: "State",
+            value: overallState.word,
+            number: false,
+            detail: app ? `${app.role}, ${place.toLowerCase()}` : "Reading the app list",
+        },
         {
             label: "Uptime",
             value: status ? formatUptime(status.uptime) : "Not read yet",
@@ -111,6 +151,80 @@
 
     function fixFor(problem: Problem) {
         return known.has(problem.code) ? fixes[problem.code] : undefined;
+    }
+
+    function componentValue(name: string, family: MetricFamily | undefined): number | null {
+        if (!family) return null;
+        const found = family.series.find((one) => one.labels.component === name);
+        return found?.value ?? null;
+    }
+
+    const tickComponents = $derived.by(() => {
+        const elapsed = tickMetrics?.metrics.find((family) => family.name === "ambrose_world_tick_subsystem_nanoseconds");
+        const budgets = tickMetrics?.metrics.find((family) => family.name === "ambrose_world_tick_subsystem_budget_nanoseconds");
+        const available = tickMetrics?.metrics.find((family) => family.name === "ambrose_world_tick_subsystem_available");
+        const overBudget = tickMetrics?.metrics.find((family) => family.name === "ambrose_world_tick_subsystem_over_budget");
+        return (elapsed?.series ?? []).map((series) => {
+            const name = series.labels.component ?? "unknown";
+            const reason = available?.series.find((one) => one.labels.component === name)?.labels.reason ?? "";
+            return {
+                name,
+                title:
+                    (
+                        {
+                            network_drain: "Network queue drain",
+                            session_update: "Session world update",
+                            session_cleanup: "Session cleanup",
+                            zone_instances: "Zone instances",
+                            scripting: "Scripting",
+                            world_overhead: "Other world tick work",
+                            movement: "Movement",
+                            database_waits: "Database waits",
+                            combat: "Combat",
+                        } as Record<string, string>
+                    )[name] ?? name.replaceAll("_", " "),
+                nanoseconds: series.value,
+                budget: componentValue(name, budgets),
+                available: componentValue(name, available) === 1,
+                overBudget: componentValue(name, overBudget) === 1,
+                reason,
+            };
+        });
+    });
+
+    async function captureTickProfile() {
+        const target = gameApp;
+        if (target === "") return;
+        captureActive = true;
+        captureMessage = "";
+        try {
+            let profile = await startTickProfile(target, captureSeconds);
+            const deadline = Date.now() + (captureSeconds + 5) * 1000;
+            while (profile.active && Date.now() < deadline) {
+                await new Promise((resolve) => setTimeout(resolve, 250));
+                profile = await tickProfileOf(target);
+            }
+            if (profile.active || !profile.complete) throw new Error("The tick profile did not finish before its deadline");
+            const answer = await tickProfileTraceOf(target);
+            const url = URL.createObjectURL(new Blob([answer.trace], { type: "application/json" }));
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "world-tick-profile.json";
+            document.body.append(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            captureMessage = `Downloaded ${answer.events} Chrome trace events${answer.truncated ? "; capture reached its event limit" : ""}.`;
+        } catch (problem) {
+            captureMessage =
+                problem instanceof ApiError
+                    ? problem.message
+                    : problem instanceof Error
+                      ? problem.message
+                      : "The tick profile could not be captured";
+        } finally {
+            captureActive = false;
+        }
     }
 </script>
 
@@ -199,7 +313,10 @@
                     >{/if}
             </Card.Title>
             <Card.Description class={place.includes(":") ? "font-mono text-xs" : "text-xs"}>{place}</Card.Description>
-            <Card.Action><StatusBadge tone={state.tone} pulse={state.tone === "healthy" && !stale}>{state.word}</StatusBadge></Card.Action>
+            <Card.Action>
+                <StatusBadge tone={overallState.tone} pulse={overallState.tone === "healthy" && !stale}>{overallState.word}</StatusBadge
+                ></Card.Action
+            >
         </Card.Header>
         <Card.Content class={`flex-1 space-y-4 ${stale ? "text-muted-foreground" : ""}`}>
             {#if app?.realm || problems.length > 0}
@@ -306,6 +423,89 @@
                 <p class="text-sm text-muted-foreground">
                     This app reports nothing over time yet. Resource graphs for every app arrive with milestone 17.19.
                 </p>
+            {/if}
+            {#if status?.tick && gameApp !== ""}
+                <section class="mt-5 border-t pt-4" aria-labelledby="tick-breakdown-title">
+                    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h3 id="tick-breakdown-title" class="font-serif text-lg">World tick breakdown</h3>
+                            <p class="text-xs text-muted-foreground">
+                                Latest measured subsystem time and its budget. Movement is wizards being shown to each other, their jumps
+                                and the movement flush; reading what a client sent counts as network drain, and database waits run off the
+                                world thread.
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label for="tick-profile-seconds" class="text-xs text-muted-foreground">Profile</label>
+                            <select
+                                id="tick-profile-seconds"
+                                bind:value={captureSeconds}
+                                class="h-9 rounded-md border bg-background px-2 text-sm"
+                            >
+                                <option value={1}>1 second</option>
+                                <option value={5}>5 seconds</option>
+                                <option value={10}>10 seconds</option>
+                                <option value={30}>30 seconds</option>
+                            </select>
+                            <Button size="sm" variant="outline" disabled={captureActive} onclick={() => void captureTickProfile()}>
+                                {captureActive ? "Capturing…" : "Capture trace"}
+                            </Button>
+                        </div>
+                    </div>
+                    {#if tickMetricsFailure !== ""}
+                        <p class="mb-3 text-sm text-destructive" role="alert">{tickMetricsFailure}</p>
+                    {:else if tickComponents.length === 0}
+                        <p class="mb-3 text-sm text-muted-foreground">Waiting for the first world tick measurement.</p>
+                    {:else}
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b text-left text-xs text-muted-foreground">
+                                        <th class="py-2 font-medium">Subsystem</th>
+                                        <th class="py-2 text-right font-medium">Latest</th>
+                                        <th class="py-2 text-right font-medium">Budget</th>
+                                        <th class="py-2 text-right font-medium">State</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {#each tickComponents as component (component.name)}
+                                        <tr class="border-b last:border-0">
+                                            <th scope="row" class="py-2 text-left font-medium">{component.title}</th>
+                                            <td class="py-2 text-right font-mono tabular-nums">
+                                                {component.available && component.nanoseconds !== null
+                                                    ? `${(component.nanoseconds / 1000000).toFixed(3)} ms`
+                                                    : "Unavailable"}
+                                            </td>
+                                            <td class="py-2 text-right font-mono tabular-nums">
+                                                {component.available && component.budget !== null
+                                                    ? `${(component.budget / 1000000).toFixed(3)} ms`
+                                                    : "—"}
+                                            </td>
+                                            <td class="py-2 text-right">
+                                                {#if !component.available}
+                                                    <StatusBadge tone="unknown">
+                                                        {component.reason.includes("not integrated")
+                                                            ? "Not landed"
+                                                            : component.reason.includes("outside the world tick")
+                                                              ? "Outside tick"
+                                                              : "Not separately measured"}
+                                                    </StatusBadge>
+                                                {:else if component.overBudget}
+                                                    <StatusBadge tone="wrong">Over budget</StatusBadge>
+                                                {:else}
+                                                    <StatusBadge tone="healthy">Within budget</StatusBadge>
+                                                {/if}
+                                            </td>
+                                        </tr>
+                                    {/each}
+                                </tbody>
+                            </table>
+                        </div>
+                    {/if}
+                    {#if captureMessage !== ""}
+                        <p class="mt-3 text-sm" role="status">{captureMessage}</p>
+                    {/if}
+                </section>
             {/if}
         </Card.Content>
     </Card.Root>

@@ -57,6 +57,9 @@ namespace
         AdminSettingsView::Register(routes, settings);
         AdminReloadView::Register(routes);
         AdminMetricsView::Register(routes);
+        routes.AddGuarded("POST", "/api/tick-profile", "metrics.profile", [](AdminRequest const&) { return AdminResponse::Json(202, "{}"); });
+        routes.AddGuarded("GET", "/api/tick-profile", "metrics.profile", [](AdminRequest const&) { return AdminResponse::Json(200, "{}"); });
+        routes.AddGuarded("GET", "/api/tick-profile/trace", "metrics.profile", [](AdminRequest const&) { return AdminResponse::Json(200, "{}"); });
         AdminActivityView::Register(routes, "activity.jsonl");
         AdminClientView::Register(routes, [] () -> ClientSetupResult const& { return NoClient(); });
         AdminCommand::Register(routes, commands, "gameserver", "activity.jsonl");
@@ -129,6 +132,10 @@ TEST(PanelRoutesTest, AWriteTheRelayDoesNotKnowOrASignInIsNeverRelayed)
     EXPECT_EQ(Supervisor::PermissionFor("POST", "/api/database/reload"), std::optional<std::string_view>("reload.run"));
     EXPECT_EQ(Supervisor::PermissionFor("GET", "/api/logs/after/0"), std::optional<std::string_view>("console.read"));
     EXPECT_EQ(Supervisor::PermissionFor("POST", "/api/shutdown"), std::optional<std::string_view>("power.stop"));
+    EXPECT_EQ(Supervisor::PermissionFor("POST", "/api/tick-profile"), std::optional<std::string_view>("metrics.profile"));
+    EXPECT_EQ(Supervisor::PermissionFor("GET", "/api/tick-profile"), std::optional<std::string_view>("metrics.profile"));
+    EXPECT_EQ(Supervisor::PermissionFor("GET", "/api/tick-profile/trace"), std::optional<std::string_view>("metrics.profile"));
+    EXPECT_FALSE(Supervisor::PermissionFor("POST", "/api/tick-profile/trace").has_value());
     EXPECT_EQ(Supervisor::PermissionFor("PATCH", "/api/settings"), std::optional<std::string_view>("settings.edit"));
     EXPECT_EQ(Supervisor::PermissionFor("PUT", "/api/settings/World.UpdateInterval"), std::optional<std::string_view>("settings.edit"));
     EXPECT_EQ(Supervisor::PermissionFor("GET", "/api/settings/World.UpdateInterval/history"), std::optional<std::string_view>("settings.read"));
@@ -145,7 +152,7 @@ TEST(PanelRoutesTest, AWriteTheRelayDoesNotKnowOrASignInIsNeverRelayed)
     EXPECT_FALSE(Supervisor::PermissionFor("DELETE", "/api/settings").has_value());
     EXPECT_FALSE(Supervisor::PermissionFor("GET", "/api/nothing").has_value()) << "a path the relay does not know is not relayed under a looser permission";
     EXPECT_FALSE(Supervisor::PermissionFor("GET", "/api/database/apply").has_value());
-    for (std::string_view const key : { "database.read", "updates.apply", "reload.run", "console.read", "power.stop", "settings.edit", "clientdata.read", "activity.read", "metrics.read" })
+    for (std::string_view const key : { "database.read", "updates.apply", "reload.run", "console.read", "power.stop", "settings.edit", "clientdata.read", "activity.read", "metrics.read", "metrics.profile" })
         EXPECT_TRUE(PanelPermissions::Holds(key)) << key;
 }
 

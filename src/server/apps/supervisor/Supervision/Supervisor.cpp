@@ -285,6 +285,10 @@ std::optional<std::string_view> Supervisor::PermissionFor(std::string_view metho
     bool const read = method == "GET";
     if (tail == "/api/command")
         return method == "POST" ? std::optional<std::string_view>("console.write") : std::nullopt;
+    if (tail == "/api/tick-profile")
+        return (method == "GET" || method == "POST") ? std::optional<std::string_view>("metrics.profile") : std::nullopt;
+    if (tail == "/api/tick-profile/trace")
+        return method == "GET" ? std::optional<std::string_view>("metrics.profile") : std::nullopt;
     if (tail.starts_with("/api/logs/after/"))
         return read ? std::optional<std::string_view>("console.read") : std::nullopt;
     if (tail == "/api/settings")
