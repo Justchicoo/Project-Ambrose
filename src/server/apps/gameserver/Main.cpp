@@ -49,6 +49,7 @@
 #include "ScriptMgr.h"
 #include "GameMessageTable.h"
 #include "GameSession.h"
+#include "GameShutdown.h"
 #include "MessageRegistry.h"
 #include "SessionContext.h"
 #include "SocketMgr.h"
@@ -866,11 +867,13 @@ namespace
             sStats.Unpublish("realm_beating");
             _heartbeat.Stop();
             if (_sockets)
-                _sockets->StopNetwork();
-            _sockets.reset();
+                GameShutdown::NotifyAndDrain(*_sockets, std::chrono::seconds(5));
             for (std::shared_ptr<GameSession> const& session : sWorld.GetSessions())
                 session->LeaveWorld();
             sWorld.Clear();
+            if (_sockets)
+                _sockets->StopNetwork();
+            _sockets.reset();
             sCommandMgr.Clear();
             sScriptMgr.OnShutdown();
             sScriptMgr.Unload();

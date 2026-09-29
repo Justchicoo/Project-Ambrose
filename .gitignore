@@ -3,6 +3,7 @@
 build/
 out/
 cmake-build-*/
+CMakeUserPresets.json
 .vs/
 .vscode/
 *.obj

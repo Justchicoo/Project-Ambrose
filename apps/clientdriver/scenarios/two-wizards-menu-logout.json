@@ -1,0 +1,157 @@
+{
+  "title": "Two wizards: quitting from the in-world menu removes and restores the wizard",
+  "include": "two-wizards.json",
+  "notes": [
+    "After the included two-wizard and link-dead reattach checks, the companion opens the in-world menu and",
+    "chooses Quit. The game server must save and remove it from the main wizard's view; the companion then plays",
+    "again and must return at the exact position saved by the menu logout. This client build retries its spent",
+    "zone ticket after logout, so the driver ends that process after save/removal and starts a fresh client."
+  ],
+  "steps": [
+    {
+      "action": "key",
+      "name": "the companion opens its in-world menu",
+      "client": "companion",
+      "vk": "0x1B"
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the in-world menu",
+      "client": "companion",
+      "file": "companion-in-world-menu",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "the companion chooses Quit from the menu",
+      "client": "companion",
+      "target": "game_menu_quit"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the menu logout saves the companion's position",
+      "pattern": "saved wizard {companion_wizard_guid} at \\((\\S+, \\S+, \\S+)\\)",
+      "timeout": 30,
+      "keep": "companion_saved_place",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the main wizard sees the companion leave",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} was taken away from the (\\d+) wizard\\(s\\) still in instance",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "kill_client",
+      "name": "stop the companion after its menu logout",
+      "client": "companion"
+    },
+    {
+      "action": "restart_client",
+      "name": "restart the companion after its menu logout",
+      "client": "companion",
+      "timeout": 240
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the companion renderer starts again after menu logout",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the companion login screen appears after menu logout",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "log in again after menu logout",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the companion account is accepted after menu logout",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the companion is admitted after menu logout",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30,
+      "client": "companion"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the companion character selection scene loads after menu logout",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the companion reaches character selection after menu logout",
+      "client": "companion",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the menu-quit companion removed",
+      "file": "main-sees-menu-quit-companion-gone",
+      "settle": 1
+    },
+    {
+      "action": "click",
+      "name": "the companion plays again after menu logout",
+      "client": "companion",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{companion_wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the menu-quit companion returns to its saved position",
+      "pattern": "put wizard {companion_wizard_guid} in \\S+ instance \\d+ at \\((\\S+, \\S+, \\S+)\\)",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "expect": "{companion_saved_place}",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the companion after menu logout",
+      "pattern": "loaded (\\S+), and wizard {companion_wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the companion return after menu logout",
+      "file": "main-sees-menu-quit-companion-return",
+      "settle": 3
+    }
+  ],
+  "pending_allowed": [
+    "MSG_PLAYERWIZBANG",
+    "MSG_REQUESTPRIVACYOPTIONS",
+    "MSG_REQUESTSHOWPVPOPTION"
+  ]
+}

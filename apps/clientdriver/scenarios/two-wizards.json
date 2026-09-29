@@ -1,15 +1,15 @@
 {
-  "title": "Two wizards in the Commons see each other appear, move, jump, leave and come back",
+  "title": "Two wizards in the Commons see each other appear, move, jump, lose a client process and resume",
   "include": "parts/common.json",
   "notes": [
     "Two clients enter WizardCity/WC_Hub on accounts and wizards of their own. The main wizard enters first and backs",
     "away from the zone's Start, so the companion appears in front of it; the game server shows each to the other.",
     "The companion turns around to face the main wizard, which a right turn held 1.27 s does at the 2.47 rad/s the saved",
     "facings of an earlier run measured, then runs a full circle with W and D held together for 2.5 s, stops and jumps while the main",
-    "client is filmed every quarter second, which shows",
-    "the moves and movement states the main client is sent. The companion's client then quits and starts again: the",
-    "game server takes its wizard away from the main wizard at once, and with the mobile id rest raised to a minute",
-    "the returning wizard must take a new mobile id, and the main wizard must see one companion, not a ghost.",
+    "client is filmed every quarter second, which shows the moves and movement states the main client is sent.",
+    "The companion's process is ended without a logout, so the main wizard sees it stand still and receive the",
+    "link-dead notice. The companion then reconnects before the 300-second retention expires, resuming with the",
+    "same mobile id and without a duplicate.",
     "A client asks for the riders of what another wizard rides with MSG_RIDERSLIST once it sees that wizard; the reply",
     "loads the rider list of a RidableBehavior, which no milestone answers yet, so the request is expected and left unanswered."
   ],
@@ -20,6 +20,7 @@
     "Logger.server=2,Console Server Errors Stream",
     "Realm.Name=Ambrose Driver",
     "Logger.network.session=2,Console Server Errors Stream",
+    "Player.LinkDeadTime=300",
     "Zone.MobileIdReleaseDelay=60000"
   ],
   "server_log_allowed": [
@@ -323,24 +324,21 @@
       "record": true
     },
     {
-      "action": "restart_client",
-      "name": "the companion quits and starts again",
-      "client": "companion",
-      "timeout": 240
-    },
-    {
-      "action": "wait_game_log",
-      "name": "the companion is taken away from the main wizard",
-      "pattern": "Session \\d+'s wizard {companion_wizard_guid} was taken away from the (\\d+) wizard\\(s\\) still in instance",
-      "timeout": 60,
-      "expect": "1",
-      "record": true
+      "action": "kill_client",
+      "name": "the companion process ends without a logout",
+      "client": "companion"
     },
     {
       "action": "shot",
-      "name": "the companion is gone from the main wizard's view",
-      "file": "main-companion-gone",
-      "settle": 1
+      "name": "the main wizard sees the companion link-dead",
+      "file": "main-companion-link-dead",
+      "settle": 3
+    },
+    {
+      "action": "restart_client",
+      "name": "the companion reconnects within the retention window",
+      "client": "companion",
+      "timeout": 240
     },
     {
       "action": "wait_client_log",
@@ -422,19 +420,11 @@
       "timeout": 60,
       "fail": "cannot enter the world",
       "record": true,
-      "reject": "{companion_mobile}"
+      "expect": "{companion_mobile}"
     },
     {
       "action": "wait_game_log",
-      "name": "the two wizards are shown to each other again",
-      "pattern": "Session \\d+'s wizard {companion_wizard_guid} and the (\\d+) wizard\\(s\\) already in instance \\d+ were shown to each other",
-      "timeout": 10,
-      "expect": "1",
-      "record": true
-    },
-    {
-      "action": "wait_game_log",
-      "name": "the client loads the zone and the wizard stands in it (companion, again)",
+      "name": "the returning client loads the existing placement",
       "pattern": "loaded (\\S+), and wizard {companion_wizard_guid} stands in the world",
       "timeout": 300,
       "expect": "WizardCity/WC_Hub"

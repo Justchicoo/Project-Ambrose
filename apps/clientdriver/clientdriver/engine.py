@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect; a step may drive a companion client instead of the main one, each client keeping its own last frame and its own restart, so one run can show two wizards to each other, and a held key, or several held together, or a press may be watched, the other client filmed at a steady pace while the key is held or the press made and for a while after.
+# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, a client may be ended without its logout path, and a scenario may stop and start its game server around a connected client; for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect; a step may drive a companion client instead of the main one, each client keeping its own last frame and its own restart, so one run can show two wizards to each other, and a held key, or several held together, or a press may be watched, the other client filmed at a steady pace while the key is held or the press made and for a while after.
 import os
 import re
 import threading
@@ -274,6 +274,9 @@ class Engine:
             raise StepFailed("this run has no client it can start again" if self.which == "main" else f"this run has no {self.which} client it can start again")
         return restart(float(step.get("timeout", 180)))
 
+    def act_kill_client(self, step):
+        return self.client.close(force=True)
+
     def hold(self, keys, seconds):
         if len(keys) == 1:
             self.client.key(keys[0], hold=seconds)
@@ -352,6 +355,20 @@ class Engine:
         if self.game is None:
             raise StepFailed("the scenario gives the game server a command, but it does not require the game server")
         return self.console_command(self.game, step)
+
+    def act_stop_game_server(self, step):
+        if self.game is None:
+            raise StepFailed("the scenario stops the game server, but it does not require the game server")
+        if not self.game.alive():
+            raise StepFailed("the game server is already stopped")
+        return self.game.stop()
+
+    def act_start_game_server(self, step):
+        if self.game is None:
+            raise StepFailed("the scenario starts the game server, but it does not require the game server")
+        if self.game.alive():
+            raise StepFailed("the game server is already running")
+        return self.game.start(timeout=float(step.get("timeout", 300)))
 
     def console_command(self, server, step):
         server.send(self.fill(step["command"]))

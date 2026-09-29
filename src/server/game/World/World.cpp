@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, each session is then given the tick's time, which is how one that never attaches is closed, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone; then the wizards that left an instance this tick are taken away from the wizards still in it and those that arrived are shown to the wizards already there, and those wizards to them, and a wizard that jumped is shown entering its jumping state to the others in its instance, and to its own client when it did not ask to be left out; then what each wizard said or played since the last tick is shown to every other wizard in its instance within Chat.SayRange of it, a line never to the speaker, whose client shows its own, and an emote to the speaker too when it did not ask to be left out, timed as the chat part of the tick; after the instances are looked after, each is brought in line with its zone's objects, and the wizards in an instance whose objects changed are told which left and which came. When a movement flush is due, every wizard in an instance is asked for what changed of its movement since the last one, and what it gives is sent to every other wizard in the same instance. A wizard is in the world from the moment its session is sent its object until it is kicked or its socket closes, and work for one from another thread is queued on its session and waited for, run at once when the caller is the world thread itself, which could never wait on its own tick; each tick times its subsystems, showing wizards to each other, their jumps and the movement flush counted together as movement, and only while an operator has asked for a profile records a bounded Chrome trace of them.
+ * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, each session is then given the tick's time, which is how one that never attaches is closed, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone; then the wizards that left an instance this tick are taken away from the wizards still in it and those that arrived are shown to the wizards already there, and those wizards to them, and a wizard that jumped is shown entering its jumping state to the others in its instance, and to its own client when it did not ask to be left out; then what each wizard said or played since the last tick is shown to every other wizard in its instance within Chat.SayRange of it, a line never to the speaker, whose client shows its own, and an emote to the speaker too when it did not ask to be left out, timed as the chat part of the tick; after the instances are looked after, each is brought in line with its zone's objects, and the wizards in an instance whose objects changed are told which left and which came. When a movement flush is due, every wizard in an instance is asked for what changed of its movement since the last one, and what it gives is sent to every other wizard in the same instance. A wizard is in the world from the moment its session is sent its object until it is kicked or its socket closes, and work for one from another thread is queued on its session and waited for, run at once when the caller is the world thread itself, which could never wait on its own tick; each tick times its subsystems, showing wizards to each other, their jumps and the movement flush counted together as movement, and only while an operator has asked for a profile records a bounded Chrome trace of them; a wizard whose client drops without logging out stays in its instance as link-dead, shown to the others standing still with MSG_ZOMBIE_PLAYER, until its session's link-dead time passes or the same character attaches again and takes its place.
  */
 
 #include "World.h"
@@ -40,9 +40,10 @@ namespace
         {
             bool const open = session->IsOpen();
             PlayerPresence presence;
-            presence.MapId = open ? session->GetMapId() : std::nullopt;
+            bool const present = open || session->IsLinkDead();
+            presence.MapId = present ? session->GetMapId() : std::nullopt;
             presence.WorldGuid = session->GetWorldGuid();
-            presence.Shown = open && session->IsShown();
+            presence.Shown = present && session->IsShown();
             presence.Arrived = session->TakeArrival() && open;
             if (std::optional<WorldDeparture> const left = session->TakeDeparture())
             {
@@ -143,6 +144,21 @@ namespace
                 LOG_DEBUG("server.world", "Session {}'s wizard {} sent {}, shown to {} other wizard(s){}", speaker.GetSessionId(), speaker.GetWorldGuid(), SpeechName(speech),
                     others, speech.SpeakerSees ? " and to itself" : "");
             }
+        }
+    }
+
+    void NotifyLinkDead(std::vector<std::shared_ptr<GameSession>> const& sessions, GameSession& lost)
+    {
+        if (!lost.GetMapId())
+            return;
+        for (std::shared_ptr<GameSession> const& viewer : sessions)
+        {
+            if (!viewer->IsOpen() || viewer.get() == &lost || viewer->GetMapId() != lost.GetMapId())
+                continue;
+            MovementUpdate stopped;
+            stopped.State = MovementRelay::Standing;
+            viewer->ShowMovementOf(lost, stopped);
+            viewer->ShowZombiePlayer(lost);
         }
     }
 
@@ -259,12 +275,16 @@ void World::AddSession(std::shared_ptr<GameSession> session)
     if (!session)
         return;
     std::lock_guard const lock(_mutex);
+    session->_world = this;
     _sessions.push_back(std::move(session));
 }
 
 void World::RemoveSession(GameSession const* session)
 {
     std::lock_guard const lock(_mutex);
+    for (std::shared_ptr<GameSession> const& held : _sessions)
+        if (held.get() == session)
+            held->_world = nullptr;
     std::erase_if(_sessions, [session](std::shared_ptr<GameSession> const& held) { return held.get() == session; });
 }
 
@@ -278,6 +298,18 @@ std::vector<std::shared_ptr<GameSession>> World::GetSessions() const
 {
     std::lock_guard const lock(_mutex);
     return _sessions;
+}
+
+std::shared_ptr<GameSession> World::FindSessionByCharacterId(uint64 characterId, GameSession const* except) const
+{
+    if (characterId == 0)
+        return nullptr;
+    std::lock_guard const lock(_mutex);
+    auto const found = std::find_if(_sessions.begin(), _sessions.end(), [characterId, except](std::shared_ptr<GameSession> const& session)
+    {
+        return session.get() != except && !session->IsKicked() && session->GetCharacterId() == characterId && (session->IsOpen() || session->IsLinkDead());
+    });
+    return found == _sessions.end() ? nullptr : *found;
 }
 
 std::vector<std::shared_ptr<GameSession>> World::FindInWorld(std::string_view characterIdOrName) const
@@ -331,6 +363,8 @@ bool World::RunFor(std::shared_ptr<GameSession> const& session, std::function<vo
 void World::Clear()
 {
     std::lock_guard const lock(_mutex);
+    for (std::shared_ptr<GameSession> const& session : _sessions)
+        session->_world = nullptr;
     _sessions.clear();
     _moveFlush.Reset();
 }
@@ -379,6 +413,8 @@ void World::Update(std::chrono::milliseconds diff)
 
         auto const updateStarted = std::chrono::steady_clock::now();
         session->WorldUpdate(started);
+        if (session->TakeLinkDeadStart())
+            NotifyLinkDead(sessions, *session);
         auto const updateEnded = std::chrono::steady_clock::now();
         measured[1] += std::chrono::duration_cast<std::chrono::nanoseconds>(updateEnded - updateStarted);
         RecordProfileEvent("session_update", updateStarted, updateEnded);
@@ -387,7 +423,7 @@ void World::Update(std::chrono::milliseconds diff)
     auto const cleanupStarted = std::chrono::steady_clock::now();
     for (std::shared_ptr<GameSession> const& session : sessions)
     {
-        if (session->IsOpen())
+        if (session->IsOpen() || session->IsLinkDead())
             continue;
         session->LeaveWorld();
         RemoveSession(session.get());

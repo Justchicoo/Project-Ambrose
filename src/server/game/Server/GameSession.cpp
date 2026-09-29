@@ -29,6 +29,7 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
+#include <algorithm>
 #include <chrono>
 #include <utility>
 #include <vector>
@@ -71,7 +72,61 @@ std::size_t GameSession::DrainQueue(std::size_t limit)
 
 void GameSession::WorldUpdate(std::chrono::steady_clock::time_point now)
 {
-    if (!IsOpen() || IsAttached() || _attaching.load(std::memory_order_relaxed))
+    if (IsLinkDead())
+    {
+        uint32 const linkDeadTime = sSettings.Get<uint32>("Player.LinkDeadTime");
+        int64 const lostAt = _socketLostAtNanoseconds.load(std::memory_order_relaxed);
+        auto const lost = std::chrono::steady_clock::time_point(std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::nanoseconds(lostAt)));
+        if (linkDeadTime == 0 || now - lost >= std::chrono::seconds(linkDeadTime))
+        {
+            _linkDead.store(false, std::memory_order_relaxed);
+            _inWorld.store(false, std::memory_order_relaxed);
+            MarkOffline();
+            return;
+        }
+        if (!_linkDeadNotified)
+        {
+            _linkDeadNotified = true;
+            _relay.Stop();
+            bool const wasPendingArrival = std::exchange(_arrived, false);
+            _linkDeadStartPending.store(!wasPendingArrival, std::memory_order_relaxed);
+        }
+        return;
+    }
+
+    if (!IsOpen())
+        return;
+    if (IsAttached() && _inWorld.load(std::memory_order_relaxed) && GetStatus() == SessionStatus::InWorld)
+    {
+        if (!_afkTimerStarted)
+        {
+            _afkStarted = now;
+            _afkTimerStarted = true;
+        }
+        uint32 const afkTime = sSettings.Get<uint32>("Player.AfkTime");
+        if (afkTime != 0)
+        {
+            auto const idle = now - _afkStarted;
+            uint32 const warningAt = std::min(sSettings.Get<uint32>("Player.AfkWarnTime"), afkTime);
+            if (!_afkWarned && idle >= std::chrono::seconds(warningAt))
+            {
+                GameMessages::DisconnectAfk warning;
+                SendDmlMessage(warning);
+                _afkWarned = true;
+            }
+            if (idle >= std::chrono::seconds(afkTime))
+            {
+                _intentionalDisconnect.store(true, std::memory_order_relaxed);
+                GameMessages::DisconnectAfk disconnect;
+                disconnect.Warning = 0;
+                SendDmlMessageDelayedClose(disconnect);
+                LOG_INFO("server.gamesession", "Session {} disconnected wizard {} after {} s idle", GetSessionId(), GetCharacterId(), afkTime);
+                return;
+            }
+        }
+        return;
+    }
+    if (IsAttached() || _attaching.load(std::memory_order_relaxed))
         return;
     std::chrono::milliseconds const timeout = GetContext().GetSettings().AttachTimeout;
     if (now - _connectedAt < timeout)
@@ -79,6 +134,21 @@ void GameSession::WorldUpdate(std::chrono::steady_clock::time_point now)
     LOG_INFO("server.gamesession", "Session {} from {} sent no MSG_ATTACH within Attach.Timeout of {} s; closing it",
         GetSessionId(), GetRemoteAddress().to_string(), std::chrono::duration_cast<std::chrono::seconds>(timeout).count());
     CloseSocket();
+}
+
+std::chrono::duration<float> GameSession::GetLinkDeadRemaining(std::chrono::steady_clock::time_point now) const
+{
+    if (!IsLinkDead())
+        return std::chrono::duration<float>::zero();
+    int64 const lostAt = _socketLostAtNanoseconds.load(std::memory_order_relaxed);
+    auto const lost = std::chrono::steady_clock::time_point(std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::nanoseconds(lostAt)));
+    std::chrono::duration<float> const remaining = std::chrono::seconds(sSettings.Get<uint32>("Player.LinkDeadTime")) - (now - lost);
+    return std::max(remaining, std::chrono::duration<float>::zero());
+}
+
+bool GameSession::CanResume(std::chrono::steady_clock::time_point now) const
+{
+    return IsLinkDead() && GetLinkDeadRemaining(now).count() > 0.0f;
 }
 
 void GameSession::ProcessCallbacks()
@@ -112,6 +182,23 @@ void GameSession::OnMessage(DmlMessageData& message)
 
 void GameSession::OnSessionClosed()
 {
+    if (!IsKicked() && !_intentionalDisconnect.load(std::memory_order_relaxed) && !_superseded.load(std::memory_order_relaxed) &&
+        _attached.load(std::memory_order_relaxed) && _inWorld.load(std::memory_order_relaxed) &&
+        sSettings.Get<uint32>("Player.LinkDeadTime") != 0)
+    {
+        _socketLostAtNanoseconds.store(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(),
+            std::memory_order_relaxed);
+        _linkDead.store(true, std::memory_order_relaxed);
+    }
+    else
+        MarkOffline();
+    _countedCallbacks.Clear();
+    _queryCallbacks.Clear();
+    SessionBase::OnSessionClosed();
+}
+
+void GameSession::MarkOffline()
+{
     if (_attached.exchange(false, std::memory_order_relaxed))
     {
         LoginKeyClaim claim;
@@ -120,9 +207,6 @@ void GameSession::OnSessionClosed()
         claim.RealmId = GetRealmId();
         LoginKeyValidator::MarkOffline(claim);
     }
-    _countedCallbacks.Clear();
-    _queryCallbacks.Clear();
-    SessionBase::OnSessionClosed();
 }
 
 void GameSession::HandleAttach(GameMessages::Attach& message)
@@ -132,10 +216,11 @@ void GameSession::HandleAttach(GameMessages::Attach& message)
     claim.AccountId = message.UserId;
     claim.CharacterId = message.CharId;
     claim.RealmId = GetRealmId();
+    _reattach = message.Reattach;
 
-    LOG_INFO("server.gamesession", "Session {} from {} is attaching as account {} with wizard {} for zone {} at {}, on a key of {} character(s)",
+    LOG_INFO("server.gamesession", "Session {} from {} is attaching as account {} with wizard {} for zone {} at {}, Reattach={}, on a key of {} character(s)",
         GetSessionId(), GetRemoteAddress().to_string(), message.UserId, message.CharId, Ambrose::ForLog(message.ZoneName, 128),
-        Ambrose::ForLog(message.Location, 64), message.LoginKey.size());
+        Ambrose::ForLog(message.Location, 64), message.Reattach, message.LoginKey.size());
 
     if (_attaching.exchange(true, std::memory_order_relaxed))
     {
@@ -167,6 +252,25 @@ void GameSession::HandleAttach(GameMessages::Attach& message)
         }
         Diagnose(claim, now);
     }));
+}
+
+void GameSession::HandleQueryLogout(GameMessages::QueryLogout& message)
+{
+    SendDmlMessage(message);
+    LOG_INFO("server.gamesession", "Session {} replied to MSG_QUERY_LOGOUT with IsInstance={}", GetSessionId(), message.IsInstance);
+}
+
+void GameSession::HandleClientDisconnect(GameMessages::ClientDisconnect&)
+{
+    _intentionalDisconnect.store(true, std::memory_order_relaxed);
+    CloseSocket();
+}
+
+void GameSession::HandleNotAfk(GameMessages::NotAfk&)
+{
+    _afkStarted = std::chrono::steady_clock::now();
+    _afkTimerStarted = true;
+    _afkWarned = false;
 }
 
 void GameSession::Diagnose(LoginKeyClaim claim, int64 now)
@@ -296,41 +400,102 @@ void GameSession::LoadSpells(LoginKeyClaim const& claim, CharacterSummary charac
 
 void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character, std::optional<CharacterStats> const& stored, std::vector<CharacterSpell> const& spells)
 {
+    if (!_world)
+    {
+        RefuseEntry(claim, "the world session registry is unavailable");
+        return;
+    }
+    CharacterSummary entering = character;
+    std::shared_ptr<GameSession> previous = _world->FindSessionByCharacterId(character.Guid, this);
+    Map* map = nullptr;
+    uint16 mobileId = 0;
+    bool resumed = false;
+    std::optional<PlayerStats> resumedStats;
+    std::optional<PlayerSpellbook> resumedSpellbook;
+    PlayerMovement movement;
+    MovementRelay relay;
+    if (previous && previous->IsLinkDead() && !previous->CanResume(std::chrono::steady_clock::now()))
+    {
+        previous->LeaveWorld();
+        _world->RemoveSession(previous.get());
+        previous.reset();
+        LoginKeyValidator::MarkOnline(claim);
+    }
+    if (previous && previous->_mapId)
+    {
+        map = sMapMgr.Find(*previous->_mapId);
+        std::optional<uint16> const existingMobile = map ? map->GetMobileId(character.Guid) : std::nullopt;
+        if (map && existingMobile)
+        {
+            resumed = true;
+            mobileId = *existingMobile;
+            entering.Zone = previous->_zonePath;
+            PlayerPosition const& current = previous->_movement.GetPosition();
+            entering.PositionX = current.X;
+            entering.PositionY = current.Y;
+            entering.PositionZ = current.Z;
+            entering.Orientation = current.Yaw;
+            resumedStats = previous->_stats;
+            resumedSpellbook = previous->_spellbook;
+            movement = previous->_movement;
+            relay = previous->_relay;
+        }
+    }
+    if (previous && !resumed)
+    {
+        previous->_superseded.store(true, std::memory_order_relaxed);
+        previous->_intentionalDisconnect.store(true, std::memory_order_relaxed);
+        previous->_attached.store(false, std::memory_order_relaxed);
+        if (previous->IsOpen())
+            previous->Kick("replaced by a newer attach for the same character");
+        previous.reset();
+    }
+
     std::string problem;
-    std::optional<PlayerStats> stats = PlayerStats::Create(character, stored, *sPlayerLevelMgr.GetLevels(), *sPlayerLevelMgr.GetStats(), problem);
+    std::optional<PlayerStats> stats = resumedStats ? std::move(resumedStats) :
+        PlayerStats::Create(entering, stored, *sPlayerLevelMgr.GetLevels(), *sPlayerLevelMgr.GetStats(), problem);
     if (!stats)
     {
         RefuseEntry(claim, problem);
         return;
     }
 
-    bool const placed = character.PositionX != 0.0f || character.PositionY != 0.0f || character.PositionZ != 0.0f;
-    ZonePlace const start = sZoneMgr.FindPlace(character.Zone, ZoneLocations::StartName);
+    bool const placed = entering.PositionX != 0.0f || entering.PositionY != 0.0f || entering.PositionZ != 0.0f;
+    ZonePlace const start = sZoneMgr.FindPlace(entering.Zone, ZoneLocations::StartName);
     if (!start.Found())
     {
-        RefuseEntry(claim, fmt::format("wizard {} is in {}, and {}", character.Guid, Ambrose::ForLog(character.Zone, 128), ZoneMgr::GetLookupName(start.Result)));
+        RefuseEntry(claim, fmt::format("wizard {} is in {}, and {}", character.Guid, Ambrose::ForLog(entering.Zone, 128), ZoneMgr::GetLookupName(start.Result)));
         return;
     }
     PlayerPlacement placement;
-    placement.X = placed ? character.PositionX : start.Location.X;
-    placement.Y = placed ? character.PositionY : start.Location.Y;
-    placement.Z = placed ? character.PositionZ : start.Location.Z;
-    placement.Yaw = placed ? character.Orientation : start.Location.Yaw;
+    placement.X = resumed ? movement.GetPosition().X : placed ? entering.PositionX : start.Location.X;
+    placement.Y = resumed ? movement.GetPosition().Y : placed ? entering.PositionY : start.Location.Y;
+    placement.Z = resumed ? movement.GetPosition().Z : placed ? entering.PositionZ : start.Location.Z;
+    placement.Yaw = resumed ? movement.GetPosition().Yaw : placed ? entering.Orientation : start.Location.Yaw;
 
-    Map& map = sMapMgr.FindOrCreatePublic(character.Zone);
-    std::optional<uint16> const mobileId = sMapMgr.AddPlayer(map, character.Guid);
-    if (!mobileId)
+    if (!resumed)
     {
-        RefuseEntry(claim, fmt::format("instance {} of {} has no mobile id left", map.GetDynamicZoneId(), character.Zone));
+        map = &sMapMgr.FindOrCreatePublic(entering.Zone);
+        std::optional<uint16> const addedMobile = sMapMgr.AddPlayer(*map, character.Guid);
+        if (!addedMobile)
+        {
+            RefuseEntry(claim, fmt::format("instance {} of {} has no mobile id left", map->GetDynamicZoneId(), entering.Zone));
+            return;
+        }
+        mobileId = *addedMobile;
+        _mapId = map->GetDynamicZoneId();
+        _zonePath = entering.Zone;
+        _worldGuid = character.Guid;
+    }
+    if (!map)
+    {
+        RefuseEntry(claim, fmt::format("wizard {}'s existing instance is no longer available", character.Guid));
         return;
     }
-    _mapId = map.GetDynamicZoneId();
-    _zonePath = character.Zone;
-    _worldGuid = character.Guid;
-    _chatName = PackedName::ForWizard(character.CustomName, character.NameIndices, character.Appearance.Gender);
-    placement.MobileId = *mobileId;
+    placement.MobileId = mobileId;
+    _chatName = PackedName::ForWizard(entering.CustomName, entering.NameIndices, entering.Appearance.Gender);
 
-    PlayerSpellbook spellbook = PlayerSpellbook::FromStored(spells);
+    PlayerSpellbook spellbook = resumedSpellbook ? std::move(*resumedSpellbook) : PlayerSpellbook::FromStored(spells);
     std::vector<uint32> missing;
     std::vector<SpellTracker> const trackers = spellbook.Track(*sSpellMgr.GetSpells(), missing);
     if (!missing.empty())
@@ -342,12 +507,13 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     std::shared_ptr<BehaviorClientClasses const> const behaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
     std::shared_ptr<ObjectTemplate const> const playerTemplate = sObjectTemplateMgr.GetPlayer();
     uint32 const permissions = sSettings.Get<uint32>("LoginComplete.Permissions");
-    PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, character, *stats, trackers, placement, permissions, problem);
+    PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, entering, *stats, trackers, placement, permissions, problem);
     ObjectField const* const field = ObjectFields::Find("MSG_LOGINCOMPLETE", "Data");
     EncodeResult const data = player && field ? CoreObjectSerializer::EncodeField(*field, *player, *types) : EncodeResult{};
     if (!player || !field || !data.Ok())
     {
-        LeaveWorld();
+        if (!resumed)
+            LeaveWorld();
         RefuseEntry(claim, player ? fmt::format("its object does not encode: {}", data.Detail) : fmt::format("its object cannot be built: {}", problem));
         return;
     }
@@ -357,46 +523,63 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     shownOptions.Mask = SerializerOptions::PublicMask;
     EncodeResult shown = shownField ? CoreObjectSerializer::EncodeField(*shownField, *player, *types, shownOptions) : EncodeResult{};
     if (!shownField || !shown.Ok())
-        LOG_WARN("server.gamesession", "Session {}'s wizard {} cannot be shown to other wizards: {}", GetSessionId(), character.Guid,
+        LOG_WARN("server.gamesession", "Session {}'s wizard {} cannot be shown to other wizards: {}", GetSessionId(), entering.Guid,
             shownField ? shown.Detail : std::string("MSG_NEWOBJECT's Data is not declared"));
 
     std::string criticalProblem;
-    std::vector<uint8> const critical = MapObjectSpawner::EncodeCriticalObjects(catalog, map, criticalProblem);
+    std::vector<uint8> const critical = MapObjectSpawner::EncodeCriticalObjects(catalog, *map, criticalProblem);
     if (!criticalProblem.empty())
-        LOG_WARN("server.gamesession", "Session {} sends wizard {} no critical objects for {}: {}", GetSessionId(), character.Guid, character.Zone, criticalProblem);
+        LOG_WARN("server.gamesession", "Session {} sends wizard {} no critical objects for {}: {}", GetSessionId(), entering.Guid, entering.Zone, criticalProblem);
 
     GameMessages::LoginComplete complete;
-    complete.ZoneName = character.Zone;
+    complete.ZoneName = entering.Zone;
     complete.Data.assign(data.Bytes.begin(), data.Bytes.end());
     complete.ServerTime = static_cast<uint32>(NowEpochSeconds());
-    complete.ZoneId = StringHash::KiStringHash(character.Zone);
-    complete.DynamicZoneId = map.GetDynamicZoneId();
-    complete.DynamicServerProcId = map.GetDynamicZoneId();
+    complete.ZoneId = StringHash::KiStringHash(entering.Zone);
+    complete.DynamicZoneId = map->GetDynamicZoneId();
+    complete.DynamicServerProcId = map->GetDynamicZoneId();
     complete.Permissions = permissions;
     _chatFilter = ChatMgr::FilterFor(complete.Permissions);
     complete.IsCsr = _securityLevel.load(std::memory_order_relaxed) >= sSettings.Get<uint32>("LoginComplete.CSRSecurityLevel") ? 1 : 0;
     complete.TestServer = sSettings.Get<bool>("LoginComplete.TestServer") ? 1 : 0;
     complete.RealmName = sSettings.Get<std::string>("Realm.Name");
     complete.CriticalObjects.assign(critical.begin(), critical.end());
-    SetCharacterName(sCharacterNameMgr.FormatName(character.NameIndices, character.Appearance.Gender).value_or(std::string()));
+    SetCharacterName(sCharacterNameMgr.FormatName(entering.NameIndices, entering.Appearance.Gender).value_or(std::string()));
+    if (resumed && previous)
+        previous->TransferWorldStateTo(*this);
+    else
+    {
+        _mapId = map->GetDynamicZoneId();
+        _zonePath = entering.Zone;
+        _worldGuid = character.Guid;
+        _mobileId = mobileId;
+        _movement.Reset({ placement.X, placement.Y, placement.Z, placement.Yaw }, 0);
+        _relay.Reset(_movement);
+        _characterRevision = entering.StateRevision;
+    }
     _stats = std::move(stats);
-    _statsRevision = stored ? stored->Revision : 0;
+    if (!resumed)
+        _statsRevision = stored ? stored->Revision : 0;
     _spellbook = std::move(spellbook);
-    _movement.Reset({ placement.X, placement.Y, placement.Z, placement.Yaw }, 0);
-    _relay.Reset(_movement);
-    _mobileId = placement.MobileId;
+    if (resumed)
+    {
+        _movement = std::move(movement);
+        _relay = std::move(relay);
+    }
     _publicObject = shown.Ok() ? std::move(shown.Bytes) : std::vector<uint8>();
-    _characterRevision = character.StateRevision;
+    _inWorld.store(true, std::memory_order_relaxed);
+    _afkTimerStarted = false;
     SendDmlMessage(complete);
-    SendMapObjects(map);
-    _arrived = true;
+    SendMapObjects(*map);
+    if (!resumed)
+        _arrived = true;
     SetStatus(SessionStatus::LoggedIn);
     LOG_DEBUG("server.gamesession", "Session {} sent MSG_LOGINCOMPLETE: zone {}, id {}, dynamic zone {} in process {}, server time {}, realm {}, permissions {:#x}, CSR {}, test server {}, critical objects {}",
         GetSessionId(), complete.ZoneName, complete.ZoneId, complete.DynamicZoneId, complete.DynamicServerProcId, complete.ServerTime, complete.RealmName, complete.Permissions,
         complete.IsCsr, complete.TestServer, complete.CriticalObjects.empty() ? "none" : "a list");
     LOG_INFO("server.gamesession", "Session {} put wizard {} in {} instance {} at ({}, {}, {}) with mobile id {}, level {} with {} of {} health and {} of {} mana and {} spell(s) in its book, and sent its {}-byte object and the zone's {} object(s)",
-        GetSessionId(), character.Guid, character.Zone, map.GetDynamicZoneId(), placement.X, placement.Y, placement.Z, placement.MobileId, _stats->GetLevel(), _stats->GetHitpoints(),
-        _stats->GetMaxHitpoints(), _stats->GetMana(), _stats->GetMaxMana(), trackers.size(), data.Bytes.size(), map.GetObjects().size());
+        GetSessionId(), character.Guid, entering.Zone, map->GetDynamicZoneId(), placement.X, placement.Y, placement.Z, placement.MobileId, _stats->GetLevel(), _stats->GetHitpoints(),
+        _stats->GetMaxHitpoints(), _stats->GetMana(), _stats->GetMaxMana(), trackers.size(), data.Bytes.size(), map->GetObjects().size());
 }
 
 void GameSession::ShowPlayer(GameSession const& other)
@@ -405,6 +588,16 @@ void GameSession::ShowPlayer(GameSession const& other)
     message.Data.assign(other._publicObject.begin(), other._publicObject.end());
     SendDmlMessage(message);
     ShowMovementOf(other, other._relay.Current(other._movement));
+    if (other.IsLinkDead() && other._linkDeadNotified)
+        ShowZombiePlayer(other);
+}
+
+void GameSession::ShowZombiePlayer(GameSession const& other)
+{
+    GameMessages::ZombiePlayer message;
+    message.GlobalId = other._worldGuid;
+    message.Remaining = other.GetLinkDeadRemaining(std::chrono::steady_clock::now()).count();
+    SendDmlMessage(message);
 }
 
 void GameSession::HidePlayer(uint64 worldGuid)
@@ -429,6 +622,8 @@ void GameSession::ShowStateOf(uint64 worldGuid, uint32 state)
 
 bool GameSession::TakeArrival() noexcept
 {
+    if (IsLinkDead() && !_linkDeadNotified)
+        return false;
     return std::exchange(_arrived, false);
 }
 
@@ -505,6 +700,12 @@ void GameSession::HandleClientZoned(GameMessages::ClientZoned& message)
         LOG_WARN("server.gamesession", "Session {} says it loaded zone name id {}, but its wizard was sent to {} ({})", GetSessionId(), message.ZoneNameId,
             Ambrose::ForLog(_zonePath, 128), expected);
         return;
+    }
+    if (GetStatus() != SessionStatus::InWorld)
+    {
+        _afkStarted = std::chrono::steady_clock::now();
+        _afkTimerStarted = true;
+        _afkWarned = false;
     }
     SetStatus(SessionStatus::InWorld);
     LOG_INFO("server.gamesession", "Session {} loaded {}, and wizard {} stands in the world", GetSessionId(), _zonePath, _worldGuid);
@@ -595,6 +796,10 @@ void GameSession::SavePosition(PlayerPosition const& position)
 
 void GameSession::LeaveWorld()
 {
+    _inWorld.store(false, std::memory_order_relaxed);
+    _linkDead.store(false, std::memory_order_relaxed);
+    _linkDeadStartPending.store(false, std::memory_order_relaxed);
+    MarkOffline();
     SetCharacterName(std::string());
     if (_stats)
     {
@@ -615,6 +820,40 @@ void GameSession::LeaveWorld()
     if (Map* const map = sMapMgr.Find(*_mapId))
         sMapMgr.RemovePlayer(*map, _worldGuid);
     _mapId.reset();
+}
+
+void GameSession::TransferWorldStateTo(GameSession& replacement)
+{
+    replacement._mapId = _mapId;
+    replacement._zonePath = _zonePath;
+    replacement._worldGuid = _worldGuid;
+    replacement._mobileId = _mobileId;
+    replacement._movement = _movement;
+    replacement._relay = _relay;
+    replacement._characterRevision = _characterRevision;
+    replacement._statsRevision = _statsRevision;
+    replacement._arrived = _arrived;
+    _superseded.store(true, std::memory_order_relaxed);
+    _intentionalDisconnect.store(true, std::memory_order_relaxed);
+    _attached.store(false, std::memory_order_relaxed);
+    _inWorld.store(false, std::memory_order_relaxed);
+    _linkDead.store(false, std::memory_order_relaxed);
+    _linkDeadStartPending.store(false, std::memory_order_relaxed);
+    _linkDeadNotified = false;
+    _mapId.reset();
+    _publicObject.clear();
+    _stats.reset();
+    _spellbook.reset();
+    _worldGuid = 0;
+    _zonePath.clear();
+    _movement.Reset({}, 0);
+    _relay.Reset(_movement);
+    SetCharacterId(0);
+    _arrived = false;
+    _departure.reset();
+    SetCharacterName(std::string());
+    if (IsOpen())
+        Kick("replaced by a newer attach for the same character");
 }
 
 void GameSession::RefuseEntry(LoginKeyClaim const& claim, std::string const& reason)
