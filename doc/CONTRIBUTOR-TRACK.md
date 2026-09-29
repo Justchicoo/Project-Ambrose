@@ -192,7 +192,7 @@ The second list was written after a batch in which most findings came back as re
 | C-46 | A guide to capturing your own session safely | `doc/guides/safe-session-capture.md` | solanazaru-eng, in #17 |
 | C-47 | A guide to crash reporting and what to remove before sending a dump | `doc/guides/crash-reporting.md` | solanazaru-eng, in #16 |
 | C-49 | A content pack format for content that ships as data | `contrib/proposals/content-pack-format.md` | solanazaru-eng, in #15 |
-| C-52 | Worked examples of a verified and a refuted finding | `contrib/proposals/finding-examples.md` | solanazaru-eng, in #14 |
+| C-52 | Worked examples of a verified and a refuted finding | `contrib/proposals/finding-examples.md` | solanazaru-eng, in #14; MeruneFleuruwu, in [#27](https://github.com/Justchicoo/Project-Ambrose/pull/27) |
 | C-54 | A quality bar for the admin API's authentication | `contrib/proposals/admin-auth-quality-bar.md` | solanazaru-eng, in #13 |
 | C-02 | A metadata-only capture decoder | `contrib/tools/ambrose-capture-decoder/` | MeruneFleuruwu, in #50 |
 | C-03 | Scenarios for the failures a client has to survive, delivered as C-39, with their catalog | `apps/clientdriver/scenarios/README.md` | MeruneFleuruwu, in #54 |

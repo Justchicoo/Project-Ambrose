@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: Proposal for teaching finding quality with one verified and one refuted worked example. -->
+<!-- Project Ambrose by Imjustchico: Proposal for two worked finding examples, one verified and one refuted. -->
 
 # Proposal: worked finding examples
 
@@ -6,107 +6,102 @@
 
 C-52: add a proposal for what a good finding looks like, with one verified example and one refuted example.
 
-## Purpose
+## Problem
 
-The findings guide already defines the JSON fields and explains that a merged finding starts as `claimed`. It also explains that later re-derivation changes the result to `verified` or `refuted`. Contributors still have to infer what enough evidence looks like and how a false lead should be recorded.
+The findings guide defines the required fields and explains that a merged finding starts as `claimed`, then changes to `verified` or `refuted` only after Ambrose re-derives it. It does not yet show both completed outcomes side by side. The examples must satisfy the same status-specific checks that `apps/ci/ci_findings.py` applies to real findings, so a contributor can copy their shape without guessing which fields each outcome needs.
 
-This proposal adds two small, synthetic examples to the findings documentation:
+## Proposed change
 
-1. a claim that survives a repeatable check and is marked `verified`; and
-2. a plausible claim whose check fails and is marked `refuted`.
+Add two clearly labelled teaching examples to `contrib/findings/README.md`. Keep them in the guide rather than `contrib/findings/`, because they are worked examples, and a milestone never cites them as findings.
 
-The examples must be clearly labelled as teaching examples. They must not describe real Wizard101 behavior, use a real client revision as evidence, or be cited by a roadmap milestone.
+Base both examples on facts about the r806919 client that the project's own tools check from outside the code, so each one teaches the kind of evidence the track accepts: an observation of the game made with a tool anyone can run against their own install, never the project's code agreeing with itself.
 
-## Example 1: verified
+### Verified example
 
-Use a harmless protocol-shaped fixture rather than a client message:
+This example demonstrates a narrow claim and the observation that confirms it.
 
 ```json
 {
-  "subject": "Synthetic fixture field width",
-  "area": "protocol",
-  "claim": "The synthetic fixture's mode field occupies three bits and accepts values from 0 through 7.",
-  "revision": "r000000.Synthetic_0_0",
-  "method": "experiment",
+  "subject": "ActorDialog in the type dump",
+  "area": "objects",
+  "claim": "In the r806919.Wizard_1_610 type dump, class ActorDialog has hash 971222955 (0x39e3afab) and six properties.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
   "how_to_repeat": [
-    "Create the repository's synthetic fixture with the documented three-bit mode field.",
-    "Run the focused fixture test with values 0 and 7, then run it with value 8.",
-    "Inspect the test result and the encoded field width without copying any fixture bytes into the finding."
+    "Build the `client` tool with the repository's documented CMake preset.",
+    "Run `client types \"class ActorDialog\" --client <install>` against an r806919.Wizard_1_610 install.",
+    "Read the hash on the class line and the property count below it."
   ],
   "evidence": [
-    "The focused test accepts values 0 and 7.",
-    "The focused test rejects value 8.",
-    "The decoder reports a three-bit field for mode."
+    "The command prints `class ActorDialog  hash 971222955`.",
+    "It lists ActorDialogBase and PropertyClass as bases and prints `6 properties`."
   ],
-  "disproof": "A focused fixture test that accepts 8, rejects a value from 0 through 7, or reports a field width other than three bits.",
+  "disproof": "The same command against an r806919.Wizard_1_610 install prints a different hash or a property count other than six.",
   "confidence": "high",
   "submitted_by": "example only",
-  "submitted_on": "2026-09-19",
+  "submitted_on": "2026-09-27",
   "status": "verified",
-  "verified_by": "Synthetic fixture validation",
-  "verified_on": "2026-09-19",
-  "verified_how": "The focused test accepted the stated boundary values, rejected 8, and reported the expected three-bit width."
+  "verified_by": "client types \"class ActorDialog\" --client <install>",
+  "verified_on": "2026-09-29",
+  "verified_how": "The command printed hash 971222955 and 6 properties for class ActorDialog on a second r806919.Wizard_1_610 install."
 }
 ```
 
-The important pattern is not the fixture itself. The claim is bounded, the steps name the check, the evidence reports observations rather than intentions, and the disproof gives a result that would change the conclusion.
+### Refuted example
 
-## Example 2: refuted
-
-Use a second synthetic fixture to show that a failed claim remains valuable:
+This example shows a plausible overgeneralization and the concrete counterexamples that disprove it.
 
 ```json
 {
-  "subject": "Synthetic fixture terminator",
+  "subject": "TYPE attributes in the message definitions",
   "area": "protocol",
-  "claim": "The synthetic fixture always ends with a zero-valued terminator byte.",
-  "revision": "r000000.Synthetic_0_0",
-  "method": "experiment",
+  "claim": "Every field element in the r806919.Wizard_1_610 message definitions carries a TYPE attribute.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
   "how_to_repeat": [
-    "Create the repository's synthetic fixture with the normal encoder.",
-    "Decode several fixtures with the focused fixture test.",
-    "Record the final byte value reported by the test without copying the fixture bytes into the finding."
+    "Build the `client` tool with the repository's documented CMake preset.",
+    "Run `client wad Messages/PhysicsBehaviorMessages.xml --client <install>` and find MSG_PHYSICS_GRAB's Force field.",
+    "Run `client wad WizardMessages2.xml --client <install>` and find MSG_BATTLEGROUNDQUEUEUPDATE's Kicked field.",
+    "Run `client wad WizardMessages.xml --client <install>` and find MSG_MINIGAMEREWARDS's GlobalID field."
   ],
   "evidence": [
-    "The first fixture ended with a zero-valued byte.",
-    "A fixture containing an optional field ended with a non-zero value.",
-    "The decoder accepted both fixtures without treating the final byte as a terminator."
+    "MSG_PHYSICS_GRAB's Force field carries a TPYE attribute and no TYPE attribute.",
+    "MSG_BATTLEGROUNDQUEUEUPDATE's Kicked field carries a TYP attribute and no TYPE attribute.",
+    "MSG_MINIGAMEREWARDS's GlobalID field carries no attribute at all."
   ],
-  "disproof": "A fixture whose final byte is non-zero while decoding succeeds, or decoder behavior showing that the final byte is not required to be zero.",
+  "disproof": "Any field element in those definitions without a TYPE attribute disproves the claim that every field carries one.",
   "confidence": "high",
   "submitted_by": "example only",
-  "submitted_on": "2026-09-19",
+  "submitted_on": "2026-09-27",
   "status": "refuted",
-  "refuted_how": "The optional-field fixture decoded successfully with a non-zero final byte, so the claimed terminator rule was false."
+  "refuted_by": "client wad on PhysicsBehaviorMessages.xml, WizardMessages2.xml and WizardMessages.xml",
+  "refuted_on": "2026-09-29",
+  "refuted_how": "MSG_PHYSICS_GRAB's Force carries TPYE, MSG_BATTLEGROUNDQUEUEUPDATE's Kicked carries TYP, and MSG_MINIGAMEREWARDS's GlobalID carries no attribute, so not every field carries a TYPE attribute."
 }
 ```
-
-The refuted example should remain in the documentation as a model for recording a useful false lead. It must not be presented as a fact about the game or cited as protocol evidence.
 
 ## Rules for the examples
 
-- Mark synthetic subjects, revisions, submitters, and evidence as examples so nobody mistakes them for findings about a client.
-- Keep the fields valid for the findings checker, including the status-specific verification or refutation fields.
-- Do not include client bytes, archive entries, captures, credentials, or copied text.
-- State the cheapest experiment that could disprove the claim.
-- Keep a verified example from becoming a guarantee: it is verified only against the named synthetic fixture and check.
-- Keep a refuted example visible instead of deleting it; its value is showing how a plausible claim is corrected.
+- Keep both examples visibly labelled as worked examples in the guide, and never cite them from a milestone.
+- Preserve the status-specific fields required by `apps/ci/ci_findings.py`.
+- A real finding names the revision actually observed and reports only evidence someone actually collected.
+- Name the command and what it printed; a command name alone is not enough evidence.
+- Do not add captures, client files, protocol bytes or output copied from a client; the examples state names, hashes and counts, never file text.
 
-## Cheapest disproof of this proposal
+## Cheapest disproof
 
-Run `python apps/ci/ci_findings.py` against the proposed examples and ask a contributor unfamiliar with the findings guide to explain which example is verified, which is refuted, what evidence supports each, and what would disprove each. If the checker rejects the status-specific fields or the reader cannot distinguish the examples from real game findings, this proposal needs revision before implementation.
+Run the `client` commands in each example's `how_to_repeat` against an r806919.Wizard_1_610 install. If a command prints something other than what the example records, the example is unsupported and must be updated before it is added to the guide. Validate both JSON objects with `python -c "import re,json,sys; sys.path.insert(0,'apps/ci'); import ci_findings as c; t=open('contrib/proposals/finding-examples.md',encoding='utf-8').read(); f=chr(96)*3; [print(c.problems_for('contrib/findings/'+d['area']+'/example.json', d)) for d in map(json.loads, re.findall(f+'json\n(.*?)'+f, t, re.S))]"`, which must print `[]` twice.
 
 ## Dependencies and cost
 
-The implementation needs only the existing findings guide, its checker, and a small documentation change. It does not need a client installation, a packet capture, a database, a server build, or any external source. The examples should be added to the guide in the same pull request so the proposal does not alter the findings schema or checker.
+This documentation-only proposal belongs in `contrib/proposals/`. Its implementation would edit only `contrib/findings/README.md`, which the contributor track allows, and would leave the finding schema and checker unchanged. Repeating the examples needs your own install and the built `client` tool.
 
 ## Acceptance
 
-The proposal is ready for implementation when a maintainer can point to one findings-guide section that:
+The proposal is ready for implementation when the findings guide contains:
 
-- contains one clearly synthetic verified example;
-- contains one clearly synthetic refuted example;
-- shows the required status-specific fields;
-- gives repeatable evidence and a concrete disproof for each;
-- contains no client-derived data or copied external material; and
-- leaves the findings schema and checker unchanged.
+- one verified example with all required verification fields;
+- one refuted example with all required refutation fields;
+- repeatable checks and concrete evidence for both outcomes;
+- a clear label that both are worked examples a milestone never cites; and
+- no client files, captured bytes or copied external material.
