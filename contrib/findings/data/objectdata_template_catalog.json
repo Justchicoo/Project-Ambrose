@@ -1,0 +1,25 @@
+{
+  "subject": "objectdata_template_catalog",
+  "area": "data",
+  "claim": "On r806919, TemplateManifest.xml names 117,676 ObjectData templates in 27 archives; those templates decode into 24 classes, and the top 100 classes comprise all 24 and share class CoreTemplate and class PropertyClass as direct bases and ancestors.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Read Bin/revision.dat from your own install and confirm it reports r806919.Wizard_1_610.",
+    "Build contrib/tools/ambrose-template-catalog with the configured Project Ambrose Windows build tree and its existing static libraries.",
+    "Run ambrose-template-catalog with your own install, matching type dump and a private --output path outside the install and repository.",
+    "Check that the report's class_counts sum to object_data_templates, then compare top_100 and common_direct_bases with the class graph in the same type dump.",
+    "Run client template --list on your own install and compare its ObjectData entry count and archive count with the catalog summary."
+  ],
+  "evidence": [
+    "The existing client tool listed 137,423 total template manifest entries across 27 archives; 117,676 entries had an ObjectData/ path.",
+    "The cataloger decoded every ObjectData entry successfully and reported 117,676 templates across 24 classes; the per-class counts sum to 117,676.",
+    "Class counts in descending order were: WizItemTemplate 76,679; WizGameObjectTemplate 15,255; RecipeTemplate 12,402; GameObjectTemplate 8,012; ItemBundleTemplate 1,810; ReagentItemTemplate 867; WizPolymorphTemplate 679; SoundDefTemplate 649; PetSnackItemTemplate 478; BoosterPackTemplate 301; DynamicTriggerTemplate 214; WizPetTemplate 143; WizCinematicActorTemplate 85; ItemSetBonusTemplate 42; CinematicDefTemplate 24; GoldAmountTemplate 15; CurrencyTemplate 8; LunariAmountTemplate 4; ItemTemplate 2; TourneyTokensAmountTemplate 2; WizMountTemplate 2; CinematicActorTemplate 1; EquipmentTemplate 1; SigilDynamicTriggerTemplate 1.",
+    "Only 24 distinct ObjectData template classes occur, so the top 100 classes are all 24; their shared direct bases and shared ancestors are class CoreTemplate and class PropertyClass."
+  ],
+  "disproof": "A repeat on r806919 that finds a different ObjectData manifest count, a class-count sum other than 117676, a template that cannot be decoded, or different shared bases among the ranked classes would disprove this catalog.",
+  "confidence": "high",
+  "submitted_by": "Copilot",
+  "submitted_on": "2026-09-27",
+  "status": "claimed"
+}
