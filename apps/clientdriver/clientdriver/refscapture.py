@@ -106,9 +106,9 @@ class ReferenceCapture(Engine):
 
 
 class CaptureRun(Run):
-    def make_engine(self, client, server, store, variables, databases):
+    def make_engine(self, client, server, store, variables, databases, companion=None):
         return ReferenceCapture(self.scenario, client, server, store, self.shots, variables, databases,
-                                replace=bool(self.options.get("replace")))
+                                replace=bool(self.options.get("replace")), companion=companion)
 
     def extra(self, engine):
         return {"references_written": engine.written}

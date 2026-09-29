@@ -116,4 +116,6 @@ Access says who may see and change a setting over the admin API and the panel. A
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
 | `Zone.MobileIdReleaseDelay` | unsigned | 2000 ms | from 0 to 60000 ms | next connection or operation | gameserver | normal | How long a mobile id rests after its wizard leaves before another wizard may take it. |
+| `Zone.MoveFlushInterval` | unsigned | 250 ms | from 50 to 5000 ms | next connection or operation | gameserver | normal | How often the moves and movement states of the wizards in an instance are sent to the others in it, read at each flush. |
+| `Zone.MoveIdleIntervals` | unsigned | 2 | from 1 to 100 | next connection or operation | gameserver | normal | How many flushes a wizard said to be moving may pass without a new move before the others are told it is standing, read at each flush. |
 | `Zone.UnloadDelay` | unsigned | 60 s | from 0 to 86400 s | next connection or operation | gameserver | normal | How long an empty zone instance stays loaded, read when its last wizard leaves. |

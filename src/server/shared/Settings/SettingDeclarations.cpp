@@ -78,6 +78,9 @@ namespace
 
             Unsigned("Zone.UnloadDelay", "60", "0", "86400", "s", "Zones", Game, NextUse, "How long an empty zone instance stays loaded, read when its last wizard leaves."),
             Unsigned("Zone.MobileIdReleaseDelay", "2000", "0", "60000", "ms", "Zones", Game, NextUse, "How long a mobile id rests after its wizard leaves before another wizard may take it."),
+            Unsigned("Zone.MoveFlushInterval", "250", "50", "5000", "ms", "Zones", Game, NextUse, "How often the moves and movement states of the wizards in an instance are sent to the others in it, read at each flush."),
+            Unsigned("Zone.MoveIdleIntervals", "2", "1", "100", "", "Zones", Game, NextUse,
+                "How many flushes a wizard said to be moving may pass without a new move before the others are told it is standing, read at each flush."),
 
             Text("Realm.Name", "Ambrose", "64", "Realms", Game, NextUse, "The realm's name, announced to the login server with each heartbeat and sent in MSG_LOGINCOMPLETE."),
             Text("Realm.Address", "", "255", "Realms", Game, NextUse, "The address the login server sends players to for this realm; empty uses PublicAddress, then BindIP."),

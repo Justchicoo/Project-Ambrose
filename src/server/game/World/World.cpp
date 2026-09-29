@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, each session is then given the tick's time, which is how one that never attaches is closed, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone; after the instances are looked after, each is brought in line with its zone's objects, and the wizards in an instance whose objects changed are told which left and which came. A wizard is in the world from the moment its session is sent its object until it is kicked or its socket closes, and work for one from another thread is queued on its session and waited for, run at once when the caller is the world thread itself, which could never wait on its own tick.
+ * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, each session is then given the tick's time, which is how one that never attaches is closed, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone; then the wizards that left an instance this tick are taken away from the wizards still in it and those that arrived are shown to the wizards already there, and those wizards to them, and a wizard that jumped is shown entering its jumping state to the others in its instance, and to its own client when it did not ask to be left out; after the instances are looked after, each is brought in line with its zone's objects, and the wizards in an instance whose objects changed are told which left and which came. When a movement flush is due, every wizard in an instance is asked for what changed of its movement since the last one, and what it gives is sent to every other wizard in the same instance. A wizard is in the world from the moment its session is sent its object until it is kicked or its socket closes, and work for one from another thread is queued on its session and waited for, run at once when the caller is the world thread itself, which could never wait on its own tick.
  */
 
 #include "World.h"
@@ -8,14 +8,111 @@
 #include "Log.h"
 #include "MapMgr.h"
 #include "MetricRegistry.h"
+#include "PlayerMeetings.h"
+#include "PlayerStates.h"
+#include "Settings.h"
 #include "ScriptMgr.h"
 #include "StringUtil.h"
 
 #include <algorithm>
+#include <map>
 #include <future>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
+
+namespace
+{
+    void MeetPlayers(std::vector<std::shared_ptr<GameSession>> const& sessions)
+    {
+        std::vector<PlayerPresence> players;
+        players.reserve(sessions.size());
+        bool changed = false;
+        for (std::shared_ptr<GameSession> const& session : sessions)
+        {
+            bool const open = session->IsOpen();
+            PlayerPresence presence;
+            presence.MapId = open ? session->GetMapId() : std::nullopt;
+            presence.WorldGuid = session->GetWorldGuid();
+            presence.Shown = open && session->IsShown();
+            presence.Arrived = session->TakeArrival() && open;
+            if (std::optional<WorldDeparture> const left = session->TakeDeparture())
+            {
+                presence.LeftMapId = left->MapId;
+                presence.LeftGuid = left->WorldGuid;
+            }
+            changed = changed || presence.Arrived || presence.LeftMapId.has_value();
+            players.push_back(presence);
+        }
+        if (!changed)
+            return;
+        PlayerMeetingPlan const plan = PlanPlayerMeetings(players);
+        std::map<std::size_t, std::size_t> told;
+        for (PlayerHiding const& hiding : plan.Hidings)
+        {
+            sessions[hiding.Viewer]->HidePlayer(players[hiding.Left].LeftGuid);
+            ++told[hiding.Left];
+        }
+        for (auto const& [left, count] : told)
+            LOG_DEBUG("server.world", "Session {}'s wizard {} was taken away from the {} wizard(s) still in instance {}", sessions[left]->GetSessionId(), players[left].LeftGuid,
+                count, *players[left].LeftMapId);
+        std::map<std::size_t, std::size_t> met;
+        for (PlayerMeeting const& meeting : plan.Meetings)
+        {
+            GameSession& arrived = *sessions[meeting.Arrived];
+            GameSession& other = *sessions[meeting.Other];
+            if (meeting.ArrivedSees)
+                arrived.ShowPlayer(other);
+            if (meeting.OtherSees)
+                other.ShowPlayer(arrived);
+            ++met[meeting.Arrived];
+        }
+        for (auto const& [arrived, count] : met)
+            LOG_DEBUG("server.world", "Session {}'s wizard {} and the {} wizard(s) already in instance {} were shown to each other", sessions[arrived]->GetSessionId(),
+                sessions[arrived]->GetWorldGuid(), count, *players[arrived].MapId);
+    }
+
+    void RelayJumps(std::vector<std::shared_ptr<GameSession>> const& sessions)
+    {
+        for (std::shared_ptr<GameSession> const& jumper : sessions)
+        {
+            std::optional<uint8> const excludeOriginator = jumper->TakeJump();
+            if (!excludeOriginator || !jumper->IsOpen() || !jumper->IsShown())
+                continue;
+            std::size_t told = 0;
+            for (std::shared_ptr<GameSession> const& viewer : sessions)
+            {
+                if (!viewer->IsOpen() || viewer->GetMapId() != jumper->GetMapId() || (viewer == jumper && *excludeOriginator != 0))
+                    continue;
+                viewer->ShowStateOf(jumper->GetWorldGuid(), PlayerStates::Jumping);
+                if (viewer != jumper)
+                    ++told;
+            }
+            LOG_DEBUG("server.world", "Session {}'s wizard {} jumped{}, shown to {} other wizard(s)", jumper->GetSessionId(), jumper->GetWorldGuid(),
+                *excludeOriginator != 0 ? "" : " and to itself", told);
+        }
+    }
+
+    void FlushMovement(std::vector<std::shared_ptr<GameSession>> const& sessions, uint32 idleFlushes)
+    {
+        std::map<uint32, std::vector<GameSession*>> instances;
+        for (std::shared_ptr<GameSession> const& session : sessions)
+            if (session->IsOpen())
+                if (std::optional<uint32> const map = session->GetMapId())
+                    instances[*map].push_back(session.get());
+        for (auto const& [map, wizards] : instances)
+            for (GameSession* mover : wizards)
+            {
+                MovementUpdate const update = mover->TakeMovementUpdate(idleFlushes);
+                if (update.Empty())
+                    continue;
+                for (GameSession* viewer : wizards)
+                    if (viewer != mover)
+                        viewer->ShowMovementOf(*mover, update);
+            }
+    }
+}
 
 World& World::Instance()
 {
@@ -101,6 +198,7 @@ void World::Clear()
 {
     std::lock_guard const lock(_mutex);
     _sessions.clear();
+    _moveFlush.Reset();
 }
 
 std::thread::id World::GetWorldThreadId() const
@@ -148,6 +246,8 @@ void World::Update(std::chrono::milliseconds diff)
         session->LeaveWorld();
         RemoveSession(session.get());
     }
+    MeetPlayers(sessions);
+    RelayJumps(sessions);
 
     for (uint32 const taken : sMapMgr.Update())
         LOG_DEBUG("server.world", "Took down zone instance {}, empty for longer than its unload delay", taken);
@@ -155,6 +255,8 @@ void World::Update(std::chrono::milliseconds diff)
         for (std::shared_ptr<GameSession> const& session : sessions)
             if (session->IsOpen() && session->GetMapId() == changes.DynamicZoneId)
                 session->SendObjectChanges(changes);
+    if (_moveFlush.Advance(diff, std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MoveFlushInterval"))))
+        FlushMovement(sessions, sSettings.Get<uint32>("Zone.MoveIdleIntervals"));
 
     sScriptMgr.OnWorldUpdate(diff);
 

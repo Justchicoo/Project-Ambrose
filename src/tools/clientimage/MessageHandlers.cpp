@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads every NUL-terminated Class::MSG_Name and MSG_Name string in a program's data sections and follows each RIP-relative reference to a Class::MSG_Name, a lea or the first read of a copy made with mov or movups. A reference is a registration only when the code just before it, back to the previous reference to any such name, also reads the plain MSG_Name, either a string of its own or the tail of the debug name the linker merged it into, because the client's log calls name their own function with the same string and read no plain name; the handler is the last lea of an address in executable code between the name and the call that registers it, as when the handler is that call's last argument, or else the last one in the stretch before the name, as when it is stored first; a registration with neither is kept with no address, and repeats of one handler under one name are kept once. A reference inside the very function its name registers as a handler is not a registration either, since a handler that names itself in its log lines and builds its own plain name to post itself for later reads both names just as a registration does.
+ * Reads every NUL-terminated Class::MSG_Name and MSG_Name string in a program's data sections and follows each RIP-relative reference to a Class::MSG_Name, a lea or the first read of a copy made with mov or movups. A reference is a registration only when the code just before it, back to the previous reference to any such name, also reads the plain MSG_Name, either a string of its own or the tail of the debug name the linker merged it into, because the client's log calls name their own function with the same string and read no plain name; the handler is the last lea of an address in executable code between the name and the call that registers it, as when the handler is that call's last argument, or else the last one in the stretch before the name, as when it is stored first; a registration with neither is kept with no address, and repeats of one handler under one name are kept once. A reference inside the very function its name registers as a handler is not a registration either, since a handler that names itself in its log lines and builds its own plain name to post itself for later reads both names just as a registration does. A behavior registers under a key, its class name and the plain name joined by the first underscore, as RidableBehavior_MSG_RidersList, loads the handler before the key and reads the plain name after it, sometimes past a Class::MSG_Name debug name of its own; so a reference to a key is a registration when the plain name is read after it, before the next key, and its handler is the last lea of an address in executable code before it, back to the previous key or debug name.
  */
 
 #include "MessageHandlers.h"
@@ -24,6 +24,8 @@ namespace
     constexpr std::size_t RegistrationReach = 96;
     constexpr std::size_t CallReach = 32;
     constexpr std::size_t CallReachBytes = 256;
+    constexpr std::size_t BehaviorReach = 192;
+    constexpr std::size_t BehaviorReachBytes = 1536;
 
     struct DebugName
     {
@@ -79,11 +81,28 @@ std::optional<std::size_t> MessageHandlers::SplitName(std::string_view text)
     return split;
 }
 
+std::optional<std::size_t> MessageHandlers::SplitBehaviorName(std::string_view text)
+{
+    std::size_t const split = text.find('_');
+    if (split == std::string_view::npos || split == 0 || text.substr(0, split).find("Behavior") == std::string_view::npos)
+        return std::nullopt;
+    std::string_view const handler = text.substr(split + 1);
+    if (!(handler.starts_with("MSG_") || handler.starts_with("Msg_")) || handler.size() <= 4)
+        return std::nullopt;
+    auto const inOwner = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0; };
+    auto const inName = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_'; };
+    if (std::isalpha(static_cast<unsigned char>(text.front())) == 0 || !std::all_of(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(split), inOwner)
+        || !std::all_of(handler.begin(), handler.end(), inName))
+        return std::nullopt;
+    return split;
+}
+
 std::vector<MessageHandlerRegistration> MessageHandlers::Find(PeImage const& image, CodeIndex const& index)
 {
     std::vector<DebugName> debugNames;
+    std::vector<DebugName> behaviorNames;
     std::map<std::string_view, std::vector<std::pair<uint64, uint64>>> plainNames;
-    ForEachString(image, [&debugNames, &plainNames](uint64 address, std::string_view text)
+    ForEachString(image, [&debugNames, &behaviorNames, &plainNames](uint64 address, std::string_view text)
     {
         if (std::optional<std::size_t> const split = SplitName(text))
         {
@@ -91,12 +110,17 @@ std::vector<MessageHandlerRegistration> MessageHandlers::Find(PeImage const& ima
             std::string_view const tail = text.substr(*split + 2);
             plainNames[tail].emplace_back(address + *split + 2, address + text.size());
         }
-        else if (IsPlainName(text))
+        else if (std::optional<std::size_t> const key = SplitBehaviorName(text))
+            behaviorNames.push_back({ address, text, *key });
+        else if (IsPlainName(text) || text.starts_with("Msg_"))
             plainNames[text].emplace_back(address, address + text.size());
     });
     std::set<uint64> debugAddresses;
     for (DebugName const& name : debugNames)
         debugAddresses.insert(name.Address);
+    std::set<uint64> keyAddresses;
+    for (DebugName const& name : behaviorNames)
+        keyAddresses.insert(name.Address);
 
     std::vector<MessageHandlerRegistration> registrations;
     for (DebugName const& name : debugNames)
@@ -139,6 +163,47 @@ std::vector<MessageHandlerRegistration> MessageHandlers::Find(PeImage const& ima
                     break;
                 if (instruction.Kind == InstructionKind::Lea && instruction.RipRelativeTarget && IsCode(image, *instruction.RipRelativeTarget))
                     handlerAddress = *instruction.RipRelativeTarget;
+            }
+            registrations.push_back({ std::string(name.Text.substr(0, name.Split)), std::string(handler), site, handlerAddress });
+        }
+    }
+    for (DebugName const& name : behaviorNames)
+    {
+        std::string_view const handler = name.Text.substr(name.Split + 1);
+        std::vector<std::pair<uint64, uint64>> const& plain = plainNames[handler];
+        for (uint64 const site : index.RipReferences(name.Address))
+        {
+            bool plainRead = false;
+            std::vector<DecodedInstruction> const after = index.Decode(site, BehaviorReachBytes, BehaviorReach);
+            for (std::size_t at = 1; at < after.size() && !plainRead; ++at)
+            {
+                DecodedInstruction const& instruction = after[at];
+                if (instruction.Kind == InstructionKind::Return)
+                    break;
+                if (!instruction.RipRelativeTarget)
+                    continue;
+                uint64 const target = *instruction.RipRelativeTarget;
+                if (keyAddresses.contains(target))
+                    break;
+                plainRead = std::any_of(plain.begin(), plain.end(), [target](std::pair<uint64, uint64> const& range) { return target >= range.first && target < range.second; });
+            }
+            if (!plainRead)
+                continue;
+            std::vector<DecodedInstruction> const code = index.DecodeFunctionUntil(site);
+            uint64 handlerAddress = 0;
+            std::size_t walked = 0;
+            for (auto instruction = code.rbegin(); instruction != code.rend() && walked < RegistrationReach && handlerAddress == 0; ++instruction)
+            {
+                if (instruction->Address >= site)
+                    continue;
+                ++walked;
+                if (!instruction->RipRelativeTarget)
+                    continue;
+                uint64 const target = *instruction->RipRelativeTarget;
+                if (keyAddresses.contains(target) || debugAddresses.contains(target))
+                    break;
+                if (instruction->Kind == InstructionKind::Lea && IsCode(image, target))
+                    handlerAddress = target;
             }
             registrations.push_back({ std::string(name.Text.substr(0, name.Split)), std::string(handler), site, handlerAddress });
         }

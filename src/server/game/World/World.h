@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * The game's update loop and the sessions it owns, of which a command may take a copy to act on, finding the wizards in the world by character id or by name and handing work for one to the world thread: one thread calls Update, which is the world thread from then on, and everything the world touches happens there, so a session's queued work is drained on it rather than on the network thread that read the message; the tick carries every script's OnUpdate after the sessions have been drained, so a script sees the state the messages of that tick left behind.
+ * The game's update loop and the sessions it owns, of which a command may take a copy to act on, finding the wizards in the world by character id or by name and handing work for one to the world thread: one thread calls Update, which is the world thread from then on, and everything the world touches happens there, so a session's queued work is drained on it rather than on the network thread that read the message; each tick also moves the movement flush on, and when one is due every wizard's new move and movement state go to the others in its instance; the tick carries every script's OnUpdate after the sessions have been drained, so a script sees the state the messages of that tick left behind.
  */
 
 #ifndef AMBROSE_WORLD_H
 #define AMBROSE_WORLD_H
 
+#include "MoveFlushClock.h"
 #include "Types.h"
 
 #include <atomic>
@@ -49,6 +50,7 @@ private:
     mutable std::mutex _mutex;
     std::vector<std::shared_ptr<GameSession>> _sessions;
     std::atomic<uint64> _ticks{ 0 };
+    MoveFlushClock _moveFlush;
     mutable std::mutex _threadMutex;
     std::thread::id _worldThread;
     bool _worldThreadKnown = false;
