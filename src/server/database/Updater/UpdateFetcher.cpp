@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads include paths with $ as the source folder, refuses missing released folders, badly named released files and duplicates, hashes files with CRLF normalized to LF, and applies pending updates released first, then by name, passing again after any pass that applied something, so the files of a folder an update adds are applied in the same run; a pass that meets a file the caller does not admit stops there, so nothing after it runs ahead of it, and the listing reads the same files and records the same way without changing either.
+ * Reads include paths with $ as the source folder, refuses missing released folders, badly named released files and duplicates, hashes files with CRLF normalized to LF, plans updater decisions from in-memory applied records, applies admitted updates in order and repeats after changes, and lists applied and pending updates without changing either.
  */
 
 #include "UpdateFetcher.h"
@@ -188,6 +188,62 @@ UpdateClassification UpdateFetcher::Classify(std::string_view contents)
 bool UpdateFetcher::IsDataOnly(std::string_view contents)
 {
     return Classify(contents).Kind == UpdateKind::Data;
+}
+
+UpdatePlan UpdateFetcher::PlanUpdates(std::vector<UpdateCandidate> const& candidates, std::vector<AppliedUpdate> const& recorded, UpdaterSettings const& settings)
+{
+    std::map<std::string, std::string, std::less<>> applied;
+    for (AppliedUpdate const& row : recorded)
+        applied.emplace(row.Name, row.Hash);
+
+    std::set<std::string, std::less<>> present;
+    for (UpdateCandidate const& candidate : candidates)
+        present.insert(candidate.File.Name);
+
+    std::map<std::string, std::string, std::less<>> vanishedByHash;
+    std::set<std::string, std::less<>> deadNames;
+    for (auto const& [name, hash] : applied)
+    {
+        if (present.contains(name))
+            continue;
+        deadNames.insert(name);
+        if (!hash.empty())
+            vanishedByHash.emplace(hash, name);
+    }
+    for (UpdateCandidate const& candidate : candidates)
+        if (auto const renamed = vanishedByHash.find(candidate.Hash); renamed != vanishedByHash.end())
+            deadNames.erase(renamed->second);
+
+    UpdatePlan plan;
+    plan.DeadReferences.assign(deadNames.begin(), deadNames.end());
+    plan.DeadReferenceLimitExceeded = settings.CleanDeadRefMaxCount > 0 &&
+        plan.DeadReferences.size() > static_cast<std::size_t>(settings.CleanDeadRefMaxCount);
+    if (plan.DeadReferenceLimitExceeded)
+        return plan;
+
+    plan.Decisions.reserve(candidates.size());
+    for (UpdateCandidate const& candidate : candidates)
+    {
+        UpdateDecision decision;
+        decision.Candidate = candidate;
+        if (auto const found = applied.find(candidate.File.Name); found != applied.end())
+        {
+            if (!found->second.empty() && found->second != candidate.Hash)
+                decision.Action = settings.Redundancy ? UpdateDecisionAction::Reapply : UpdateDecisionAction::RejectChanged;
+            else if (found->second.empty())
+                decision.Action = settings.AllowRehash ? UpdateDecisionAction::FillHash : UpdateDecisionAction::RejectMissingHash;
+            else
+                decision.Action = UpdateDecisionAction::AlreadyApplied;
+        }
+        else if (auto const renamed = vanishedByHash.find(candidate.Hash); renamed != vanishedByHash.end())
+        {
+            decision.Action = UpdateDecisionAction::Rename;
+            decision.RenamedFrom = renamed->second;
+            vanishedByHash.erase(renamed);
+        }
+        plan.Decisions.push_back(std::move(decision));
+    }
+    return plan;
 }
 
 bool UpdateFetcher::CollectFiles(std::vector<UpdateFile>& files, std::string& error) const
@@ -414,79 +470,64 @@ UpdateSummary UpdateFetcher::Pass(std::string_view databaseLabel, std::set<std::
     std::vector<AppliedUpdate> recorded;
     if (!ReadRecorded(recorded, error))
         return fail(std::move(error));
-    std::map<std::string, std::string, std::less<>> applied;
-    for (AppliedUpdate& row : recorded)
-        applied.emplace(std::move(row.Name), std::move(row.Hash));
-
-    std::set<std::string, std::less<>> present;
-    for (UpdateFile const& file : files)
-        present.insert(file.Name);
-    std::map<std::string, std::string, std::less<>> vanishedByHash;
-    for (auto const& [name, recordedHash] : applied)
-        if (!present.contains(name) && !recordedHash.empty())
-            vanishedByHash.emplace(recordedHash, name);
-    std::set<std::string, std::less<>> deadNames;
-    for (auto const& [name, recordedHash] : applied)
-        if (!present.contains(name))
-            deadNames.insert(name);
-    std::map<std::string, std::string, std::less<>> fileHashes;
+    std::vector<UpdateCandidate> candidates;
+    candidates.reserve(files.size());
     for (UpdateFile const& file : files)
     {
         std::string contents;
         if (!ReadFile(file.Path, contents, error))
             return fail(std::move(error), file.Name);
-        fileHashes.emplace(file.Name, HashContents(contents));
+        candidates.push_back({ file, HashContents(contents) });
     }
-    for (auto const& [name, hash] : fileHashes)
-        if (auto const renamed = vanishedByHash.find(hash); renamed != vanishedByHash.end())
-            deadNames.erase(renamed->second);
-    for (std::string const& name : deadNames)
+    UpdatePlan const plan = PlanUpdates(candidates, recorded, _settings);
+    for (std::string const& name : plan.DeadReferences)
         if (warned.insert(name).second)
             LOG_WARN("sql.updates", "{} was applied to the {} database but is no longer present on disk", name, databaseLabel);
-    if (_settings.CleanDeadRefMaxCount > 0 && deadNames.size() > static_cast<std::size_t>(_settings.CleanDeadRefMaxCount))
-        return fail(fmt::format("{} applied update references are missing from disk (limit {})", deadNames.size(), _settings.CleanDeadRefMaxCount));
+    if (plan.DeadReferenceLimitExceeded)
+        return fail(fmt::format("{} applied update references are missing from disk (limit {})", plan.DeadReferences.size(), _settings.CleanDeadRefMaxCount));
     if (_settings.CleanDeadRefMaxCount != 0)
-        for (std::string const& name : deadNames)
+        for (std::string const& name : plan.DeadReferences)
             if (!_bookkeeping.Execute(fmt::format("DELETE FROM `updates` WHERE `name` = '{}'", _bookkeeping.Escape(name))))
                 return fail(fmt::format("cannot remove missing update {}: [{}] {}", name, _bookkeeping.GetLastErrorCode(), _bookkeeping.GetLastErrorText()));
 
-    for (UpdateFile const& file : files)
+    for (UpdateDecision const& decision : plan.Decisions)
     {
-        std::string const hash = fileHashes.at(file.Name);
-        bool reapply = false;
-        if (auto const found = applied.find(file.Name); found != applied.end())
+        UpdateFile const& file = decision.Candidate.File;
+        std::string const& hash = decision.Candidate.Hash;
+        switch (decision.Action)
         {
-            ++summary.AlreadyApplied;
-            if (!found->second.empty() && found->second != hash)
-            {
-                ++summary.Changed;
-                if (!_settings.Redundancy)
-                    return fail(fmt::format("{} changed after it was applied to the {} database; Updates.Redundancy is disabled", file.Name, databaseLabel), file.Name);
-                reapply = true;
-            }
-            else if (found->second.empty())
-            {
-                if (!_settings.AllowRehash)
-                    return fail(fmt::format("{} has no recorded hash; enable Updates.AllowRehash to fill it", file.Name), file.Name);
+            case UpdateDecisionAction::AlreadyApplied:
+                ++summary.AlreadyApplied;
+                continue;
+            case UpdateDecisionAction::FillHash:
+                ++summary.AlreadyApplied;
                 if (!_bookkeeping.Execute(fmt::format("UPDATE `updates` SET `hash` = '{}' WHERE `name` = '{}'", hash, _bookkeeping.Escape(file.Name))))
                     return fail(fmt::format("cannot fill the hash for {}: [{}] {}", file.Name, _bookkeeping.GetLastErrorCode(), _bookkeeping.GetLastErrorText()), file.Name);
                 LOG_INFO("sql.updates", "Filled the missing hash for {} in the {} database", file.Name, databaseLabel);
                 continue;
-            }
-            if (!reapply)
+            case UpdateDecisionAction::RejectChanged:
+                ++summary.AlreadyApplied;
+                ++summary.Changed;
+                return fail(fmt::format("{} changed after it was applied to the {} database; Updates.Redundancy is disabled", file.Name, databaseLabel), file.Name);
+            case UpdateDecisionAction::RejectMissingHash:
+                ++summary.AlreadyApplied;
+                return fail(fmt::format("{} has no recorded hash; enable Updates.AllowRehash to fill it", file.Name), file.Name);
+            case UpdateDecisionAction::Reapply:
+                ++summary.AlreadyApplied;
+                ++summary.Changed;
+                break;
+            case UpdateDecisionAction::Rename:
+            {
+                std::string const rename = fmt::format("UPDATE `updates` SET `name` = '{}', `state` = '{}' WHERE `name` = '{}'",
+                    _bookkeeping.Escape(file.Name), ToString(file.State), _bookkeeping.Escape(decision.RenamedFrom));
+                if (!_bookkeeping.Execute(rename))
+                    return fail(fmt::format("cannot record that {} was renamed to {}: [{}] {}", decision.RenamedFrom, file.Name, _bookkeeping.GetLastErrorCode(), _bookkeeping.GetLastErrorText()), file.Name);
+                LOG_INFO("sql.updates", "{} was already applied to the {} database as {}; recorded the new name", file.Name, databaseLabel, decision.RenamedFrom);
+                ++summary.AlreadyApplied;
                 continue;
-        }
-        if (auto const renamed = vanishedByHash.find(hash); renamed != vanishedByHash.end())
-        {
-            std::string const rename = fmt::format("UPDATE `updates` SET `name` = '{}', `state` = '{}' WHERE `name` = '{}'",
-                _bookkeeping.Escape(file.Name), ToString(file.State), _bookkeeping.Escape(renamed->second));
-            if (!_bookkeeping.Execute(rename))
-                return fail(fmt::format("cannot record that {} was renamed to {}: [{}] {}", renamed->second, file.Name, _bookkeeping.GetLastErrorCode(), _bookkeeping.GetLastErrorText()), file.Name);
-            LOG_INFO("sql.updates", "{} was already applied to the {} database as {}; recorded the new name", file.Name, databaseLabel, renamed->second);
-            applied.emplace(file.Name, hash);
-            vanishedByHash.erase(renamed);
-            ++summary.AlreadyApplied;
-            continue;
+            }
+            case UpdateDecisionAction::Apply:
+                break;
         }
 
         std::string contents;
@@ -507,14 +548,13 @@ UpdateSummary UpdateFetcher::Pass(std::string_view databaseLabel, std::set<std::
             return summary;
         }
         auto const elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
-        std::string const record = reapply
+        std::string const record = decision.Action == UpdateDecisionAction::Reapply
             ? fmt::format("UPDATE `updates` SET `hash` = '{}', `state` = '{}', `timestamp` = CURRENT_TIMESTAMP, `speed` = {} WHERE `name` = '{}'",
                 hash, ToString(file.State), elapsed, _bookkeeping.Escape(file.Name))
             : fmt::format("INSERT INTO `updates` (`name`, `hash`, `state`, `speed`) VALUES ('{}', '{}', '{}', {})",
                 _bookkeeping.Escape(file.Name), hash, ToString(file.State), elapsed);
         if (!_bookkeeping.Execute(record))
             return fail(fmt::format("{} was applied but could not be recorded: [{}] {}", file.Name, _bookkeeping.GetLastErrorCode(), _bookkeeping.GetLastErrorText()), file.Name);
-        applied.emplace(file.Name, hash);
         ++summary.Applied;
         summary.AppliedNames.push_back(file.Name);
         LOG_INFO("sql.updates", "Applied {} {} to the {} database in {} ms", ToString(file.State), file.Name, databaseLabel, elapsed);

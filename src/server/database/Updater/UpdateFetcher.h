@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Finds a database's update files through its updates_include table, validates and orders them, and applies the ones the updates table has not recorded, keeping each file's hash, state and duration; it also lists what is applied and pending without applying anything, sorting each pending file into data-only or able to change the schema and saying whether it can run inside one transaction, and can apply only as far as a caller admits.
+ * Finds a database's update files through its updates_include table, validates and orders them, and applies the ones the updates table has not recorded, keeping each file's hash, state and duration; it also lists what is applied and pending without applying anything, sorts pending files by SQL effects, applies only as far as a caller admits, and plans updater policies against in-memory applied records.
  */
 
 #ifndef AMBROSE_UPDATEFETCHER_H
@@ -96,6 +96,37 @@ struct UpdaterSettings
     bool AllowPending = false;
 };
 
+struct UpdateCandidate
+{
+    UpdateFile File;
+    std::string Hash;
+};
+
+enum class UpdateDecisionAction : uint8
+{
+    Apply,
+    Reapply,
+    AlreadyApplied,
+    FillHash,
+    Rename,
+    RejectChanged,
+    RejectMissingHash
+};
+
+struct UpdateDecision
+{
+    UpdateCandidate Candidate;
+    UpdateDecisionAction Action = UpdateDecisionAction::Apply;
+    std::string RenamedFrom;
+};
+
+struct UpdatePlan
+{
+    std::vector<UpdateDecision> Decisions;
+    std::vector<std::string> DeadReferences;
+    bool DeadReferenceLimitExceeded = false;
+};
+
 class UpdateFetcher
 {
 public:
@@ -118,6 +149,7 @@ public:
     static bool ListSqlFiles(std::filesystem::path const& directory, std::vector<std::filesystem::path>& files, std::string& error);
     static UpdateClassification Classify(std::string_view contents);
     static bool IsDataOnly(std::string_view contents);
+    static UpdatePlan PlanUpdates(std::vector<UpdateCandidate> const& candidates, std::vector<AppliedUpdate> const& recorded, UpdaterSettings const& settings);
 
     bool CollectFiles(std::vector<UpdateFile>& files, std::string& error) const;
     bool Inspect(UpdateReport& report, std::string& error) const;
