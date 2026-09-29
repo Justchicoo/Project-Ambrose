@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Answers the WIZARD messages a client sends as it enters the world: its timed access passes and subscriber-only items with empty lists of the classes the client's own handlers load, ActiveTimedAccessPassList and SubscriberOnlyItemsList, written raw because the client reads them with no envelope and no flags word, and its crown balance with none, the only fields the client reads back being Failure and TotalCrowns, until accounts keep crowns; and logs the notes it sends about its screen, its patch time, the end of its shopping and its quest finder.
+ * Answers the WIZARD messages a client sends as it enters the world: its timed access passes and subscriber-only items with empty lists of the classes the client's own handlers load, ActiveTimedAccessPassList and SubscriberOnlyItemsList, written raw because the client reads them with no envelope and no flags word, and its crown balance with none, the only fields the client reads back being Failure and TotalCrowns, until accounts keep crowns; logs the notes it sends about its screen, its patch time, the end of its shopping and its quest finder; and relays a player's spellbook wizbang to the wizards in the same zone instance.
  */
 
 #include "GameSession.h"
 #include "Log.h"
 #include "ObjectFields.h"
 #include "ObjectSerializer.h"
+#include "PlayerWizBang.h"
 #include "PropertyObject.h"
 #include "TypeRegistry.h"
 
@@ -89,4 +90,20 @@ void GameSession::HandleLogPatchClientPatchTime(GameMessages::LogPatchClientPatc
 void GameSession::HandleQuestFinderOption(GameMessages::QuestFinderOption& message)
 {
     LOG_DEBUG(WizardLog, "Session {} turned its quest finder {}", GetSessionId(), message.Enable ? "on" : "off");
+}
+
+void GameSession::HandlePlayerWizBang(GameMessages::PlayerWizBang& message)
+{
+    std::optional<uint32> const mapId = GetMapId();
+    if (!mapId || !IsShown())
+    {
+        LOG_WARN(WizardLog, "Session {} sent MSG_PLAYERWIZBANG while wizard {} has no shown world object", GetSessionId(), GetWorldGuid());
+        return;
+    }
+
+    uint32 const wizBangId = PlayerWizBang::IdForState(message.StateName);
+    if (_wizBangId == wizBangId)
+        return;
+    _wizBangId = wizBangId;
+    _pendingWizBang = wizBangId;
 }

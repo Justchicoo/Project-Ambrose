@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Ambrose-authored LOGIN, GAME, WIZARD, WIZARD2 and WizCombat message definitions for login and game server tests: the authentication requests and replies, the AFK and shutdown messages with their field layouts, the character list request and its replies, the character pick and where it sends the client, the GAME attach, its refusal, the moves, movement states and jumps a client sends and the moves, movement states and object states the server relays to other clients, and the login completion that hands the client its object, which the game server sends and the login server never accepts, with the objects the game server brings into view and takes away, the WIZARD requests and notes a client sends as it enters with the replies that answer them, and the spell the game server adds to a wizard's spellbook or takes from it, at the orders the r806919 client gives them, the WIZARD2 note the client sends once it has loaded its zone, and the service-51 catalog plus the two tested wire layouts.
+ * Ambrose-authored LOGIN, GAME, WIZARD, WIZARD2 and WizCombat message definitions for login and game server tests: the authentication requests and replies, the AFK and shutdown messages with their field layouts, the character list request and its replies, the character pick and where it sends the client, the GAME attach, its refusal, the moves, movement states and jumps a client sends and the moves, movement states, object states and wizbangs the server relays to other clients, and the login completion that hands the client its object, which the game server sends and the login server never accepts, with the objects the game server brings into view and takes away, the WIZARD requests, notes and player wizbang a client sends as it enters or plays, with the replies that answer them, and the spell the game server adds to a wizard's spellbook or takes from it, at the orders the r806919 client gives them, the WIZARD2 note the client sends once it has loaded its zone, and the service-51 catalog plus the two tested wire layouts.
  */
 
 #ifndef AMBROSE_LOGINMESSAGEFIXTURES_H
@@ -54,6 +54,7 @@ namespace LoginMessageFixtures
 <MSG_NEWOBJECT><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">122</_MsgOrder><Data TYPE="STR"></Data></RECORD></MSG_NEWOBJECT>
 <MSG_REMOVEOBJECT><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">182</_MsgOrder><GameObjectID TYPE="GID"></GameObjectID></RECORD></MSG_REMOVEOBJECT>
 <MSG_SERVERMOVE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">218</_MsgOrder><LocationX TYPE="USHRT"></LocationX><LocationY TYPE="USHRT"></LocationY><LocationZ TYPE="USHRT"></LocationZ><Direction TYPE="UBYT"></Direction><MobileID TYPE="USHRT"></MobileID></RECORD></MSG_SERVERMOVE>
+<MSG_WIZBANG><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">247</_MsgOrder><GameObjectID TYPE="GID"></GameObjectID><WizBangID TYPE="UINT"></WizBangID></RECORD></MSG_WIZBANG>
 </FixtureGameMessages>
 )";
 
@@ -67,6 +68,7 @@ namespace LoginMessageFixtures
 <MSG_GETTIMEDACCESSPASSES><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">65</_MsgOrder></RECORD></MSG_GETTIMEDACCESSPASSES>
 <MSG_LOGCLIENTRESOLUTION><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">87</_MsgOrder><ScreenWidth TYPE="UINT"></ScreenWidth><ScreenHeight TYPE="UINT"></ScreenHeight><FullScreen TYPE="UBYT"></FullScreen><ClassicMode TYPE="UBYT"></ClassicMode></RECORD></MSG_LOGCLIENTRESOLUTION>
 <MSG_LOGPATCHCLIENTPATCHTIME><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">89</_MsgOrder><PatchClientPatchTime TYPE="UINT"></PatchClientPatchTime></RECORD></MSG_LOGPATCHCLIENTPATCHTIME>
+<MSG_PLAYERWIZBANG><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">128</_MsgOrder><StateName TYPE="STR"></StateName></RECORD></MSG_PLAYERWIZBANG>
 <MSG_QUESTFINDEROPTION><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">145</_MsgOrder><Enable TYPE="UBYT"></Enable></RECORD></MSG_QUESTFINDEROPTION>
 <MSG_REMOVESPELLFROMBOOK><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">155</_MsgOrder><SpellID TYPE="INT"></SpellID></RECORD></MSG_REMOVESPELLFROMBOOK>
 <MSG_SUBSCRIBERONLYITEMS><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">211</_MsgOrder><Data TYPE="STR"></Data></RECORD></MSG_SUBSCRIBERONLYITEMS>

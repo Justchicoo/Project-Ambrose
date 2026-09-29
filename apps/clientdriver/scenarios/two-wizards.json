@@ -11,7 +11,9 @@
     "game server takes its wizard away from the main wizard at once, and with the mobile id rest raised to a minute",
     "the returning wizard must take a new mobile id, and the main wizard must see one companion, not a ghost.",
     "A client asks for the riders of what another wizard rides with MSG_RIDERSLIST once it sees that wizard; the reply",
-    "loads the rider list of a RidableBehavior, which no milestone answers yet, so the request is expected and left unanswered."
+    "loads the rider list of a RidableBehavior, which no milestone answers yet, so the request is expected and left unanswered.",
+    "Opening the spellbook sends MSG_CANSEETIEREDSPELLGROUPS to ask which tiered spell groups may be upgraded;",
+    "that response is not implemented yet and is expected while this scenario checks the separate wizbang broadcast."
   ],
   "requires": {
     "gameserver": true
@@ -20,11 +22,13 @@
     "Logger.server=2,Console Server Errors Stream",
     "Realm.Name=Ambrose Driver",
     "Logger.network.session=2,Console Server Errors Stream",
-    "Zone.MobileIdReleaseDelay=60000"
+    "Zone.MobileIdReleaseDelay=60000",
+    "Setup.SchemaProbeTimeout=1"
   ],
   "server_log_allowed": [
     "character_create_school holds no school, so no wizard can be created until it does",
-    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added",
+    "it ran longer than 1 seconds"
   ],
   "wizard": {
     "school": 2343174,
@@ -268,6 +272,50 @@
       "settle": 3
     },
     {
+      "action": "hold_key",
+      "name": "the companion opens its spellbook",
+      "vk": "0x50",
+      "seconds": 0.2,
+      "client": "companion",
+      "watch": "main",
+      "watch_every": 0.25,
+      "watch_after": 1
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the server shows the companion's spellbook wizbang to both wizards",
+      "pattern": "Session \\d+ changed wizard {companion_wizard_guid}'s wizbang to ([1-9]\\d*) for 2 wizard\\(s\\) in zone instance \\d+",
+      "timeout": 10
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the companion's spellbook wizbang",
+      "file": "main-sees-spellbook-wizbang",
+      "settle": 1
+    },
+    {
+      "action": "hold_key",
+      "name": "the companion closes its spellbook",
+      "vk": "0x50",
+      "seconds": 0.2,
+      "client": "companion",
+      "watch": "main",
+      "watch_every": 0.25,
+      "watch_after": 1
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the server clears the companion's spellbook wizbang for both wizards",
+      "pattern": "Session \\d+ changed wizard {companion_wizard_guid}'s wizbang to 0 for 2 wizard\\(s\\) in zone instance \\d+",
+      "timeout": 10
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the companion's spellbook wizbang cleared",
+      "file": "main-sees-spellbook-wizbang-cleared",
+      "settle": 1
+    },
+    {
       "action": "shot",
       "name": "the companion faces away from the main wizard",
       "file": "companion-faces-away",
@@ -456,6 +504,7 @@
   "pending_allowed": [
     "MSG_AdvPvPEloData",
     "MSG_BUDDYREQUESTLIST",
+    "MSG_CANSEETIEREDSPELLGROUPS",
     "MSG_CHECK_MAIL",
     "MSG_CLIENT_DISCONNECT",
     "MSG_CONNECTIONSTATS",

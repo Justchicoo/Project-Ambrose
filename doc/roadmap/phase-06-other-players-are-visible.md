@@ -79,7 +79,7 @@ Two real clients in the same zone instance see each other appear, walk, jump, an
 
 **Acceptance**
 
-- [ ] Real client: opening/closing the spellbook shows and clears the wizbang for others
+- [x] Real client: opening/closing the spellbook shows and clears the wizbang for others (`two-wizards.json`, run 20260929-191156: the companion's wizbang ID 1288150110 and its clear to 0 were relayed to both wizards; all 55 steps passed)
 
 ### Detailed spec from WIZ-1: Wizard service dispatch skeleton and login chatter
 
@@ -101,9 +101,9 @@ A character entering the world gets no errors or unknown-message spam from the W
 
 **Acceptance**
 
-- [ ] Unit test: every name from all three Wizard XML files maps to exactly one entry, either a handler or the unhandled list; MSG_PETHATCHREADYSTATUS maps to one order
-- [ ] Unit test: WIZARD message order is the 1-based index in the de-duplicated alphabetical list, with UPDATEMANA=233 and ADDSPELLTOBOOK=10 as fixtures
-- [ ] Real client: log in to a zone. The server log shows GETTIMEDACCESSPASSES, GETSUBSCRIBERONLYITEMS, LOGCLIENTRESOLUTION and DONESHOPPING handled with no warnings. Opening and closing the spellbook makes other clients in range see the book wizbang appear and clear.
+- [x] Unit test: every name from all three Wizard XML files maps to exactly one entry, either a handler or the unhandled list; MSG_PETHATCHREADYSTATUS maps to one order (`GameMessageTableClientTest.EveryWorldMessageHasExactlyOneRuleAndTheEntryChatterIsHandled`)
+- [x] Unit test: WIZARD message order is the 1-based index in the de-duplicated alphabetical list, with UPDATEMANA=233 and ADDSPELLTOBOOK=10 as fixtures (`GameMessageTableClientTest.WizardOrdersAreThePlacesOfTheirTagsSortedWithoutRepeats`)
+- [x] Real client: log in to a zone. The server log shows GETTIMEDACCESSPASSES, GETSUBSCRIBERONLYITEMS, LOGCLIENTRESOLUTION and DONESHOPPING handled with no warnings. Opening and closing the spellbook makes other clients in range see the book wizbang appear and clear. (`two-wizards.json`, run 20260929-191156: the companion's wizbang ID 1288150110 and its clear to 0 were relayed to both wizards; all 55 steps passed)
 
 **Risks**
 

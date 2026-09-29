@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Lists the messages the game server knows about: MSG_ATTACH handled the moment a client connects, because it is the only thing a client that has not attached yet may say, MSG_ATTACHFAILED refused inbound and declared as one the server sends, MSG_LOGINCOMPLETE declared as one the server sends and refused inbound, as are MSG_NEWOBJECT and MSG_REMOVEOBJECT, which bring an object into a wizard's view and take it away, and MSG_SERVERMOVE and MSG_MOVESTATE, which show other wizards moving, and MSG_ENTERSTATE, which puts another wizard's object in a state such as a jump, and MSG_ADDSPELLTOBOOK and MSG_REMOVESPELLFROMBOOK, which change a wizard's spellbook, MSG_CLIENTZONED from the WIZARD2 service handled once the wizard has been handed its object, the GAME moves, movement states and jumps a client sends from then on run on the world thread, where the wizard's place is kept, the WIZARD messages a client sends as it enters, taken from the moment it has its object because it sends them before it says it has loaded the zone, with the crown balance run on the world thread because the balance will be game state and the rest answered or logged where they arrive, the first in-world WizCombat handlers, and the SYSTEM and EXTENDEDBASE rules every app shares. Every other GAME, WIZARD, DOODLEDOUG_MESSAGES, WIZARD2 and WIZARD3 message is named once by PendingRest, because the world's services are the game server's own and hold hundreds of messages and the milestone that answers each will claim it by name then; until then one arrives as a message this server does not handle yet, which is reported, rather than as one it has never heard of.
+ * Lists the messages the game server knows about: MSG_ATTACH handled the moment a client connects, because it is the only thing a client that has not attached yet may say, MSG_ATTACHFAILED refused inbound and declared as one the server sends, MSG_LOGINCOMPLETE declared as one the server sends and refused inbound, as are MSG_NEWOBJECT and MSG_REMOVEOBJECT, which bring an object into a wizard's view and take it away, MSG_SERVERMOVE and MSG_MOVESTATE, which show other wizards moving, MSG_ENTERSTATE, which puts another wizard's object in a state such as a jump, and MSG_WIZBANG, which shows its active player wizbang, and MSG_ADDSPELLTOBOOK and MSG_REMOVESPELLFROMBOOK, which change a wizard's spellbook, MSG_CLIENTZONED from the WIZARD2 service handled once the wizard has been handed its object, the GAME moves, movement states, jumps and player wizbangs a client sends from then on run on the world thread, where the wizard's place is kept, the WIZARD messages a client sends as it enters, taken from the moment it has its object because it sends them before it says it has loaded the zone, with the crown balance run on the world thread because the balance will be game state and the rest answered or logged where they arrive, the first in-world WizCombat handlers, and the SYSTEM and EXTENDEDBASE rules every app shares. Every other GAME, WIZARD, DOODLEDOUG_MESSAGES, WIZARD2 and WIZARD3 message is named once by PendingRest, because the world's services are the game server's own and hold hundreds of messages and the milestone that answers each will claim it by name then; until then one arrives as a message this server does not handle yet, which is reported, rather than as one it has never heard of.
  */
 
 #include "GameMessageTable.h"
@@ -34,6 +34,7 @@ namespace
             Accept<&GameSession::HandleQuestFinderOption>(entered, MessageProcessing::InPlace, "GameSession::HandleQuestFinderOption");
 
             SessionStatusMask const inWorld = SessionStatuses::InWorld;
+            Accept<&GameSession::HandlePlayerWizBang>(inWorld, MessageProcessing::Queued, "GameSession::HandlePlayerWizBang");
             Accept<&GameSession::HandleCombatMove>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatMove");
             Accept<&GameSession::HandleCombatDraw>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatDraw");
             Accept<&GameSession::HandleCombatAFK>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatAFK");
@@ -47,6 +48,7 @@ namespace
             Refuse(GameService, "MSG_SERVERMOVE");
             Refuse(GameService, "MSG_MOVESTATE");
             Refuse(GameService, "MSG_ENTERSTATE");
+            Refuse(GameService, "MSG_WIZBANG");
             Refuse(WizardService, "MSG_ADDSPELLTOBOOK");
             Refuse(WizardService, "MSG_REMOVESPELLFROMBOOK");
 
@@ -64,6 +66,7 @@ namespace
             Sends<ServerMove>();
             Sends<MoveState>();
             Sends<EnterState>();
+            Sends<WizBang>();
             Sends<TimedAccessPasses>();
             Sends<SubscriberOnlyItems>();
             Sends<CombatPhaseForSpectators>();
