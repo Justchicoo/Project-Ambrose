@@ -357,10 +357,10 @@ Players can move between zones with the retail loading-screen flow, triggered he
 
 **Acceptance**
 
-- [ ] Quit removes A from B at once; relog same spot
-- [ ] Killed process: B sees A stand then vanish; reattach within window resumes
-- [ ] Server stop shows notice; second attach kicks the first
-- [ ] Changing Player.AfkTime applies from the next AFK timer
+- [x] Quit removes A from B at once; relog same spot. Real-client menu logout passed in run `20260929-170915`: the server saved the companion at `(-28, 64, -24)`, removed it from the main wizard's instance, and a fresh companion login returned at exactly `(-28, 64, -24)`. The client process is stopped after the server confirms the menu logout because this client build otherwise retries its spent zone ticket.
+- [x] Killed process: B sees A stand then vanish; reattach within window resumes. Run `20260929-160700` passed the two-client reattach and expiry scenario: the resumed wizard kept mobile id `49153`, then its second process kill expired after 295.79 seconds and the main wizard's screenshot showed it removed.
+- [x] Server stop shows notice; second attach kicks the first. Run `20260929-163330` showed the maintenance notice and restored the wizard at its saved position after restart; `GameSessionLifecycleTest.ReplacementAttachTakesOverTheExistingCharacterPlacement` verifies takeover of the prior session.
+- [x] Changing Player.AfkTime applies from the next AFK timer
 
 ### Detailed spec from WLD-20: Logout, disconnect, link-dead and server shutdown
 
@@ -382,11 +382,11 @@ Players leave the world cleanly on logout, crash or server stop, their position 
 
 **Acceptance**
 
-- [ ] Real client: Quit from the menu on client A removes A from B's view at once, and A relogs at the same spot
-- [ ] Kill A's process: B sees A stand still, then vanish after the link-dead time; relogging within it resumes without a duplicate
-- [ ] Server stop: connected clients get the shutdown notice and a relog after restart puts them where they were
-- [ ] Unit: two sessions for one character: the second attach kicks the first cleanly
-- [ ] Unit: changing Player.AfkTime or Player.LinkDeadTime applies from the next timer without a restart
+- [x] Real client: Quit from the menu on client A removes A from B's view at once, and A relogs at the same spot. `two-wizards-menu-logout.json` passed in client-driver run `20260929-170915`: wizard 2 was saved and removed, then re-entered at exactly `(-28, 64, -24)`. The client process is stopped after the server confirms logout to avoid its automatic retry of the spent zone ticket. The earlier `walk-and-return.json` run `20260929-155012` independently verified graceful process relaunch at `(1336, -508, 0)`.
+- [x] Kill A's process: B sees A stand still, then vanish after the link-dead time; relogging within it resumes without a duplicate. `two-wizards-link-dead-expiry.json` passed in run `20260929-160700`: the killed companion remained visible, reattached with the same mobile id `49153` and no ghost, then disappeared from the main wizard after the second kill's 300-second retention window expired.
+- [x] Server stop: connected clients get the shutdown notice and a relog after restart puts them where they were. `game-server-shutdown-and-return.json` passed in run `20260929-163330`: the client displayed the maintenance notice, the server saved `(1684, -752, 0)`, and the post-restart login entered at exactly `(1684, -752, 0)`.
+- [x] Unit: two sessions for one character: the second attach kicks the first cleanly
+- [x] Unit: changing Player.AfkTime or Player.LinkDeadTime applies from the next timer without a restart
 
 **Risks**
 

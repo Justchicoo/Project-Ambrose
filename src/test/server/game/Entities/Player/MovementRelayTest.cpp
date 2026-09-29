@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests what the other wizards in an instance are told of one wizard's movement: a move goes out once as the client packed it and the same move sent again is no change, a movement state goes out when it changes, a wizard said to be moving that sends no new move for the flushes asked for is told as standing once without the relay changing what its client said, and its next move, or its client's next state, shows the client's state again, a count of idle flushes changed between two flushes applies at the next one, a wizard that has just arrived is shown another's last move and its state only when it is moving, and the flush clock takes an interval changed between two ticks from the next flush.
+ * Tests movement relay updates, idle standing, immediate link-dead standing, a newcomer's view of the last move and state, and the flush clock's live interval.
  */
 
 #include "MoveFlushClock.h"
@@ -98,6 +98,22 @@ TEST(MovementRelayTest, ANewcomerIsShownTheLastMoveAndAStateOnlyWhileMoving)
     EXPECT_FALSE(standing.State);
     movement.SetMoveState(1);
     EXPECT_EQ(relay.Current(movement).State, std::optional<int8>(1));
+}
+
+TEST(MovementRelayTest, ALinkDeadWizardIsShownStandingImmediately)
+{
+    PlayerMovement movement = Arrived();
+    MovementRelay relay;
+    relay.Reset(movement);
+    movement.SetMoveState(1);
+    movement.Apply(10, 20, 30, 0, 0);
+    relay.Take(movement, 2);
+
+    MovementUpdate const stopped = relay.Stop();
+    EXPECT_EQ(stopped.State, std::optional<int8>(MovementRelay::Standing));
+    EXPECT_EQ(movement.GetMoveState(), 1) << "a link-dead stop does not change what the client last reported";
+    EXPECT_FALSE(relay.Current(movement).State);
+    EXPECT_TRUE(relay.Take(movement, 2).Empty());
 }
 
 TEST(MovementRelayTest, TheFlushClockTakesAChangedIntervalFromTheNextFlush)

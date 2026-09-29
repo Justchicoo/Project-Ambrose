@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One connected game client, on the network side a session like the login server's and on the game side the thing the world owns: what arrives is queued by the network thread that read it and run later by the world thread that owns the game state, so a handler never touches the world from two threads at once, and the account and character it belongs to are carried here for every later system to read. What arrives goes through the game server's own message table, so a message with no rule is counted and reported rather than acted on. An attach is judged by the handoff key it carries, which is spent against the login database off the network thread, so a client is only ever let in on a key that this attach won; the wizard it names is then loaded, checked to belong to that account, placed in its zone's instance on the world thread and handed its own object in MSG_LOGINCOMPLETE, and when the client says it has loaded that zone the wizard is in the world. The wizard's name, as its client shows it, is kept for a command to find the session by, under a lock of its own since a console asks from another thread. The instance and zone it stands in are the world thread's alone, and it leaves them when the session goes; the wizard's object is also encoded as other wizards see it, and the session says once that it arrived and once that it left, for the world to show it to the wizards in its instance and take it away from them, while showing another wizard or taking one away is the session's own sending; a jump its client sends is kept until the world's next tick tells the wizards in the instance, and the client itself when it asked to be told, that the wizard's object entered its jumping state. The WIZARD messages a client sends as it enters are answered by the handlers in game/Handlers. Where the wizard stands is kept from the moves its client sends, and written to its character row when it leaves the world, never as it moves. The wizard's stats are read with it, from its character_stats row, and kept on the world thread while it plays; they are written when they change and when it leaves, never on a timer, each write queued so a closing session need not wait on it and carrying the next revision of the wizard's row, so writes that land out of order leave the newest. Its spellbook is read with it too, from its character_spell rows, and the player object carries a tracker for each spell it knows; LearnSpell and UnlearnSpell change it on the world thread, for a command, a quest or a trainer alike, each change written at once under the spellbook's next revision and told to the client with MSG_ADDSPELLTOBOOK or MSG_REMOVESPELLFROMBOOK. The world ticks each session, and one that has neither attached nor begun to within Attach.Timeout of connecting is closed, so a socket that never says who it is cannot hold a slot.
+ * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook and stats stay with the world thread and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate.
  */
 
 #ifndef AMBROSE_GAMESESSION_H
@@ -11,6 +11,7 @@
 #include "CharacterStats.h"
 #include "CharacterSummary.h"
 #include "GameMessages.h"
+#include "GameSessionWorld.h"
 #include "LoginKeyValidator.h"
 #include "MapObjectSpawner.h"
 #include "MovementRelay.h"
@@ -58,6 +59,11 @@ public:
     void SetCharacterId(uint64 characterId) noexcept { _characterId.store(characterId, std::memory_order_relaxed); }
 
     bool IsAttached() const noexcept { return _attached.load(std::memory_order_relaxed); }
+    bool IsLinkDead() const noexcept { return _linkDead.load(std::memory_order_relaxed); }
+    bool TakeLinkDeadStart() noexcept { return _linkDeadStartPending.exchange(false, std::memory_order_relaxed); }
+    std::chrono::duration<float> GetLinkDeadRemaining(std::chrono::steady_clock::time_point now) const;
+    bool CanResume(std::chrono::steady_clock::time_point now) const;
+    void SetIntentionalDisconnect() noexcept { _intentionalDisconnect.store(true, std::memory_order_relaxed); }
 
     std::string GetCharacterName() const;
     void SetCharacterName(std::string name);
@@ -70,6 +76,9 @@ public:
     void HandleClientMove(GameMessages::ClientMove& message);
     void HandleClientMoveState(GameMessages::ClientMoveState& message);
     void HandleJump(GameMessages::Jump& message);
+    void HandleQueryLogout(GameMessages::QueryLogout& message);
+    void HandleClientDisconnect(GameMessages::ClientDisconnect& message);
+    void HandleNotAfk(GameMessages::NotAfk& message);
     void LeaveWorld();
     std::optional<uint32> GetMapId() const noexcept { return _mapId; }
     uint64 GetWorldGuid() const noexcept { return _worldGuid; }
@@ -77,6 +86,7 @@ public:
     bool TakeArrival() noexcept;
     std::optional<WorldDeparture> TakeDeparture() noexcept;
     void ShowPlayer(GameSession const& other);
+    void ShowZombiePlayer(GameSession const& other);
     void HidePlayer(uint64 worldGuid);
     std::optional<uint8> TakeJump() noexcept;
     void ShowStateOf(uint64 worldGuid, uint32 state);
@@ -114,6 +124,9 @@ protected:
     void OnSessionClosed() override;
 
 private:
+    friend class World;
+    friend struct GameSessionLifecycleTestAccess;
+
     std::shared_ptr<GameSession> SharedSelf();
     SQLOperation::CompletionHandler MakeCompletionHandler();
     void Diagnose(LoginKeyClaim claim, int64 now);
@@ -129,16 +142,30 @@ private:
     void SaveSpell(CharacterSpell const& spell);
     void SavePosition(PlayerPosition const& position);
     void RefuseEntry(LoginKeyClaim const& claim, std::string const& reason);
+    void MarkOffline();
+    void TransferWorldStateTo(GameSession& replacement);
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
     AsyncCallbackProcessor<QueryCallback> _queryCallbacks;
     std::atomic<uint64> _accountId{ 0 };
     std::atomic<uint64> _characterId{ 0 };
     std::atomic<uint64> _unhandled{ 0 };
+    GameSessionWorld* _world = nullptr;
     std::atomic<bool> _attached{ false };
     std::atomic<bool> _attaching{ false };
+    std::atomic<bool> _intentionalDisconnect{ false };
+    std::atomic<bool> _superseded{ false };
+    std::atomic<bool> _inWorld{ false };
+    std::atomic<bool> _linkDead{ false };
+    std::atomic<bool> _linkDeadStartPending{ false };
+    std::atomic<int64> _socketLostAtNanoseconds{ 0 };
     std::atomic<uint8> _securityLevel{ 0 };
     std::chrono::steady_clock::time_point const _connectedAt = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point _afkStarted;
+    bool _afkTimerStarted = false;
+    bool _afkWarned = false;
+    bool _linkDeadNotified = false;
+    uint8 _reattach = 0;
     std::optional<uint32> _mapId;
     std::string _zonePath;
     uint64 _worldGuid = 0;

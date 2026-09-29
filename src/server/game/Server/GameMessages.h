@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, each object of that zone the server sends it, as the unwrapped CoreObject Data the client builds it from, and the id of one that leaves its view, another wizard's move as its client packed it with that wizard's mobile id and its movement state with its global id, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; and the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits.
+ * The game service ids and its declared wire messages: attach and attach refusal, login completion and zone objects, movement and visibility, logout and disconnect, link-dead and AFK notices, server shutdown, entry messages, combat, shop replies and spellbook changes.
  */
 
 #ifndef AMBROSE_GAMEMESSAGES_H
@@ -30,11 +30,12 @@ namespace GameMessages
         uint64 CharId = 0;
         std::string ZoneName;
         std::string Location;
+        uint8 Reattach = 0;
 
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("LoginKey", &Attach::LoginKey), DmlField("UserID", &Attach::UserId), DmlField("CharID", &Attach::CharId),
-                DmlField("ZoneName", &Attach::ZoneName), DmlField("Location", &Attach::Location) };
+                DmlField("ZoneName", &Attach::ZoneName), DmlField("Location", &Attach::Location), DmlField("Reattach", &Attach::Reattach) };
         }
     };
 
@@ -177,6 +178,81 @@ namespace GameMessages
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("ExcludeOriginator", &Jump::ExcludeOriginator) };
+        }
+    };
+
+    struct QueryLogout
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_QUERY_LOGOUT";
+
+        uint8 IsInstance = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("IsInstance", &QueryLogout::IsInstance) };
+        }
+    };
+
+    struct ClientDisconnect
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_CLIENT_DISCONNECT";
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{};
+        }
+    };
+
+    struct ZombiePlayer
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_ZOMBIE_PLAYER";
+
+        uint64 GlobalId = 0;
+        float Remaining = 0.0f;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GlobalID", &ZombiePlayer::GlobalId), DmlField("Remaining", &ZombiePlayer::Remaining) };
+        }
+    };
+
+    struct DisconnectAfk
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_DISCONNECT_AFK";
+
+        int8 Warning = 1;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Warning", &DisconnectAfk::Warning) };
+        }
+    };
+
+    struct NotAfk
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_NOT_AFK";
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{};
+        }
+    };
+
+    struct ServerShutdown
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_SERVERSHUTDOWN";
+
+        uint32 Message = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Message", &ServerShutdown::Message) };
         }
     };
 

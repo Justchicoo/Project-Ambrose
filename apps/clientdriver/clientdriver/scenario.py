@@ -23,14 +23,17 @@ ACTIONS = {
     "shot": ((), ("file", "settle")),
     "server_command": (("command",), ("pattern", "timeout")),
     "game_command": (("command",), ("pattern", "timeout")),
+    "stop_game_server": ((), ()),
+    "start_game_server": ((), ("timeout",)),
     "wait_game_log": (("pattern", "timeout"), ("from", "fail", "expect", "reject", "record", "keep")),
+    "kill_client": ((), ()),
     "restart_client": ((), ("timeout",)),
     "wait_listener": (("listener", "timeout"), ()),
 }
 COMMON_KEYS = ("action", "name", "client")
 CLIENTS = ("main", "companion")
 CLIENT_ACTIONS = ("wait_client_log", "forbid_log", "wait_screen", "submit_login", "type", "char", "key", "hold_key", "click", "shot",
-                  "restart_client", "wait_listener")
+                  "kill_client", "restart_client", "wait_listener")
 ALLOW_LISTS = ("pending_allowed", "dropped_allowed", "server_log_allowed", "client_log_allowed")
 TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "game_settings", "wizard", "companion", "variables", "expect", "steps",
              "patching", "listeners", "patch_config") + ALLOW_LISTS
@@ -169,6 +172,8 @@ def _check_step(path, index, step):
         raise Refused(f"{where} ({name}) keeps what it matched under a name of letters, digits and underscores that is not one of the run's own, {', '.join(RUN_VARIABLES)}")
     if action == "restart_client" and "timeout" in step and (not isinstance(step["timeout"], (int, float)) or isinstance(step["timeout"], bool) or not 0 < step["timeout"] <= 600):
         raise Refused(f"{where} ({name}) may wait more than 0 and at most 600 seconds for the client to come back")
+    if action == "start_game_server" and "timeout" in step and (not isinstance(step["timeout"], (int, float)) or isinstance(step["timeout"], bool) or not 0 < step["timeout"] <= 600):
+        raise Refused(f"{where} ({name}) may wait more than 0 and at most 600 seconds for the game server to come back")
     if action == "shot" and "settle" in step and (not isinstance(step["settle"], (int, float)) or isinstance(step["settle"], bool) or not 0 <= step["settle"] <= MAX_SETTLE_SECONDS):
         raise Refused(f"{where} ({name}) may let the screen settle for 0 to {MAX_SETTLE_SECONDS} seconds before its shot")
     if "client" in step and step["client"] not in CLIENTS:

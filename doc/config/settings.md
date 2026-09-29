@@ -82,6 +82,14 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Network.SendQueueHighWater` | unsigned | 16777216 bytes | from 1048576 to 1073741824 bytes | live | gameserver, loginserver | normal | How many bytes one connection may have waiting to be sent before it is closed; applies to existing connections immediately. |
 | `Network.SessionAcceptTimeout` | unsigned | 15 s | from 1 to 3600 s | next connection or operation | gameserver, loginserver | normal | How long a new connection may take to finish its handshake. |
 
+## Player
+
+| Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
+|---|---|---|---|---|---|---|---|
+| `Player.AfkTime` | unsigned | 1800 s | from 0 to 86400 s | live | gameserver | normal | How long an in-world wizard may be idle before its session is disconnected; 0 disables the AFK timer. |
+| `Player.AfkWarnTime` | unsigned | 900 s | from 0 to 86400 s | live | gameserver | normal | How long an in-world wizard may be idle before the client receives MSG_DISCONNECT_AFK. |
+| `Player.LinkDeadTime` | unsigned | 60 s | from 0 to 86400 s | live | gameserver | normal | How long a disconnected wizard remains visible and may reattach before being removed from the world. |
+
 ## Rates
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |

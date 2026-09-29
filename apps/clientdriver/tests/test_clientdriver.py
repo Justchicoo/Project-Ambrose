@@ -695,9 +695,15 @@ class FakeClient:
         self.active = True
         self.refuses_shots = 0
         self.arriving = []
+        self.closes = []
 
     def alive(self):
         return self.living
+
+    def close(self, timeout=60, force=False):
+        self.closes.append(force)
+        self.living = False
+        return "the client was ended without its own quit path" if force else "the client was closed"
 
     def frame(self):
         self.frames_taken += 1
@@ -861,6 +867,42 @@ class EngineTests(TemporaryFolder):
         again.run()
         self.assertEqual(asked, [180.0])
         self.assertEqual(again.steps[0]["result"], "started again")
+
+    def test_game_server_can_stop_and_start_while_a_scenario_is_running(self):
+        running = self.build([
+            {"action": "stop_game_server", "name": "stop the game server"},
+            {"action": "start_game_server", "name": "start the game server", "timeout": 90}])
+
+        class FakeGame:
+            def __init__(self):
+                self.living = True
+                self.calls = []
+
+            def alive(self):
+                return self.living
+
+            def stop(self):
+                self.calls.append("stop")
+                self.living = False
+                return "stopped"
+
+            def start(self, timeout=300):
+                self.calls.append(("start", timeout))
+                self.living = True
+                return "started"
+
+        game = FakeGame()
+        running.game = game
+        running.run()
+        self.assertEqual(game.calls, ["stop", ("start", 90.0)])
+        self.assertTrue(game.alive())
+
+    def test_killing_a_client_ends_only_the_selected_client_without_its_quit_path(self):
+        running = self.build([{"action": "kill_client", "name": "the companion loses its process",
+                               "client": "companion"}], companion=True)
+        running.run()
+        self.assertEqual(self.companion.closes, [True])
+        self.assertTrue(self.client.living)
 
     def test_a_step_that_names_the_companion_drives_it_and_the_next_one_drives_the_main_client_again(self):
         running = self.build([

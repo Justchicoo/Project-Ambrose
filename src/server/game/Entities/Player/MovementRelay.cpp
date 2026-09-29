@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Counts a flush with no new move as a quiet one, and once the quiet flushes reach the number asked for the wizard is shown as idle, standing whatever its client last said, until a new move or a new state from its client ends it; the state shown is compared with the one last sent, so standing goes out once and the client's own state goes out again when the idle ends. What a wizard who has just arrived is shown of another is that other's last move and, when it is not shown standing, its state.
+ * Relays changed moves and states, idles a quiet mover after its configured flush count, shows the last move to newcomers, and forces a link-dead wizard to stand immediately.
  */
 
 #include "MovementRelay.h"
@@ -12,6 +12,19 @@ void MovementRelay::Reset(PlayerMovement const& movement) noexcept
     _saidState = movement.GetMoveState();
     _quietFlushes = 0;
     _idle = false;
+}
+
+MovementUpdate MovementRelay::Stop() noexcept
+{
+    _idle = true;
+    _quietFlushes = 0;
+    MovementUpdate update;
+    if (_sentState != Standing)
+    {
+        update.State = Standing;
+        _sentState = Standing;
+    }
+    return update;
 }
 
 int8 MovementRelay::ShownState(PlayerMovement const& movement) const noexcept

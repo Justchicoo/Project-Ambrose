@@ -1,0 +1,131 @@
+{
+  "title": "A game-server shutdown notifies a connected wizard and restores its saved position",
+  "include": "walk-and-return.json",
+  "notes": [
+    "After the included walk and relog establish a saved position, this scenario gracefully stops the game server",
+    "with the wizard connected, records the flushed MSG_SERVERSHUTDOWN notice, captures the client's screen, starts",
+    "the game server again, and requires the wizard to enter at the same saved position."
+  ],
+  "steps": [
+    {
+      "action": "stop_game_server",
+      "name": "the game server shuts down with the wizard connected"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the shutdown notice is flushed to the session",
+      "pattern": "Sent MSG_SERVERSHUTDOWN with Message=\\d+ to (\\d+) session\\(s\\); 0 notice\\(s\\) were still unwritten",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client opens its game-server maintenance notice",
+      "pattern": "DisplayMessageBox\\( msg = Server has been brought down for maintenance\\.\\s+Please try again later!, title = INFO, msg string key = GUI_ServerShutdown",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the client shows the game-server shutdown notice",
+      "file": "game-server-shutdown-notice",
+      "settle": 3
+    },
+    {
+      "action": "start_game_server",
+      "name": "the game server starts again",
+      "timeout": 300
+    },
+    {
+      "action": "kill_client",
+      "name": "close the client after recording its shutdown notice"
+    },
+    {
+      "action": "restart_client",
+      "name": "start the client again after the server is ready",
+      "timeout": 240
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the restarted client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the restarted client is at login",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in after the server restart",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the login server accepts the returning client",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the login server admits the returning client",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the returning character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the returning client reaches character selection",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "play the wizard after the server restart",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard returns to its saved position after restart",
+      "pattern": "put wizard \\d+ in \\S+ instance \\d+ at \\((\\S+, \\S+, \\S+)\\)",
+      "timeout": 120,
+      "fail": "cannot enter the world",
+      "expect": "{saved_place}",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the restored zone",
+      "pattern": "loaded (\\S+), and wizard \\d+ stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "shot",
+      "name": "the wizard is back after the server restart",
+      "file": "back-after-game-server-restart",
+      "settle": 2
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "title": "Two wizards: an abruptly disconnected wizard vanishes after the link-dead window",
+  "include": "two-wizards.json",
+  "notes": [
+    "The included two-wizards run verifies that a killed client is visibly link-dead and can resume its original",
+    "mobile before the retention deadline. This run then kills the resumed companion and waits for the configured",
+    "300-second link-dead window to expire; the main client's screenshot records the companion's removal."
+  ],
+  "steps": [
+    {
+      "action": "kill_client",
+      "name": "the resumed companion process ends without a logout",
+      "client": "companion"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the resumed companion link-dead",
+      "file": "main-companion-link-dead-again",
+      "settle": 3
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the link-dead window expires and the companion disappears",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} was taken away from the (\\d+) wizard\\(s\\) still in instance",
+      "timeout": 330,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the expired companion removed",
+      "file": "main-companion-link-dead-expired",
+      "settle": 1
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What the other players in an instance are told of one wizard's movement at each flush: its move as its client packed it, when that has changed since the last flush, and its movement state, when that has changed since it was last sent. State 1 makes a viewing client carry the wizard on along its last heading until a newer move arrives, and 0 stops it at the last move, so a wizard whose client has sent no new move for the number of flushes asked for is shown as standing, told once as state 0, even when its client never says it stopped; that is the relay's own view, kept apart from the state the client said, so the wizard's next move or the client's next state shows what the client says again.
+ * What other players are told of one wizard's movement at each flush: changed packed moves and movement states, the idle transition when moves stop arriving, and the standing state when its socket becomes link-dead.
  */
 
 #ifndef AMBROSE_MOVEMENTRELAY_H
@@ -25,6 +25,7 @@ public:
     static constexpr int8 Standing = 0;
 
     void Reset(PlayerMovement const& movement) noexcept;
+    MovementUpdate Stop() noexcept;
     MovementUpdate Take(PlayerMovement const& movement, uint32 idleFlushes);
     MovementUpdate Current(PlayerMovement const& movement) const;
 
