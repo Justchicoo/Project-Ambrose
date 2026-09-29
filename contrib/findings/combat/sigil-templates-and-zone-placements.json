@@ -1,0 +1,268 @@
+{
+  "subject": "r806919 sigil entry schemas and Wizard City placements",
+  "area": "combat",
+  "claim": "In r806919.Wizard_1_610, Root.wad has 25 Sigils entries: 3 BattlegroundSigilTemplate, 10 CombatSigilTemplate, 1 DynamicSigilTemplate, 7 MinigameSigilTemplate, and 4 PvPCombatSigilTemplate; across Wizard City's 133 zone archives there are 322 CombatSigilInfo, 53 MinigameSigilInfo, 4 ConfigurableMinigameSigilInfo, 2 PvPCombatSigilInfo, and no BattlegroundSigilInfo or DynamicSigilInfo entries, with the per-zone counts recorded here and omitted zone/class pairs equal to zero.",
+  "revision": "r806919.Wizard_1_610",
+  "method": "static",
+  "how_to_repeat": [
+    "Use the client tool against your own r806919 install to list Root.wad entries with the exact prefix Sigils/ and decode each listed entry, grouping its root $class and serialized field names.",
+    "Read the nested SigilSubCircle, SigilCamera, and SpellEffect field names from those decoded entries and check the corresponding class declarations in the same install's type dump.",
+    "Enumerate the 133 zone paths beginning WizardCity/WC_ from the zone archives and match each path to its WAD by replacing slashes with hyphens in the full path.",
+    "Run schemaprobe against each matching WizardCity WAD with candidates class BattlegroundSigilInfo, class CombatSigilInfo, class DynamicSigilInfo, class MinigameSigilInfo, class ConfigurableMinigameSigilInfo, and class PvPCombatSigilInfo.",
+    "For each matched class, count its occurrences only when the probe reports first_file gamedata.bin and a first_path under class WizZoneData.m_objectList; treat classes absent from a zone report as zero for that zone.",
+    "Use the zone_placements totals, nonzero-zone counts, and sparse per-zone maps below; all omitted paths in the 133-zone scope have zero occurrences for that class."
+  ],
+  "evidence": [
+    "The exact Root.wad prefix listing contains 25 entries, whose decoded root classes group as 3 BattlegroundSigilTemplate, 10 CombatSigilTemplate, 1 DynamicSigilTemplate, 7 MinigameSigilTemplate, and 4 PvPCombatSigilTemplate.",
+    "The decoded entry field sets are recorded under entry_classes; their nested SigilSubCircle, SigilCamera, and SpellEffect fields are recorded under nested_classes.",
+    "The 133 zone paths beginning WizardCity/WC_ map one-to-one to 133 WizardCity-*.wad archive stems and all were decoded by schemaprobe; the per-zone class sums equal the totals recorded here.",
+    "The zone-object counts are CombatSigilInfo 322 across 97 zones, MinigameSigilInfo 53 across 17 zones, ConfigurableMinigameSigilInfo 4 across 4 zones, and PvPCombatSigilInfo 2 across 2 zones; BattlegroundSigilInfo and DynamicSigilInfo have zero occurrences in all 133 zones.",
+    "The probe matched CombatSigilInfo, MinigameSigilInfo, ConfigurableMinigameSigilInfo, and PvPCombatSigilInfo to client class hashes 478486736, 234614075, 1070872413, and 744574030 respectively; client strings contain no CombatSigilObjectInfo class name."
+  ],
+  "entry_classes": {
+    "class BattlegroundSigilTemplate": {
+      "count": 3,
+      "fields": [
+        "m_battlefieldEffects", "m_behaviors", "m_bluePlaceholdObjectID", "m_blueTeamStart", "m_cancelResults",
+        "m_combatMusic", "m_completeResults", "m_dK0PvE", "m_dK0PvP", "m_dN0PvE", "m_dN0PvP",
+        "m_damageLimitPvE", "m_damageLimitPvP", "m_deathEffect", "m_engageRadius", "m_entryResults",
+        "m_noAggroEffect", "m_planningCinematicOverride", "m_playerAggroRange", "m_playerVictoryCinematic",
+        "m_prePlanningCinematicOverride", "m_rK0PvE", "m_rK0PvP", "m_rN0PvE", "m_rN0PvP",
+        "m_redPlaceholdObjectID", "m_redTeamStart", "m_requirements", "m_resistLimitPvE", "m_resistLimitPvP",
+        "m_scalarDamagePvE", "m_scalarDamagePvP", "m_scalarPiercePvE", "m_scalarPiercePvP",
+        "m_scalarResistPvE", "m_scalarResistPvP", "m_shadowPipRatingFactor", "m_shadowThresholdFactor",
+        "m_shadowThresholdType", "m_sigilName", "m_sigilType", "m_stateOverride", "m_subCircles",
+        "m_tickRateMS", "m_useState"
+      ]
+    },
+    "class CombatSigilTemplate": {
+      "count": 10,
+      "fields": [
+        "m_battlefieldEffects", "m_behaviors", "m_cancelResults", "m_combatMusic", "m_completeResults",
+        "m_dK0PvE", "m_dK0PvP", "m_dN0PvE", "m_dN0PvP", "m_damageLimitPvE", "m_damageLimitPvP",
+        "m_engageRadius", "m_entryResults", "m_planningCinematicOverride", "m_playerVictoryCinematic",
+        "m_prePlanningCinematicOverride", "m_rK0PvE", "m_rK0PvP", "m_rN0PvE", "m_rN0PvP",
+        "m_requirements", "m_resistLimitPvE", "m_resistLimitPvP", "m_scalarDamagePvE", "m_scalarDamagePvP",
+        "m_scalarPiercePvE", "m_scalarPiercePvP", "m_scalarResistPvE", "m_scalarResistPvP",
+        "m_shadowPipRatingFactor", "m_shadowThresholdFactor", "m_shadowThresholdType", "m_sigilName",
+        "m_sigilType", "m_stateOverride", "m_subCircles", "m_useState"
+      ]
+    },
+    "class DynamicSigilTemplate": {
+      "count": 1,
+      "fields": [
+        "m_battlefieldEffects", "m_behaviors", "m_cancelResults", "m_combatMusic", "m_completeResults",
+        "m_dK0PvE", "m_dK0PvP", "m_dN0PvE", "m_dN0PvP", "m_damageLimitPvE", "m_damageLimitPvP",
+        "m_engageRadius", "m_entryResults", "m_planningCinematicOverride", "m_playerVictoryCinematic",
+        "m_prePlanningCinematicOverride", "m_rK0PvE", "m_rK0PvP", "m_rN0PvE", "m_rN0PvP",
+        "m_requirements", "m_resistLimitPvE", "m_resistLimitPvP", "m_scalarDamagePvE", "m_scalarDamagePvP",
+        "m_scalarPiercePvE", "m_scalarPiercePvP", "m_scalarResistPvE", "m_scalarResistPvP",
+        "m_shadowPipRatingFactor", "m_shadowThresholdFactor", "m_shadowThresholdType", "m_sigilName",
+        "m_sigilType", "m_stateOverride", "m_subCircles", "m_useState"
+      ]
+    },
+    "class MinigameSigilTemplate": {
+      "count": 7,
+      "fields": [
+        "m_behaviors", "m_cancelResults", "m_completeResults", "m_entryResults", "m_requirements",
+        "m_sigilName", "m_sigilType", "m_stateOverride", "m_subCircles", "m_useState"
+      ]
+    },
+    "class PvPCombatSigilTemplate": {
+      "count": 4,
+      "fields": [
+        "m_battlefieldEffects", "m_behaviors", "m_cancelResults", "m_combatMusic", "m_completeResults",
+        "m_dK0PvE", "m_dK0PvP", "m_dN0PvE", "m_dN0PvP", "m_damageLimitPvE", "m_damageLimitPvP",
+        "m_engageRadius", "m_entryResults", "m_minimumError", "m_minimumOnSide",
+        "m_planningCinematicOverride", "m_playerVictoryCinematic", "m_prePlanningCinematicOverride",
+        "m_rK0PvE", "m_rK0PvP", "m_rN0PvE", "m_rN0PvP", "m_requirements", "m_resistLimitPvE",
+        "m_resistLimitPvP", "m_scalarDamagePvE", "m_scalarDamagePvP", "m_scalarPiercePvE",
+        "m_scalarPiercePvP", "m_scalarResistPvE", "m_scalarResistPvP", "m_shadowPipRatingFactor",
+        "m_shadowThresholdFactor", "m_shadowThresholdType", "m_sigilName", "m_sigilType",
+        "m_stateOverride", "m_subCircles", "m_useState"
+      ]
+    }
+  },
+  "nested_classes": {
+    "class SigilSubCircle": [
+      "m_cameras", "m_color", "m_locationPreference", "m_locationType", "m_radius", "m_rotation"
+    ],
+    "class SigilCamera": [
+      "m_cameraName", "m_overrideName", "m_fMinHeight"
+    ],
+    "class SpellEffect": [
+      "m_act", "m_actNum", "m_armorPiercingParam", "m_bypassProtection", "m_chancePerTarget",
+      "m_cloaked", "m_converted", "m_damageType", "m_disposition", "m_effectParam", "m_numRounds",
+      "m_effectTarget", "m_effectType", "m_enchantmentSpellTemplateID", "m_healModifier", "m_paramPerRound",
+      "m_pipNum", "m_protected", "m_rank", "m_sDamageType", "m_shadowPactCasterSC", "m_spellTemplateID"
+    ]
+  },
+  "zone_placements": {
+    "scope": "All 133 WizardCity/WC_* zone paths; nonzero maps are sparse and omitted paths are zero.",
+    "classes": {
+      "class BattlegroundSigilInfo": {
+        "total": 0,
+        "zero_zone_count": 133,
+        "nonzero": []
+      },
+      "class CombatSigilInfo": {
+        "total": 322,
+        "zero_zone_count": 36,
+        "hash": 478486736,
+        "nonzero": [
+          ["WizardCity/WC_Streets/Interiors/WC_Catacombs_Avalon", 3],
+          ["WizardCity/WC_Streets/Interiors/WC_Catacombs_Crypt01", 3],
+          ["WizardCity/WC_Streets/Interiors/WC_Catacombs_DragonCave", 3],
+          ["WizardCity/WC_Streets/Interiors/WC_Catacombs_LivingTomb", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Catacombs_RealityEdge", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Catacombs_Valencia_A", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Catacombs_Valencia_B", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Catacombs_Valencia_C", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Catacombs_ViggorsTomb", 2],
+          ["WizardCity/WC_Streets/Interiors/WC_Catacombs_WhisperingSepulcher", 3],
+          ["WizardCity/WC_Streets/Interiors/WC_Colossus_CE_T1_L1", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Colossus_CE_T1_L2", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Colossus_CE_T1_L3", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Colossus_CE_T1_L4", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Colossus_CE_T1_L5", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Colossus_CE_T1_L6", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Colossus_HideoutEarl", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Colossus_T1", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Colossus_T2", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Colossus_T3", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Colossus_ThroneRoom", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Cyclops_H1", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Cyclops_T1", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Cyclops_T2", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_DarkCave_H1", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_DarkCave_MalistairesSanctum", 2],
+          ["WizardCity/WC_Streets/Interiors/WC_Event_Maestro/WC_Z02_Ice_Tower", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Event_Maestro/WC_Z05_Fire_Tower01", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Event_Maestro/WC_Z07_Fire_Tower02", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Event_Maestro/WC_Z08_Fire_Tower02_Basement", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_FireCat_BerniceAndLarryHouse", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_FireCat_HideoutMauler", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Firecat_CabalSafehouse02", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Firecat_T1", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Firecat_T2", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Firecat_T3", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Firecat_Theatre", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_HauntedCave_T1", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_HauntedCave_T2", 3],
+          ["WizardCity/WC_Streets/Interiors/WC_HauntedCave_T3", 2],
+          ["WizardCity/WC_Streets/Interiors/WC_OldeTown_C01", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_OldeTown_T1", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_OldeTown_T2", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_PageEvent_BossRoom", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_PageEvent_MobRoom", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_RottenRobHideout", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_SkelKey_FathomlessTomb2", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Sunken_City_SkeletonKey01", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Sunken_City_T1", 4],
+          ["WizardCity/WC_Streets/Interiors/WC_Sunken_City_T2", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Sunken_City_T3", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Triton_H3", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Triton_HideoutPetes", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Triton_T1", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Triton_T2", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Triton_T3", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Unicorn_H4", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Unicorn_T1", 1],
+          ["WizardCity/WC_Streets/Interiors/WC_Unicorn_T2", 1],
+          ["WizardCity/WC_Streets/WC_Catacombs", 2],
+          ["WizardCity/WC_Streets/WC_Catacombs_B", 3],
+          ["WizardCity/WC_Streets/WC_Catacombs_C", 2],
+          ["WizardCity/WC_Streets/WC_Colossus", 34],
+          ["WizardCity/WC_Streets/WC_Cyclops", 24],
+          ["WizardCity/WC_Streets/WC_DarkCave", 20],
+          ["WizardCity/WC_Streets/WC_Drains/WC_Drains_BeansBackyard", 1],
+          ["WizardCity/WC_Streets/WC_Drains/WC_Drains_DeadsLair", 2],
+          ["WizardCity/WC_Streets/WC_Drains/WC_Drains_FalloutAntechamber", 1],
+          ["WizardCity/WC_Streets/WC_Drains/Z00_BetterNinjaTunnel", 2],
+          ["WizardCity/WC_Streets/WC_Drains/Z00_ClubBackyard", 1],
+          ["WizardCity/WC_Streets/WC_Drains/Z00_ClubHouse", 2],
+          ["WizardCity/WC_Streets/WC_Drains/Z00_Drains_HUB", 6],
+          ["WizardCity/WC_Streets/WC_Drains/Z00_ShedderLair", 1],
+          ["WizardCity/WC_Streets/WC_Drains/Z00_ShedderTunnel", 1],
+          ["WizardCity/WC_Streets/WC_Drains/Z04_BossOffice", 3],
+          ["WizardCity/WC_Streets/WC_Drains/Z04_CollapsedTunnel", 1],
+          ["WizardCity/WC_Streets/WC_Drains/Z04_OldeTownDrains", 2],
+          ["WizardCity/WC_Streets/WC_Firecat", 31],
+          ["WizardCity/WC_Streets/WC_Golem_Tower/WC_Golem_Tower_1", 1],
+          ["WizardCity/WC_Streets/WC_Golem_Tower/WC_Golem_Tower_2", 1],
+          ["WizardCity/WC_Streets/WC_Golem_Tower/WC_Golem_Tower_3", 1],
+          ["WizardCity/WC_Streets/WC_Golem_Tower/WC_Golem_Tower_4", 1],
+          ["WizardCity/WC_Streets/WC_Golem_Tower/WC_Golem_Tower_5", 1],
+          ["WizardCity/WC_Streets/WC_HauntedCave", 12],
+          ["WizardCity/WC_Streets/WC_Sunken_City", 19],
+          ["WizardCity/WC_Streets/WC_Triton", 30],
+          ["WizardCity/WC_Streets/WC_Triton_Underwater/Interiors/WC_Triton_Underwater_C1", 1],
+          ["WizardCity/WC_Streets/WC_Triton_Underwater/Interiors/WC_Triton_Underwater_SkelKey_Boss", 1],
+          ["WizardCity/WC_Streets/WC_Triton_Underwater/Interiors/WC_Triton_Underwater_Storm", 1],
+          ["WizardCity/WC_Streets/WC_Triton_Underwater/Interiors/WC_Triton_Underwater_T1", 1],
+          ["WizardCity/WC_Streets/WC_Triton_Underwater/Interiors/WC_Triton_Underwater_T2", 1],
+          ["WizardCity/WC_Streets/WC_Triton_Underwater/Interiors/WC_Triton_Underwater_T3", 1],
+          ["WizardCity/WC_Streets/WC_Triton_Underwater/Interiors/WC_Triton_Underwater_T4", 1],
+          ["WizardCity/WC_Streets/WC_Triton_Underwater/WC_Triton_Underwater", 9],
+          ["WizardCity/WC_Streets/WC_Triton_Underwater/WC_Triton_Warren01", 7],
+          ["WizardCity/WC_Streets/WC_Triton_Underwater/WC_Triton_Warren02", 2],
+          ["WizardCity/WC_Streets/WC_Unicorn", 17]
+        ]
+      },
+      "class DynamicSigilInfo": {
+        "total": 0,
+        "zero_zone_count": 133,
+        "nonzero": []
+      },
+      "class MinigameSigilInfo": {
+        "total": 53,
+        "zero_zone_count": 116,
+        "hash": 234614075,
+        "nonzero": [
+          ["WizardCity/WC_Golem_Tower", 1],
+          ["WizardCity/WC_Hub", 6],
+          ["WizardCity/WC_NightSide", 1],
+          ["WizardCity/WC_Ravenwood", 3],
+          ["WizardCity/WC_Streets/Interiors/WC_PageEvent_LandingRoom", 1],
+          ["WizardCity/WC_Streets/WC_Catacombs", 4],
+          ["WizardCity/WC_Streets/WC_Catacombs_B", 3],
+          ["WizardCity/WC_Streets/WC_Catacombs_C", 1],
+          ["WizardCity/WC_Streets/WC_Colossus", 5],
+          ["WizardCity/WC_Streets/WC_Cyclops", 2],
+          ["WizardCity/WC_Streets/WC_Drains/Z00_Drains_HUB", 5],
+          ["WizardCity/WC_Streets/WC_Firecat", 5],
+          ["WizardCity/WC_Streets/WC_HauntedCave", 2],
+          ["WizardCity/WC_Streets/WC_OldeTown", 5],
+          ["WizardCity/WC_Streets/WC_Triton", 4],
+          ["WizardCity/WC_Streets/WC_Triton_Underwater/WC_Triton_Underwater", 4],
+          ["WizardCity/WC_Streets/WC_Triton_Underwater/WC_Triton_Warren02", 1]
+        ]
+      },
+      "class ConfigurableMinigameSigilInfo": {
+        "total": 4,
+        "zero_zone_count": 129,
+        "hash": 1070872413,
+        "nonzero": [
+          ["WizardCity/WC_Ravenwood", 1],
+          ["WizardCity/WC_Streets/WC_Catacombs", 1],
+          ["WizardCity/WC_Streets/WC_Colossus", 1],
+          ["WizardCity/WC_Streets/WC_Triton_Underwater/WC_Triton_Underwater", 1]
+        ]
+      },
+      "class PvPCombatSigilInfo": {
+        "total": 2,
+        "zero_zone_count": 131,
+        "hash": 744574030,
+        "nonzero": [
+          ["WizardCity/WC_Duel_Arena", 1],
+          ["WizardCity/WC_Duel_Arena_New", 1]
+        ]
+      }
+    }
+  },
+  "disproof": "A repeatable decode of the same r806919 Root.wad or any of the 133 matched Wizard City zone archives that yields a different root class, serialized field set, class hash, or per-zone count would disprove this finding.",
+  "confidence": "high",
+  "submitted_by": "Merune Fleur",
+  "submitted_on": "2026-09-28",
+  "status": "claimed"
+}
