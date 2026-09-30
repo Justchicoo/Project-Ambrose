@@ -112,7 +112,7 @@ Everything not in the table above, including every milestone whose dependencies 
 |---|---|
 | 1.18 | Answered against the maintainer's own capture of a session |
 | 2.14 | Built but for its real-client checks: a banned account refused with a visible message, which contributor item C-77 turns into a scenario, and an optional sniffer check |
-| 3.02 | Built but for one check, which waits on a real client being sent MSG_BADGES, which NET and WIZ have not built yet |
+| 3.02 | Built but for one check, a real client shown the badge window once MSG_BADGES is sent. Kept for the maintainer's world session, which sends MSG_BADGES and closes that check before 7.02, which depends on 3.02 |
 | 3.12 | Only its real-client check is left: the character creation screen offering exactly what the server validates |
 | 3.23 | Next in the maintainer's own queue |
 | 4.06 | Built but for one check, a bad key refused with MSG_ATTACHFAILED on a real client, which is next in the maintainer's world session |
@@ -146,17 +146,18 @@ Everything not in the table above, including every milestone whose dependencies 
 | 17.184 | Queued for the maintainer's panel session after 17.178, 3.26 and 17.24, in order from 17.182 to 17.186: signed updates for the desktop programs |
 | 17.185 | Queued for the maintainer's panel session after 17.178, 3.26 and 17.24, in order from 17.182 to 17.186: the Ambrose service from the panel program |
 | 17.186 | Queued for the maintainer's panel session after 17.178, 3.26 and 17.24, in order from 17.182 to 17.186: reaching a panel through SSH |
-| 8.04 | Built on 2026-09-26 by the maintainer's world session, 10 of 12 checks. Left: the game master's real-client check, which waits on 6.04's in-game commands, and the real-client check that shows a spell in the Spell Deck, which waits on the deck 8.10 and 8.11 build |
+| 8.04 | Built on 2026-09-26 by the maintainer's world session, 10 of 12 checks. The game master's real-client check is next in that session now that 6.04's in-game commands have landed. The real-client check that shows a spell in the Spell Deck is waiting on the deck 8.10 and 8.11 build, which needs 8.09, 8.07, 7.04 and 8.05 first |
 | 9.02 | Built on 2026-09-26 by the maintainer's world session, 6 of 7 checks. Left: its real-client check, which waits on 6.04 |
 | 8.02 | Queued for the maintainer's world session after 8.01: experience and level-up, the next step on the way to a playable game |
-| 7.02 | Queued for the maintainer's world session after 8.02, 9.02 and 8.04: the quest, dialog and madlib model the quest engine rests on |
-| 7.03 | Queued for the maintainer's world session after 7.02: the quest schema, sQuestMgr and its validator |
-| 7.07 | Queued for the maintainer's world session after 7.03: the NPC service menu |
-| 7.04 | Queued for the maintainer's world session after 7.07: the requirement engine |
-| 7.06 | Queued for the maintainer's world session after 7.04: character quest persistence |
-| 7.08 | Queued for the maintainer's world session after 7.06: the wizbang indicators above quest givers |
-| 7.09 | Queued for the maintainer's world session after 7.08: the quest offer |
-| 7.10 | Queued for the maintainer's world session after 7.09: accepting a quest and the quest book |
+| 6.13 | Queued for the maintainer's world session after 8.02, 9.02 and 8.04, and before 7.02: volumes and walk-in trigger events, which 7.07 needs. Its last dependency, 6.12, closes with 6.11's landing |
+| 7.02 | Queued for the maintainer's world session after 3.02's badge window check and 6.13: the quest, dialog and madlib model the quest engine rests on. Waiting on 3.02, whose last check needs MSG_BADGES sent to a real client |
+| 7.03 | Queued for the maintainer's world session after 7.02: the quest schema, sQuestMgr and its validator. Waiting on 7.02, which waits on 3.02's badge window check |
+| 7.07 | Queued for the maintainer's world session after 7.03: the NPC service menu. Waiting on 6.13 and on 7.02, which waits on 3.02's badge window check |
+| 7.04 | Queued for the maintainer's world session after 7.07: the requirement engine. Waiting on 7.02, which waits on 3.02's badge window check |
+| 7.06 | Queued for the maintainer's world session after 7.04: character quest persistence. Waiting on 7.02, which waits on 3.02's badge window check |
+| 7.08 | Queued for the maintainer's world session after 7.06: the wizbang indicators above quest givers. Waiting on 7.02, which waits on 3.02's badge window check |
+| 7.09 | Queued for the maintainer's world session after 7.08: the quest offer. Waiting on 7.02, which waits on 3.02's badge window check |
+| 7.10 | Queued for the maintainer's world session after 7.09: accepting a quest and the quest book. Waiting on 7.02, which waits on 3.02's badge window check |
 | 8.06 | Queued for the maintainer's world session after 7.10: the item template extractor |
 | 8.08 | Queued for the maintainer's world session after 8.06: the backpack's item instances |
 | 8.09 | Queued for the maintainer's world session after 8.08: the backpack's stacks, locks and overflow |
