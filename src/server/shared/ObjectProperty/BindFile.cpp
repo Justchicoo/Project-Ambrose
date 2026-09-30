@@ -68,7 +68,7 @@ SerializerLimits BindFile::GetDefaultLimits() noexcept
     return limits;
 }
 
-BindReadResult BindFile::Read(TypeCatalogPtr const& catalog, std::span<uint8 const> bytes, std::optional<SerializerLimits> limits)
+BindReadResult BindFile::Read(TypeCatalogPtr const& catalog, std::span<uint8 const> bytes, std::optional<SerializerLimits> limits, bool keepSkippedValues)
 {
     if (!IsBind(bytes))
         return Refuse(BindStatus::NotBind, SerializerFlag::None, "does not start with BINd");
@@ -110,6 +110,7 @@ BindReadResult BindFile::Read(TypeCatalogPtr const& catalog, std::span<uint8 con
     options.Flags = flags & PayloadFlags;
     options.Limits = applied;
     options.AllowNullRoot = false;
+    options.KeepSkippedValues = keepSkippedValues;
     BindReadResult result;
     result.Flags = flags;
     if (payload.size() >= sizeof(uint32))

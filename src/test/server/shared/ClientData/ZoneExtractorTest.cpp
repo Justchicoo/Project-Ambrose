@@ -1,8 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, override name, global dynamic and undetectable flags, loading type and spawn requirements, which the zone manager reads back from the world database, an entry of the missing class is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted.
+ * Tests the zone extractor on zone data the test encodes as versionable objects through a type dump it writes and reads back through a second dump that lacks one object class, as the install's sigil classes are missing from the real dump: every location and every object list entry the reader can describe becomes a row with its class, template, orientation vector, start state, override name, global dynamic and undetectable flags, loading type and spawn requirements, which the zone manager reads back from the world database, an entry of the missing class is left out and reported with its class hash, a missing part deeper inside a kept entry is reported and the entry kept, a zone whose name is not its archive's is an error, archives are read in name order, a caller that asks is told after each one, and one without gamedata.bin gives no zone, the SQL script writes NULL where an object has no requirements, and with AMBROSE_TEST_DB set the script applies twice to a new world database and loads in the zone manager with the rows it extracted. A zone's volumes.xml and triggers.xml, written as BINd through server classes the test declares, become volume and trigger rows with their events, a result whose class the reader lacks keeps its place and hash, and a file whose root is not the list it should hold fails that file alone, counted against its zone.
  */
 
+#include "BindFile.h"
 #include "DBUpdater.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
@@ -96,6 +97,38 @@ namespace
         AddClass(classes, "class WizZoneData", plain, { { "std::string", "m_zoneName" }, { "std::string", "m_zoneDisplayName" }, { "class LocationTemplate", "m_locationList" },
             { "class SharedPointer<class CoreObjectInfo>", "m_objectList" }, { "int", "m_healingPerMinute" }, { "int", "m_nSoftLimit" }, { "int", "m_nHardLimit" },
             { "float", "m_farClip" }, { "bool", "m_noMounts" } }, { "m_locationList", "m_objectList" });
+        return Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump();
+    }
+
+    std::string TriggerDump(bool withMissingResult)
+    {
+        Json classes = Json::object();
+        for (char const* name : { "class PropertyClass", "enum CoreObjectInfo::LoadingType" })
+            classes[std::to_string(StringHash::KiStringHash(name))] = Json{ { "name", name }, { "bases", Json::array() }, { "hash", StringHash::KiStringHash(name) },
+                { "properties", Json::object() } };
+        std::vector<std::string> const plain{ "class PropertyClass" };
+        AddClass(classes, "class Requirement", plain, {});
+        AddClass(classes, "class RequirementList", plain, { { "class Requirement*", "m_requirements" } }, { "m_requirements" });
+        AddClass(classes, "class Result", plain, {});
+        AddClass(classes, "class ResTeleport", { "class Result", "class PropertyClass" }, {});
+        if (withMissingResult)
+            AddClass(classes, "class ResMissing", { "class Result", "class PropertyClass" }, { { "std::string", "m_text" } });
+        AddClass(classes, "class ResultList", plain, { { "class Result*", "m_results" } }, { "m_results" });
+        AddClass(classes, "class TriggerObjectInfo", plain, {});
+        AddClass(classes, "class TriggerVolume", plain, { { "std::string", "m_triggerObjName" }, { "unsigned int", "m_nObjectID" }, { "unsigned __int64", "m_templateID" },
+            { "std::string", "m_shape" }, { "float", "m_locationX" }, { "float", "m_locationY" }, { "float", "m_locationZ" }, { "float", "m_radius" }, { "float", "m_length" },
+            { "float", "m_width" }, { "float", "m_depth" }, { "bool", "m_questEvents" }, { "bool", "m_playerOnly" }, { "enum CoreObjectInfo::LoadingType", "m_loadingType" },
+            { "class SharedPointer<class RequirementList>", "m_spawnRequirements" }, { "std::string", "m_enterEvents" }, { "std::string", "m_exitEvents" } },
+            { "m_enterEvents", "m_exitEvents" });
+        AddClass(classes, "class TriggerVolumeList", plain, { { "class TriggerVolume*", "m_allVolumes" } }, { "m_allVolumes" });
+        AddClass(classes, "class Trigger", plain, { { "std::string", "m_triggerName" }, { "int", "m_triggerMax" }, { "float", "m_cooldown" }, { "int", "#780900737" },
+            { "bool", "#847435658" }, { "std::string", "m_activateEvents" }, { "std::string", "m_fireEvents" }, { "std::string", "m_deactivateEvents" }, { "std::string", "#1549045087" },
+            { "class RequirementList*", "m_requirements" }, { "class ResultList*", "m_results" }, { "class ResultList*", "m_cooldownResults" }, { "std::string", "#2293879431" },
+            { "class SharedPointer<class TriggerObjectInfo>", "m_triggerObjectInfo" } }, { "m_activateEvents", "m_fireEvents", "m_deactivateEvents" });
+        for (auto& [name, property] : classes[std::to_string(StringHash::KiStringHash("class Trigger"))]["properties"].items())
+            if (name.starts_with('#'))
+                property["hash"] = std::stoul(name.substr(1));
+        AddClass(classes, "class TriggerList", plain, { { "class SharedPointer<class Trigger>", "m_allTriggers" } }, { "m_allTriggers" });
         return Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump();
     }
 
@@ -342,14 +375,16 @@ TEST_F(ZoneExtractorTest, TheScriptReplacesTheZoneTablesAndWritesNullForNoRequir
     ASSERT_TRUE(extraction.Ok()) << Report(extraction);
     WorldSqlScript const script = ZoneScript::Build(extraction);
     std::vector<std::string> const& statements = script.GetStatements();
-    ASSERT_EQ(statements.size(), 6u);
+    ASSERT_EQ(statements.size(), 10u) << "the volume and trigger tables are emptied too, with no rows to write";
     EXPECT_EQ(statements[0], "DELETE FROM `zone_template`");
     EXPECT_NE(statements[1].find(WorldSqlScript::Literal(std::string(Hub))), std::string::npos) << statements[1];
     EXPECT_EQ(statements[4], "DELETE FROM `zone_object`");
     EXPECT_NE(statements[5].find("`spawn_requirements`"), std::string::npos) << statements[5];
     EXPECT_NE(statements[5].find("'', 0, 0, 1, NULL)"), std::string::npos) << "the emitter's loading type is 1 and it has no spawn requirements: " << statements[5];
+    EXPECT_EQ(statements[6], "DELETE FROM `zone_volume`");
+    EXPECT_EQ(statements[9], "DELETE FROM `zone_trigger_result`");
     EXPECT_EQ(WorldSqlScript::Literal(std::monostate{}), "NULL");
-    EXPECT_EQ(ZoneScript::GetTables(), (std::vector<std::string_view>{ "zone_template", "zone_location", "zone_object" }));
+    EXPECT_EQ(ZoneScript::GetTables(), (std::vector<std::string_view>{ "zone_template", "zone_location", "zone_object", "zone_volume", "zone_trigger", "zone_trigger_event", "zone_trigger_result" }));
 }
 
 TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtracted)
@@ -411,4 +446,115 @@ TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtr
         sZoneMgr.Clear();
         WorldDatabase.Close();
     }
+}
+
+TEST(ZoneTriggerTest, VolumesAndTriggersBecomeRowsAndAResultOfAnUnknownClassKeepsItsPlace)
+{
+    TypeRegistry writer;
+    ASSERT_TRUE(writer.LoadFromText(TriggerDump(true), "writer.json")) << writer.GetErrors().front();
+    TypeRegistry reader;
+    ASSERT_TRUE(reader.LoadFromText(TriggerDump(false), "reader.json")) << reader.GetErrors().front();
+    auto const create = [&writer](std::string_view type)
+    {
+        PropertyObjectPtr object = PropertyObject::Create(writer.GetCatalog(), type);
+        EXPECT_TRUE(object) << type;
+        return object;
+    };
+    auto const texts = [](std::initializer_list<char const*> names)
+    {
+        PropertyValue::List list;
+        for (char const* name : names)
+            list.emplace_back(std::string(name));
+        return list;
+    };
+
+    PropertyObjectPtr volume = create("class TriggerVolume");
+    ASSERT_EQ(volume->Set("m_triggerObjName", std::string("Ravenwood POI")), PropertySetResult::Ok);
+    ASSERT_EQ(volume->Set("m_nObjectID", uint32{ 222350 }), PropertySetResult::Ok);
+    ASSERT_EQ(volume->Set("m_templateID", uint64{ 1700 }), PropertySetResult::Ok);
+    ASSERT_EQ(volume->Set("m_shape", std::string("Sphere")), PropertySetResult::Ok);
+    ASSERT_EQ(volume->Set("m_locationX", -47.75f), PropertySetResult::Ok);
+    ASSERT_EQ(volume->Set("m_locationY", 1772.25f), PropertySetResult::Ok);
+    ASSERT_EQ(volume->Set("m_radius", 1034.5f), PropertySetResult::Ok);
+    ASSERT_EQ(volume->Set("m_playerOnly", true), PropertySetResult::Ok);
+    ASSERT_EQ(volume->Set("m_enterEvents", texts({ "Enter_Ravenwood POI" })), PropertySetResult::Ok);
+    ASSERT_EQ(volume->Set("m_exitEvents", texts({ "Exit_Ravenwood POI" })), PropertySetResult::Ok);
+    PropertyObjectPtr volumes = create("class TriggerVolumeList");
+    PropertyValue::List allVolumes;
+    allVolumes.emplace_back(std::move(volume));
+    ASSERT_EQ(volumes->Set("m_allVolumes", std::move(allVolumes)), PropertySetResult::Ok);
+
+    PropertyObjectPtr results = create("class ResultList");
+    PropertyValue::List resultList;
+    resultList.emplace_back(create("class ResTeleport"));
+    resultList.emplace_back(create("class ResMissing"));
+    ASSERT_EQ(results->Set("m_results", std::move(resultList)), PropertySetResult::Ok);
+    PropertyObjectPtr trigger = create("class Trigger");
+    ASSERT_EQ(trigger->Set("m_triggerName", std::string("TeleportToShoppingDistrict")), PropertySetResult::Ok);
+    ASSERT_EQ(trigger->Set("m_triggerMax", int32{ -1 }), PropertySetResult::Ok);
+    ASSERT_EQ(trigger->Set("m_activateEvents", texts({ "StartZone" })), PropertySetResult::Ok);
+    ASSERT_EQ(trigger->Set("m_fireEvents", texts({ "Enter_Activator Volume (4)" })), PropertySetResult::Ok);
+    ASSERT_EQ(trigger->Set("#1549045087", std::string("kept")), PropertySetResult::Ok);
+    ASSERT_EQ(trigger->Set("m_results", std::move(results)), PropertySetResult::Ok);
+    PropertyObjectPtr triggers = create("class TriggerList");
+    PropertyValue::List allTriggers;
+    allTriggers.emplace_back(std::move(trigger));
+    ASSERT_EQ(triggers->Set("m_allTriggers", std::move(allTriggers)), PropertySetResult::Ok);
+
+    EncodeResult const volumeFile = BindFile::Write(volumes.get());
+    ASSERT_TRUE(volumeFile.Ok()) << volumeFile.Detail;
+    EncodeResult const triggerFile = BindFile::Write(triggers.get());
+    ASSERT_TRUE(triggerFile.Ok()) << triggerFile.Detail;
+
+    ZoneExtraction extraction;
+    ExtractedZone zone;
+    zone.Path = Hub;
+    ZoneExtractor::ReadVolumes(reader.GetCatalog(), zone, volumeFile.Bytes, extraction);
+    ZoneExtractor::ReadTriggers(reader.GetCatalog(), zone, triggerFile.Bytes, extraction);
+    ASSERT_TRUE(extraction.TriggerFailures.empty()) << extraction.TriggerFailures.front().Detail;
+    ASSERT_EQ(zone.Volumes.size(), 1u);
+    ExtractedVolume const& poi = zone.Volumes[0];
+    EXPECT_EQ(poi.Name, "Ravenwood POI");
+    EXPECT_EQ(poi.ObjectId, 222350u);
+    EXPECT_EQ(poi.TemplateId, 1700u);
+    EXPECT_EQ(poi.Shape, "Sphere");
+    EXPECT_EQ(poi.Position, (PropertyTypes::Vector3D{ -47.75f, 1772.25f, 0.0f })) << "the position is m_locationX, Y and Z";
+    EXPECT_EQ(poi.Radius, 1034.5f);
+    EXPECT_TRUE(poi.PlayerOnly);
+    EXPECT_FALSE(poi.SpawnRequirements);
+    EXPECT_EQ(poi.EnterEvents, std::vector<std::string>{ "Enter_Ravenwood POI" });
+    EXPECT_EQ(poi.ExitEvents, std::vector<std::string>{ "Exit_Ravenwood POI" });
+
+    ASSERT_EQ(zone.Triggers.size(), 1u);
+    ExtractedTrigger const& teleport = zone.Triggers[0];
+    EXPECT_EQ(teleport.Name, "TeleportToShoppingDistrict");
+    EXPECT_EQ(teleport.ClassName, "class Trigger");
+    EXPECT_EQ(teleport.TriggerMax, -1);
+    EXPECT_EQ(teleport.Unnamed1549045087, "kept") << "a field no name fits is kept under its hash";
+    EXPECT_EQ(teleport.FireEvents, std::vector<std::string>{ "Enter_Activator Volume (4)" });
+    EXPECT_FALSE(teleport.State);
+    ASSERT_EQ(teleport.Results.size(), 2u);
+    EXPECT_EQ(teleport.Results[0].ClassName, std::optional<std::string>("class ResTeleport"));
+    EXPECT_TRUE(teleport.Results[0].Data);
+    EXPECT_EQ(teleport.Results[1].ClassHash, StringHash::KiStringHash("class ResMissing")) << "a result the reader cannot describe keeps its place and hash";
+    EXPECT_FALSE(teleport.Results[1].ClassName);
+    EXPECT_FALSE(teleport.Results[1].Data);
+    EXPECT_TRUE(teleport.CooldownResults.empty());
+
+    ZoneExtraction wrong;
+    ExtractedZone other;
+    other.Path = "WizardCity/WC_Ravenwood";
+    ZoneExtractor::ReadTriggers(reader.GetCatalog(), other, volumeFile.Bytes, wrong);
+    ASSERT_EQ(wrong.TriggerFailures.size(), 1u);
+    EXPECT_EQ(wrong.TriggerFailures[0].File, ZoneExtractor::TriggerEntry);
+    EXPECT_NE(wrong.TriggerFailures[0].Detail.find("not class TriggerList"), std::string::npos) << wrong.TriggerFailures[0].Detail;
+    EXPECT_EQ(wrong.GetTriggerFailureZoneCount(), 1u);
+    EXPECT_TRUE(wrong.Ok()) << "a trigger file that fails is counted, not an error that stops the extraction";
+
+    zone.Objects.clear();
+    extraction.Zones.push_back(zone);
+    std::string const sql = ZoneScript::Build(extraction).ToText();
+    EXPECT_NE(sql.find(WorldSqlScript::Literal(std::string("Enter_Ravenwood POI"))), std::string::npos);
+    EXPECT_NE(sql.find(WorldSqlScript::Literal(std::string("class ResTeleport"))), std::string::npos);
+    EXPECT_NE(sql.find(fmt::format("{}, NULL, NULL", StringHash::KiStringHash("class ResMissing"))), std::string::npos) << "no class name and no bytes for the unknown result";
 }

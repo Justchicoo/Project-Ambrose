@@ -222,18 +222,23 @@ ServerClassProposals ServerClassProposer::Propose(TypeCatalog const& catalog, Pr
             continue;
 
         std::vector<std::string> named;
+        bool written = true;
         if (auto const found = names.find(seen.Hash); found != names.end())
-            for (std::string const& name : found->second)
-                if (StringHash::KiStringHash(name) == seen.Hash && std::find(named.begin(), named.end(), name) == named.end())
-                    named.push_back(name);
+            for (ServerClassName const& name : found->second)
+                if (StringHash::KiStringHash(name.Name) == seen.Hash)
+                {
+                    if (std::find(named.begin(), named.end(), name.Name) == named.end())
+                        named.push_back(name.Name);
+                    written = written && name.Written;
+                }
         if (named.empty())
         {
-            refuse("no string of the client program hashes to it");
+            refuse("no name the client program's strings or the install's text files give hashes to it");
             continue;
         }
         if (named.size() > 1)
         {
-            refuse(fmt::format("{} strings of the client program hash to it: {}", named.size(), Join(named)));
+            refuse(fmt::format("{} names the client program's strings and the install's text files give hash to it: {}", named.size(), Join(named)));
             continue;
         }
 
@@ -348,10 +353,11 @@ ServerClassProposals ServerClassProposer::Propose(TypeCatalog const& catalog, Pr
         }
         for (std::size_t index = 0; index < proposal.Class.Properties.size(); ++index)
             proposal.Class.Properties[index].Id = index;
-        proposal.Evidence = fmt::format("{} object(s) in {} file(s) of the install's archives hold it, the first in {} at {}. The client program holds the string {}, which hashes to it. "
+        proposal.Evidence = fmt::format("{} object(s) in {} file(s) of the install's archives hold it, the first in {} at {}. {} {}, which hashes to it. "
                                         "The property oracle names each of the {} properties they hold one way only. It derives from {}, {}, and holds every "
                                         "property {} declares, which come first, with its {} own after them.",
-            seen.Count, seen.Files, seen.FirstFile, seen.FirstPath.empty() ? std::string("the root") : seen.FirstPath, named.front(), guessed.size(), base.Name,
+            seen.Count, seen.Files, seen.FirstFile, seen.FirstPath.empty() ? std::string("the root") : seen.FirstPath,
+            written ? "A text file of the install's archives writes the class" : "The client program holds the string", named.front(), guessed.size(), base.Name,
             bound ? fmt::format("the class {}, the list it sits in, holds", holder) : std::string("since it sits in no list"), base.Name, own);
         proposals.Classes.push_back(std::move(proposal));
     }

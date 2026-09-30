@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads and writes the client's BINd data files: the BINd magic, the u32 serializer flags the object was written with, and when those flags ask for compression a padding byte, the u32 inflated size and a zlib stream, around one versionable ObjectProperty object; reading refuses anything that is not such a file or inflates past its limit and returns the root class hash and the decoded object with the issues its decode reported, and writing leaves out dirty-encoded properties at their defaults as the client's own files do.
+ * Reads and writes the client's BINd data files: the BINd magic, the u32 serializer flags the object was written with, and when those flags ask for compression a padding byte, the u32 inflated size and a zlib stream, around one versionable ObjectProperty object; reading refuses anything that is not such a file or inflates past its limit and returns the root class hash and the decoded object with the issues its decode reported, each with the bits it skipped when asked, and writing leaves out dirty-encoded properties at their defaults as the client's own files do.
  */
 
 #ifndef AMBROSE_BINDFILE_H
@@ -52,7 +52,7 @@ public:
 
     static bool IsBind(std::span<uint8 const> bytes) noexcept;
     static SerializerLimits GetDefaultLimits() noexcept;
-    static BindReadResult Read(TypeCatalogPtr const& catalog, std::span<uint8 const> bytes, std::optional<SerializerLimits> limits = std::nullopt);
+    static BindReadResult Read(TypeCatalogPtr const& catalog, std::span<uint8 const> bytes, std::optional<SerializerLimits> limits = std::nullopt, bool keepSkippedValues = false);
     static EncodeResult Write(PropertyObject const* object, SerializerFlag flags = DefaultFlags, uint32 mask = SaveMask);
     static std::string_view GetStatusName(BindStatus status) noexcept;
 };

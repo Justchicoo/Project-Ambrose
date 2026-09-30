@@ -1,10 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Extracts every zone of the user's own r806919 install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: every zone archive reads without an error and no two zones share a path; the only object list entries left out anywhere are sigils, whose classes the dump does not describe; the Commons comes out as WizardCity/WC_Hub under its own display key with every placed object its data lists but its six sigils, 123 of them the server's to send, and with its start and exit places; Ravenwood holds its objects, 40 of them the server's to send, its places and the templates of its statues and teachers; and with AMBROSE_TEST_DB set the rows fill a new world database that the zone manager loads, the server sending the objects its data marks as the server's own to send.
+ * Extracts every zone of the user's own r806919 install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: every zone archive reads without an error and no two zones share a path; the only object list entries left out anywhere are sigils, whose classes the dump does not describe; the Commons comes out as WizardCity/WC_Hub under its own display key with every placed object its data lists but its six sigils, 123 of them the server's to send, and with its start and exit places; Ravenwood holds its objects, 40 of them the server's to send, its places and the templates of its statues and teachers; and with AMBROSE_TEST_DB set the rows fill a new world database that the zone manager loads, the server sending the objects its data marks as the server's own to send, and the Commons' volumes.xml and triggers.xml read through the authored classes that database holds: the Ravenwood POI sphere with its enter and exit events, the trigger that fires on entering it, and TeleportToShoppingDistrict, whose one result is a ResTeleport with no destination, as the client's class has no properties.
  */
 
 #include "DBUpdater.h"
 #include "DatabaseEnv.h"
+#include "KiwadArchive.h"
+#include "ServerClassScript.h"
+#include "TypeRegistry.h"
 #include "Environment.h"
 #include "LogConfig.h"
 #include "StringHash.h"
@@ -205,4 +208,78 @@ TEST_F(ZoneExtractorClientTest, TheRowsFillAWorldDatabaseTheZoneManagerLoads)
             ++sent;
     }
     EXPECT_EQ(sent, SentByTheServer(extracted));
+}
+
+TEST(ZoneExtractorClientTriggerTest, TheCommonsVolumesAndTriggersReadThroughTheAuthoredClasses)
+{
+    std::optional<std::string> const client = Ambrose::GetEnv("AMBROSE_CLIENT_DIR");
+    std::optional<std::string> const dump = Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH");
+    std::optional<std::string> const text = Ambrose::GetEnv("AMBROSE_TEST_DB");
+    if (!client || client->empty() || !dump || dump->empty() || !text || text->empty())
+        GTEST_SKIP() << "AMBROSE_CLIENT_DIR, AMBROSE_TYPE_DUMP_PATH and AMBROSE_TEST_DB are not all set";
+    std::optional<MySQLConnectionInfo> server = MySQLConnectionInfo::Parse(*text);
+    ASSERT_TRUE(server);
+    MySQLConnectionInfo world = *server;
+    world.Database = fmt::format("ambrose_client_triggers_{:08x}", std::random_device()());
+    server->Database.clear();
+    struct Cleanup
+    {
+        MySQLConnectionInfo Server;
+        std::string Name;
+        ~Cleanup()
+        {
+            WorldDatabase.Close();
+            MySQLConnection connection(Server);
+            if (connection.Open() == 0)
+                connection.Execute(fmt::format("DROP DATABASE IF EXISTS {}", DBUpdater::QuoteIdentifier(Name)));
+        }
+    } const cleanup{ *server, world.Database };
+    ASSERT_TRUE(DBUpdater::Run(world, "world", UpdaterSettings{}));
+    ASSERT_TRUE(WorldDatabase.SetConnectionInfo(world.ToConnectionString(), 1, 1));
+    ASSERT_EQ(WorldDatabase.Open(), 0u);
+    TypeDumpLoader::RawDump authored;
+    std::vector<std::string> errors;
+    ASSERT_TRUE(ServerClassScript::Read(authored, errors, ServerClassScript::AuthoredSource)) << (errors.empty() ? std::string() : errors.front());
+
+    TypeRegistry registry;
+    ASSERT_TRUE(registry.SetSupplement(std::move(authored), "the authored classes", errors)) << (errors.empty() ? std::string() : errors.front());
+    ASSERT_TRUE(registry.LoadFromFile(LogConfig::Utf8Path(*dump)));
+    std::string error;
+    std::unique_ptr<KiwadArchive> const archive = KiwadArchive::Open(LogConfig::Utf8Path(*client) / "Data" / "GameData" / "WizardCity-WC_Hub.wad", error);
+    ASSERT_TRUE(archive) << error;
+    KiwadReadResult const volumes = archive->Read(ZoneExtractor::VolumeEntry, ZoneExtractor::MaxEntryBytes);
+    KiwadReadResult const triggers = archive->Read(ZoneExtractor::TriggerEntry, ZoneExtractor::MaxEntryBytes);
+    ASSERT_TRUE(volumes.Succeeded()) << volumes.Error;
+    ASSERT_TRUE(triggers.Succeeded()) << triggers.Error;
+
+    ZoneExtraction extraction;
+    ExtractedZone zone;
+    zone.Path = Commons;
+    ZoneExtractor::ReadVolumes(registry.GetCatalog(), zone, volumes.Data, extraction);
+    ZoneExtractor::ReadTriggers(registry.GetCatalog(), zone, triggers.Data, extraction);
+    ASSERT_TRUE(extraction.TriggerFailures.empty()) << extraction.TriggerFailures.front().File << ": " << extraction.TriggerFailures.front().Detail;
+
+    auto const volume = std::find_if(zone.Volumes.begin(), zone.Volumes.end(), [](ExtractedVolume const& row) { return row.Name == "Ravenwood POI"; });
+    ASSERT_NE(volume, zone.Volumes.end());
+    EXPECT_EQ(volume->Shape, "Sphere");
+    EXPECT_EQ(volume->EnterEvents, std::vector<std::string>{ "Enter_Ravenwood POI" });
+    EXPECT_EQ(volume->ExitEvents, std::vector<std::string>{ "Exit_Ravenwood POI" });
+    EXPECT_EQ(volume->LoadingType, 0) << "STATIC_CLIENT_SERVER";
+    EXPECT_GT(volume->Radius, 0.0f);
+
+    auto const named = [&zone](std::string_view name)
+    {
+        return std::find_if(zone.Triggers.begin(), zone.Triggers.end(), [name](ExtractedTrigger const& row) { return row.Name == name; });
+    };
+    auto const poi = named("Trigger POI Ravenwood");
+    ASSERT_NE(poi, zone.Triggers.end());
+    EXPECT_EQ(poi->FireEvents, std::vector<std::string>{ "Enter_Ravenwood POI" });
+    auto const teleport = named("TeleportToShoppingDistrict");
+    ASSERT_NE(teleport, zone.Triggers.end());
+    ASSERT_EQ(teleport->Results.size(), 1u);
+    EXPECT_EQ(teleport->Results[0].ClassName, std::optional<std::string>("class ResTeleport"));
+    EXPECT_EQ(teleport->Results[0].ClassHash, StringHash::KiStringHash("class ResTeleport"));
+    ClassInfo const* const resTeleport = registry.GetCatalog()->FindClass("class ResTeleport");
+    ASSERT_NE(resTeleport, nullptr);
+    EXPECT_TRUE(resTeleport->Properties.empty()) << "no destination is held; destinations come from the world's own data";
 }

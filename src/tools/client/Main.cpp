@@ -35,7 +35,9 @@
 #include "LogConfig.h"
 #include "PropertyJson.h"
 #include "PropertyOracle.h"
+#include "PropertyWordSearch.h"
 #include "ServerClassCache.h"
+#include "SkippedValue.h"
 #include "StringUtil.h"
 #include "TypeDumpLoader.h"
 #include "TypeRegistry.h"
@@ -123,7 +125,8 @@ Commands:
                          program holds the name at all where it registers none
   behaviors --list [text] print every behavior the client program registers
   wad <entry>...         print an archive entry: BINd and headerless objects as JSON,
-                         the rest as text
+                         the rest as text, and each value no class names by its bits
+                         with what they read as
   wad --list [pattern]   print entry names holding the pattern
   lang <key>             print the text a locale key holds, which is what the client
                          shows where the data carries only an id
@@ -131,12 +134,16 @@ Commands:
   core <file>...         print a game object blob, the Data a MSG_LOGINCOMPLETE or a
                          MSG_NEWOBJECT carries, enveloped or not, with the block, type
                          and template its header names; --as names the class they stand for
-  hex <file>...          print a file's bytes with their offsets, from --from for --count
+  hex <file>...          print a file's bytes with their offsets, from --from for --count,
+                         or with --wad an archive entry's, such as one no class reads yet
 
 Options:
   --client <dir>       the install to read (default: AMBROSE_CLIENT_DIR)
   --type-dump <file>   the type dump made from it (default: AMBROSE_TYPE_DUMP_PATH)
-  --wad <file>         the archive wad reads (default: Root.wad)
+  --supplement <file>  a class file in the type dump's format, such as schemaprobe
+                       --server-classes writes, whose classes join the dump in place of
+                       the one the Ambrose data folder holds for the install
+  --wad <file>         the archive wad and name read (default: Root.wad), and hex when given
   --locale <name>      the locale lang reads (default: en-US)
   --all                print every match rather than the first few
   --as <class>         the class a game object's core type builds, such as
@@ -154,6 +161,12 @@ Options:
                        and it takes the place of the world database's row for that type
   --wide               with name, also try every class the dump lists as a type, plain,
                        pointed to and shared, which names far more hashes by chance
+  --words              with name, also try names built from the words of every name the
+                       sources give, m_ and one or two words, against --type or the plain
+                       scalar types, saying how often chance alone would name a hash
+  --type <type>        with --words, a type to try instead of the scalar ones; repeatable
+  --anchor <word>      with --words, also try three words with this one in any place;
+                       repeatable, and each makes a match by chance more likely
   --derived            with types, print every class derived from each class named
   --flag <name>        with types, print only the properties that carry a property flag,
                        such as ObjectName, of the classes found
@@ -181,10 +194,12 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         std::optional<std::string> Client;
         std::optional<std::string> TypeDump;
         std::string Wad = "Root.wad";
+        bool WadGiven = false;
         std::string Locale = "en-US";
         std::optional<std::string> As;
         std::vector<std::string> CoreTypes;
         std::optional<std::string> WorldDatabase;
+        std::optional<std::string> Supplement;
         std::size_t From = 0;
         std::size_t Count = 0;
         bool List = false;
@@ -192,6 +207,9 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         bool Trailing = false;
         bool Derived = false;
         bool Wide = false;
+        bool Words = false;
+        std::vector<std::string> Types;
+        std::vector<std::string> Anchors;
         std::optional<std::string> Flag;
         std::optional<std::string> Ghidra;
         std::optional<std::string> GhidraProject;
@@ -242,6 +260,15 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                 parsed.Trailing = true;
             else if (arg == "--wide")
                 parsed.Wide = true;
+            else if (arg == "--words")
+                parsed.Words = true;
+            else if (arg == "--type" || arg == "--anchor")
+            {
+                std::optional<std::string> const given = value(arg);
+                if (!given)
+                    return std::nullopt;
+                (arg == "--type" ? parsed.Types : parsed.Anchors).push_back(*given);
+            }
             else if (arg == "--derived")
                 parsed.Derived = true;
             else if (arg == "--flag" || arg == "--ghidra" || arg == "--ghidra-project")
@@ -306,19 +333,24 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                 }
                 (arg == "--from" ? parsed.From : parsed.Count) = static_cast<std::size_t>(*number);
             }
-            else if (arg == "--client" || arg == "--type-dump" || arg == "--wad" || arg == "--world-db")
+            else if (arg == "--client" || arg == "--type-dump" || arg == "--wad" || arg == "--world-db" || arg == "--supplement")
             {
                 std::optional<std::string> const given = value(arg);
                 if (!given)
                     return std::nullopt;
                 if (arg == "--client")
                     parsed.Client = *given;
+                else if (arg == "--supplement")
+                    parsed.Supplement = *given;
                 else if (arg == "--type-dump")
                     parsed.TypeDump = *given;
                 else if (arg == "--world-db")
                     parsed.WorldDatabase = *given;
                 else
+                {
                     parsed.Wad = *given;
+                    parsed.WadGiven = true;
+                }
             }
             else if (arg.starts_with("--"))
             {
@@ -539,12 +571,35 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                 ++named;
         std::cout << fmt::format("{} types and {} names: the dump's, {} the client program holds and {} the text files of {} spell out; a random hash is named {:.1f}% of the time\n",
             oracle.GetTypeCount(), oracle.GetNameCount(), programNames, textNames, arguments.Wad, 100.0 * static_cast<double>(named) / Trials);
+        PropertyWordSearchResult searched;
+        if (arguments.Words)
+        {
+            std::vector<std::string> spelled = names;
+            for (ClassInfo const* type : catalog.GetClasses())
+                for (PropertyInfo const& property : type->Properties)
+                    spelled.push_back(property.Name);
+            std::vector<std::string> const words = PropertyWordSearch::Words(spelled);
+            std::vector<std::string> tried = arguments.Types;
+            if (tried.empty())
+                for (std::string_view const type : PropertyWordSearch::DefaultTypes())
+                    tried.emplace_back(type);
+            searched = PropertyWordSearch::Run(hashes, tried, words, arguments.Anchors);
+            std::cout << fmt::format("the word search built {} names from {} words and tried each as {} type(s); a random hash is named by it {:.2f}% of the time\n", searched.Names,
+                words.size(), tried.size(), 100.0 * searched.Chance);
+        }
         for (uint32 const hash : hashes)
         {
             std::vector<PropertyGuess> const guesses = oracle.Guess(hash);
-            std::cout << fmt::format("{}: {}\n", hash, guesses.empty() ? std::string("no name") : fmt::format("{} name(s)", guesses.size()));
+            std::vector<PropertyWordMatch> built;
+            for (PropertyWordMatch const& match : searched.Matches)
+                if (match.Hash == hash)
+                    built.push_back(match);
+            std::size_t const count = guesses.size() + built.size();
+            std::cout << fmt::format("{}: {}\n", hash, count == 0 ? std::string("no name") : fmt::format("{} name(s)", count));
             for (PropertyGuess const& guess : guesses)
                 std::cout << fmt::format("  {} {}{}\n", guess.Type, guess.Name, guess.Known ? "  the dump lists it" : "");
+            for (PropertyWordMatch const& match : built)
+                std::cout << fmt::format("  {} {}  built from words\n", match.Type, match.Name);
         }
         return Success;
     }
@@ -1069,19 +1124,34 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         return status;
     }
 
-    int RunHex(Arguments const& arguments)
+    int RunHex(Arguments const& arguments, KiwadArchive const* archive)
     {
         int status = Success;
         for (std::string const& subject : arguments.Subjects)
         {
-            std::ifstream stream(LogConfig::Utf8Path(subject), std::ios::binary);
-            if (!stream)
+            std::vector<uint8> bytes;
+            if (archive)
             {
-                std::cerr << fmt::format("{}: cannot be read\n", subject);
-                status = Failure;
-                continue;
+                KiwadReadResult read = archive->Read(subject);
+                if (!read.Succeeded())
+                {
+                    std::cerr << fmt::format("{}: {}\n", subject, read.Error);
+                    status = Failure;
+                    continue;
+                }
+                bytes = std::move(read.Data);
             }
-            std::vector<uint8> const bytes((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+            else
+            {
+                std::ifstream stream(LogConfig::Utf8Path(subject), std::ios::binary);
+                if (!stream)
+                {
+                    std::cerr << fmt::format("{}: cannot be read\n", subject);
+                    status = Failure;
+                    continue;
+                }
+                bytes.assign(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+            }
             std::size_t const from = std::min(arguments.From, bytes.size());
             std::size_t const to = arguments.Count == 0 ? bytes.size() : std::min(bytes.size(), from + arguments.Count);
             for (std::size_t line = from; line < to; line += 16)
@@ -1895,8 +1965,9 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
     void ReportIssues(std::string_view name, std::vector<DecodeIssue> const& issues)
     {
         for (DecodeIssue const& issue : issues)
-            std::cerr << fmt::format("{}: {} at {}{}{}\n", name, ObjectSerializer::GetIssueName(issue.Kind), issue.Path.empty() ? std::string("the root") : issue.Path,
-                issue.Hash == 0 ? std::string() : fmt::format(", hash {}", issue.Hash), issue.Detail.empty() ? std::string() : ": " + issue.Detail);
+            std::cerr << fmt::format("{}: {} at {}{}{}{}\n", name, ObjectSerializer::GetIssueName(issue.Kind), issue.Path.empty() ? std::string("the root") : issue.Path,
+                issue.Hash == 0 ? std::string() : fmt::format(", hash {}", issue.Hash), issue.Detail.empty() ? std::string() : ": " + issue.Detail,
+                issue.Value.empty() ? std::string() : fmt::format("\n  {} bit(s): {}", issue.Bits, SkippedValue::Describe(issue.Bits, issue.Value)));
         if (!issues.empty())
             std::cerr << fmt::format("client: {} read with {} part(s) skipped, each named above and left out of what is printed\n", name, issues.size());
     }
@@ -1929,7 +2000,8 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
             }
             if (catalog)
             {
-                BindReadResult const result = BindFile::Read(catalog, read.Data);
+                bool constexpr KeepSkippedValues = true;
+                BindReadResult const result = BindFile::Read(catalog, read.Data, std::nullopt, KeepSkippedValues);
                 if (result.Ok())
                 {
                     std::cout << PropertyJson::Dump(result.Decoded.Object.get(), 2) << "\n";
@@ -1943,6 +2015,7 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                 options.Limits = BindFile::GetDefaultLimits();
                 options.AllowNullRoot = false;
                 options.AllowTrailingBytes = false;
+                options.KeepSkippedValues = true;
                 DecodeResult const raw = ObjectSerializer::Decode(catalog, read.Data, options);
                 if (raw.Ok())
                 {
@@ -1981,17 +2054,17 @@ int main(int argc, char** argv)
     }
 
     std::string const command = Ambrose::ToLower(arguments->Command);
-    if (command == "hex")
+    if (command == "hex" && !arguments->WadGiven)
     {
         if (arguments->Subjects.empty())
         {
-            std::cerr << "client hex needs a file\n";
+            std::cerr << "client hex needs a file, or --wad and an entry\n";
             return BadUsage;
         }
-        return RunHex(*arguments);
+        return RunHex(*arguments, nullptr);
     }
 
-    if (command != "types" && command != "name" && command != "messages" && command != "handlers" && command != "behaviors" && command != "template" && command != "wad" && command != "lang"
+    if (command != "hex" && command != "types" && command != "name" && command != "messages" && command != "handlers" && command != "behaviors" && command != "template" && command != "wad" && command != "lang"
         && command != "core" && command != "strings" && command != "xrefs" && command != "disasm" && command != "decompile" && command != "functions" && command != "vtable")
     {
         std::cerr << fmt::format("there is no command {}\n{}", arguments->Command, Usage);
@@ -2057,12 +2130,16 @@ int main(int argc, char** argv)
             return Failure;
         }
     }
-    if (!world && catalog && arguments->Client)
+    if (!world && catalog && (arguments->Client || arguments->Supplement))
     {
-        std::optional<ClientInstall> const install = ClientInstall::Inspect(system, LogConfig::Utf8Path(*arguments->Client));
-        std::optional<std::filesystem::path> const classes = install ? ServerClassCache::PathFor(ClientLocator::GetDataFolder(system), install->Revision) : std::nullopt;
+        std::optional<ClientInstall> const install = arguments->Client ? ClientInstall::Inspect(system, LogConfig::Utf8Path(*arguments->Client)) : std::nullopt;
+        std::optional<std::filesystem::path> classes;
+        if (arguments->Supplement)
+            classes = LogConfig::Utf8Path(*arguments->Supplement);
+        else if (install)
+            classes = ServerClassCache::PathFor(ClientLocator::GetDataFolder(system), install->Revision);
         std::error_code missing;
-        if (classes && std::filesystem::is_regular_file(*classes, missing))
+        if (classes && (arguments->Supplement || std::filesystem::is_regular_file(*classes, missing)))
         {
             TypeDumpLoader::RawDump found;
             std::string unread;
@@ -2070,11 +2147,18 @@ int main(int argc, char** argv)
             if (ServerClassCache::Read(*classes, found, unread) && sTypeRegistry.SetSupplement(std::move(found), ConfigMgr::PathToUtf8(*classes), errors))
             {
                 catalog = sTypeRegistry.GetCatalog();
-                std::cerr << fmt::format("client: the {} class(es) {} holds that its type dump does not describe join it from {}\n", sTypeRegistry.GetSupplementClassCount(),
-                    install->Describe(), ConfigMgr::PathToUtf8(*classes));
+                if (arguments->Supplement)
+                    std::cerr << fmt::format("client: the {} class(es) {} holds join the type dump\n", sTypeRegistry.GetSupplementClassCount(), ConfigMgr::PathToUtf8(*classes));
+                else
+                    std::cerr << fmt::format("client: the {} class(es) {} holds that its type dump does not describe join it from {}\n", sTypeRegistry.GetSupplementClassCount(),
+                        install->Describe(), ConfigMgr::PathToUtf8(*classes));
             }
             else
+            {
                 std::cerr << fmt::format("client: the class file {} cannot be used: {}\n", ConfigMgr::PathToUtf8(*classes), errors.empty() ? unread : errors.front());
+                if (arguments->Supplement)
+                    return Failure;
+            }
         }
     }
     if (world && catalog)
@@ -2230,6 +2314,8 @@ int main(int argc, char** argv)
     }
     if (command == "messages")
         return RunMessages(*arguments, messages);
+    if (command == "hex")
+        return RunHex(*arguments, archive.get());
 
     if (command == "handlers")
     {

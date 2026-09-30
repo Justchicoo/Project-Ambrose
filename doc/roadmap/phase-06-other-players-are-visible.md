@@ -483,15 +483,21 @@ Classes that exist in client data or server logic but not in the client dump dec
 
 ## 6.11 Trigger/volume schemas and zone WAD sweep (WLD-3 part 1 + OBJ-18)
 
-**Goal:** WizZoneTriggers 0x06DAAC43, Trigger 0x068C265B, WizZoneVolumes 0x1B6EF770, Volume 0x1B7B55F6 authored and hash-checked.
+**Goal:** TriggerList 0x06DAAC43, Trigger 0x068C265B, TriggerVolumeList 0x1B6EF770, TriggerVolume 0x1B7B55F6 and TriggerGroupList authored and hash-checked.
 
 **Size:** M. **Depends on:** 6.10
 
 **Acceptance**
 
-- [ ] Every authored class and property hash recomputes (these classes confirmed absent from the dump)
-- [ ] Sweep of all zone WADs: zero crashes, every file kind has a root class
-- [ ] Aquila-AQ_Z00_Hub.wad triggers.xml and volumes.xml decode with no unknown classes
+- [x] Every authored class and property hash recomputes (these classes confirmed absent from the dump) (`ObjectSchemaMgrTest.EveryAuthoredClassAndPropertyHashesAsItsNameSays`, run against a database, over the rows data/sql/updates/db_world/2026_09_30_00.sql adds)
+- [x] Sweep of all zone WADs: zero crashes, every file kind has a root class (`schemaprobe --all-wads`: 3589 archives, 2479 file kinds, every one with a root class and none failing)
+- [x] Aquila-AQ_Z00_Hub.wad triggers.xml and volumes.xml decode with no unknown classes (`schemaprobe --wad Aquila-AQ_Z00_Hub.wad` with the install's class file: its only unknown classes are two sigil classes in gamedata.bin)
+
+The roadmap's working names were guesses. The client program holds no string for any of the three roots, so their names come from a search of name forms, each confirmed by the list property hashing with the element type it holds: TriggerList 0x06DAAC43 through m_allTriggers, a SharedPointer to Trigger; TriggerVolumeList 0x1B6EF770 through m_allVolumes, a pointer to TriggerVolume; and TriggerGroupList through m_allTriggerGroups. Trigger 0x068C265B and TriggerVolume 0x1B7B55F6 match the roadmap's hashes. WizardCity-WC_Hub's leftover trig_backup_saveme.notxml spells Trigger, TriggerObjectInfo and most of their properties, and ArchiveText::PropertyNames now reads .notxml and class names written as `class.X`, as candidates checked by hash. Of the rest, 21 property names no dump, text or program string holds come from a two-word search, and m_requiredQuest from a three-word one, each name fitting the values the files hold. A field no name fits yet stays typed under its hash, such as Trigger's #780900737, and is read and stored, never skipped. Every class, with its evidence, is in data/sql/updates/db_world/2026_09_30_00.sql.
+
+The full sweep found one more class inside triggers.xml: StateTrigger, 17 entries in 10 zones, a Trigger that also holds a state it requires.
+
+Seven files outside the zones fail to decode, all for a root class the dump does not list: HighScoreConfig.xml, MonsterMagicWorldLoot.xml, NPCServices.xml, WhirlyBurlyConfig.xml and WizBangPriority.xml in Root.wad, and Combat/CombatAIData.xml and CombatAIDataBruteForce.xml in _Shared-WorldData.wad. None is a zone file kind. The name-form search names five of the roots: HighScoreConfig, MonsterMagicWorldLootList, NPCServices, WhirlyBurlyConfig and WizBangPriorityManager. CombatAIData's root, 561859630, is not named. They wait for the milestones that use them: minigames, loot, NPC services and combat.
 
 ### Detailed spec from WLD-3: Zone extractor part 2: volumes and triggers (server-only classes)
 
@@ -499,9 +505,9 @@ Walk-in volumes and event triggers for every zone are decoded into typed world r
 
 **Deliverables**
 
-- src/server/shared/ObjectProperty: hand-authored schemas registered for WizZoneTriggers (0x06DAAC43), Trigger (0x068C265B), WizZoneVolumes (0x1B6EF770), Volume (0x1B7B55F6) and the Result/Requirement subclasses seen in triggers.xml, each name checked by recomputing its property-name hash
+- src/server/shared/ObjectProperty: hand-authored schemas registered for TriggerList (0x06DAAC43), Trigger (0x068C265B), TriggerVolumeList (0x1B6EF770), TriggerVolume (0x1B7B55F6) and the Result/Requirement subclasses seen in triggers.xml, each name checked by recomputing its property-name hash
 - extractor zones: BINd reader (magic 'BINd', uint32 flags=7, then class hash), decodes triggers.xml, volumes.xml and trigger_groups.xml
-- data/sql/base/db_world: zone_volume, zone_trigger, zone_trigger_event, zone_trigger_result
+- data/sql/updates/db_world: zone_volume, zone_trigger, zone_trigger_event, zone_trigger_result
 
 **Data sources**
 
@@ -517,10 +523,10 @@ Walk-in volumes and event triggers for every zone are decoded into typed world r
 
 **Acceptance**
 
-- [ ] Unit: each hand-authored class hash equals the string hash of its name, and each property id equals the hash of its property name
-- [ ] WC_Hub volumes decode to rows including 'Ravenwood POI' (Sphere, enter event 'Enter_Ravenwood POI', exit 'Exit_Ravenwood POI', type STATIC_CLIENT_SERVER)
-- [ ] WC_Hub triggers decode to rows including 'Trigger POI Ravenwood' (fire event 'Enter_Ravenwood POI') and 'TeleportToShoppingDistrict' with a teleport result whose destination is empty
-- [ ] Extractor summary counts zones whose trigger or volume files fail to decode, target 0 across all 3356
+- [x] Unit: each hand-authored class hash equals the string hash of its name, and each property id equals the hash of its property name. `ObjectSchemaMgrTest.EveryAuthoredClassAndPropertyHashesAsItsNameSays` reads every authored row back from a world database and checks each class hash against its name and each property hash against its type and name, or against the hash an unnamed property's name carries (`TypeRegistryTest.AnUnnamedSupplementPropertyIsCheckedByTheHashItsNameCarries`).
+- [x] WC_Hub volumes decode to rows including 'Ravenwood POI' (Sphere, enter event 'Enter_Ravenwood POI', exit 'Exit_Ravenwood POI', type STATIC_CLIENT_SERVER) (`ZoneExtractorClientTriggerTest.TheCommonsVolumesAndTriggersReadThroughTheAuthoredClasses`, client-gated, reads WC_Hub's volumes.xml and triggers.xml through the authored classes a new world database holds: Ravenwood POI is a Sphere with enter event Enter_Ravenwood POI, exit event Exit_Ravenwood POI and loading type 0, STATIC_CLIENT_SERVER; the rows written to a world database by `extractor zones` hold the same)
+- [x] WC_Hub triggers decode to rows including 'Trigger POI Ravenwood' (fire event 'Enter_Ravenwood POI') and 'TeleportToShoppingDistrict' with a teleport result whose destination is empty (`ZoneExtractorClientTriggerTest.TheCommonsVolumesAndTriggersReadThroughTheAuthoredClasses`, client-gated, reads WC_Hub's volumes.xml and triggers.xml through the authored classes a new world database holds: Trigger POI Ravenwood fires on Enter_Ravenwood POI, and TeleportToShoppingDistrict's one result is a class ResTeleport, which has no properties, so it holds no destination)
+- [x] Extractor summary counts zones whose trigger or volume files fail to decode, target 0 across all 3356. `extractor zones` over r806919 with a world database holding the authored and install classes: 3356 zones, 13,390 zone_volume rows, 19,644 zone_trigger rows (17 of them StateTrigger), 63,907 events and 40,022 results, and 0 zones whose volume or trigger files do not decode. 25,903 of the results are of Res classes nothing describes yet. They keep their place and class hash, so they can be read once their classes are named. Before StateTrigger was authored, the summary counted 10 zones.
 
 **Risks**
 
@@ -538,8 +544,8 @@ Per-zone BINd object files (spawns, triggers, volumes, paths) decode reliably an
 
 **Acceptance**
 
-- [ ] Client-gated sweep over all zone WADs completes with zero crashes; every file kind has a known root class or an OBJ-12 supplemental entry
-- [ ] The Aquila-AQ_Z00_Hub.wad triggers.xml and volumes.xml decode with no unknown classes after supplements
+- [x] Client-gated sweep over all zone WADs completes with zero crashes; every file kind has a known root class or an OBJ-12 supplemental entry (`schemaprobe --all-wads`: 3589 archives, 2479 file kinds, every one with a root class and none failing)
+- [x] The Aquila-AQ_Z00_Hub.wad triggers.xml and volumes.xml decode with no unknown classes after supplements (`schemaprobe --wad Aquila-AQ_Z00_Hub.wad` with the install's class file: its only unknown classes are two sigil classes in gamedata.bin)
 
 **Risks**
 
@@ -553,9 +559,11 @@ Per-zone BINd object files (spawns, triggers, volumes, paths) decode reliably an
 
 **Acceptance**
 
-- [ ] WC_Hub 'Ravenwood POI' sphere with Enter_/Exit_Ravenwood POI, STATIC_CLIENT_SERVER
-- [ ] 'Trigger POI Ravenwood' and 'TeleportToShoppingDistrict' with an empty teleport destination
-- [ ] Failures across 3356 zones counted, target 0
+- [x] WC_Hub 'Ravenwood POI' sphere with Enter_/Exit_Ravenwood POI, STATIC_CLIENT_SERVER (`ZoneExtractorClientTriggerTest.TheCommonsVolumesAndTriggersReadThroughTheAuthoredClasses`, client-gated, reads WC_Hub's volumes.xml and triggers.xml through the authored classes a new world database holds: Ravenwood POI is a Sphere with enter event Enter_Ravenwood POI, exit event Exit_Ravenwood POI and loading type 0, STATIC_CLIENT_SERVER; the rows written to a world database by `extractor zones` hold the same)
+- [x] 'Trigger POI Ravenwood' and 'TeleportToShoppingDistrict' with an empty teleport destination (`ZoneExtractorClientTriggerTest.TheCommonsVolumesAndTriggersReadThroughTheAuthoredClasses`, client-gated, reads WC_Hub's volumes.xml and triggers.xml through the authored classes a new world database holds: Trigger POI Ravenwood fires on Enter_Ravenwood POI, and TeleportToShoppingDistrict's one result is a class ResTeleport, which has no properties, so it holds no destination)
+- [x] Failures across 3356 zones counted, target 0 (`extractor zones` over r806919 with a world database holding the authored and install classes: 3356 zones, 13,390 zone_volume rows, 19,644 zone_trigger rows (17 of them StateTrigger), 63,907 events and 40,022 results, and 0 zones whose volume or trigger files do not decode.)
+
+Delivered with 6.11 in one landing: the same four tables, written by `extractor zones` and the game server's first start from the classes 6.11 authored, data/sql/updates/db_world/2026_09_30_01.sql.
 
 ### Detailed spec from WLD-3: Zone extractor part 2: volumes and triggers (server-only classes)
 
@@ -563,9 +571,9 @@ Walk-in volumes and event triggers for every zone are decoded into typed world r
 
 **Deliverables**
 
-- src/server/shared/ObjectProperty: hand-authored schemas registered for WizZoneTriggers (0x06DAAC43), Trigger (0x068C265B), WizZoneVolumes (0x1B6EF770), Volume (0x1B7B55F6) and the Result/Requirement subclasses seen in triggers.xml, each name checked by recomputing its property-name hash
+- src/server/shared/ObjectProperty: hand-authored schemas registered for TriggerList (0x06DAAC43), Trigger (0x068C265B), TriggerVolumeList (0x1B6EF770), TriggerVolume (0x1B7B55F6) and the Result/Requirement subclasses seen in triggers.xml, each name checked by recomputing its property-name hash
 - extractor zones: BINd reader (magic 'BINd', uint32 flags=7, then class hash), decodes triggers.xml, volumes.xml and trigger_groups.xml
-- data/sql/base/db_world: zone_volume, zone_trigger, zone_trigger_event, zone_trigger_result
+- data/sql/updates/db_world: zone_volume, zone_trigger, zone_trigger_event, zone_trigger_result
 
 **Data sources**
 
@@ -581,10 +589,10 @@ Walk-in volumes and event triggers for every zone are decoded into typed world r
 
 **Acceptance**
 
-- [ ] Unit: each hand-authored class hash equals the string hash of its name, and each property id equals the hash of its property name
-- [ ] WC_Hub volumes decode to rows including 'Ravenwood POI' (Sphere, enter event 'Enter_Ravenwood POI', exit 'Exit_Ravenwood POI', type STATIC_CLIENT_SERVER)
-- [ ] WC_Hub triggers decode to rows including 'Trigger POI Ravenwood' (fire event 'Enter_Ravenwood POI') and 'TeleportToShoppingDistrict' with a teleport result whose destination is empty
-- [ ] Extractor summary counts zones whose trigger or volume files fail to decode, target 0 across all 3356
+- [x] Unit: each hand-authored class hash equals the string hash of its name, and each property id equals the hash of its property name. `ObjectSchemaMgrTest.EveryAuthoredClassAndPropertyHashesAsItsNameSays` reads every authored row back from a world database and checks each class hash against its name and each property hash against its type and name, or against the hash an unnamed property's name carries (`TypeRegistryTest.AnUnnamedSupplementPropertyIsCheckedByTheHashItsNameCarries`).
+- [x] WC_Hub volumes decode to rows including 'Ravenwood POI' (Sphere, enter event 'Enter_Ravenwood POI', exit 'Exit_Ravenwood POI', type STATIC_CLIENT_SERVER) (`ZoneExtractorClientTriggerTest.TheCommonsVolumesAndTriggersReadThroughTheAuthoredClasses`, client-gated, reads WC_Hub's volumes.xml and triggers.xml through the authored classes a new world database holds: Ravenwood POI is a Sphere with enter event Enter_Ravenwood POI, exit event Exit_Ravenwood POI and loading type 0, STATIC_CLIENT_SERVER; the rows written to a world database by `extractor zones` hold the same)
+- [x] WC_Hub triggers decode to rows including 'Trigger POI Ravenwood' (fire event 'Enter_Ravenwood POI') and 'TeleportToShoppingDistrict' with a teleport result whose destination is empty (`ZoneExtractorClientTriggerTest.TheCommonsVolumesAndTriggersReadThroughTheAuthoredClasses`, client-gated, reads WC_Hub's volumes.xml and triggers.xml through the authored classes a new world database holds: Trigger POI Ravenwood fires on Enter_Ravenwood POI, and TeleportToShoppingDistrict's one result is a class ResTeleport, which has no properties, so it holds no destination)
+- [x] Extractor summary counts zones whose trigger or volume files fail to decode, target 0 across all 3356. `extractor zones` over r806919 with a world database holding the authored and install classes: 3356 zones, 13,390 zone_volume rows, 19,644 zone_trigger rows (17 of them StateTrigger), 63,907 events and 40,022 results, and 0 zones whose volume or trigger files do not decode.
 
 **Risks**
 

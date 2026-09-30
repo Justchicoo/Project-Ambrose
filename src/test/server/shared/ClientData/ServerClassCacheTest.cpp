@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the class file cache with a fake schemaprobe run: a class file is named like the type dump in the classes folder, counts as current only when it is as new as the dump and was found the way this build finds classes, is built when missing or outdated with every archive swept and the finished file moved into place, is not built again while current, reads back with each class's evidence, leaves nothing behind when the run fails and names why, and while another process holds the build lock is waited for until that process writes it, or until a stop ends the wait.
+ * Tests the class file cache with a fake schemaprobe run: a class file is named like the type dump in the classes folder, counts as current only when it is as new as the dump, was found the way this build finds classes and was built on the authored classes given, which reach schemaprobe as a class file removed once it has run and are built on again when they change, is built when missing or outdated with every archive swept and the finished file moved into place, is not built again while current, reads back with each class's evidence, leaves nothing behind when the run fails and names why, and while another process holds the build lock is waited for until that process writes it, or until a stop ends the wait.
  */
 
 #include "BuildLock.h"
@@ -35,7 +35,7 @@ namespace
         stream << content;
     }
 
-    std::string ClassFile(std::optional<uint32> extraction)
+    std::string ClassFile(std::optional<uint32> extraction, std::string const& builtOn = {})
     {
         uint32 const hash = StringHash::KiStringHash("class ChatterManager");
         nlohmann::json file{ { "version", 2 }, { "tool", "schemaprobe" },
@@ -43,6 +43,8 @@ namespace
                                                         { "evidence", "1 object(s) in 1 plain-XML file(s)" } } } } } };
         if (extraction)
             file[std::string(ServerClassCache::ExtractionKey)] = *extraction;
+        if (!builtOn.empty())
+            file[std::string(ServerClassCache::BuiltOnKey)] = builtOn;
         return file.dump();
     }
 
@@ -194,6 +196,48 @@ TEST(ServerClassCacheTest, AMissingOrOutdatedClassFileIsBuiltThroughSchemaprobeA
     PutFile(harness.Classes(), ClassFile(ServerClassCache::ExtractionVersion - 1));
     EXPECT_TRUE(ServerClassCache::Ensure(harness.Install, harness.Dump, options, error)) << error;
     EXPECT_EQ(harness.Runs.load(), 2) << "a file found an earlier way is built again";
+}
+
+TEST(ServerClassCacheTest, AClassFileIsBuiltOnTheAuthoredClassesItIsGivenAndAgainWhenTheyChange)
+{
+    Harness harness;
+    TypeDumpLoader::RawDump authored;
+    TypeDumpLoader::RawClass list;
+    list.Name = "class TriggerList";
+    list.Hash = StringHash::KiStringHash("class TriggerList");
+    list.Bases = { "class PropertyClass" };
+    list.Evidence = "the root of every triggers.xml";
+    list.Source = std::string(ServerClassCache::AuthoredSource);
+    authored.Classes.push_back(list);
+    std::filesystem::path supplement;
+    bool supplementRead = false;
+    harness.Behavior = [&](ChildProcessOptions const& options)
+    {
+        supplement = ConfigMgr::PathFromUtf8(Argument(options, "--supplement"));
+        TypeDumpLoader::RawDump given;
+        std::string unread;
+        supplementRead = ServerClassCache::Read(supplement, given, unread);
+        PutFile(ConfigMgr::PathFromUtf8(Argument(options, "--server-classes")), ClassFile(ServerClassCache::ExtractionVersion, ServerClassCache::Digest(given)));
+        return Finished(0);
+    };
+    ServerClassCacheOptions options = harness.Options();
+    options.Authored = authored;
+    std::string error;
+    ASSERT_TRUE(ServerClassCache::Ensure(harness.Install, harness.Dump, options, error)) << error;
+    EXPECT_EQ(harness.Runs.load(), 1);
+    EXPECT_TRUE(supplementRead) << "the authored classes reach schemaprobe as a class file it can load";
+    EXPECT_FALSE(std::filesystem::exists(supplement)) << "and that file is removed once it has run";
+    std::string const digest = ServerClassCache::Digest(authored);
+    EXPECT_FALSE(digest.empty());
+    EXPECT_EQ(ServerClassCache::ReadBuiltOn(harness.Classes()), digest) << "what the file was built on survives being written and read back";
+    EXPECT_TRUE(ServerClassCache::IsCurrent(harness.Classes(), harness.Dump, digest));
+    EXPECT_FALSE(ServerClassCache::IsCurrent(harness.Classes(), harness.Dump)) << "a file built on authored classes is not one built on none";
+
+    ASSERT_TRUE(ServerClassCache::Ensure(harness.Install, harness.Dump, options, error)) << error;
+    EXPECT_EQ(harness.Runs.load(), 1) << "the same authored classes need no new build";
+    options.Authored.Classes.front().Evidence = "seen again";
+    ASSERT_TRUE(ServerClassCache::Ensure(harness.Install, harness.Dump, options, error)) << error;
+    EXPECT_EQ(harness.Runs.load(), 2) << "changed authored classes build the file again";
 }
 
 TEST(ServerClassCacheTest, AFailedRunLeavesNothingBehindAndNamesItsCause)

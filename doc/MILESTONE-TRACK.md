@@ -161,9 +161,8 @@ Everything not in the table above, including every milestone whose dependencies 
 | 8.08 | Queued for the maintainer's world session after 8.06: the backpack's item instances |
 | 8.09 | Queued for the maintainer's world session after 8.08: the backpack's stacks, locks and overflow |
 | 4.08 | Taken over by the maintainer's world session on 2026-09-26. 5.02 moved its writer into `extractor zones`, which now writes a row for every entry whose class the type dump describes, with typed columns and the loading type. MeruneFleuruwu's decoding of every zone, with real positions and display keys, is what it builds on. Left: the four checks that count every entry, which wait on the sigils 6.10's class tables describe, and the spawn data the two integration tests read |
-| 6.11 | Next in the maintainer's world session after 6.03 and 6.04: the zone triggers and volumes it reads build on the extraction code 6.10 just changed |
 | 7.01 | Next in the maintainer's world session after 6.03 and 6.04: the object template extractor builds on the extraction code 6.10 just changed and leads to the NPC templates a playable game needs |
-| 8.01 | Next in the maintainer's world session after 6.11 and 7.01: live health, mana, gold and potions on the HUD, on the way to a playable game |
+| 8.01 | Next in the maintainer's world session after 7.01: live health, mana, gold and potions on the HUD, on the way to a playable game |
 
 ## In flight
 

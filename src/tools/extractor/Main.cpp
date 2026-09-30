@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * extractor entry point: silences the log, reads its arguments and environment as UTF-8, refuses an option value that is itself an option and a command named twice, checks the world database, --sql and --dry-run before anything is searched, then when no install or type dump is named follows AMBROSE_SETUP_MODE: auto uses the newest install found and the type dump built from it, ask offers the finds and a build, off prints them with the flag to pass; opens the user's own Root.wad and a type dump bound to the views of every command named, extracts for each command in turn, the character names, disallowed names, schools and creation options for names, the level, school and stat tables for levels, every zone's settings, locations and placed objects from its own archive for zones, and for classes the classes the install's archives hold that the type dump does not describe, from the class file schemaprobe builds once per revision in the Ambrose data folder, prints their counts, the problems found and the zone parts a type dump could not describe, then replaces every command's world tables in one transaction, writes the SQL to a file, or on a dry run writes nothing and checks the world tables of any database it was given; exits 0 on success, 1 when the install, dump, data or database fails, and 2 on bad usage.
+ * extractor entry point: silences the log, reads its arguments and environment as UTF-8, refuses an option value that is itself an option and a command named twice, checks the world database, --sql and --dry-run before anything is searched, then when no install or type dump is named follows AMBROSE_SETUP_MODE: auto uses the newest install found and the type dump built from it, ask offers the finds and a build, off prints them with the flag to pass; opens the user's own Root.wad and a type dump bound to the views of every command named, extracts for each command in turn, the character names, disallowed names, schools and creation options for names, the level, school and stat tables for levels, every zone's settings, locations, placed objects, volumes and triggers from its own archive for zones, the last two read through the server classes of the world database when one is named, and for classes the classes the install's archives hold that the type dump does not describe, from the class file schemaprobe builds once per revision in the Ambrose data folder on the authored classes the world database holds when one is named, prints their counts, the problems found and the zone parts a type dump could not describe, then replaces every command's world tables in one transaction, writes the SQL to a file, or on a dry run writes nothing and checks the world tables of any database it was given; exits 0 on success, 1 when the install, dump, data or database fails, and 2 on bad usage.
  */
 
 #include "CharacterNameExtractor.h"
+#include "DatabaseEnv.h"
 #include "ClientSetup.h"
 #include "CharacterNameScript.h"
 #include "LevelExtractor.h"
@@ -55,12 +56,15 @@ Commands:
           schools and their badges, the level each mob rank stands for, and the
           stat settings with their crit, block and pip conversion bands
   zones   every zone's settings, named locations and placed objects, read from
-          the gamedata.bin of each zone's own archive
+          the gamedata.bin of each zone's own archive, and its volumes and
+          triggers from its volumes.xml and triggers.xml, read through the
+          server classes of the world database named
   classes the classes every archive of the install holds that the type dump
           does not describe and every object of which then decodes cleanly,
           with the evidence for each; schemaprobe finds them once per client
-          revision and keeps them in the Ambrose data folder's classes folder,
-          and only the classes marked install are replaced
+          revision, on the authored classes of the world database named, and
+          keeps them in the Ambrose data folder's classes folder, and only the
+          classes marked install are replaced
 
 Options:
   --client <dir>      the install holding Data/GameData (default: AMBROSE_CLIENT_DIR)
@@ -217,6 +221,30 @@ database fails, 2 on bad usage.
         std::cout << fmt::format("zone_template: {} rows from {} archives\n", extraction.Zones.size(), extraction.Archives);
         std::cout << fmt::format("zone_location: {} rows\n", extraction.GetLocationCount());
         std::cout << fmt::format("zone_object: {} rows, {} object list entries left out\n", extraction.GetObjectCount(), extraction.GetSkippedObjectCount());
+        std::size_t events = 0;
+        std::size_t results = 0;
+        std::size_t unknownResults = 0;
+        for (ExtractedZone const& zone : extraction.Zones)
+        {
+            for (ExtractedVolume const& volume : zone.Volumes)
+                events += volume.EnterEvents.size() + volume.ExitEvents.size();
+            for (ExtractedTrigger const& trigger : zone.Triggers)
+            {
+                events += trigger.ActivateEvents.size() + trigger.FireEvents.size() + trigger.DeactivateEvents.size();
+                for (auto const* list : { &trigger.Results, &trigger.CooldownResults })
+                {
+                    results += list->size();
+                    unknownResults += static_cast<std::size_t>(std::count_if(list->begin(), list->end(), [](ExtractedTriggerResult const& result) { return !result.ClassName; }));
+                }
+            }
+        }
+        std::cout << fmt::format("zone_volume: {} rows\n", extraction.GetVolumeCount());
+        std::cout << fmt::format("zone_trigger: {} rows\n", extraction.GetTriggerCount());
+        std::cout << fmt::format("zone_trigger_event: {} rows\n", events);
+        std::cout << fmt::format("zone_trigger_result: {} rows, {} of classes no class the server knows describes\n", results, unknownResults);
+        std::cout << fmt::format("zones whose volume or trigger files do not decode: {}\n", extraction.GetTriggerFailureZoneCount());
+        for (std::size_t index = 0; index < extraction.TriggerFailures.size() && index < 10; ++index)
+            std::cout << fmt::format("  {} {}: {}\n", extraction.TriggerFailures[index].Zone, extraction.TriggerFailures[index].File, extraction.TriggerFailures[index].Detail);
         std::map<uint32, std::size_t> wholeByClass;
         std::map<uint32, std::size_t> partsByClass;
         for (SkippedZonePart const& part : extraction.Skipped)
@@ -227,8 +255,34 @@ database fails, 2 on bad usage.
             std::cout << fmt::format("  {} parts of kept entries of class hash {}, which the type dump does not list\n", count, hash);
     }
 
-    bool CollectClasses(std::string const& client, std::string const& typeDump, Extracted& extracted)
+    bool ReadServerClasses(std::optional<std::string> const& worldDatabase, TypeDumpLoader::RawDump& classes, std::optional<std::string_view> source, Extracted& extracted)
     {
+        if (!worldDatabase)
+        {
+            std::cout << (source ? "server_class: no world database is named, so the class file is built without the authored classes\n"
+                                 : "zone_trigger: no world database is named, so the zones' volumes and triggers are read without the server classes\n");
+            return true;
+        }
+        std::vector<std::string> errors;
+        if (!WorldDatabase.SetConnectionInfo(*worldDatabase, 1, 1) || WorldDatabase.Open() != 0)
+            errors.emplace_back("the world database cannot be opened to read its server classes");
+        else
+        {
+            ServerClassScript::Read(classes, errors, source);
+            WorldDatabase.Close();
+        }
+        if (errors.empty())
+            return true;
+        extracted.ErrorCount += errors.size();
+        extracted.Errors.insert(extracted.Errors.end(), errors.begin(), errors.end());
+        return false;
+    }
+
+    bool CollectClasses(std::string const& client, std::string const& typeDump, std::optional<std::string> const& worldDatabase, Extracted& extracted)
+    {
+        TypeDumpLoader::RawDump authored;
+        if (!ReadServerClasses(worldDatabase, authored, ServerClassScript::AuthoredSource, extracted))
+            return false;
         LocalClientSystem const system;
         std::optional<ClientInstall> const install = ClientInstall::Inspect(system, LogConfig::Utf8Path(client));
         std::string error;
@@ -241,6 +295,7 @@ database fails, 2 on bad usage.
             options.DataFolder = ClientLocator::GetDataFolder(system);
             options.Program = ServerClassCache::DefaultProgram(system.GetExecutableDirectory());
             options.Report = [](std::string const& line) { std::cerr << line << '\n'; };
+            options.Authored = std::move(authored);
             classes = ServerClassCache::Ensure(*install, LogConfig::Utf8Path(typeDump), options, error);
         }
         TypeDumpLoader::RawDump dump;
@@ -250,6 +305,7 @@ database fails, 2 on bad usage.
             extracted.Errors.push_back(error);
             return false;
         }
+        dump = ServerClassScript::InstallClasses(dump);
         std::size_t properties = 0;
         for (TypeDumpLoader::RawClass const& type : dump.Classes)
             properties += type.Properties.size();
@@ -343,6 +399,22 @@ database fails, 2 on bad usage.
         if (zones)
             ZoneViews::RegisterAll(views);
         TypeRegistry registry(&views);
+        if (zones)
+        {
+            TypeDumpLoader::RawDump classes;
+            Extracted refused;
+            if (!ReadServerClasses(arguments->WorldDatabase, classes, std::nullopt, refused))
+            {
+                std::cerr << fmt::format("extractor: {}\n", refused.Errors.front());
+                return Failure;
+            }
+            std::vector<std::string> problems;
+            if (!classes.Classes.empty() && !registry.SetSupplement(std::move(classes), "the world database's server classes", problems))
+            {
+                std::cerr << fmt::format("extractor: the world database's server classes cannot join the type dump: {}\n", problems.empty() ? std::string() : problems.front());
+                return Failure;
+            }
+        }
         if (!registry.LoadFromFile(LogConfig::Utf8Path(*arguments->TypeDump)))
         {
             std::cerr << fmt::format("extractor: cannot load the type dump {}\n", *arguments->TypeDump);
@@ -359,7 +431,7 @@ database fails, 2 on bad usage.
             else if (command == "levels")
                 Collect<LevelScript>(LevelExtractor::Extract(*archive, registry.GetCatalog()), extracted);
             else if (command == "classes")
-                CollectClasses(*arguments->Client, *arguments->TypeDump, extracted);
+                CollectClasses(*arguments->Client, *arguments->TypeDump, arguments->WorldDatabase, extracted);
             else
                 Collect<ZoneScript>(ZoneExtractor::Extract(rootWad.parent_path(), registry.GetCatalog()), extracted);
         }

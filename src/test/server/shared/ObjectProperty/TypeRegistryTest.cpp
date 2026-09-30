@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the type registry on small dumps written by the test with invented classes: aliases collapsed into their class, into an unprefixed template class, or standing in for a missing one; base chains; properties in id order found by hash and name; per-property enum options in both directions with text options, integer and text defaults in dump order and the base class hint; value, primitive and bit kinds; the class kind counts; and loads refused while the active catalog keeps serving: bad hashes, unknown bases and types, broken, empty or misshapen JSON, fields of the wrong JSON type or missing, duplicates, id gaps, oversized values, bad containers, keys that differ from the hash, inconsistent base chains and inherited property ids, classes that hold themselves inline and the wrong version. A supplement of classes the dump does not describe joins the dump loaded before or after it, rebuilds the catalog into a new generation, is marked as coming from the supplement, decodes and encodes versionable objects, decodes from a BINd file inside a list of the dump class it extends, where a catalog without it reports an unknown class, hashes a pointer property's type as written as the dump does, gives way to the dump where the dump describes the same class, and when a name or property does not hash to what it declares, or the rebuild fails, is refused with the catalog that was serving left in place.
+ * Tests the type registry on small dumps written by the test with invented classes: aliases collapsed into their class, into an unprefixed template class, or standing in for a missing one; base chains; properties in id order found by hash and name; per-property enum options in both directions with text options, integer and text defaults in dump order and the base class hint; value, primitive and bit kinds; the class kind counts; and loads refused while the active catalog keeps serving: bad hashes, unknown bases and types, broken, empty or misshapen JSON, fields of the wrong JSON type or missing, duplicates, id gaps, oversized values, bad containers, keys that differ from the hash, inconsistent base chains and inherited property ids, classes that hold themselves inline and the wrong version. A supplement of classes the dump does not describe joins the dump loaded before or after it, rebuilds the catalog into a new generation, is marked as coming from the supplement, decodes and encodes versionable objects, decodes from a BINd file inside a list of the dump class it extends, where a catalog without it reports an unknown class, hashes a pointer property's type as written as the dump does, checks a property nobody can name by the hash its # name carries, gives way to the dump where the dump describes the same class, and when a name or property does not hash to what it declares, or the rebuild fails, is refused with the catalog that was serving left in place.
  */
 
 #include "BindFile.h"
@@ -698,6 +698,34 @@ TEST_F(TypeRegistryTest, ASupplementPropertyHashesItsTypeAsWrittenAsTheDumpsOwnD
     errors.clear();
     supplement.Classes.front().Properties.back().Hash = StringHash::PropertyHash("class TestBase", "m_children");
     EXPECT_FALSE(_registry.SetSupplement(supplement, "test rows", errors)) << "the pointed-to class alone is not the type the hash is taken from";
+}
+
+TEST_F(TypeRegistryTest, AnUnnamedSupplementPropertyIsCheckedByTheHashItsNameCarries)
+{
+    ASSERT_NO_FATAL_FAILURE(Activate());
+    TypeDumpLoader::RawDump supplement = Supplement("TestServerBehavior", "class TestBase");
+    TypeDumpLoader::RawProperty copy = supplement.Classes.front().Properties.back();
+    TypeDumpLoader::RawProperty& unnamed = supplement.Classes.front().Properties.emplace_back(std::move(copy));
+    unnamed.Name = TypeDumpLoader::UnnamedName(780900737);
+    unnamed.Type = "int";
+    unnamed.Id = 2;
+    unnamed.Offset = 48;
+    unnamed.Hash = 780900737;
+    std::vector<std::string> errors;
+    EXPECT_EQ(unnamed.Name, "#780900737");
+    EXPECT_TRUE(_registry.SetSupplement(supplement, "test rows", errors)) << (errors.empty() ? std::string() : errors.front());
+    ClassInfo const* const server = _registry.GetCatalog()->FindClass("TestServerBehavior");
+    ASSERT_NE(server, nullptr);
+    ASSERT_NE(server->FindProperty("#780900737"), nullptr);
+    EXPECT_EQ(server->FindProperty("#780900737")->Hash, 780900737u);
+
+    errors.clear();
+    supplement.Classes.front().Properties.back().Hash = 780900738;
+    EXPECT_FALSE(_registry.SetSupplement(supplement, "test rows", errors)) << "the hash a # name carries is the hash the property must have";
+    EXPECT_EQ(TypeDumpLoader::UnnamedHash("#0780900737"), std::nullopt) << "a hash is written one way only";
+    EXPECT_EQ(TypeDumpLoader::UnnamedHash("#"), std::nullopt);
+    EXPECT_EQ(TypeDumpLoader::UnnamedHash("m_count"), std::nullopt);
+    EXPECT_EQ(TypeDumpLoader::ExpectedPropertyHash("int", "m_count"), StringHash::PropertyHash("int", "m_count"));
 }
 
 TEST_F(TypeRegistryTest, ASupplementSetBeforeTheDumpJoinsItWhenItLoads)
