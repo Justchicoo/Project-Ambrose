@@ -74,6 +74,8 @@ None are open. A new one is listed here with the milestones it blocks until the 
 
 ### Resolved
 
+Settled on 2026-09-30 at the maintainer's standing direction to take the recommended option, and recorded under Protocol and type data load at runtime in doc/ARCHITECTURE.md: 4.11's captured MSG_LOGINCOMPLETE checks are met by the Data Ambrose sends and the r806919 client accepts, saved in a client driver run and read whole by `client core`, since the capture on hand came from an older-layout reference server and KingsIsle's live servers run a newer build than r806919.
+
 Settled on 2026-09-30 at the maintainer's standing direction to take the recommended option, and recorded under Content, SQL and releases in doc/ARCHITECTURE.md: pending SQL is promoted to its dated name by `apps/ci/ci_sql.py promote` in the landing commit rather than by a workflow's bot commit, because main's ruleset refuses a push whose checks have not passed and lets only an administrator past, and a push to main that leaves a pending file behind fails the checks job instead.
 
 Settled on 2026-09-30 at the maintainer's standing direction to take the recommended option, and recorded under Server-side class schemas in doc/ARCHITECTURE.md: 4.08's sigil entries, whose four classes no source names the properties of, are accepted with their shared property 62872365 kept typed under its hash, so every m_objectList entry gets its row and 4.08's checks keep their counts. That work is the maintainer's world session's, with 4.08.

@@ -97,6 +97,8 @@ namespace
             Unsigned("Realm.RefreshInterval", "10", "1", "3600", "s", "Realms", Login, Live, "How often the login server rereads the realmlist table."),
             Text("Realm.DefaultRealm", "", "64", "Realms", Login, Live, "The realm a player is sent to when their client names none; a name no realm online has falls through to the least-full realm."),
 
+            Text("LoginComplete.SaveDataTo", "", "1024", "Diagnostics", Game, Live,
+                "A folder the game server writes each MSG_LOGINCOMPLETE Data it sends into, as the enveloped bytes the client receives, for reading with client core; empty writes nothing."),
             Text("GM.CommandPrefix", ".", "8", "Commands", Game, Live, "What a chat line starts with to be read as a command."),
             Flag("GM.PlayerCommandsAsChat", "true", "Commands", Game, Live,
                 "Whether a player's chat line that starts with the command prefix is said as an ordinary line; when off it is refused and the player told so. An account above player level runs such a line as a command."),

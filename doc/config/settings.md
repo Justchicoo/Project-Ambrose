@@ -38,6 +38,12 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `GM.LogCommands` | bool | true | none | live | gameserver | normal | Whether every command run is written to the log. |
 | `GM.PlayerCommandsAsChat` | bool | true | none | live | gameserver | normal | Whether a player's chat line that starts with the command prefix is said as an ordinary line; when off it is refused and the player told so. An account above player level runs such a line as a command. |
 
+## Diagnostics
+
+| Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
+|---|---|---|---|---|---|---|---|
+| `LoginComplete.SaveDataTo` | string | empty | at most 1024 bytes | live | gameserver | normal | A folder the game server writes each MSG_LOGINCOMPLETE Data it sends into, as the enveloped bytes the client receives, for reading with client core; empty writes nothing. |
+
 ## Files
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
