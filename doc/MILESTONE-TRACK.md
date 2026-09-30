@@ -126,8 +126,7 @@ Everything not in the table above, including every milestone whose dependencies 
 | 17.28 | Being built by the maintainer's panel session, which the maintainer asked to finish the panel first |
 | 17.165 | Being built by the maintainer's panel session: the decoded data routes every game data page in 17.166-17.177 rests on |
 | 17.178 | Kept for the maintainer's panel session, after the game data pages |
-| 17.179 | Being built by the maintainer's panel session: the desktop shell the launcher and the panel program share |
-| 17.180 | Being built by the maintainer's panel session: the sign-in links the panel program opens panels with |
+| 17.179 | Being built by the maintainer's panel session since 2026-09-30, after 17.180 landed: the desktop shell the launcher and the panel program share |
 | 17.181 | Queued for the maintainer's panel session after 17.180 and 17.179: the panel program's own window and its list of panels |
 | 17.166 | Queued for the maintainer's panel session, one of the game data pages it builds after 17.165 in order from 17.166 to 17.177: the archive browser |
 | 17.167 | Queued for the maintainer's panel session, one of the game data pages it builds after 17.165 in order from 17.166 to 17.177: the locale text browser |
