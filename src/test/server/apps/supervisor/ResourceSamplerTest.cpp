@@ -1,8 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks what the sampler promises: the first reading of a process writes everything but the processor share, because a share needs two readings, the second works the share out against the time that actually passed rather than the time a round was meant to take, an app with no process is skipped so its graph carries a gap rather than zeroes, an app that stops and starts again is measured against its new process rather than against a total that belongs to the old one, every app is written under its own name, a round costs few enough microseconds per app to sit on a timer beside twenty of them, judged by the median of two hundred rounds timed one by one so the few a busy machine preempts are not counted as the sampler's own work, the series a graph would draw for a process holding half a core agrees within fifteen points with what that process measured on its own clock, which is wide enough that a machine busy building something else does not fail it and narrow enough that a share worked out per machine rather than per core still does, and an app that stops leaves a gap at the end of its own graph while the app beside it goes on being written.
+ * Checks what the sampler promises: the first reading of a process writes everything but the processor share, because a share needs two readings, the second works the share out against the time that actually passed rather than the time a round was meant to take, an app with no process is skipped so its graph carries a gap rather than zeroes, an app that stops and starts again is measured against its new process rather than against a total that belongs to the old one, every app is written under its own name, a round costs few enough microseconds per app to sit on a timer beside twenty of them, judged by the median of two hundred rounds timed one by one so the few a busy machine preempts are not counted as the sampler's own work, the series a graph would draw for a process burning about half a core agrees within fifteen points with the processor time that process recorded itself between the same two readings, so a machine busy building something else changes both sides alike, while a share worked out per machine rather than per core still fails it, and an app that stops leaves a gap at the end of its own graph while the app beside it goes on being written.
  */
 
+#include "BurnReport.h"
 #include "ChildProcess.h"
 #include "LogTestConfig.h"
 #include "ResourceSampler.h"
@@ -11,8 +12,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <numeric>
 #include <optional>
 #include <thread>
@@ -207,7 +208,7 @@ TEST(ResourceSamplerTest, TheSeriesTheGraphDrawsMatchesAProcessUnderLoad)
 
     ChildLaunchOptions options;
     options.Program = std::filesystem::path(AMBROSE_CHILD_PROCESS_HELPER);
-    options.Arguments = { "burn", "50", "7000" };
+    options.Arguments = { "burn", "50", "8000" };
     options.OutputFile = output;
 
     std::string error;
@@ -227,20 +228,21 @@ TEST(ResourceSamplerTest, TheSeriesTheGraphDrawsMatchesAProcessUnderLoad)
             std::chrono::system_clock::now().time_since_epoch()).count());
     };
 
+    auto const steady = [] {
+        return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count());
+    };
+
+    ASSERT_TRUE(BurnReport::WaitForFirstMark(output, std::chrono::milliseconds(10000)));
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    std::uint64_t const from = steady();
     sampler.Sample({ app }, now());
     std::this_thread::sleep_for(std::chrono::milliseconds(6000));
     sampler.Sample({ app }, now());
+    std::uint64_t const to = steady();
 
     ASSERT_TRUE(child.WaitForExit(std::chrono::milliseconds(10000)));
-    std::ifstream reading(output);
-    std::string line;
-    std::optional<double> held;
-    while (std::getline(reading, line))
-    {
-        if (line.rfind("burnt ", 0) == 0)
-            held = std::strtod(line.c_str() + 6, nullptr);
-    }
+    std::optional<double> const held = BurnReport::ShareBetween(output, from, to);
     ASSERT_TRUE(held.has_value());
 
     std::vector<SeriesPoint> const points = store.Between("gameserver", ResourceSampler::CpuSeries, now() - 120000, now(), 200);

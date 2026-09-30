@@ -1,8 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks what a process snapshot promises: this process reports resident memory and at least the thread asking, processor time only ever climbs and climbs when work is done, a share worked out from two readings is a share of the cores that exist rather than an unbounded number, a process that is not this one can be read, which is what the supervisor needs of the apps it runs, a process that does not exist is refused rather than answered with zeroes, because a zero reads as an idle app and a refusal reads as a gap, and the share reported for a process burning a controlled amount agrees within ten points with what that process measured on its own clock, which is two independent measurements of one thing rather than a number compared against itself, and is what makes a processor graph worth reading.
+ * Checks what a process snapshot promises: this process reports resident memory and at least the thread asking, processor time only ever climbs and climbs when work is done, a share worked out from two readings is a share of the cores that exist rather than an unbounded number, a process that is not this one can be read, which is what the supervisor needs of the apps it runs, a process that does not exist is refused rather than answered with zeroes, because a zero reads as an idle app and a refusal reads as a gap, and the share reported for a process burning a controlled amount agrees within ten points with the processor time that process recorded itself over the very same window, which is two measurements of one thing taken from opposite sides rather than a number compared against itself, and holds on a machine so busy the process gets far less than it asked for, and is what makes a processor graph worth reading.
  */
 
+#include "BurnReport.h"
 #include "ChildProcess.h"
 #include "LogTestConfig.h"
 #include "ProcessInfo.h"
@@ -10,9 +11,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
-#include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -119,7 +118,7 @@ TEST(ProcessInfoTest, TheShareReportedMatchesWhatTheProcessActuallyHeld)
 
     ChildLaunchOptions options;
     options.Program = HelperProgram();
-    options.Arguments = { "burn", "50", "7000" };
+    options.Arguments = { "burn", "50", "8000" };
     options.OutputFile = output;
 
     std::string error;
@@ -135,6 +134,7 @@ TEST(ProcessInfoTest, TheShareReportedMatchesWhatTheProcessActuallyHeld)
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
     ASSERT_TRUE(first.has_value());
+    ASSERT_TRUE(BurnReport::WaitForFirstMark(output, std::chrono::milliseconds(10000))) << "the helper must begin burning before the window opens";
 
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
     uint64 const from = NowMicroseconds();
@@ -142,23 +142,17 @@ TEST(ProcessInfoTest, TheShareReportedMatchesWhatTheProcessActuallyHeld)
     ASSERT_TRUE(second.has_value());
     std::this_thread::sleep_for(std::chrono::milliseconds(6000));
     std::optional<ProcessSnapshot> const third = ProcessInfo::SnapshotOf(pid);
-    uint64 const elapsed = NowMicroseconds() - from;
+    uint64 const to = NowMicroseconds();
+    uint64 const elapsed = to - from;
     ASSERT_TRUE(third.has_value());
 
     double const share = ProcessInfo::CpuShare(*second, *third, elapsed, ProcessInfo::CoreCount());
     ASSERT_TRUE(child.WaitForExit(std::chrono::milliseconds(10000))) << "the helper must finish so it can say what it held";
 
-    std::ifstream reading(output);
-    std::string line;
-    std::optional<double> held;
-    while (std::getline(reading, line))
-    {
-        if (line.rfind("burnt ", 0) == 0)
-            held = std::strtod(line.c_str() + 6, nullptr);
-    }
-    ASSERT_TRUE(held.has_value()) << "the helper reports the share it managed to hold, measured on its own clock";
+    std::optional<double> const held = BurnReport::ShareBetween(output, from, to);
+    ASSERT_TRUE(held.has_value()) << "the helper marks the processor time it used, so the share it held over this very window can be read back";
 
-    std::cout << "[ CPUSHARE ] the process held " << *held << "% of one core by its own clock and reads as " << share
+    std::cout << "[ CPUSHARE ] the process held " << *held << "% of one core over the measured window by its own processor clock and reads as " << share
               << "% through the operating system" << std::endl;
 
     EXPECT_GT(share, *held - 10.0) << "the reading is " << share << "% where the process held " << *held << "%";

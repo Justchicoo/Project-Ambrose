@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs process and supervisor test commands from arguments or a config file, ignoring settings except Helper.Script values and supporting # prefixed command lines when a config file also carries test-specific settings.
+ * Runs process and supervisor test commands from arguments or a config file, ignoring settings except Helper.Script values and supporting # prefixed command lines when a config file also carries test-specific settings; a burn marks, every tenth of a second, the steady clock beside the processor time the process has used, so a test can read the share it truly held over the very window it measured.
  */
 
 #include "ChildProcess.h"
@@ -87,6 +87,28 @@ namespace
     {
         std::fwrite(text.data(), 1, text.size(), stream);
         std::fflush(stream);
+    }
+
+    long long ProcessorMicroseconds()
+    {
+#ifdef _WIN32
+        FILETIME created{}, exited{}, kernel{}, user{};
+        if (!GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user))
+            return -1;
+        auto const ticks = [](FILETIME const& time) { return (static_cast<unsigned long long>(time.dwHighDateTime) << 32) | time.dwLowDateTime; };
+        return static_cast<long long>((ticks(kernel) + ticks(user)) / 10);
+#else
+        timespec used{};
+        if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &used) != 0)
+            return -1;
+        return static_cast<long long>(used.tv_sec) * 1000000 + used.tv_nsec / 1000;
+#endif
+    }
+
+    void Mark()
+    {
+        long long const steady = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        Write(stdout, "at " + std::to_string(steady) + " " + std::to_string(ProcessorMicroseconds()) + "\n");
     }
 
     std::optional<long long> Number(std::string_view text)
@@ -342,7 +364,9 @@ int main(int argc, char** argv)
                 return 2;
             }
             Write(stdout, "burning\n");
+            Mark();
             auto const began = std::chrono::steady_clock::now();
+            auto marked = began;
             auto const until = began + std::chrono::milliseconds(*forMilliseconds);
             double const wanted = static_cast<double>(*share) / 100.0;
             std::chrono::nanoseconds busy{ 0 };
@@ -350,6 +374,11 @@ int main(int argc, char** argv)
             while (std::chrono::steady_clock::now() < until)
             {
                 auto const at = std::chrono::steady_clock::now();
+                if (at - marked >= std::chrono::milliseconds(100))
+                {
+                    Mark();
+                    marked = at;
+                }
                 std::chrono::nanoseconds const gone = at - began;
                 double const held = gone.count() > 0 ? static_cast<double>(busy.count()) / static_cast<double>(gone.count()) : 0.0;
                 if (held < wanted)
@@ -367,6 +396,7 @@ int main(int argc, char** argv)
                     std::this_thread::sleep_for(std::chrono::milliseconds(2));
                 }
             }
+            Mark();
             std::chrono::nanoseconds const gone = std::chrono::steady_clock::now() - began;
             Write(stdout, "burnt " + std::to_string(gone.count() > 0 ? busy.count() * 100 / gone.count() : 0) + "\n");
             return 0;
