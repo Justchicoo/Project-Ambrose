@@ -305,6 +305,310 @@ namespace GameMessages
         }
     };
 
+    struct BuddyRequestList
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_BUDDYREQUESTLIST";
+
+        uint64 ListOwnerGid = 0;
+        uint8 Forwarded = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ListOwnerGID", &BuddyRequestList::ListOwnerGid), DmlField("Forwarded", &BuddyRequestList::Forwarded) };
+        }
+    };
+
+    struct BuddyEntry
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_BUDDYENTRY";
+
+        uint64 ListOwnerGid = 0;
+        uint64 EntryGid = 0;
+        uint64 GameObjectId = 0;
+        std::string Name;
+        uint8 Status = 0;
+        uint32 FriendInfo = 0;
+        uint8 PasswordChat = 0;
+        uint32 Permissions = 0;
+        std::string ZoneName;
+        std::string RealmName;
+        uint32 Locale = 0;
+        uint32 FriendDate = 0;
+        uint32 FriendStatusDate = 0;
+        std::string PreviousName;
+        int32 PlatformType = 0;
+        std::u16string PlatformGamerTag;
+        uint8 DisableCrossPlay = 0;
+        uint8 CrossPlayUpdated = 0;
+        std::string PlatformChatId;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ListOwnerGID", &BuddyEntry::ListOwnerGid), DmlField("EntryGID", &BuddyEntry::EntryGid),
+                DmlField("GameObjectID", &BuddyEntry::GameObjectId), DmlField("Name", &BuddyEntry::Name), DmlField("Status", &BuddyEntry::Status),
+                DmlField("FriendInfo", &BuddyEntry::FriendInfo), DmlField("PasswordChat", &BuddyEntry::PasswordChat), DmlField("Permissions", &BuddyEntry::Permissions),
+                DmlField("ZoneName", &BuddyEntry::ZoneName), DmlField("RealmName", &BuddyEntry::RealmName), DmlField("Locale", &BuddyEntry::Locale),
+                DmlField("FriendDate", &BuddyEntry::FriendDate), DmlField("FriendStatusDate", &BuddyEntry::FriendStatusDate), DmlField("PreviousName", &BuddyEntry::PreviousName),
+                DmlField("PlatformType", &BuddyEntry::PlatformType), DmlField("PlatformGamerTag", &BuddyEntry::PlatformGamerTag),
+                DmlField("DisableCrossPlay", &BuddyEntry::DisableCrossPlay), DmlField("CrossPlayUpdated", &BuddyEntry::CrossPlayUpdated),
+                DmlField("PlatformChatID", &BuddyEntry::PlatformChatId) };
+        }
+    };
+
+    struct BuddyListComplete
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_BUDDYLISTCOMPLETE";
+
+        uint64 ListOwnerGid = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ListOwnerGID", &BuddyListComplete::ListOwnerGid) };
+        }
+    };
+
+    struct BuddyRequestAdd
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_BUDDYREQUESTADD";
+
+        uint64 ListOwnerGid = 0;
+        uint64 EntryGid = 0;
+        std::string OwnerName;
+        uint8 OwnerLevel = 0;
+        std::string OwnerSchool;
+        uint8 Remove = 0;
+        int32 OwnerPlatformType = 0;
+        std::u16string OwnerPlatformGamerTag;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ListOwnerGID", &BuddyRequestAdd::ListOwnerGid), DmlField("EntryGID", &BuddyRequestAdd::EntryGid),
+                DmlField("OwnerName", &BuddyRequestAdd::OwnerName), DmlField("OwnerLevel", &BuddyRequestAdd::OwnerLevel),
+                DmlField("OwnerSchool", &BuddyRequestAdd::OwnerSchool), DmlField("Remove", &BuddyRequestAdd::Remove),
+                DmlField("OwnerPlatformType", &BuddyRequestAdd::OwnerPlatformType), DmlField("OwnerPlatformGamerTag", &BuddyRequestAdd::OwnerPlatformGamerTag) };
+        }
+    };
+
+    struct BuddyRequestAccept
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_BUDDYREQUESTACCEPT";
+
+        uint64 ListOwnerGid = 0;
+        uint64 EntryGid = 0;
+        std::string OwnerName;
+        std::string EntryName;
+        uint64 SourceObjectId = 0;
+        uint64 DestObjectId = 0;
+        uint32 Error = 0;
+        uint32 Permissions = 0;
+        uint8 Forwarded = 0;
+        uint32 EntryLocale = 0;
+        uint32 FriendInfo = 0;
+        uint32 FriendDate = 0;
+        uint32 FriendStatusDate = 0;
+        std::string PreviousName;
+        int32 PlatformType = 0;
+        std::u16string PlatformGamerTag;
+        std::string PlatformChatId;
+        uint8 DisableCrossPlay = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ListOwnerGID", &BuddyRequestAccept::ListOwnerGid), DmlField("EntryGID", &BuddyRequestAccept::EntryGid),
+                DmlField("OwnerName", &BuddyRequestAccept::OwnerName), DmlField("EntryName", &BuddyRequestAccept::EntryName),
+                DmlField("SourceObjectID", &BuddyRequestAccept::SourceObjectId), DmlField("DestObjectID", &BuddyRequestAccept::DestObjectId),
+                DmlField("Error", &BuddyRequestAccept::Error), DmlField("Permissions", &BuddyRequestAccept::Permissions),
+                DmlField("Forwarded", &BuddyRequestAccept::Forwarded), DmlField("EntryLocale", &BuddyRequestAccept::EntryLocale),
+                DmlField("FriendInfo", &BuddyRequestAccept::FriendInfo), DmlField("FriendDate", &BuddyRequestAccept::FriendDate),
+                DmlField("FriendStatusDate", &BuddyRequestAccept::FriendStatusDate), DmlField("PreviousName", &BuddyRequestAccept::PreviousName),
+                DmlField("PlatformType", &BuddyRequestAccept::PlatformType), DmlField("PlatformGamerTag", &BuddyRequestAccept::PlatformGamerTag),
+                DmlField("PlatformChatID", &BuddyRequestAccept::PlatformChatId), DmlField("DisableCrossPlay", &BuddyRequestAccept::DisableCrossPlay) };
+        }
+    };
+
+    struct BuddyRequestDeny
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_BUDDYREQUESTDENY";
+
+        uint64 ListOwnerGid = 0;
+        uint64 EntryGid = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ListOwnerGID", &BuddyRequestDeny::ListOwnerGid), DmlField("EntryGID", &BuddyRequestDeny::EntryGid) };
+        }
+    };
+
+    struct BuddyRequestDrop
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_BUDDYREQUESTDROP";
+
+        uint64 ListOwnerGid = 0;
+        uint64 EntryGid = 0;
+        uint8 Forwarded = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ListOwnerGID", &BuddyRequestDrop::ListOwnerGid), DmlField("EntryGID", &BuddyRequestDrop::EntryGid),
+                DmlField("Forwarded", &BuddyRequestDrop::Forwarded) };
+        }
+    };
+
+    struct BuddyDrop
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_BUDDYDROP";
+
+        uint64 ListOwnerGid = 0;
+        uint64 EntryGid = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ListOwnerGID", &BuddyDrop::ListOwnerGid), DmlField("EntryGID", &BuddyDrop::EntryGid) };
+        }
+    };
+
+    struct BuddyStatusUpdate
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_BUDDYSTATUSUPDATE";
+
+        uint64 ListOwnerGid = 0;
+        uint64 EntryGid = 0;
+        uint8 Status = 0;
+        uint32 Permissions = 0;
+        std::string ZoneName;
+        uint32 Locale = 0;
+        std::string RealmName;
+        uint32 FriendInfo = 0;
+        uint32 FriendDate = 0;
+        uint32 FriendStatusDate = 0;
+        std::string PreviousName;
+        int32 PlatformType = 0;
+        std::string PlatformChatId;
+        std::u16string PlatformGamerTag;
+        uint8 DisableCrossPlay = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ListOwnerGID", &BuddyStatusUpdate::ListOwnerGid), DmlField("EntryGID", &BuddyStatusUpdate::EntryGid),
+                DmlField("Status", &BuddyStatusUpdate::Status), DmlField("Permissions", &BuddyStatusUpdate::Permissions),
+                DmlField("ZoneName", &BuddyStatusUpdate::ZoneName), DmlField("Locale", &BuddyStatusUpdate::Locale),
+                DmlField("RealmName", &BuddyStatusUpdate::RealmName), DmlField("FriendInfo", &BuddyStatusUpdate::FriendInfo),
+                DmlField("FriendDate", &BuddyStatusUpdate::FriendDate), DmlField("FriendStatusDate", &BuddyStatusUpdate::FriendStatusDate),
+                DmlField("PreviousName", &BuddyStatusUpdate::PreviousName), DmlField("PlatformType", &BuddyStatusUpdate::PlatformType),
+                DmlField("PlatformChatID", &BuddyStatusUpdate::PlatformChatId), DmlField("PlatformGamerTag", &BuddyStatusUpdate::PlatformGamerTag),
+                DmlField("DisableCrossPlay", &BuddyStatusUpdate::DisableCrossPlay) };
+        }
+    };
+
+    struct BestFriend
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_BESTFRIEND";
+
+        uint64 ListOwnerGid = 0;
+        uint64 BuddyId = 0;
+        uint8 Forwarded = 0;
+        uint8 FriendSymbol = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ListOwnerGID", &BestFriend::ListOwnerGid), DmlField("BuddyID", &BestFriend::BuddyId),
+                DmlField("Forwarded", &BestFriend::Forwarded), DmlField("FriendSymbol", &BestFriend::FriendSymbol) };
+        }
+    };
+
+    struct RequestMaxFriends
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_REQUESTMAXFRIENDS";
+
+        uint64 RequestingPlayerGid = 0;
+        int32 MaximumFriends = 0;
+        int32 MaximumSubscriberFriends = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("RequestingPlayerGID", &RequestMaxFriends::RequestingPlayerGid),
+                DmlField("MaximumFriends", &RequestMaxFriends::MaximumFriends), DmlField("MaximumSubscriberFriends", &RequestMaxFriends::MaximumSubscriberFriends) };
+        }
+    };
+
+    struct IgnoreAdd
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_IGNOREADD";
+
+        uint64 ListOwnerGid = 0;
+        uint64 CharacterGid = 0;
+        uint64 GameObjectGid = 0;
+        std::string CharacterName;
+        uint8 Forwarded = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ListOwnerGID", &IgnoreAdd::ListOwnerGid), DmlField("CharacterGID", &IgnoreAdd::CharacterGid),
+                DmlField("GameObjectGID", &IgnoreAdd::GameObjectGid), DmlField("CharacterName", &IgnoreAdd::CharacterName),
+                DmlField("Forwarded", &IgnoreAdd::Forwarded) };
+        }
+    };
+
+    struct IgnoreDrop
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_IGNOREDROP";
+
+        uint64 ListOwnerGid = 0;
+        uint64 CharacterGid = 0;
+        uint64 GameObjectGid = 0;
+        uint8 Forwarded = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ListOwnerGID", &IgnoreDrop::ListOwnerGid), DmlField("CharacterGID", &IgnoreDrop::CharacterGid),
+                DmlField("GameObjectGID", &IgnoreDrop::GameObjectGid), DmlField("Forwarded", &IgnoreDrop::Forwarded) };
+        }
+    };
+
+    struct IgnoreList
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_IGNORELIST";
+
+        uint64 ListOwnerGid = 0;
+        std::string ListData;
+        uint8 Add = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ListOwnerGID", &IgnoreList::ListOwnerGid), DmlField("ListData", &IgnoreList::ListData), DmlField("Add", &IgnoreList::Add) };
+        }
+    };
+
+    struct ChatError
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_CHATERROR";
+
+        uint64 ListOwnerGid = 0;
+        uint64 CharacterId = 0;
+        uint32 Error = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ListOwnerGID", &ChatError::ListOwnerGid), DmlField("CharacterID", &ChatError::CharacterId),
+                DmlField("Error", &ChatError::Error) };
+        }
+    };
+
     struct CombatMove
     {
         static constexpr uint8 ServiceId = CombatService;

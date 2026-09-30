@@ -120,6 +120,12 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Realm.OfflineAfterIntervals` | unsigned | 3 | from 1 to 1000 | live | loginserver | normal | How many heartbeats a realm may miss before no player is sent to it. |
 | `Realm.RefreshInterval` | unsigned | 10 s | from 1 to 3600 s | live | loginserver | normal | How often the login server rereads the realmlist table. |
 
+## Social
+
+| Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
+|---|---|---|---|---|---|---|---|
+| `Social.MaxFriends` | unsigned | 100 | from 0 to 10000 | live | gameserver | normal | How many friends one wizard may have; a change applies to the next friend request and max-friends reply. |
+
 ## World
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |

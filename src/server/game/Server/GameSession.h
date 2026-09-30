@@ -71,6 +71,8 @@ public:
 
     std::string GetCharacterName() const;
     void SetCharacterName(std::string name);
+    std::string const& GetZonePath() const noexcept { return _zonePath; }
+    std::string const& GetZoneDisplay() const noexcept { return _zoneDisplay; }
 
     std::size_t DrainQueue(std::size_t limit = MaxQueuedMessages);
     void WorldUpdate(std::chrono::steady_clock::time_point now);
@@ -120,6 +122,16 @@ public:
     void HandleLogClientResolution(GameMessages::LogClientResolution& message);
     void HandleLogPatchClientPatchTime(GameMessages::LogPatchClientPatchTime& message);
     void HandleQuestFinderOption(GameMessages::QuestFinderOption& message);
+
+    void HandleBuddyRequestList(GameMessages::BuddyRequestList& message);
+    void HandleBuddyRequestAdd(GameMessages::BuddyRequestAdd& message);
+    void HandleBuddyRequestAccept(GameMessages::BuddyRequestAccept& message);
+    void HandleBuddyRequestDeny(GameMessages::BuddyRequestDeny& message);
+    void HandleBuddyRequestDrop(GameMessages::BuddyRequestDrop& message);
+    void HandleBestFriend(GameMessages::BestFriend& message);
+    void HandleRequestMaxFriends(GameMessages::RequestMaxFriends& message);
+    void HandleIgnoreAdd(GameMessages::IgnoreAdd& message);
+    void HandleIgnoreDrop(GameMessages::IgnoreDrop& message);
 
     void HandleCombatMove(GameMessages::CombatMove& message);
     void HandleCombatDraw(GameMessages::CombatDraw& message);
@@ -204,6 +216,7 @@ private:
     uint64 _characterRevision = 0;
     mutable std::mutex _nameMutex;
     std::string _characterName;
+    std::string _zoneDisplay;
 };
 
 #endif

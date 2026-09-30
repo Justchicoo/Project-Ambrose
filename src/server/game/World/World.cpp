@@ -12,6 +12,7 @@
 #include "PlayerMeetings.h"
 #include "PlayerStates.h"
 #include "Settings.h"
+#include "SocialMgr.h"
 #include "SpeechMessages.h"
 #include "SpeechRelay.h"
 #include "ScriptMgr.h"
@@ -138,11 +139,20 @@ namespace
             for (Speech const& speech : said)
             {
                 std::vector<std::size_t> const hearers = PlanHearers(listeners, index, speech.SpeakerSees, range);
+                std::size_t others = 0;
+                bool speakerHeard = false;
                 for (std::size_t const hearer : hearers)
+                {
+                    if (!sSocialMgr.ShouldRelayChat(sessions[hearer]->GetCharacterId(), speaker.GetCharacterId()))
+                        continue;
                     sessions[hearer]->HearSpeech(who, speech);
-                std::size_t const others = hearers.size() - (speech.SpeakerSees && std::find(hearers.begin(), hearers.end(), index) != hearers.end() ? 1 : 0);
+                    if (hearer == index)
+                        speakerHeard = true;
+                    else
+                        ++others;
+                }
                 LOG_DEBUG("server.world", "Session {}'s wizard {} sent {}, shown to {} other wizard(s){}", speaker.GetSessionId(), speaker.GetWorldGuid(), SpeechName(speech),
-                    others, speech.SpeakerSees ? " and to itself" : "");
+                    others, speakerHeard ? " and to itself" : "");
             }
         }
     }
@@ -367,6 +377,7 @@ void World::Clear()
         session->_world = nullptr;
     _sessions.clear();
     _moveFlush.Reset();
+    sSocialMgr.Clear();
 }
 
 std::thread::id World::GetWorldThreadId() const
@@ -434,6 +445,7 @@ void World::Update(std::chrono::milliseconds diff)
 
     auto const meetingStarted = std::chrono::steady_clock::now();
     MeetPlayers(sessions);
+    sSocialMgr.UpdatePresence(sessions);
     RelayJumps(sessions);
     auto const meetingEnded = std::chrono::steady_clock::now();
     measured[4] = std::chrono::duration_cast<std::chrono::nanoseconds>(meetingEnded - meetingStarted);

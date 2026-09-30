@@ -60,4 +60,27 @@ void CharacterDatabaseConnection::DoPrepareStatements()
     PrepareStatement(CHAR_REP_CHARACTER_SPELL, "CHAR_REP_CHARACTER_SPELL", "INSERT INTO `character_spell` (`guid`, `spell_id`, `known`, `learned`, `revision`) VALUES (?, ?, ?, ?, ?) "
         "ON DUPLICATE KEY UPDATE `known` = IF(VALUES(`revision`) > `revision`, VALUES(`known`), `known`), `learned` = IF(VALUES(`revision`) > `revision`, VALUES(`learned`), `learned`), "
         "`revision` = GREATEST(`revision`, VALUES(`revision`))", ConnectionFlags::Both);
+
+    PrepareStatement(CHAR_SEL_SOCIAL_FRIENDS, "CHAR_SEL_SOCIAL_FRIENDS", "SELECT f.`friend_guid`, f.`best_friend_symbol`, f.`date`, c.`custom_name`, c.`name_indices`, a.`gender` "
+        "FROM `character_friend` f INNER JOIN `characters` c ON c.`guid` = f.`friend_guid` "
+        "INNER JOIN `character_appearance` a ON a.`guid` = c.`guid` WHERE f.`owner_guid` = ? AND c.`deleted_at` IS NULL ORDER BY f.`date`, f.`friend_guid`", ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_SOCIAL_IGNORES, "CHAR_SEL_SOCIAL_IGNORES", "SELECT i.`ignored_guid`, i.`platform_type`, c.`custom_name`, c.`name_indices`, a.`gender` "
+        "FROM `character_ignore` i INNER JOIN `characters` c ON c.`guid` = i.`ignored_guid` INNER JOIN `character_appearance` a ON a.`guid` = c.`guid` "
+        "WHERE i.`owner_guid` = ? AND c.`deleted_at` IS NULL ORDER BY i.`date`, i.`ignored_guid`", ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_SOCIAL_REQUESTS, "CHAR_SEL_SOCIAL_REQUESTS", "SELECT r.`requester_guid`, c.`custom_name`, c.`name_indices`, a.`gender`, c.`level` "
+        "FROM `character_friend_request` r INNER JOIN `characters` c ON c.`guid` = r.`requester_guid` INNER JOIN `character_appearance` a ON a.`guid` = c.`guid` "
+        "WHERE r.`target_guid` = ? AND c.`deleted_at` IS NULL ORDER BY r.`date`, r.`requester_guid`", ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_SOCIAL_REQUEST_EXISTS, "CHAR_SEL_SOCIAL_REQUEST_EXISTS", "SELECT 1 FROM `character_friend_request` WHERE `requester_guid` = ? AND `target_guid` = ?", ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_SOCIAL_FRIEND_COUNT, "CHAR_SEL_SOCIAL_FRIEND_COUNT", "SELECT COUNT(*) FROM `character_friend` f INNER JOIN `characters` c ON c.`guid` = f.`friend_guid` "
+        "WHERE f.`owner_guid` = ? AND c.`deleted_at` IS NULL", ConnectionFlags::Both);
+    PrepareStatement(CHAR_INS_SOCIAL_REQUEST, "CHAR_INS_SOCIAL_REQUEST", "INSERT INTO `character_friend_request` (`requester_guid`, `target_guid`, `date`) VALUES (?, ?, ?) "
+        "ON DUPLICATE KEY UPDATE `date` = VALUES(`date`)", ConnectionFlags::Both);
+    PrepareStatement(CHAR_DEL_SOCIAL_REQUEST, "CHAR_DEL_SOCIAL_REQUEST", "DELETE FROM `character_friend_request` WHERE `requester_guid` = ? AND `target_guid` = ?", ConnectionFlags::Both);
+    PrepareStatement(CHAR_INS_SOCIAL_FRIEND, "CHAR_INS_SOCIAL_FRIEND", "INSERT INTO `character_friend` (`owner_guid`, `friend_guid`, `best_friend_symbol`, `date`) VALUES (?, ?, ?, ?) "
+        "ON DUPLICATE KEY UPDATE `best_friend_symbol` = VALUES(`best_friend_symbol`), `date` = VALUES(`date`)", ConnectionFlags::Both);
+    PrepareStatement(CHAR_DEL_SOCIAL_FRIEND, "CHAR_DEL_SOCIAL_FRIEND", "DELETE FROM `character_friend` WHERE `owner_guid` = ? AND `friend_guid` = ?", ConnectionFlags::Both);
+    PrepareStatement(CHAR_UPD_SOCIAL_BEST_FRIEND, "CHAR_UPD_SOCIAL_BEST_FRIEND", "UPDATE `character_friend` SET `best_friend_symbol` = ? WHERE `owner_guid` = ? AND `friend_guid` = ?", ConnectionFlags::Both);
+    PrepareStatement(CHAR_INS_SOCIAL_IGNORE, "CHAR_INS_SOCIAL_IGNORE", "INSERT INTO `character_ignore` (`owner_guid`, `ignored_guid`, `platform_type`, `date`) VALUES (?, ?, ?, ?) "
+        "ON DUPLICATE KEY UPDATE `platform_type` = VALUES(`platform_type`), `date` = VALUES(`date`)", ConnectionFlags::Both);
+    PrepareStatement(CHAR_DEL_SOCIAL_IGNORE, "CHAR_DEL_SOCIAL_IGNORE", "DELETE FROM `character_ignore` WHERE `owner_guid` = ? AND `ignored_guid` = ?", ConnectionFlags::Both);
 }

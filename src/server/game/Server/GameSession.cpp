@@ -557,6 +557,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         _relay.Reset(_movement);
         _characterRevision = entering.StateRevision;
     }
+    _zoneDisplay = entering.ZoneDisplay.empty() ? entering.Zone : entering.ZoneDisplay;
     _stats = std::move(stats);
     if (!resumed)
         _statsRevision = stored ? stored->Revision : 0;
@@ -801,6 +802,7 @@ void GameSession::LeaveWorld()
     _linkDeadStartPending.store(false, std::memory_order_relaxed);
     MarkOffline();
     SetCharacterName(std::string());
+    _zoneDisplay.clear();
     if (_stats)
     {
         SaveStats();
@@ -826,6 +828,7 @@ void GameSession::TransferWorldStateTo(GameSession& replacement)
 {
     replacement._mapId = _mapId;
     replacement._zonePath = _zonePath;
+    replacement._zoneDisplay = _zoneDisplay;
     replacement._worldGuid = _worldGuid;
     replacement._mobileId = _mobileId;
     replacement._movement = _movement;
