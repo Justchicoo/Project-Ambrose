@@ -50,12 +50,6 @@
       "since": "2026-09-30"
     },
     {
-      "scope": "milestone:5.07",
-      "who": "the maintainer's track session",
-      "what": "the binary type-registry cache, taken over to finish every milestone before 8.01",
-      "since": "2026-09-30"
-    },
-    {
       "scope": "milestone:6.17",
       "who": "the maintainer's track session",
       "what": "the network hardening fuzz runs, taken over to finish every milestone before 8.01",
