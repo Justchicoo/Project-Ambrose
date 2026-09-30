@@ -35,6 +35,8 @@ struct AdminHealth
     int64 StartUntilEpochMs = 0;
 };
 
+class EmbeddedPage;
+
 class AdminSocket
 {
 public:
@@ -69,6 +71,7 @@ public:
 
     void SetHealthSource(std::function<AdminHealth()> health);
     void SetSessionSource(SessionSource* source);
+    void SetEmbeddedDashboard(EmbeddedPage const* page);
     std::string MakeSessionCookie(std::string const& value, bool clear) const { return SessionCookie(value, clear); }
     std::string MakeCookie(std::string_view suffix, std::string const& value, int64 maxAgeSeconds) const;
     void AddSocket(AdminSocketRoute route);
@@ -113,6 +116,7 @@ private:
     AdminSessions _sessions;
     SessionSource* _sessionSource = nullptr;
     AdminFiles _files;
+    EmbeddedPage const* _embeddedDashboard = nullptr;
     AdminRouter _router;
     std::function<AdminHealth()> _health;
     mutable std::mutex _socketMutex;

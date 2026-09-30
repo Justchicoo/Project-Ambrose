@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Where the launcher's window was when it was last closed, written down and read back. Only the numbers live here, with no window and no operating system in sight, so the rule that a remembered place has to be a place a window could actually be is one a test can drive: a size below what the screens need to hold their words is not taken, a size larger than any screen is not taken, and anything that cannot be read at all leaves the window to open where it would have opened anyway. A window that comes back somewhere its user cannot reach is worse than one that forgets, so forgetting is what every doubtful case does.
+ * Where a desktop shell window, the launcher's among them, was when it was last closed, written down and read back. Only the numbers live here, with no window and no operating system in sight, so the rule that a remembered place has to be a place a window could actually be is one a test can drive: a size below what the screens need to hold their words is not taken, a size larger than any screen is not taken, and anything that cannot be read at all leaves the window to open where it would have opened anyway. A window that comes back somewhere its user cannot reach is worse than one that forgets, so forgetting is what every doubtful case does.
  */
 
 #ifndef AMBROSE_LAUNCHERPLACE_H

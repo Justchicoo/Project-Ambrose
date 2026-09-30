@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The one typed call every surface makes to whatever hosts it, with an implementation for the Windows web view, for the one on every other desktop and for a browser talking to the panel over HTTP.
+ * The one typed call every surface makes to whatever hosts it, with an implementation for the Windows web view, for the one on every other desktop and for a browser talking to the panel over HTTP. A native host is used only on a desktop program's own origin, so a remote panel a program opens always talks HTTP to its own server.
  */
 
 export type HostKind = "webview2" | "webkit" | "http";
@@ -44,8 +44,21 @@ type WebKitWindow = Window & {
 };
 
 const HANDLER = "ambrose";
+const OWN_DOMAIN = ".ambrose";
+const OWN_PROTOCOLS = ["https:", "ambrose:"];
+
+export function isProgramOrigin(scope: Window | undefined = typeof window === "undefined" ? undefined : window): boolean {
+    const location = scope?.location;
+    if (!location) {
+        return false;
+    }
+    return OWN_PROTOCOLS.includes(location.protocol) && location.hostname.endsWith(OWN_DOMAIN) && location.port === "";
+}
 
 export function hostKind(scope: Window | undefined = typeof window === "undefined" ? undefined : window): HostKind {
+    if (!isProgramOrigin(scope)) {
+        return "http";
+    }
     const windows = scope as (WebView2Window & WebKitWindow) | undefined;
     if (windows?.chrome?.webview) {
         return "webview2";

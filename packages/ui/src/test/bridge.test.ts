@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks the host bridge: which host a page is in, that a reply reaches the call that asked for it, and that a reply for a call nobody is waiting on is ignored.
+ * Checks the host bridge: which host a page is in, that a native host is chosen only on a desktop program's own origin, that a reply reaches the call that asked for it, and that a reply for a call nobody is waiting on is ignored.
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -8,10 +8,14 @@ import { createHost, hostKind } from "../bridge/bridge";
 
 type Listener = (event: { data: unknown }) => void;
 
-function windowsHost() {
+const launcherOrigin = { protocol: "https:", hostname: "launcher.ambrose", port: "" };
+const webkitOrigin = { protocol: "ambrose:", hostname: "launcher.ambrose", port: "" };
+
+function windowsHost(location: object = launcherOrigin) {
     const sent: unknown[] = [];
     let listener: Listener | undefined;
     const scope = {
+        location,
         chrome: {
             webview: {
                 postMessage: (message: unknown) => sent.push(message),
@@ -24,9 +28,10 @@ function windowsHost() {
     return { scope, sent, reply: (data: unknown) => listener?.({ data }) };
 }
 
-function webkitHost() {
+function webkitHost(location: object = webkitOrigin) {
     const sent: unknown[] = [];
     const scope = {
+        location,
         webkit: { messageHandlers: { ambrose: { postMessage: (message: unknown) => sent.push(message) } } },
     } as unknown as Window & { ambroseHostReply?: (message: unknown) => void };
     return { scope, sent };
@@ -44,6 +49,21 @@ describe("the host bridge", () => {
 
     it("knows the web view every other desktop uses", () => {
         expect(hostKind(webkitHost().scope)).toBe("webkit");
+    });
+
+    it("answers http on any origin but a desktop program's own, even where a web view's channel is there", () => {
+        const remote = [
+            { protocol: "https:", hostname: "panel.example.org", port: "8443" },
+            { protocol: "http:", hostname: "127.0.0.1", port: "12021" },
+            { protocol: "http:", hostname: "launcher.ambrose", port: "" },
+            { protocol: "https:", hostname: "launcher.ambrose", port: "8443" },
+            { protocol: "https:", hostname: "launcher.ambrose.example.org", port: "" },
+        ];
+        for (const location of remote) {
+            expect(hostKind(windowsHost(location).scope)).toBe("http");
+            expect(hostKind(webkitHost(location).scope)).toBe("http");
+        }
+        expect(hostKind(windowsHost({ protocol: "https:", hostname: "panel.ambrose", port: "" }).scope)).toBe("webview2");
     });
 
     it("sends a call and resolves it with the reply that carries its number", async () => {

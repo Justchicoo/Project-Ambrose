@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads and writes the remembered place of the launcher's window. A place is taken only when every number is a number, the size is one the window's own screens can be read at, and the corner is somewhere a desktop could have put it; anything else is dropped and the window opens where it would have opened on a machine that had never run it. A maximised window keeps the size it had before it was maximised, so unmaximising it puts back the window the user last sized by hand.
+ * Reads and writes the remembered place of a desktop shell window, the launcher's among them. A place is taken only when every number is a number, the size is one the window's own screens can be read at, and the corner is somewhere a desktop could have put it; anything else is dropped and the window opens where it would have opened on a machine that had never run it. A maximised window keeps the size it had before it was maximised, so unmaximising it puts back the window the user last sized by hand.
  */
 
 #include "LauncherPlace.h"

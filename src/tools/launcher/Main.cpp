@@ -268,10 +268,10 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
 
         if (arguments->WindowUi)
         {
-            std::filesystem::path const page = Ambrose::GetExecutableDirectory() / "launcher-ui" / "index.html";
-            std::filesystem::path const placeFile = ClientLocator::GetDataFolder(system) / "launcher-window.json";
+            std::filesystem::path const dataFolder = ClientLocator::GetDataFolder(system);
+            std::filesystem::path const placeFile = dataFolder / "launcher-window.json";
             std::string windowError;
-            bool const shown = LauncherWindow::Show(page, placeFile,
+            bool const shown = LauncherWindow::Show(dataFolder, placeFile,
                 [&](std::string const& message) { return Answer(message, launcher, *arguments, mode, *prompt); }, windowError);
             if (shown)
                 return Success;

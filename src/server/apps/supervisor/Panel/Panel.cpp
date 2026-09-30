@@ -355,6 +355,11 @@ PanelTwoFactorSettings Panel::TwoFactorSettings() const
     return _twoFactorSettings;
 }
 
+void Panel::SetDashboard(EmbeddedPage const* page)
+{
+    _listener.SetEmbeddedDashboard(page);
+}
+
 bool Panel::Start(ConfigMgr const& config, std::string& error)
 {
     std::vector<std::string> problems;

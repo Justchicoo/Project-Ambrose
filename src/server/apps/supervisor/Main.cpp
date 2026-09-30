@@ -11,6 +11,7 @@
 #include "ClientLocator.h"
 #include "ClientSystem.h"
 #include "ConfigMgr.h"
+#include "DashboardPage.h"
 #include "Duration.h"
 #include "Environment.h"
 #include "FileRoots.h"
@@ -176,6 +177,7 @@ namespace
 
         void OnAdminApiReady(AdminServer& admin) override
         {
+            admin.SetEmbeddedDashboard(&DashboardPage());
             _supervisor.SetRelayHooks({ [this](AdminRequest const& request) { return _panel.NameOf(request); },
                 [this](AdminRequest const& request, RelayedAnswer const& answer) { _panel.RecordRelayed(request, answer.App, answer.Method, answer.Path, answer.Status, answer.Body); } });
             _supervisor.Register(admin.Routes(), [this] { return BuildStatus(); });
@@ -250,6 +252,7 @@ namespace
                 reports.emplace_back(GetInfo().Name, AdminStatus::ErrorsJson(GetInfo().Name));
                 return reports;
             });
+            _panel.SetDashboard(&DashboardPage());
             if (!_panel.Start(Config(), error))
             {
                 LOG_ERROR("server.panel", "{}", error);

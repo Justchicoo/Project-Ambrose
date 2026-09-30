@@ -45,6 +45,7 @@
 #include <vector>
 
 class ConfigMgr;
+class EmbeddedPage;
 class Log;
 class PanelSettingStore;
 class SettingStore;
@@ -69,6 +70,7 @@ public:
     static std::filesystem::path StoreFile(ConfigMgr const& config, std::filesystem::path const& dataFolder);
     static std::filesystem::path KeyringFile(ConfigMgr const& config, std::filesystem::path const& dataFolder);
 
+    void SetDashboard(EmbeddedPage const* page);
     bool Start(ConfigMgr const& config, std::string& error);
     bool Reload(ConfigMgr const& config);
     void Stop();

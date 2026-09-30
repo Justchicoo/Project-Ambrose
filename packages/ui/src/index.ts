@@ -43,7 +43,7 @@ export { default as TimeSeries } from "./components/TimeSeries.svelte";
 export { classes } from "./internal/classes";
 export { motion, motionSettings, durationMs, easing } from "./motion/motion.svelte";
 export type { MotionSetting, DurationName } from "./motion/motion.svelte";
-export { createHost, hostKind } from "./bridge/bridge";
+export { createHost, hostKind, isProgramOrigin } from "./bridge/bridge";
 export type { Host, HostKind, HostRequest, HostReply } from "./bridge/bridge";
 export { icons, iconNames } from "./icons/icons";
 export type { IconName } from "./icons/icons";

@@ -467,9 +467,17 @@ std::string AdminServer::MakeCookie(std::string_view suffix, std::string const& 
     return fmt::format("{}{}={}; Path=/; HttpOnly; SameSite=Strict{}; Max-Age={}", browser.CookieName, suffix, value, browser.Secure ? "; Secure" : "", std::max<int64>(maxAgeSeconds, 0));
 }
 
+void AdminServer::SetEmbeddedDashboard(EmbeddedPage const* page)
+{
+    _embeddedDashboard = page;
+}
+
 void AdminServer::ApplyLiveSettings(ListenerSettings const& settings)
 {
-    _files.SetRoot(settings.DashboardFolder());
+    if (settings.DashboardDir.empty() && _embeddedDashboard != nullptr)
+        _files.SetEmbedded(_embeddedDashboard);
+    else
+        _files.SetRoot(settings.DashboardFolder());
     _router.SetAllowedHosts(settings.AllowedHosts);
     _sessions.SetLifetimes(std::chrono::minutes(settings.SessionIdleMinutes), std::chrono::hours(settings.SessionLifetimeHours));
 }

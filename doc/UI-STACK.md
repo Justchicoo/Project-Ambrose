@@ -519,6 +519,14 @@ and WebSocket for the browser, so the same components sit above all three and no
 A loopback HTTP listener with a one-time token would be simpler and identical in both engines, and is rejected
 because 3.26 says the launcher serves nothing over the network.
 
+As built in 17.179, `ambrose_embed_page` in src/cmake/EmbedPage.cmake writes the manifest with each file's path,
+media type, entity tag and bytes, without the compressed variants, since a page read from memory by a web view
+on the same machine gains nothing from them. `desktop-shell` in src/tools/shell serves it. On Windows the view
+navigates to `https://<program>.ambrose` and a web resource handler answers every request to that origin from
+memory, rather than a virtual host name mapped to a folder, which gave a plain `http` origin that is not a secure
+context; on WebKitGTK the `ambrose` scheme is registered as both secure and CORS-enabled. The supervisor serves
+the dashboard compiled into its own binary when no dashboard folder is named, and doc/TOOLS.md describes both.
+
 ## What binds the shipped code
 
 Only Svelte's runtime, which is MIT, and the vendored fonts, which are OFL-1.1 and oblige shipping their

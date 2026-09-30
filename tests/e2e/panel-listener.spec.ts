@@ -1,8 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * The built panel loaded from the panel's own listener rather than an app's admin API: its first operator is made from the link the supervisor printed and reaches the overview with nothing written to the browser console, every request it makes goes back to the listener it came from, every response carries the policy, frame denial, nosniff and referrer headers, the servers page reaches the app the supervisor runs through that listener rather than the app list of the supervisor alone, and a signed-in page opens exactly one event socket, to the listener's own events path with nothing in its address, whose first frame is hello and whose first answer is ready.
+ * The built panel loaded from the panel's own listener rather than an app's admin API, from the copy compiled into the supervisor since no Panel.DashboardDir names a folder: its first operator is made from the link the supervisor printed and reaches the overview with nothing written to the browser console, every request it makes goes back to the listener it came from, every response carries the policy, frame denial, nosniff and referrer headers, the servers page reaches the app the supervisor runs through that listener rather than the app list of the supervisor alone, and a signed-in page opens exactly one event socket, to the listener's own events path with nothing in its address, whose first frame is hello and whose first answer is ready.
  */
 
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { app, built, operator, port, startPanelListener, supervisor, type PanelListener } from "./panel-server";
 
@@ -42,6 +44,22 @@ test("the panel loads from its own listener with no console errors and no reques
 
     expect(complaints).toEqual([]);
     expect(elsewhere).toEqual([]);
+});
+
+test("the panel listener serves the dashboard compiled into the supervisor with the headers a folder gets", async () => {
+    const index = await fetch(`${panel.url}/`);
+    expect(index.status).toBe(200);
+    expect(index.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(index.headers.get("cache-control")).toBe("no-cache");
+    expect(await index.text()).toBe(readFileSync(path.resolve("apps/dashboard/dist/index.html"), "utf8"));
+
+    const asset = readdirSync(path.resolve("apps/dashboard/dist/assets")).find((name) => name.endsWith(".js"));
+    expect(asset).toBeDefined();
+    const script = await fetch(`${panel.url}/assets/${asset}`);
+    expect(script.status).toBe(200);
+    expect(script.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+    expect(script.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+    expect(await script.text()).toBe(readFileSync(path.resolve("apps/dashboard/dist/assets", asset!), "utf8"));
 });
 
 test("every response from the panel listener carries its security headers", async () => {

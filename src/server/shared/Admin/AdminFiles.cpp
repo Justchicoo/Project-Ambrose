@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Maps a request path onto the panel folder segment by segment, refuses anything that is not a plain name, a known type or a regular file inside the folder, reads the file whole within a size cap, and sets its type and caching.
+ * Maps a request path onto the panel folder, or onto the copy compiled into the program with the same types and caching, segment by segment, refuses anything that is not a plain name, a known type or a regular file inside the folder, reads the file whole within a size cap, and sets its type and caching.
  */
 
 #include "AdminFiles.h"
 #include "ConfigMgr.h"
+#include "EmbeddedPage.h"
 #include "StringUtil.h"
 
 #include <algorithm>
@@ -52,6 +53,20 @@ void AdminFiles::SetRoot(std::filesystem::path root)
 {
     std::unique_lock const lock(_mutex);
     _root = std::move(root);
+    _embedded = nullptr;
+}
+
+void AdminFiles::SetEmbedded(EmbeddedPage const* page)
+{
+    std::unique_lock const lock(_mutex);
+    _root.clear();
+    _embedded = page;
+}
+
+bool AdminFiles::ServesEmbedded() const
+{
+    std::shared_lock const lock(_mutex);
+    return _embedded != nullptr;
 }
 
 std::filesystem::path AdminFiles::GetRoot() const
@@ -81,29 +96,36 @@ std::optional<std::string_view> AdminFiles::ContentType(std::filesystem::path co
     return std::nullopt;
 }
 
-std::optional<std::filesystem::path> AdminFiles::Resolve(std::filesystem::path const& root, std::string_view path)
+std::optional<std::string> AdminFiles::Relative(std::string_view path)
 {
-    if (root.empty() || path.empty() || path.front() != '/')
+    if (path.empty() || path.front() != '/')
         return std::nullopt;
     std::string_view relative = path.substr(1);
     if (relative.empty())
         relative = "index.html";
+    std::string const whole(relative);
 
-    std::filesystem::path candidate = root;
     while (!relative.empty())
     {
         std::size_t const slash = relative.find('/');
         std::string_view const segment = relative.substr(0, slash);
         if (!PlainName(segment))
             return std::nullopt;
-        candidate /= std::filesystem::path(std::string(segment));
         relative = slash == std::string_view::npos ? std::string_view() : relative.substr(slash + 1);
         if (slash != std::string_view::npos && relative.empty())
             return std::nullopt;
     }
-
-    if (!ContentType(candidate))
+    if (!ContentType(std::filesystem::path(whole)))
         return std::nullopt;
+    return whole;
+}
+
+std::optional<std::filesystem::path> AdminFiles::Resolve(std::filesystem::path const& root, std::string_view path)
+{
+    std::optional<std::string> const relative = Relative(path);
+    if (root.empty() || !relative)
+        return std::nullopt;
+    std::filesystem::path const candidate = root / ConfigMgr::PathFromUtf8(*relative);
     std::error_code code;
     if (!std::filesystem::is_regular_file(candidate, code) || code)
         return std::nullopt;
@@ -127,6 +149,25 @@ AdminResponse AdminFiles::Serve(AdminRequest const& request) const
         AdminResponse refused = AdminResponse::Problem(405, "method_not_allowed", request.Path + " answers GET, HEAD");
         refused.Headers.emplace_back("Allow", "GET, HEAD");
         return refused;
+    }
+
+    EmbeddedPage const* embedded = nullptr;
+    {
+        std::shared_lock const lock(_mutex);
+        embedded = _embedded;
+    }
+    if (embedded != nullptr)
+    {
+        std::optional<std::string> const relative = Relative(request.Path);
+        EmbeddedFile const* const found = relative ? embedded->Find(*relative) : nullptr;
+        if (found == nullptr)
+            return AdminResponse::Problem(404, "not_found", "The admin API has no " + request.Path);
+        AdminResponse response;
+        response.Status = 200;
+        response.ContentType = std::string(*ContentType(std::filesystem::path(*relative)));
+        response.Body = std::string(found->Bytes);
+        response.Headers.emplace_back("Cache-Control", request.Path.starts_with(AssetPrefix) ? "public, max-age=31536000, immutable" : "no-cache");
+        return response;
     }
 
     std::filesystem::path const root = GetRoot();
