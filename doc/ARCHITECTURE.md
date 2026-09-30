@@ -634,6 +634,7 @@ Settled on 2026-09-16 at the maintainer's direction to make CI cheaper. A privat
 - Setting the repository variable `AMBROSE_CI_BUILDS` to `off` stops scheduled, push and pull request builds. The checks, manual runs and cache keepalives still run.
 - Each operating system keeps one vcpkg binary cache, keyed by the archives it holds. A build prunes archives older than 30 days that it no longer uses, and saves a new cache only when the set changed. GitHub drops caches unused for 7 days, so scheduled checks restore the Linux cache daily. On Sunday and Wednesday slots that do not build Windows, a short job restores the Windows cache.
 - `python apps/ci/ci_usage.py` adds up this month's billed minutes through `gh`, for a look before a large manual run.
+- `python apps/ci/ci_stress.py` runs a test many times over in concurrent copies, optionally under load, and groups the failures by cause, which is how a flaky test's fix is proven before it lands. It runs on a workstation, never in CI.
 - Pushes build nothing, so run `ctest` with a preset before every push. Besides the unit tests it runs `codestyle.selftest`, `codestyle.tree`, `ci.selftest` and `ci.forbidden`, the checks CI runs.
 
 ### Entering the world

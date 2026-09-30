@@ -196,6 +196,14 @@ A single entry point for contributors and agents: install deps, compile, run the
 - module new/list; studio (launch local web editor)
 - Reads client data only from the user's own install and never downloads it from a host the project runs. An opt-in step that fills a separate copy from KingsIsle's patch servers is planned, not yet scheduled; using it is the user's own choice on their own account and machine, may break KingsIsle's terms, and never touches the pinned development install
 
+### ci_stress (built on 2026-09-30)
+
+Measures a flaky test before and after its fix the same way every time: `python apps/ci/ci_stress.py <unit_tests> --filter 'AdminServerTest.*' --copies 32 --runs 100 [--busy 8] [--keep <folder>] [--label fixed]` runs the gtest executable as that many concurrent copies, each that many times, optionally beside busy loops that load the machine, and prints how many runs failed, grouped by the first failure each printed, with ports, timings and addresses made alike so one cause counts once, and which tests failed. It exits 1 when any run failed, and `--keep` holds each failing run's whole output. It took over the loops written by hand for flake 1 and flake 2; a stress proof a fix lands on is run with it, and the numbers go in the fix's message.
+
+- **Form:** CLI (Python)
+- **Lives in:** apps/ci/ci_stress.py, with its self-tests in apps/ci/tests/test_ci.py
+- **Needs:** a built unit_tests; nothing else
+
 ### Reload channel (.reload + admin API)
 
 Let editors, GMs and operators push world database changes into any running gameserver without a restart, so a tester in the Wizard101 client sees a change within seconds.

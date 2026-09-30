@@ -27,6 +27,7 @@ import ci_findings
 import ci_forbidden_files
 import ci_roadmap_state
 import ci_select_legs
+import ci_stress
 import ci_triage
 import ci_usage
 import ci_vcpkg_cache
@@ -546,6 +547,60 @@ class UsageTests(unittest.TestCase):
         self.assertEqual(by_event["schedule"], 43)
         self.assertEqual(by_job["build (linux-gcc)"], 9)
 
+
+
+class StressTests(unittest.TestCase):
+    RACE = "\n".join([
+        "[ RUN      ] AdminServerTest.RotatesTheToken",
+        "src/test/server/shared/Admin/AdminServerTest.cpp:541: Failure",
+        "Value of: server.Start(Loopback(), error)",
+        "  Actual: false",
+        "Expected: true",
+        "The admin API could not bind 127.0.0.1:48899",
+        "",
+        "[  FAILED  ] AdminServerTest.RotatesTheToken (7 ms)",
+        "[==========] 37 tests from 1 test suite ran. (617 ms total)",
+    ])
+
+    def test_a_failure_is_named_by_its_file_and_reason_with_numbers_made_alike(self):
+        self.assertEqual(ci_stress.first_failure(self.RACE), "AdminServerTest.cpp: The admin API could not bind N.N.N.N:N")
+        other = self.RACE.replace("48899", "51234").replace("541", "560").replace("/", "\\")
+        self.assertEqual(ci_stress.first_failure(other), ci_stress.first_failure(self.RACE))
+        self.assertEqual(ci_stress.failed_tests(self.RACE), ["AdminServerTest.RotatesTheToken"])
+
+    def test_a_run_that_stopped_part_way_is_told_apart(self):
+        self.assertEqual(ci_stress.first_failure("[ RUN      ] AdminServerTest.X\nterminate called"), "the run ended before it finished")
+
+    def test_copies_run_concurrently_and_every_failing_run_is_counted_and_kept(self):
+        with tempfile.TemporaryDirectory() as folder:
+            counter = os.path.join(folder, "count")
+            fake = os.path.join(folder, "fake.py")
+            with open(fake, "w", encoding="utf-8") as script:
+                script.write("\n".join([
+                    "import os, sys",
+                    f"path = {counter!r}",
+                    "number = 1",
+                    "while True:",
+                    "    try:",
+                    "        os.close(os.open(f'{path}-{number}', os.O_CREAT | os.O_EXCL | os.O_WRONLY))",
+                    "        break",
+                    "    except FileExistsError:",
+                    "        number += 1",
+                    "odd = number % 2",
+                    "assert sys.argv[-1] == '--gtest_filter=Fake.*'",
+                    f"print({self.RACE!r} if odd else '[==========] 1 tests from 1 test suite ran.')",
+                    "sys.exit(1 if odd else 0)",
+                ]))
+            keep = os.path.join(folder, "kept")
+            code = ci_stress.main([sys.executable, "--filter", "Fake.*", "--copies", "2", "--runs", "3", "--keep", keep, "--label", "fake", "--", fake])
+            self.assertEqual(code, 1)
+            self.assertEqual(len([name for name in os.listdir(folder) if name.startswith("count-")]), 6)
+            self.assertEqual(len(os.listdir(keep)), 3)
+            args = argparse.Namespace(executable=sys.executable, filter="Fake.*", copies=1, runs=2, busy=1, keep=None, extra=[fake])
+            tally, _ = ci_stress.stress(args)
+            self.assertEqual(tally.runs, 2)
+            self.assertEqual(tally.failures, 1)
+            self.assertIn("1 of 2 runs failed (1 copies, 1 busy loops", ci_stress.report("fake", tally, 1.0, 1, 1))
 
 
 class ContributorPathTests(unittest.TestCase):
