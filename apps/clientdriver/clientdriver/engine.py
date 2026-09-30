@@ -227,6 +227,18 @@ class Engine:
                                  f"{'an answer' if wanted is None else repr(wanted)} within {step['timeout']}s: {query}")
             time.sleep(0.25)
 
+    def act_db_exec(self, step):
+        if self.databases is None:
+            raise StepFailed("this run has no database to change")
+        kind = step.get("database", "characters")
+        statement = self.fill(step["statement"])
+        try:
+            changed = self.databases.execute(kind, statement)
+        except Exception as error:
+            raise StepFailed(f"the {kind} database refused {statement}: {error}")
+        self.notes.append({"step": step.get("name"), "statement": statement, "rows": changed})
+        return f"{kind} ran it, {changed} row(s) changed"
+
     def ask(self, kind, query):
         try:
             return self.databases.value(kind, query), None

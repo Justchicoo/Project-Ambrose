@@ -111,6 +111,16 @@ class Scratch:
             connection.close()
         return f"applied {applied} statement(s) from {path} to {self.names[kind]}"
 
+    def execute(self, kind, statement):
+        connection = self._connect(self.names[kind])
+        try:
+            with connection.cursor() as cursor:
+                changed = cursor.execute(statement)
+            connection.commit()
+        finally:
+            connection.close()
+        return changed
+
     @staticmethod
     def _run(cursor, statements):
         for statement in statements:

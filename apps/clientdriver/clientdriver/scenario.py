@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, a seeded wizard's stat it does not carry or a negative one, a patching mode other than off or default, a companion without a wizard of its own, a step that drives or watches a client the run does not start, a watch that films too often or too long, a held key list that is empty or holds more than four keys, a listener without a name, an address, a port or the number of connections it should see, or a wait on a listener the scenario does not name, before anything is started.
+# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, a seeded wizard's stat it does not carry or a negative one, more wizards without a first one, a patching mode other than off or default, a companion without a wizard of its own, a step that drives or watches a client the run does not start, a statement meant for any database but the run's own, a watch that films too often or too long, a held key list that is empty or holds more than four keys, a listener without a name, an address, a port or the number of connections it should see, or a wait on a listener the scenario does not name, before anything is started.
 import json
 import os
 import re
@@ -14,6 +14,7 @@ ACTIONS = {
     "forbid_log": (("side", "pattern"), ()),
     "wait_screen": (("screens", "timeout"), ()),
     "wait_db": (("query", "timeout"), ("database", "expect", "record")),
+    "db_exec": (("statement",), ("database",)),
     "submit_login": (("password",), ("user",)),
     "type": (("text",), ()),
     "char": (("code",), ()),
@@ -35,7 +36,7 @@ CLIENTS = ("main", "companion")
 CLIENT_ACTIONS = ("wait_client_log", "forbid_log", "wait_screen", "submit_login", "type", "char", "key", "hold_key", "click", "shot",
                   "kill_client", "restart_client", "wait_listener")
 ALLOW_LISTS = ("pending_allowed", "dropped_allowed", "server_log_allowed", "client_log_allowed")
-TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "game_settings", "wizard", "companion", "variables", "expect", "steps",
+TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "game_settings", "wizard", "more_wizards", "companion", "variables", "expect", "steps",
              "patching", "listeners", "patch_config") + ALLOW_LISTS
 COMPANION = ("wizard",)
 PATCHING = ("off", "default")
@@ -91,6 +92,7 @@ class Scenario:
         self.server_settings = list(document.get("server_settings") or [])
         self.game_settings = list(document.get("game_settings") or [])
         self.wizard = document.get("wizard")
+        self.more_wizards = list(document.get("more_wizards") or [])
         self.companion = dict(document["companion"]) if document.get("companion") else None
         self.variables = dict(document.get("variables") or {})
         for name in ALLOW_LISTS:
@@ -162,6 +164,8 @@ def _check_step(path, index, step):
     for key in step:
         if key not in allowed:
             raise Refused(f"{where} ({name}) has the key {key!r}, which its {action} action does not take")
+    if action == "db_exec" and (step.get("database", "characters") not in ("login", "characters", "world") or not str(step["statement"]).strip()):
+        raise Refused(f"{where} ({name}) runs one statement on the run's own login, characters or world database")
     if action in ("wait_server_log", "wait_client_log", "wait_screen", "wait_db", "wait_listener") and not isinstance(step["timeout"], (int, float)):
         raise Refused(f"{where} ({name}) needs a timeout in seconds")
     if action == "wait_screen" and (not isinstance(step["screens"], list) or not step["screens"]):
@@ -234,6 +238,14 @@ def _check_document(path, document):
         _check_wizard(path, wizard, "the wizard")
         if not (document.get("requires") or {}).get("gameserver"):
             raise Refused(f"{path} seeds a wizard but does not require the game server it enters the world on")
+    more = document.get("more_wizards")
+    if more is not None:
+        if not isinstance(more, list) or not more:
+            raise Refused(f"{path}: more_wizards must be a list of one or more wizards")
+        if wizard is None:
+            raise Refused(f"{path} seeds more wizards but not the first wizard they join")
+        for index, other in enumerate(more):
+            _check_wizard(path, other, f"wizard {index + 2}")
     companion = document.get("companion")
     if companion is not None:
         if not isinstance(companion, dict) or sorted(companion) != sorted(COMPANION):
@@ -316,6 +328,7 @@ def _merge(base, scenario):
     scenario.needs_gameserver = base.needs_gameserver or scenario.needs_gameserver
     scenario.game_settings = base.game_settings + [value for value in scenario.game_settings if value not in base.game_settings]
     scenario.wizard = scenario.wizard or base.wizard
+    scenario.more_wizards = scenario.more_wizards or base.more_wizards
     scenario.companion = scenario.companion or base.companion
     scenario.expect_failure = base.expect_failure or scenario.expect_failure
     scenario.notes = base.notes + scenario.notes

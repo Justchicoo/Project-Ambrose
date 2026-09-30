@@ -32,9 +32,13 @@
   "targets": {
     "login_reconnect": {"at": [771, 428], "presses": "the button of the refused-login dialog that reconnects"},
     "charselect_play": {"at": [640, 689], "presses": "the button of the character selection screen that plays the chosen wizard"},
+    "spellbook_character": {"at": [975, 108], "presses": "the Character tab at the top of the spellbook's right edge, whose page holds the wizard's badges"},
+    "character_badges": {"at": [738, 138], "presses": "the third icon along the top of the spellbook's Character page, which opens its Badges page"},
     "spellbook_fire": {"at": [398, 141], "presses": "the Fire tab along the top of the spellbook P opens"},
     "game_menu_quit": {"at": [431, 575], "presses": "the Quit button at the lower left of the in-world Graphics menu"},
     "charselect_new": {"at": [946, 689], "presses": "the button of the character selection screen that starts a new wizard"},
+    "charselect_left": {"at": [345, 300], "presses": "the wizard at the left desk of the character selection screen, the second an account lists"},
+    "charselect_right": {"at": [1030, 290], "presses": "the wizard at the right desk of the character selection screen, the third an account lists"},
     "dialog_next": {"at": [806, 697], "presses": "the button that moves a creation dialogue on"},
     "test_skip": {"at": [405, 605], "presses": "the button that skips the sorting test"},
     "school_ice": {"at": [688, 405], "presses": "the fourth school in the list"},

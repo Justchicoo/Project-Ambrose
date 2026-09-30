@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The server group: what an operator asks a running server about itself, and what the server says to everyone in it. 'server info' is the one a console reaches for first, saying which build is running, how long it has been up, how many times the world has ticked and how many sessions it holds, and it is open to any level because none of it is a secret to somebody already signed in. 'server announce' shows a line of text to every wizard in the world through MSG_SERVERMESSAGE, which the client shows as a server message, and says how many it reached.
+ * The server group: what an operator asks a running server about itself, and what the server says to everyone in it. 'server info' is the one a console reaches for first, saying which build is running, how long it has been up, how many times the world has ticked and how many sessions it holds, and it is open to any level because none of it is a secret to somebody already signed in. 'server announce' shows a line of text to every wizard in the world through MSG_SERVERMESSAGE, which the client shows as a server message, and says how many it reached; '--repeat <n>' before the text sends it n times over in one message, up to 64, which is how a message longer than a command line may be is sent.
  */
 
 #include "AccountMgr.h"
@@ -10,6 +10,7 @@
 #include "GameSession.h"
 #include "GitRevision.h"
 #include "ScriptMgr.h"
+#include "StringUtil.h"
 #include "Utf.h"
 #include "World.h"
 
@@ -46,6 +47,8 @@ namespace
             return true;
         }
 
+        static constexpr uint32 MaxRepeat = 64;
+
         static bool Announce(CommandCaller& caller, std::vector<std::string> const& arguments)
         {
             if (arguments.empty())
@@ -53,7 +56,23 @@ namespace
                 caller.Reply("Give the message to show");
                 return false;
             }
-            std::string const text = fmt::format("{}", fmt::join(arguments, " "));
+            std::size_t repeat = 1;
+            std::size_t first = 0;
+            if (arguments.size() > 2 && arguments[0] == "--repeat")
+            {
+                std::optional<uint32> const times = Ambrose::StringTo<uint32>(arguments[1]);
+                if (!times || *times == 0 || *times > MaxRepeat)
+                {
+                    caller.Reply(fmt::format("--repeat takes a count from 1 to {}", MaxRepeat));
+                    return false;
+                }
+                repeat = *times;
+                first = 2;
+            }
+            std::string text;
+            std::string const once = fmt::format("{}", fmt::join(arguments.begin() + first, arguments.end(), " "));
+            for (std::size_t index = 0; index < repeat; ++index)
+                text += once;
             std::optional<std::u16string> const wide = Utf::Utf8ToUtf16(text, Utf::InvalidPolicy::Reject);
             if (!wide)
             {
