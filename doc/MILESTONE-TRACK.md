@@ -130,9 +130,9 @@ Everything not in the table above, including every milestone whose dependencies 
 | 8.04 | Built on 2026-09-26 by the maintainer's world session, 10 of 12 checks. Left: the game master's real-client check, which waits on 6.04's in-game commands, and the real-client check that shows a spell in the Spell Deck, which waits on the deck 8.10 and 8.11 build |
 | 9.02 | Built on 2026-09-26 by the maintainer's world session, 6 of 7 checks. Left: its real-client check, which waits on 6.04 |
 | 4.08 | Taken over by the maintainer's world session on 2026-09-26. 5.02 moved its writer into `extractor zones`, which now writes a row for every entry whose class the type dump describes, with typed columns and the loading type. MeruneFleuruwu's decoding of every zone, with real positions and display keys, is what it builds on. Left: the four checks that count every entry, which wait on the sigils 6.10's class tables describe, and the spawn data the two integration tests read |
-| 6.04 | Next in the maintainer's world session, which landed 6.03's chat the same day: GM commands typed in chat run through the same handler |
 | 6.11 | Next in the maintainer's world session after 6.03 and 6.04: the zone triggers and volumes it reads build on the extraction code 6.10 just changed |
 | 7.01 | Next in the maintainer's world session after 6.03 and 6.04: the object template extractor builds on the extraction code 6.10 just changed and leads to the NPC templates a playable game needs |
+| 8.01 | Next in the maintainer's world session after 6.11 and 7.01: live health, mana, gold and potions on the HUD, on the way to a playable game |
 
 ## In flight
 
