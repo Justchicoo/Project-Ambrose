@@ -22,13 +22,11 @@
     "Logger.server=2,Console Server Errors Stream",
     "Realm.Name=Ambrose Driver",
     "Logger.network.session=2,Console Server Errors Stream",
-    "Zone.MobileIdReleaseDelay=60000",
-    "Setup.SchemaProbeTimeout=1"
+    "Zone.MobileIdReleaseDelay=60000"
   ],
   "server_log_allowed": [
     "character_create_school holds no school, so no wizard can be created until it does",
-    "realmlist holds no realm, so no player can be sent to a gameserver until one is added",
-    "it ran longer than 1 seconds"
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
   ],
   "wizard": {
     "school": 2343174,
