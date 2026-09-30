@@ -144,6 +144,8 @@ Access says who may see and change a setting over the admin API and the panel. A
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
+| `Visibility.Distance` | float | 0 world units | from 0 to 100000 world units | live | gameserver | normal | How near an object must come to a wizard to be shown to it, read at each visibility update; 0 takes the zone's own far clip, and a zone with none shows everything. |
+| `Visibility.Hysteresis` | float | 20 world units | from 0 to 10000 world units | live | gameserver | normal | How far past the visibility distance an object already shown may go before it is taken away, read at each visibility update, so one standing at the edge is not shown and taken away over and over. |
 | `Zone.MobileIdReleaseDelay` | unsigned | 2000 ms | from 0 to 60000 ms | next connection or operation | gameserver | normal | How long a mobile id rests after its wizard leaves before another wizard may take it. |
 | `Zone.MoveFlushInterval` | unsigned | 250 ms | from 50 to 5000 ms | next connection or operation | gameserver | normal | How often the moves and movement states of the wizards in an instance are sent to the others in it, read at each flush. |
 | `Zone.MoveIdleIntervals` | unsigned | 2 | from 1 to 100 | next connection or operation | gameserver | normal | How many flushes a wizard said to be moving may pass without a new move before the others are told it is standing, read at each flush. |

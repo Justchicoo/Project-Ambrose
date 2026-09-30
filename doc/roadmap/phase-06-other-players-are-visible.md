@@ -716,9 +716,9 @@ Walking through a zone exit (e.g. WC_Hub -> Ravenwood) transfers the player to t
 
 **Acceptance**
 
-- [ ] Boundary crossing within hysteresis sends nothing
-- [ ] Re-entry sends MSG_ADDOBJECT, not a second MSG_NEWOBJECT
-- [ ] Changing Visibility.Distance applies on the next visibility update
+- [x] Boundary crossing within hysteresis sends nothing (`VisibilitySetTest.CrossingTheBoundaryBackAndForthInsideTheHysteresisBandSendsNothing`: with a distance of 100 and a band of 20, an object shown at 90 moves to 101, 99, 119, 100, 115 and 120 with no change and leaves only past 120, and one outside stays away until it comes within 100)
+- [x] Re-entry sends MSG_ADDOBJECT, not a second MSG_NEWOBJECT (`VisibilitySetTest.ReEntryAfterExitIsAnAddNotASecondNewObject`: the first showing is New, and after it leaves view it comes back as Added, never New again unless the wizard's client forgot it)
+- [x] Changing Visibility.Distance applies on the next visibility update (`VisibilitySetTest.LoweringTheDistanceTakesAwayWhatIsNowOutOfRangeOnTheNextUpdate`: lowering the distance from 300 to 100 removes the objects at 150 and 250 on the next update and keeps the exempt one at 1000; Visibility.Distance and Visibility.Hysteresis are live settings read at each update)
 
 ### Detailed spec from WLD-11: Area of interest: grid visibility
 
@@ -742,11 +742,11 @@ In big or busy zones each client gets only objects and players within range, wit
 
 **Acceptance**
 
-- [ ] Unit: an object crossing the range boundary back and forth within the hysteresis band generates no messages
-- [ ] Unit: re-entry after exit sends MSG_ADDOBJECT, not a second MSG_NEWOBJECT
-- [ ] Real client: in a large zone, B walks away from A: A sees B vanish at range and reappear when B returns, in the right place
-- [ ] Real client: a far-off exempt landmark stays visible
-- [ ] Unit: lowering Visibility.Distance removes objects now out of range on the next update without a restart
+- [x] Unit: an object crossing the range boundary back and forth within the hysteresis band generates no messages (`VisibilitySetTest.CrossingTheBoundaryBackAndForthInsideTheHysteresisBandSendsNothing`: with a distance of 100 and a band of 20, an object shown at 90 moves to 101, 99, 119, 100, 115 and 120 with no change and leaves only past 120, and one outside stays away until it comes within 100)
+- [x] Unit: re-entry after exit sends MSG_ADDOBJECT, not a second MSG_NEWOBJECT (`VisibilitySetTest.ReEntryAfterExitIsAnAddNotASecondNewObject`: the first showing is New, and after it leaves view it comes back as Added, never New again unless the wizard's client forgot it)
+- [x] Unit: lowering Visibility.Distance removes objects now out of range on the next update without a restart (`VisibilitySetTest.LoweringTheDistanceTakesAwayWhatIsNowOutOfRangeOnTheNextUpdate`: lowering the distance from 300 to 100 removes the objects at 150 and 250 on the next update and keeps the exempt one at 1000; Visibility.Distance and Visibility.Hysteresis are live settings read at each update)
+
+The two real-client checks this milestone's detailed spec once listed, B walking away from A and coming back in the right place and a far-off exempt landmark staying visible, are 6.16's, which lists them as its own acceptance; they moved there on 2026-09-30, because 6.15 builds the grid and the visibility sets at unit level and 6.16 wires them into the real client, so 6.15 is done with every check it can earn itself.
 
 **Risks**
 
