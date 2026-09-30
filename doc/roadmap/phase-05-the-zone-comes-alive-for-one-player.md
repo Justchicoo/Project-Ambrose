@@ -305,8 +305,8 @@ A player in game can quit to character select and land on the list without re-en
 
 **Acceptance**
 
-- [ ] Binary registry equals JSON registry
-- [ ] Load under 200 ms; edited hash rejected
+- [x] Binary registry equals JSON registry (`TypeRegistryClientTest.TheBinaryCacheBuildsTheSameRegistryAsTheJsonDumpClassByClass`, client-gated: on the pinned r806919 dump it compared 2596 classes and 16495 properties, each class's kind, hash, bases and default sizes and each property's hash, id, offset, flags, container, type, bit width, defaults, enum options and text options, and found no difference)
+- [x] Load under 200 ms; edited hash rejected (`TypeRegistryClientTest.TheBinaryCacheOfTheDumpLoadsInUnder200Milliseconds` in the windows-release build, client-gated: the pinned r806919 dump's binary cache loaded in a median of 102 ms over 7 loads, on a machine carrying two other builds)
 
 ### Detailed spec from OBJ-15: Binary type-registry cache
 
@@ -319,8 +319,8 @@ Server start does not re-parse the 13.8 MB JSON dump each time, and a revision m
 
 **Acceptance**
 
-- [ ] Client-gated test: the binary registry equals the JSON-loaded registry (every class, property and enum table compared)
-- [ ] Load time from binary is under 200 ms
+- [x] Client-gated test: the binary registry equals the JSON-loaded registry (every class, property and enum table compared) (`TypeRegistryClientTest.TheBinaryCacheBuildsTheSameRegistryAsTheJsonDumpClassByClass`, client-gated: on the pinned r806919 dump it compared 2596 classes and 16495 properties, each class's kind, hash, bases and default sizes and each property's hash, id, offset, flags, container, type, bit width, defaults, enum options and text options, and found no difference)
+- [x] Load time from binary is under 200 ms (`TypeRegistryClientTest.TheBinaryCacheOfTheDumpLoadsInUnder200Milliseconds` in the windows-release build, client-gated: the pinned r806919 dump's binary cache loaded in a median of 102 ms over 7 loads, on a machine carrying two other builds)
 - [x] A deliberately stale cache (edited hash) is rejected with a clear message (TypeRegistryBinaryTest.RoundTripsTheRegistryAndRejectsAnEditedPayload and .FallsBackToJsonForMissingOrStaleCaches; a truncated, a bit-flipped and a random cache built from the pinned install's dump are each refused by name and the JSON dump keeps serving)
 
 ## 5.08 Installer (FND-22)

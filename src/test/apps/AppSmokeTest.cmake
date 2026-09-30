@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs a built server executable to check --version, a missing config, and --check with a copy of its shipped .conf.dist in the work folder, so no saved choice in the build folder's conf.d applies, where neither that run nor a run in Setup.Mode ask with ClientDir and TypeDumpPath empty and unlocked, an empty input file and a machine holding a synthetic install may print any text of a setup question to either output, the game and login servers must log that install as found with the advice for a run without a terminal, and no choice is saved; with AMBROSE_TEST_DB the game server and the login server, with its login, characters and world databases, create, update, open and close uniquely named databases that are dropped afterwards, the login server saying it can create wizards from the world it opened, the login server runs account commands piped into its console input, a bad login database string exits 1, the game server beats for the realm it was named as and leaves it offline when it stops, and the supervisor's --check names every app it would run and starts none of them, with its admin API on a port of its own choosing and its token in the work folder.
+# Runs a built server executable to check --version, a missing config, and --check with a copy of its shipped .conf.dist in the work folder, so no saved choice in the build folder's conf.d applies, where neither that run nor a run in Setup.Mode ask with ClientDir and TypeDumpPath empty and unlocked, an empty input file and a machine holding a synthetic install may print any text of a setup question to either output, the game and login servers must log that install as found with the advice for a run without a terminal, and no choice is saved; with AMBROSE_TEST_DB the game server and the login server, with its login, characters and world databases, create, update, open and close uniquely named databases that are dropped afterwards, the login server saying it can create wizards from the world it opened, the login server runs account commands piped into its console input, a bad login database string exits 1, the game server beats for the realm it was named as and leaves it offline when it stops, and the supervisor's --check names every app it would run and starts none of them, with its admin API on a port of its own choosing and its token in the work folder, and with the unit test executable beside it the supervisor is started for real to print a sign-in link and a pairing line from its command line, which the disabled PanelLinkSmoke case checks with the data folder kept inside the work folder.
 if(NOT APP OR NOT NAME OR NOT WORKDIR)
     message(FATAL_ERROR "APP, NAME and WORKDIR must be set")
 endif()
@@ -171,6 +171,20 @@ if(NAME STREQUAL "gameserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AMB
     endforeach()
 endif()
 ambrose_drop_test_databases()
+
+if(NAME STREQUAL "supervisor" AND UNIT_TESTS AND EXISTS "${UNIT_TESTS}")
+    set(linkWork "${WORKDIR}/panel-link")
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env "AMBROSE_SMOKE_SUPERVISOR=${APP}" "AMBROSE_SMOKE_WORKDIR=${linkWork}" "LOCALAPPDATA=${linkWork}/data" "XDG_DATA_HOME=${linkWork}/data"
+            "${UNIT_TESTS}" --gtest_also_run_disabled_tests "--gtest_filter=PanelLinkSmoke.DISABLED_*"
+        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE linkResult OUTPUT_VARIABLE linkOutput ERROR_VARIABLE linkError TIMEOUT 600)
+    if(NOT linkResult EQUAL 0)
+        message(FATAL_ERROR "the supervisor's sign-in link check failed (${linkResult}): ${linkOutput}${linkError}")
+    endif()
+    if(NOT linkOutput MATCHES "PASSED[^
+]*1 test")
+        message(FATAL_ERROR "the supervisor's sign-in link check did not run: ${linkOutput}${linkError}")
+    endif()
+endif()
 
 if(NAME STREQUAL "loginserver")
     execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=not a connection string"

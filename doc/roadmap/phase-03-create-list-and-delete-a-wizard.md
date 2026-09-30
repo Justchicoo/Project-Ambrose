@@ -136,7 +136,7 @@ ObjectProperty blobs can be packed and unpacked in the 4-byte envelope that the 
 
 - [x] Unit test: a stored wrap of 10 bytes gives header 0x8000000A followed by the payload; Unwrap returns the same bytes
 - [x] Unit test: a compressed wrap round-trips; a header size that disagrees with the inflated length is rejected; a declared size above the limit is rejected without allocating
-- [ ] Real client, once NET/WIZ send MSG_BADGES (GameMessages.xml) with BadgeInfo wrapped: the badge window opens without a crash. Captures show an unwrapped blob in that field crashes the client
+- [ ] Real client, once NET/WIZ send MSG_BADGES (GameMessages.xml) with BadgeInfo wrapped: the badge window opens without a crash. Captures show an unwrapped blob in that field crashes the client Reopened on 2026-09-30 at the maintainer's direction that a page must display content, not only open: in the client driver's badges-and-long-frame run 20260930-114953 the Badges page opened on the enveloped MSG_BADGES without a crash, but the list the server sent was empty, so it showed one filter with 0 of 0 badges and no entries. It closes once the server sends the wizard real badges read from the install and the page shows them.
 
 **Risks**
 
@@ -363,7 +363,7 @@ Wizards can be stored, loaded per account, counted and soft-deleted, with appear
 **Acceptance**
 
 - [x] Blob starts with class hash 292458316 and decodes identically; empty equipment gives 157-221 bytes (LoginScreenInfoBuilderTest, LoginScreenInfoClientTest; corrected: an empty equipment list gives 96 bytes plus the location, and the captured 157-221 byte blobs carried equipped items)
-- [ ] Real client: 3 seeded characters show gender, hair, colors, name from name_indices, level and school
+- [x] Real client: 3 seeded characters show gender, hair, colors, name from name_indices, level and school (the client driver's charselect-three-wizards run 20260930-111102 on 2026-09-30)
 - [x] 0 characters shows an empty screen without errors (the server side passes in CharacterHandlerTest; the screen waits for the real client) (2026-09-17, retail r806919 client: the client logged 'CHARACTER LIST' and 'WizardCharacterSelect: The scene has been loaded successfully' for an account with no characters, with no error dialog)
 
 ### Detailed spec from LOG-6: Character list: REQUESTCHARACTERLIST -> STARTCHARACTERLIST / CHARACTERINFO* / CHARACTERLIST
@@ -393,7 +393,7 @@ The character select screen shows the account's wizards with correct appearance,
 
 - [x] Unit: the serialized blob starts with class hash 292458316 (WizardCharacterCreationInfo), and decoding it with our OBJ codec returns identical field values; with an empty equipment list the size falls in the observed 157-221 byte range (LoginScreenInfoBuilderTest; corrected in LoginScreenInfoClientTest against r806919: an empty equipment list gives 96 bytes plus the location's bytes, and the captured blobs were larger because the reference server filled the equipment list)
 - [x] Unit: the property flag mask excludes m_shouldRename, m_quarantined and m_lastLoginTime (flags 24), per the type dump (corrected: flags 0x18 are exactly Transmit|AuthorityTransmit, so under that mask those three properties are included; the one left out is m_behaviorTemplateNameID, flags 0x27. The reference server's blobs, which the client displayed, used the same mask; LoginScreenInfoBuilderTest checks both)
-- [ ] Real client: an account seeded with 3 characters via data/sql/custom shows 3 wizards; each shows its gender, hair and colors, and the name built from name_indices (first=(idx>>16)&0xFF, middle=(idx>>8)&0xFF, last=idx&0xFF), level and school, matching capture lines 4-9
+- [x] Real client: an account seeded with 3 characters via data/sql/custom shows 3 wizards; each shows its gender, hair and colors, and the name built from name_indices (first=(idx>>16)&0xFF, middle=(idx>>8)&0xFF, last=idx&0xFF), level and school, matching capture lines 4-9 The client driver's charselect-three-wizards run 20260930-111102 on 2026-09-30, seeding three wizards through the driver's new `more_wizards`: the login server listed 3 characters, and choosing each shows it under its own name, level and school, each with its own gender, hair and colors: Adam AngleBane, Level 1 Novice Pyromancer; Cameron LionRunner, Level 25 Adept Diviner; Alicia DaisyCatcher, Level 12 Initiate Thaumaturge.
 - [x] Real client: an account with 0 characters shows the empty select screen or the create prompt without errors (2026-09-17, retail r806919 client: the client logged 'CHARACTER LIST' and 'WizardCharacterSelect: The scene has been loaded successfully' for an account with no characters, with no error dialog)
 
 **Risks**
@@ -508,7 +508,7 @@ The handful of plain-XML ObjectProperty files (character creation config, action
 
 - [x] Unit test on synthetic XML covers nested lists and enums (XmlObjectReaderTest, with flag lists, colors, vectors, wide text, reported problems and refused documents)
 - [x] Client-gated test: CharacterCreation/CharacterCreationConfig.xml decodes to WizCharacterCreationConfig with non-empty m_creationOptions and m_schoolOptions; ActionList.xml, Chatter.xml, Colors.xml and InputBindings.xml parse with no unknown properties (XmlObjectReaderClientTest: ActionList.xml and InputBindings.xml read with no issue on the dump alone, and with the classes the install holds that the dump does not describe, from the class file the extractor or the game server builds, all five read with no issue: the creation config with its creation option and seven schools, Chatter.xml with its 24 chatter lists and Colors.xml with its 14 primary colours for boys, run on r806919 on 2026-09-29)
-- [ ] Real client, with LOG wiring: the character-creation screen offers exactly the schools and options the server validates against
+- [x] Real client, with LOG wiring: the character-creation screen offers exactly the schools and options the server validates against The client driver's create-at-slot-limit run 20260930-111225 on 2026-09-30 walks the client's creation screens: its school list offers Storm, Myth, Life, Fire, Ice, Balance and Death, exactly the 7 rows of character_create_school that `extractor names` writes and the login server validates against, and the look the client submitted read as one of its creation options.
 
 **Risks**
 
@@ -692,7 +692,7 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 - [x] Unit: a truncated or garbage blob returns ErrorCode!=0 without crashing or closing the session (2026-09-24: CreateCharacterDatabaseTest.ARequestThatIsRefusedWritesNothingAndLeavesTheSessionUsable)
 - [x] Unit: lowering Character.MaxPerAccount on a running server refuses the next create over the new limit without a restart (2026-09-24: CreateCharacterDatabaseTest.LoweringTheLimitTakesHoldOnTheNextRequestWithNothingRestarted, which creates one wizard, lowers the setting on the running server and has the next request refused)
 - [x] Real client: completing the creation flow returns to character select with the new wizard at level 1 with the chosen school, look and name; restarting the client and logging in again still shows it (the same check as 3.16's, earned by the same run on 2026-09-24: a Level 1 Novice Pyromancer created from the client's own flow and still listed after both servers were restarted)
-- [ ] Real client: on an account already at the slot limit, the create attempt shows the client's failure message and the list is unchanged
+- [x] Real client: on an account already at the slot limit, the create attempt shows the client's failure message and the list is unchanged The client driver's create-at-slot-limit run 20260930-111225 on 2026-09-30: with Character.MaxPerAccount at 1 and one wizard on the account, the login server refused the wizard the client's creation flow submitted, "the account already holds 1 wizards and is allowed 1", with MSG_CREATECHARACTERRESPONSE ErrorCode=1; the client showed "Character Creation Failed" and the account still held one wizard.
 
 **Risks**
 
@@ -713,7 +713,7 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 
 - [x] A valid blob creates exactly one character in one transaction (2026-09-24: CreateCharacterDatabaseTest.AValidRequestStoresExactlyOneWizardWhereTheWorldRowsSay, where one request leaves one row in characters and one in character_appearance, at level 1 in the world, zone and place playercreateinfo names, owned by the account that asked, and EachWizardIsGivenAnIdOfItsOwn shows three requests taking three ids with the high-water mark following them)
 - [x] Real client: the creation flow returns to select with the new level-1 wizard; it survives restart (2026-09-24: creation on the maintainer's own client left character 1 stored and the client returned to select showing Luke Wyvernfriend at level 1; both servers were then stopped and started again, the client logged in to a new login server process at 22:26:59 and the same wizard was there to pick at 22:27:12. What that proves is a fresh login against a restarted server rather than a restart of the client process, which was not separately recorded)
-- [ ] At the slot limit the client shows failure and the list is unchanged
+- [x] At the slot limit the client shows failure and the list is unchanged (the client driver's create-at-slot-limit run 20260930-111225 on 2026-09-30)
 
 ### Detailed spec from LOG-8: Character creation: MSG_CREATECHARACTER -> MSG_CREATECHARACTERRESPONSE
 
@@ -751,7 +751,7 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 - [x] Unit: a truncated or garbage blob returns ErrorCode!=0 without crashing or closing the session (2026-09-24: CreateCharacterDatabaseTest.ARequestThatIsRefusedWritesNothingAndLeavesTheSessionUsable)
 - [x] Unit: lowering Character.MaxPerAccount on a running server refuses the next create over the new limit without a restart (2026-09-24: CreateCharacterDatabaseTest.LoweringTheLimitTakesHoldOnTheNextRequestWithNothingRestarted)
 - [x] Real client: completing the creation flow returns to character select with the new wizard at level 1 with the chosen school, look and name; restarting the client and logging in again still shows it (2026-09-24: Luke Wyvernfriend, Level 1 Novice Pyromancer, created from the client's own flow and still there after both servers were restarted and the client logged in again; the first two attempts were refused because the server read the top byte of m_nameIndices as unused, which is recorded in the spec below)
-- [ ] Real client: on an account already at the slot limit, the create attempt shows the client's failure message and the list is unchanged
+- [x] Real client: on an account already at the slot limit, the create attempt shows the client's failure message and the list is unchanged The client driver's create-at-slot-limit run 20260930-111225 on 2026-09-30, as 3.15 records.
 
 **Risks**
 
@@ -770,8 +770,8 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 
 **Acceptance**
 
-- [ ] Another account's CharID, a missing id or an online character gives ErrorCode!=0
-- [ ] Real client: confirm word removes the wizard and it stays gone after relog; DB row has deleted_at
+- [x] Another account's CharID, a missing id or an online character gives ErrorCode!=0 (`CreateCharacterDatabaseTest.AnAccountDeletesItsOwnWizardAndOnlyThatOne`, against a database: the account's own wizard is deleted with ErrorCode 0, its row kept with deleted_at and deleted_account set and gone from the list, while another account's wizard, an id that does not exist, a wizard in the world and one already deleted each give ErrorCode 1 and change nothing; `HardDeletionAndKeptDaysApplyFromTheNextDeleteWithNothingRestarted` holds Character.DeleteMode hard, which removes the row and what it holds, and Character.KeepDeletedDays, which removes wizards deleted longer ago on the next delete)
+- [x] Real client: confirm word removes the wizard and it stays gone after relog; DB row has deleted_at (the client driver's delete-a-wizard run 20260930-135457 on 2026-09-30: character select listed Adam AngleBane and Alicia DaisyCatcher; Delete on Adam brought the client's own dialog, the word it asks for, ABRACADABRA as LocalError_ABRACADABRA holds it, was typed and the dialog's Delete pressed; the login server deleted character 1 of the account, the row kept with deleted_at set and deleted_account holding the account, and after the client quit, started again and logged in, the server listed one wizard and the client showed only Alicia DaisyCatcher, Level 12 Initiate Thaumaturge)
 
 ### Detailed spec from LOG-9: Character deletion: MSG_DELETECHARACTER -> MSG_DELETECHARACTERRESPONSE
 
@@ -781,7 +781,7 @@ A player can delete one of their own wizards from the select screen, and the dat
 
 - CharacterHandler::HandleDeleteCharacter: require that the character belongs to the session's account, is not online, and is not already deleted; set deleted_at and deleted_account, clear account; reply MSG_DELETECHARACTERRESPONSE{ErrorCode}
 - Live settings Character.DeleteMode (soft or hard) and Character.KeepDeletedDays, read on each delete and purge so a change applies without a restart (registered with 4.16 when it lands)
-- src/test/server/apps/loginserver/DeleteCharacterTest.cpp
+- src/test/server/apps/loginserver/Handlers/CreateCharacterTest.cpp, beside creation, whose fixture it shares
 
 **Client messages:** MSG_DELETECHARACTER, MSG_DELETECHARACTERRESPONSE
 
@@ -791,9 +791,9 @@ A player can delete one of their own wizards from the select screen, and the dat
 
 **Acceptance**
 
-- [ ] Unit: deleting your own character gives ErrorCode=0 and removes it from the list; a CharID belonging to another account, a nonexistent id or an online character each give ErrorCode!=0 and change nothing
-- [ ] Real client: the delete confirmation (the client asks the player to type a confirmation word, per LocalError.lang) removes the wizard from the select screen, and it stays gone after a relog
-- [ ] DB: the row still exists with deleted_at set
+- [x] Unit: deleting your own character gives ErrorCode=0 and removes it from the list; a CharID belonging to another account, a nonexistent id or an online character each give ErrorCode!=0 and change nothing (`CreateCharacterDatabaseTest.AnAccountDeletesItsOwnWizardAndOnlyThatOne`, against a database: the account's own wizard is deleted with ErrorCode 0, its row kept with deleted_at and deleted_account set and gone from the list, while another account's wizard, an id that does not exist, a wizard in the world and one already deleted each give ErrorCode 1 and change nothing; `HardDeletionAndKeptDaysApplyFromTheNextDeleteWithNothingRestarted` holds Character.DeleteMode hard, which removes the row and what it holds, and Character.KeepDeletedDays, which removes wizards deleted longer ago on the next delete)
+- [x] Real client: the delete confirmation (the client asks the player to type a confirmation word, per LocalError.lang) removes the wizard from the select screen, and it stays gone after a relog (the client driver's delete-a-wizard run 20260930-135457 on 2026-09-30: character select listed Adam AngleBane and Alicia DaisyCatcher; Delete on Adam brought the client's own dialog, the word it asks for, ABRACADABRA as LocalError_ABRACADABRA holds it, was typed and the dialog's Delete pressed; the login server deleted character 1 of the account, the row kept with deleted_at set and deleted_account holding the account, and after the client quit, started again and logged in, the server listed one wizard and the client showed only Alicia DaisyCatcher, Level 12 Initiate Thaumaturge)
+- [x] DB: the row still exists with deleted_at set (the same run: the wait_db step found the row with deleted_at and deleted_account set and account 0, and `CreateCharacterDatabaseTest.AnAccountDeletesItsOwnWizardAndOnlyThatOne` reads the row back the same way)
 
 **Risks**
 
@@ -847,9 +847,9 @@ The updater copes with renamed, edited, deleted and pending update files the way
 
 **Acceptance**
 
-- [ ] Editing an existing updates file fails ci-sql-check
-- [ ] Merged pending_db_world/rev_1767225600_npc.sql becomes <today>_00.sql
-- [ ] Pending SQL with a syntax error fails the DB job
+- [x] Editing an existing updates file fails ci-sql-check (`SqlTests.test_editing_an_applied_update_fails_unless_a_squash_says_why`: `ci_sql.py check` over a commit that edits `data/sql/updates/db_world/2026_01_01_00.sql` fails, and passes only with a squash label or a `Squashes SQL:` line; the checks job runs it as its SQL changes step)
+- [x] Merged pending_db_world/rev_1767225600_npc.sql becomes <today>_00.sql (`SqlTests.test_a_pending_update_takes_the_next_free_number_for_its_day_in_the_order_it_was_written`: rev_1767225600_npc.sql becomes 2026_09_30_01.sql beside an existing _00, as a git rename; on main, `ci_sql.py promote` moved the waiting rev_1790241513_zone-teleport.sql to 2026_09_30_02.sql, and the checks job's Pending SQL on main step fails while one is left)
+- [x] Pending SQL with a syntax error fails the DB job (`ci_sql.py apply` against a fresh MySQL 8.0, as the sql workflow runs it: every base, released and pending file applies, and with a pending rev_1790260000_broken.sql holding an unfinished CREATE TABLE it exits 1 naming that file with ERROR 1064)
 
 ### Detailed spec from FND-19: apps/ci: pending_ SQL promotion and SQL validation jobs
 
@@ -863,10 +863,12 @@ Pending SQL from merged PRs becomes correctly numbered dated files, and CI prove
 
 **Acceptance**
 
-- [ ] A PR editing data/sql/updates/db_world/2026_01_01_00.sql fails ci-sql-check
-- [ ] Merging a PR with pending_db_world/rev_1767225600_npc.sql produces updates/db_world/<today>_00.sql, or _01 if _00 exists
-- [ ] A PR whose pending SQL has a syntax error fails the DB job, naming the file
-- [ ] Real client: n/a
+- [x] A PR editing data/sql/updates/db_world/2026_01_01_00.sql fails ci-sql-check (`SqlTests.test_editing_an_applied_update_fails_unless_a_squash_says_why`: `ci_sql.py check` over a commit that edits `data/sql/updates/db_world/2026_01_01_00.sql` fails, and passes only with a squash label or a `Squashes SQL:` line; the checks job runs it as its SQL changes step)
+- [x] Merging a PR with pending_db_world/rev_1767225600_npc.sql produces updates/db_world/<today>_00.sql, or _01 if _00 exists (`SqlTests.test_a_pending_update_takes_the_next_free_number_for_its_day_in_the_order_it_was_written`: rev_1767225600_npc.sql becomes 2026_09_30_01.sql beside an existing _00, as a git rename; on main, `ci_sql.py promote` moved the waiting rev_1790241513_zone-teleport.sql to 2026_09_30_02.sql, and the checks job's Pending SQL on main step fails while one is left)
+- [x] A PR whose pending SQL has a syntax error fails the DB job, naming the file (`ci_sql.py apply` against a fresh MySQL 8.0, as the sql workflow runs it: every base, released and pending file applies, and with a pending rev_1790260000_broken.sql holding an unfinished CREATE TABLE it exits 1 naming that file with ERROR 1064)
+- [x] Real client: n/a
+
+Built as one tool, `apps/ci/ci_sql.py`, rather than the two scripts the deliverables name, with its three commands run by the checks job and `.github/workflows/sql.yml`. Promotion happens in the landing commit instead of a bot push, as recorded under Resolved in doc/ROADMAP.md, because main's ruleset refuses a push whose checks have not run.
 
 **Risks**
 
@@ -1082,12 +1084,12 @@ Added on 2026-09-17 at the maintainer's direction, who approved the look in doc/
 **Acceptance**
 
 - [ ] Dev-gated (the maintainer's own machine): the window opens, shows the install it found and the server it will join, and Play starts the client in the window size shown, with nothing written inside the install
-- [ ] The first run screen shows each step as it happens, ending with the server open, and a step that fails names the cause and what to do
-- [ ] Every screen can be used from the keyboard alone, every control has a label, and the window restores its size and position after a restart
-- [ ] The page and the console options build the same plan, proved by a test that compares them
-- [ ] The window makes no network request: a capture of the run shows traffic only to the login server
-- [ ] On a machine with no web view, the launcher says so once and runs as the console program
-- [ ] Unit tests cover the page's states and its refusals, and they run in CI with the dashboard's job
+- [x] The first run screen shows each step as it happens, ending with the server open, and a step that fails names the cause and what to do (LauncherStepsTest's four cases: one step moves on per ask, the install and run folder carry their own numbers, the login server is asked once a second and the steps end with it open, a failing step names its cause and the setting or option to change, and the server is given up on after thirty tries; the launcher project's page tests follow the steps until the server is open or a step goes wrong; and App.browser.test.ts shows the first run screen with each step labelled)
+- [x] Every screen can be used from the keyboard alone, every control has a label, and the window restores its size and position after a restart (App.browser.test.ts in Chromium and WebKit reaches Play, settings and back, a changed setting and Look again with Tab and Enter alone, and every screen passes the axe gate with every control labelled; LauncherPlaceTest for the place the shell's window writes as it closes and reads back as it opens)
+- [x] The page and the console options build the same plan, proved by a test that compares them (LauncherChannelTest.AMessageAndTheConsoleOptionsBuildTheSamePlan)
+- [x] The window makes no network request: a capture of the run shows traffic only to the login server (ShellSmoke on Windows and Linux: the launcher page's resource timing lists nothing from any origin but its own, and a request the page makes to a loopback listener is refused by its content policy and the shell and never arrives)
+- [x] On a machine with no web view, the launcher says so once and runs as the console program (the Launcher CTest runs --window-ui --dry-run with WebView2 pointed at an empty folder on Windows, and with no display elsewhere, and finds the notice once and the console run)
+- [x] Unit tests cover the page's states and its refusals, and they run in CI with the dashboard's job (apps/launcherui's launcher project, 21 cases, runs in `npm run test:logic` and its launcher-browser project in `npm run test:browser`, both of which the front-end job runs)
 
 ### Detailed spec
 

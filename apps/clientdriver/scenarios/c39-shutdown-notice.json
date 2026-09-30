@@ -5,6 +5,10 @@
     "The shutdown is requested through the documented console command after the client is admitted.",
     "The server log and the client log are both required so a silent socket close cannot pass this scenario."
   ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
   "steps": [
     {"action": "wait_client_log", "name": "the client brings its renderer up",
      "pattern": "About to initialize graphical client\\.", "timeout": 180},
@@ -12,12 +16,12 @@
     {"action": "submit_login", "name": "submit the test account", "password": "{password}"},
     {"action": "wait_client_log", "name": "the client is admitted",
      "pattern": "The LoginServer has admitted the user", "timeout": 30},
-    {"action": "server_command", "name": "request a graceful shutdown", "command": "server shutdown",
+    {"action": "server_command", "name": "request a graceful shutdown", "command": "shutdown",
      "pattern": "loginserver shutting down", "timeout": 30},
     {"action": "wait_server_log", "name": "the notice is sent to the session",
      "pattern": "Sent MSG_LOGINSERVERSHUTDOWN to \\d+ session\\(s\\)", "timeout": 30, "record": true},
     {"action": "wait_client_log", "name": "the client shows the maintenance notice",
-     "pattern": "Server has been brought down for maintenance\\. Please try again later!",
+     "pattern": "Server has been brought down for maintenance\\.\\s+Please try again later!",
      "timeout": 60, "record": true}
   ]
 }

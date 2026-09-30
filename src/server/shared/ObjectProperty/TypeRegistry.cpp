@@ -153,7 +153,7 @@ bool TypeRegistry::SetSupplement(TypeDumpLoader::RawDump supplement, std::string
                 errors.push_back(fmt::format("{}: property {} of {} has no type", sourceName, property.Name, *type.Name));
                 continue;
             }
-            uint32 const hashedProperty = StringHash::PropertyHash(*property.Type, property.Name);
+            uint32 const hashedProperty = TypeDumpLoader::ExpectedPropertyHash(*property.Type, property.Name);
             if (property.Hash && *property.Hash != hashedProperty)
                 errors.push_back(fmt::format("{}: property {} {} of {} declares hash {}, but its type and name hash to {}", sourceName, *property.Type, property.Name, *type.Name,
                     *property.Hash, hashedProperty));

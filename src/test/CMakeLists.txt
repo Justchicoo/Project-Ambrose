@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, with the launcher's and the client-image library's own tests joining it when those libraries are built so one executable holds them, and outside the login server's and the supervisor's folders unless their libraries are built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, hands the tests the path of the generated design token stylesheet so the terminal header can be checked against it and the path of doc/config/settings.md so the settings page can be checked against its declarations, the path of the dashboard's generated protocol module and of doc/PANEL.md so the event socket's catalog can be checked against both, links the Windows security API the admin token permission checks read and Winsock, which makes the unix socket file the file jail tests refuse, registers each test with CTest, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable, the supervisor and the bindecode, client, dbimport, extractor, launcher, localetool, schemaprobe and typeextract tools, labelling `client` every tool test that reads the install when AMBROSE_CLIENT_DIR names one, as the client tests are, so one label selects or skips everything that does.
+# Builds unit_tests from every test source outside the compile, client, fuzz, helpers and tools folders, with the launcher's, the desktop shell's and the client-image library's own tests joining it, the shell's smoke program built beside it, and two pages embedded by ambrose_embed_page, a fixture written at configure time and a missing folder's placeholder, for the manifest tests when those libraries are built so one executable holds them, and outside the login server's and the supervisor's folders unless their libraries are built, together with the child_process_helper program its ChildProcess tests run, which links the common library and whose DLL list the tests get to copy it elsewhere, hands the tests the path of the generated design token stylesheet so the terminal header can be checked against it and the path of doc/config/settings.md so the settings page can be checked against its declarations, the path of the dashboard's generated protocol module and of doc/PANEL.md so the event socket's catalog can be checked against both, links the Windows security API the admin token permission checks read and Winsock, which makes the unix socket file the file jail tests refuse, registers each test with CTest, adds the compile and client folders, the typeextract tests when that tool is built and the fuzz folder when fuzzers are built, and smoke-tests each server executable, the supervisor and the bindecode, client, dbimport, extractor, launcher, localetool, schemaprobe and typeextract tools, labelling `client` every tool test that reads the install when AMBROSE_CLIENT_DIR names one, as the client tests are, so one label selects or skips everything that does.
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
@@ -66,6 +66,25 @@ if(TARGET launcher-core)
     target_include_directories(unit_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tools/launcher")
     target_link_libraries(unit_tests PRIVATE launcher-core)
 endif()
+
+if(TARGET desktop-shell)
+    file(GLOB shell_test_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tools/shell/*.cpp")
+    target_sources(unit_tests PRIVATE ${shell_test_sources})
+    target_link_libraries(unit_tests PRIVATE desktop-shell)
+    add_subdirectory(tools/shell)
+endif()
+
+set(embed_fixture "${CMAKE_CURRENT_BINARY_DIR}/embed-fixture")
+file(WRITE "${embed_fixture}/index.html" "<!doctype html><html><head><title>Embedded fixture</title><script type=\"module\" src=\"./assets/app-Bx3kQ9aZ.js\"></script></head><body></body></html>")
+file(WRITE "${embed_fixture}/assets/app-Bx3kQ9aZ.js" "document.title = 'Embedded fixture';")
+file(WRITE "${embed_fixture}/assets/app-Bx3kQ9aZ.css" "body { margin: 0; }")
+file(WRITE "${embed_fixture}/assets/empty-Q1w2e3r4.txt" "")
+file(WRITE "${embed_fixture}/favicon.ico" "icon")
+file(WRITE "${embed_fixture}/robots.txt" "User-agent: *")
+file(WRITE "${embed_fixture}/data.bin" "raw")
+ambrose_embed_page(unit_tests NAME TestEmbeddedPage FOLDER "${embed_fixture}" PLACEHOLDER "unused")
+ambrose_embed_page(unit_tests NAME TestPlaceholderPage FOLDER "${CMAKE_CURRENT_BINARY_DIR}/embed-fixture-missing" PLACEHOLDER "This build has no page.")
+target_compile_definitions(unit_tests PRIVATE "AMBROSE_EMBED_FIXTURE=\"${embed_fixture}\"")
 
 if(TARGET client-image)
     file(GLOB client_image_test_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tools/clientimage/*.cpp")

@@ -1,11 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the KI session handshake and keepalives on the socket's network thread, queues DML frames that arrive before SessionAccept, closes on mismatched ids, silence or too many strikes, holds inbound work for the app to drain, answers pings within the ping budget, and sends server messages and forced disconnects.
+ * Runs the KI session handshake and keepalives on the socket's network thread, queues DML frames that arrive before SessionAccept, closes on mismatched ids, silence or too many strikes, holds inbound work for the app to drain, answers pings within the ping budget, and sends server messages and forced disconnects. Each DML message received is written to the packet log and offered to the network hooks before the app sees it, each one sent is offered to them before it is encoded and written to the log when it is on, and a session that was offered tells the hooks once that its socket opened and once that it closed.
  */
 
 #include "SessionBase.h"
 #include "FrameWriter.h"
 #include "Log.h"
+#include "NetworkHooks.h"
+#include "PacketLog.h"
+#include "Settings.h"
 #include "StringUtil.h"
 
 #include <fmt/format.h>
@@ -197,6 +200,10 @@ void SessionBase::ReportSendFailure(std::string_view tag, std::string_view reaso
 
 void SessionBase::SendDml(uint8 serviceId, uint8 order, std::span<uint8 const> body)
 {
+    if (!AllowSend(serviceId, order))
+        return;
+    if (PacketLogging())
+        LogSent(serviceId, order, body);
     ByteBuffer frame;
     FrameWriter::WriteDml(frame, serviceId, order, body, GetLongFrameLength());
     QueueFrame(std::move(frame));
@@ -222,7 +229,27 @@ void SessionBase::OnStart()
     _offerSentAt = std::chrono::steady_clock::now();
     _lastInbound = _offerSentAt;
     LOG_INFO(SessionLog, "Session {} offered to {}:{}", _sessionId, GetRemoteAddress().to_string(), GetRemotePort());
+    _announced = true;
+    NetworkHooks::SocketOpened(_sessionId, GetRemoteAddress().to_string());
     StartAcceptTimer();
+}
+
+bool SessionBase::AllowSend(uint8 serviceId, uint8 order) const
+{
+    if (NetworkHooks::CanSend(_sessionId, serviceId, order))
+        return true;
+    LOG_DEBUG(SessionLog, "Session {}'s outgoing message {}:{} was held back by a network hook", _sessionId, serviceId, order);
+    return false;
+}
+
+bool SessionBase::PacketLogging()
+{
+    return sSettings.Get<bool>("Network.PacketLog.Enable");
+}
+
+void SessionBase::LogSent(uint8 serviceId, uint8 order, std::span<uint8 const> body) const
+{
+    PacketLog::Record(PacketLog::Direction::ServerToClient, _sessionId, serviceId, order, body);
 }
 
 void SessionBase::OnFrame(Frame& frame)
@@ -280,6 +307,8 @@ void SessionBase::OnClose()
         _context->ReleaseId(_sessionId);
     }
     LOG_DEBUG(SessionLog, "Session {} closed", _sessionId);
+    if (std::exchange(_announced, false))
+        NetworkHooks::SocketClosed(_sessionId);
     OnSessionClosed();
 }
 
@@ -333,6 +362,8 @@ void SessionBase::HandleAccept(Frame const& frame)
     _acceptRoundTripMs.store(roundTrip, std::memory_order_relaxed);
     _state.store(SessionState::Accepted, std::memory_order_relaxed);
     LOG_INFO(SessionLog, "Session {} accepted by {}:{} after {} ms", _sessionId, GetRemoteAddress().to_string(), GetRemotePort(), roundTrip);
+    LOG_DEBUG(SessionLog, "Session {} accept echoes time high {} low {} and {} ms, with {} trailing byte(s)", _sessionId, accept->Time.TimeHigh, accept->Time.TimeLow, accept->Time.Milliseconds,
+        accept->Trailing.size());
 
     OnAccepted();
     while (IsOpen() && !IsKicked() && !_pendingFrames.empty())
@@ -395,8 +426,16 @@ void SessionBase::DispatchDml(Frame& frame)
         CloseNow();
         return;
     }
+    if (messages.size() > 1)
+        LOG_DEBUG(SessionLog, "Session {} got one frame holding {} DML messages", _sessionId, messages.size());
     for (DmlMessageData& message : messages)
     {
+        PacketLog::Record(PacketLog::Direction::ClientToServer, _sessionId, message.ServiceId, message.Order, message.Body);
+        if (!NetworkHooks::CanReceive(_sessionId, message.ServiceId, message.Order))
+        {
+            LOG_DEBUG(SessionLog, "Session {}'s message {}:{} was held back by a network hook", _sessionId, message.ServiceId, message.Order);
+            continue;
+        }
         OnMessage(message);
         if (!IsOpen() || IsKicked())
             return;

@@ -196,6 +196,27 @@ CharacterOpResult CharacterRepository::SoftDelete(uint64 guid, uint64 account, u
     return CharacterOpResult::Ok;
 }
 
+CharacterRepository::Statement CharacterRepository::PrepareDelete(uint64 guid, uint64 account, std::optional<uint64> deletedAt)
+{
+    Statement statement = Prepare(deletedAt ? CHAR_UPD_SOFT_DELETE : CHAR_DEL_CHARACTER);
+    if (!statement)
+        return statement;
+    uint8 index = 0;
+    if (deletedAt)
+        statement->SetData(index++, *deletedAt);
+    statement->SetData(index++, guid);
+    statement->SetData(index, account);
+    return statement;
+}
+
+CharacterRepository::Statement CharacterRepository::PreparePurgeDeleted(uint64 deletedBefore)
+{
+    Statement statement = Prepare(CHAR_DEL_DELETED_BEFORE);
+    if (statement)
+        statement->SetData(0, deletedBefore);
+    return statement;
+}
+
 CharacterOpResult CharacterRepository::Restore(uint64 guid)
 {
     Statement const statement = Prepare(CHAR_UPD_RESTORE);

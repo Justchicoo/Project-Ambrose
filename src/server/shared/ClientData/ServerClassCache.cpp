@@ -1,11 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Names a class file the way the type dump beside it is named, so a revision that cannot name one cannot name the other; a file is current once it is at least as new as the type dump it was probed with and says it was found the way this build finds classes, a file written before the XML object files were read carrying no such number, and building one takes the build lock beside the file, or waits while another process holds it until the file is current or the lock is free, as the type dump cache does, then runs schemaprobe with the install, the type dump and every archive unless the file became current meanwhile, passes each line it writes on to the caller, and moves the finished file into place; reading one takes its classes through the type dump's own parser, which keeps each class's evidence.
+ * Names a class file the way the type dump beside it is named, so a revision that cannot name one cannot name the other; a file is current once it is at least as new as the type dump it was probed with, says it was found the way this build finds classes, a file written before the XML object files were read carrying no such number, and was built on the authored classes given, by the SHA-256 of their JSON, none standing for a file that records none; the authored classes go to schemaprobe as a file beside the class file, removed once it has run; and building one takes the build lock beside the file, or waits while another process holds it until the file is current or the lock is free, as the type dump cache does, then runs schemaprobe with the install, the type dump and every archive unless the file became current meanwhile, passes each line it writes on to the caller, and moves the finished file into place; reading one takes its classes through the type dump's own parser, which keeps each class's evidence.
  */
 
 #include "ServerClassCache.h"
 #include "BuildLock.h"
 #include "ConfigMgr.h"
+#include "Hex.h"
+#include "SHA256.h"
 #include "TypeDumpCache.h"
 
 #include <fmt/format.h>
@@ -27,7 +29,8 @@ namespace
     std::optional<std::filesystem::path> Build(ClientInstall const& install, std::filesystem::path const& typeDump, std::filesystem::path const& classes, ServerClassCacheOptions const& options,
         std::string& error)
     {
-        if (ServerClassCache::IsCurrent(classes, typeDump))
+        std::string const builtOn = ServerClassCache::Digest(options.Authored);
+        if (ServerClassCache::IsCurrent(classes, typeDump, builtOn))
             return classes;
         std::error_code status;
         std::filesystem::path partial = classes;
@@ -37,6 +40,23 @@ namespace
         ChildProcessOptions child;
         child.Program = options.Program;
         child.Arguments = { "--client", ConfigMgr::PathToUtf8(install.Root), "--type-dump", ConfigMgr::PathToUtf8(typeDump), "--all-wads", "--server-classes", ConfigMgr::PathToUtf8(partial) };
+        std::filesystem::path authored = classes;
+        authored += ".authored";
+        if (!options.Authored.Classes.empty())
+        {
+            if (!ServerClassCache::WriteClasses(authored, options.Authored, error))
+                return std::nullopt;
+            child.Arguments.insert(child.Arguments.end(), { "--supplement", ConfigMgr::PathToUtf8(authored) });
+        }
+        struct RemoveAuthored
+        {
+            std::filesystem::path const& Path;
+            ~RemoveAuthored()
+            {
+                std::error_code ignored;
+                std::filesystem::remove(Path, ignored);
+            }
+        } const removeAuthored{ authored };
         child.Timeout = std::chrono::duration_cast<std::chrono::milliseconds>(options.Timeout);
         child.InputEndsWithParent = true;
         child.OnLine = [&options](std::string_view line, bool)
@@ -77,7 +97,7 @@ std::optional<std::filesystem::path> ServerClassCache::PathFor(std::filesystem::
     return dataFolder / std::filesystem::path(FolderName) / dump->filename();
 }
 
-bool ServerClassCache::IsCurrent(std::filesystem::path const& classes, std::filesystem::path const& typeDump)
+bool ServerClassCache::IsCurrent(std::filesystem::path const& classes, std::filesystem::path const& typeDump, std::string_view builtOn)
 {
     std::error_code error;
     if (!std::filesystem::is_regular_file(classes, error))
@@ -86,7 +106,70 @@ bool ServerClassCache::IsCurrent(std::filesystem::path const& classes, std::file
     if (error)
         return false;
     std::filesystem::file_time_type const probed = std::filesystem::last_write_time(typeDump, error);
-    return !error && built >= probed && ReadExtractionVersion(classes) == ExtractionVersion;
+    return !error && built >= probed && ReadExtractionVersion(classes) == ExtractionVersion && ReadBuiltOn(classes).value_or("") == builtOn;
+}
+
+std::optional<std::string> ServerClassCache::ReadBuiltOn(std::filesystem::path const& classes)
+{
+    std::ifstream stream(classes, std::ios::binary);
+    if (!stream)
+        return std::nullopt;
+    nlohmann::json const file = nlohmann::json::parse(stream, nullptr, false);
+    if (!file.is_object())
+        return std::nullopt;
+    auto const found = file.find(std::string(BuiltOnKey));
+    if (found == file.end() || !found->is_string())
+        return std::nullopt;
+    return found->get<std::string>();
+}
+
+nlohmann::json ServerClassCache::ClassesJson(std::vector<TypeDumpLoader::RawClass> const& classes)
+{
+    nlohmann::json list = nlohmann::json::object();
+    for (TypeDumpLoader::RawClass const& type : classes)
+    {
+        nlohmann::json properties = nlohmann::json::object();
+        for (TypeDumpLoader::RawProperty const& property : type.Properties)
+        {
+            nlohmann::json entry{ { "type", property.Type.value_or("") }, { "id", property.Id.value_or(0) }, { "offset", property.Offset.value_or(0) }, { "flags", property.Flags.value_or(0) },
+                { "container", property.Container.value_or("Static") }, { "dynamic", property.Dynamic.value_or(false) }, { "singleton", property.Singleton.value_or(false) },
+                { "pointer", property.Pointer.value_or(false) }, { "hash", property.Hash.value_or(0) } };
+            if (!property.Options.empty())
+            {
+                nlohmann::json options = nlohmann::json::object();
+                for (auto const& [name, value] : property.Options)
+                    options[name] = std::holds_alternative<int64>(value) ? nlohmann::json(std::get<int64>(value)) : nlohmann::json(std::get<std::string>(value));
+                entry["enum_options"] = std::move(options);
+            }
+            properties[property.Name] = std::move(entry);
+        }
+        nlohmann::json entry{ { "name", type.Name.value_or("") }, { "hash", type.Hash.value_or(0) }, { "bases", type.Bases }, { "evidence", type.Evidence.value_or("") },
+            { "properties", std::move(properties) } };
+        if (type.Source)
+            entry["source"] = *type.Source;
+        list[type.Key.empty() ? fmt::format("{}", type.Hash.value_or(0)) : type.Key] = std::move(entry);
+    }
+    return list;
+}
+
+std::string ServerClassCache::Digest(TypeDumpLoader::RawDump const& classes)
+{
+    if (classes.Classes.empty())
+        return {};
+    SHA256::Digest const digest = SHA256::GetDigestOf(ClassesJson(classes.Classes).dump());
+    return Hex::Encode(digest);
+}
+
+bool ServerClassCache::WriteClasses(std::filesystem::path const& path, TypeDumpLoader::RawDump const& classes, std::string& error)
+{
+    nlohmann::json const file{ { "version", TypeDumpLoader::SupportedVersion }, { "classes", ClassesJson(classes.Classes) } };
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    if (!output || !(output << file.dump(2) << '\n') || !output.flush())
+    {
+        error = fmt::format("the classes cannot be written to {}", ClientLocator::PathText(path));
+        return false;
+    }
+    return true;
 }
 
 std::optional<uint32> ServerClassCache::ReadExtractionVersion(std::filesystem::path const& classes)
@@ -113,7 +196,8 @@ std::optional<std::filesystem::path> ServerClassCache::Ensure(ClientInstall cons
             ClientLocator::PathText(options.DataFolder), install.Revision);
         return std::nullopt;
     }
-    if (IsCurrent(*classes, typeDump))
+    std::string const builtOn = Digest(options.Authored);
+    if (IsCurrent(*classes, typeDump, builtOn))
         return classes;
 
     std::error_code status;
@@ -151,7 +235,7 @@ std::optional<std::filesystem::path> ServerClassCache::Ensure(ClientInstall cons
                     ClientLocator::PathText(lockPath), lockError, install.Revision));
             return Build(install, typeDump, *classes, options, error);
         }
-        if (IsCurrent(*classes, typeDump))
+        if (IsCurrent(*classes, typeDump, builtOn))
             return classes;
         if (outcome == BuildLockOutcome::Failed)
         {

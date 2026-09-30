@@ -24,7 +24,7 @@
 The experiment is simple: see how far AI-driven development can take a complete game server. Humans set direction and review; AI agents write the code. Nothing here is copied from another emulator, and nothing extracted from the game client is ever committed.
 
 > [!NOTE]
-> **Pre-alpha.** A real Wizard101 client, started by Ambrose's own launcher, talks to the servers as far as character select, and each server shows itself live in its own web panel. It stops there.
+> **Pre-alpha.** A real Wizard101 client, started by Ambrose's own launcher, signs in, picks a wizard and enters the world: it stands in the Commons with the zone's objects and NPCs around it, walks, sees other players and chats with them, and logs out where it stood. Quests, combat and changing zones come next, and each server shows itself live in its own web panel.
 
 ## Where the project is
 
@@ -40,12 +40,18 @@ The card is generated from the roadmap itself by `apps/progress/progress.py`, so
 
 | Working | Not yet |
 |---|---|
-| Session handshake against a retail client, signing in, a wrong password and a retry | A wizard standing in a zone, and moving |
-| The character list, picking one, and the handoff to the game server with the key it was issued | Quests, combat, pets, housing |
-| Ambrose's own launcher starting your own client | Character creation end to end |
-| The game layer's core: a world tick, scripts and modules that join the build by existing, command handling with security levels | Serving patches to a client |
-| Reading your own installation: type extraction, archives, the object format byte for byte, every zone's templates, locations and object placements | The panel's pages beyond the overview, and roles |
-| The admin API and a live log stream with secrets hidden, a supervisor that runs the servers and takes back the ones still running, and the panel's overview with its own accounts | |
+| Session handshake against a retail client, signing in, a wrong password and a retry | Going back to character select from the world |
+| The character list, picking one, and the handoff to the game server with the key it was issued | Teleports, doors and moving between zones |
+| Entering the world: a wizard stands in its zone with every object and NPC the zone's data places there | Quests and NPC dialog |
+| Walking, with where the wizard stands kept and restored at the next login | Combat, spells in play, the backpack and gear |
+| The wizard's level, experience, health, mana and gold from the database, shown on the client's HUD and character page | Character creation end to end |
+| Other players in the same zone, say chat, quick chat and emotes | Pets, housing, crafting and minigames |
+| GM commands typed in chat, checked against the account's security level | Serving patches to a client |
+| Logging out, link-dead and AFK handling, and a server shutdown that warns players and brings each wizard back where it stood | The panel's pages beyond those listed here, and roles |
+| Ambrose's own launcher starting your own client | |
+| The game layer's core: a world tick, scripts and modules that join the build by existing, command handling with security levels, and settings and data that reload live | |
+| Reading your own installation: type extraction, archives, the object format byte for byte, every zone's templates, locations and object placements, and the level and school tables | |
+| The admin API and a live log stream with secrets hidden, a supervisor that runs the servers and takes back the ones still running, and the panel's overview, realms, activity and accounts | |
 | Errors an app raises, grouped by where they came from, downloadable as a report | |
 
 [doc/ROADMAP.md](doc/ROADMAP.md)'s **Where we are** says exactly which milestones are done, and the [work board](https://justchicoo.github.io/Project-Ambrose/) says what is being built right now and by whom. The plan runs in **17 phases**, each milestone ending in something visible in the real client or the panel.

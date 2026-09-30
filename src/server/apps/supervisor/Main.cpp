@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel, the supervisor routes and the file roots on its admin API and the panel's listener alike, keeps its own live settings in the panel store when that is open and in config alone when it is not, hands a change of the minimum free space to the space guard, rebuilds the file roots on a configuration change, a reload of file_roots or a change of an owner's protected patterns, records relayed settings and reload answers, refused file paths and its own secret reveals in the panel's audit log, runs every relayed change inside a panel audit record while the panel store is open, as it runs them unrecorded by a panel that is off, and caps a relayed command at the level the caller's grants allow, the admin token keeping the top level, publishes every state an app passes through on the panel's status stream at that app's scope and gives the panel's event socket its list of apps, reloads the panel's own listener and its two-factor rules when a Panel option changes, offers apps, start, stop, restart and kill on its console with the panel's operators beside them, including the way back in for an operator who lost their authenticator and their recovery codes, and leaves the apps running when it stops so the next start takes them back.
+ * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; with --panel-link or --panel-pair it only asks the supervisor already running for a sign-in link through its admin API and prints it; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel, the supervisor routes and the file roots on its admin API and the panel's listener alike, keeps its own live settings in the panel store when that is open and in config alone when it is not, hands a change of the minimum free space to the space guard, rebuilds the file roots on a configuration change, a reload of file_roots or a change of an owner's protected patterns, records relayed settings and reload answers, refused file paths and its own secret reveals in the panel's audit log, runs every relayed change inside a panel audit record while the panel store is open, as it runs them unrecorded by a panel that is off, and caps a relayed command at the level the caller's grants allow, the admin token keeping the top level, publishes every state an app passes through on the panel's status stream at that app's scope and gives the panel's event socket its list of apps, reloads the panel's own listener and its two-factor rules when a Panel option changes, offers apps, start, stop, restart and kill on its console with the panel's operators beside them, including the way back in for an operator who lost their authenticator and their recovery codes and the local and pairing links a desktop program signs in with, serves those links on its admin API behind its token, and leaves the apps running when it stops so the next start takes them back.
  */
 
 #include "AdminCapabilities.h"
@@ -11,6 +11,7 @@
 #include "ClientLocator.h"
 #include "ClientSystem.h"
 #include "ConfigMgr.h"
+#include "DashboardPage.h"
 #include "Duration.h"
 #include "Environment.h"
 #include "FileRoots.h"
@@ -18,7 +19,8 @@
 #include "Log.h"
 #include "AppOptions.h"
 #include "Panel.h"
-#include "PanelUsers.h"
+#include "PanelCommands.h"
+#include "PanelLinkClient.h"
 #include "PublishedSampler.h"
 #include "ReloadMgr.h"
 #include "ResourceSampler.h"
@@ -35,7 +37,6 @@
 #include <fmt/format.h>
 
 #include <algorithm>
-#include <ctime>
 #include <filesystem>
 #include <chrono>
 #include <memory>
@@ -53,6 +54,7 @@ namespace
     constexpr std::string_view SelfSignedOption = "--panel-self-signed";
     constexpr std::string_view InstallServiceOption = "--install-service";
     constexpr std::string_view UninstallServiceOption = "--uninstall-service";
+    constexpr uint16 DefaultAdminPort = 12020;
 
     int SendConsoleBreak(std::vector<std::string> const& arguments)
     {
@@ -134,18 +136,6 @@ namespace
         return 0;
     }
 
-    std::string WhenText(int64 epochMs)
-    {
-        std::time_t const value = static_cast<std::time_t>(epochMs / 1000);
-        std::tm parts = {};
-#ifdef _WIN32
-        localtime_s(&parts, &value);
-#else
-        localtime_r(&value, &parts);
-#endif
-        return fmt::format("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", parts.tm_year + 1900, parts.tm_mon + 1, parts.tm_mday, parts.tm_hour, parts.tm_min, parts.tm_sec);
-    }
-
     std::optional<uint32> ParseCountdown(std::string_view text)
     {
         if (text == "0")
@@ -159,8 +149,6 @@ namespace
     class SupervisorApp : public ServerApp
     {
     public:
-        static constexpr uint16 DefaultAdminPort = 12020;
-
         SupervisorApp() : ServerApp({ "supervisor", "supervisor.conf", DefaultAdminPort }, sConfigMgr, sLog, std::cout, std::cerr), _supervisor(sLog, BreakThroughThisProgram()), _panel(sLog, ClientLocator::GetDataFolder(LocalClientSystem()), sConfigMgr.GetFilename().parent_path()), _files(_roots, _space, FileHooks())
         {
             RegisterCommands();
@@ -189,11 +177,13 @@ namespace
 
         void OnAdminApiReady(AdminServer& admin) override
         {
+            admin.SetEmbeddedDashboard(&DashboardPage());
             _supervisor.SetRelayHooks({ [this](AdminRequest const& request) { return _panel.NameOf(request); },
                 [this](AdminRequest const& request, RelayedAnswer const& answer) { _panel.RecordRelayed(request, answer.App, answer.Method, answer.Path, answer.Status, answer.Body); } });
             _supervisor.Register(admin.Routes(), [this] { return BuildStatus(); });
             AdminGraphsView::Register(admin.Routes(), [this]() -> Ambrose::SeriesStore const& { return _history; });
             _files.Register(admin.Routes());
+            _panel.RegisterAdminRoutes(admin.Routes());
         }
 
         bool OnStart() override
@@ -262,6 +252,7 @@ namespace
                 reports.emplace_back(GetInfo().Name, AdminStatus::ErrorsJson(GetInfo().Name));
                 return reports;
             });
+            _panel.SetDashboard(&DashboardPage());
             if (!_panel.Start(Config(), error))
             {
                 LOG_ERROR("server.panel", "{}", error);
@@ -411,125 +402,7 @@ namespace
 
         void RegisterCommands()
         {
-            Commands().Register({ "panel user list", "", "list the panel's operators", false,
-                [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
-                {
-                    if (!arguments.empty())
-                        return false;
-                    std::string error;
-                    std::vector<PanelUser> const users = _panel.Users().List(error);
-                    if (!error.empty())
-                    {
-                        reply(error);
-                        return true;
-                    }
-                    if (users.empty())
-                        reply("The panel has no operator yet; its console printed a one-time link when it started");
-                    for (PanelUser const& user : users)
-                        reply(fmt::format("{}{}{}{} last signed in {}", user.Username, user.IsOwner ? " (owner)" : "", user.Disabled ? " (disabled)" : "",
-                            user.TwoFactor ? " (two-factor)" : "", user.SignedInEpochMs ? WhenText(*user.SignedInEpochMs) : std::string("never")));
-                    return true;
-                } });
-            Commands().Register({ "panel user reset-two-factor", "<name>", "turn off an operator's two-factor sign-in and end their sessions, for one who lost their authenticator and codes", false,
-                [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
-                {
-                    if (arguments.size() != 1)
-                        return false;
-                    std::string error;
-                    std::optional<PanelUser> const user = _panel.Users().Find(arguments[0], error);
-                    if (!user)
-                    {
-                        reply(error.empty() ? fmt::format("The panel has no operator named {}", arguments[0]) : error);
-                        return true;
-                    }
-                    if (!user->TwoFactor)
-                    {
-                        reply(fmt::format("{} has no two-factor sign-in to reset", user->Username));
-                        return true;
-                    }
-                    if (!_panel.ResetTwoFactor(*user, "console", error))
-                    {
-                        reply(fmt::format("Two-factor sign-in was not reset for {}: {}", user->Username, error));
-                        return true;
-                    }
-                    reply(fmt::format("{} signs in with their password alone until they turn two-factor sign-in on again, and the sessions they had have ended", user->Username));
-                    return true;
-                } });
-            Commands().Register({ "panel user create", "<name>", "make an operator and print a one-time link they set their password from", false,
-                [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
-                {
-                    if (arguments.size() != 1)
-                        return false;
-                    std::string error;
-                    std::string const password = PanelUsers::Unguessable();
-                    int64 id = 0;
-                    PanelUserResult const made = _panel.Users().Create(arguments[0], password, false, true, &id, error);
-                    if (made != PanelUserResult::Ok)
-                    {
-                        reply(fmt::format("{} was not made: {}", arguments[0], made == PanelUserResult::StoreFailed ? error : std::string(PanelUsers::Explain(made))));
-                        return true;
-                    }
-                    reply(fmt::format("{} was made. They set their own password once, from this machine, within 30 minutes: {}",
-                        arguments[0], _panel.LinkFor(_panel.MintPasswordLink(id))));
-                    return true;
-                } });
-            Commands().Register({ "panel user reset-password", "<name>", "print a one-time link that operator sets a new password from", false,
-                [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
-                {
-                    if (arguments.size() != 1)
-                        return false;
-                    std::string error;
-                    std::optional<PanelUser> const user = _panel.Users().Find(arguments[0], error);
-                    if (!user)
-                    {
-                        reply(error.empty() ? fmt::format("The panel has no operator named {}", arguments[0]) : error);
-                        return true;
-                    }
-                    reply(fmt::format("{} sets a new password once, from this machine, within 30 minutes: {}",
-                        user->Username, _panel.LinkFor(_panel.MintPasswordLink(user->Id))));
-                    return true;
-                } });
-            Commands().Register({ "panel user disable", "<name>", "stop an operator signing in and end the sessions they have", false,
-                [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
-                {
-                    if (arguments.size() != 1)
-                        return false;
-                    std::string error;
-                    std::optional<PanelUser> const user = _panel.Users().Find(arguments[0], error);
-                    if (!user)
-                    {
-                        reply(error.empty() ? fmt::format("The panel has no operator named {}", arguments[0]) : error);
-                        return true;
-                    }
-                    if (!_panel.Users().SetDisabled(user->Id, true, error))
-                    {
-                        reply(error.empty() ? fmt::format("{} was not disabled", user->Username) : error);
-                        return true;
-                    }
-                    _panel.Sessions().CloseEveryOne(user->Id, "the operator was disabled", error);
-                    reply(fmt::format("{} can no longer sign in, and the sessions they had have ended", user->Username));
-                    return true;
-                } });
-            Commands().Register({ "panel user enable", "<name>", "let a disabled operator sign in again", false,
-                [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
-                {
-                    if (arguments.size() != 1)
-                        return false;
-                    std::string error;
-                    std::optional<PanelUser> const user = _panel.Users().Find(arguments[0], error);
-                    if (!user)
-                    {
-                        reply(error.empty() ? fmt::format("The panel has no operator named {}", arguments[0]) : error);
-                        return true;
-                    }
-                    if (!_panel.Users().SetDisabled(user->Id, false, error))
-                    {
-                        reply(error.empty() ? fmt::format("{} was not enabled", user->Username) : error);
-                        return true;
-                    }
-                    reply(fmt::format("{} can sign in again", user->Username));
-                    return true;
-                } });
+            PanelCommands::Register(Commands(), _panel);
             Commands().Register({ "apps", "", "list the apps the supervisor runs and their state", false,
                 [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
                 {
@@ -599,6 +472,8 @@ int main(int argc, char** argv)
         return SendConsoleBreak(arguments);
     if (std::find(arguments.begin(), arguments.end(), std::string(SelfSignedOption)) != arguments.end())
         return WriteSelfSignedCertificate(arguments);
+    if (PanelLinkClient::IsAsked(arguments))
+        return PanelLinkClient::Run(arguments, sConfigMgr, ClientLocator::GetDataFolder(LocalClientSystem()), DefaultAdminPort, std::cout, std::cerr);
     SupervisorApp app;
     if (std::find(arguments.begin(), arguments.end(), "--service") != arguments.end())
         return SupervisorService::Run(arguments, [&app](std::vector<std::string> const& normal) { return app.Run(normal); }, [&app] { app.RequestStop("service stop"); });

@@ -225,7 +225,6 @@ export async function startPanelListener(
             "Panel.BindIP = 127.0.0.1",
             `Panel.Port = ${panelPort}`,
             `Panel.Token = ${token}`,
-            `Panel.DashboardDir = "${forward("apps/dashboard/dist")}"`,
             `Panel.StoreFile = "${forward(path.join(folder, "panel.sqlite3"))}"`,
             `Panel.KeyringFile = "${forward(path.join(folder, "keyring"))}"`,
             ...extra,

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The route that runs one command for a signed-in operator and the record it leaves behind. The command runs through the console table the app already fills, which on a game server is every command CommandMgr holds, so there is one set of commands and not a second one reachable only from a browser. A command that changes something irreversibly is refused without a confirmation the caller has to send on purpose, a command above the level the caller asked to run at is answered as though it did not exist, and what is written down is the line as the table describes it for a log, so an argument a command marked sensitive never reaches the record or the answer.
+ * The route that runs one command for a signed-in operator and the record it leaves behind. The command runs through the console table the app already fills, which on a game server is every command CommandMgr holds, so there is one set of commands and not a second one reachable only from a browser. A command that changes something irreversibly is refused without a confirmation the caller has to send on purpose, a command above the level the caller asked to run at is answered as though it did not exist, a command the table marks console-only because it hands out a way to sign in is refused with that reason, since through this route it would let an operator into another operator's account, and what is written down is the line as the table describes it for a log, so an argument a command marked sensitive never reaches the record or the answer.
  */
 
 #ifndef AMBROSE_ADMINCOMMAND_H
@@ -32,6 +32,7 @@ class AdminCommand
 public:
     static constexpr std::size_t MaxCommandBytes = 4096;
     static constexpr uint8 ConsoleLevel = 4;
+    static constexpr std::string_view ConsoleOnlyReason = "that command runs only on the app's own console, since it hands out a way to sign in";
 
     using Runner = std::function<AdminCommandOutcome(std::string const& line, uint8 level, bool confirmed)>;
     using Describer = std::function<std::string(std::string_view line)>;

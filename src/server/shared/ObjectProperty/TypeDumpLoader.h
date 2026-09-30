@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads a client type dump (format v2) into raw classes with a streaming JSON parser that checks the type of every field it knows, keeping the evidence a class the server adds carries for it, and builds a validated TypeCatalog from them: every hash recomputed, ids and base chains checked, aliases collapsed into their classes, and every property type classified.
+ * Reads a client type dump (format v2) into raw classes with a streaming JSON parser that checks the type of every field it knows, keeping the evidence a class the server adds carries for it and where the class came from, and a property nobody can name written as its hash after a #, and builds a validated TypeCatalog from them: every hash recomputed, ids and base chains checked, aliases collapsed into their classes, and every property type classified.
  */
 
 #ifndef AMBROSE_TYPEDUMPLOADER_H
@@ -43,6 +43,7 @@ namespace TypeDumpLoader
         std::vector<std::string> Bases;
         std::vector<RawProperty> Properties;
         std::optional<std::string> Evidence;
+        std::optional<std::string> Source;
     };
 
     struct RawDump
@@ -52,7 +53,12 @@ namespace TypeDumpLoader
         std::vector<RawClass> Classes;
     };
 
+    inline constexpr char UnnamedPrefix = '#';
+
     bool Parse(std::string_view text, RawDump& dump, std::vector<std::string>& errors);
+    std::optional<uint32> UnnamedHash(std::string_view propertyName);
+    std::string UnnamedName(uint32 hash);
+    uint32 ExpectedPropertyHash(std::string_view typeName, std::string_view propertyName);
     std::string Canonicalize(std::string_view typeName);
     std::string Normalize(std::string_view typeName);
 }

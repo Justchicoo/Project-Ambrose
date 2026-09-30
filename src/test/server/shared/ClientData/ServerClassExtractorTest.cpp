@@ -94,7 +94,7 @@ TEST(ServerClassExtractorTest, TheNamedBehaviorIsKeptOnceItsListDecodesAndTheUnn
     TypeRegistry served;
     ASSERT_TRUE(served.LoadFromText(Dump(false), "served.json"));
     PropertyOracle const oracle(*served.GetCatalog(), { "m_spellList", "m_secret" }, { "unsigned int" });
-    ServerClassNames const names{ { StringHash::KiStringHash("class DeckBehaviorTemplate"), { "class DeckBehaviorTemplate" } } };
+    ServerClassNames const names{ { StringHash::KiStringHash("class DeckBehaviorTemplate"), { { "class DeckBehaviorTemplate" } } } };
     std::vector<uint32> rounds;
     ServerClassExtractorOptions options;
     options.Threads = 2;
@@ -117,7 +117,7 @@ TEST(ServerClassExtractorTest, TheNamedBehaviorIsKeptOnceItsListDecodesAndTheUnn
     EXPECT_EQ(found.FailuresAfter, 0u);
     ASSERT_EQ(found.Refused.size(), 1u);
     EXPECT_EQ(found.Refused.front().Hash, StringHash::KiStringHash("class HiddenBehaviorTemplate"));
-    EXPECT_EQ(found.Refused.front().Reason, "no string of the client program hashes to it");
+    EXPECT_EQ(found.Refused.front().Reason, "no name the client program's strings or the install's text files give hashes to it");
     EXPECT_TRUE(served.IsFromSupplement(StringHash::KiStringHash("class DeckBehaviorTemplate"))) << "the registry ends holding what was kept";
 }
 
@@ -168,7 +168,7 @@ TEST(ServerClassExtractorTest, ClassesOnlyTheXmlFilesHoldAreKeptOnceTheyReadClea
     EXPECT_EQ(kept, (std::vector<std::string>{ "class ColorSwatch", "class ExtraBehaviorTemplate", "class ShoppingColors" }));
     ASSERT_EQ(found.Refused.size(), 1u);
     EXPECT_EQ(found.Refused.front().Hash, StringHash::KiStringHash("class HiddenBehaviorTemplate"));
-    EXPECT_EQ(found.Refused.front().Reason, "no string of the client program hashes to it") << "a class a BINd file holds is judged from it, whatever the XML files say";
+    EXPECT_EQ(found.Refused.front().Reason, "no name the client program's strings or the install's text files give hashes to it") << "a class a BINd file holds is judged from it, whatever the XML files say";
     EXPECT_EQ(found.XmlDocuments, 3u);
     EXPECT_EQ(found.XmlUnknownBefore, 4u);
     EXPECT_EQ(found.XmlObjectsBefore, 4u);

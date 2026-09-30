@@ -53,6 +53,7 @@ export type LauncherChannel = {
     describe(request: LauncherRequest): Promise<LauncherAnswer>;
     start(request: LauncherRequest): Promise<LauncherAnswer>;
     steps?(): Promise<SetupStep[]>;
+    again?(): Promise<SetupStep[]>;
 };
 
 export function isPlan(answer: LauncherAnswer): answer is LauncherPlan {
@@ -79,6 +80,10 @@ export function hostChannel(host: Host): LauncherChannel {
         start: (request: LauncherRequest) => ask("/launcher/start", request),
         steps: async (): Promise<SetupStep[]> => {
             const reply = await host.call<{ steps?: SetupStep[] }>({ path: "/launcher/steps", method: "GET" });
+            return reply.ok && Array.isArray(reply.body?.steps) ? reply.body.steps : [];
+        },
+        again: async (): Promise<SetupStep[]> => {
+            const reply = await host.call<{ steps?: SetupStep[] }>({ path: "/launcher/steps/again", method: "POST" });
             return reply.ok && Array.isArray(reply.body?.steps) ? reply.body.steps : [];
         },
     };

@@ -36,6 +36,7 @@ include(CompilerFlags)
 include(AmbroseMacros)
 include(Scripts)
 include(Frontend)
+include(EmbedPage)
 
 find_package(fmt CONFIG REQUIRED)
 find_package(asio CONFIG REQUIRED)

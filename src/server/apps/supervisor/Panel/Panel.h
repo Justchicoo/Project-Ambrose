@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The panel's own front door in the supervisor: a second listener with its own Panel options, its own token file, its own store and its own keyring, off unless Panel.Enable is set, holding its operators and their sessions, the counts a failed sign-in or a wrong second factor adds to, the cost-weighted limit every costly route is held to and the audit tables every change is recorded in, relayed settings changes, batches, reloads, secret reveals and error report creation among them, the protected path patterns an owner adds to a file root, saved with their audit row, and the supervisor's own live settings with their history, signing an operator with two-factor sign-in in only after a password and a code, holding every route and socket to the two-factor requirement an owner sets while leaving open the routes that meet it, and asking for a fresh check before a danger action, bound to this machine unless a certificate and key are given or the operator opts into plain HTTP, serving the built dashboard at / and the panel's API under /api/panel/, the one event socket every live page runs on at /api/panel/events with the streams it serves and the one-time tickets a script opens it with, and reloaded with the rest of the configuration so a bind it would not be allowed to keep, or a two-factor requirement it does not know, is refused while the old one goes on serving.
+ * The panel's own front door in the supervisor: a second listener with its own Panel options, its own token file, its own store and its own keyring, off unless Panel.Enable is set, holding its operators and their sessions, the single-use links that make the first owner, set a password or open a session from a desktop program, kept only as hashes so they survive a restart, the counts a failed sign-in, a wrong second factor or a wrong link adds to, the cost-weighted limit every costly route is held to and the audit tables every change is recorded in, relayed settings changes, batches, reloads, secret reveals and error report creation among them, the protected path patterns an owner adds to a file root, saved with their audit row, and the supervisor's own live settings with their history, signing an operator with two-factor sign-in in only after a password or a link and a code, holding every route and socket to the two-factor requirement an owner sets while leaving open the routes that meet it, and asking for a fresh check before a danger action, bound to this machine unless a certificate and key are given or the operator opts into plain HTTP, serving the built dashboard at / and the panel's API under /api/panel/, the one event socket every live page runs on at /api/panel/events with the streams it serves and the one-time tickets a script opens it with, issuing local and pairing links through the supervisor's admin API, its console and its command line alike, and reloaded with the rest of the configuration so a bind it would not be allowed to keep, or a two-factor requirement it does not know, is refused while the old one goes on serving.
  */
 
 #ifndef AMBROSE_PANEL_H
@@ -18,6 +18,7 @@
 #include "PanelEventStreams.h"
 #include "PanelEventTickets.h"
 #include "PanelKeyring.h"
+#include "PanelLinks.h"
 #include "PanelSessions.h"
 #include "PanelSignIn.h"
 #include "PanelTwoFactor.h"
@@ -44,6 +45,7 @@
 #include <vector>
 
 class ConfigMgr;
+class EmbeddedPage;
 class Log;
 class PanelSettingStore;
 class SettingStore;
@@ -53,7 +55,8 @@ class Panel
 public:
     static constexpr uint16 DefaultPort = 12080;
     static constexpr std::string_view Prefix = "/api/panel";
-    static constexpr std::chrono::minutes ClaimLifetime{ 30 };
+    static constexpr std::string_view LinksPath = "/api/panel-links";
+    static constexpr std::string_view LinkPath = "/api/panel/link";
     static constexpr std::string_view ChallengeCookie = "_challenge";
     static constexpr std::size_t MaxChallenges = 1024;
     static constexpr uint32 PasswordCheckCost = 10;
@@ -67,6 +70,7 @@ public:
     static std::filesystem::path StoreFile(ConfigMgr const& config, std::filesystem::path const& dataFolder);
     static std::filesystem::path KeyringFile(ConfigMgr const& config, std::filesystem::path const& dataFolder);
 
+    void SetDashboard(EmbeddedPage const* page);
     bool Start(ConfigMgr const& config, std::string& error);
     bool Reload(ConfigMgr const& config);
     void Stop();
@@ -76,8 +80,13 @@ public:
     std::string GetBindIp() const { return _listener.GetBindIp(); }
     std::string GetToken() const { return _listener.GetToken(); }
     bool IsSecure() const { return _secure; }
+    std::string GetFingerprint() const { return _listener.GetFingerprint(); }
     std::string MintPasswordLink(int64 userId);
-    std::string LinkFor(std::string_view token) const;
+    std::string LinkFor(std::string_view page, std::string_view token) const;
+    static std::string PairingLine(std::string_view host, uint16 port, std::string_view token, std::string_view fingerprint);
+    std::optional<PanelLinkIssued> IssueLink(PanelLinkAsk const& ask, PanelLinkIssuer const& issuer, PanelLinkRefusal& refusal);
+    PanelUserResult MakeOperator(std::string_view username, PanelLinkIssuer const& by, int64& id, std::string& error);
+    void RegisterAdminRoutes(AdminRouter& routes);
 
     PanelStore& Store() { return _store; }
     PanelSettings& Settings() { return _settings; }
@@ -89,6 +98,7 @@ public:
     PanelTwoFactor& TwoFactor() { return _twoFactor; }
     PanelTwoFactorSettings TwoFactorSettings() const;
     PanelFileRules& FileRules() { return _fileRules; }
+    PanelLinks& Links() { return _links; }
     std::shared_ptr<SettingStore> LiveSettingStore();
     bool IsStoreOpen();
     bool ReadFileRules(std::map<std::string, std::vector<std::string>, std::less<>>& rules, std::string& error);
@@ -99,6 +109,7 @@ public:
     static constexpr std::chrono::seconds GatherInterval{ 30 };
     PanelSignInThrottle& SignInThrottle() { return _signIn; }
     PanelSignInThrottle& SecondFactorThrottle() { return _secondFactor; }
+    PanelSignInThrottle& LinkThrottle() { return _linkFailures; }
     PanelRateLimit& Limit() { return _rateLimit; }
     AdminRouter& Routes() { return _listener.Routes(); }
     PanelEventStreams& Events() { return _events; }
@@ -130,6 +141,14 @@ private:
         std::string How = {};
         std::chrono::steady_clock::time_point Expires = {};
         uint32 Attempts = 0;
+        std::string LinkId = {};
+        std::string LinkKind = {};
+    };
+
+    struct LinkUsed
+    {
+        std::string Id = {};
+        std::string Kind = {};
     };
 
     bool OpenStore(ConfigMgr const& config, std::string& error);
@@ -143,8 +162,16 @@ private:
     AdminResponse Claim(AdminRequest const& request);
     AdminResponse Probe(AdminRequest const& request);
     AdminResponse Reset(AdminRequest const& request);
-    AdminResponse OpenFor(PanelUser const& user, AdminRequest const& request, std::string_view how, nlohmann::json const* properties = nullptr);
-    AdminResponse Challenged(PanelUser const& user, AdminRequest const& request, std::string_view how);
+    AdminResponse TradeLink(AdminRequest const& request);
+    AdminResponse MintLinkRoute(AdminRequest const& request);
+    AdminResponse OpenFor(PanelUser const& user, AdminRequest const& request, std::string_view how, nlohmann::json const* properties = nullptr, LinkUsed const* link = nullptr);
+    AdminResponse Challenged(PanelUser const& user, AdminRequest const& request, std::string_view how, LinkUsed const* link = nullptr);
+    bool Transact(std::function<bool(std::string& error)> const& change, std::string& error);
+    bool InsertOperator(PanelUserDraft const& draft, PanelLinkIssuer const& by, std::string_view reason, int64& id, PanelUserResult& made, std::string& error);
+    bool PlainBeyondLoopback() const;
+    bool BindsOneRemoteAddress() const;
+    std::optional<AdminResponse> LinkHeldBack(AdminRequest const& request);
+    AdminResponse LinkRefused(AdminRequest const& request, PanelLink const* link, std::optional<PanelUser> const& user, int status, std::string_view code, std::string_view message, std::string_view reason);
     AdminResponse SignIn(AdminRequest const& request);
     AdminResponse SecondFactor(AdminRequest const& request);
     AdminResponse SignOut(AdminRequest const& request);
@@ -182,12 +209,10 @@ private:
     std::unique_ptr<PanelAuthorization> _authorization;
     PanelSignInThrottle _signIn;
     PanelSignInThrottle _secondFactor;
-    std::mutex _claimMutex;
-    std::string _claimToken;
-    std::chrono::steady_clock::time_point _claimExpires;
+    PanelSignInThrottle _linkFailures;
+    PanelLinks _links;
     std::chrono::seconds _sessionIdle{ 0 };
     std::chrono::seconds _sessionLifetime{ 0 };
-    std::map<std::string, std::pair<int64, std::chrono::steady_clock::time_point>> _resets;
     std::mutex _challengeMutex;
     std::map<std::string, Challenge, std::less<>> _challenges;
     mutable std::mutex _twoFactorMutex;

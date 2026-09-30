@@ -140,6 +140,11 @@ class Run:
                     variables["wizard"] = name
                     variables["wizard_guid"] = str(guid)
                     self.note("the wizard", f"{name}, guid {guid}, in {wizard['zone']}")
+                for index, more in enumerate(self.scenario.more_wizards if wizard else [], start=2):
+                    guid, name = databases.seed_character(variables["user"], more)
+                    variables[f"wizard_{index}"] = name
+                    variables[f"wizard_{index}_guid"] = str(guid)
+                    self.note(f"wizard {index}", f"{name}, guid {guid}, in {more['zone']}")
                 if companion is not None:
                     other = self.scenario.companion["wizard"]
                     guid, name = databases.seed_character(variables["companion_user"], other)

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the route that runs a command for an operator: a command runs and its output comes back with the request it belongs to, a command that changes something irreversibly is refused until it is confirmed on purpose, a caller asking to run below the console level is told there is no such command and nothing runs, a failing command says so rather than pretending, a body that is too long or carries a key this app does not take is refused before anything runs, and an argument of a command marked sensitive reaches neither the record nor the answer.
+ * Tests the route that runs a command for an operator: a command runs and its output comes back with the request it belongs to, a command that changes something irreversibly is refused until it is confirmed on purpose, a caller asking to run below the console level is told there is no such command and nothing runs, a failing command says so rather than pretending, a body that is too long or carries a key this app does not take is refused before anything runs, an argument of a command marked sensitive reaches neither the record nor the answer, and a command marked console-only is refused with its reason, confirmed or not, without running.
  */
 
 #include "AdminAuth.h"
@@ -281,4 +281,47 @@ TEST(AdminCommandRouteTest, ACommandAboveTheRunnerLevelIsRefusedWithoutExecution
     ASSERT_TRUE(body.is_object()) << refused.Body;
     EXPECT_TRUE(body["refused"].get<bool>());
     EXPECT_EQ(body["reason"], "there is no such command");
+}
+
+TEST(AdminCommandTest, AConsoleOnlyCommandIsRefusedThroughTheRouteWithItsReason)
+{
+    LogTestDirectory directory;
+    std::filesystem::path const audit = directory.Path() / "audit" / "commands.jsonl";
+    ConsoleCommandTable table;
+    Fill(table);
+    bool ran = false;
+    table.Register({ "panel user link", "[name]", "hands out a way to sign in", false,
+        [&ran](std::vector<std::string> const&, ConsoleCommandTable::Reply const& reply)
+        {
+            ran = true;
+            reply("http://127.0.0.1:1/#link?token=never-shown");
+            return true;
+        }, true });
+
+    AdminCommandOutcome const direct = AdminCommand::RunThroughTable(table, "panel user link owner", AdminCommand::ConsoleLevel, true);
+    EXPECT_FALSE(direct.Ran);
+    EXPECT_TRUE(direct.Refused);
+    EXPECT_FALSE(direct.NeedsConfirm);
+    EXPECT_EQ(direct.Reason, AdminCommand::ConsoleOnlyReason);
+    EXPECT_TRUE(direct.Lines.empty());
+    EXPECT_FALSE(ran);
+
+    AdminAuth auth(10, 1.0);
+    auth.SetToken(Token);
+    AdminRouter router(auth);
+    AdminCommand::Register(router, table, "supervisor", audit);
+    AdminResponse const answer = router.Dispatch(Post(R"({"command":"panel user link owner","confirm":true})"));
+    EXPECT_EQ(answer.Status, 409) << answer.Body;
+    nlohmann::json const body = nlohmann::json::parse(answer.Body, nullptr, false);
+    ASSERT_TRUE(body.is_object()) << answer.Body;
+    EXPECT_TRUE(body["refused"].get<bool>());
+    EXPECT_EQ(body["reason"].get<std::string>(), AdminCommand::ConsoleOnlyReason);
+    EXPECT_TRUE(body["lines"].empty());
+    EXPECT_FALSE(ran) << "a console-only command never runs through the route";
+    EXPECT_EQ(answer.Body.find("never-shown"), std::string::npos);
+
+    std::string const written = ReadAll(audit);
+    EXPECT_NE(written.find("panel user link owner"), std::string::npos) << written;
+    EXPECT_NE(written.find(std::string(AdminCommand::ConsoleOnlyReason)), std::string::npos) << written;
+    EXPECT_TRUE(AdminCommand::RunThroughTable(table, "ping", AdminCommand::ConsoleLevel, false).Ran) << "every other command still runs";
 }

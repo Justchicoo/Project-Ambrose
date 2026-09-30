@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the panel's own listener and what it holds: it serves nothing until Panel.Enable is set, it opens its store with the panel tables before it listens, it answers its own routes on a loopback port with its own token, a bind beyond this machine with no certificate is refused with the Panel option names in the message, the plain-HTTP opt-in lifts that refusal, a certificate and key are served over TLS with the fingerprint the files hold, a route that declares a cost is held back with a retry hint while an uncosted route from the same caller still answers, one audit row records the throttling however many requests are refused in that minute, and a change whose audit row cannot be written is not applied, the plain-HTTP opt-in lets it reach beyond this machine with the risk said out loud, a reload that would leave the bind unsafe is refused while the old listener goes on serving, and a replaced certificate is served after a reload on the same port, and it refuses to start at all when a route says neither which permission it needs nor that any signed-in member may call it, or names a permission the catalog does not hold; and a relayed settings change, reset, batch, reload or reveal is recorded with who, where, why and how it ended, a dry run not at all and a reveal naming a key with only the keys it showed, a refused change too, but never a value.
+ * Tests the panel's own listener and what it holds: it serves nothing until Panel.Enable is set, it serves the dashboard compiled into the program with the same headers a folder gets until Panel.DashboardDir names a folder, which then wins, it opens its store with the panel tables before it listens, it answers its own routes on a loopback port with its own token, a bind beyond this machine with no certificate is refused with the Panel option names in the message, the plain-HTTP opt-in lifts that refusal, a certificate and key are served over TLS with the fingerprint the files hold, a route that declares a cost is held back with a retry hint while an uncosted route from the same caller still answers, one audit row records the throttling however many requests are refused in that minute, and a change whose audit row cannot be written is not applied, the plain-HTTP opt-in lets it reach beyond this machine with the risk said out loud, a reload that would leave the bind unsafe is refused while the old listener goes on serving, and a replaced certificate is served after a reload on the same port, and it refuses to start at all when a route says neither which permission it needs nor that any signed-in member may call it, or names a permission the catalog does not hold; and a relayed settings change, reset, batch, reload or reveal is recorded with who, where, why and how it ended, a dry run not at all and a reveal naming a key with only the keys it showed, a refused change too, but never a value.
  */
 
 #include "AdminClient.h"
@@ -12,6 +12,7 @@
 #include "PanelErrors.h"
 #include "PanelAudit.h"
 #include "PanelStore.h"
+#include "TestEmbeddedPage.h"
 #include "TlsCertificate.h"
 
 #include <fmt/format.h>
@@ -21,6 +22,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -70,6 +73,41 @@ TEST_F(PanelTest, ServesNothingUntilPanelEnableIsSet)
     ASSERT_TRUE(panel.Start(Configured("Panel.Enable = 0\n"), error)) << error;
     EXPECT_FALSE(panel.IsRunning());
     EXPECT_FALSE(panel.Store().IsOpen());
+}
+
+TEST_F(PanelTest, ServesTheCompiledDashboardUntilAFolderNamesAnother)
+{
+    AdminClientRequest const index{ "GET", "/", "", "text/html", "" };
+    AdminClientRequest const asset{ "GET", "/assets/app-Bx3kQ9aZ.js", "", "text/javascript", "" };
+    std::string error;
+    {
+        Panel panel = Make();
+        panel.SetDashboard(&TestEmbeddedPage());
+        ASSERT_TRUE(panel.Start(Configured("Panel.Enable = 1\nPanel.Port = 0\n"), error)) << error;
+        AdminClient const browser("127.0.0.1", panel.GetPort(), "");
+        AdminClientResponse const page = browser.Send(index, std::chrono::seconds(10));
+        ASSERT_EQ(page.Status, 200) << page.Body;
+        EXPECT_EQ(page.Body, std::string(TestEmbeddedPage().Find("index.html")->Bytes));
+        EXPECT_EQ(page.ContentType, "text/html; charset=utf-8");
+        EXPECT_NE(page.Head.find("Cache-Control: no-cache"), std::string::npos) << page.Head;
+        AdminClientResponse const script = browser.Send(asset, std::chrono::seconds(10));
+        ASSERT_EQ(script.Status, 200) << script.Body;
+        EXPECT_EQ(script.ContentType, "text/javascript; charset=utf-8");
+        EXPECT_NE(script.Head.find("Cache-Control: public, max-age=31536000, immutable"), std::string::npos) << script.Head;
+        EXPECT_EQ(browser.Send({ "GET", "/assets/missing-00000000.js", "", "text/javascript", "" }, std::chrono::seconds(10)).Status, 404);
+    }
+
+    std::filesystem::path const folder = _directory.Path() / "built";
+    std::filesystem::create_directories(folder);
+    std::ofstream(folder / "index.html", std::ios::binary) << "<!doctype html><title>From the folder</title>";
+    Panel panel = Make();
+    panel.SetDashboard(&TestEmbeddedPage());
+    ASSERT_TRUE(panel.Start(Configured("Panel.Enable = 1\nPanel.Port = 0\nPanel.DashboardDir = \"" + folder.generic_string() + "\"\n"), error)) << error;
+    AdminClient const browser("127.0.0.1", panel.GetPort(), "");
+    AdminClientResponse const page = browser.Send(index, std::chrono::seconds(10));
+    ASSERT_EQ(page.Status, 200) << page.Body;
+    EXPECT_EQ(page.Body, "<!doctype html><title>From the folder</title>");
+    EXPECT_EQ(browser.Send(asset, std::chrono::seconds(10)).Status, 404) << "the compiled copy is not served beside a named folder";
 }
 
 TEST_F(PanelTest, OpensItsStoreAndAnswersItsOwnRoutesOnLoopback)

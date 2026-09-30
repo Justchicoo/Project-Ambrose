@@ -78,6 +78,8 @@ public:
     static CharacterOpResult SaveSpell(uint64 guid, CharacterSpell const& spell);
 
     static Statement PrepareLoadByAccount(uint64 account);
+    static Statement PrepareDelete(uint64 guid, uint64 account, std::optional<uint64> deletedAt);
+    static Statement PreparePurgeDeleted(uint64 deletedBefore);
     static Statement PrepareLoad(uint64 guid);
     static Statement PrepareCountByAccount(uint64 account);
     static std::vector<CharacterSummary> ReadCharacters(PreparedResultSet& result);

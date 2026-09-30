@@ -748,6 +748,32 @@ namespace GameMessages
         }
     };
 
+    struct Badges
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_BADGES";
+
+        uint32 CurrentBadge = 0;
+        int8 UpdateAll = 0;
+        uint32 TotalBadges = 0;
+        int8 Add = 0;
+        int8 Remove = 0;
+        std::string BadgeName;
+        std::string BadgeInfo;
+        uint32 BadgeNameId = 0;
+        std::string BadgeFilterInfo;
+        uint8 Display = 0;
+        uint8 LastSegment = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("CurrentBadge", &Badges::CurrentBadge), DmlField("UpdateAll", &Badges::UpdateAll), DmlField("TotalBadges", &Badges::TotalBadges),
+                DmlField("Add", &Badges::Add), DmlField("Remove", &Badges::Remove), DmlField("BadgeName", &Badges::BadgeName), DmlField("BadgeInfo", &Badges::BadgeInfo),
+                DmlField("BadgeNameID", &Badges::BadgeNameId), DmlField("BadgeFilterInfo", &Badges::BadgeFilterInfo), DmlField("Display", &Badges::Display),
+                DmlField("LastSegment", &Badges::LastSegment) };
+        }
+    };
+
     struct TimedAccessPasses
     {
         static constexpr uint8 ServiceId = WizardService;

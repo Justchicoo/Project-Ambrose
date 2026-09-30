@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Hands out the archive's entries, or those named in the list it is given, to worker threads one index at a time, running on the calling thread and whichever workers could be started; each worker reads its entry through the archive's own lock, skips anything that is neither a BINd file nor a versionable object whose first word names a class the dump lists, decodes the rest in parallel and keeps its own tallies, which are merged in entry order afterwards so the report is the same however the work was split; an entry that throws is counted as unreadable or failed without letting the exception leave its thread, and issues are grouped by kind, hash and the class that owns them, counted once per use and once per file with the first file, path and detail they appear with, a root class that stops a file from decoding included among the unknown classes, and each property of an unknown class grouped by the class and its own hash.
+ * Hands out the archive's entries, or those named in the list it is given, to worker threads one index at a time, running on the calling thread and whichever workers could be started; each worker reads its entry through the archive's own lock, skips anything that is neither a BINd file nor a versionable object whose first word names a class the dump lists, decodes the rest in parallel and keeps its own tallies, which are merged in entry order afterwards so the report is the same however the work was split; an entry that throws is counted as unreadable or failed without letting the exception leave its thread, and issues are grouped by kind, hash and the class that owns them, counted once per use and once per file with the first file, path and detail they appear with, a root class that stops a file from decoding included among the unknown classes, and each property of an unknown class grouped by the class and its own hash; the values a skipped property held are kept by the order they were first met, file by file, so the first ones are the same however the work was split, and a file's kind is its name after the last folder.
  */
 
 #include "BindSweep.h"
@@ -33,6 +33,8 @@ namespace
         Done
     };
 
+    using FirstMet = std::pair<std::size_t, std::size_t>;
+
     struct Use
     {
         uint64 Count = 0;
@@ -41,6 +43,8 @@ namespace
         std::string FirstPath;
         std::string FirstDetail;
         std::map<uint64, uint64> BitSizes;
+        std::map<BindSweepValue, FirstMet> Values;
+        bool MoreValues = false;
     };
 
     using IssueKey = std::tuple<DecodeIssueKind, uint32, uint32>;
@@ -58,6 +62,7 @@ namespace
         std::map<PropertyKey, Use> ClassProperties;
         std::map<IssueKey, Use> Issues;
         std::set<std::size_t> UnknownEntries;
+        std::map<std::string, BindSweepFileKind> FileKinds;
     };
 
     void Count(Use& use, std::size_t entry, std::string_view path, std::string_view detail, bool newInFile)
@@ -78,6 +83,26 @@ namespace
         ++use.BitSizes[bits];
     }
 
+    void KeepFirstValues(Use& use)
+    {
+        while (use.Values.size() > BindSweep::MaxValues)
+        {
+            auto const last = std::max_element(use.Values.begin(), use.Values.end(), [](auto const& left, auto const& right) { return left.second < right.second; });
+            use.Values.erase(last);
+            use.MoreValues = true;
+        }
+    }
+
+    void CountValue(Use& use, DecodeIssue const& issue, FirstMet met)
+    {
+        if (issue.Value.empty())
+            return;
+        auto const [found, added] = use.Values.try_emplace(BindSweepValue{ issue.Bits, issue.Value }, met);
+        if (!added)
+            found->second = std::min(found->second, met);
+        KeepFirstValues(use);
+    }
+
     void Merge(Use& into, Use&& from)
     {
         into.Count += from.Count;
@@ -90,6 +115,26 @@ namespace
         }
         for (auto const& [bits, count] : from.BitSizes)
             into.BitSizes[bits] += count;
+        for (auto& [value, met] : from.Values)
+        {
+            auto const [found, added] = into.Values.try_emplace(value, met);
+            if (!added)
+                found->second = std::min(found->second, met);
+        }
+        into.MoreValues = into.MoreValues || from.MoreValues;
+        KeepFirstValues(into);
+    }
+
+    std::vector<BindSweepValue> InOrderMet(std::map<BindSweepValue, FirstMet>&& values)
+    {
+        std::vector<std::pair<FirstMet, BindSweepValue>> ordered;
+        for (auto& [value, met] : values)
+            ordered.emplace_back(met, value);
+        std::sort(ordered.begin(), ordered.end());
+        std::vector<BindSweepValue> list;
+        for (auto& [met, value] : ordered)
+            list.push_back(std::move(value));
+        return list;
     }
 
     bool IsHeaderlessObject(std::span<uint8 const> bytes, TypeCatalog const& catalog)
@@ -110,6 +155,7 @@ namespace
         options.Limits = limits;
         options.AllowNullRoot = false;
         options.AllowTrailingBytes = false;
+        options.KeepSkippedValues = true;
         return ObjectSerializer::Decode(catalog, bytes, options);
     }
 
@@ -117,14 +163,16 @@ namespace
     {
         std::set<IssueKey> seen;
         std::set<PropertyKey> seenProperties;
-        for (DecodeIssue const& issue : issues)
+        for (std::size_t order = 0; order < issues.size(); ++order)
         {
+            DecodeIssue const& issue = issues[order];
             if (issue.Kind == DecodeIssueKind::UnknownClassProperty)
             {
                 PropertyKey const key{ issue.Owner, issue.Hash };
                 Use& use = tally.ClassProperties[key];
                 Count(use, index, issue.Path, issue.Detail, seenProperties.insert(key).second);
                 CountBits(use, issue.Bits);
+                CountValue(use, issue, { index, order });
                 continue;
             }
             IssueKey const key{ issue.Kind, issue.Hash, issue.Kind == DecodeIssueKind::UnknownClass ? 0u : issue.Owner };
@@ -138,6 +186,7 @@ namespace
             {
                 Count(tally.Issues[key], index, issue.Path, issue.Detail, newInFile);
                 CountBits(tally.Issues[key], issue.Bits);
+                CountValue(tally.Issues[key], issue, { index, order });
             }
         }
     }
@@ -161,18 +210,32 @@ namespace
             }
             ++tally.Headerless;
             stage = Stage::Counted;
+            BindSweepFileKind& kind = tally.FileKinds[BindSweep::KindOf(entry.Name)];
+            ++kind.Files;
+            ++kind.Roots[static_cast<uint32>(read.Data[0]) | static_cast<uint32>(read.Data[1]) << 8 | static_cast<uint32>(read.Data[2]) << 16 | static_cast<uint32>(read.Data[3]) << 24];
             DecodeResult const decoded = DecodeHeaderless(catalog, read.Data, limits);
             CountIssues(tally, index, decoded.Issues);
             if (decoded.Ok())
+            {
                 ++tally.HeaderlessDecoded;
+                ++kind.Decoded;
+            }
             else
+            {
+                ++kind.Failed;
                 tally.Failures.emplace_back(index, BindSweepFailure{ entry.Name, BindStatus::Ok, decoded.Status, 0, decoded.Detail });
+            }
             stage = Stage::Done;
             return;
         }
         ++tally.Files;
         stage = Stage::Counted;
-        BindReadResult const result = BindFile::Read(catalog, read.Data, limits);
+        bool constexpr KeepSkippedValues = true;
+        BindReadResult const result = BindFile::Read(catalog, read.Data, limits, KeepSkippedValues);
+        BindSweepFileKind& kind = tally.FileKinds[BindSweep::KindOf(entry.Name)];
+        ++kind.Files;
+        ++kind.Roots[result.RootClassHash];
+        ++(result.Ok() ? kind.Decoded : kind.Failed);
         if (!result.Ok())
         {
             if (result.Decoded.Status == SerializerStatus::UnknownClass && result.RootClassHash != 0)
@@ -213,6 +276,12 @@ namespace
             ++tally.ReadErrors;
         }
     }
+}
+
+std::string BindSweep::KindOf(std::string_view entry)
+{
+    std::size_t const slash = entry.find_last_of("/\\");
+    return std::string(slash == std::string_view::npos ? entry : entry.substr(slash + 1));
 }
 
 BindSweepReport BindSweep::Run(KiwadArchive const& archive, TypeCatalogPtr const& catalog, unsigned threads, SerializerLimits const& limits, std::vector<std::string> const* only)
@@ -293,6 +362,15 @@ BindSweepReport BindSweep::Run(KiwadArchive const& archive, TypeCatalogPtr const
         for (auto& [key, use] : tally.Issues)
             Merge(issues[key], std::move(use));
         unknownEntries.insert(tally.UnknownEntries.begin(), tally.UnknownEntries.end());
+        for (auto& [name, kind] : tally.FileKinds)
+        {
+            BindSweepFileKind& into = report.FileKinds[name];
+            into.Files += kind.Files;
+            into.Decoded += kind.Decoded;
+            into.Failed += kind.Failed;
+            for (auto const& [hash, count] : kind.Roots)
+                into.Roots[hash] += count;
+        }
     }
     for (std::size_t const index : unknownEntries)
         report.UnknownFiles.push_back(entries[index].Name);
@@ -302,10 +380,11 @@ BindSweepReport BindSweep::Run(KiwadArchive const& archive, TypeCatalogPtr const
     for (auto& [hash, use] : classes)
         report.UnknownClasses.push_back(BindSweepUnknownClass{ hash, use.Count, use.Files, entries[use.FirstEntry].Name, std::move(use.FirstPath) });
     for (auto& [key, use] : properties)
-        report.ClassProperties.push_back(BindSweepClassProperty{ key.first, key.second, use.Count, use.Files, entries[use.FirstEntry].Name, std::move(use.FirstPath), std::move(use.BitSizes) });
+        report.ClassProperties.push_back(BindSweepClassProperty{ key.first, key.second, use.Count, use.Files, entries[use.FirstEntry].Name, std::move(use.FirstPath), std::move(use.BitSizes),
+            InOrderMet(std::move(use.Values)), use.MoreValues });
     for (auto& [key, use] : issues)
         report.Issues.push_back(BindSweepIssue{ std::get<0>(key), std::get<1>(key), std::get<2>(key), use.Count, use.Files, entries[use.FirstEntry].Name, std::move(use.FirstPath), std::move(use.FirstDetail),
-            std::move(use.BitSizes) });
+            std::move(use.BitSizes), InOrderMet(std::move(use.Values)), use.MoreValues });
     std::sort(report.UnknownClasses.begin(), report.UnknownClasses.end(), [](BindSweepUnknownClass const& left, BindSweepUnknownClass const& right)
     {
         return left.Count != right.Count ? left.Count > right.Count : left.Hash < right.Hash;

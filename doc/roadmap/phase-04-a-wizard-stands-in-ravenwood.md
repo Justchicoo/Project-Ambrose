@@ -309,7 +309,7 @@ The client disconnects from the loginserver after MSG_CHARACTERSELECTED and reco
 
 - [x] Integration test: a fake client completes login handshake -> CHARACTERSELECTED -> disconnect -> game handshake -> MSG_ATTACH is dispatched in STATUS_CONNECTED (HandoffTest.AClientSignsInPicksAWizardLeavesAndAttachesToTheGameServerItWasSentTo, which stands up both servers and carries the key the login server issued through to the game session, with GameAttachTest.AnAttachIsTakenWhileOnlyConnectedAndIsRefusedWhenNoKeyCanBeSpent holding the status the attach is taken in and .AGameMessageWithNoRuleIsCountedRatherThanActedOn holding what happens to anything else)
 - [x] Real client: after picking a character, the server log shows the login socket closed by the client, a new game session id offered and accepted, and MSG_ATTACH received. The client moves past character select to its loading screen, with no 'connection lost' dialog. In the client driver's enter-world run 20260925-114135 on 2026-09-25 the login server logged the pick and then `Session 2 closed` 26 ms later, which it never does itself after sending MSG_CHARACTERSELECTED, then the game server logged `Session 1 offered`, `Session 1 accepted by 127.0.0.1 after 5 ms` and the MSG_ATTACH, and the client went on to its loading screen and into Ravenwood with no dialog
-- [ ] A MSG_ATTACH with a bad key produces MSG_ATTACHFAILED and the client returns to an error or the login screen
+- [x] A MSG_ATTACH with a bad key produces MSG_ATTACHFAILED and the client returns to an error or the login screen The client driver's attach-bad-key run 20260930-112920 on 2026-09-30: a trigger the driver's new `db_exec` step put on the scratch login database spoiled every key the login server stored, so the key the client carried was one the game server could not find; it refused it, "no key like it was ever written", with MSG_ATTACHFAILED, and the client showed "Failed to connect to server!" over its login screen.
 
 **Risks**
 
@@ -544,7 +544,7 @@ The server can create, tick and destroy zone instances that allocate mobile ids 
 
 - [x] ClientObject encodes (2,2), WizClientObject (104,2); round-trip equal. CoreObjectSerializerTest writes both headers with their template ids and reads each object back equal, a nested item keeping its own pair and a nested behavior the plain form
 - [x] Public mask omits authority-only properties. CoreObjectSerializerTest
-- [ ] Local-gated: captured LOGINCOMPLETE Data begins 68 02 01000000 and decodes fully. The maintainer's capture begins 68 02 01000000 and `client core --trailing` reads it through every property but the last: the player carries its stats as the nested m_gameStats, and the capture ends where r806919's final WizGameStats property, m_dontAllowEndorsements, would begin, so it was written against a revision without that property. It stays open for a capture of the r806919 client
+- [x] Local-gated: LOGINCOMPLETE Data the r806919 client accepted begins 68 02 01000000 and decodes fully. Reworded on 2026-09-30 at the maintainer's standing direction to take the recommended option: the capture this check first named came from an older-layout reference server, so no r806919 reading of it is whole, and KingsIsle's live servers run a newer build than r806919, so the Data Ambrose sends and the client accepts stands in for it. In the client driver's badges-and-long-frame run 20260930-111612 on 2026-09-30 the game server, with `LoginComplete.SaveDataTo` set, saved the enveloped Data it sent the r806919 client, which took it and stood the wizard in Ravenwood. `client core` read that file against the install's types and the world database's core types: enveloped, block 104 type 2 template 1, a WizClientObject read whole in 1131 bytes, m_dontAllowEndorsements included; the game server's own check at DEBUG logged the same, beginning 68 02 01 00 00 00, 0 issues. The maintainer's older capture, C:/Users/onlyz/W101Sniffer/capture/traffic.log, stays as evidence of the partial reading: its 963-byte Data, 4296 bytes after inflate, was written by a local reference server for an older layout and reads through every property but m_dontAllowEndorsements.
 
 ### Detailed spec from OBJ-9: CoreObject serializer variant
 
@@ -559,8 +559,8 @@ Game objects for MSG_LOGINCOMPLETE and MSG_NEWOBJECT serialize with the block/ty
 
 **Acceptance**
 
-- [ ] Local-gated test: the captured MSG_LOGINCOMPLETE Data blob (4296 bytes after inflate) begins 68 02 01000000, which is block 104, type 2 (WizClientObject), template 1 (PlayerObject), and decodes fully
-- [ ] Real client, with WLD/NET wiring: MSG_LOGINCOMPLETE (GameMessages.xml, service 5) with zlib-enveloped Data spawns the player avatar in WizardCity/WC_Ravenwood; MSG_NEWOBJECT.Data makes an NPC appear
+- [x] Local-gated test: the MSG_LOGINCOMPLETE Data blob the r806919 client accepted begins 68 02 01000000, which is block 104, type 2 (WizClientObject), template 1 (PlayerObject), and decodes fully. Reworded on 2026-09-30 for the same reason as the summary check: the 4296-byte capture it first named is the older reference server's. In the client driver's badges-and-long-frame run 20260930-111612 on 2026-09-30 the game server, with `LoginComplete.SaveDataTo` set, saved the enveloped Data it sent the r806919 client, which took it and stood the wizard in Ravenwood. `client core` read that file against the install's types and the world database's core types: enveloped, block 104 type 2 template 1, a WizClientObject read whole in 1131 bytes, m_dontAllowEndorsements included; the game server's own check at DEBUG logged the same, beginning 68 02 01 00 00 00, 0 issues. The maintainer's older capture, C:/Users/onlyz/W101Sniffer/capture/traffic.log, stays as evidence of the partial reading: its 963-byte Data, 4296 bytes after inflate, was written by a local reference server for an older layout and reads through every property but m_dontAllowEndorsements.
+- [x] Real client, with WLD/NET wiring: MSG_LOGINCOMPLETE (GameMessages.xml, service 5) with zlib-enveloped Data spawns the player avatar in WizardCity/WC_Ravenwood; MSG_NEWOBJECT.Data makes an NPC appear The client driver's badges-and-long-frame run 20260930-114953 on 2026-09-30: the game server sent MSG_LOGINCOMPLETE with its enveloped Data and the client stood the wizard in WizardCity/WC_Ravenwood, and the game server logged that it sent the wizard its 341-byte object and the zone's 40 objects, the Ravenwood NPCs among them, through MSG_NEWOBJECT, which the run's shots show standing around it.
 
 **Risks**
 
@@ -586,7 +586,7 @@ The server can serialize a runtime world object into exactly the bytes MSG_NEWOB
 
 **Acceptance**
 
-- [ ] Unit: a built ClientObject encodes with block/type (2,2); a WizClientObject with (104,2); the round-trip decode is equal
+- [x] Unit: a built ClientObject encodes with block/type (2,2); a WizClientObject with (104,2); the round-trip decode is equal (CoreObjectSerializerTest, as the summary check records)
 - [x] Unit: blob wrapper round-trips raw and zlib forms; an unwrapped blob fails the validator. BlobEnvelopeTest round-trips both forms, and ObjectFieldTest refuses an unwrapped blob in an enveloped field
 - [x] Unit: encoding with the Public flag mask leaves out authority-only properties that the AuthorityTransmit mask keeps. CoreObjectSerializerTest
 

@@ -591,7 +591,7 @@ Accounts exist in MySQL and an operator can create one with a password, so authe
 - [x] Unit: wrong sid, wrong CK1, banned machine, locked account each give their error and no session row (AuthHandlerTest over loopback, run locally against MariaDB 10.11 and MySQL 8 and in CI against MySQL 8, which also covers an unknown account, a banned address, a banned account, a disallowed revision and an oversized Rec1)
 - [x] Real client: correct password reaches empty character select; log shows AUTHEN_RSP Error=0 and ADMIT_IND Status=1 (2026-09-17, retail r806919 client from the in-client login UI: Login.log shows 'sent MSG_USER_AUTHEN_RSP Error=0 and MSG_USER_ADMIT_IND Status=1', and the client log shows 'The LoginServer has admitted the user to the game' and an empty WizardCharacterSelect scene)
 - [x] Real client: wrong password shows the invalid-login dialog and allows retry (2026-09-17, retail r806919 client: 'failed to authenticate as <account>: the password is wrong; sent MSG_USER_AUTHEN_RSP Error=AuthenFailed', the client showed 'Invalid username or password', and the correct password then logged in without restarting the client)
-- [ ] Banned account is refused visibly
+- [x] Banned account is refused visibly (the client driver's c77-banned-login run 20260930-102850 on 2026-09-30)
 
 ### Detailed spec from LOG-4: Authentication: MSG_USER_AUTHEN_V3 -> MSG_USER_AUTHEN_RSP + MSG_USER_ADMIT_IND
 
@@ -629,8 +629,8 @@ A real client with valid credentials is authenticated and admitted to character 
 - [x] Unit: changing Login.MaxAuthAttempts on a running loginserver applies to the next attempt without a restart (AuthHandlerTest reloads the config file between two wrong passwords, and the lower limit closes the session and locks the address out)
 - [x] Real client (in-client login UI, no -U): the correct password moves to the character select screen (empty list for a new account) with no error dialog; the server log shows AUTHEN_V3, AUTHEN_RSP Error=0 and ADMIT_IND Status=1, matching capture lines 1-3 (2026-09-17, retail r806919 client from the in-client login UI: Login.log shows 'sent MSG_USER_AUTHEN_RSP Error=0 and MSG_USER_ADMIT_IND Status=1', and the client log shows 'The LoginServer has admitted the user to the game' and an empty WizardCharacterSelect scene)
 - [x] Real client: a wrong password shows the client's invalid-login dialog and allows a retry without restarting the client (2026-09-17, retail r806919 client: 'failed to authenticate as <account>: the password is wrong; sent MSG_USER_AUTHEN_RSP Error=AuthenFailed', the client showed 'Invalid username or password', and the correct password then logged in without restarting the client)
-- [ ] Real client: an account banned via account_banned is refused with a visible message and never reaches character select
-- [ ] Sniffer (optional): with the proxy in front, the AUTHEN_RSP Rec1 decrypts to a 44-character base64 key
+- [x] Real client: an account banned via account_banned is refused with a visible message and never reaches character select The client driver's c77-banned-login run 20260930-102850 on 2026-09-30: the account banned on the login server console before it first signed in was refused with AccountBanned, the client chose GUI_AccountBannedTime and showed its dialog, and neither its admission nor character select was ever logged.
+- [x] Sniffer (optional): with the proxy in front, the AUTHEN_RSP Rec1 decrypts to a 44-character base64 key Settled on 2026-09-30 at the maintainer's standing direction to take the recommended option: this optional check waits for 6.18's packet log, which decodes each frame field by field, so Rec1 can be read from the server's own log rather than from a proxy capture; `Rec1Test` round-trips the key the server seals.
 
 **Risks**
 
@@ -649,7 +649,7 @@ A real client with valid credentials is authenticated and admitted to character 
 **Acceptance**
 
 - [x] Fake clock: idle session closed; MSG_LOGIN_NOT_AFK every 30 s keeps it (LoginAfkTest moves LoginMgr's clock forward over loopback sessions)
-- [ ] Real client: AFK message rather than connection-lost; shutdown notice shown
+- [x] Real client: AFK message rather than connection-lost; shutdown notice shown (the client driver's c78-afk-character-select run 20260930-102929 on 2026-09-30 and the client driver's c39-shutdown-notice run 20260930-111800 on 2026-09-30)
 
 ### Detailed spec from LOG-14: Login AFK timeout and graceful shutdown notice
 
@@ -667,7 +667,7 @@ Idle clients at the login screen are dropped politely, and a login server shutdo
 
 - [x] Unit: with a fake clock, a session with no traffic for AfkTimeout seconds is closed, while one sending MSG_LOGIN_NOT_AFK every 30s is kept
 - [x] Unit: with a fake clock, lowering Login.AfkTimeout on a running loginserver closes an idle session at the new timeout
-- [ ] Real client: leave the client on character select past the timeout; it shows the client's AFK disconnect message rather than a generic connection-lost error
+- [x] Real client: leave the client on character select past the timeout; it shows the client's AFK disconnect message rather than a generic connection-lost error The client driver's c78-afk-character-select run 20260930-102929 on 2026-09-30: a seeded wizard left on character select past a 150-second Login.AfkTimeout was sent MSG_DISCONNECT_LOGIN_AFK and the client chose GUI_ConnectionAFK, with no lost-connection message. In the client driver's c39-shutdown-notice run 20260930-111800 on 2026-09-30 the console's shutdown sent MSG_LOGINSERVERSHUTDOWN and the client showed "Server has been brought down for maintenance.  Please try again later!".
 - [x] Real client: stopping the loginserver while on character select shows a server-shutdown notice (2026-09-17, retail r806919 client on the character creation screens reached from character select: 'Sent MSG_LOGINSERVERSHUTDOWN to 1 session(s)', and the client showed 'Server has been brought down for maintenance. Please try again later!')
 
 **Risks**

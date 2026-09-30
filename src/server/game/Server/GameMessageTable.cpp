@@ -60,6 +60,7 @@ namespace
             Accept<&GameSession::HandleCombatCheat>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatCheat");
 
             Refuse(GameService, "MSG_ATTACHFAILED");
+            Refuse(GameService, "MSG_BADGES");
             Refuse(GameService, "MSG_LOGINCOMPLETE");
             Refuse(GameService, "MSG_SERVERMOVE");
             Refuse(GameService, "MSG_MOVESTATE");
@@ -84,6 +85,7 @@ namespace
             PendingRest(Wizard3Service, any);
 
             Sends<AttachFailed>();
+            Sends<Badges>();
             Sends<LoginComplete>();
             Sends<NewObject>();
             Sends<RemoveObject>();

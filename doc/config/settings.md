@@ -22,6 +22,8 @@ Access says who may see and change a setting over the admin API and the panel. A
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
 | `Character.AllowChosenNames` | bool | false | none | live | loginserver | normal | Whether any account may name a wizard freely rather than from the client's name tables. |
+| `Character.DeleteMode` | string | soft | at most 8 bytes | live | loginserver | normal | What deleting a wizard from character select does, read on each delete: soft keeps its row, with the time and the account it was taken from, so a game master can restore it; hard removes it and everything it holds. |
+| `Character.KeepDeletedDays` | unsigned | 0 days | from 0 to 36500 days | live | loginserver | normal | How long a soft-deleted wizard is kept before the next delete removes it for good, read on each delete; 0 keeps them all. |
 | `Character.MaxPerAccount` | unsigned | 6 | from 0 to 250 | live | loginserver | normal | How many wizards an account may hold. |
 
 ## Chat
@@ -37,6 +39,12 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `GM.CommandPrefix` | string | . | at most 8 bytes | live | gameserver | normal | What a chat line starts with to be read as a command. |
 | `GM.LogCommands` | bool | true | none | live | gameserver | normal | Whether every command run is written to the log. |
 | `GM.PlayerCommandsAsChat` | bool | true | none | live | gameserver | normal | Whether a player's chat line that starts with the command prefix is said as an ordinary line; when off it is refused and the player told so. An account above player level runs such a line as a command. |
+
+## Diagnostics
+
+| Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
+|---|---|---|---|---|---|---|---|
+| `LoginComplete.SaveDataTo` | string | empty | at most 1024 bytes | live | gameserver | normal | A folder the game server writes each MSG_LOGINCOMPLETE Data it sends into, as the enveloped bytes the client receives, for reading with client core; empty writes nothing. |
 
 ## Files
 
@@ -82,6 +90,9 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Network.KeepAliveTimeout` | unsigned | 15 s | from 1 to 3600 s | next connection or operation | gameserver, loginserver | normal | How long a keepalive may go unanswered before the connection is closed. |
 | `Network.MaxConnectionsPerIP` | unsigned | 100 | from 1 to 100000 | live | gameserver, loginserver | normal | How many simultaneous client connections one IP address may hold. |
 | `Network.MaxStrikes` | unsigned | 10 | from 1 to 1000 | next connection or operation | gameserver, loginserver | normal | How many refused or malformed messages a connection may send before it is closed. |
+| `Network.PacketLog.Enable` | bool | false | none | live | gameserver, loginserver | normal | Whether every DML message a session sends or receives is written to the network.packets log by name with its fields, read at each message; a message carrying credentials is written without its field values. |
+| `Network.PacketLog.Filter` | string | empty | at most 2048 bytes | live | gameserver, loginserver | normal | The message tags the packet log keeps, separated by commas or spaces, read at each message; empty keeps every message not suppressed. |
+| `Network.PacketLog.Suppress` | string | MSG_CLIENTMOVE,MSG_SERVERMOVE,MSG_NEWOBJECT,MSG_REMOVEOBJECT,MSG_LOGIN_NOT_AFK | at most 2048 bytes | live | gameserver, loginserver | normal | The message tags the packet log leaves out, separated by commas or spaces, read at each message; keepalives are control frames and are never written. |
 | `Network.PingBurst` | unsigned | 16 | from 1 to 100000 | next connection or operation | gameserver, loginserver | normal | How many pings a connection may send at once before a ping counts as a strike. |
 | `Network.PingsPerSecond` | unsigned | 4 | from 1 to 100000 | next connection or operation | gameserver, loginserver | normal | How fast that allowance of pings refills, per second. |
 | `Network.RateLimit.Burst` | unsigned | 150 | from 1 to 100000 | live | gameserver, loginserver | normal | How many inbound frames a session may receive in a burst before frames count against its per-second rate. |
@@ -141,6 +152,8 @@ Access says who may see and change a setting over the admin API and the panel. A
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
+| `Visibility.Distance` | float | 0 world units | from 0 to 100000 world units | live | gameserver | normal | How near an object must come to a wizard to be shown to it, read at each visibility update; 0 takes the zone's own far clip, and a zone with none shows everything. |
+| `Visibility.Hysteresis` | float | 20 world units | from 0 to 10000 world units | live | gameserver | normal | How far past the visibility distance an object already shown may go before it is taken away, read at each visibility update, so one standing at the edge is not shown and taken away over and over. |
 | `Zone.MobileIdReleaseDelay` | unsigned | 2000 ms | from 0 to 60000 ms | next connection or operation | gameserver | normal | How long a mobile id rests after its wizard leaves before another wizard may take it. |
 | `Zone.MoveFlushInterval` | unsigned | 250 ms | from 50 to 5000 ms | next connection or operation | gameserver | normal | How often the moves and movement states of the wizards in an instance are sent to the others in it, read at each flush. |
 | `Zone.MoveIdleIntervals` | unsigned | 2 | from 1 to 100 | next connection or operation | gameserver | normal | How many flushes a wizard said to be moving may pass without a new move before the others are told it is standing, read at each flush. |

@@ -7,6 +7,7 @@ vcpkg_from_github(
     PATCHES
         remove-cpm.patch
         initialise-request-flags.patch
+        stop-on-the-io-thread.patch
 )
 
 vcpkg_cmake_configure(

@@ -79,7 +79,7 @@ namespace
                     return JsonKind::Object;
                 return std::nullopt;
             case Level::Class:
-                if (key == "name" || key == "evidence")
+                if (key == "name" || key == "evidence" || key == "source")
                     return JsonKind::String;
                 if (key == "hash")
                     return JsonKind::Unsigned;
@@ -208,6 +208,8 @@ namespace
                 CurrentClass().Name = std::move(value);
             else if (Top() == Level::Class && _key == "evidence")
                 CurrentClass().Evidence = std::move(value);
+            else if (Top() == Level::Class && _key == "source")
+                CurrentClass().Source = std::move(value);
             else if (Top() == Level::Property && _key == "type")
                 CurrentProperty().Type = std::move(value);
             else if (Top() == Level::Property && _key == "container")
@@ -484,6 +486,28 @@ bool TypeDumpLoader::Parse(std::string_view text, RawDump& dump, std::vector<std
     return parsed && errors.empty();
 }
 
+std::optional<uint32> TypeDumpLoader::UnnamedHash(std::string_view propertyName)
+{
+    if (propertyName.size() < 2 || propertyName.front() != UnnamedPrefix)
+        return std::nullopt;
+    std::string_view const digits = propertyName.substr(1);
+    if (digits.front() == '0' && digits.size() > 1)
+        return std::nullopt;
+    return Ambrose::StringTo<uint32>(digits, 10);
+}
+
+std::string TypeDumpLoader::UnnamedName(uint32 hash)
+{
+    return fmt::format("{}{}", UnnamedPrefix, hash);
+}
+
+uint32 TypeDumpLoader::ExpectedPropertyHash(std::string_view typeName, std::string_view propertyName)
+{
+    if (std::optional<uint32> const hash = UnnamedHash(propertyName))
+        return *hash;
+    return StringHash::PropertyHash(typeName, propertyName);
+}
+
 std::string TypeDumpLoader::Canonicalize(std::string_view typeName)
 {
     std::string_view name = typeName;
@@ -589,7 +613,7 @@ TypeCatalogPtr TypeCatalogBuilder::Build(TypeDumpLoader::RawDump dump, std::stri
                 errors.push_back(fmt::format("{} has container {}, which is not Static, List or Vector", where, Ambrose::ForLog(*property.Container)));
             if (!Narrow(property.Id) || !Narrow(property.Offset) || !Narrow(property.Flags))
                 errors.push_back(fmt::format("{} has an id, offset or flags value above 32 bits", where));
-            uint32 const expectedProperty = StringHash::PropertyHash(*property.Type, property.Name);
+            uint32 const expectedProperty = TypeDumpLoader::ExpectedPropertyHash(*property.Type, property.Name);
             if (Narrow(property.Hash) != expectedProperty)
                 errors.push_back(fmt::format("{} records hash {}, but its type and name hash to {}", where, *property.Hash, expectedProperty));
             for (auto const& [optionName, value] : property.Options)

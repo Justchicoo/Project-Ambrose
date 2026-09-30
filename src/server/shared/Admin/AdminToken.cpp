@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Takes the admin API token from Admin.Token or its token file, generating 32 random bytes into a file it creates itself so the owner and the permissions are always the ones built here, keeping that file in the data folder or, where the machine names none, in the folder the config file came from, putting that owner and those permissions back on a file that already exists, and refusing a token that is too short or holds anything but printable characters; on Windows a file kept for the machine also names the local system account and the Administrators group in an access list that inherits nothing, while elsewhere every such file is the owner's alone with mode 0600.
+ * Takes the admin API token from Admin.Token or its token file, reading either without writing anything when a caller only asks, and otherwise generating 32 random bytes into a file it creates itself when there is none, so the owner and the permissions are always the ones built here, keeping that file in the data folder or, where the machine names none, in the folder the config file came from, putting that owner and those permissions back on a file that already exists, and refusing a token that is too short or holds anything but printable characters; on Windows a file kept for the machine also names the local system account and the Administrators group in an access list that inherits nothing, while elsewhere every such file is the owner's alone with mode 0600.
  */
 
 #include "AdminToken.h"
@@ -288,54 +288,73 @@ bool AdminToken::SecureFile(std::filesystem::path const& file, std::string& erro
     return SecureOwnerOnly(file, readers, error);
 }
 
-AdminTokenResult AdminToken::Resolve(ListenerSettings const& settings, std::string const& appName, std::filesystem::path const& dataFolder, std::filesystem::path const& fallbackFolder)
+AdminTokenResult AdminToken::Read(ListenerSettings const& settings, std::string const& appName, std::filesystem::path const& dataFolder, std::filesystem::path const& fallbackFolder)
 {
     AdminTokenResult result;
     if (!settings.Token.empty())
     {
         if (std::optional<std::string> const problem = Validate(settings.Token))
         {
-            result.Error = fmt::format("Admin.Token {}", *problem);
+            result.Error = fmt::format("{} {}", settings.Option("Token"), *problem);
             return result;
         }
         result.Token = settings.Token;
-        result.Source = "Admin.Token";
+        result.Source = settings.Option("Token");
         return result;
     }
 
     result.File = settings.TokenFile.empty() ? DefaultFile(appName, dataFolder, fallbackFolder) : settings.TokenFile;
-    result.Source = "Admin.TokenFile";
+    result.Source = settings.Option("TokenFile");
     if (result.File.empty())
     {
-        result.Error = "the admin API has no token and no file to keep one in: set Admin.Token or Admin.TokenFile";
+        result.Error = fmt::format("the admin API has no token and no file to keep one in: set {} or {}", settings.Option("Token"), settings.Option("TokenFile"));
         return result;
     }
 
     std::string const path = ConfigMgr::PathToUtf8(result.File);
     std::error_code code;
+    if (!std::filesystem::is_regular_file(result.File, code))
+    {
+        result.Error = fmt::format("the admin API token file {} does not exist; {} makes it the first time it starts", path, appName);
+        return result;
+    }
+    std::ifstream stream(result.File, std::ios::binary);
+    if (!stream)
+    {
+        result.Error = fmt::format("the admin API token file {} cannot be read", path);
+        return result;
+    }
+    std::ostringstream contents;
+    contents << stream.rdbuf();
+    std::string const token(Ambrose::Trim(contents.str()));
+    if (std::optional<std::string> const problem = Validate(token))
+    {
+        result.Error = fmt::format("the admin API token in {} {}; delete the file to have a new token generated", path, *problem);
+        return result;
+    }
+    result.Token = token;
+    return result;
+}
+
+AdminTokenResult AdminToken::Resolve(ListenerSettings const& settings, std::string const& appName, std::filesystem::path const& dataFolder, std::filesystem::path const& fallbackFolder)
+{
+    AdminTokenResult result = Read(settings, appName, dataFolder, fallbackFolder);
+    if (!settings.Token.empty() || result.File.empty())
+        return result;
+
+    std::string const path = ConfigMgr::PathToUtf8(result.File);
+    std::error_code code;
     if (std::filesystem::is_regular_file(result.File, code))
     {
-        std::ifstream stream(result.File, std::ios::binary);
-        if (!stream)
-        {
-            result.Error = fmt::format("the admin API token file {} cannot be read", path);
+        if (!result.Succeeded())
             return result;
-        }
-        std::ostringstream contents;
-        contents << stream.rdbuf();
-        std::string const token(Ambrose::Trim(contents.str()));
-        if (std::optional<std::string> const problem = Validate(token))
-        {
-            result.Error = fmt::format("the admin API token in {} {}; delete the file to have a new token generated", path, *problem);
-            return result;
-        }
-        result.Token = token;
         std::string secured;
         if (!SecureFile(result.File, secured))
             result.Warning = fmt::format("the admin API token file {} cannot be made readable only by this user: {}", path, secured);
         return result;
     }
 
+    result.Error.clear();
     result.Token = Generate();
     std::string error;
     if (!WriteSecretFile(result.File, result.Token, error))

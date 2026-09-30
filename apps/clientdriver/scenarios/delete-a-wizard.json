@@ -1,0 +1,247 @@
+{
+ "include": "parts/common.json",
+ "requires": {
+  "gameserver": true
+ },
+ "game_settings": [
+  "Logger.server=2,Console Server Errors Stream",
+  "Realm.Name=Ambrose Driver",
+  "Logger.network.session=2,Console Server Errors Stream"
+ ],
+ "server_log_allowed": [
+  "character_create_school holds no school, so no wizard can be created until it does",
+  "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+ ],
+ "title": "A wizard deleted from character select with the client's own confirmation word is gone from the list and stays gone after a relog, its row kept",
+ "notes": [
+  "3.17's real-client check: two wizards are seeded; the first one listed is deleted with the Delete button, the word the client asks for,",
+  "ABRACADABRA as LocalError_ABRACADABRA holds it, typed into the dialog's text box, and the dialog's own Delete; the login server soft-deletes it, keeping its row with deleted_at set, and after the client",
+  "quits and logs in again only one wizard is listed."
+ ],
+ "wizard": {
+  "school": 2343174,
+  "zone": "WizardCity/WC_Ravenwood",
+  "zone_display": "Ravenwood",
+  "locale": "en-US",
+  "first": 1,
+  "middle": 1,
+  "last": 1,
+  "level": 1,
+  "appearance": {
+   "gender": 1,
+   "race": 79806088,
+   "hair_model": 6,
+   "hair_color": 60,
+   "hat_color": 4,
+   "hat_decal": 4,
+   "torso_color": 4,
+   "torso_decal": 4,
+   "feet_color": 4,
+   "feet_decal": 12
+  }
+ },
+ "more_wizards": [
+  {
+   "school": 72777,
+   "zone": "WizardCity/WC_Ravenwood",
+   "zone_display": "Ravenwood",
+   "locale": "en-US",
+   "first": 5,
+   "middle": 9,
+   "last": 14,
+   "level": 12,
+   "appearance": {
+    "gender": 0,
+    "race": 79806088,
+    "hair_model": 6,
+    "hair_color": 20,
+    "hat_color": 9,
+    "hat_decal": 4,
+    "torso_color": 9,
+    "torso_decal": 4,
+    "feet_color": 4,
+    "feet_decal": 12
+   }
+  }
+ ],
+ "steps": [
+  {
+   "action": "wait_client_log",
+   "name": "the client brings its renderer up",
+   "pattern": "About to initialize graphical client\\.",
+   "timeout": 180
+  },
+  {
+   "action": "wait_screen",
+   "name": "the login window is on the screen",
+   "screens": [
+    "login"
+   ],
+   "timeout": 120
+  },
+  {
+   "action": "submit_login",
+   "name": "log in",
+   "password": "{password}"
+  },
+  {
+   "action": "wait_server_log",
+   "name": "the server accepts the password",
+   "pattern": "authenticated as {user} \\(id \\d+\\)",
+   "timeout": 30
+  },
+  {
+   "action": "wait_client_log",
+   "name": "the client is admitted",
+   "pattern": "The LoginServer has admitted the user",
+   "timeout": 30
+  },
+  {
+   "action": "wait_server_log",
+   "name": "the server lists both wizards",
+   "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+   "timeout": 30,
+   "expect": "2",
+   "record": true
+  },
+  {
+   "action": "wait_client_log",
+   "name": "the character selection scene loads",
+   "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+   "timeout": 120
+  },
+  {
+   "action": "wait_screen",
+   "name": "the character selection screen is on the screen",
+   "screens": [
+    "charselect"
+   ],
+   "timeout": 90
+  },
+  {
+   "action": "shot",
+   "name": "both wizards before the delete",
+   "file": "before",
+   "settle": 3
+  },
+  {
+   "action": "click",
+   "name": "press delete",
+   "target": "charselect_delete",
+   "attempts": 3
+  },
+  {
+   "action": "shot",
+   "name": "the confirmation the client asks for",
+   "file": "confirmation",
+   "settle": 2
+  },
+  {
+   "action": "click",
+   "name": "choose the text box",
+   "target": "delete_word_field",
+   "attempts": 1
+  },
+  {
+   "action": "type",
+   "name": "type the confirmation word",
+   "text": "ABRACADABRA"
+  },
+  {
+   "action": "shot",
+   "name": "the word typed",
+   "file": "word-typed",
+   "settle": 1
+  },
+  {
+   "action": "click",
+   "name": "press the dialog's Delete",
+   "target": "delete_word_confirm",
+   "attempts": 3,
+   "until": {
+    "action": "wait_server_log",
+    "pattern": "Session \\d+ deleted character (\\d+) of account \\d+",
+    "timeout": 15,
+    "record": true
+   }
+  },
+  {
+   "action": "shot",
+   "name": "the list after the delete",
+   "file": "after",
+   "settle": 3
+  },
+  {
+   "action": "wait_db",
+   "name": "the row is kept with deleted_at set",
+   "database": "characters",
+   "query": "SELECT COUNT(*) FROM characters WHERE deleted_at IS NOT NULL AND deleted_account IS NOT NULL AND account = 0",
+   "expect": "1",
+   "timeout": 10
+  },
+  {
+   "action": "restart_client",
+   "name": "quit the client and start it again",
+   "timeout": 240
+  },
+  {
+   "action": "wait_client_log",
+   "name": "the client brings its renderer up, again",
+   "pattern": "About to initialize graphical client\\.",
+   "timeout": 180
+  },
+  {
+   "action": "wait_screen",
+   "name": "the login window is on the screen, again",
+   "screens": [
+    "login"
+   ],
+   "timeout": 120
+  },
+  {
+   "action": "submit_login",
+   "name": "log in, again",
+   "password": "{password}"
+  },
+  {
+   "action": "wait_server_log",
+   "name": "the server accepts the password, again",
+   "pattern": "authenticated as {user} \\(id \\d+\\)",
+   "timeout": 30
+  },
+  {
+   "action": "wait_client_log",
+   "name": "the client is admitted, again",
+   "pattern": "The LoginServer has admitted the user",
+   "timeout": 30
+  },
+  {
+   "action": "wait_server_log",
+   "name": "the server lists one wizard, again",
+   "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+   "timeout": 30,
+   "expect": "1",
+   "record": true
+  },
+  {
+   "action": "wait_client_log",
+   "name": "the character selection scene loads, again",
+   "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+   "timeout": 120
+  },
+  {
+   "action": "wait_screen",
+   "name": "the character selection screen is on the screen, again",
+   "screens": [
+    "charselect"
+   ],
+   "timeout": 90
+  },
+  {
+   "action": "shot",
+   "name": "one wizard after the relog",
+   "file": "after-relog",
+   "settle": 3
+  }
+ ]
+}

@@ -112,6 +112,15 @@ jobs:
           PR_BRANCH: ${{ github.head_ref }}
           CHECK_RANGE: ${{ github.event_name == 'pull_request' && format('{0}...{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
         run: python apps/ci/ci_roadmap_state.py --range "$CHECK_RANGE" --branch "$PR_BRANCH"
+      - name: SQL changes
+        if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push') }}
+        env:
+          CHECK_RANGE: ${{ github.event_name == 'pull_request' && format('{0}...{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: python apps/ci/ci_sql.py check --range "$CHECK_RANGE" --labels "$PR_LABELS"
+      - name: Pending SQL on main
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+        run: python apps/ci/ci_sql.py promote --check
       - name: Commit trailers
         if: ${{ !cancelled() }}
         env:

@@ -1,14 +1,14 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the Panel options into a listener of the same shape as an app's admin API, opens the store and then the keyring before the listener so nothing serves without somewhere to write or the keys its secrets need, lends that store under its own lock to the supervisor's live settings and to an owner's protected file patterns, which are saved in the same transaction as the audit row naming who changed them, names the certificate and key in Panel option names when the bind rule refuses them, and starts, reloads and stops the listener beside the supervisor's own; a reload that would leave the bind unsafe or the certificate unservable, or name a two-factor requirement the panel does not know, is refused and the old listener and requirement keep serving. Signing in also says which role the operator holds and every permission that role allows, so the pages a person cannot use are never drawn for them and the panel never has to ask again what somebody is allowed to do. An operator with two-factor sign-in is given no session for a password alone: the password earns a challenge held in memory under the hash of a short-lived cookie, which dies after a few attempts or minutes, and only a code or a recovery code from that operator turns it into a session, the one-time password link included; an operator who already has two-factor sign-in moves to another authenticator only with a current code or recovery code from the one in use as well as the password and a code from the new one, so a session and a password alone cannot swap the factor out. A code or recovery code is checked and spent under the same lock every recorded change holds, so it never lands inside another request's transaction and is never undone with it. Every authenticated route and socket is held to the two-factor requirement except the routes that turn it on, and a danger permission, a secret reveal or a restricted change asks for a check of who the caller is within the last few minutes, records what that check authorized, and changes nothing while it is missing. A route that asks for a permission the catalog does not hold is left out and named in a warning as the panel starts, so a misnamed key costs its page loudly rather than silently. A settings change, reset, batch or reload an app answered through the relay is recorded, a dry run not being a change, with who asked, from where, why and how it ended, refused ones too, and a read that showed a secret is recorded with the keys it showed, never a value; no code, secret or password ever reaches an audit row or a log line. The event socket and its ticket route are registered with the rest, its streams and its sweeper start once the listener is up and stop before it closes.
+ * Reads the Panel options into a listener of the same shape as an app's admin API, opens the store and then the keyring before the listener so nothing serves without somewhere to write or the keys its secrets need, lends that store under its own lock to the supervisor's live settings and to an owner's protected file patterns, which are saved in the same transaction as the audit row naming who changed them, names the certificate and key in Panel option names when the bind rule refuses them, and starts, reloads and stops the listener beside the supervisor's own; a reload that would leave the bind unsafe or the certificate unservable, or name a two-factor requirement the panel does not know, is refused and the old listener and requirement keep serving. Signing in also says which role the operator holds and every permission that role allows, so the pages a person cannot use are never drawn for them and the panel never has to ask again what somebody is allowed to do. An operator with two-factor sign-in is given no session for a password alone: the password earns a challenge held in memory under the hash of a short-lived cookie, which dies after a few attempts or minutes, and only a code or a recovery code from that operator turns it into a session, the one-time password link included; an operator who already has two-factor sign-in moves to another authenticator only with a current code or recovery code from the one in use as well as the password and a code from the new one, so a session and a password alone cannot swap the factor out. A code or recovery code is checked and spent under the same lock every recorded change holds, so it never lands inside another request's transaction and is never undone with it. Every authenticated route and socket is held to the two-factor requirement except the routes that turn it on, and a danger permission, a secret reveal or a restricted change asks for a check of who the caller is within the last few minutes, records what that check authorized, and changes nothing while it is missing. A route that asks for a permission the catalog does not hold is left out and named in a warning as the panel starts, so a misnamed key costs its page loudly rather than silently. A settings change, reset, batch or reload an app answered through the relay is recorded, a dry run not being a change, with who asked, from where, why and how it ended, refused ones too, and a read that showed a secret is recorded with the keys it showed, never a value; no code, secret or password ever reaches an audit row or a log line. The event socket and its ticket route are registered with the rest, its streams and its sweeper start once the listener is up and stop before it closes. Every single-use link, the owner claim printed at each start while there is no operator, a password link, a local link and a pairing link, is issued through one path that audits it with the store change in one transaction and never writes its token anywhere but the answer, makes the owner with a password nobody is told when a desktop link finds the panel empty, refuses a local link a loopback peer cannot reach and a pairing a plain listener would carry unencrypted, and pins a pairing to the certificate the listener serves now; a link is traded once, counted per address when wrong or spent, burned when used from where it does not belong, and opens a session only through the second factor its operator has, and no Argon2id hash ever runs inside an open transaction.
  */
 
 #include "Panel.h"
+#include "AdminClient.h"
 #include "AdminConfigView.h"
 #include "PanelErrorReport.h"
 #include "ConfigMgr.h"
 #include "PanelSettingStore.h"
-#include "ConstantTime.h"
 #include "CryptoRandom.h"
 #include "Base64.h"
 #include "IpAddress.h"
@@ -77,11 +77,104 @@ namespace
     {
         return AdminResponse::Problem(403, "check_refused", "That password and code do not confirm it is you");
     }
+
+    constexpr std::string_view PlainRemoteMessage =
+        "The panel serves plain HTTP beyond this machine, so a pairing would send its token and the session it opens unencrypted; set Panel.CertificateFile and "
+        "Panel.PrivateKeyFile, which supervisor --panel-self-signed can write, and pair again";
+    constexpr std::string_view PlainLocalMessage =
+        "The panel serves plain HTTP on this machine only, so a pairing can name only a loopback address; to pair from another machine set Panel.CertificateFile and "
+        "Panel.PrivateKeyFile, which supervisor --panel-self-signed can write";
+
+    std::string UrlHost(std::string_view host)
+    {
+        return host.find(':') == std::string_view::npos ? std::string(host) : fmt::format("[{}]", host);
+    }
+
+    bool IsLoopbackHost(std::string_view host)
+    {
+        if (Ambrose::EqualsIgnoreCase(host, "localhost"))
+            return true;
+        std::optional<asio::ip::address> const address = Ambrose::Asio::MakeAddress(host);
+        return address && Ambrose::Asio::IsLoopback(*address);
+    }
+
+    bool IsHostName(std::string_view host)
+    {
+        if (host.empty() || host.size() > 253 || host.front() == '.' || host.back() == '.' || host.front() == '-' || host.back() == '-')
+            return false;
+        return std::all_of(host.begin(), host.end(), [](char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-'; });
+    }
+
+    bool ReadAddress(std::string_view text, uint16 defaultPort, std::string& host, uint16& port, std::string& problem)
+    {
+        text = Ambrose::Trim(text);
+        if (text.empty())
+        {
+            problem = "Give the address the program reaches the panel at, as host or host:port";
+            return false;
+        }
+        std::string_view name = text;
+        std::string_view portText;
+        bool bracketed = false;
+        if (text.front() == '[')
+        {
+            std::size_t const close = text.find(']');
+            if (close == std::string_view::npos)
+            {
+                problem = "An IPv6 address in brackets needs its closing bracket";
+                return false;
+            }
+            name = text.substr(1, close - 1);
+            std::string_view const rest = text.substr(close + 1);
+            if (!rest.empty() && rest.front() != ':')
+            {
+                problem = "Write the port after the bracket and a colon, as [::1]:12080";
+                return false;
+            }
+            portText = rest.empty() ? std::string_view() : rest.substr(1);
+            if (!rest.empty() && portText.empty())
+            {
+                problem = "A colon after the address takes a port";
+                return false;
+            }
+            bracketed = true;
+        }
+        else if (std::size_t const colon = text.find(':'); colon != std::string_view::npos && text.find(':', colon + 1) == std::string_view::npos)
+        {
+            name = text.substr(0, colon);
+            portText = text.substr(colon + 1);
+            if (portText.empty())
+            {
+                problem = "A colon after the host takes a port";
+                return false;
+            }
+        }
+        std::optional<asio::ip::address> const address = Ambrose::Asio::MakeAddress(name);
+        bool const valid = bracketed ? (address && address->is_v6()) : (address.has_value() || IsHostName(name));
+        if (!valid || (address && Ambrose::Asio::IsUnspecified(*address)))
+        {
+            problem = fmt::format("{} is not an address or a host name; write IPv6 in brackets, as [::1]:12080", Ambrose::ForLog(text));
+            return false;
+        }
+        port = defaultPort;
+        if (!portText.empty())
+        {
+            std::optional<uint16> const parsed = Ambrose::StringTo<uint16>(portText);
+            if (!parsed || *parsed == 0)
+            {
+                problem = fmt::format("{} is not a port from 1 to 65535", Ambrose::ForLog(portText));
+                return false;
+            }
+            port = *parsed;
+        }
+        host = address ? address->to_string() : Ambrose::ToLower(name);
+        return true;
+    }
 }
 
 Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path configFolder)
     : _log(log), _dataFolder(std::move(dataFolder)), _store(), _settings(_store), _users(_store), _sessions(_store), _errors(_store), _grants(_store), _keyring(),
-      _twoFactor(_store, _keyring), _fileRules(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
+      _twoFactor(_store, _keyring), _fileRules(_store), _links(_store), _listener(log, "panel", _dataFolder, std::move(configFolder))
 {
     _listener.Routes().SetThrottle([this](AdminRequest const& request, uint32 cost) { return Throttle(request, cost); });
     _listener.SetSessionSource(&_sessions);
@@ -260,6 +353,11 @@ PanelTwoFactorSettings Panel::TwoFactorSettings() const
 {
     std::lock_guard const lock(_twoFactorMutex);
     return _twoFactorSettings;
+}
+
+void Panel::SetDashboard(EmbeddedPage const* page)
+{
+    _listener.SetEmbeddedDashboard(page);
 }
 
 bool Panel::Start(ConfigMgr const& config, std::string& error)
@@ -697,6 +795,7 @@ void Panel::RegisterSignIn()
     routes.AddPublic("GET", "/api/panel/session", [this](AdminRequest const& request) { return Probe(request); });
     routes.AddPublic("GET", "/api/session", [this](AdminRequest const& request) { return Probe(request); });
     routes.AddPublic("POST", "/api/panel/reset", [this](AdminRequest const& request) { return Reset(request); });
+    routes.AddPublic("POST", std::string(LinkPath), [this](AdminRequest const& request) { return TradeLink(request); });
     routes.AddEnrollment("DELETE", "/api/panel/session", [this](AdminRequest const& request) { return SignOut(request); });
     routes.AddEnrollment("GET", "/api/panel/me", [this](AdminRequest const& request) { return WhoAmI(request); });
     routes.AddOpen("GET", "/api/panel/permissions", [](AdminRequest const&) { return AdminResponse::Json(200, PanelPermissions::CatalogJson()); });
@@ -1234,12 +1333,22 @@ AdminResponse Panel::SignIn(AdminRequest const& request)
     return OpenFor(user, request, "a username and password");
 }
 
-AdminResponse Panel::Challenged(PanelUser const& user, AdminRequest const& request, std::string_view how)
+AdminResponse Panel::Challenged(PanelUser const& user, AdminRequest const& request, std::string_view how, LinkUsed const* link)
 {
     PanelTwoFactorSettings const settings = TwoFactorSettings();
     std::array<uint8, 32> const bytes = Ambrose::Crypto::GetRandomArray<32>();
     std::string const secret = Base64::Encode(bytes, Base64::Alphabet::UrlSafe, Base64::Padding::Omitted);
     auto const now = std::chrono::steady_clock::now();
+    Challenge challenge;
+    challenge.UserId = user.Id;
+    challenge.Username = user.Username;
+    challenge.How = std::string(how);
+    challenge.Expires = now + settings.ChallengeLifetime;
+    if (link)
+    {
+        challenge.LinkId = link->Id;
+        challenge.LinkKind = link->Kind;
+    }
     {
         std::lock_guard const lock(_challengeMutex);
         std::erase_if(_challenges, [now](auto const& entry) { return now >= entry.second.Expires; });
@@ -1248,7 +1357,7 @@ AdminResponse Panel::Challenged(PanelUser const& user, AdminRequest const& reque
             auto const oldest = std::min_element(_challenges.begin(), _challenges.end(), [](auto const& left, auto const& right) { return left.second.Expires < right.second.Expires; });
             _challenges.erase(oldest);
         }
-        _challenges.insert_or_assign(ChallengeKey(secret), Challenge{ user.Id, user.Username, std::string(how), now + settings.ChallengeLifetime, 0 });
+        _challenges.insert_or_assign(ChallengeKey(secret), std::move(challenge));
     }
 
     AuditEvent challenged;
@@ -1259,7 +1368,16 @@ AdminResponse Panel::Challenged(PanelUser const& user, AdminRequest const& reque
     challenged.Address = request.RemoteAddress;
     challenged.UserAgent = request.UserAgent;
     challenged.Reason = fmt::format("{} checked out, and a second factor is asked for", how);
+    if (link)
+    {
+        nlohmann::json properties;
+        properties["link"] = link->Id;
+        properties["link_kind"] = link->Kind;
+        challenged.Properties = properties.dump();
+    }
     challenged.On("panel_user", std::to_string(user.Id), user.Username);
+    if (link)
+        challenged.On("panel_link", link->Id, link->Kind);
     std::string failure;
     if (!Record(challenged, {}, failure))
         AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A second-factor challenge could not be recorded: {}", failure);
@@ -1358,7 +1476,9 @@ AdminResponse Panel::SecondFactor(AdminRequest const& request)
     properties["second_factor"] = method;
     if (method == "recovery_code")
         properties["recovery_codes_left"] = _twoFactor.RecoveryCodesLeft(user->Id, error);
-    AdminResponse response = OpenFor(*user, request, fmt::format("{}, then a {}", challenge.How, method == "totp" ? "TOTP code" : "recovery code"), &properties);
+    LinkUsed const used{ challenge.LinkId, challenge.LinkKind };
+    AdminResponse response = OpenFor(*user, request, fmt::format("{}, then a {}", challenge.How, method == "totp" ? "TOTP code" : "recovery code"), &properties,
+        challenge.LinkId.empty() ? nullptr : &used);
     response.Headers.emplace_back("Set-Cookie", _listener.MakeCookie(ChallengeCookie, "", 0));
     return response;
 }
@@ -1849,26 +1969,463 @@ bool Panel::ResetTwoFactor(PanelUser const& user, std::string_view actor, std::s
 void Panel::OfferTheOwnerLink()
 {
     std::string error;
-    if (!_users.IsEmpty(error))
+    bool empty = false;
+    {
+        std::lock_guard const lock(_storeMutex);
+        empty = _store.IsOpen() && _users.IsEmpty(error);
+    }
+    if (!empty)
     {
         if (!error.empty())
             AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "The panel could not read its users: {}", error);
         return;
     }
 
-    std::array<uint8, 32> const bytes = Ambrose::Crypto::GetRandomArray<32>();
+    PanelLinkRefusal refusal;
+    std::optional<PanelLinkIssued> const issued = IssueLink({ PanelLinkKind::OwnerClaim, {}, {} }, { AuditActor::System, {}, "supervisor", {} }, refusal);
+    if (!issued)
     {
-        std::lock_guard const lock(_claimMutex);
-        _claimToken = Base64::Encode(bytes, Base64::Alphabet::UrlSafe, Base64::Padding::Omitted);
-        _claimExpires = std::chrono::steady_clock::now() + ClaimLifetime;
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "The panel has no operator yet, and the link that makes the first one could not be made: {}", refusal.Message);
+        return;
     }
-    std::string const host = _listener.GetBindIp() == "0.0.0.0" || _listener.GetBindIp() == "::" ? std::string("127.0.0.1") : _listener.GetBindIp();
-    std::string const link = fmt::format("{}://{}:{}/#claim?token={}", _secure ? "https" : "http", host, _listener.GetPort(), _claimToken);
     AMBROSE_LOG(_log, LogLevel::Info, PanelCategory, "The panel has no operator yet. Open this link from this machine within {} minutes to make the first one: {}",
-        ClaimLifetime.count(), link);
+        std::chrono::duration_cast<std::chrono::minutes>(PanelLinks::LifetimeOf(PanelLinkKind::OwnerClaim)).count(), issued->Url);
 }
 
-AdminResponse Panel::OpenFor(PanelUser const& user, AdminRequest const& request, std::string_view how, nlohmann::json const* properties)
+bool Panel::Transact(std::function<bool(std::string& error)> const& change, std::string& error)
+{
+    std::lock_guard const lock(_storeMutex);
+    if (!_store.IsOpen())
+    {
+        error = "the panel store is not open, so nothing can be recorded and nothing is changed";
+        return false;
+    }
+    if (!_store.Begin(error))
+        return false;
+    if (!change(error))
+    {
+        _store.Rollback();
+        return false;
+    }
+    if (!_store.Commit(error))
+    {
+        _store.Rollback();
+        return false;
+    }
+    return true;
+}
+
+bool Panel::InsertOperator(PanelUserDraft const& draft, PanelLinkIssuer const& by, std::string_view reason, int64& id, PanelUserResult& made, std::string& error)
+{
+    made = _users.InsertUser(draft, &id, error);
+    if (made != PanelUserResult::Ok)
+    {
+        if (error.empty())
+            error = std::string(PanelUsers::Explain(made));
+        return false;
+    }
+    AuditEvent created;
+    created.Name = "panel:user.created";
+    created.Actor = by.Actor;
+    created.ActorId = by.Id;
+    created.ActorName = by.Name;
+    created.Address = by.RemoteAddress;
+    created.Reason = std::string(reason);
+    nlohmann::json properties;
+    properties["role"] = std::string(PanelPermissions::NameOf(draft.Owner ? PanelRole::Owner : PanelRole::Viewer));
+    properties["must_change_password"] = draft.MustChange;
+    created.Properties = properties.dump();
+    created.On("panel_user", std::to_string(id), draft.Username);
+    return PanelAudit::Write(_store, created, error);
+}
+
+bool Panel::PlainBeyondLoopback() const
+{
+    if (_secure)
+        return false;
+    std::optional<asio::ip::address> const bound = Ambrose::Asio::MakeAddress(_listener.GetBindIp());
+    return !bound || !Ambrose::Asio::IsLoopback(*bound);
+}
+
+bool Panel::BindsOneRemoteAddress() const
+{
+    std::optional<asio::ip::address> const bound = Ambrose::Asio::MakeAddress(_listener.GetBindIp());
+    return bound && !Ambrose::Asio::IsLoopback(*bound) && !Ambrose::Asio::IsUnspecified(*bound);
+}
+
+std::string Panel::LinkFor(std::string_view page, std::string_view token) const
+{
+    return fmt::format("{}://{}:{}/#{}?token={}", _secure ? "https" : "http", UrlHost(AdminClient::ConnectHost(_listener.GetBindIp())), _listener.GetPort(), page, token);
+}
+
+std::string Panel::PairingLine(std::string_view host, uint16 port, std::string_view token, std::string_view fingerprint)
+{
+    if (fingerprint.empty())
+        return fmt::format("http://{}:{}/#link?token={}", UrlHost(host), port, token);
+    return fmt::format("https://{}:{}/#link?token={}&sha256={}", UrlHost(host), port, token, fingerprint);
+}
+
+std::optional<PanelLinkIssued> Panel::IssueLink(PanelLinkAsk const& ask, PanelLinkIssuer const& issuer, PanelLinkRefusal& refusal)
+{
+    auto const refuse = [&refusal](int status, std::string code, std::string message, std::string field) -> std::optional<PanelLinkIssued>
+    {
+        refusal.Status = status;
+        refusal.Code = std::move(code);
+        refusal.Message = std::move(message);
+        refusal.Field = std::move(field);
+        return std::nullopt;
+    };
+    if (!_listener.IsRunning() || !IsStoreOpen())
+        return refuse(503, "panel_off", "The panel is off (Panel.Enable = 0), so it has no sign-in to hand out; turn it on and start the supervisor again", {});
+
+    std::string const name(Ambrose::Trim(ask.Username));
+    std::string host = AdminClient::ConnectHost(_listener.GetBindIp());
+    uint16 port = _listener.GetPort();
+    std::string fingerprint;
+    if (ask.Kind == PanelLinkKind::Local && BindsOneRemoteAddress())
+        return refuse(409, "not_on_loopback", fmt::format("Panel.BindIP = {} is one address beyond this machine, so no program here reaches the panel through loopback; "
+            "bind 127.0.0.1 or every address, or pair the program instead", _listener.GetBindIp()), {});
+    if (ask.Kind == PanelLinkKind::Pairing)
+    {
+        if (PlainBeyondLoopback())
+            return refuse(409, "plain_http_remote", std::string(PlainRemoteMessage), {});
+        if (name.empty())
+            return refuse(422, "invalid", "A pairing names the operator it signs in", "username");
+        std::string problem;
+        if (!ReadAddress(ask.Address, _listener.GetPort(), host, port, problem))
+            return refuse(422, "invalid", problem, "address");
+        if (!_listener.Routes().HostAllowed(host))
+            return refuse(422, "invalid", fmt::format("The panel does not answer for {}; add it to Panel.AllowedHosts first", host), "address");
+        if (!_secure && !IsLoopbackHost(host))
+            return refuse(409, "plain_http_remote", std::string(PlainLocalMessage), {});
+        if (_secure)
+        {
+            fingerprint = _listener.GetFingerprint();
+            if (fingerprint.empty())
+                return refuse(503, "no_certificate", "The panel could not say which certificate it serves, so it cannot pin one; try again", {});
+        }
+    }
+    if (ask.Kind == PanelLinkKind::Password && name.empty())
+        return refuse(422, "invalid", "A password link names the operator it is for", "username");
+
+    std::string error;
+    bool empty = false;
+    std::optional<PanelUser> user;
+    if (ask.Kind != PanelLinkKind::OwnerClaim)
+    {
+        std::lock_guard const lock(_storeMutex);
+        empty = _users.IsEmpty(error);
+        if (error.empty() && !empty)
+            user = name.empty() ? _users.FirstOwner(error) : _users.Find(name, error);
+    }
+    if (!error.empty())
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "The panel could not read its operators to make a link: {}", error);
+        return refuse(503, "store_unavailable", "The panel could not read its operators; try again", {});
+    }
+    bool const makeOwner = empty && (ask.Kind == PanelLinkKind::Local || ask.Kind == PanelLinkKind::Pairing);
+    if (ask.Kind != PanelLinkKind::OwnerClaim && !makeOwner)
+    {
+        if (!user)
+            return refuse(404, "no_such_operator", name.empty() ? std::string("The panel has no owner who can sign in") : fmt::format("The panel has no operator named {}", Ambrose::ForLog(name)), {});
+        if (user->Disabled)
+            return refuse(409, "operator_disabled", fmt::format("{} is disabled, so no link signs them in; enable them first", user->Username), {});
+    }
+
+    PanelUserDraft draft;
+    if (makeOwner)
+    {
+        std::string password = PanelUsers::Unguessable();
+        PanelUserResult const prepared = _users.PrepareUser(name.empty() ? std::string_view("owner") : std::string_view(name), password, true, true, draft, error);
+        WipeText(password);
+        if (prepared == PanelUserResult::NameTooShort || prepared == PanelUserResult::NameTooLong || prepared == PanelUserResult::NameInvalid || prepared == PanelUserResult::NameTaken)
+            return refuse(422, "invalid", std::string(PanelUsers::Explain(prepared)), "username");
+        if (prepared != PanelUserResult::Ok)
+        {
+            AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "The panel's first owner could not be made for a link: {}", error.empty() ? std::string(PanelUsers::Explain(prepared)) : error);
+            return refuse(503, "store_unavailable", "The panel could not make its first owner; try again", {});
+        }
+    }
+
+    PanelLinkMinted const minted = _links.Mint(ask.Kind);
+    std::string const issuerName = issuer.Actor == AuditActor::Token ? std::string("token") : issuer.Name;
+    std::string const kindName(PanelLinks::NameOf(ask.Kind));
+    std::string const stored = ask.Kind == PanelLinkKind::Pairing ? fmt::format("{}:{}", UrlHost(host), port) : std::string();
+    int64 const seconds = std::chrono::duration_cast<std::chrono::seconds>(PanelLinks::LifetimeOf(ask.Kind)).count();
+    int64 userId = user ? user->Id : 0;
+    std::string const username = user ? user->Username : draft.Username;
+    PanelUserResult made = PanelUserResult::Ok;
+    bool taken = false;
+    bool const kept = Transact([&](std::string& why)
+    {
+        if (makeOwner)
+        {
+            bool const nobody = _users.IsEmpty(why);
+            if (!why.empty())
+                return false;
+            if (!nobody)
+            {
+                taken = true;
+                why = "another operator was made first";
+                return false;
+            }
+            if (!InsertOperator(draft, issuer, fmt::format("the first owner was made by a {} link, with a password nobody is told", kindName), userId, made, why))
+                return false;
+            if (!_links.SpendEvery(PanelLinkKind::OwnerClaim, why))
+                return false;
+        }
+        AuditEvent event;
+        event.Name = "panel:link.issued";
+        event.Actor = issuer.Actor;
+        event.ActorId = issuer.Id;
+        event.ActorName = issuer.Name;
+        event.Address = issuer.RemoteAddress;
+        event.Reason = username.empty() ? fmt::format("a {} link good for {} seconds", kindName, seconds)
+                                        : fmt::format("a {} link for {} good for {} seconds", kindName, username, seconds);
+        nlohmann::json properties;
+        properties["kind"] = kindName;
+        properties["user_id"] = userId != 0 ? nlohmann::json(userId) : nlohmann::json(nullptr);
+        properties["issuer"] = issuerName;
+        properties["expires_epoch_ms"] = minted.ExpiresEpochMs;
+        properties["link"] = minted.Id;
+        if (ask.Kind == PanelLinkKind::Pairing)
+        {
+            properties["address"] = stored;
+            properties["fingerprint"] = fingerprint.empty() ? nlohmann::json(nullptr) : nlohmann::json(fingerprint);
+        }
+        event.Properties = properties.dump();
+        event.On("panel_link", minted.Id, kindName);
+        if (userId != 0)
+            event.On("panel_user", std::to_string(userId), username);
+        if (!PanelAudit::Write(_store, event, why))
+            return false;
+        return _links.Keep(minted, ask.Kind, userId != 0 ? std::optional<int64>(userId) : std::nullopt, issuerName, stored, why);
+    }, error);
+    if (!kept)
+    {
+        if (taken)
+            return refuse(409, "already_claimed", "Another operator was made while this link was being made; ask again and name them", {});
+        if (made == PanelUserResult::NameTaken)
+            return refuse(422, "invalid", std::string(PanelUsers::Explain(made)), "username");
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A {} link could not be kept, so none was made: {}", kindName, error);
+        return refuse(503, "store_unavailable", "The panel could not keep the link, so none was made; try again", {});
+    }
+    if (makeOwner)
+        AMBROSE_LOG(_log, LogLevel::Info, PanelCategory, "{} is the panel's owner, made by a {} link, with a password nobody is told until they set their own", username, kindName);
+
+    PanelLinkIssued issued;
+    issued.Kind = ask.Kind;
+    issued.Token = minted.Token;
+    issued.Id = minted.Id;
+    issued.UserId = userId;
+    issued.Username = username;
+    issued.CreatedOwner = makeOwner;
+    issued.ExpiresEpochMs = minted.ExpiresEpochMs;
+    issued.Host = host;
+    issued.Port = port;
+    issued.Fingerprint = fingerprint;
+    switch (ask.Kind)
+    {
+        case PanelLinkKind::OwnerClaim: issued.Url = LinkFor("claim", minted.Token); break;
+        case PanelLinkKind::Password: issued.Url = LinkFor("password", minted.Token); break;
+        case PanelLinkKind::Local: issued.Url = LinkFor("link", minted.Token); break;
+        case PanelLinkKind::Pairing: issued.Url = PairingLine(host, port, minted.Token, fingerprint); break;
+    }
+    return issued;
+}
+
+PanelUserResult Panel::MakeOperator(std::string_view username, PanelLinkIssuer const& by, int64& id, std::string& error)
+{
+    std::string password = PanelUsers::Unguessable();
+    PanelUserDraft draft;
+    PanelUserResult const prepared = _users.PrepareUser(username, password, false, true, draft, error);
+    WipeText(password);
+    if (prepared != PanelUserResult::Ok)
+        return prepared;
+    PanelUserResult made = PanelUserResult::Ok;
+    if (Transact([&](std::string& why) { return InsertOperator(draft, by, "an operator was made with a password nobody is told, to set their own from a one-time link", id, made, why); }, error))
+        return PanelUserResult::Ok;
+    return made != PanelUserResult::Ok ? made : PanelUserResult::StoreFailed;
+}
+
+void Panel::RegisterAdminRoutes(AdminRouter& routes)
+{
+    routes.AddGuarded("POST", std::string(LinksPath), "users.link", [this](AdminRequest const& request) { return MintLinkRoute(request); });
+}
+
+AdminResponse Panel::MintLinkRoute(AdminRequest const& request)
+{
+    nlohmann::json const body = ParseBody(request);
+    if (!body.is_object())
+        return AdminResponse::Invalid("A link takes a JSON object naming its kind", { { "kind", "Give local or pairing" } });
+    std::vector<std::pair<std::string, std::string>> fields;
+    for (auto const& [key, value] : body.items())
+        if (key != "kind" && key != "username" && key != "address")
+            fields.emplace_back(key, "A link takes only kind, username and address");
+    std::string const kindText = body.contains("kind") && body["kind"].is_string() ? body["kind"].get<std::string>() : std::string();
+    PanelLinkKind kind = PanelLinkKind::Local;
+    if (kindText == "pairing")
+        kind = PanelLinkKind::Pairing;
+    else if (kindText != "local")
+        fields.emplace_back("kind", "Give local or pairing");
+    for (char const* const key : { "username", "address" })
+        if (body.contains(key) && !body[key].is_string())
+            fields.emplace_back(key, "Give it as text");
+    if (!fields.empty())
+        return AdminResponse::Invalid("That is not a link this panel makes", std::move(fields));
+
+    PanelLinkRefusal refusal;
+    std::optional<PanelLinkIssued> const issued = IssueLink({ kind, TextOf(body, "username"), TextOf(body, "address") },
+        { AuditActor::Token, request.Principal, "token", request.RemoteAddress }, refusal);
+    if (!issued)
+    {
+        if (!refusal.Field.empty())
+            return AdminResponse::Invalid(refusal.Message, { { refusal.Field, refusal.Message } });
+        return AdminResponse::Problem(refusal.Status, refusal.Code, refusal.Message);
+    }
+    nlohmann::json answer;
+    answer["kind"] = std::string(PanelLinks::NameOf(kind));
+    if (kind == PanelLinkKind::Local)
+        answer["link"] = issued->Url;
+    else
+    {
+        answer["line"] = issued->Url;
+        answer["host"] = issued->Host;
+        answer["port"] = issued->Port;
+        answer["fingerprint"] = issued->Fingerprint.empty() ? nlohmann::json(nullptr) : nlohmann::json(issued->Fingerprint);
+    }
+    answer["token"] = issued->Token;
+    answer["user_id"] = issued->UserId;
+    answer["username"] = issued->Username;
+    answer["created_owner"] = issued->CreatedOwner;
+    answer["expires_epoch_ms"] = issued->ExpiresEpochMs;
+    answer["expires_seconds"] = std::chrono::duration_cast<std::chrono::seconds>(PanelLinks::LifetimeOf(kind)).count();
+    return AdminResponse::Json(200, answer.dump());
+}
+
+std::optional<AdminResponse> Panel::LinkHeldBack(AdminRequest const& request)
+{
+    PanelSignInVerdict const verdict = _linkFailures.CheckAddress(request.RemoteAddress);
+    if (verdict.Allowed)
+        return std::nullopt;
+    if (verdict.FirstThisWindow)
+    {
+        AuditEvent held;
+        held.Name = "panel:link.throttled";
+        held.Actor = AuditActor::User;
+        held.Address = request.RemoteAddress;
+        held.UserAgent = request.UserAgent;
+        held.Result = AuditResult::Throttled;
+        held.Reason = "too many wrong or spent links were tried from this address";
+        std::string failure;
+        if (!Record(held, {}, failure))
+            AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A throttled link could not be recorded: {}", failure);
+    }
+    AdminResponse answer = AdminResponse::Problem(429, "too_many_requests", "Too many links were tried from here; wait and try again");
+    answer.Headers.emplace_back("Retry-After", std::to_string(verdict.RetryAfterSeconds));
+    return answer;
+}
+
+AdminResponse Panel::LinkRefused(AdminRequest const& request, PanelLink const* link, std::optional<PanelUser> const& user, int status, std::string_view code,
+    std::string_view message, std::string_view reason)
+{
+    _linkFailures.FailedAtAddress(request.RemoteAddress);
+    AuditEvent refused;
+    refused.Name = "panel:link.refused";
+    refused.Actor = AuditActor::User;
+    if (user)
+    {
+        refused.ActorId = std::to_string(user->Id);
+        refused.ActorName = user->Username;
+    }
+    refused.Address = request.RemoteAddress;
+    refused.UserAgent = request.UserAgent;
+    refused.Result = AuditResult::Refused;
+    refused.Reason = std::string(reason);
+    nlohmann::json properties;
+    properties["answer"] = std::string(code);
+    properties["link"] = link ? nlohmann::json(link->Id) : nlohmann::json(nullptr);
+    properties["link_kind"] = link ? nlohmann::json(std::string(PanelLinks::NameOf(link->Kind))) : nlohmann::json(nullptr);
+    refused.Properties = properties.dump();
+    if (link)
+    {
+        refused.On("panel_link", link->Id, std::string(PanelLinks::NameOf(link->Kind)));
+        if (link->UserId)
+            refused.On("panel_user", std::to_string(*link->UserId), user ? user->Username : std::string());
+    }
+    std::string failure;
+    if (!Record(refused, {}, failure))
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A refused link could not be recorded: {}", failure);
+    return AdminResponse::Problem(status, std::string(code), std::string(message));
+}
+
+AdminResponse Panel::TradeLink(AdminRequest const& request)
+{
+    nlohmann::json const body = ParseBody(request);
+    if (!body.is_object())
+        return AdminResponse::Invalid("Opening a link takes the token it carries", { { "token", "Give the token from the link" } });
+    std::vector<std::pair<std::string, std::string>> fields;
+    for (auto const& [key, value] : body.items())
+        if (key != "token")
+            fields.emplace_back(key, "Opening a link takes only its token");
+    if (!HasText(body, "token"))
+        fields.emplace_back("token", "Give the token from the link");
+    else if (body["token"].get_ref<std::string const&>().size() > PanelLinks::MaxTokenBytes)
+        fields.emplace_back("token", "A link's token is far shorter than that");
+    if (!fields.empty())
+        return AdminResponse::Invalid("That is not a link this panel opens", std::move(fields));
+
+    if (std::optional<AdminResponse> held = LinkHeldBack(request))
+        return std::move(*held);
+
+    PanelLink link;
+    std::string error;
+    PanelLinkState state = PanelLinkState::StoreFailed;
+    {
+        std::lock_guard const lock(_storeMutex);
+        if (_store.IsOpen())
+            state = _links.Spend({ PanelLinkKind::Local, PanelLinkKind::Pairing }, body["token"].get_ref<std::string const&>(), request.RemoteAddress, link, error);
+        else
+            error = "the panel store is not open";
+    }
+    constexpr std::string_view Refused = "That link does not sign anyone in";
+    constexpr std::string_view Gone = "That link has been used or has run out; ask for another";
+    switch (state)
+    {
+        case PanelLinkState::Redeemed:
+            break;
+        case PanelLinkState::Unknown:
+            return LinkRefused(request, nullptr, std::nullopt, 403, "link_refused", Refused, "no link has that token");
+        case PanelLinkState::Spent:
+            return LinkRefused(request, &link, std::nullopt, 410, "link_expired", Gone, "the link was already used");
+        case PanelLinkState::Expired:
+            return LinkRefused(request, &link, std::nullopt, 410, "link_expired", Gone, "the link had run out, and it is spent now");
+        case PanelLinkState::StoreFailed:
+            AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A link could not be read: {}", error);
+            return AdminResponse::Problem(503, "store_unavailable", "The panel could not read its links; try again");
+    }
+
+    std::optional<asio::ip::address> const from = Ambrose::Asio::MakeAddress(request.RemoteAddress);
+    if (link.Kind == PanelLinkKind::Local && (!from || !Ambrose::Asio::IsLoopback(*from)))
+        return LinkRefused(request, &link, std::nullopt, 403, "not_this_machine", "A local link opens the panel only on the machine the panel runs on",
+            "a local link was used from another machine, so it was burned");
+    if (link.Kind == PanelLinkKind::Pairing && PlainBeyondLoopback())
+        return LinkRefused(request, &link, std::nullopt, 403, "plain_http_remote", "This panel now serves plain HTTP beyond its own machine, so it takes no pairing link",
+            "a pairing link was used while the panel served plain HTTP beyond this machine, so it was burned");
+    std::optional<PanelUser> user;
+    if (link.UserId)
+        user = _users.FindById(*link.UserId, error);
+    if (!user || user->Disabled)
+        return LinkRefused(request, &link, user, 403, "link_refused", Refused, user ? "the operator is disabled, so the link was burned" : "the operator is gone");
+
+    LinkUsed const used{ link.Id, std::string(PanelLinks::NameOf(link.Kind)) };
+    std::string_view const how = link.Kind == PanelLinkKind::Local ? "a local link" : "a pairing link";
+    if (user->TwoFactor)
+        return Challenged(*user, request, how, &used);
+    return OpenFor(*user, request, how, nullptr, &used);
+}
+
+AdminResponse Panel::OpenFor(PanelUser const& user, AdminRequest const& request, std::string_view how, nlohmann::json const* properties, LinkUsed const* link)
 {
     std::string error;
     std::optional<PanelSessionOpened> opened = _sessions.Open(user.Id, user.Generation, request.RemoteAddress, request.UserAgent, PanelStore::NowEpochMs(), error);
@@ -1886,9 +2443,19 @@ AdminResponse Panel::OpenFor(PanelUser const& user, AdminRequest const& request,
     signedIn.Address = request.RemoteAddress;
     signedIn.UserAgent = request.UserAgent;
     signedIn.Reason = std::string(how);
-    if (properties)
-        signedIn.Properties = properties->dump();
+    if (properties || link)
+    {
+        nlohmann::json kept = properties ? *properties : nlohmann::json::object();
+        if (link)
+        {
+            kept["link"] = link->Id;
+            kept["link_kind"] = link->Kind;
+        }
+        signedIn.Properties = kept.dump();
+    }
     signedIn.On("panel_session", opened->Id).On("panel_user", std::to_string(user.Id), user.Username);
+    if (link)
+        signedIn.On("panel_link", link->Id, link->Kind);
     std::string failure;
     if (!Record(signedIn, [&](std::string& why) { return _users.RecordSignIn(user.Id, why); }, failure))
     {
@@ -1918,38 +2485,97 @@ AdminResponse Panel::Claim(AdminRequest const& request)
     if (!from || !Ambrose::Asio::IsLoopback(*from))
         return AdminResponse::Problem(403, "not_this_machine", "The first operator is made from the machine the supervisor runs on");
 
-    std::string token;
+    auto const refused = [] { return AdminResponse::Problem(403, "link_refused", "That link is not the one the supervisor printed"); };
+    auto const gone = [] { return AdminResponse::Problem(410, "link_expired", "That link has been used or has run out; restart the supervisor for another"); };
+    auto const claimed = [this]
     {
-        std::lock_guard const lock(_claimMutex);
-        if (_claimToken.empty() || std::chrono::steady_clock::now() >= _claimExpires)
-            return AdminResponse::Problem(410, "link_expired", "That link has been used or has run out; restart the supervisor for another");
-        token = _claimToken;
-    }
-    if (!Ambrose::Crypto::ConstantTimeEquals(body["token"].get<std::string>(), token))
-        return AdminResponse::Problem(403, "link_refused", "That link is not the one the supervisor printed");
-
-    std::string error;
-    if (!_users.IsEmpty(error))
-    {
-        std::lock_guard const lock(_claimMutex);
-        _claimToken.clear();
+        std::lock_guard const lock(_storeMutex);
+        std::string ignored;
+        if (_store.IsOpen())
+            _links.SpendEvery(PanelLinkKind::OwnerClaim, ignored);
         return AdminResponse::Problem(409, "already_claimed", "The panel already has an operator");
+    };
+
+    std::string const token = body["token"].get<std::string>();
+    std::string error;
+    PanelLink link;
+    PanelLinkState state = PanelLinkState::StoreFailed;
+    bool empty = false;
+    {
+        std::lock_guard const lock(_storeMutex);
+        if (_store.IsOpen())
+        {
+            state = _links.Peek({ PanelLinkKind::OwnerClaim }, token, link, error);
+            if (state == PanelLinkState::Redeemed)
+                empty = _users.IsEmpty(error);
+        }
     }
+    if (state == PanelLinkState::Unknown)
+        return refused();
+    if (state == PanelLinkState::Spent || state == PanelLinkState::Expired)
+        return gone();
+    if (state == PanelLinkState::StoreFailed || !error.empty())
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "The owner link could not be read: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not read its links; try again");
+    }
+    if (!empty)
+        return claimed();
 
     std::string const username = body["username"].get<std::string>();
-    int64 id = 0;
-    PanelUserResult const made = _users.Create(username, body["password"].get<std::string>(), true, false, &id, error);
-    if (made != PanelUserResult::Ok)
+    std::string password = body["password"].get<std::string>();
+    PanelUserDraft draft;
+    PanelUserResult const prepared = _users.PrepareUser(username, password, true, false, draft, error);
+    WipeText(password);
+    auto const invalid = [](PanelUserResult result)
     {
-        std::string const why(PanelUsers::Explain(made));
-        return AdminResponse::Invalid("The first operator could not be made",
-            { { made == PanelUserResult::NameTaken || made == PanelUserResult::NameInvalid || made == PanelUserResult::NameTooLong || made == PanelUserResult::NameTooShort ? "username" : "password", why } });
+        bool const named = result == PanelUserResult::NameTaken || result == PanelUserResult::NameInvalid || result == PanelUserResult::NameTooLong || result == PanelUserResult::NameTooShort;
+        return AdminResponse::Invalid("The first operator could not be made", { { named ? "username" : "password", std::string(PanelUsers::Explain(result)) } });
+    };
+    if (prepared != PanelUserResult::Ok)
+        return invalid(prepared);
+
+    int64 id = 0;
+    PanelUserResult made = PanelUserResult::Ok;
+    PanelLinkState spent = PanelLinkState::StoreFailed;
+    bool taken = false;
+    PanelLinkIssuer const by{ AuditActor::System, {}, "owner link", request.RemoteAddress };
+    bool const done = Transact([&](std::string& why)
+    {
+        spent = _links.Spend({ PanelLinkKind::OwnerClaim }, token, request.RemoteAddress, link, why);
+        if (spent != PanelLinkState::Redeemed)
+        {
+            if (why.empty())
+                why = "the owner link could not be used";
+            return false;
+        }
+        bool const nobody = _users.IsEmpty(why);
+        if (!why.empty())
+            return false;
+        if (!nobody)
+        {
+            taken = true;
+            why = "the panel already has an operator";
+            return false;
+        }
+        if (!InsertOperator(draft, by, "the first owner was made from the one-time owner link", id, made, why))
+            return false;
+        return _links.SpendEvery(PanelLinkKind::OwnerClaim, why);
+    }, error);
+    if (!done)
+    {
+        if (spent == PanelLinkState::Unknown)
+            return refused();
+        if (spent == PanelLinkState::Spent || spent == PanelLinkState::Expired)
+            return gone();
+        if (taken)
+            return claimed();
+        if (made != PanelUserResult::Ok && made != PanelUserResult::StoreFailed)
+            return invalid(made);
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "The first operator could not be made: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not make its first operator; try again");
     }
 
-    {
-        std::lock_guard const lock(_claimMutex);
-        _claimToken.clear();
-    }
     std::optional<PanelUser> const owner = _users.FindById(id, error);
     if (!owner)
         return AdminResponse::Problem(503, "store_unavailable", "The operator was made but could not be read back");
@@ -1980,28 +2606,30 @@ AdminResponse Panel::Probe(AdminRequest const& request)
     answer["idle_seconds"] = _sessionIdle.count();
     answer["lifetime_seconds"] = _sessionLifetime.count();
     answer["user"] = user ? UserAnswer(*user) : nlohmann::json(nullptr);
+    bool needsOwner = false;
+    if (!user)
     {
-        std::lock_guard const lock(_claimMutex);
-        answer["needs_owner"] = !user && !_claimToken.empty() && std::chrono::steady_clock::now() < _claimExpires;
+        std::lock_guard const lock(_storeMutex);
+        needsOwner = _store.IsOpen() && _users.IsEmpty(error) && _links.AnyOpen(PanelLinkKind::OwnerClaim, error);
     }
+    answer["needs_owner"] = needsOwner;
     return AdminResponse::Json(200, answer.dump());
-}
-
-std::string Panel::LinkFor(std::string_view token) const
-{
-    std::string const host = _listener.GetBindIp() == "0.0.0.0" || _listener.GetBindIp() == "::" ? std::string("127.0.0.1") : _listener.GetBindIp();
-    return fmt::format("{}://{}:{}/#password?token={}", _secure ? "https" : "http", host, _listener.GetPort(), token);
 }
 
 std::string Panel::MintPasswordLink(int64 userId)
 {
-    std::array<uint8, 32> const bytes = Ambrose::Crypto::GetRandomArray<32>();
-    std::string token = Base64::Encode(bytes, Base64::Alphabet::UrlSafe, Base64::Padding::Omitted);
-    std::lock_guard const lock(_claimMutex);
-    auto const now = std::chrono::steady_clock::now();
-    std::erase_if(_resets, [now](auto const& entry) { return now >= entry.second.second; });
-    _resets.emplace(token, std::pair{ userId, now + ClaimLifetime });
-    return token;
+    std::string error;
+    std::optional<PanelUser> const user = _users.FindById(userId, error);
+    if (!user)
+        return {};
+    PanelLinkRefusal refusal;
+    std::optional<PanelLinkIssued> const issued = IssueLink({ PanelLinkKind::Password, user->Username, {} }, { AuditActor::System, {}, "console", {} }, refusal);
+    if (!issued)
+    {
+        AMBROSE_LOG(_log, LogLevel::Warn, PanelCategory, "No password link was made for {}: {}", user->Username, refusal.Message);
+        return {};
+    }
+    return issued->Token;
 }
 
 AdminResponse Panel::Reset(AdminRequest const& request)
@@ -2011,37 +2639,81 @@ AdminResponse Panel::Reset(AdminRequest const& request)
         return AdminResponse::Invalid("Setting a password takes the link's token and the password",
             { { "token", "Give the token from the link" }, { "password", "Give the password you want" } });
 
-    int64 userId = 0;
-    {
-        std::lock_guard const lock(_claimMutex);
-        auto const now = std::chrono::steady_clock::now();
-        std::erase_if(_resets, [now](auto const& entry) { return now >= entry.second.second; });
-        auto const found = _resets.find(body["token"].get<std::string>());
-        if (found == _resets.end())
-            return AdminResponse::Problem(410, "link_expired", "That link has been used or has run out; ask for another");
-        userId = found->second.first;
-        _resets.erase(found);
-    }
-
+    auto const gone = [] { return AdminResponse::Problem(410, "link_expired", "That link has been used or has run out; ask for another"); };
+    std::string const token = body["token"].get<std::string>();
     std::string error;
-    PanelUserResult const set = _users.SetPassword(userId, body["password"].get<std::string>(), false, error);
-    if (set != PanelUserResult::Ok)
+    PanelLink link;
+    PanelLinkState state = PanelLinkState::StoreFailed;
     {
-        std::string const token = MintPasswordLink(userId);
-        AdminResponse answer = AdminResponse::Invalid("That password was not taken", { { "password", std::string(PanelUsers::Explain(set)) } });
-        nlohmann::json again = nlohmann::json::parse(answer.Body, nullptr, false);
-        if (again.is_object())
+        std::lock_guard const lock(_storeMutex);
+        if (_store.IsOpen())
+            state = _links.Peek({ PanelLinkKind::Password }, token, link, error);
+    }
+    if (state == PanelLinkState::StoreFailed)
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A password link could not be read: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not read its links; try again");
+    }
+    if (state != PanelLinkState::Redeemed || !link.UserId)
+        return gone();
+
+    int64 const userId = *link.UserId;
+    std::optional<PanelUser> const holder = _users.FindById(userId, error);
+    if (!holder)
+        return gone();
+    std::string password = body["password"].get<std::string>();
+    std::string hash;
+    PanelUserResult const prepared = _users.PreparePassword(userId, password, hash, error);
+    WipeText(password);
+    if (prepared == PanelUserResult::UnknownUser)
+        return gone();
+    if (prepared == PanelUserResult::StoreFailed || prepared == PanelUserResult::HashFailed)
+    {
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A password from a one-time link could not be made ready: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not set the password; try again");
+    }
+    if (prepared != PanelUserResult::Ok)
+        return AdminResponse::Invalid("That password was not taken", { { "password", std::string(PanelUsers::Explain(prepared)) } });
+
+    PanelLinkState spent = PanelLinkState::StoreFailed;
+    bool const done = Transact([&](std::string& why)
+    {
+        spent = _links.Spend({ PanelLinkKind::Password }, token, request.RemoteAddress, link, why);
+        if (spent != PanelLinkState::Redeemed)
         {
-            again["token"] = token;
-            answer.Body = again.dump();
+            if (why.empty())
+                why = "the password link could not be used";
+            return false;
         }
-        return answer;
+        if (_users.StoreHash(userId, hash, false, why) != PanelUserResult::Ok)
+            return false;
+        AuditEvent set;
+        set.Name = "panel:user.password_set";
+        set.Actor = AuditActor::User;
+        set.ActorId = std::to_string(userId);
+        set.ActorName = holder->Username;
+        set.Address = request.RemoteAddress;
+        set.UserAgent = request.UserAgent;
+        set.Reason = "the password was set from a one-time link, ending every session the operator had";
+        nlohmann::json properties;
+        properties["link"] = link.Id;
+        set.Properties = properties.dump();
+        set.On("panel_user", std::to_string(userId), holder->Username).On("panel_link", link.Id, std::string(PanelLinks::NameOf(PanelLinkKind::Password)));
+        if (!PanelAudit::Write(_store, set, why))
+            return false;
+        return _sessions.CloseEveryOne(userId, "the password was set from a one-time link", why);
+    }, error);
+    if (!done)
+    {
+        if (spent == PanelLinkState::Unknown || spent == PanelLinkState::Spent || spent == PanelLinkState::Expired)
+            return gone();
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A password from a one-time link could not be set: {}", error);
+        return AdminResponse::Problem(503, "store_unavailable", "The panel could not set the password; try again");
     }
 
     std::optional<PanelUser> const user = _users.FindById(userId, error);
     if (!user)
         return AdminResponse::Problem(503, "store_unavailable", "The password was set but the operator could not be read back");
-    _sessions.CloseEveryOne(userId, "the password was set from a one-time link", error);
     AMBROSE_LOG(_log, LogLevel::Info, PanelCategory, "{} set a password from a one-time link; every other session that operator had has ended", user->Username);
     if (user->TwoFactor)
         return Challenged(*user, request, "a one-time password link");

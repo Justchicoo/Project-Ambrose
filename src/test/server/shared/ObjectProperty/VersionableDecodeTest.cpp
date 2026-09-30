@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the versionable ObjectProperty format on classes the test invents, against bytes the test assembles itself: a literal object byte for byte, unknown properties skipped and unknown nested classes skipped and reported with their paths, each with every property it holds by hash and size, compact lengths in their 7-bit and 31-bit forms for strings, wide strings and lists, enums and flag integers carried as option names, values that do not fit their declared size, properties the mask does not select and objects of the wrong class resynchronized at their property's end and reported, impossible object and property sizes refused where they are the object's own and reported where a property holds them, the decode limits including the objects and depth of default inline objects, clean dirty-encoded properties left out, compact lengths in the compact format, and whole trees round-tripping in every mode.
+ * Tests the versionable ObjectProperty format on classes the test invents, against bytes the test assembles itself: a literal object byte for byte, unknown properties skipped and unknown nested classes skipped and reported with their paths, each with every property it holds by hash and size and, when asked, the bits each skipped value held, read from past the padding its header was aligned past, compact lengths in their 7-bit and 31-bit forms for strings, wide strings and lists, enums and flag integers carried as option names, values that do not fit their declared size, properties the mask does not select and objects of the wrong class resynchronized at their property's end and reported, impossible object and property sizes refused where they are the object's own and reported where a property holds them, the decode limits including the objects and depth of default inline objects, clean dirty-encoded properties left out, compact lengths in the compact format, and whole trees round-tripping in every mode.
  */
 
 #include "BitWriter.h"
@@ -798,4 +798,53 @@ TEST_F(VersionableDecodeTest, WholeTreesRoundTripInEveryMode)
             EXPECT_TRUE(*decoded.Object == *box) << static_cast<uint32>(flags) << ' ' << versionable;
         }
     }
+}
+
+TEST_F(VersionableDecodeTest, ASkippedValueKeepsItsOwnBitsWhenAskedEvenPastAnUnalignedHeader)
+{
+    Stream stream;
+    Mark const box = stream.BeginObject(ClassHash("class TestBox"));
+    Mark const items = stream.BeginProperty(Hash("class SharedPointer<class TestItem>", "m_items"));
+    stream.Length(2);
+    {
+        Mark const stranger = stream.BeginObject(UnknownHash);
+        Mark const flag = stream.BeginProperty(0x0BADF00Du);
+        stream.Bit(true);
+        stream.End(flag);
+        Mark const count = stream.BeginProperty(0x0DDBA11u);
+        stream.U32(7);
+        stream.End(count);
+        stream.End(stranger);
+    }
+    {
+        Mark const hat = stream.BeginObject(ClassHash("class TestHat"));
+        Mark const unknown = stream.BeginProperty(0xDEADBEEFu);
+        stream.Text("kept");
+        stream.End(unknown);
+        stream.End(hat);
+    }
+    stream.End(items);
+    stream.End(box);
+    std::vector<uint8> const bytes = stream.Take();
+
+    SerializerOptions keeping = FileOptions();
+    keeping.KeepSkippedValues = true;
+    DecodeResult const kept = DecodeFile(bytes, keeping);
+    ASSERT_TRUE(kept.Ok()) << kept.Detail;
+    std::vector<DecodeIssue const*> values;
+    for (DecodeIssue const& issue : kept.Issues)
+        if (issue.Kind != DecodeIssueKind::UnknownClass)
+            values.push_back(&issue);
+    ASSERT_EQ(values.size(), 3u);
+    EXPECT_EQ(values[0]->Bits, 1u);
+    EXPECT_EQ(values[0]->Value, (std::vector<uint8>{ 0x01 }));
+    EXPECT_EQ(values[1]->Bits, 32u) << "the value starts after the padding its header was aligned past";
+    EXPECT_EQ(values[1]->Value, (std::vector<uint8>{ 0x07, 0x00, 0x00, 0x00 }));
+    EXPECT_EQ(values[2]->Kind, DecodeIssueKind::UnknownProperty);
+    EXPECT_EQ(values[2]->Value, (std::vector<uint8>{ 0x08, 'k', 'e', 'p', 't' }));
+
+    DecodeResult const plain = DecodeFile(bytes);
+    ASSERT_TRUE(plain.Ok()) << plain.Detail;
+    for (DecodeIssue const& issue : plain.Issues)
+        EXPECT_TRUE(issue.Value.empty()) << "nothing is kept unless asked";
 }

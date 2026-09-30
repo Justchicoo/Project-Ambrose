@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The panel frame: it asks the server that served it whether this browser is signed in, shows the sign-in page when it is not and a plain notice when the server cannot be reached, shows only the two-factor enrollment page, asking the server for nothing else, while the panel requires two-factor sign-in of an operator who has not turned it on, keeps the question a danger action asks for a fresh check of who the operator is ready on every page, and once signed in opens the panel's one event socket while a panel session holds it, follows the status stream wherever the socket's permissions let it read status, and draws a skip link that moves focus to the page without touching the address, the shadcn-svelte sidebar from the route table, a top bar with the breadcrumb, the command palette's search button and the connection's state, a bar that says when the server stopped answering with a countdown and a retry, the user's menu naming the operator with the light and dark choice, their two-factor sign-in and signing out, and the page the address names, read from the address up to any query so a page can keep its own place after it, which is the page itself, the milestone that brings it, or the access-denied page. -->
+<!-- Project Ambrose by Imjustchico: The panel frame: it trades the one-time sign-in link the page was opened with, when it was, and then asks the server that served it whether this browser is signed in, shows the sign-in page when it is not and a plain notice when the server cannot be reached, shows only the two-factor enrollment page, asking the server for nothing else, while the panel requires two-factor sign-in of an operator who has not turned it on, keeps the question a danger action asks for a fresh check of who the operator is ready on every page, and once signed in opens the panel's one event socket while a panel session holds it, follows the status stream wherever the socket's permissions let it read status, and draws a skip link that moves focus to the page without touching the address, the shadcn-svelte sidebar from the route table, a top bar with the breadcrumb, the command palette's search button and the connection's state, a bar that says when the server stopped answering with a countdown and a retry, the user's menu naming the operator with the light and dark choice, their two-factor sign-in and signing out, and the page the address names, read from the address up to any query so a page can keep its own place after it, which is the page itself, the milestone that brings it, or the access-denied page. -->
 <script lang="ts">
     import * as Breadcrumb from "$lib/components/ui/breadcrumb/index.js";
     import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
@@ -8,9 +8,10 @@
     import { Separator } from "$lib/components/ui/separator/index.js";
     import { Skeleton } from "$lib/components/ui/skeleton/index.js";
     import { Toaster } from "$lib/components/ui/sonner/index.js";
-    import { probeSession, session, signOut } from "$lib/api.svelte.js";
+    import { openLink, probeSession, session, signOut } from "$lib/api.svelte.js";
     import { connectEvents, disconnectEvents, events, follow, readableScopes } from "$lib/events.svelte.js";
     import { formatAge } from "$lib/format.js";
+    import { arrivedWith } from "$lib/links.js";
     import { isStale, live, retryNow, stop, watch } from "$lib/status.svelte.js";
     import { chooseTheme, theme, type ThemeChoice } from "$lib/theme.svelte.js";
     import ChevronsUpDownIcon from "@lucide/svelte/icons/chevrons-up-down";
@@ -48,6 +49,12 @@
     });
 
     onMount(() => {
+        const arrived = arrivedWith.link;
+        if (arrived !== null && arrived.page === "link") {
+            arrivedWith.link = null;
+            void openLink(arrived.token);
+            return;
+        }
         void probeSession();
     });
 

@@ -229,6 +229,26 @@ namespace
             return true;
         }
 
+        bool ReportSkipped(DecodeIssueKind kind, uint32 hash, uint64 bits, std::string path, std::string detail, uint32 owner, std::size_t from)
+        {
+            if (!Report(kind, hash, bits, std::move(path), std::move(detail), owner))
+                return false;
+            if (!_options.KeepSkippedValues)
+                return true;
+            if (!Charge((bits + 7) / 8))
+                return false;
+            std::vector<uint8>& value = _issues.back().Value;
+            value.reserve((bits + 7) / 8);
+            _reader.SeekBit(from);
+            for (uint64 left = bits; left > 0;)
+            {
+                uint8 const count = static_cast<uint8>(std::min<uint64>(left, 8));
+                value.push_back(static_cast<uint8>(_reader.ReadBits(count)));
+                left -= count;
+            }
+            return true;
+        }
+
         bool ReportUnknownProperties(uint32 owner, std::size_t objectEnd, std::string const& path)
         {
             while (objectEnd - _reader.GetBitPosition() >= PropertyHeaderBits)
@@ -236,10 +256,11 @@ namespace
                 std::size_t const start = _reader.GetBitPosition();
                 uint32 const size = _reader.Read<uint32>();
                 uint32 const hash = _reader.Read<uint32>();
-                if (_reader.Failed() || size < PropertyHeaderBits || size > objectEnd - start)
+                std::size_t const header = _reader.GetBitPosition() - start;
+                if (_reader.Failed() || size < header || size > objectEnd - start)
                     return true;
-                if (!Report(DecodeIssueKind::UnknownClassProperty, hash, size - PropertyHeaderBits, path,
-                        fmt::format("holds property hash {} in class hash {}, which the type dump does not list", hash, owner), owner))
+                if (!ReportSkipped(DecodeIssueKind::UnknownClassProperty, hash, size - header, path,
+                        fmt::format("holds property hash {} in class hash {}, which the type dump does not list", hash, owner), owner, start + header))
                     return false;
                 _reader.SeekBit(start + size);
             }
@@ -475,7 +496,8 @@ namespace
                 auto const found = type.PropertyByHash.find(hash);
                 if (found == type.PropertyByHash.end())
                 {
-                    if (!Report(DecodeIssueKind::UnknownProperty, hash, valueBits, _path.Format(_root), fmt::format("holds property hash {}, which {} does not list", hash, type.Name), type.Hash))
+                    if (!ReportSkipped(DecodeIssueKind::UnknownProperty, hash, valueBits, _path.Format(_root), fmt::format("holds property hash {}, which {} does not list", hash, type.Name), type.Hash,
+                            start + header))
                         return false;
                     _reader.SeekBit(end);
                     continue;
@@ -487,7 +509,7 @@ namespace
                 {
                     std::string what = property.HasFlag(PropertyFlag::Deprecated) ? fmt::format("holds {}, which is deprecated", property.Name)
                                                                                    : fmt::format("holds {}, whose flags {:#x} the mask {:#x} does not select", property.Name, property.Flags, _options.Mask);
-                    if (!Report(DecodeIssueKind::UnselectedProperty, hash, valueBits, _path.Format(_root), std::move(what), type.Hash))
+                    if (!ReportSkipped(DecodeIssueKind::UnselectedProperty, hash, valueBits, _path.Format(_root), std::move(what), type.Hash, start + header))
                         return false;
                     _reader.SeekBit(end);
                     continue;

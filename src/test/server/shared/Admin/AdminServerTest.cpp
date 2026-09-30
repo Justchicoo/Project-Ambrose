@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the admin API listener on a loopback port the operating system picks: health needs the token and carries the step a start is on, wrong tokens are rate limited while the right one still answers, every /api path answers the same way without one whatever method it carries, whatever upgrade it claims and wherever it falls on a kept-alive connection, a certificate and key are served over TLS with HSTS and reported to the log, a reload swaps the certificate live and keeps the old one when the new pair does not match, a certificate that will not load stops the listener opening, a reload rotates the token without a restart and keeps the old listener when the new port is taken, an unsafe remote bind is refused, WebSocket routes registered before or after the listener opens take the same token and carry frames both ways and close with the code their route chose once the frames before it have gone, a route that admits its own upgrades opens without the token or its permission, keeps the request that opened it and has a refusal logged by its path and never its query, a machine with no data folder keeps its generated token beside the config file, an app reloads the listener from its own config, an app whose admin binding is unsafe exits with a failure, the built panel is served without a token and with the security headers, a browser signs in only from its own origin by trading the token for a cookie named after the port, with each wrong field named beside the request id, the cookie's unsafe requests and socket upgrades need its own origin and CSRF token, signing out and rotating the token end the session, a host the listener does not answer for is refused, and a route is handed the query exactly as it was sent beside the decoded values.
+ * Tests the admin API listener on a loopback port the operating system picks: health needs the token and carries the step a start is on, wrong tokens are rate limited while the right one still answers, every /api path answers the same way without one whatever method it carries, whatever upgrade it claims and wherever it falls on a kept-alive connection, a certificate and key are served over TLS with HSTS and reported to the log, a reload swaps the certificate live and keeps the old one when the new pair does not match, a certificate that will not load stops the listener opening, a reload rotates the token without a restart and keeps the old listener when the new port is taken, an unsafe remote bind is refused, WebSocket routes registered before or after the listener opens take the same token and carry frames both ways and close with the code their route chose once the frames before it have gone, a route that admits its own upgrades opens without the token or its permission, keeps the request that opened it and has a refusal logged by its path and never its query, a machine with no data folder keeps its generated token beside the config file, an app reloads the listener from its own config, an app whose admin binding is unsafe exits with a failure, the built panel is served without a token and with the security headers, a browser signs in only from its own origin by trading the token for a cookie named after the port, with each wrong field named beside the request id, the cookie's unsafe requests and socket upgrades need its own origin and CSRF token, signing out and rotating the token end the session, a host the listener does not answer for is refused, and a route is handed the query exactly as it was sent beside the decoded values, and a reload naming a certificate and key at new paths swaps them in place, keeping the port and a connection open across it.
  */
 
 #include "AdminClient.h"
@@ -1119,6 +1119,56 @@ TEST_F(AdminServerTest, AReloadSwapsTheCertificateAndKeepsTheOldOneWhenTheNewPai
     EXPECT_FALSE(server.Reload(settings));
     EXPECT_TRUE(server.IsRunning());
     EXPECT_EQ(fingerprintNow(), replacement.GetInfo().Fingerprint);
+}
+
+TEST_F(AdminServerTest, AReloadNamingAnotherCertificateFileSwapsItWithoutDroppingTheListener)
+{
+    AdminServer server = Make();
+    server.SetHealthSource([] { return AdminHealth{ "testserver", "", "rev", 0, "running" }; });
+
+    ListenerSettings settings = Loopback();
+    settings.CertificateFile = _directory.Path() / "admin.crt";
+    settings.PrivateKeyFile = _directory.Path() / "admin.key";
+    std::string error;
+    ASSERT_TRUE(TlsCertificate::CreateSelfSigned(settings.CertificateFile, settings.PrivateKeyFile, "Ambrose first", { "127.0.0.1" }, 60, error)) << error;
+    ASSERT_TRUE(server.Start(settings, error)) << error;
+    uint16 const port = server.GetPort();
+
+    auto const fingerprintNow = [&]
+    {
+        AdminClient const client("127.0.0.1", port, Token, true);
+        AdminClientResponse const answer = client.Send({ "GET", "/api/health", "", "application/json", "" }, std::chrono::seconds(10));
+        EXPECT_TRUE(answer.Answered) << answer.Error;
+        EXPECT_EQ(answer.Status, 200) << answer.Body;
+        return answer.PeerFingerprint;
+    };
+    TlsCertificate first;
+    ASSERT_TRUE(first.Load(settings.CertificateFile, settings.PrivateKeyFile, error)) << error;
+    for (int request = 0; request < 3; ++request)
+        EXPECT_EQ(fingerprintNow(), first.GetInfo().Fingerprint);
+
+    settings.CertificateFile = _directory.Path() / "renewed.crt";
+    settings.PrivateKeyFile = _directory.Path() / "renewed.key";
+    ASSERT_TRUE(TlsCertificate::CreateSelfSigned(settings.CertificateFile, settings.PrivateKeyFile, "Ambrose renewed", { "127.0.0.1" }, 60, error)) << error;
+    TlsCertificate renewed;
+    ASSERT_TRUE(renewed.Load(settings.CertificateFile, settings.PrivateKeyFile, error)) << error;
+
+    asio::io_context context;
+    asio::ip::tcp::socket held(context);
+    held.connect({ asio::ip::make_address("127.0.0.1"), port });
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    ASSERT_TRUE(server.Reload(settings));
+    ASSERT_TRUE(server.IsRunning());
+    EXPECT_EQ(server.GetPort(), port);
+    EXPECT_EQ(fingerprintNow(), renewed.GetInfo().Fingerprint);
+
+    held.non_blocking(true);
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    std::array<char, 1> byte{};
+    std::error_code readError;
+    held.read_some(asio::buffer(byte), readError);
+    EXPECT_EQ(readError, asio::error::would_block) << "a connection open across the swap stays open, because the listener never rebound: " << readError.message();
 }
 
 TEST_F(AdminServerTest, RefusesToOpenWithACertificateItCannotServe)

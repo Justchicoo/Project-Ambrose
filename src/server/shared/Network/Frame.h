@@ -38,7 +38,7 @@ struct FrameLimits
     static constexpr std::size_t DefaultMaxSendQueueBytes = std::size_t{ 16 } << 20;
 
     std::size_t MaxFrameSize = DefaultMaxFrameSize;
-    LongFrameLength LongLength = LongFrameLength::BodyOnly;
+    LongFrameLength LongLength = LongFrameLength::HeaderAndBody;
     std::size_t MaxDmlMessages = DefaultMaxDmlMessages;
     std::size_t MaxSendQueueBytes = DefaultMaxSendQueueBytes;
 };

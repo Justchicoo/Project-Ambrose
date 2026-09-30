@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the sign-in page in a real browser against a stubbed server: a 422 marks the field it names beside the input and shows its request id, a field the form does not have is listed with the id, a wrong token is said above the form with its id, the right token signs the browser in, and a one-time owner link's token fills the form and leaves the address and the browser's history at once, so the page lands on the overview; on the panel, a password that asks for a second factor opens nothing and shows a code step instead, the right code signs in, a wrong one says so, a recovery code can be used instead, and a sign-in that ran out goes back to the name and password.
+ * Tests the sign-in page in a real browser against a stubbed server: a 422 marks the field it names beside the input and shows its request id, a field the form does not have is listed with the id, a wrong token is said above the form with its id, the right token signs the browser in, and a one-time owner link's token leaves the address and the browser's history at once, so the page lands on the overview, and fills the form; on the panel, a password that asks for a second factor opens nothing and shows a code step instead, the right code signs in, a wrong one says so, a recovery code can be used instead, and a sign-in that ran out goes back to the name and password; a sign-in link that asked for a second factor opens on the code step, one that did not sign in says why above the name and password, and a password link asks for the new password, leaves the address at once and signs in with it.
  */
 
 import { flushSync, mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { session } from "$lib/api.svelte";
+import { ApiError, session } from "$lib/api.svelte";
+import { arrivedWith, takeArrival } from "$lib/links";
 import SignIn from "./SignIn.svelte";
 
 type Reply = { status: number; body: unknown; id: string };
@@ -39,6 +40,9 @@ beforeEach(() => {
     session.panel = false;
     session.needsOwner = false;
     session.user = null;
+    session.secondFactorPending = false;
+    session.linkProblem = null;
+    arrivedWith.link = null;
     vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
         sent.push({ url: String(url), body: typeof init?.body === "string" ? init.body : "" });
         const reply = replies.shift();
@@ -133,14 +137,16 @@ describe("the sign-in page", () => {
         window.addEventListener("hashchange", follow);
         try {
             history.replaceState(null, "", `${window.location.pathname}${window.location.search}#claim?token=link-token-abc`);
+            arrivedWith.link = takeArrival();
+            expect(window.location.hash).toBe("#overview");
+            expect(window.location.href).not.toContain("link-token-abc");
+            expect(routed).toEqual(["#overview"]);
             session.panel = true;
             session.needsOwner = true;
             page = mount(SignIn, { target: host });
             flushSync();
             expect(host.querySelector<HTMLInputElement>("#sign-in-token")?.value).toBe("link-token-abc");
-            expect(window.location.hash).toBe("#overview");
-            expect(window.location.href).not.toContain("link-token-abc");
-            expect(routed).toEqual(["#overview"]);
+            expect(arrivedWith.link, "the page took the token and nothing keeps it").toBeNull();
         } finally {
             window.removeEventListener("hashchange", follow);
             history.replaceState(null, "", before);
@@ -290,5 +296,118 @@ describe("the second step of a panel sign-in", () => {
         expect(host.querySelector("#sign-in-password")).not.toBeNull();
         expect(host.querySelector<HTMLInputElement>("#sign-in-password")?.value, "the password is not kept for another try").toBe("");
         expect(host.textContent).toContain("That sign-in ran out. Enter your name and password again.");
+    });
+});
+
+describe("a one-time link on the panel", () => {
+    const operator = {
+        id: 2,
+        username: "desk",
+        display_name: "Desk",
+        owner: true,
+        role: "owner",
+        permissions: ["status.read"],
+        grants: {},
+        must_change_password: false,
+        two_factor: true,
+        two_factor_required: false,
+    };
+
+    function fill(id: string, value: string) {
+        const input = host.querySelector<HTMLInputElement>(id);
+        if (!input) throw new Error(`no ${id} field`);
+        input.value = value;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        flushSync();
+    }
+
+    async function send() {
+        host.querySelector("form")?.requestSubmit();
+        await settle();
+        flushSync();
+    }
+
+    function remount() {
+        if (page) unmount(page);
+        session.panel = true;
+        session.needsOwner = false;
+        page = mount(SignIn, { target: host });
+        flushSync();
+    }
+
+    it("a link that asks for a second factor opens on the code step and the right code signs in", async () => {
+        session.secondFactorPending = true;
+        remount();
+        expect(host.querySelector("h1")?.textContent).toContain("Enter your code");
+        expect(host.querySelector("#sign-in-password"), "a link asks for no password").toBeNull();
+        expect(host.querySelector("#sign-in-code")).not.toBeNull();
+        expect(session.secondFactorPending, "the step was taken and nothing keeps asking for it").toBe(false);
+
+        replies.push({ status: 200, body: { csrf: "csrf-after-link", user: operator }, id: "id-in" });
+        fill("#sign-in-code", "123456");
+        await send();
+        expect(sent[0].url).toBe("api/panel/session/second-factor");
+        expect(JSON.parse(sent[0].body)).toEqual({ code: "123456" });
+        expect(session.state).toBe("signed-in");
+        expect(session.csrf).toBe("csrf-after-link");
+    });
+
+    it("says why a link did not sign in above the name and password", async () => {
+        session.linkProblem = new ApiError(410, "link_expired", "That link has been used or has run out; ask for another", "id-spent");
+        remount();
+        const alert = host.querySelector("[role=alert]");
+        expect(alert?.textContent).toContain("That link has been used or has run out. Ask for another.");
+        expect(alert?.textContent).toContain("id-spent");
+        expect(host.querySelector("#sign-in-username")).not.toBeNull();
+        expect(host.querySelector("#sign-in-password")).not.toBeNull();
+
+        session.linkProblem = new ApiError(
+            403,
+            "not_this_machine",
+            "A local link opens the panel only on the machine the panel runs on",
+            "id-far",
+        );
+        flushSync();
+        expect(host.querySelector("[role=alert]")?.textContent).toContain("That link opens the panel only on the machine it runs on.");
+        session.linkProblem = new ApiError(403, "link_refused", "That link does not sign anyone in", "id-wrong");
+        flushSync();
+        expect(host.querySelector("[role=alert]")?.textContent).toContain("That link does not sign anyone in.");
+        session.linkProblem = new ApiError(429, "too_many_requests", "Too many links were tried from here; wait and try again", "id-held");
+        flushSync();
+        expect(host.querySelector("[role=alert]")?.textContent).toContain(
+            "Too many links were tried from here. Wait a minute and try again.",
+        );
+    });
+
+    it("a password link asks for the new password, leaves the address at once and signs in", async () => {
+        if (page) unmount(page);
+        page = null;
+        const before = window.location.href;
+        try {
+            history.replaceState(null, "", `${window.location.pathname}${window.location.search}#password?token=reset-token-abc`);
+            arrivedWith.link = takeArrival();
+            expect(window.location.hash).toBe("#overview");
+            expect(window.location.href).not.toContain("reset-token-abc");
+            remount();
+            expect(host.querySelector("h1")?.textContent).toContain("Set your password");
+            expect(host.querySelector("#sign-in-username"), "a password link names its operator").toBeNull();
+            expect(host.querySelector<HTMLInputElement>("#sign-in-new-password")?.autocomplete).toBe("new-password");
+
+            fill("#sign-in-new-password", "a long new passphrase");
+            fill("#sign-in-new-password-again", "a different passphrase");
+            await send();
+            expect(sent).toHaveLength(0);
+            expect(host.querySelector("#sign-in-new-password-again-problem")?.textContent?.trim()).toBe("Type the same password again.");
+
+            replies.push({ status: 200, body: { csrf: "csrf-after-reset", user: { ...operator, two_factor: false } }, id: "id-reset" });
+            fill("#sign-in-new-password-again", "a long new passphrase");
+            await send();
+            expect(sent[0].url).toBe("api/panel/reset");
+            expect(JSON.parse(sent[0].body)).toEqual({ token: "reset-token-abc", password: "a long new passphrase" });
+            expect(session.state).toBe("signed-in");
+            expect(session.csrf).toBe("csrf-after-reset");
+        } finally {
+            history.replaceState(null, "", before);
+        }
     });
 });

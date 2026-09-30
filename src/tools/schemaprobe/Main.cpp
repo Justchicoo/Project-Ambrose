@@ -14,6 +14,7 @@
 #include "ProgramStrings.h"
 #include "PropertyOracle.h"
 #include "ServerClassCache.h"
+#include "SkippedValue.h"
 #include "ServerClassExtractor.h"
 #include "StringHash.h"
 #include "TypeDumpLoader.h"
@@ -21,6 +22,7 @@
 #include "XmlSweep.h"
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -187,6 +189,36 @@ namespace
         return result;
     }
 
+    struct FileKind
+    {
+        BindSweepFileKind Sweep;
+        uint64 Archives = 0;
+    };
+
+    void MergeValues(std::vector<BindSweepValue>& into, bool& more, std::vector<BindSweepValue> const& values, bool itemMore)
+    {
+        more = more || itemMore;
+        for (BindSweepValue const& value : values)
+        {
+            if (std::ranges::find(into, value) != into.end())
+                continue;
+            if (into.size() == BindSweep::MaxValues)
+            {
+                more = true;
+                break;
+            }
+            into.push_back(value);
+        }
+    }
+
+    Json ValuesJson(std::vector<BindSweepValue> const& values)
+    {
+        Json list = Json::array();
+        for (auto const& [bits, bytes] : values)
+            list.push_back({ { "bits", bits }, { "hex", fmt::format("{:02x}", fmt::join(bytes, " ")) }, { "readings", SkippedValue::Readings(bits, bytes) } });
+        return list;
+    }
+
     void Merge(BindSweepUnknownClass& into, BindSweepUnknownClass const& item)
     {
         if (into.Hash == 0)
@@ -208,6 +240,7 @@ namespace
             into.Files += item.Files;
             for (auto const& [bits, count] : item.BitSizes)
                 into.BitSizes[bits] += count;
+            MergeValues(into.Values, into.MoreValues, item.Values, item.MoreValues);
         }
     }
 
@@ -219,31 +252,17 @@ namespace
         return list;
     }
 
-    Json ClassesJson(std::vector<ServerClassProposal> const& classes)
+    std::vector<TypeDumpLoader::RawClass> WrittenClasses(TypeDumpLoader::RawDump const& existing, std::vector<ServerClassProposal> const& found)
     {
-        Json list = Json::object();
-        for (ServerClassProposal const& proposal : classes)
+        std::vector<TypeDumpLoader::RawClass> classes = existing.Classes;
+        for (ServerClassProposal const& proposal : found)
         {
-            TypeDumpLoader::RawClass const& type = proposal.Class;
-            Json properties = Json::object();
-            for (TypeDumpLoader::RawProperty const& property : type.Properties)
-            {
-                Json entry{ { "type", property.Type.value_or("") }, { "id", property.Id.value_or(0) }, { "offset", property.Offset.value_or(0) }, { "flags", property.Flags.value_or(0) },
-                    { "container", property.Container.value_or("Static") }, { "dynamic", property.Dynamic.value_or(false) }, { "singleton", property.Singleton.value_or(false) },
-                    { "pointer", property.Pointer.value_or(false) }, { "hash", property.Hash.value_or(0) } };
-                if (!property.Options.empty())
-                {
-                    Json options = Json::object();
-                    for (auto const& [name, value] : property.Options)
-                        options[name] = std::holds_alternative<int64>(value) ? Json(std::get<int64>(value)) : Json(std::get<std::string>(value));
-                    entry["enum_options"] = std::move(options);
-                }
-                properties[property.Name] = std::move(entry);
-            }
-            list[type.Key] = { { "name", type.Name.value_or("") }, { "hash", type.Hash.value_or(0) }, { "bases", type.Bases }, { "evidence", proposal.Evidence },
-                { "properties", std::move(properties) } };
+            TypeDumpLoader::RawClass type = proposal.Class;
+            type.Evidence = proposal.Evidence;
+            type.Source = std::string(ServerClassCache::InstallSource);
+            classes.push_back(std::move(type));
         }
-        return list;
+        return classes;
     }
 
     void Merge(BindSweepIssue& into, BindSweepIssue const& item)
@@ -256,6 +275,7 @@ namespace
             into.Files += item.Files;
             for (auto const& [bits, count] : item.BitSizes)
                 into.BitSizes[bits] += count;
+            MergeValues(into.Values, into.MoreValues, item.Values, item.MoreValues);
         }
     }
 }
@@ -336,13 +356,31 @@ int main(int argc, char** argv)
         else
             std::cerr << fmt::format("schemaprobe: {} cannot be read, so no class or property is named from the client program's strings: {}\n", ConfigMgr::PathToUtf8(programPath), error);
         std::size_t textProperties = 0;
+        std::vector<std::string> writtenNames;
         for (std::filesystem::path const& path : FindWads(*arguments))
             if (std::unique_ptr<KiwadArchive> const archive = KiwadArchive::Open(path, error))
             {
                 std::vector<std::string> const written = ArchiveText::PropertyNames(*archive);
                 textProperties += written.size();
                 extraNames.insert(extraNames.end(), written.begin(), written.end());
+                for (std::string const& name : ArchiveText::ClassNames(*archive))
+                    writtenNames.push_back(name);
             }
+        ServerClassNames classNames;
+        for (auto const& [hash, names] : programNames)
+            for (std::string const& name : names)
+                classNames[hash].push_back({ name, false });
+        std::size_t textClasses = 0;
+        for (std::string const& name : writtenNames)
+        {
+            std::vector<ServerClassName>& named = classNames[StringHash::KiStringHash(name)];
+            if (std::ranges::none_of(named, [&name](ServerClassName const& known) { return known.Name == name; }))
+            {
+                named.push_back({ name, true });
+                programNames[StringHash::KiStringHash(name)].push_back(name);
+                ++textClasses;
+            }
+        }
         PropertyOracle const oracle(*registry.GetCatalog(), extraNames, extraTypes);
         if (arguments->ServerClasses)
         {
@@ -350,7 +388,7 @@ int main(int argc, char** argv)
             ServerClassExtractorOptions options;
             options.Threads = arguments->Threads;
             options.Progress = [](uint32 round, std::size_t kept) { std::cerr << fmt::format("schemaprobe: round {} keeps {} class(es)\n", round, kept); };
-            ServerClassExtraction const found = ServerClassExtractor::Run(archives, registry, existing, oracle, programNames, options);
+            ServerClassExtraction const found = ServerClassExtractor::Run(archives, registry, existing, oracle, classNames, options);
             for (std::string const& problem : found.Errors)
                 std::cerr << "schemaprobe: " << problem << '\n';
             if (!found.Ok())
@@ -359,7 +397,8 @@ int main(int argc, char** argv)
             for (ServerClassRefusal const& refusal : found.Refused)
                 refused.push_back({ { "hash", refusal.Hash }, { "reason", refusal.Reason } });
             Json const classes{ { "version", TypeDumpLoader::SupportedVersion }, { std::string(ServerClassCache::ExtractionKey), ServerClassCache::ExtractionVersion }, { "tool", "schemaprobe" },
-                { "client", *arguments->Client }, { "classes", ClassesJson(found.Classes) },
+                { "client", *arguments->Client }, { std::string(ServerClassCache::BuiltOnKey), ServerClassCache::Digest(existing) },
+                { "classes", ServerClassCache::ClassesJson(WrittenClasses(existing, found.Classes)) },
                 { "summary", { { "kept", found.Classes.size() }, { "rounds", found.Rounds }, { "unknown_before", found.UnknownBefore }, { "unknown_after", found.UnknownAfter },
                                  { "objects_before", found.ObjectsBefore }, { "objects_after", found.ObjectsAfter }, { "failures_before", found.FailuresBefore },
                                  { "failures_after", found.FailuresAfter }, { "xml_documents", found.XmlDocuments }, { "xml_unknown_before", found.XmlUnknownBefore },
@@ -381,10 +420,11 @@ int main(int argc, char** argv)
         }
         TypeCatalogPtr const catalog = registry.GetCatalog();
         Json report{ { "tool", "schemaprobe" }, { "client", *arguments->Client }, { "wads", Json::array() }, { "unknown_classes", Json::array() }, { "unknown_properties", Json::array() },
-            { "draft_schema", Json::array() } };
+            { "draft_schema", Json::array() }, { "file_kinds", Json::array() } };
         std::map<uint32, BindSweepUnknownClass> classes;
         std::map<std::pair<uint32, uint32>, BindSweepClassProperty> classProperties;
         std::map<uint32, BindSweepIssue> properties;
+        std::map<std::string, FileKind> fileKinds;
         uint64 entries = 0;
         uint64 files = 0;
         uint64 decoded = 0;
@@ -417,6 +457,29 @@ int main(int argc, char** argv)
                 Merge(classProperties[{ item.Owner, item.Hash }], item);
             for (BindSweepIssue const& item : sweep.Issues)
                 Merge(properties[item.Hash], item);
+            for (auto const& [name, kind] : sweep.FileKinds)
+            {
+                FileKind& into = fileKinds[name];
+                ++into.Archives;
+                into.Sweep.Files += kind.Files;
+                into.Sweep.Decoded += kind.Decoded;
+                into.Sweep.Failed += kind.Failed;
+                for (auto const& [hash, count] : kind.Roots)
+                    into.Sweep.Roots[hash] += count;
+            }
+        }
+        for (auto const& [name, kind] : fileKinds)
+        {
+            if (kind.Archives < 2)
+                continue;
+            Json roots = Json::array();
+            for (auto const& [hash, count] : kind.Sweep.Roots)
+            {
+                ClassInfo const* const root = catalog->FindClass(hash);
+                roots.push_back({ { "hash", hash }, { "name", root ? Json(root->Name) : Json(nullptr) }, { "files", count } });
+            }
+            report["file_kinds"].push_back({ { "name", name }, { "archives", kind.Archives }, { "files", kind.Sweep.Files }, { "decoded", kind.Sweep.Decoded },
+                { "failed", kind.Sweep.Failed }, { "roots", std::move(roots) } });
         }
         std::vector<BindSweepUnknownClass> sortedClasses;
         for (auto const& [hash, item] : classes)
@@ -434,7 +497,7 @@ int main(int argc, char** argv)
                     continue;
                 std::vector<PropertyGuess> const guesses = oracle.Guess(property.Hash);
                 members.push_back({ { "hash", property.Hash }, { "count", property.Count }, { "files", property.Files }, { "bit_sizes", Bits(property.BitSizes) },
-                    { "guesses", Guesses(guesses) } });
+                    { "values", ValuesJson(property.Values) }, { "more_values", property.MoreValues }, { "guesses", Guesses(guesses) } });
                 if (guesses.size() == 1)
                     draft.push_back({ { "hash", property.Hash }, { "name", guesses.front().Name }, { "type", guesses.front().Type } });
                 else
@@ -453,7 +516,8 @@ int main(int argc, char** argv)
         {
             uint32 const hash = item.Hash;
             report["unknown_properties"].push_back({ { "hash", hash }, { "count", item.Count }, { "files", item.Files }, { "first_file", item.FirstFile }, { "first_path", item.FirstPath },
-                { "bit_sizes", Bits(item.BitSizes) }, { "matches", PropertyMatches(*catalog, hash, arguments->Candidates) }, { "guesses", Guesses(oracle.Guess(hash)) } });
+                { "bit_sizes", Bits(item.BitSizes) }, { "values", ValuesJson(item.Values) }, { "more_values", item.MoreValues }, { "matches", PropertyMatches(*catalog, hash, arguments->Candidates) },
+                { "guesses", Guesses(oracle.Guess(hash)) } });
         }
         Json xmlClasses = Json::array();
         for (XmlSweepClass const& seen : xml.UnknownClasses)
@@ -488,7 +552,7 @@ int main(int argc, char** argv)
         report["xml"] = { { "unknown_classes", std::move(xmlClasses) }, { "failures", std::move(xmlFailures) }, { "issues", std::move(xmlIssues) } };
         report["summary"] = { { "entries", entries }, { "bind_files", files }, { "decoded", decoded }, { "headerless", headerless }, { "headerless_decoded", headerlessDecoded },
             { "xml_entries", xml.Entries }, { "xml_documents", xml.Documents }, { "xml_read", xml.Read }, { "xml_refused", xml.Failures.size() },
-            { "oracle_names", oracle.GetNameCount() }, { "oracle_types", oracle.GetTypeCount() }, { "program_strings", programStrings }, { "program_properties", programProperties }, { "text_properties", textProperties },
+            { "oracle_names", oracle.GetNameCount() }, { "oracle_types", oracle.GetTypeCount() }, { "program_strings", programStrings }, { "program_properties", programProperties }, { "text_properties", textProperties }, { "text_classes", textClasses },
             { "supplement_classes", registry.GetSupplementClassCount() } };
         std::string const text = report.dump(2) + '\n';
         if (arguments->Output)

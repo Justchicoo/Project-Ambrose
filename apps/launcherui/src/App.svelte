@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The launcher window as a player meets it: the night ground filling the frame, one thing said in display type where the eye lands, and beneath it a bar carrying what this run is and the single gold Play. Which screen shows is decided by what the launcher answered, not by the page, so the first run and the failure each follow from the answer, and settings is the one screen the operator opens themselves. The facts on the bar are the settings the launcher decided and are shown as values rather than as states, because this program has not asked the server whether it is there and must not look as though it had. Every screen is reachable from the keyboard alone and every control carries its label. There is no account field: the client's own automatic login is answered by a milestone that is not built, and a box that looks like it signs somebody in and does not is worse than no box. The launcher is asked what it found once when the window opens rather than on every redraw, since each asking reads the install again. -->
+<!-- Project Ambrose by Imjustchico: The launcher window as a player meets it: the night ground filling the frame, one thing said in display type where the eye lands, and beneath it a bar carrying what this run is and the single gold Play. Which screen shows is decided by what the launcher answered, not by the page, so the first run and the failure each follow from the answer, and settings is the one screen the operator opens themselves. The facts on the bar are the settings the launcher decided and are shown as values rather than as states, because this program has not asked the server whether it is there and must not look as though it had. Every screen is reachable from the keyboard alone and every control carries its label. There is no account field: the client's own automatic login is answered by a milestone that is not built, and a box that looks like it signs somebody in and does not is worse than no box. The launcher is asked what it found when the window opens, and again every half second only while its first run is still going, rather than on every redraw, since each asking reads the install again; Look again starts that first run over. -->
 <script lang="ts">
     import { AppShell, Button, Card, createHost, Heading, IconButton, Mono, ProgressBar, StateDot, StepList, TextField } from "@ambrose/ui";
     import { hostChannel } from "./lib/channel";
@@ -15,7 +15,7 @@
     $effect(() => {
         if (looked) return;
         looked = true;
-        void launcher.look();
+        void launcher.run();
     });
 
     const drawnSteps = $derived(
@@ -107,7 +107,7 @@
                 <StateDot state="waiting" word="Reading what is on this machine" />
             {:else if launcher.screen === "first-run"}
                 <div class="mt-6" style="max-width: 34rem">
-                    <Card title="What is being set up">
+                    <Card title="What is being set up" headingLevel={2}>
                         <StepList label="First run" steps={drawnSteps} />
                         {#if launcher.steps.length > 0}
                             <ProgressBar
@@ -121,7 +121,7 @@
                 </div>
             {:else if launcher.screen === "settings"}
                 <div class="mt-6" style="max-width: 30rem">
-                    <Card title="This machine">
+                    <Card title="This machine" headingLevel={2}>
                         <form class="flex flex-col gap-16" onsubmit={saveSettings}>
                             <TextField
                                 id="launcher-host"
@@ -187,7 +187,7 @@
                 Play
             </Button>
         {:else if launcher.screen === "failed"}
-            <Button variant="action" size="wide" icon="refresh-cw" onclick={() => launcher.look()} style="min-width: 204px">
+            <Button variant="action" size="wide" icon="refresh-cw" onclick={() => launcher.again()} style="min-width: 204px">
                 Look again
             </Button>
         {/if}

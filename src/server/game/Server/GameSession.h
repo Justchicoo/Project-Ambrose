@@ -122,6 +122,7 @@ public:
     void HandleLogClientResolution(GameMessages::LogClientResolution& message);
     void HandleLogPatchClientPatchTime(GameMessages::LogPatchClientPatchTime& message);
     void HandleQuestFinderOption(GameMessages::QuestFinderOption& message);
+    void SendBadges();
 
     void HandleBuddyRequestList(GameMessages::BuddyRequestList& message);
     void HandleBuddyRequestAdd(GameMessages::BuddyRequestAdd& message);

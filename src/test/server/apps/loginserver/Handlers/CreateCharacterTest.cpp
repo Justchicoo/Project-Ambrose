@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives MSG_CREATECHARACTER over loopback against a real LoginSession with AMBROSE_TEST_DB set, with a world database holding one school, the human name tables and the starting state every school falls back to: a request with every field in order answers MSG_CREATECHARACTERRESPONSE ErrorCode 0 and leaves exactly one wizard stored, standing where the world rows say and owned by the account that asked; a blob that is not a creation info, a school no row knows and a name index past the end of its table each answer ErrorCode 1, write nothing and leave the session able to go on and ask for its character list; an account already holding as many wizards as it is allowed is refused and keeps exactly those it had; and lowering Character.MaxPerAccount refuses the next request with nothing restarted.
+ * Drives MSG_CREATECHARACTER over loopback against a real LoginSession with AMBROSE_TEST_DB set, with a world database holding one school, the human name tables and the starting state every school falls back to: a request with every field in order answers MSG_CREATECHARACTERRESPONSE ErrorCode 0 and leaves exactly one wizard stored, standing where the world rows say and owned by the account that asked; a blob that is not a creation info, a school no row knows and a name index past the end of its table each answer ErrorCode 1, write nothing and leave the session able to go on and ask for its character list; an account already holding as many wizards as it is allowed is refused and keeps exactly those it had; and lowering Character.MaxPerAccount refuses the next request with nothing restarted. It drives MSG_DELETECHARACTER over the same session too: the account's own wizard is deleted with ErrorCode 0, its row kept with deleted_at and deleted_account set and gone from the list, while another account's wizard, a missing id and a wizard in the world are refused with ErrorCode 1 and change nothing; Character.DeleteMode hard removes the row, and Character.KeepDeletedDays removes wizards deleted longer ago on the next delete.
  */
 
 #include "AccountMgr.h"
@@ -172,6 +172,28 @@ namespace
             return response->ErrorCode;
         }
 
+        std::optional<int32> Delete(LoginClient& client, uint64 guid)
+        {
+            LoginMessages::DeleteCharacter request;
+            request.CharId = guid;
+            Send(client, request);
+            std::optional<LoginMessages::DeleteCharacterResponse> const response = ReadMessage<LoginMessages::DeleteCharacterResponse>(client);
+            if (!response)
+                return std::nullopt;
+            return response->ErrorCode;
+        }
+
+        std::vector<uint64> Guids()
+        {
+            CharacterList const stored = CharacterRepository::LoadByAccount(_accountId);
+            EXPECT_EQ(stored.Result, CharacterOpResult::Ok);
+            std::vector<uint64> guids;
+            for (CharacterSummary const& character : stored.Characters)
+                guids.push_back(character.Guid);
+            std::sort(guids.begin(), guids.end());
+            return guids;
+        }
+
         uint32 StoredCharacters() const
         {
             std::optional<uint32> const counted = CharacterRepository::CountByAccount(_accountId);
@@ -306,4 +328,63 @@ TEST_F(CreateCharacterDatabaseTest, EachWizardIsGivenAnIdOfItsOwn)
     std::sort(guids.begin(), guids.end());
     EXPECT_EQ(std::adjacent_find(guids.begin(), guids.end()), guids.end()) << "no two wizards were given the same id";
     EXPECT_EQ(CharacterRepository::GetMaxGuid().value_or(0), guids.back()) << "and the highest id ever used follows them";
+}
+
+TEST_F(CreateCharacterDatabaseTest, AnAccountDeletesItsOwnWizardAndOnlyThatOne)
+{
+    LoginClient client = Authenticated();
+    for (int made = 0; made < 4; ++made)
+        ASSERT_EQ(Ask(client, Blob()), 0);
+    std::vector<uint64> const guids = Guids();
+    ASSERT_EQ(guids.size(), 4u);
+    uint64 const own = guids[0];
+    uint64 const others = guids[1];
+    uint64 const playing = guids[2];
+    ASSERT_TRUE(CharacterDatabase.DirectExecute(fmt::format("UPDATE `characters` SET `account` = {} WHERE `guid` = {}", _accountId + 100, others)));
+    ASSERT_TRUE(CharacterDatabase.DirectExecute(fmt::format("UPDATE `characters` SET `online` = 1 WHERE `guid` = {}", playing)));
+
+    EXPECT_EQ(Delete(client, own), 0);
+    CharacterLoad const deleted = CharacterRepository::Load(own);
+    ASSERT_EQ(deleted.Result, CharacterOpResult::Ok) << "a soft delete keeps the row";
+    EXPECT_TRUE(deleted.Character->IsDeleted());
+    QueryResult const row = CharacterDatabase.Query(fmt::format("SELECT `deleted_at` IS NOT NULL, `deleted_account` FROM `characters` WHERE `guid` = {}", own));
+    ASSERT_TRUE(row);
+    EXPECT_EQ(row->Fetch()[0].Get<int64>(), 1) << "deleted_at is set";
+    EXPECT_EQ(row->Fetch()[1].Get<uint64>(), _accountId) << "and remembers the account a game master can give it back to";
+    EXPECT_EQ(Guids(), (std::vector<uint64>{ playing, guids[3] })) << "and the list leaves it out";
+
+    EXPECT_EQ(Delete(client, others), 1) << "another account's wizard";
+    EXPECT_EQ(Delete(client, 999999), 1) << "a wizard that does not exist";
+    EXPECT_EQ(Delete(client, playing), 1) << "a wizard in the world";
+    EXPECT_EQ(Delete(client, own), 1) << "a wizard already deleted";
+    EXPECT_EQ(CharacterRepository::Load(others).Character->Account, _accountId + 100) << "and each refusal changed nothing";
+    EXPECT_FALSE(CharacterRepository::Load(playing).Character->IsDeleted());
+    EXPECT_EQ(Guids().size(), 2u);
+}
+
+TEST_F(CreateCharacterDatabaseTest, HardDeletionAndKeptDaysApplyFromTheNextDeleteWithNothingRestarted)
+{
+    LoginClient client = Authenticated();
+    for (int made = 0; made < 3; ++made)
+        ASSERT_EQ(Ask(client, Blob()), 0);
+    std::vector<uint64> const guids = Guids();
+    ASSERT_EQ(guids.size(), 3u);
+
+    ASSERT_EQ(Delete(client, guids[0]), 0);
+    ASSERT_TRUE(CharacterDatabase.DirectExecute(fmt::format("UPDATE `characters` SET `deleted_at` = 1 WHERE `guid` = {}", guids[0])));
+    LoginSettings changed = *sLoginMgr.GetSettings();
+    changed.KeepDeletedDays = 30;
+    sLoginMgr.SetSettings(changed);
+    ASSERT_EQ(Delete(client, guids[1]), 0);
+    EXPECT_TRUE(WaitForCondition([&] { return CharacterRepository::Load(guids[0]).Result == CharacterOpResult::NotFound; }))
+        << "a wizard deleted longer ago than Character.KeepDeletedDays is removed on the next delete";
+    EXPECT_EQ(CharacterRepository::Load(guids[1]).Result, CharacterOpResult::Ok) << "the one just deleted is kept";
+
+    changed.HardDelete = true;
+    sLoginMgr.SetSettings(changed);
+    EXPECT_EQ(Delete(client, guids[2]), 0);
+    EXPECT_EQ(CharacterRepository::Load(guids[2]).Result, CharacterOpResult::NotFound) << "Character.DeleteMode hard removes the row";
+    QueryResult const appearance = CharacterDatabase.Query(fmt::format("SELECT COUNT(*) FROM `character_appearance` WHERE `guid` = {}", guids[2]));
+    ASSERT_TRUE(appearance);
+    EXPECT_EQ(appearance->Fetch()[0].Get<uint64>(), 0u) << "and what the wizard held with it";
 }

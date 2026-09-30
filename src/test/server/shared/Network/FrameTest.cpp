@@ -238,6 +238,10 @@ TEST(FrameTest, LongFramesUseTheMarkerInBothLengthModes)
     EXPECT_EQ(Hex::Encode(headerAndBody.GetData().first(8)), "0df0" "0080" "88770000");
     EXPECT_EQ(headerAndBody.GetSize(), bodyOnly.GetSize());
 
+    ByteBuffer byDefault;
+    FrameWriter::WriteDml(byDefault, 5, 1, longBody);
+    EXPECT_EQ(Hex::Encode(byDefault.GetData().first(8)), "0df0" "0080" "88770000") << "the r806919 client reads a long frame's length as its header and body, and drops a connection sent the body alone";
+
     ByteBuffer controlLong;
     FrameWriter::WriteControl(controlLong, 2, longBody, LongFrameLength::BodyOnly);
     EXPECT_EQ(Hex::Encode(controlLong.GetData().first(8)), "0df0" "0080" "80770000");
@@ -263,7 +267,7 @@ TEST(FrameTest, LongFramesUseTheMarkerInBothLengthModes)
     forced.IsLong = true;
     forced.Payload = Sequence(3);
     ByteBuffer forcedBuffer;
-    FrameWriter::WriteFrame(forcedBuffer, forced);
+    FrameWriter::WriteFrame(forcedBuffer, forced, LongFrameLength::BodyOnly);
     EXPECT_EQ(Hex::Encode(forcedBuffer.GetData()), "0df0" "0080" "03000000" "01000000" "000102" "00");
 
     EXPECT_THROW(FrameWriter::WriteDml(bodyOnly, 5, 1, Sequence(FrameLayout::MaxDmlBody + 1)), std::length_error);

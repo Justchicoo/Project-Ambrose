@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests what the world database's object schema tables promise, against a real world database when AMBROSE_TEST_DB is set and a small type dump the test writes: the updates create the tables with the rows that prove the player object, a server class joins the catalog in one build and extends a class the dump describes, the core object types load with the template classes' pairs and give the player template's header, the behavior classes load and are found, a behavior with no class stands for an empty slot, a row naming a class nothing describes or one of the wrong kind, and a template class nothing describes, fails its reload with the row named and keeps what was serving, a server class whose property does not hash fails its reload with the catalog left as it was, and one added then joins and decodes without a restart, and the classes an install holds are written marked install with their enum options, read back on their own as the file they came from, whatever its evidence says, and unlike one read another way, replace the install classes written before them and leave the authored ones.
+ * Tests what the world database's object schema tables promise, against a real world database when AMBROSE_TEST_DB is set and a small type dump the test writes: the updates create the tables with the rows that prove the player object, and every class and property they author, the zone trigger and volume classes among them, hashes as its name says, a server class joins the catalog in one build and extends a class the dump describes, the core object types load with the template classes' pairs and give the player template's header, the behavior classes load and are found, a behavior with no class stands for an empty slot, a row naming a class nothing describes or one of the wrong kind, and a template class nothing describes, fails its reload with the row named and keeps what was serving, a server class whose property does not hash fails its reload with the catalog left as it was, and one added then joins and decodes without a restart, and the classes an install holds are written marked install with their enum options, read back on their own as the file they came from, whatever its evidence says, and unlike one read another way, replace the install classes written before them and leave the authored ones.
  */
 
 #include "BindFile.h"
@@ -20,8 +20,10 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <optional>
 #include <random>
+#include <string_view>
 #include <string>
 #include <vector>
 
@@ -207,6 +209,34 @@ TEST_F(ObjectSchemaMgrTest, TheUpdatesCreateTheTablesWithTheRowsThatProveThePlay
         << "core type 0, the byte that says a plain class hash follows, cannot stand for a class";
 }
 
+TEST_F(ObjectSchemaMgrTest, EveryAuthoredClassAndPropertyHashesAsItsNameSays)
+{
+    TypeDumpLoader::RawDump authored;
+    std::vector<std::string> errors;
+    ASSERT_TRUE(ServerClassScript::Read(authored, errors, ServerClassScript::AuthoredSource)) << (errors.empty() ? std::string() : errors.front());
+    std::vector<std::string> names;
+    std::size_t properties = 0;
+    for (TypeDumpLoader::RawClass const& type : authored.Classes)
+    {
+        names.push_back(*type.Name);
+        EXPECT_EQ(*type.Hash, StringHash::KiStringHash(*type.Name)) << *type.Name;
+        EXPECT_FALSE(type.Evidence.value_or("").empty()) << *type.Name << " says what proves it";
+        for (TypeDumpLoader::RawProperty const& property : type.Properties)
+        {
+            ++properties;
+            EXPECT_EQ(*property.Hash, TypeDumpLoader::ExpectedPropertyHash(*property.Type, property.Name)) << *type.Name << "." << property.Name;
+        }
+    }
+    for (std::string_view const name : { "class TriggerList", "class Trigger", "class StateTrigger", "class TriggerObjectInfo", "class TriggerVolumeList", "class TriggerVolume", "class TriggerGroupList",
+             "class TriggerGroup", "class ResClientNotifyText", "class ResAddDynaMod", "class ResActorDialog", "class ResDownloadPackage" })
+        EXPECT_NE(std::find(names.begin(), names.end(), name), names.end()) << name;
+    EXPECT_EQ(StringHash::KiStringHash("class TriggerList"), 0x06DAAC43u) << "the root of every triggers.xml";
+    EXPECT_EQ(StringHash::KiStringHash("class Trigger"), 0x068C265Bu);
+    EXPECT_EQ(StringHash::KiStringHash("class TriggerVolumeList"), 0x1B6EF770u) << "the root of every volumes.xml";
+    EXPECT_EQ(StringHash::KiStringHash("class TriggerVolume"), 0x1B7B55F6u);
+    EXPECT_GE(properties, 90u);
+}
+
 TEST_F(ObjectSchemaMgrTest, TheServerClassJoinsTheCatalogAndTheTablesAreFoundBothWays)
 {
     ASSERT_NO_FATAL_FAILURE(UseTestRows());
@@ -318,6 +348,7 @@ TEST_F(ObjectSchemaMgrTest, AServerClassThatDoesNotHashFailsItsReloadWithTheCata
 
 TEST_F(ObjectSchemaMgrTest, InstallClassesReplaceTheInstallClassesBeforeThemWithTheirEnumOptionsAndLeaveTheAuthoredOnes)
 {
+    Execute("DELETE FROM `server_class` WHERE `name` <> 'BasicMobileBehavior'");
     std::string error;
     ASSERT_TRUE(ServerClassScript::Build(InstallClass("TestShadeBehavior")).Apply(_worldInfo, error)) << error;
     std::vector<std::string> loading;
@@ -336,7 +367,7 @@ TEST_F(ObjectSchemaMgrTest, InstallClassesReplaceTheInstallClassesBeforeThemWith
 
     TypeDumpLoader::RawDump held;
     std::vector<std::string> reading;
-    ASSERT_TRUE(sObjectSchemaMgr.ReadInstallClasses(held, reading)) << (reading.empty() ? std::string() : reading.front());
+    ASSERT_TRUE(ServerClassScript::Read(held, reading, ServerClassScript::InstallSource)) << (reading.empty() ? std::string() : reading.front());
     ASSERT_EQ(held.Classes.size(), 1u) << "only the classes the install gave, not the authored ones";
     EXPECT_TRUE(ServerClassScript::Matches(held, InstallClass("TestShadeBehavior"))) << "what was written reads back as the file it came from";
     TypeDumpLoader::RawDump changed = InstallClass("TestShadeBehavior");

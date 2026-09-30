@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps one count per account and one per account and address together, each over a window that starts at its first failure and ends on its own, so a run of guesses is held back for what is left of the window and then forgiven; the name is folded before it is counted, so guessing at a name in another case is the same guessing, and a success clears both of that account's counts and nobody else's.
+ * Keeps one count per account and one per account and address together, each over a window that starts at its first failure and ends on its own, so a run of guesses is held back for what is left of the window and then forgiven; the name is folded before it is counted, so guessing at a name in another case is the same guessing, and a success clears both of that account's counts and nobody else's. An address counted alone is kept under a key no account's count can share, with the same window, limit and eviction, and nothing clears it but its window.
  */
 
 #include "PanelSignIn.h"
@@ -41,6 +41,11 @@ std::string PanelSignInThrottle::UserKey(std::string_view username)
 std::string PanelSignInThrottle::PairKey(std::string_view username, std::string_view address)
 {
     return "pair:" + Ambrose::ToLower(username) + "|" + std::string(address);
+}
+
+std::string PanelSignInThrottle::AddressKey(std::string_view address)
+{
+    return "addr:" + std::string(address);
 }
 
 bool PanelSignInThrottle::Over(Count& count, Clock::time_point now, uint32& retryAfter, bool& first)
@@ -91,6 +96,26 @@ PanelSignInVerdict PanelSignInThrottle::Check(std::string_view username, std::st
     return verdict;
 }
 
+PanelSignInVerdict PanelSignInThrottle::CheckAddress(std::string_view address)
+{
+    PanelSignInVerdict verdict;
+    if (address.empty())
+        return verdict;
+
+    std::lock_guard const lock(_mutex);
+    auto const found = _counts.find(AddressKey(address));
+    if (found == _counts.end())
+        return verdict;
+    bool first = false;
+    if (Over(found->second, _timeSource(), verdict.RetryAfterSeconds, first))
+    {
+        verdict.Allowed = false;
+        verdict.FirstThisWindow = first;
+        verdict.Counted = "address";
+    }
+    return verdict;
+}
+
 void PanelSignInThrottle::Add(std::string const& key, Clock::time_point now)
 {
     auto found = _counts.find(key);
@@ -134,6 +159,14 @@ void PanelSignInThrottle::Failed(std::string_view username, std::string_view add
     Add(UserKey(username), now);
     if (!address.empty())
         Add(PairKey(username, address), now);
+}
+
+void PanelSignInThrottle::FailedAtAddress(std::string_view address)
+{
+    if (address.empty())
+        return;
+    std::lock_guard const lock(_mutex);
+    Add(AddressKey(address), _timeSource());
 }
 
 void PanelSignInThrottle::Succeeded(std::string_view username, std::string_view address)

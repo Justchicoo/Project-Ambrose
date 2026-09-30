@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Opens every GameData archive in name order and reads the gamedata.bin of each that holds one as a versionable object, the form the client keeps zone data in. The decoder names every part of a class the dump does not list by its path, so an object list entry that came back empty is matched to the part it was and reported as a skipped object, a part deeper inside an entry is reported as a skipped part of a row that is still written, and any other problem the decoder names is an error, because it means the dump and the data disagree. A zone is known by its own m_zoneName, which is how the client is told where it is and how it finds the archive, so a name whose archive is not the one it was read from is an error rather than a second guess. Spawn requirements are kept as the versionable bytes the zone data holds them in, written again from the decoded object, so a stored client object stays in the client's own form.
+ * Opens every GameData archive in name order and reads the gamedata.bin of each that holds one as a versionable object, the form the client keeps zone data in. The decoder names every part of a class the dump does not list by its path, so an object list entry that came back empty is matched to the part it was and reported as a skipped object, a part deeper inside an entry is reported as a skipped part of a row that is still written, and any other problem the decoder names is an error, because it means the dump and the data disagree. A zone is known by its own m_zoneName, which is how the client is told where it is and how it finds the archive, so a name whose archive is not the one it was read from is an error rather than a second guess. Spawn requirements are kept as the versionable bytes the zone data holds them in, written again from the decoded object, so a stored client object stays in the client's own form. A zone's volumes.xml and triggers.xml are BINd files whose classes the dump does not list, so each field is read by its name, and by its hash where no name fits yet, and a field that is missing or of another type fails the file rather than giving a row a default, where a null pointer is a value and a list entry of a class nothing describes, or any issue other than an unknown class, fails it too; a result of a class nothing describes keeps its place with the hash the file gives it, and a part deeper inside a kept entry is reported as a skipped part as in gamedata.bin.
  */
 
 #include "ZoneExtractor.h"
+#include "BindFile.h"
 #include "ConfigMgr.h"
 #include "KiwadArchive.h"
 #include "ObjectSerializer.h"
@@ -13,8 +14,10 @@
 
 #include <algorithm>
 #include <charconv>
+#include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <utility>
 
 namespace
@@ -87,6 +90,218 @@ namespace
         row.LoadingType = info.GetLoadingType();
         return row;
     }
+
+    std::optional<std::vector<uint8>> Versionable(PropertyObject const* object, std::string& error)
+    {
+        EncodeResult encoded = ObjectSerializer::Encode(object, ZoneDataOptions());
+        if (!encoded.Ok())
+        {
+            error = encoded.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(encoded.Status)) : std::move(encoded.Detail);
+            return std::nullopt;
+        }
+        return std::move(encoded.Bytes);
+    }
+
+    class FieldReader
+    {
+    public:
+        explicit FieldReader(PropertyObject const& object) : _object(object) { }
+
+        std::string const& GetMissing() const noexcept { return _missing; }
+        void Fail(std::string reason)
+        {
+            if (_missing.empty())
+                _missing = std::move(reason);
+        }
+
+        std::string Text(std::string_view name) { return Take<std::string>(name, _object.Get(name)); }
+        std::string Text(uint32 hash) { return Take<std::string>(fmt::format("#{}", hash), _object.Get(hash)); }
+        bool Flag(std::string_view name) { return Take<bool>(name, _object.Get(name)); }
+        bool Flag(uint32 hash) { return Take<bool>(fmt::format("#{}", hash), _object.Get(hash)); }
+        float Real(std::string_view name) { return Take<float>(name, _object.Get(name)); }
+        int64 Whole(std::string_view name) { return Whole(name, _object.Get(name)); }
+        int64 Whole(uint32 hash) { return Whole(fmt::format("#{}", hash), _object.Get(hash)); }
+
+        std::vector<std::string> Texts(std::string_view name)
+        {
+            std::vector<std::string> texts;
+            PropertyValue const* const value = _object.Get(name);
+            PropertyValue::List const* const list = value ? value->GetList() : nullptr;
+            if (!list)
+            {
+                Miss(name);
+                return texts;
+            }
+            for (PropertyValue const& entry : *list)
+                texts.push_back(Take<std::string>(name, &entry));
+            return texts;
+        }
+
+        PropertyObject const* Object(std::string_view name)
+        {
+            PropertyValue const* const value = _object.Get(name);
+            if (!value || (!value->IsNullObject() && !value->AsObject()))
+            {
+                Miss(name);
+                return nullptr;
+            }
+            return value->AsObject();
+        }
+
+    private:
+        void Miss(std::string_view name)
+        {
+            Fail(fmt::format("{} has no {} the rows can read", _object.GetClass().Name, name));
+        }
+
+        template<typename T>
+        T Take(std::string_view name, PropertyValue const* value)
+        {
+            T const* const held = value ? value->GetIf<T>() : nullptr;
+            if (!held)
+            {
+                Miss(name);
+                return T{};
+            }
+            return *held;
+        }
+
+        int64 Whole(std::string_view name, PropertyValue const* value)
+        {
+            std::optional<int64> number;
+            if (value)
+                number = WholeOf(*value);
+            if (!number)
+                Miss(name);
+            return number.value_or(0);
+        }
+
+        static std::optional<int64> WholeOf(PropertyValue const& value)
+        {
+            if (auto const* held = value.GetIf<int8>()) return *held;
+            if (auto const* held = value.GetIf<uint8>()) return *held;
+            if (auto const* held = value.GetIf<int16>()) return *held;
+            if (auto const* held = value.GetIf<uint16>()) return *held;
+            if (auto const* held = value.GetIf<int32>()) return *held;
+            if (auto const* held = value.GetIf<uint32>()) return *held;
+            if (auto const* held = value.GetIf<int64>()) return *held;
+            if (auto const* held = value.GetIf<uint64>()) return static_cast<int64>(*held);
+            return std::nullopt;
+        }
+
+        PropertyObject const& _object;
+        std::string _missing;
+    };
+
+    struct FileIssues
+    {
+        std::map<std::string, uint32, std::less<>> UnknownAt;
+        std::set<std::string, std::less<>> Placed;
+        std::string Failure;
+    };
+
+    FileIssues SortIssues(std::vector<DecodeIssue> const& issues, std::string_view listPath)
+    {
+        FileIssues sorted;
+        for (DecodeIssue const& issue : issues)
+        {
+            if (!IsUnknownClassIssue(issue.Kind))
+            {
+                if (sorted.Failure.empty())
+                    sorted.Failure = fmt::format("{} at {}: {}", ObjectSerializer::GetIssueName(issue.Kind), issue.Path, issue.Detail);
+                continue;
+            }
+            if (issue.Kind != DecodeIssueKind::UnknownClass)
+                continue;
+            std::string_view const path = issue.Path;
+            std::size_t const close = path.starts_with(listPath) ? path.find(']', listPath.size()) : std::string_view::npos;
+            if (close == std::string_view::npos || close + 1 == path.size())
+            {
+                if (sorted.Failure.empty())
+                    sorted.Failure = fmt::format("{} is of class hash {}, which no class the server knows describes", issue.Path, issue.Hash);
+                continue;
+            }
+            sorted.UnknownAt.emplace(issue.Path, issue.Hash);
+        }
+        return sorted;
+    }
+
+    std::optional<BindReadResult> ReadServerFile(TypeCatalogPtr const& catalog, std::span<uint8 const> data, std::string_view rootClass, std::string& failure)
+    {
+        BindReadResult read = BindFile::Read(catalog, data);
+        if (!read.Ok() || !read.Decoded.Object)
+        {
+            failure = read.Detail.empty() ? std::string(BindFile::GetStatusName(read.Status)) : read.Detail;
+            return std::nullopt;
+        }
+        if (read.Decoded.Object->GetClass().Name != rootClass)
+        {
+            failure = fmt::format("its root is {}, not {}", read.Decoded.Object->GetClass().Name, rootClass);
+            return std::nullopt;
+        }
+        return read;
+    }
+
+    std::vector<ExtractedTriggerResult> Results(PropertyObject const* list, std::string const& path, FileIssues& issues, FieldReader& fields)
+    {
+        std::vector<ExtractedTriggerResult> results;
+        if (!list)
+            return results;
+        PropertyValue const* const entries = list->Get("m_results");
+        if (!entries || !entries->GetList())
+        {
+            fields.Fail(fmt::format("{} has no m_results list", path));
+            return results;
+        }
+        for (std::size_t index = 0; index < entries->GetList()->size(); ++index)
+        {
+            std::string const at = fmt::format("{}.m_results[{}]", path, index);
+            PropertyObject const* const result = (*entries->GetList())[index].AsObject();
+            ExtractedTriggerResult row;
+            if (!result)
+            {
+                auto const unknown = issues.UnknownAt.find(at);
+                if (unknown == issues.UnknownAt.end())
+                {
+                    fields.Fail(fmt::format("{} is null", at));
+                    return results;
+                }
+                issues.Placed.insert(at);
+                row.ClassHash = unknown->second;
+                results.push_back(std::move(row));
+                continue;
+            }
+            row.ClassHash = result->GetClass().Hash;
+            row.ClassName = result->GetClass().Name;
+            std::string error;
+            row.Data = Versionable(result, error);
+            if (!row.Data)
+            {
+                fields.Fail(fmt::format("{} does not encode: {}", at, error));
+                return results;
+            }
+            results.push_back(std::move(row));
+        }
+        return results;
+    }
+
+    std::optional<std::vector<uint8>> Encoded(PropertyObject const* object, std::string_view name, FieldReader& fields)
+    {
+        if (!object)
+            return std::nullopt;
+        std::string error;
+        std::optional<std::vector<uint8>> bytes = Versionable(object, error);
+        if (!bytes)
+            fields.Fail(fmt::format("{} does not encode: {}", name, error));
+        return bytes;
+    }
+
+    void SkipUnplacedParts(FileIssues const& issues, std::string const& zone, ZoneExtraction& extraction)
+    {
+        for (auto const& [path, hash] : issues.UnknownAt)
+            if (!issues.Placed.contains(path))
+                extraction.Skipped.push_back({ zone, path, hash, false });
+    }
 }
 
 void ZoneExtraction::AddError(std::string error)
@@ -121,6 +336,30 @@ std::size_t ZoneExtraction::GetObjectCount() const noexcept
 std::size_t ZoneExtraction::GetSkippedObjectCount() const noexcept
 {
     return static_cast<std::size_t>(std::count_if(Skipped.begin(), Skipped.end(), [](SkippedZonePart const& part) { return part.WholeObject; }));
+}
+
+std::size_t ZoneExtraction::GetVolumeCount() const noexcept
+{
+    std::size_t count = 0;
+    for (ExtractedZone const& zone : Zones)
+        count += zone.Volumes.size();
+    return count;
+}
+
+std::size_t ZoneExtraction::GetTriggerCount() const noexcept
+{
+    std::size_t count = 0;
+    for (ExtractedZone const& zone : Zones)
+        count += zone.Triggers.size();
+    return count;
+}
+
+std::size_t ZoneExtraction::GetTriggerFailureZoneCount() const
+{
+    std::set<std::string_view> zones;
+    for (TriggerFileFailure const& failure : TriggerFailures)
+        zones.insert(failure.Zone);
+    return zones.size();
 }
 
 ExtractedZone const* ZoneExtraction::Find(std::string_view path) const noexcept
@@ -230,6 +469,137 @@ void ZoneExtractor::ReadZone(TypeCatalogPtr const& catalog, std::string_view arc
     extraction.Zones.push_back(std::move(zone));
 }
 
+void ZoneExtractor::ReadVolumes(TypeCatalogPtr const& catalog, ExtractedZone& zone, std::span<uint8 const> data, ZoneExtraction& extraction)
+{
+    constexpr std::string_view Root = "class TriggerVolumeList";
+    std::string failure;
+    std::optional<BindReadResult> const read = ReadServerFile(catalog, data, Root, failure);
+    if (!read)
+    {
+        extraction.TriggerFailures.push_back({ zone.Path, std::string(VolumeEntry), std::move(failure) });
+        return;
+    }
+    std::string const listPath = fmt::format("{}.m_allVolumes[", Root);
+    FileIssues issues = SortIssues(read->Decoded.Issues, listPath);
+    std::vector<ExtractedVolume> volumes;
+    FieldReader root(*read->Decoded.Object);
+    PropertyValue const* const list = read->Decoded.Object->Get("m_allVolumes");
+    if (!list || !list->GetList())
+        root.Fail("class TriggerVolumeList has no m_allVolumes list");
+    for (std::size_t index = 0; issues.Failure.empty() && root.GetMissing().empty() && list && list->GetList() && index < list->GetList()->size(); ++index)
+    {
+        PropertyObject const* const entry = (*list->GetList())[index].AsObject();
+        if (!entry)
+        {
+            root.Fail(fmt::format("{}{}] is null", listPath, index));
+            break;
+        }
+        FieldReader fields(*entry);
+        ExtractedVolume volume;
+        volume.Name = fields.Text("m_triggerObjName");
+        volume.ObjectId = static_cast<uint32>(fields.Whole("m_nObjectID"));
+        volume.TemplateId = static_cast<uint64>(fields.Whole("m_templateID"));
+        volume.Shape = fields.Text("m_shape");
+        volume.Position = { fields.Real("m_locationX"), fields.Real("m_locationY"), fields.Real("m_locationZ") };
+        volume.Radius = fields.Real("m_radius");
+        volume.Length = fields.Real("m_length");
+        volume.Width = fields.Real("m_width");
+        volume.Depth = fields.Real("m_depth");
+        volume.QuestEvents = fields.Flag("m_questEvents");
+        volume.PlayerOnly = fields.Flag("m_playerOnly");
+        volume.LoadingType = fields.Whole("m_loadingType");
+        volume.SpawnRequirements = Encoded(fields.Object("m_spawnRequirements"), "m_spawnRequirements", fields);
+        volume.EnterEvents = fields.Texts("m_enterEvents");
+        volume.ExitEvents = fields.Texts("m_exitEvents");
+        if (!fields.GetMissing().empty())
+        {
+            root.Fail(fmt::format("{}{}]: {}", listPath, index, fields.GetMissing()));
+            break;
+        }
+        volumes.push_back(std::move(volume));
+    }
+    if (!issues.Failure.empty() || !root.GetMissing().empty())
+    {
+        extraction.TriggerFailures.push_back({ zone.Path, std::string(VolumeEntry), issues.Failure.empty() ? root.GetMissing() : issues.Failure });
+        return;
+    }
+    SkipUnplacedParts(issues, zone.Path, extraction);
+    zone.Volumes = std::move(volumes);
+}
+
+void ZoneExtractor::ReadTriggers(TypeCatalogPtr const& catalog, ExtractedZone& zone, std::span<uint8 const> data, ZoneExtraction& extraction)
+{
+    constexpr std::string_view Root = "class TriggerList";
+    std::string failure;
+    std::optional<BindReadResult> const read = ReadServerFile(catalog, data, Root, failure);
+    if (!read)
+    {
+        extraction.TriggerFailures.push_back({ zone.Path, std::string(TriggerEntry), std::move(failure) });
+        return;
+    }
+    std::string const listPath = fmt::format("{}.m_allTriggers[", Root);
+    FileIssues issues = SortIssues(read->Decoded.Issues, listPath);
+    std::vector<ExtractedTrigger> triggers;
+    FieldReader root(*read->Decoded.Object);
+    PropertyValue const* const list = read->Decoded.Object->Get("m_allTriggers");
+    if (!list || !list->GetList())
+        root.Fail("class TriggerList has no m_allTriggers list");
+    for (std::size_t index = 0; issues.Failure.empty() && root.GetMissing().empty() && list && list->GetList() && index < list->GetList()->size(); ++index)
+    {
+        PropertyObject const* const entry = (*list->GetList())[index].AsObject();
+        if (!entry)
+        {
+            root.Fail(fmt::format("{}{}] is null", listPath, index));
+            break;
+        }
+        std::string const at = fmt::format("{}{}]", listPath, index);
+        FieldReader fields(*entry);
+        ExtractedTrigger trigger;
+        trigger.Name = fields.Text("m_triggerName");
+        trigger.ClassName = entry->GetClass().Name;
+        trigger.TriggerMax = static_cast<int32>(fields.Whole("m_triggerMax"));
+        trigger.Cooldown = fields.Real("m_cooldown");
+        trigger.Unnamed780900737 = static_cast<int32>(fields.Whole(780900737u));
+        trigger.Unnamed847435658 = fields.Flag(847435658u);
+        trigger.Unnamed1549045087 = fields.Text(1549045087u);
+        trigger.Unnamed2293879431 = fields.Text(2293879431u);
+        trigger.Requirements = Encoded(fields.Object("m_requirements"), "m_requirements", fields);
+        trigger.ObjectInfo = Encoded(fields.Object("m_triggerObjectInfo"), "m_triggerObjectInfo", fields);
+        trigger.ActivateEvents = fields.Texts("m_activateEvents");
+        trigger.FireEvents = fields.Texts("m_fireEvents");
+        trigger.DeactivateEvents = fields.Texts("m_deactivateEvents");
+        trigger.Results = Results(fields.Object("m_results"), at + ".m_results", issues, fields);
+        trigger.CooldownResults = Results(fields.Object("m_cooldownResults"), at + ".m_cooldownResults", issues, fields);
+        if (trigger.ClassName == "class StateTrigger")
+        {
+            ExtractedStateTrigger& state = trigger.State.emplace();
+            state.QuestEvent = fields.Text("m_questEvent");
+            state.RequiredQuest = fields.Text("m_requiredQuest");
+            state.RequiredState = fields.Text("m_requiredState");
+            state.Unnamed333662217 = fields.Flag(333662217u);
+            state.Unnamed758563334 = fields.Flag(758563334u);
+            state.Unnamed1521843245 = fields.Texts("#1521843245");
+            state.Unnamed3350245995 = fields.Text(3350245995u);
+            state.Unnamed3431571632 = fields.Text(3431571632u);
+        }
+        else if (trigger.ClassName != "class Trigger")
+            fields.Fail(fmt::format("{} is a {}, which the zone rows do not read", at, trigger.ClassName));
+        if (!fields.GetMissing().empty())
+        {
+            root.Fail(fmt::format("{}: {}", at, fields.GetMissing()));
+            break;
+        }
+        triggers.push_back(std::move(trigger));
+    }
+    if (!issues.Failure.empty() || !root.GetMissing().empty())
+    {
+        extraction.TriggerFailures.push_back({ zone.Path, std::string(TriggerEntry), issues.Failure.empty() ? root.GetMissing() : issues.Failure });
+        return;
+    }
+    SkipUnplacedParts(issues, zone.Path, extraction);
+    zone.Triggers = std::move(triggers);
+}
+
 ZoneExtraction ZoneExtractor::Extract(std::filesystem::path const& gameData, TypeCatalogPtr const& catalog, ZoneExtractionProgress const& progress)
 {
     ZoneExtraction extraction;
@@ -267,7 +637,26 @@ ZoneExtraction ZoneExtractor::Extract(std::filesystem::path const& gameData, Typ
             extraction.AddError(fmt::format("{}: {}: {}", stem, DataEntry, data.Error));
             continue;
         }
+        std::size_t const zones = extraction.Zones.size();
         ReadZone(catalog, stem, data.Data, extraction);
+        if (extraction.Zones.size() == zones)
+            continue;
+        ExtractedZone& zone = extraction.Zones.back();
+        for (std::string_view const entry : { VolumeEntry, TriggerEntry })
+        {
+            if (!archive->Find(entry))
+                continue;
+            KiwadReadResult const read = archive->Read(entry, MaxEntryBytes);
+            if (!read.Succeeded())
+            {
+                extraction.TriggerFailures.push_back({ zone.Path, std::string(entry), read.Error });
+                continue;
+            }
+            if (entry == VolumeEntry)
+                ReadVolumes(catalog, zone, read.Data, extraction);
+            else
+                ReadTriggers(catalog, zone, read.Data, extraction);
+        }
     }
     if (progress)
         progress(archives.size(), archives.size());
@@ -276,7 +665,7 @@ ZoneExtraction ZoneExtractor::Extract(std::filesystem::path const& gameData, Typ
 }
 
 std::optional<ZoneExtraction> ZoneExtractor::ExtractFromInstall(std::filesystem::path const& clientDir, std::filesystem::path const& typeDump, std::string& error,
-    ZoneExtractionProgress const& progress)
+    ZoneExtractionProgress const& progress, TypeDumpLoader::RawDump supplement)
 {
     std::filesystem::path const gameData = clientDir / "Data" / "GameData";
     if (!std::filesystem::is_directory(gameData))
@@ -287,6 +676,12 @@ std::optional<ZoneExtraction> ZoneExtractor::ExtractFromInstall(std::filesystem:
     TypedViewRegistry views;
     ZoneViews::RegisterAll(views);
     TypeRegistry registry(&views);
+    std::vector<std::string> refused;
+    if (!supplement.Classes.empty() && !registry.SetSupplement(std::move(supplement), "the server classes", refused))
+    {
+        error = fmt::format("the server classes cannot join the type dump{}{}", refused.empty() ? "" : ": ", refused.empty() ? std::string() : refused.front());
+        return std::nullopt;
+    }
     if (!registry.LoadFromFile(typeDump))
     {
         std::vector<std::string> const problems = registry.GetErrors();

@@ -25,6 +25,7 @@ apps/clientdriver/refs/
 __pycache__/
 *.pyc
 CLAUDE.local.md
+.claude/settings.local.json
 conf/config.cmake
 conf/env
 

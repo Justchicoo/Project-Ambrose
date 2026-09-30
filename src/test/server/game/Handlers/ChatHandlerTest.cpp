@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives the chat a client sends through a real game session over loopback: a typed line, a quick chat phrase, an extended phrase and an emote from a wizard that has its object are each taken and queued for the world thread rather than counted as messages the server does not handle, and shown to nobody while the wizard does not yet stand shown in an instance; a line starting with the command prefix from a game master's account runs the command, whose reply comes back as one MSG_SERVERMESSAGE, a line too long for one split across several, before the wizard stands anywhere; and a client that has not attached is not listened to at all.
+ * Drives the chat a client sends through a real game session over loopback: a typed line, a quick chat phrase, an extended phrase and an emote from a wizard that has its object are each taken and queued for the world thread rather than counted as messages the server does not handle, and shown to nobody while the wizard does not yet stand shown in an instance; a line starting with the command prefix from a game master's account runs the command, whose reply comes back as one MSG_SERVERMESSAGE, a line too long for one split across several, before the wizard stands anywhere; and a client that has not attached is not listened to at all; and a server script refusing one message holds back exactly that one, reaching the session as though never sent, with no edit to the core.
  */
 
 #include "AccountMgr.h"
@@ -9,6 +9,7 @@
 #include "CommandCaller.h"
 #include "CommandMgr.h"
 #include "GameTestHarness.h"
+#include "ScriptMgr.h"
 
 #include <gtest/gtest.h>
 
@@ -16,6 +17,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace
@@ -23,6 +25,18 @@ namespace
     using namespace GameTesting;
 
     constexpr uint64 WizardId = 7002;
+
+    class HoldBackQuickChat : public ServerScript
+    {
+    public:
+        HoldBackQuickChat() : ServerScript("hold_back_quick_chat") {}
+
+        bool CanPacketReceive(uint16, uint8 serviceId, uint8 order) override
+        {
+            MessageInfo const* const quickChat = sMessageRegistry.GetCatalog()->Find(GameMessages::GameService, "MSG_REQUESTRADIALQUICKCHAT");
+            return !quickChat || serviceId != GameMessages::GameService || order != quickChat->Definition->Order;
+        }
+    };
 
     class ChatHandlerTest : public testing::Test
     {
@@ -145,4 +159,26 @@ TEST_F(ChatHandlerTest, AGameMastersCommandRunsAndItsRepliesComeBackAsServerMess
     }
     EXPECT_EQ(received, 4000u);
     sCommandMgr.Clear();
+}
+
+TEST_F(ChatHandlerTest, AServerScriptHoldsBackTheOneMessageItRefusesWithNoEditToTheCore)
+{
+    sScriptMgr.Unload();
+    new HoldBackQuickChat();
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Connect(client, true);
+    ASSERT_TRUE(session);
+
+    SendEach(*client);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 3; })) << "the quick chat phrase never reaches the session";
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_EQ(session->GetQueuedMessageCount(), 3u);
+    EXPECT_EQ(session->GetUnhandledMessageCount(), 0u) << "a message a hook holds back is not one the server failed to handle";
+    EXPECT_EQ(session->GetStrikes(), 0u);
+    EXPECT_EQ(session->DrainQueue(), 3u);
+
+    sScriptMgr.Unload();
+    SendEach(*client);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 4; })) << "with the script gone, every message reaches the session again";
+    EXPECT_EQ(session->DrainQueue(), 4u);
 }

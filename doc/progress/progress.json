@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 98,
+    "done": 116,
     "total": 469,
-    "percent": 20.9
+    "percent": 24.7
   },
   "checks": {
-    "done": 853,
-    "total": 2868,
-    "percent": 29.7
+    "done": 948,
+    "total": 2866,
+    "percent": 33.1
   },
   "contributor_track": {
     "merged": 92,
@@ -18,57 +18,57 @@
     {
       "phase": 1,
       "title": "Foundations to first handshake",
-      "milestones_done": 20,
+      "milestones_done": 22,
       "milestones_total": 22,
-      "checks_done": 192,
+      "checks_done": 197,
       "checks_total": 197
     },
     {
       "phase": 2,
       "title": "Log in to character select",
-      "milestones_done": 13,
+      "milestones_done": 15,
       "milestones_total": 15,
-      "checks_done": 114,
+      "checks_done": 119,
       "checks_total": 119
     },
     {
       "phase": 3,
       "title": "Create list and delete a wizard",
-      "milestones_done": 17,
+      "milestones_done": 23,
       "milestones_total": 28,
-      "checks_done": 138,
+      "checks_done": 162,
       "checks_total": 178
     },
     {
       "phase": 4,
       "title": "A wizard stands in ravenwood",
-      "milestones_done": 13,
+      "milestones_done": 15,
       "milestones_total": 16,
-      "checks_done": 118,
+      "checks_done": 123,
       "checks_total": 127
     },
     {
       "phase": 5,
       "title": "The zone comes alive for one player",
-      "milestones_done": 5,
+      "milestones_done": 6,
       "milestones_total": 8,
-      "checks_done": 41,
+      "checks_done": 45,
       "checks_total": 57
     },
     {
       "phase": 6,
       "title": "Other players are visible",
-      "milestones_done": 6,
+      "milestones_done": 9,
       "milestones_total": 18,
-      "checks_done": 52,
-      "checks_total": 141
+      "checks_done": 76,
+      "checks_total": 139
     },
     {
       "phase": 7,
       "title": "An npc offers a quest",
-      "milestones_done": 0,
+      "milestones_done": 1,
       "milestones_total": 13,
-      "checks_done": 0,
+      "checks_done": 9,
       "checks_total": 86
     },
     {
@@ -108,7 +108,7 @@
       "title": "Social wizards instances and realms",
       "milestones_done": 0,
       "milestones_total": 23,
-      "checks_done": 0,
+      "checks_done": 5,
       "checks_total": 138
     },
     {
@@ -146,9 +146,9 @@
     {
       "phase": 17,
       "title": "Operations console admin api dashboard and metrics",
-      "milestones_done": 20,
+      "milestones_done": 21,
       "milestones_total": 186,
-      "checks_done": 153,
+      "checks_done": 167,
       "checks_total": 1113
     }
   ]

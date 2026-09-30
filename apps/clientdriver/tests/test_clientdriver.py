@@ -365,6 +365,23 @@ class WorldEntryTests(TemporaryFolder):
         self.assertEqual(loaded.wizard["zone"], "WizardCity/WC_Ravenwood")
         self.assertEqual(loaded.game_settings, ["Realm.Name=Test"])
 
+    def test_more_wizards_join_the_first_on_its_account_and_need_it(self):
+        steps = [{"action": "wait_game_log", "name": "in", "pattern": "stands in the world", "timeout": 1}]
+        search = (os.path.join(self.folder, "scenarios"),)
+        second = dict(self.WIZARD, first=2)
+        self.scenario_file("orphans.json", {"title": "orphans", "requires": {"gameserver": True}, "more_wizards": [second], "steps": steps})
+        with self.assertRaises(Refused) as raised:
+            scenario.load("orphans.json", search=search)
+        self.assertIn("not the first wizard they join", str(raised.exception))
+        self.scenario_file("broken.json", {"title": "broken", "requires": {"gameserver": True}, "wizard": self.WIZARD, "more_wizards": [{"school": 1}], "steps": steps})
+        with self.assertRaises(Refused) as raised:
+            scenario.load("broken.json", search=search)
+        self.assertIn("wizard 2 needs zone, first, middle, last", str(raised.exception))
+        self.scenario_file("three.json", {"title": "three", "requires": {"gameserver": True}, "wizard": self.WIZARD,
+                                          "more_wizards": [second, dict(self.WIZARD, first=3)], "steps": steps})
+        loaded = scenario.load("three.json", search=search)
+        self.assertEqual([wizard["first"] for wizard in loaded.more_wizards], [2, 3])
+
     def test_a_seeded_wizard_may_carry_stats_it_has_and_none_it_does_not(self):
         steps = [{"action": "wait_game_log", "name": "in", "pattern": "stands in the world", "timeout": 1},
                  {"action": "shot", "name": "look", "settle": 2.5}]
@@ -811,6 +828,10 @@ class FakeDatabases:
             raise answer
         return answer
 
+    def execute(self, kind, statement):
+        self.asked.append((kind, statement))
+        return 1
+
 
 class EngineTests(TemporaryFolder):
     def build(self, steps, picture=None, answers=("0",), variables=None, expect_failure=False, companion=False):
@@ -1138,6 +1159,17 @@ class EngineTests(TemporaryFolder):
         with self.assertRaises(StepFailed) as raised:
             running.run()
         self.assertIn("does not require the game server", str(raised.exception))
+
+    def test_a_database_statement_runs_on_the_run_s_own_database_and_is_noted(self):
+        running = self.build([{"action": "db_exec", "name": "spoil the next key", "database": "login", "statement": "UPDATE login_key SET used = 1 WHERE account_id = 1"}])
+        running.run()
+        self.assertEqual(running.databases.asked, [("login", "UPDATE login_key SET used = 1 WHERE account_id = 1")])
+        self.assertIn("1 row(s) changed", running.steps[0]["result"])
+        path = self.write_json(os.path.join("scenarios", "elsewhere.json"), {"title": "elsewhere", "steps": [
+            {"action": "db_exec", "name": "reach out", "database": "mysql", "statement": "DROP DATABASE x"}]})
+        with self.assertRaises(Refused) as raised:
+            scenario.load("elsewhere.json", search=(os.path.dirname(path),))
+        self.assertIn("run's own login, characters or world database", str(raised.exception))
 
     def test_a_database_step_waits_for_the_row_it_expects(self):
         running = self.build([{"action": "wait_db", "name": "no wizard yet", "database": "characters",

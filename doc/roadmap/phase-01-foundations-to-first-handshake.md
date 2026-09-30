@@ -825,7 +825,7 @@ Raw TCP bytes are split into complete control frames or DML messages regardless 
 **Acceptance**
 
 - [x] Hand-written vectors round-trip
-- [ ] Checklist recorded: offer length (23 vs 28 bytes), server keepalive layout, long-frame semantics, multi-DML frames, keepalive cadence
+- [x] Checklist recorded: offer length (23 vs 28 bytes), server keepalive layout, long-frame semantics, multi-DML frames, keepalive cadence Recorded in doc/CAPTURE.md from the client driver's runs of 2026-09-30.
 
 ### Detailed spec from NET-6: Control messages and wire capture verification
 
@@ -848,8 +848,8 @@ The four control messages are encoded exactly as the 1.610 client expects, and t
 **Acceptance**
 
 - [x] Unit tests round-trip each control message and match the hand-written vectors
-- [ ] Verification checklist answered and recorded in the doc: (a) SessionOffer body length the 1.610 client accepts. A reference server sends a 23-byte frame; the reference patch client fetcher expects a 28-byte offer from the live KI patch server. (b) Server keepalive layout and whether the client answers it with opcode 4. (c) Long-frame length semantics for a frame over 0x7780 bytes. (d) Whether the client ever packs 2+ DML messages in one frame. (e) Client KeepAlive cadence
-- [ ] FrameWriter long-frame test updated to the confirmed semantics
+- [x] Verification checklist answered and recorded in the doc: (a) SessionOffer body length the 1.610 client accepts. A reference server sends a 23-byte frame; the reference patch client fetcher expects a 28-byte offer from the live KI patch server. (b) Server keepalive layout and whether the client answers it with opcode 4. (c) Long-frame length semantics for a frame over 0x7780 bytes. (d) Whether the client ever packs 2+ DML messages in one frame. (e) Client KeepAlive cadence All six answers are in doc/CAPTURE.md, from the client driver's runs on 2026-09-30: c79-idle-login-keepalive 20260930-111824 for (a), (b), (e) and (f), and badges-and-long-frame 20260930-112752, 20260930-113124 and 20260930-114953 for (c) and (d).
+- [x] FrameWriter long-frame test updated to the confirmed semantics (`FrameTest.LongFramesUseTheMarkerInBothLengthModes` pins that a long DML frame written by default declares its header and body, which the r806919 client reads, where it dropped a connection sent the body alone; `NetworkSettingsTest.LoadsAndClampsConfigValues` holds HeaderAndBody as the default)
 
 **Risks**
 
@@ -985,7 +985,7 @@ Every other domain can run the retail client against loginserver/gameserver with
 
 - [x] Fake client: wrong accept id closes; no accept in 15 s closes; keepalive echo correct
 - [x] Real client: log shows SessionOffer sent, SessionAccept with matching id, then 'LOGIN MSG_USER_AUTHEN_V3 (7:27)' (2026-09-17, retail r806919 client through apps/launcher: Login.log shows 'Session 3 offered to 172.31.64.1:59427', 'Session 3 accepted by 172.31.64.1:59427 after 17 ms' and 'LOGIN MSG_USER_AUTHEN_V3 (7:27) from session 3, 264 bytes'; that run also showed the client ends its KeepAlive frames without the trailing byte, which ControlMessages now reads)
-- [ ] Idle 5 minutes at login: keepalives both ways, no drop
+- [x] Idle 5 minutes at login: keepalives both ways, no drop (the client driver's c79-idle-login-keepalive run 20260930-111824 on 2026-09-30)
 
 ### Detailed spec from NET-8: Session object, handshake and keep-alive
 
@@ -1010,7 +1010,7 @@ A real Wizard101 client completes the session handshake with an Ambrose server a
 
 - [x] Unit test with a fake client: offer bytes as specified; accept with the wrong id closes; no accept in 15s closes; keepalive echo is correct
 - [x] Real client: start loginserver, launch the client pointed at 127.0.0.1:12000 (-L 127.0.0.1 12000), and trigger login. The server log shows SessionOffer sent, SessionAccept received with a matching id, then a decoded 'LOGIN MSG_USER_AUTHEN_V3 (7:27)' line proving the client accepted the session and moved on to authenticate (2026-09-17, retail r806919 client through apps/launcher: Login.log shows 'Session 3 offered to 172.31.64.1:59427', 'Session 3 accepted by 172.31.64.1:59427 after 17 ms' and 'LOGIN MSG_USER_AUTHEN_V3 (7:27) from session 3, 264 bytes'; that run also showed the client ends its KeepAlive frames without the trailing byte, which ControlMessages now reads)
-- [ ] Real client idle for 5 minutes at the login stage: keepalives are logged in both directions and the server never drops the session
+- [x] Real client idle for 5 minutes at the login stage: keepalives are logged in both directions and the server never drops the session The client driver's c79-idle-login-keepalive run 20260930-111824 on 2026-09-30: after a wrong password the client sat at the login retry prompt for five minutes; the login server logged 36 client keepalives, one every 10 seconds, and answered each, and sent its own every 60 seconds, each answered by the client with KeepAliveRsp within 0 to 6 ms, and never closed the session.
 
 **Risks**
 

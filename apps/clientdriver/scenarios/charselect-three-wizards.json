@@ -1,0 +1,174 @@
+{
+ "title": "Character select lists an account's three wizards with each one's look, name, level and school",
+ "include": "parts/common.json",
+ "requires": {
+  "gameserver": true
+ },
+ "game_settings": [
+  "Logger.server=2,Console Server Errors Stream",
+  "Realm.Name=Ambrose Driver",
+  "Logger.network.session=2,Console Server Errors Stream"
+ ],
+ "server_log_allowed": [
+  "character_create_school holds no school, so no wizard can be created until it does",
+  "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+ ],
+ "notes": [
+  "3.09's real-client check: the run seeds three wizards on one account, a level 1 Fire boy, a level 12 Ice girl and a level 25 Storm boy,",
+  "each with its own hair and colors and a name built from its name_indices, and records the list the server sends and shots of the screen.",
+  "Choosing the wizards at the side desks brings each one to the middle under its own name, level and school."
+ ],
+ "wizard": {
+  "school": 2343174,
+  "zone": "WizardCity/WC_Ravenwood",
+  "zone_display": "Ravenwood",
+  "locale": "en-US",
+  "first": 1,
+  "middle": 1,
+  "last": 1,
+  "level": 1,
+  "appearance": {
+   "gender": 1,
+   "race": 79806088,
+   "hair_model": 6,
+   "hair_color": 60,
+   "hat_color": 4,
+   "hat_decal": 4,
+   "torso_color": 4,
+   "torso_decal": 4,
+   "feet_color": 4,
+   "feet_decal": 12
+  }
+ },
+ "more_wizards": [
+  {
+   "school": 72777,
+   "zone": "WizardCity/WC_Ravenwood",
+   "zone_display": "Ravenwood",
+   "locale": "en-US",
+   "first": 5,
+   "middle": 9,
+   "last": 14,
+   "level": 12,
+   "appearance": {
+    "gender": 0,
+    "race": 79806088,
+    "hair_model": 6,
+    "hair_color": 20,
+    "hat_color": 9,
+    "hat_decal": 4,
+    "torso_color": 9,
+    "torso_decal": 4,
+    "feet_color": 4,
+    "feet_decal": 12
+   }
+  },
+  {
+   "school": 83375795,
+   "zone": "WizardCity/WC_Ravenwood",
+   "zone_display": "Ravenwood",
+   "locale": "en-US",
+   "first": 30,
+   "middle": 40,
+   "last": 50,
+   "level": 25,
+   "appearance": {
+    "gender": 1,
+    "race": 79806088,
+    "hair_model": 6,
+    "hair_color": 3,
+    "hat_color": 12,
+    "hat_decal": 4,
+    "torso_color": 12,
+    "torso_decal": 4,
+    "feet_color": 4,
+    "feet_decal": 12
+   }
+  }
+ ],
+ "steps": [
+  {
+   "action": "wait_client_log",
+   "name": "the client brings its renderer up",
+   "pattern": "About to initialize graphical client\\.",
+   "timeout": 180
+  },
+  {
+   "action": "wait_screen",
+   "name": "the login window is on the screen",
+   "screens": [
+    "login"
+   ],
+   "timeout": 120
+  },
+  {
+   "action": "submit_login",
+   "name": "log in",
+   "password": "{password}"
+  },
+  {
+   "action": "wait_server_log",
+   "name": "the server accepts the password",
+   "pattern": "authenticated as {user} \\(id \\d+\\)",
+   "timeout": 30
+  },
+  {
+   "action": "wait_client_log",
+   "name": "the client is admitted",
+   "pattern": "The LoginServer has admitted the user",
+   "timeout": 30
+  },
+  {
+   "action": "wait_server_log",
+   "name": "the server lists the three wizards",
+   "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+   "timeout": 30,
+   "expect": "3",
+   "record": true
+  },
+  {
+   "action": "wait_client_log",
+   "name": "the character selection scene loads",
+   "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+   "timeout": 120
+  },
+  {
+   "action": "wait_screen",
+   "name": "the character selection screen is on the screen",
+   "screens": [
+    "charselect"
+   ],
+   "timeout": 90
+  },
+  {
+   "action": "shot",
+   "name": "the three wizards listed",
+   "file": "three-wizards",
+   "settle": 3
+  },
+  {
+   "action": "click",
+   "name": "choose the wizard at the left desk",
+   "target": "charselect_left",
+   "attempts": 3
+  },
+  {
+   "action": "shot",
+   "name": "the second wizard chosen",
+   "file": "second-wizard",
+   "settle": 3
+  },
+  {
+   "action": "click",
+   "name": "choose the wizard at the right desk",
+   "target": "charselect_right",
+   "attempts": 3
+  },
+  {
+   "action": "shot",
+   "name": "the third wizard chosen",
+   "file": "third-wizard",
+   "settle": 3
+  }
+ ]
+}

@@ -28,9 +28,11 @@
 
 **Acceptance**
 
-- [ ] Unknown behavior hash still yields a row
-- [ ] Template 38232 -> 'WC-RAV-NPC06', 'WC-NPCs_00000125', Art_Portrait_Boy_Fire.dds; 39088 -> 'WC-GTW-Registrar'; hat row 1652259 WizItemTemplate Items_00028316
-- [ ] All 104869 ObjectData processed; idempotent
+- [x] Unknown behavior hash still yields a row (`TemplateExtractorTest.EveryTemplateBecomesARowAndAnUnknownBehaviorKeepsItsPlace` writes a template whose third behavior is of a class the reader's dump lacks: the template still gives a row, and the behavior keeps its place with its class hash and the m_behaviorName its skipped bytes hold, counted by class hash in the extractor's report)
+- [x] Template 38232 -> 'WC-RAV-NPC06', 'WC-NPCs_00000125', Art_Portrait_Boy_Fire.dds; 39088 -> 'WC-GTW-Registrar'; hat row 1652259 WizItemTemplate Items_00028316 (`TemplateExtractorClientTest.TheRavenwoodStudentTheRegistrarAndTheHatAreRows`, client-gated: 38232 is WC-RAV-NPC06 under WC-NPCs_00000125 with GUI/NpcPortraits/Art_Portrait_Boy_Fire.dds, NPCBehavior, WizardQuestingBehavior and BasicNPCServiceBehavior; 39088 is WC-GTW-Registrar; 1652259 is a class WizItemTemplate under Items_00028316)
+- [x] All 104869 ObjectData processed; idempotent (`TemplateExtractorClientTest.EveryManifestEntryAndEveryObjectDataEntryIsRead`; `extractor --world-db <db> templates` run twice against a world database dbimport set up: both runs replaced the tables in one transaction and left the same 137,423 object_template and 346,314 object_template_behavior rows, 38232, 39088 and 1652259 as named above; the tables are replaced whole, so a second run writes the same rows, and `TemplateExtractorClientTest.BuildingTheScriptTwiceWritesTheSameRows` checks the script itself)
+
+Built as `extractor templates`, src/server/shared/ClientData/TemplateExtractor.cpp with src/server/database/Extraction/TemplateScript.cpp, beside the other extractors rather than a separate tool, and data/sql/updates/db_world/2026_09_30_03.sql. It walks TemplateManifest.xml, not only ObjectData, so every template gets a row: all 137423 entries read, 104869 of them ObjectData. A behavior of a class the dump does not describe still gives its name. m_behaviorName is a BehaviorTemplate property, so every behavior template writes it under the same hash, and the extractor reads it from the bytes the decoder skipped. That is how 38232's WizardQuestingBehavior and BasicNPCServiceBehavior are named, though neither template class is described. item_template_ext, the item fields used early, is left to 8.06, the item template extractor, which reads WizItemTemplate in full.
 
 ### Detailed spec from OBJ-17: Template extractor to world database
 
@@ -39,14 +41,14 @@ The key fields of client templates land in world DB tables that managers and GM 
 **Deliverables**
 
 - src/tools/extractors/TemplateExtractor: walks the manifest and writes rows. object_template: entry, class_name, object_name, display_key, visual_id, adjectives, source_path, root class hash; item_template_ext for WizItemTemplate fields used early (equip requirements summary, item type, rarity)
-- data/sql/base/db_world schema for those tables plus a dated update file in data/sql/updates/db_world/
+- data/sql/updates/db_world: a dated update file with those tables
 - The row source is always the user's install at run time; no rows are committed
 
 **Acceptance**
 
-- [ ] Client-gated run: the row count equals the manifest entries that decode (reported against 137423); the hat row has entry 1652259, class WizItemTemplate, display_key Items_00028316
-- [ ] Re-running is idempotent (upsert)
-- [ ] dbimport applies the schema update and records it in the updates table
+- [x] Client-gated run: the row count equals the manifest entries that decode (reported against 137423); the hat row has entry 1652259, class WizItemTemplate, display_key Items_00028316 (`TemplateExtractorClientTest.EveryManifestEntryAndEveryObjectDataEntryIsRead`, client-gated: all 137423 manifest entries give a row with none unread, all 104869 ObjectData entries among them; `extractor templates` reports 14,180 NPC templates and 346,314 behavior rows, 26,542 of classes no class the server knows describes, by class hash; the hat as above)
+- [x] Re-running is idempotent (upsert) (`extractor --world-db <db> templates` run twice against a world database dbimport set up: both runs replaced the tables in one transaction and left the same 137,423 object_template and 346,314 object_template_behavior rows, 38232, 39088 and 1652259 as named above; the tables are replaced whole, so a second run writes the same rows, and `TemplateExtractorClientTest.BuildingTheScriptTwiceWritesTheSameRows` checks the script itself)
+- [x] dbimport applies the schema update and records it in the updates table (dbimport over new login, characters and world databases on MariaDB 10.11 applied the object template tables, then data/sql/updates/db_world/2026_09_30_02.sql and renamed 2026_09_30_03.sql when main took that name for another update, and the world database's updates table lists it as RELEASED)
 
 **Risks**
 
@@ -60,7 +62,7 @@ A tool fills world.object_template from the user's ObjectData, so the server kno
 **Deliverables**
 
 - src/tools/extractor/ObjectTemplateExtractor.cpp: walk Root.wad ObjectData/** (BINd), decode WizGameObjectTemplate, and emit rows through dbimport. Store behavior names only (NPCBehavior, WizardQuestingBehavior, BasicNPCServiceBehavior, WizardSelectBehavior) and skip unknown server-only behavior class hashes by size.
-- data/sql/base/db_world: object_template, object_template_adjective, object_template_behavior (schema only; rows are generated locally and never committed).
+- data/sql/updates/db_world: object_template, object_template_adjective, object_template_behavior (schema only; rows are generated locally and never committed).
 - src/test/tools/extractor/ObjectTemplateExtractorTest.cpp with a synthetic BINd fixture built in the test.
 
 **Data sources**
@@ -70,9 +72,9 @@ A tool fills world.object_template from the user's ObjectData, so the server kno
 
 **Acceptance**
 
-- [ ] Unit test: a synthetic template containing an unknown behavior class hash still yields a row. The unknown behavior is logged, not fatal.
-- [ ] Integration test against the client: template 38232 -> object_name 'WC-RAV-NPC06', display key 'WC-NPCs_00000125', portrait 'GUI/NpcPortraits/Art_Portrait_Boy_Fire.dds', has NPCBehavior and WizardQuestingBehavior. Template 39088 -> 'WC-GTW-Registrar'.
-- [ ] The extractor processes all 104869 ObjectData entries, and the report counts NPC templates and unknown-hash occurrences.
+- [x] Unit test: a synthetic template containing an unknown behavior class hash still yields a row. The unknown behavior is logged, not fatal. (`TemplateExtractorTest.EveryTemplateBecomesARowAndAnUnknownBehaviorKeepsItsPlace` writes a template whose third behavior is of a class the reader's dump lacks: the template still gives a row, and the behavior keeps its place with its class hash and the m_behaviorName its skipped bytes hold, counted by class hash in the extractor's report)
+- [x] Integration test against the client: template 38232 -> object_name 'WC-RAV-NPC06', display key 'WC-NPCs_00000125', portrait 'GUI/NpcPortraits/Art_Portrait_Boy_Fire.dds', has NPCBehavior and WizardQuestingBehavior. Template 39088 -> 'WC-GTW-Registrar'. (`TemplateExtractorClientTest.TheRavenwoodStudentTheRegistrarAndTheHatAreRows`, client-gated: 38232 is WC-RAV-NPC06 under WC-NPCs_00000125 with GUI/NpcPortraits/Art_Portrait_Boy_Fire.dds, NPCBehavior, WizardQuestingBehavior and BasicNPCServiceBehavior; 39088 is WC-GTW-Registrar; 1652259 is a class WizItemTemplate under Items_00028316)
+- [x] The extractor processes all 104869 ObjectData entries, and the report counts NPC templates and unknown-hash occurrences. (`TemplateExtractorClientTest.EveryManifestEntryAndEveryObjectDataEntryIsRead`, client-gated: all 137423 manifest entries give a row with none unread, all 104869 ObjectData entries among them; `extractor templates` reports 14,180 NPC templates and 346,314 behavior rows, 26,542 of classes no class the server knows describes, by class hash)
 
 **Risks**
 

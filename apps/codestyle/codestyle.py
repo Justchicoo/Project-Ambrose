@@ -103,6 +103,15 @@ def cpp_brief_problem(brief):
     return brief_problem(brief)
 
 
+def frontmatter_end(lines):
+    if not lines or lines[0] != "---":
+        return 0
+    for index in range(1, len(lines)):
+        if lines[index] == "---":
+            return index + 1
+    return 0
+
+
 def check_header(kind, lines):
     issues = []
     start = 0
@@ -139,11 +148,12 @@ def check_header(kind, lines):
         return skip, issues[:1]
 
     if kind in MARKUP_KINDS:
-        match = re.fullmatch(r"<!-- " + re.escape(BRAND) + r": (.*) -->", line_at(0) or "")
+        at = frontmatter_end(lines) if kind == "markdown" else 0
+        match = re.fullmatch(r"<!-- " + re.escape(BRAND) + r": (.*) -->", line_at(at) or "")
         if not match:
-            return (1 if (line_at(0) or "").startswith("<!--") else 0), [(1, f"expected '<!-- {BRAND}: <brief> -->'")]
+            return (at + 1 if (line_at(at) or "").startswith("<!--") else at), [(at + 1, f"expected '<!-- {BRAND}: <brief> -->'")]
         problem = brief_problem(match.group(1)) or ("the brief holds '-->', which ends the header comment" if "-->" in match.group(1) else None)
-        return 1, ([(1, problem)] if problem else [])
+        return at + 1, ([(at + 1, problem)] if problem else [])
 
     marker = {"sql": "--", "batch": "REM"}.get(kind, "#")
     first = line_at(start)
@@ -460,7 +470,13 @@ def scan_batch(text):
 def scan_markdown(text):
     hits = []
     in_fence = False
-    for number, line in enumerate(text.split("\n"), start=1):
+    lines = text.split("\n")
+    front = frontmatter_end(lines)
+    for number, line in enumerate(lines, start=1):
+        if number <= front:
+            if line.lstrip().startswith("#"):
+                hits.append(number)
+            continue
         if re.match(r" {0,3}(```|~~~)", line):
             in_fence = not in_fence
             continue
@@ -664,8 +680,9 @@ def check_file(relpath, raw):
         hits = scan_markdown(text)
     if tokenize_error:
         issues.append(Issue(relpath, 1, "tokenize", f"could not tokenize the file: {tokenize_error}"))
+    front = frontmatter_end(lines) if kind == "markdown" else 0
     for line in sorted(set(hits)):
-        if line > skip:
+        if line > skip or line <= front:
             issues.append(Issue(relpath, line, "comment", "comments are not allowed outside the branding header"))
 
     name_without_template = name[:-3] if name.endswith(".in") else name

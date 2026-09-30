@@ -10,6 +10,8 @@
 #include "CoreObjectSerializer.h"
 #include "Frame.h"
 #include "GameMessageTable.h"
+#include "BlobEnvelope.h"
+#include "ConfigMgr.h"
 #include "Log.h"
 #include "MapMgr.h"
 #include "MessageRegistry.h"
@@ -31,6 +33,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -517,6 +522,26 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         RefuseEntry(claim, player ? fmt::format("its object does not encode: {}", data.Detail) : fmt::format("its object cannot be built: {}", problem));
         return;
     }
+    if (std::string const folder = sSettings.Get<std::string>("LoginComplete.SaveDataTo"); !folder.empty())
+    {
+        std::error_code made;
+        std::filesystem::path const path = ConfigMgr::PathFromUtf8(folder) / fmt::format("logincomplete-{}-{}.bin", character.Guid, NowEpochSeconds());
+        std::filesystem::create_directories(path.parent_path(), made);
+        std::ofstream saved(path, std::ios::binary | std::ios::trunc);
+        saved.write(reinterpret_cast<char const*>(data.Bytes.data()), static_cast<std::streamsize>(data.Bytes.size()));
+        if (saved)
+            LOG_INFO("server.gamesession", "Session {} saved the MSG_LOGINCOMPLETE Data it sends to {}", GetSessionId(), ConfigMgr::PathToUtf8(path));
+        else
+            LOG_WARN("server.gamesession", "Session {} could not save its MSG_LOGINCOMPLETE Data to {}", GetSessionId(), ConfigMgr::PathToUtf8(path));
+    }
+    if (sLog.ShouldLog("server.gamesession", LogLevel::Debug))
+    {
+        BlobEnvelope::UnwrapResult const inner = BlobEnvelope::Unwrap(data.Bytes, BlobEnvelope::MaxPayloadSize);
+        DecodeResult const back = CoreObjectSerializer::DecodeField(catalog, *field, data.Bytes, *types);
+        LOG_DEBUG("server.gamesession", "Session {}'s MSG_LOGINCOMPLETE Data holds {} bytes inside its envelope, beginning {:02x}, and {} whole with {} issue(s)", GetSessionId(),
+            inner.Data.size(), fmt::join(std::span<uint8 const>(inner.Data).first(std::min<std::size_t>(inner.Data.size(), 6)), " "),
+            back.Ok() && back.Object ? "decodes" : "does not decode", back.Issues.size());
+    }
 
     ObjectField const* const shownField = ObjectFields::Find("MSG_NEWOBJECT", "Data");
     SerializerOptions shownOptions;
@@ -571,6 +596,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     _inWorld.store(true, std::memory_order_relaxed);
     _afkTimerStarted = false;
     SendDmlMessage(complete);
+    SendBadges();
     SendMapObjects(*map);
     if (!resumed)
         _arrived = true;

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Console commands with multi-word names, argument hints, help text and a sensitive flag, matched case-insensitively on whole words, completed from a typed prefix and run with quoted-argument splitting.
+ * Console commands with multi-word names, argument hints, help text, a sensitive flag and a console-only flag for a command that hands out a way to sign in, matched case-insensitively on whole words, completed from a typed prefix and run with quoted-argument splitting.
  */
 
 #ifndef AMBROSE_CONSOLECOMMANDTABLE_H
@@ -25,6 +25,7 @@ public:
         std::string Help;
         bool Sensitive = false;
         Handler Run;
+        bool ConsoleOnly = false;
     };
 
     enum class Result
@@ -39,6 +40,7 @@ public:
     bool Unregister(std::string_view name);
     Result Execute(std::string_view line, Reply const& reply) const;
     std::string DescribeForLog(std::string_view line) const;
+    bool IsConsoleOnly(std::string_view line) const;
     std::vector<std::string> DescribeCommands(std::string_view prefix = {}) const;
     std::vector<std::string> CompleteNames(std::string_view prefix) const;
 

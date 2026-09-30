@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Turns an extracted set of zones into a world SQL script that replaces the three zone tables, and names those tables.
+ * Turns an extracted set of zones into a world SQL script that replaces the zone tables, their places, objects, volumes and triggers included, and names those tables.
  */
 
 #ifndef AMBROSE_ZONESCRIPT_H

@@ -79,6 +79,10 @@ namespace
             Unsigned("Zone.UnloadDelay", "60", "0", "86400", "s", "Zones", Game, NextUse, "How long an empty zone instance stays loaded, read when its last wizard leaves."),
             Unsigned("Zone.MobileIdReleaseDelay", "2000", "0", "60000", "ms", "Zones", Game, NextUse, "How long a mobile id rests after its wizard leaves before another wizard may take it."),
             Unsigned("Zone.MoveFlushInterval", "250", "50", "5000", "ms", "Zones", Game, NextUse, "How often the moves and movement states of the wizards in an instance are sent to the others in it, read at each flush."),
+            Float("Visibility.Distance", "0", "0", "100000", "world units", "Zones", Game, Live,
+                "How near an object must come to a wizard to be shown to it, read at each visibility update; 0 takes the zone's own far clip, and a zone with none shows everything."),
+            Float("Visibility.Hysteresis", "20", "0", "10000", "world units", "Zones", Game, Live,
+                "How far past the visibility distance an object already shown may go before it is taken away, read at each visibility update, so one standing at the edge is not shown and taken away over and over."),
             Unsigned("Zone.MoveIdleIntervals", "2", "1", "100", "", "Zones", Game, NextUse,
                 "How many flushes a wizard said to be moving may pass without a new move before the others are told it is standing, read at each flush."),
             Unsigned("Player.LinkDeadTime", "60", "0", "86400", "s", "Player", Game, Live,
@@ -97,6 +101,8 @@ namespace
             Unsigned("Realm.RefreshInterval", "10", "1", "3600", "s", "Realms", Login, Live, "How often the login server rereads the realmlist table."),
             Text("Realm.DefaultRealm", "", "64", "Realms", Login, Live, "The realm a player is sent to when their client names none; a name no realm online has falls through to the least-full realm."),
 
+            Text("LoginComplete.SaveDataTo", "", "1024", "Diagnostics", Game, Live,
+                "A folder the game server writes each MSG_LOGINCOMPLETE Data it sends into, as the enveloped bytes the client receives, for reading with client core; empty writes nothing."),
             Text("GM.CommandPrefix", ".", "8", "Commands", Game, Live, "What a chat line starts with to be read as a command."),
             Flag("GM.PlayerCommandsAsChat", "true", "Commands", Game, Live,
                 "Whether a player's chat line that starts with the command prefix is said as an ordinary line; when off it is refused and the player told so. An account above player level runs such a line as a command."),
@@ -109,6 +115,12 @@ namespace
 
             Text("Locale.Default", "en-US", "16", "Locale", Game | Login, Live, "The locale names and texts are read in when a client names none."),
 
+            Flag("Network.PacketLog.Enable", "false", "Network", Game | Login, Live,
+                "Whether every DML message a session sends or receives is written to the network.packets log by name with its fields, read at each message; a message carrying credentials is written without its field values."),
+            Text("Network.PacketLog.Filter", "", "2048", "Network", Game | Login, Live,
+                "The message tags the packet log keeps, separated by commas or spaces, read at each message; empty keeps every message not suppressed."),
+            Text("Network.PacketLog.Suppress", "MSG_CLIENTMOVE,MSG_SERVERMOVE,MSG_NEWOBJECT,MSG_REMOVEOBJECT,MSG_LOGIN_NOT_AFK", "2048", "Network", Game | Login, Live,
+                "The message tags the packet log leaves out, separated by commas or spaces, read at each message; keepalives are control frames and are never written."),
             Unsigned("Network.SessionAcceptTimeout", "15", "1", "3600", "s", "Network", Game | Login, NextUse, "How long a new connection may take to finish its handshake."),
             Unsigned("Network.KeepAliveInterval", "60", "0", "3600", "s", "Network", Game | Login, NextUse, "How often an idle connection is asked whether it is still there; 0 never asks."),
             Unsigned("Network.KeepAliveTimeout", "15", "1", "3600", "s", "Network", Game | Login, NextUse, "How long a keepalive may go unanswered before the connection is closed."),
@@ -139,6 +151,10 @@ namespace
             Unsigned("Login.ShutdownGrace", "5", "0", "60", "s", "Login", Login, Live, "How long a stopping login server waits for its shutdown notices to be written."),
 
             Unsigned("Character.MaxPerAccount", "6", "0", "250", "", "Characters", Login, Live, "How many wizards an account may hold."),
+            Text("Character.DeleteMode", "soft", "8", "Characters", Login, Live,
+                "What deleting a wizard from character select does, read on each delete: soft keeps its row, with the time and the account it was taken from, so a game master can restore it; hard removes it and everything it holds."),
+            Unsigned("Character.KeepDeletedDays", "0", "0", "36500", "days", "Characters", Login, Live,
+                "How long a soft-deleted wizard is kept before the next delete removes it for good, read on each delete; 0 keeps them all."),
             Flag("Character.AllowChosenNames", "false", "Characters", Login, Live, "Whether any account may name a wizard freely rather than from the client's name tables."),
 
             Float("Rate.XP.Quest", "1", "0", "100", "times", "Rates", Game, Live, "Multiplies the experience a quest gives."),

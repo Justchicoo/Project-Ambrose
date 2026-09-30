@@ -52,6 +52,7 @@
 #include "GameShutdown.h"
 #include "MessageRegistry.h"
 #include "SessionContext.h"
+#include "NetworkHooks.h"
 #include "SocketMgr.h"
 #include "World.h"
 #include "ServerApp.h"
@@ -408,6 +409,7 @@ namespace
                 return false;
             }
             SetListener(network.BindIp, _sockets->GetPort());
+            NetworkHooks::NetworkStarted("gameserver");
             sStats.Publish("sessions", [this] { return Ambrose::StatValue(static_cast<int64>(_sockets ? _sockets->GetConnectionCount() : 0)); });
             sStats.Publish("realm_beating", [this] { return Ambrose::StatValue(_heartbeat.Beating()); });
 
@@ -602,10 +604,11 @@ namespace
             if (!WorldDatabase.IsOpen() || !setup.Install || !setup.TypeDump)
                 return;
             TypeDumpLoader::RawDump held;
+            TypeDumpLoader::RawDump authored;
             std::vector<std::string> problems;
-            if (!sObjectSchemaMgr.ReadInstallClasses(held, problems))
+            if (!ServerClassScript::Read(held, problems, ServerClassScript::InstallSource) || !ServerClassScript::Read(authored, problems, ServerClassScript::AuthoredSource))
             {
-                LOG_WARN("server.gameserver", "The classes the world database holds from the install cannot be read, so they are left as they are: {}",
+                LOG_WARN("server.gameserver", "The classes the world database holds cannot be read, so the ones from the install are left as they are: {}",
                     problems.empty() ? std::string("no reason was given") : problems.front());
                 return;
             }
@@ -614,6 +617,7 @@ namespace
             options.DataFolder = ClientLocator::GetDataFolder(system);
             options.Program = program.empty() ? ServerClassCache::DefaultProgram(system.GetExecutableDirectory()) : ConfigMgr::PathFromUtf8(program);
             options.Timeout = std::chrono::seconds(Config().GetOption<uint32>("Setup.SchemaProbeTimeout", 3600, true));
+            options.Authored = authored;
             options.Report = [](std::string const& line)
             {
                 StartProgress::Report("finding the classes the install holds", ExtractionAllowance);
@@ -624,7 +628,8 @@ namespace
             if (!held.Classes.empty())
             {
                 std::optional<std::filesystem::path> const cached = ServerClassCache::PathFor(options.DataFolder, setup.Install->Revision);
-                if (cached && ServerClassCache::IsCurrent(*cached, *setup.TypeDump) && ServerClassCache::Read(*cached, found, error) && ServerClassScript::Matches(held, found))
+                if (cached && ServerClassCache::IsCurrent(*cached, *setup.TypeDump, ServerClassCache::Digest(authored)) && ServerClassCache::Read(*cached, found, error)
+                    && ServerClassScript::Matches(held, found))
                     return;
                 found = {};
                 error.clear();
@@ -642,7 +647,7 @@ namespace
             }
             if (!held.Classes.empty() && ServerClassScript::Matches(held, found))
             {
-                LOG_INFO("server.gameserver", "The world database already holds the {} class(es) {} holds that its type dump does not describe", found.Classes.size(), setup.Install->Describe());
+                LOG_INFO("server.gameserver", "The world database already holds the {} class(es) {} holds that its type dump does not describe", ServerClassScript::InstallClasses(found).Classes.size(), setup.Install->Describe());
                 return;
             }
             StartProgress::Report("writing the classes the install holds to the world database", WriteAllowance);
@@ -653,7 +658,7 @@ namespace
                 return;
             }
             LOG_INFO("server.gameserver", "{} the {} class(es) {} holds that its type dump does not describe, from {}", held.Classes.empty() ? "Wrote" : "Replaced the classes from the install with",
-                found.Classes.size(), setup.Install->Describe(), ConfigMgr::PathToUtf8(*classes));
+                ServerClassScript::InstallClasses(found).Classes.size(), setup.Install->Describe(), ConfigMgr::PathToUtf8(*classes));
         }
 
         bool ExtractNames(ClientSetupResult const& setup, SetupPrompt& prompt)
@@ -747,8 +752,16 @@ namespace
             StartProgress::Report("extracting the zones", ExtractionAllowance);
             std::string const install = setup.Install->Describe();
             std::string error;
+            TypeDumpLoader::RawDump classes;
+            std::vector<std::string> problems;
+            if (WorldDatabase.IsOpen() && !ServerClassScript::Read(classes, problems))
+            {
+                LOG_WARN("server.gameserver", "The classes the world database holds cannot be read, so the zones' volumes and triggers are read without them: {}",
+                    problems.empty() ? std::string("no reason was given") : problems.front());
+                classes = {};
+            }
             std::optional<ZoneExtraction> const extraction = ZoneExtractor::ExtractFromInstall(setup.Install->Root, *setup.TypeDump, error,
-                [](std::size_t, std::size_t) { StartProgress::Report("extracting the zones", ArchiveAllowance); });
+                [](std::size_t, std::size_t) { StartProgress::Report("extracting the zones", ArchiveAllowance); }, std::move(classes));
             if (!extraction)
             {
                 LOG_ERROR("server.gameserver", "Cannot extract the zones: {}", error);
@@ -767,8 +780,15 @@ namespace
                 LOG_ERROR("server.gameserver", "Cannot write the zones to the world database: {}", error);
                 return false;
             }
-            LOG_INFO("server.gameserver", "Extracted {} zones with {} named places and {} placed objects from {}, leaving out {} object list entries of classes the type dump does not describe",
-                extraction->Zones.size(), extraction->GetLocationCount(), extraction->GetObjectCount(), install, extraction->GetSkippedObjectCount());
+            LOG_INFO("server.gameserver", "Extracted {} zones with {} named places, {} placed objects, {} volumes and {} triggers from {}, leaving out {} object list entries of classes the type dump does not describe",
+                extraction->Zones.size(), extraction->GetLocationCount(), extraction->GetObjectCount(), extraction->GetVolumeCount(), extraction->GetTriggerCount(), install,
+                extraction->GetSkippedObjectCount());
+            if (!extraction->TriggerFailures.empty())
+            {
+                TriggerFileFailure const& first = extraction->TriggerFailures.front();
+                LOG_WARN("server.gameserver", "The volume or trigger files of {} zones do not decode, so those zones have none, the first {} of {}: {}", extraction->GetTriggerFailureZoneCount(),
+                    first.File, first.Zone, first.Detail);
+            }
             return true;
         }
 

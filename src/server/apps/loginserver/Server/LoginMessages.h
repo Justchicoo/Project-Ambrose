@@ -289,6 +289,32 @@ namespace LoginMessages
         }
     };
 
+    struct DeleteCharacter
+    {
+        static constexpr uint8 ServiceId = LoginService;
+        static constexpr std::string_view Tag = "MSG_DELETECHARACTER";
+
+        uint64 CharId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("CharID", &DeleteCharacter::CharId) };
+        }
+    };
+
+    struct DeleteCharacterResponse
+    {
+        static constexpr uint8 ServiceId = LoginService;
+        static constexpr std::string_view Tag = "MSG_DELETECHARACTERRESPONSE";
+
+        int32 ErrorCode = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ErrorCode", &DeleteCharacterResponse::ErrorCode) };
+        }
+    };
+
     struct LoginLogCharacterCreation
     {
         static constexpr uint8 ServiceId = LoginService;

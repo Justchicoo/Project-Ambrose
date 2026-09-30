@@ -81,7 +81,7 @@ private:
     std::atomic<std::size_t> _queuedBytes{ 0 };
     std::atomic<std::size_t> _maxQueuedBytes;
     std::atomic<bool> _queueOverflowed{ false };
-    std::atomic<LongFrameLength> _longLength{ LongFrameLength::BodyOnly };
+    std::atomic<LongFrameLength> _longLength{ LongFrameLength::HeaderAndBody };
     std::function<void()> _closeHandler;
 };
 

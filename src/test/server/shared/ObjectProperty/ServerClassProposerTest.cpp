@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the server class proposer over a small dump written by the test: a behavior found in a template's behavior list is named by the one program string that hashes to it, derives from the behavior base the list holds with the base's property first, and not from a deeper class whose properties it happens to hold, keeps a property the dump lists elsewhere as the dump gives it and reads a new one with a trial container that a retry turns into a list; an enum property takes the options and the Enum flag the dump gives its type; a program string that does not hash to a class is no name for it; and a class nothing names, whose property the oracle cannot name, or that does not hold every property of the class its list holds is refused with the reason; and the element class of a list type, the list a path ends in and the class that list holds, walked from the path's root through each declared type, are read the way the proposer reads them. A class only the plain-XML files hold takes the server's own types: the one type, with its flags and options, the dump gives every property of an element's name, or of its last field for a name the dump lacks, when every value reads as it, else the first of bool, int, unsigned int, unsigned __int64, float, Color and std::string that does, an empty element reading as an empty value; objects are held by pointer to their class, or the nearest class they share, and a repeated or keyed element is a list; it derives from the class the dump property holding it declares; and it is refused with the reason when a BINd file holds it, its name is no class name, an element mixes text and objects or holds too many values, or its holders declare different classes.
+ * Tests the server class proposer over a small dump written by the test: a behavior found in a template's behavior list is named by the one program string that hashes to it, derives from the behavior base the list holds with the base's property first, and not from a deeper class whose properties it happens to hold, keeps a property the dump lists elsewhere as the dump gives it and reads a new one with a trial container that a retry turns into a list; an enum property takes the options and the Enum flag the dump gives its type; a class only a text file of the install names says so in its evidence; a program string that does not hash to a class is no name for it; and a class nothing names, whose property the oracle cannot name, or that does not hold every property of the class its list holds is refused with the reason; and the element class of a list type, the list a path ends in and the class that list holds, walked from the path's root through each declared type, are read the way the proposer reads them. A class only the plain-XML files hold takes the server's own types: the one type, with its flags and options, the dump gives every property of an element's name, or of its last field for a name the dump lacks, when every value reads as it, else the first of bool, int, unsigned int, unsigned __int64, float, Color and std::string that does, an empty element reading as an empty value; objects are held by pointer to their class, or the nearest class they share, and a repeated or keyed element is a list; it derives from the class the dump property holding it declares; and it is refused with the reason when a BINd file holds it, its name is no class name, an element mixes text and objects or holds too many values, or its holders declare different classes.
  */
 
 #include "PropertyFlags.h"
@@ -141,7 +141,7 @@ namespace
 TEST_F(ServerClassProposerTest, ABehaviorDerivesFromTheClassItsListHoldsAndReadsANewPropertyWithATrialContainer)
 {
     PropertyOracle const oracle(*_catalog, { "m_spellList", "m_deckColor" }, { "unsigned int" });
-    ServerClassNames const names{ { StringHash::KiStringHash("class DeckBehaviorTemplate"), { "class DeckBehaviorTemplate" } } };
+    ServerClassNames const names{ { StringHash::KiStringHash("class DeckBehaviorTemplate"), { { "class DeckBehaviorTemplate" } } } };
     std::vector<ServerClassObservation> const seen{ Seen("class DeckBehaviorTemplate",
         { Hash("std::string", "m_behaviorName"), Hash("std::string", "m_tags"), Hash("unsigned int", "m_spellList") }) };
 
@@ -165,6 +165,7 @@ TEST_F(ServerClassProposerTest, ABehaviorDerivesFromTheClassItsListHoldsAndReads
     for (std::size_t index = 0; index < deck.Properties.size(); ++index)
         EXPECT_EQ(*deck.Properties[index].Id, index);
     EXPECT_NE(first.Classes.front().Evidence.find("12 object(s) in 4 file(s)"), std::string::npos) << first.Classes.front().Evidence;
+    EXPECT_NE(first.Classes.front().Evidence.find("The client program holds the string class DeckBehaviorTemplate"), std::string::npos) << first.Classes.front().Evidence;
 
     ServerClassContainers const retry{ { { StringHash::KiStringHash("class DeckBehaviorTemplate"), Hash("unsigned int", "m_spellList") }, "List" } };
     ServerClassProposals const second = ServerClassProposer::Propose(*_catalog, oracle, names, seen, retry);
@@ -177,10 +178,21 @@ TEST_F(ServerClassProposerTest, ABehaviorDerivesFromTheClassItsListHoldsAndReads
         }
 }
 
+TEST_F(ServerClassProposerTest, AClassOnlyATextFileNamesSaysSoInItsEvidence)
+{
+    PropertyOracle const oracle(*_catalog);
+    ServerClassNames const names{ { StringHash::KiStringHash("class ChestBehaviorTemplate"), { { "class ChestBehaviorTemplate", true } } } };
+    ServerClassProposals const proposed = ServerClassProposer::Propose(*_catalog, oracle, names,
+        { Seen("class ChestBehaviorTemplate", { Hash("std::string", "m_behaviorName"), Hash("std::string", "m_displayName") }) });
+    ASSERT_EQ(proposed.Classes.size(), 1u);
+    EXPECT_NE(proposed.Classes.front().Evidence.find("A text file of the install's archives writes the class class ChestBehaviorTemplate, which hashes to it"), std::string::npos)
+        << proposed.Classes.front().Evidence;
+}
+
 TEST_F(ServerClassProposerTest, AClassThatHoldsExactlyADeeperClasssPropertiesIsNotTakenToDeriveFromIt)
 {
     PropertyOracle const oracle(*_catalog);
-    ServerClassNames const names{ { StringHash::KiStringHash("class ChestBehaviorTemplate"), { "class ChestBehaviorTemplate" } } };
+    ServerClassNames const names{ { StringHash::KiStringHash("class ChestBehaviorTemplate"), { { "class ChestBehaviorTemplate" } } } };
     ServerClassProposals const proposed = ServerClassProposer::Propose(*_catalog, oracle, names,
         { Seen("class ChestBehaviorTemplate", { Hash("std::string", "m_behaviorName"), Hash("std::string", "m_displayName") }) });
     ASSERT_EQ(proposed.Classes.size(), 1u);
@@ -191,7 +203,7 @@ TEST_F(ServerClassProposerTest, AClassThatHoldsExactlyADeeperClasssPropertiesIsN
 TEST_F(ServerClassProposerTest, ANewEnumPropertyTakesTheOptionsTheDumpGivesItsType)
 {
     PropertyOracle const oracle(*_catalog, { "m_trimShade" }, {});
-    ServerClassNames const names{ { StringHash::KiStringHash("class ShadedBehaviorTemplate"), { "class ShadedBehaviorTemplate" } } };
+    ServerClassNames const names{ { StringHash::KiStringHash("class ShadedBehaviorTemplate"), { { "class ShadedBehaviorTemplate" } } } };
     ServerClassProposals const proposed = ServerClassProposer::Propose(*_catalog, oracle, names,
         { Seen("class ShadedBehaviorTemplate", { Hash("std::string", "m_behaviorName"), Hash("enum Shade", "m_trimShade") }) });
     ASSERT_EQ(proposed.Classes.size(), 1u);
@@ -206,8 +218,8 @@ TEST_F(ServerClassProposerTest, AClassThatCannotBeNamedTypedOrBasedIsRefusedWith
 {
     PropertyOracle const oracle(*_catalog, { "m_spellList" }, { "unsigned int" });
     uint32 const known = Hash("std::string", "m_behaviorName");
-    ServerClassNames names{ { StringHash::KiStringHash("class TwiceNamed"), { "class TwiceNamed", "class Imposter" } },
-        { StringHash::KiStringHash("class OddTemplate"), { "class OddTemplate" } }, { StringHash::KiStringHash("class LooseTemplate"), { "class LooseTemplate" } } };
+    ServerClassNames names{ { StringHash::KiStringHash("class TwiceNamed"), { { "class TwiceNamed" }, { "class Imposter" } } },
+        { StringHash::KiStringHash("class OddTemplate"), { { "class OddTemplate" } } }, { StringHash::KiStringHash("class LooseTemplate"), { { "class LooseTemplate" } } } };
     std::vector<ServerClassObservation> const seen{ Seen("class Nameless", { known }), Seen("class TwiceNamed", { known }), Seen("class OddTemplate", { known, 424242 }),
         Seen("class LooseTemplate", { Hash("unsigned int", "m_spellList") }) };
     ServerClassProposals const proposed = ServerClassProposer::Propose(*_catalog, oracle, names, seen);
@@ -220,7 +232,7 @@ TEST_F(ServerClassProposerTest, AClassThatCannotBeNamedTypedOrBasedIsRefusedWith
                 return refusal.Reason;
         return std::string();
     };
-    EXPECT_EQ(reason("class Nameless"), "no string of the client program hashes to it");
+    EXPECT_EQ(reason("class Nameless"), "no name the client program's strings or the install's text files give hashes to it");
     EXPECT_NE(reason("class OddTemplate").find("its property 424242 is named no way"), std::string::npos) << reason("class OddTemplate");
     EXPECT_NE(reason("class LooseTemplate").find("does not hold every property of class BehaviorTemplate"), std::string::npos) << reason("class LooseTemplate");
 }
