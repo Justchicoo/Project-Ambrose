@@ -6,13 +6,13 @@
 #include "SocialMgr.h"
 
 #include "CharacterDatabase.h"
-#include "CharacterNameMgr.h"
 #include "CharacterRepository.h"
 #include "DatabaseEnv.h"
 #include "GameSession.h"
 #include "Log.h"
 #include "ObjectFields.h"
 #include "ObjectSerializer.h"
+#include "PackedName.h"
 #include "PropertyFiller.h"
 #include "QueryResult.h"
 #include "Settings.h"
@@ -39,20 +39,20 @@ namespace
         uint64 CharacterId = 0;
         uint8 BestFriendSymbol = 0;
         uint64 Date = 0;
-        std::string Name;
+        std::string PackedName;
     };
 
     struct IgnoreRow
     {
         uint64 CharacterId = 0;
         int32 PlatformType = 0;
-        std::string Name;
+        std::string PackedName;
     };
 
     struct RequestRow
     {
         uint64 CharacterId = 0;
-        std::string Name;
+        std::string PackedName;
         int32 Level = 1;
     };
 
@@ -68,11 +68,12 @@ namespace
         return static_cast<uint32>(std::min<uint64>(date, std::numeric_limits<uint32>::max()));
     }
 
-    std::string CharacterName(Field const& customName, Field const& nameIndices, Field const& gender)
+    std::string PackedCharacterName(Field const& customName, Field const& nameIndices, Field const& gender)
     {
+        std::optional<std::string> custom;
         if (!customName.IsNull())
-            return customName.Get<std::string>();
-        return sCharacterNameMgr.FormatName(nameIndices.Get<uint32>(), gender.Get<uint32>()).value_or(std::string());
+            custom = customName.Get<std::string>();
+        return PackedName::ForWizard(custom, nameIndices.Get<uint32>(), gender.Get<uint32>());
     }
 
     Statement Prepare(CharacterDatabaseStatements id)
@@ -97,7 +98,7 @@ namespace
         do
         {
             friends.push_back({ row[0].Get<uint64>(), row[1].Get<uint8>(), row[2].Get<uint64>(),
-                CharacterName(row[3], row[4], row[5]) });
+                PackedCharacterName(row[3], row[4], row[5]) });
         } while (result->NextRow());
         return true;
     }
@@ -118,7 +119,7 @@ namespace
         PreparedResultSet const& row = *result;
         do
         {
-            ignores.push_back({ row[0].Get<uint64>(), row[1].Get<int32>(), CharacterName(row[2], row[3], row[4]) });
+            ignores.push_back({ row[0].Get<uint64>(), row[1].Get<int32>(), PackedCharacterName(row[2], row[3], row[4]) });
         } while (result->NextRow());
         return true;
     }
@@ -139,7 +140,7 @@ namespace
         PreparedResultSet const& row = *result;
         do
         {
-            requests.push_back({ row[0].Get<uint64>(), CharacterName(row[1], row[2], row[3]), row[4].Get<int32>() });
+            requests.push_back({ row[0].Get<uint64>(), PackedCharacterName(row[1], row[2], row[3]), row[4].Get<int32>() });
         } while (result->NextRow());
         return true;
     }
@@ -194,7 +195,7 @@ namespace
                 return std::nullopt;
             }
             PropertyFiller(*entry, problem)
-                .Set("m_ignoreName", row.Name)
+                .Set("m_ignoreName", row.PackedName)
                 .Set("m_characterID", row.CharacterId)
                 .Set("m_gameObjectID", uint64{ 0 })
                 .Set("m_platformType", row.PlatformType);
@@ -355,14 +356,14 @@ void SocialMgr::SendChatError(GameSession& session, uint64 characterId)
     session.SendDmlMessage(error);
 }
 
-void SocialMgr::SendFriendEntry(GameSession& session, uint64 friendId, std::string const& friendName, uint64 friendDate, uint64 friendStatusDate)
+void SocialMgr::SendFriendEntry(GameSession& session, uint64 friendId, std::string const& friendPackedName, uint64 friendDate, uint64 friendStatusDate)
 {
     GameMessages::BuddyEntry entry;
     entry.ListOwnerGid = session.GetCharacterId();
     entry.EntryGid = friendId;
-    entry.Name = friendName;
+    entry.Name = friendPackedName;
     entry.FriendInfo = 0;
-    entry.Permissions = 0;
+    entry.Permissions = sSettings.Get<uint32>("LoginComplete.Permissions");
     entry.RealmName = sSettings.Get<std::string>("Realm.Name");
     entry.FriendDate = Date32(friendDate);
     entry.FriendStatusDate = Date32(friendStatusDate);
@@ -410,7 +411,7 @@ void SocialMgr::SendPendingRequests(GameSession& session)
         GameMessages::BuddyRequestAdd message;
         message.ListOwnerGid = request.CharacterId;
         message.EntryGid = session.GetCharacterId();
-        message.OwnerName = request.Name;
+        message.OwnerName = request.PackedName;
         message.OwnerLevel = static_cast<uint8>(std::clamp(request.Level, 0, static_cast<int32>(std::numeric_limits<uint8>::max())));
         session.SendDmlMessage(message);
     }
@@ -429,7 +430,7 @@ void SocialMgr::SendLists(GameSession& session)
     }
     for (FriendRow const& friendRow : friends)
     {
-        SendFriendEntry(session, friendRow.CharacterId, friendRow.Name, friendRow.Date, friendRow.Date);
+        SendFriendEntry(session, friendRow.CharacterId, friendRow.PackedName, friendRow.Date, friendRow.Date);
         if (friendRow.BestFriendSymbol != 0)
         {
             GameMessages::BestFriend bestFriend;
@@ -451,7 +452,7 @@ void SocialMgr::AddFriendRequest(GameSession& session, GameMessages::BuddyReques
 {
     uint64 const ownerId = session.GetCharacterId();
     uint64 const targetId = message.EntryGid;
-    if (message.ListOwnerGid != ownerId || targetId == 0 || targetId == ownerId)
+    if (!IsRequestOwnerForCharacter(message.ListOwnerGid, ownerId) || targetId == 0 || targetId == ownerId)
     {
         LOG_WARN("server.social", "Session {} sent an invalid friend request from wizard {} to {}", session.GetSessionId(), message.ListOwnerGid, targetId);
         SendChatError(session, targetId);
@@ -538,8 +539,7 @@ void SocialMgr::AddFriendRequest(GameSession& session, GameMessages::BuddyReques
             GameMessages::BuddyRequestAdd request;
             request.ListOwnerGid = ownerId;
             request.EntryGid = targetId;
-            request.OwnerName = owner.Character->CustomName.value_or(
-                sCharacterNameMgr.FormatName(owner.Character->NameIndices, owner.Character->Appearance.Gender).value_or(std::string()));
+            request.OwnerName = PackedName::ForWizard(owner.Character->CustomName, owner.Character->NameIndices, owner.Character->Appearance.Gender);
             request.OwnerLevel = static_cast<uint8>(std::clamp(owner.Character->Level, 0, static_cast<int32>(std::numeric_limits<uint8>::max())));
             recipient->SendDmlMessage(request);
         }
@@ -548,8 +548,8 @@ void SocialMgr::AddFriendRequest(GameSession& session, GameMessages::BuddyReques
 void SocialMgr::AcceptFriendRequest(GameSession& session, GameMessages::BuddyRequestAccept const& message)
 {
     uint64 const ownerId = session.GetCharacterId();
-    uint64 const requesterId = message.EntryGid;
-    if (message.ListOwnerGid != ownerId || requesterId == 0 || requesterId == ownerId)
+    uint64 const requesterId = message.ListOwnerGid;
+    if (!IsIncomingRequestForCharacter(requesterId, message.EntryGid, ownerId))
     {
         LOG_WARN("server.social", "Session {} sent an invalid friend acceptance from wizard {} for {}", session.GetSessionId(), message.ListOwnerGid, requesterId);
         SendChatError(session, requesterId);
@@ -628,9 +628,8 @@ void SocialMgr::AcceptFriendRequest(GameSession& session, GameMessages::BuddyReq
     CharacterLoad const requester = LoadCharacter(requesterId);
     if (requester.Result == CharacterOpResult::Ok && requester.Character)
     {
-        std::string const name = requester.Character->CustomName.value_or(
-            sCharacterNameMgr.FormatName(requester.Character->NameIndices, requester.Character->Appearance.Gender).value_or(std::string()));
-        SendFriendEntry(session, requesterId, name, now, now);
+        std::string const packedName = PackedName::ForWizard(requester.Character->CustomName, requester.Character->NameIndices, requester.Character->Appearance.Gender);
+        SendFriendEntry(session, requesterId, packedName, now, now);
     }
     else
         LOG_ERROR("server.social", "Accepted friend {} -> {} but could not read the requester's name", requesterId, ownerId);
@@ -638,8 +637,7 @@ void SocialMgr::AcceptFriendRequest(GameSession& session, GameMessages::BuddyReq
     if (auto const remote = _online.find(requesterId); remote != _online.end())
         if (std::shared_ptr<GameSession> recipient = remote->second.Session.lock())
         {
-            std::string const name = session.GetCharacterName();
-            SendFriendEntry(*recipient, ownerId, name, now, now);
+            SendFriendEntry(*recipient, ownerId, session.GetChatName(), now, now);
         }
     SendPresenceToFriends(ownerId, PlayerStatusOnline, session.GetZoneDisplay());
     if (auto const remote = _online.find(requesterId); remote != _online.end())
@@ -649,8 +647,8 @@ void SocialMgr::AcceptFriendRequest(GameSession& session, GameMessages::BuddyReq
 void SocialMgr::DenyFriendRequest(GameSession& session, GameMessages::BuddyRequestDeny const& message)
 {
     uint64 const ownerId = session.GetCharacterId();
-    uint64 const requesterId = message.EntryGid;
-    if (message.ListOwnerGid != ownerId || requesterId == 0 || requesterId == ownerId)
+    uint64 const requesterId = message.ListOwnerGid;
+    if (!IsIncomingRequestForCharacter(requesterId, message.EntryGid, ownerId))
     {
         LOG_WARN("server.social", "Session {} sent an invalid friend denial from wizard {} for {}", session.GetSessionId(), message.ListOwnerGid, requesterId);
         return;
@@ -782,7 +780,7 @@ void SocialMgr::AddIgnore(GameSession& session, GameMessages::IgnoreAdd const& m
 {
     uint64 const ownerId = session.GetCharacterId();
     uint64 const ignoredId = message.CharacterGid;
-    if (message.ListOwnerGid != ownerId || ignoredId == 0 || ignoredId == ownerId || !LoadLists(ownerId) || !LoadLists(ignoredId))
+    if (!IsRequestOwnerForCharacter(message.ListOwnerGid, ownerId) || ignoredId == 0 || ignoredId == ownerId || !LoadLists(ownerId) || !LoadLists(ignoredId))
     {
         LOG_WARN("server.social", "Session {} sent an invalid ignore request for wizard {}", session.GetSessionId(), ignoredId);
         SendChatError(session, ignoredId);
@@ -856,7 +854,7 @@ void SocialMgr::DropIgnore(GameSession& session, GameMessages::IgnoreDrop const&
 {
     uint64 const ownerId = session.GetCharacterId();
     uint64 const ignoredId = message.CharacterGid;
-    if (message.ListOwnerGid != ownerId || ignoredId == 0 || !LoadLists(ownerId))
+    if (!IsRequestOwnerForCharacter(message.ListOwnerGid, ownerId) || ignoredId == 0 || !LoadLists(ownerId))
     {
         LOG_WARN("server.social", "Session {} sent an invalid ignore removal for wizard {}", session.GetSessionId(), ignoredId);
         return;
@@ -891,7 +889,7 @@ void SocialMgr::SendPresenceToFriends(uint64 characterId, uint8 status, std::str
             update.ListOwnerGid = viewerId;
             update.EntryGid = characterId;
             update.Status = status;
-            update.Permissions = 0;
+            update.Permissions = sSettings.Get<uint32>("LoginComplete.Permissions");
             update.ZoneName = status == PlayerStatusOffline ? std::string() : zoneName;
             update.RealmName = sSettings.Get<std::string>("Realm.Name");
             update.FriendInfo = 0;

@@ -10,7 +10,7 @@
 
 void GameSession::HandleBuddyRequestList(GameMessages::BuddyRequestList& message)
 {
-    if (message.ListOwnerGid != GetCharacterId())
+    if (!SocialMgr::IsRequestOwnerForCharacter(message.ListOwnerGid, GetCharacterId()))
     {
         LOG_WARN("server.social", "Session {} requested the buddy list for wizard {}", GetSessionId(), message.ListOwnerGid);
         return;

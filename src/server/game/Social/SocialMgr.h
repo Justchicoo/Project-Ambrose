@@ -50,6 +50,15 @@ public:
 
     static bool CanAcceptFriendRequest(bool requestExists) noexcept { return requestExists; }
     static bool CanRequestFriend(uint32 friendCount, uint32 maximum) noexcept { return friendCount < maximum; }
+    static bool IsRequestOwnerForCharacter(uint64 requestedOwnerId, uint64 characterId) noexcept
+    {
+        return characterId != 0 && (requestedOwnerId == 0 || requestedOwnerId == characterId);
+    }
+    static bool IsIncomingRequestForCharacter(uint64 requesterId, uint64 requestedCharacterId, uint64 characterId) noexcept
+    {
+        return characterId != 0 && requesterId != 0 && requesterId != characterId &&
+               (requestedCharacterId == 0 || requestedCharacterId == characterId);
+    }
 
     void SendLists(GameSession& session);
     void AddFriendRequest(GameSession& session, GameMessages::BuddyRequestAdd const& message);
@@ -82,7 +91,7 @@ private:
 
     SocialLists& Lists(uint64 characterId);
     bool LoadLists(uint64 characterId);
-    void SendFriendEntry(GameSession& session, uint64 friendId, std::string const& friendName, uint64 friendDate, uint64 friendStatusDate);
+    void SendFriendEntry(GameSession& session, uint64 friendId, std::string const& friendPackedName, uint64 friendDate, uint64 friendStatusDate);
     void SendIgnoreList(GameSession& session, bool addOne = false, uint64 characterId = 0);
     void SendPendingRequests(GameSession& session);
     void SendChatError(GameSession& session, uint64 characterId);

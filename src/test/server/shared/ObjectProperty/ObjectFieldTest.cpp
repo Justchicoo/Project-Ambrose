@@ -46,6 +46,7 @@ namespace
         Json badges = Json::object();
         badges["m_badges"] = Property("class SharedPointer<class BadgeInfo>", "m_badges", 0, "List");
         AddClass(classes, "class BadgeInfoList", badges);
+        AddClass(classes, "class IgnoreEntryDataList", Json::object());
         Json creation = Json::object();
         creation["m_name"] = Property("std::wstring", "m_name", 0);
         AddClass(classes, "class WizardCharacterCreationInfo", creation);
@@ -125,6 +126,27 @@ TEST(ObjectFieldTest, EnvelopedFieldsRoundTripAndRefuseBadEnvelopes)
     DecodeResult const oversized = ObjectSerializer::DecodeField(catalog, field, wrapped.Bytes, tight);
     EXPECT_EQ(oversized.Status, SerializerStatus::BadEnvelope);
     EXPECT_FALSE(oversized.Object);
+}
+
+TEST(ObjectFieldTest, IgnoreListFieldRoundTripsAsAnUnwrappedIgnoreEntryList)
+{
+    TypeCatalogPtr const catalog = LoadCatalog();
+    ASSERT_TRUE(catalog);
+    PropertyObjectPtr const list = PropertyObject::Create(catalog, "class IgnoreEntryDataList");
+    ASSERT_TRUE(list);
+    ObjectField const* const field = ObjectFields::Find("MSG_IGNORELIST", "ListData");
+    ASSERT_NE(field, nullptr);
+    EXPECT_FALSE(field->Enveloped);
+    EXPECT_FALSE(field->AllowNull);
+    EXPECT_EQ(field->Classes.front(), "class IgnoreEntryDataList");
+
+    EncodeResult const encoded = ObjectSerializer::EncodeField(*field, list.get());
+    ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
+    EXPECT_EQ(encoded.Bytes, ObjectSerializer::Encode(list.get()).Bytes);
+
+    DecodeResult const decoded = ObjectSerializer::DecodeField(catalog, *field, encoded.Bytes);
+    ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
+    EXPECT_TRUE(*decoded.Object == *list);
 }
 
 TEST(ObjectFieldTest, FieldsHoldTheirRootToAllowedClassesAndRequireOne)
