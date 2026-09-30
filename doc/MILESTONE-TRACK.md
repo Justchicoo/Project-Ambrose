@@ -118,6 +118,7 @@ Everything not in the table above, including every milestone whose dependencies 
 | 17.28 | Being built by the maintainer's panel session, which the maintainer asked to finish the panel first |
 | 17.165 | Being built by the maintainer's panel session: the decoded data routes every game data page in 17.166-17.177 rests on |
 | 17.178 | Kept for the maintainer's panel session, after the game data pages |
+| 17.179 | Two of its window checks reopened on 2026-09-30 by the maintainer's panel session, which builds the rest: the page loads but was not shown to render, and a page is done only when it shows real content |
 | 17.181 | Queued for the maintainer's panel session now that 17.180 and 17.179 have landed: the panel program's own window and its list of panels |
 | 17.166 | Queued for the maintainer's panel session, one of the game data pages it builds after 17.165 in order from 17.166 to 17.177: the archive browser |
 | 17.167 | Queued for the maintainer's panel session, one of the game data pages it builds after 17.165 in order from 17.166 to 17.177: the locale text browser |
@@ -140,6 +141,7 @@ Everything not in the table above, including every milestone whose dependencies 
 | 9.02 | Built on 2026-09-26 by the maintainer's world session, 6 of 7 checks. Left: its real-client check, which 6.04's in-game commands unblocked and which is queued in that session |
 | 8.02 | Queued for the maintainer's world session after 8.01: experience and level-up, the next step on the way to a playable game |
 | 6.13 | Queued for the maintainer's world session after its real-client batch since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished: volumes and walk-in trigger events, which 7.07 needs. Every dependency is built since 6.12 landed on 2026-09-30 |
+| 3.02 | Reopened on 2026-09-30 by the maintainer's world session, which builds the rest: its Badges page opens but shows no badges, because the server sends an empty list, and a page is done only when the real client shows real content in it |
 | 7.02 | Queued for the maintainer's world session after 6.13: the quest, dialog and madlib model the quest engine rests on. 3.02, which it depends on, closed on 2026-09-30 |
 | 7.03 | Queued for the maintainer's world session after 7.02: the quest schema, sQuestMgr and its validator |
 | 7.07 | Queued for the maintainer's world session after 7.03: the NPC service menu. Waiting on 6.13 and 7.02 |
