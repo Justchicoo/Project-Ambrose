@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Answers the WIZARD messages a client sends as it enters the world: its timed access passes and subscriber-only items with empty lists of the classes the client's own handlers load, ActiveTimedAccessPassList and SubscriberOnlyItemsList, written raw because the client reads them with no envelope and no flags word, and its crown balance with none, the only fields the client reads back being Failure and TotalCrowns, until accounts keep crowns; and logs the notes it sends about its screen, its patch time, the end of its shopping and its quest finder.
+ * Answers the WIZARD messages a client sends as it enters the world: its timed access passes and subscriber-only items with empty lists of the classes the client's own handlers load, ActiveTimedAccessPassList and SubscriberOnlyItemsList, written raw because the client reads them with no envelope and no flags word, and its crown balance with none, the only fields the client reads back being Failure and TotalCrowns, until accounts keep crowns; tells a wizard entering the world which badges it holds with MSG_BADGES, whose BadgeInfo and BadgeFilterInfo are enveloped BadgeInfoList and BadgeFilterInfoList objects, which the client cannot read unwrapped, empty until wizards earn badges; and logs the notes it sends about its screen, its patch time, the end of its shopping and its quest finder.
  */
 
 #include "GameSession.h"
@@ -20,14 +20,14 @@ namespace
 {
     constexpr char const* WizardLog = "server.gamesession";
 
-    std::optional<std::string> EncodeEmptyList(uint16 sessionId, std::string_view message, std::string_view className)
+    std::optional<std::string> EncodeEmptyList(uint16 sessionId, std::string_view message, std::string_view className, std::string_view fieldName = "Data")
     {
         TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
         PropertyObjectPtr const list = catalog ? PropertyObject::Create(catalog, className) : nullptr;
-        ObjectField const* const field = ObjectFields::Find(message, "Data");
+        ObjectField const* const field = ObjectFields::Find(message, fieldName);
         if (!list || !field)
         {
-            LOG_ERROR(WizardLog, "Session {} gets no {}, because {}", sessionId, message, !list ? fmt::format("the type dump has no {}", className) : std::string("no field describes its Data"));
+            LOG_ERROR(WizardLog, "Session {} gets no {}, because {}", sessionId, message, !list ? fmt::format("the type dump has no {}", className) : fmt::format("no field describes its {}", fieldName));
             return std::nullopt;
         }
         EncodeResult const encoded = ObjectSerializer::EncodeField(*field, list.get());
@@ -38,6 +38,21 @@ namespace
         }
         return std::string(encoded.Bytes.begin(), encoded.Bytes.end());
     }
+}
+
+void GameSession::SendBadges()
+{
+    std::optional<std::string> info = EncodeEmptyList(GetSessionId(), GameMessages::Badges::Tag, "class BadgeInfoList", "BadgeInfo");
+    std::optional<std::string> filters = EncodeEmptyList(GetSessionId(), GameMessages::Badges::Tag, "class BadgeFilterInfoList", "BadgeFilterInfo");
+    if (!info || !filters)
+        return;
+    GameMessages::Badges badges;
+    badges.UpdateAll = 1;
+    badges.BadgeInfo = std::move(*info);
+    badges.BadgeFilterInfo = std::move(*filters);
+    badges.LastSegment = 1;
+    SendDmlMessage(badges);
+    LOG_DEBUG(WizardLog, "Session {} told its wizard it holds no badges", GetSessionId());
 }
 
 void GameSession::HandleGetTimedAccessPasses(GameMessages::GetTimedAccessPasses&)

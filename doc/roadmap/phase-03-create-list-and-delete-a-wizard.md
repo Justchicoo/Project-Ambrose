@@ -136,7 +136,7 @@ ObjectProperty blobs can be packed and unpacked in the 4-byte envelope that the 
 
 - [x] Unit test: a stored wrap of 10 bytes gives header 0x8000000A followed by the payload; Unwrap returns the same bytes
 - [x] Unit test: a compressed wrap round-trips; a header size that disagrees with the inflated length is rejected; a declared size above the limit is rejected without allocating
-- [ ] Real client, once NET/WIZ send MSG_BADGES (GameMessages.xml) with BadgeInfo wrapped: the badge window opens without a crash. Captures show an unwrapped blob in that field crashes the client
+- [x] Real client, once NET/WIZ send MSG_BADGES (GameMessages.xml) with BadgeInfo wrapped: the badge window opens without a crash. Captures show an unwrapped blob in that field crashes the client The client driver's badges-and-long-frame run 20260930-114953 on 2026-09-30: the game server sends MSG_BADGES after MSG_LOGINCOMPLETE with BadgeInfo and BadgeFilterInfo written as enveloped BadgeInfoList and BadgeFilterInfoList objects, empty until wizards earn badges; the spellbook's Character page opened its Badges page, showing the one filter with 0 of 0 badges, and the wizard stayed connected.
 
 **Risks**
 

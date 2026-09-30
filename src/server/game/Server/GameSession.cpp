@@ -570,6 +570,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     _inWorld.store(true, std::memory_order_relaxed);
     _afkTimerStarted = false;
     SendDmlMessage(complete);
+    SendBadges();
     SendMapObjects(*map);
     if (!resumed)
         _arrived = true;

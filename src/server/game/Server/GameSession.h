@@ -120,6 +120,7 @@ public:
     void HandleLogClientResolution(GameMessages::LogClientResolution& message);
     void HandleLogPatchClientPatchTime(GameMessages::LogPatchClientPatchTime& message);
     void HandleQuestFinderOption(GameMessages::QuestFinderOption& message);
+    void SendBadges();
 
     void HandleCombatMove(GameMessages::CombatMove& message);
     void HandleCombatDraw(GameMessages::CombatDraw& message);
