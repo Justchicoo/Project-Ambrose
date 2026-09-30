@@ -50,12 +50,6 @@
       "since": "2026-09-27"
     },
     {
-      "scope": "milestone:3.19",
-      "who": "the maintainer's track session",
-      "what": "CI pending SQL promotion and SQL validation, finishing every milestone before 8.01",
-      "since": "2026-09-30"
-    },
-    {
       "scope": "milestone:3.28",
       "who": "the maintainer's track session",
       "what": "a type dump from any client, taken over to finish every milestone before 8.01",
