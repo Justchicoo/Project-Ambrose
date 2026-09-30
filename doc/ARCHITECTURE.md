@@ -6,6 +6,7 @@ Project Ambrose follows the structure and methods of AzerothCore, the open-sourc
 ## Repository layout
 
 ```
+.claude/skills/           Claude Code skills every session in a checkout picks up: milestone work, client decoding, lean token use and pull request stewardship
 apps/                     Repository tooling and operator apps: CI, code style checks, installer, design tokens, dashboard, launcher window, Grafana
   panelui/                The panel program's own screens (17.181)
   packaging/desktop/      Installers and portable archives for the desktop programs (17.183)
@@ -104,7 +105,7 @@ Servers stay headless so they run the same on a desktop, a Linux VPS, or in Dock
 
 ### File header
 
-Every file starts with the Project Ambrose branding header and a one-line brief of what the file holds and does. There are no other comments anywhere. Formats that cannot contain comments, such as JSON, are exempt.
+Every file starts with the Project Ambrose branding header and a one-line brief of what the file holds and does. There are no other comments anywhere. Formats that cannot contain comments, such as JSON, are exempt. A Markdown file that opens with YAML front matter, such as a Claude Code skill's SKILL.md, carries the header on the line after the front matter, and the front matter holds no comments.
 
 | File type | Header |
 |---|---|

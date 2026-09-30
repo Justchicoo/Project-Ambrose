@@ -159,6 +159,13 @@ class OtherFormatTests(CheckerTestCase):
         self.assertIssue("doc/Sample.md", MD_HEADER + "Text\n<!-- note -->\n", "comment", 3)
         self.assertClean("doc/Sample.md", MD_HEADER + "Use `<!-- x -->` here.\n\n```html\n<!-- sample -->\n```\n")
 
+    def test_markdown_header_follows_frontmatter(self):
+        front = "---\nname: sample\ndescription: Sample skill used by the codestyle tests.\n---\n"
+        self.assertClean(".claude/skills/sample/SKILL.md", front + MD_HEADER + "Text\n")
+        self.assertIssue(".claude/skills/sample/SKILL.md", front + "Text\n" + MD_HEADER, "header", 5)
+        self.assertIssue(".claude/skills/sample/SKILL.md", "---\n# note\nname: sample\n---\n" + MD_HEADER, "comment", 2)
+        self.assertIssue(".claude/skills/sample/SKILL.md", front + MD_HEADER + "<!-- note -->\n", "comment", 6)
+
     def test_markdown_header_brief_required(self):
         self.assertIssue("doc/Sample.md", "<!-- Project Ambrose by Imjustchico:  -->\n", "header", 1)
         self.assertIssue("doc/Sample.md", "<!-- Project Ambrose by Imjustchico: Notes --> more -->\n", "header", 1)
