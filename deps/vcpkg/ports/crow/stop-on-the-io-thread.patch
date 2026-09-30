@@ -1,0 +1,66 @@
+diff --git a/include/crow/http_server.h b/include/crow/http_server.h
+index e5cff67..2e9df22 100644
+--- a/include/crow/http_server.h
++++ b/include/crow/http_server.h
+@@ -221,6 +221,7 @@ namespace crow // NOTE: Already documented in "crow/app.h"
+               [this] {
+                   notify_start();
+                   io_context_.run();
++                  close_acceptor();
+                   CROW_LOG_INFO << "Exiting.";
+               })
+               .join();
+@@ -230,20 +231,6 @@ namespace crow // NOTE: Already documented in "crow/app.h"
+         {
+             shutting_down_ = true; // Prevent the acceptor from taking new connections
+ 
+-            // Explicitly close the acceptor
+-            // else asio will throw an exception (linux only), when trying to start server again:
+-            // what():  bind: Address already in use
+-            if (acceptor_.raw_acceptor().is_open())
+-            {
+-                CROW_LOG_INFO << "Closing acceptor. " << &acceptor_;
+-                error_code ec;
+-                acceptor_.raw_acceptor().close(ec);
+-                if (ec)
+-                {
+-                    CROW_LOG_WARNING << "Failed to close acceptor: " << ec.message();
+-                }
+-            }
+-
+             for (auto& io_context : io_context_pool_)
+             {
+                 if (io_context != nullptr)
+@@ -285,6 +272,23 @@ namespace crow // NOTE: Already documented in "crow/app.h"
+         }
+ 
+     private:
++        // Explicitly close the acceptor, on the thread that ran it once it has stopped
++        // else asio will throw an exception (linux only), when trying to start server again:
++        // what():  bind: Address already in use
++        void close_acceptor()
++        {
++            if (acceptor_.raw_acceptor().is_open())
++            {
++                CROW_LOG_INFO << "Closing acceptor. " << &acceptor_;
++                error_code ec;
++                acceptor_.raw_acceptor().close(ec);
++                if (ec)
++                {
++                    CROW_LOG_WARNING << "Failed to close acceptor: " << ec.message();
++                }
++            }
++        }
++
+         size_t pick_io_context_idx()
+         {
+             size_t min_queue_idx = 0;
+@@ -344,7 +348,7 @@ namespace crow // NOTE: Already documented in "crow/app.h"
+         std::vector<detail::task_timer*> task_timer_pool_;
+         std::vector<std::function<std::string()>> get_cached_date_str_pool_;
+         Acceptor acceptor_;
+-        bool shutting_down_ = false;
++        std::atomic<bool> shutting_down_{false};
+         bool server_started_{false};
+         bool startup_failed_ = false;
+         std::condition_variable cv_started_;
