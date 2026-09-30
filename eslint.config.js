@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What the linter enforces on every front-end file: typed rules, the Svelte template rules including its accessibility ones, and the rule that nothing in a shipped bundle may import the accessibility engine.
+ * What the linter enforces on every front-end file: typed rules, the Svelte template rules including its accessibility ones, and the rule that nothing in a shipped bundle may import the accessibility engine, which a test file may, since tests never ship.
  */
 
 import js from "@eslint/js";
@@ -41,6 +41,12 @@ export default typescript.config(
                 },
             ],
             "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+        },
+    },
+    {
+        files: ["**/*.test.ts"],
+        rules: {
+            "no-restricted-imports": "off",
         },
     },
     {

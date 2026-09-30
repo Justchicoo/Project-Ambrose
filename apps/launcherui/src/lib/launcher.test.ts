@@ -117,17 +117,37 @@ describe("the launcher window", () => {
         const made = rig();
         const answers: SetupStep[][] = [
             [
-                { id: "install", label: "Find your Wizard101 installation", state: "done", word: "Wizard101 r806919 at C:/Games/Wizard101" },
-                { id: "run-folder", label: "Ready the folder the game runs from", state: "doing", word: "Writing the configuration the game reads" },
+                {
+                    id: "install",
+                    label: "Find your Wizard101 installation",
+                    state: "done",
+                    word: "Wizard101 r806919 at C:/Games/Wizard101",
+                },
+                {
+                    id: "run-folder",
+                    label: "Ready the folder the game runs from",
+                    state: "doing",
+                    word: "Writing the configuration the game reads",
+                },
                 { id: "server", label: "Reach the login server", state: "waiting", word: "Waits for the run folder" },
             ],
             [
-                { id: "install", label: "Find your Wizard101 installation", state: "done", word: "Wizard101 r806919 at C:/Games/Wizard101" },
+                {
+                    id: "install",
+                    label: "Find your Wizard101 installation",
+                    state: "done",
+                    word: "Wizard101 r806919 at C:/Games/Wizard101",
+                },
                 { id: "run-folder", label: "Ready the folder the game runs from", state: "done", word: "C:/run with 4 files" },
                 { id: "server", label: "Reach the login server", state: "doing", word: "Waiting for 127.0.0.1:12000 to open, try 1 of 30" },
             ],
             [
-                { id: "install", label: "Find your Wizard101 installation", state: "done", word: "Wizard101 r806919 at C:/Games/Wizard101" },
+                {
+                    id: "install",
+                    label: "Find your Wizard101 installation",
+                    state: "done",
+                    word: "Wizard101 r806919 at C:/Games/Wizard101",
+                },
                 { id: "run-folder", label: "Ready the folder the game runs from", state: "done", word: "C:/run with 4 files" },
                 { id: "server", label: "Reach the login server", state: "done", word: "127.0.0.1:12000 is open, answered on try 2" },
             ],
@@ -156,7 +176,14 @@ describe("the launcher window", () => {
         made.channel.steps = async () =>
             asked++ === 0
                 ? [{ id: "server", label: "Reach the login server", state: "doing", word: "try 1 of 30" }]
-                : [{ id: "server", label: "Reach the login server", state: "wrong", word: "Nothing answered at 127.0.0.1:12000 after 30 tries. Start the Ambrose servers, then look again" }];
+                : [
+                      {
+                          id: "server",
+                          label: "Reach the login server",
+                          state: "wrong",
+                          word: "Nothing answered at 127.0.0.1:12000 after 30 tries. Start the Ambrose servers, then look again",
+                      },
+                  ];
         const state = new LauncherState(made.channel, memory(), async () => undefined);
 
         await state.run();

@@ -117,15 +117,14 @@ Everything not in the table above, including every milestone whose dependencies 
 | 4.11 | Being built now, and the world entry after it runs through the same files. In the maintainer's world session's real-client batch after 7.01 since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished |
 | 16.11 | Overlaps the type extraction already built in 3.21 and is being rethought |
 | 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal, and nothing else left to build |
-| 3.26 | Held by the maintainer's panel session, which builds it after 17.179 since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished: the launcher window the panel's own installable program shares |
+| 3.26 | Landed on 2026-09-30 by the maintainer's panel session with six of seven checks. Left: the Dev-gated Play check, which waits for a real-client window on the maintainer's machine |
 | 17.47 | Landed on 2026-09-27 by the maintainer's panel session with four of five checks. Left: the API-key half of check 2, which waits on 17.36's keys |
 | 17.18 | Landed on 2026-09-27 by the maintainer's panel session with seven of eight checks. Left: check 2's download and share paths, which 17.54 and 17.39 add |
 | 17.24 | Held by the maintainer's panel session: hosting a game on this computer, built on the panel program of 17.181 |
 | 17.28 | Being built by the maintainer's panel session, which the maintainer asked to finish the panel first |
 | 17.165 | Being built by the maintainer's panel session: the decoded data routes every game data page in 17.166-17.177 rests on |
 | 17.178 | Kept for the maintainer's panel session, after the game data pages |
-| 17.179 | Being built by the maintainer's panel session since 2026-09-30, after 17.180 landed: the desktop shell the launcher and the panel program share |
-| 17.181 | Queued for the maintainer's panel session after 17.180 and 17.179: the panel program's own window and its list of panels |
+| 17.181 | Queued for the maintainer's panel session now that 17.180 and 17.179 have landed: the panel program's own window and its list of panels |
 | 17.166 | Queued for the maintainer's panel session, one of the game data pages it builds after 17.165 in order from 17.166 to 17.177: the archive browser |
 | 17.167 | Queued for the maintainer's panel session, one of the game data pages it builds after 17.165 in order from 17.166 to 17.177: the locale text browser |
 | 17.168 | Queued for the maintainer's panel session, one of the game data pages it builds after 17.165 in order from 17.166 to 17.177: the template explorer |

@@ -38,12 +38,6 @@
       "since": "2026-09-27"
     },
     {
-      "scope": "milestone:17.179",
-      "who": "the maintainer's panel session",
-      "what": "the desktop shell the launcher and the panel program share",
-      "since": "2026-09-27"
-    },
-    {
       "scope": "milestone:17.180",
       "who": "the maintainer's panel session",
       "what": "sign-in links for the panel program",

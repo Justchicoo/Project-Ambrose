@@ -11,7 +11,14 @@ import App from "./App.svelte";
 import type { LauncherAnswer, LauncherChannel, LauncherRequest, SetupStep } from "./lib/channel";
 import { LauncherState } from "./lib/launcher.svelte";
 
-type Rig = { channel: LauncherChannel; started: LauncherRequest[]; described: LauncherRequest[]; restarted: number; answer: LauncherAnswer; steps: SetupStep[] };
+type Rig = {
+    channel: LauncherChannel;
+    started: LauncherRequest[];
+    described: LauncherRequest[];
+    restarted: number;
+    answer: LauncherAnswer;
+    steps: SetupStep[];
+};
 
 const plan: LauncherAnswer = {
     schema: 1,
@@ -63,7 +70,11 @@ function settle() {
     return new Promise((done) => setTimeout(done, 30));
 }
 
-async function open(made: Rig, then?: (state: LauncherState) => void, pause: (milliseconds: number) => Promise<void> = async () => undefined): Promise<LauncherState> {
+async function open(
+    made: Rig,
+    then?: (state: LauncherState) => void,
+    pause: (milliseconds: number) => Promise<void> = async () => undefined,
+): Promise<LauncherState> {
     host = document.createElement("div");
     document.body.appendChild(host);
     const launcher = new LauncherState(made.channel, memory, pause);
@@ -77,7 +88,9 @@ async function open(made: Rig, then?: (state: LauncherState) => void, pause: (mi
 
 async function gate(): Promise<void> {
     const results = await axe.run(host, { resultTypes: ["violations"] });
-    const found = results.violations.map((violation) => `${violation.id}: ${violation.nodes.map((node) => node.target.join(" ")).join(", ")}`);
+    const found = results.violations.map(
+        (violation) => `${violation.id}: ${violation.nodes.map((node) => node.target.join(" ")).join(", ")}`,
+    );
     expect(found).toEqual([]);
     for (const control of host.querySelectorAll<HTMLElement>("button, input, a[href], select, textarea")) {
         const name = control.getAttribute("aria-label") ?? control.textContent?.trim() ?? "";
@@ -160,7 +173,14 @@ describe("the launcher window from the keyboard alone", () => {
 
     it("names what went wrong, and Look again is reached and pressed from the keyboard", async () => {
         const made = rig();
-        made.steps = [{ id: "server", label: "Reach the login server", state: "wrong", word: "Nothing answered at 127.0.0.1:12000 after 30 tries. Start the Ambrose servers, then look again" }];
+        made.steps = [
+            {
+                id: "server",
+                label: "Reach the login server",
+                state: "wrong",
+                word: "Nothing answered at 127.0.0.1:12000 after 30 tries. Start the Ambrose servers, then look again",
+            },
+        ];
         const launcher = await open(made);
         expect(launcher.screen).toBe("failed");
         expect(host.textContent).toContain("Start the Ambrose servers");
