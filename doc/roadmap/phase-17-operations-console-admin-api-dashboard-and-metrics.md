@@ -4831,13 +4831,13 @@ Added on 2026-09-27 at the maintainer's direction. 17.24 promised that a player 
 
 **Acceptance**
 
-- [ ] A local link signs in once and only from loopback: a second use answers 410, a use from a peer that is not loopback answers 403, and a use after 60 seconds answers 410 (PanelLinkTest over HTTP, with a clock moved through the window)
-- [ ] Without the admin token the route answers 401. With it, on a panel with no users, it makes the owner under the name given and returns a link that signs them in, and no password for that owner appears anywhere (PanelLinkTest)
-- [ ] An owner claim link printed before a supervisor restart claims once after it, and never twice (PanelLinkTest)
-- [ ] Against a running supervisor, `supervisor --panel-link` prints a link that opens a session, and `--panel-pair` prints the fingerprint of the certificate the listener actually serves (an AppSmoke run that reads the fingerprint back through `AdminClient`)
-- [ ] Env-gated on `AMBROSE_TEST_ADMIN_REMOTE_BIND`: a pairing token signs in once over TLS from an address that is not loopback, and a pairing asked of a listener serving plain HTTP beyond loopback is refused with the reason
-- [ ] Twenty wrong or spent tokens from one address within a minute answer 429, as failed sign-ins do, and a disabled user's link is refused (PanelLinkTest)
-- [ ] After a link is issued and used, the token is in no log file, audit row or command history, and the store holds only its hash (a test that searches each for the token)
+- [x] A local link signs in once and only from loopback: a second use answers 410, a use from a peer that is not loopback answers 403, and a use after 60 seconds answers 410 (PanelLinkTest.ALocalLinkSignsInOnceAndOnlyFromLoopback over HTTP, with a clock moved through the window)
+- [x] Without the admin token the route answers 401. With it, on a panel with no users, it makes the owner under the name given and returns a link that signs them in, and no password for that owner appears anywhere (PanelLinkTest.TheRouteNeedsTheAdminTokenAndOnAnEmptyPanelMakesTheOwnerWithNoPasswordAnywhere)
+- [x] An owner claim link printed before a supervisor restart claims once after it, and never twice (PanelLinkTest.AnOwnerClaimLinkPrintedBeforeARestartClaimsOnceAfterIt, and APasswordLinkIssuedBeforeARestartSetsThePasswordOnceAfterIt for password links)
+- [x] Against a running supervisor, `supervisor --panel-link` prints a link that opens a session, and `--panel-pair` prints the fingerprint of the certificate the listener actually serves (an AppSmoke run that reads the fingerprint back through `AdminClient`: AppSmoke.supervisor runs PanelLinkSmoke.DISABLED_TheCommandLinePrintsALinkThatOpensASessionAndThePinTheListenerServes against the real supervisor, and tests/e2e/panel-link.spec.ts opens the printed link in a browser)
+- [x] Env-gated on `AMBROSE_TEST_ADMIN_REMOTE_BIND`: a pairing token signs in once over TLS from an address that is not loopback, and a pairing asked of a listener serving plain HTTP beyond loopback is refused with the reason (PanelLinkTest.APairingTokenSignsInOnceOverTlsFromBeyondLoopback and PanelLinkTest.APairingOfAPlainListenerBeyondLoopbackIsRefusedWithTheReason, run with `AMBROSE_TEST_ADMIN_REMOTE_BIND=0.0.0.0`)
+- [x] Twenty wrong or spent tokens from one address within a minute answer 429, as failed sign-ins do, and a disabled user's link is refused (PanelLinkTest.TwentyWrongOrSpentTokensFromOneAddressAreHeldBackAndADisabledOperatorsLinkIsRefused)
+- [x] After a link is issued and used, the token is in no log file, audit row or command history, and the store holds only its hash (PanelLinkTest.ATokenIsInNoLogFileAuditRowOrCommandHistoryAndTheStoreHoldsOnlyItsHash searches each for the token)
 
 ## 17.181 The panel program: its own window and a list of panels
 

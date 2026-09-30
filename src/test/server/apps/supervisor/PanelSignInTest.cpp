@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests how an operator gets into the panel and how a guesser is kept out: a fresh panel has no password at all and prints a one-time link that makes the owner once, from this machine only; a name and password then open a session that the panel answers by cookie; twenty failed attempts against one account are held back until the window passes; a success against one account does not forgive the failures counted against another from the same address; and changing a password ends the sessions that user already had.
+ * Tests how an operator gets into the panel and how a guesser is kept out: a fresh panel has no password at all and prints a one-time link that makes the owner once, from this machine only; a name and password then open a session that the panel answers by cookie; twenty failed attempts against one account are held back until the window passes; a success against one account does not forgive the failures counted against another from the same address; a count against an address alone, which a sign-in link adds to, holds back that address and no account and is forgiven by no success; and changing a password ends the sessions that user already had.
  */
 
 #include "AdminClient.h"
@@ -205,6 +205,36 @@ TEST_F(PanelSignInTest, AFoldedNameIsTheSameGuessingAndTheWindowEndsOnItsOwn)
     EXPECT_EQ(throttle.Check("alice", "10.0.0.1").RetryAfterSeconds, 30u);
     now += std::chrono::seconds(31);
     EXPECT_TRUE(throttle.Check("alice", "10.0.0.1").Allowed);
+}
+
+TEST_F(PanelSignInTest, AnAddressCountIsKeptApartFromEveryAccount)
+{
+    auto now = PanelSignInThrottle::Clock::time_point() + std::chrono::hours(1);
+    PanelSignInThrottle throttle([&now] { return now; });
+    throttle.SetLimits(3, std::chrono::seconds(60));
+
+    for (int attempt = 0; attempt < 3; ++attempt)
+        throttle.FailedAtAddress("10.0.0.1");
+    PanelSignInVerdict const held = throttle.CheckAddress("10.0.0.1");
+    EXPECT_FALSE(held.Allowed);
+    EXPECT_TRUE(held.FirstThisWindow);
+    EXPECT_EQ(held.RetryAfterSeconds, 60u);
+    EXPECT_EQ(held.Counted, "address");
+    EXPECT_FALSE(throttle.CheckAddress("10.0.0.1").FirstThisWindow);
+    EXPECT_TRUE(throttle.CheckAddress("10.0.0.2").Allowed);
+    EXPECT_TRUE(throttle.Check("alice", "10.0.0.1").Allowed) << "an address count holds back no account";
+
+    throttle.Succeeded("alice", "10.0.0.1");
+    EXPECT_FALSE(throttle.CheckAddress("10.0.0.1").Allowed) << "a success forgives nothing counted against the address";
+
+    for (int attempt = 0; attempt < 3; ++attempt)
+        throttle.Failed("10.0.0.3", "10.0.0.4");
+    EXPECT_FALSE(throttle.Check("10.0.0.3", "10.0.0.4").Allowed);
+    EXPECT_TRUE(throttle.CheckAddress("10.0.0.3").Allowed) << "an account named like an address is not that address";
+    EXPECT_TRUE(throttle.CheckAddress("10.0.0.4").Allowed) << "guesses at an account are not counted against the address alone";
+
+    now += std::chrono::seconds(61);
+    EXPECT_TRUE(throttle.CheckAddress("10.0.0.1").Allowed) << "the window ends on its own";
 }
 
 TEST_F(PanelSignInTest, APasswordChangeEndsTheSessionsThatUserHad)

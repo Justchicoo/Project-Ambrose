@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What a failed sign-in costs: failures are counted against the account, and separately against the account and the address together, over a window that ends on its own; only failures count, so no amount of signing in successfully buys an attacker more guesses, and a success clears only the counts for that account, so guessing at one account from an address is not forgiven by signing in to another from the same address.
+ * What a failed sign-in costs: failures are counted against the account, and separately against the account and the address together, over a window that ends on its own; only failures count, so no amount of signing in successfully buys an attacker more guesses, and a success clears only the counts for that account, so guessing at one account from an address is not forgiven by signing in to another from the same address. A door that names no account, such as a sign-in link, counts against the address alone, in counts of its own kept apart from every account's, which no success ever clears.
  */
 
 #ifndef AMBROSE_PANELSIGNIN_H
@@ -43,7 +43,9 @@ public:
     std::chrono::seconds GetWindow() const;
 
     PanelSignInVerdict Check(std::string_view username, std::string_view address);
+    PanelSignInVerdict CheckAddress(std::string_view address);
     void Failed(std::string_view username, std::string_view address);
+    void FailedAtAddress(std::string_view address);
     void Succeeded(std::string_view username, std::string_view address);
     void Clear();
     std::size_t Tracked() const;
@@ -58,6 +60,7 @@ private:
 
     static std::string UserKey(std::string_view username);
     static std::string PairKey(std::string_view username, std::string_view address);
+    static std::string AddressKey(std::string_view address);
 
     bool Over(Count& count, Clock::time_point now, uint32& retryAfter, bool& first);
     void Add(std::string const& key, Clock::time_point now);

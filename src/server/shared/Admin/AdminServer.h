@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The optional admin API listener every operations feature builds on: it binds only where the remote-access rule allows, keeps a generated token in the data folder or, where the machine names none, beside the config file, holds the route table, the bearer token and the failure limiter, answers the same 401 on every path and every method without it, serves GET /api/health, with the step a start in progress is on and how long it may take, serves the built panel at / without a token and lets it sign in by trading the token once for a browser session, makes the short-lived cookies a sign-in in progress is carried by with the session cookie's own attributes, and takes the WebSocket routes later milestones register, before or after it opens, each refused to a caller who lacks the permission it names or whom the listener's admission rule holds back, unless the route admits its own upgrades and signs its callers in on their first frame, in which case only the host check and the route's own admission stand before the upgrade. A socket keeps the request that opened it and can be closed with a code of the route's choosing once the frames sent before it have gone.
+ * The optional admin API listener every operations feature builds on: it binds only where the remote-access rule allows, keeps a generated token in the data folder or, where the machine names none, beside the config file, holds the route table, the bearer token and the failure limiter, answers the same 401 on every path and every method without it, serves GET /api/health, with the step a start in progress is on and how long it may take, serves the built panel at / without a token and lets it sign in by trading the token once for a browser session, makes the short-lived cookies a sign-in in progress is carried by with the session cookie's own attributes, and takes the WebSocket routes later milestones register, before or after it opens, each refused to a caller who lacks the permission it names or whom the listener's admission rule holds back, unless the route admits its own upgrades and signs its callers in on their first frame, in which case only the host check and the route's own admission stand before the upgrade. A socket keeps the request that opened it and can be closed with a code of the route's choosing once the frames sent before it have gone. It says the SHA-256 fingerprint of the certificate it serves right now, after any swap a reload made, and nothing when it serves plain HTTP.
  */
 
 #ifndef AMBROSE_ADMINSERVER_H
@@ -82,6 +82,7 @@ public:
     uint16 GetPort() const;
     std::string GetBindIp() const;
     std::string GetToken() const;
+    std::string GetFingerprint() const;
 
 private:
     struct Listener;

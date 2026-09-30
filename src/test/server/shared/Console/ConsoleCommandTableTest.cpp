@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests console command matching: multi-word and case-insensitive names, the longest match, usage replies, unknown commands, group listings, quoted arguments, hidden sensitive arguments, name completion, and handlers that read the table.
+ * Tests console command matching: multi-word and case-insensitive names, the longest match, usage replies, unknown commands, group listings, quoted arguments, hidden sensitive arguments, name completion, handlers that read the table, and which commands run only on the app's own console.
  */
 
 #include "ConsoleCommandTable.h"
@@ -122,4 +122,24 @@ TEST(ConsoleCommandTableTest, CompletionOffersTheNamesAPrefixCouldBecome)
     EXPECT_EQ(table.CompleteNames("s"), (std::vector<std::string>{ "shutdown", "status" }));
     EXPECT_EQ(table.CompleteNames("  ACCOUNT C"), (std::vector<std::string>{ "account create" }));
     EXPECT_EQ(table.CompleteNames("statuses"), std::vector<std::string>());
+}
+
+TEST(ConsoleCommandTableTest, KnowsWhichCommandsRunOnlyOnItsOwnConsole)
+{
+    ConsoleCommandTable table;
+    bool ran = false;
+    ASSERT_TRUE(table.Register({ "panel user link", "[name]", "hands out a way to sign in", false,
+        [&ran](std::vector<std::string> const&, ConsoleCommandTable::Reply const&) { ran = true; return true; }, true }));
+    ASSERT_TRUE(table.Register({ "panel user list", "", "lists the operators", false, [](std::vector<std::string> const&, ConsoleCommandTable::Reply const&) { return true; } }));
+
+    EXPECT_TRUE(table.IsConsoleOnly("panel user link owner"));
+    EXPECT_TRUE(table.IsConsoleOnly("  PANEL User LINK"));
+    EXPECT_FALSE(table.IsConsoleOnly("panel user list"));
+    EXPECT_FALSE(table.IsConsoleOnly("panel user"));
+    EXPECT_FALSE(table.IsConsoleOnly("nothing at all"));
+    EXPECT_FALSE(table.IsConsoleOnly(""));
+
+    Transcript transcript;
+    EXPECT_EQ(table.Execute("panel user link owner", transcript.Reply()), ConsoleCommandTable::Result::Ran);
+    EXPECT_TRUE(ran) << "the console itself still runs a console-only command";
 }

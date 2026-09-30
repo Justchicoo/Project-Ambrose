@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reading the request, refusing what should not run, running the rest through the app's own console table and writing down what happened. A body is held to one shape and one size before anything is executed, because a command line is the last place to be generous about what a caller sent. The record is appended as one JSON object a line, which is what a later page can read back without a parser of its own, and it carries what the table says the line was rather than the line itself.
+ * Reading the request, refusing what should not run, running the rest through the app's own console table and writing down what happened. A body is held to one shape and one size before anything is executed, because a command line is the last place to be generous about what a caller sent. A command the table marks console-only is refused with its reason before it runs, whatever level the caller holds. The record is appended as one JSON object a line, which is what a later page can read back without a parser of its own, and it carries what the table says the line was rather than the line itself.
  */
 
 #include "AdminCommand.h"
@@ -51,6 +51,12 @@ AdminCommandOutcome AdminCommand::RunThroughTable(ConsoleCommandTable const& tab
     {
         outcome.Refused = true;
         outcome.Reason = "there is no such command";
+        return outcome;
+    }
+    if (table.IsConsoleOnly(line))
+    {
+        outcome.Refused = true;
+        outcome.Reason = std::string(ConsoleOnlyReason);
         return outcome;
     }
     if (IsDestructive(line) && !confirmed)

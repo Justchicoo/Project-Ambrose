@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the Admin options: defaults, clamped values with their problems, the remote-access rule that refuses a non-loopback bind without TLS or the plain-HTTP opt-in and names what to change when both are set, the warnings a binding it allows still carries, and the token that comes from config or a file the current user alone can read, beside the config file where the machine names no data folder, and the panel options: its folder, found beside the executable by default, the host names allowed beside IP addresses, and the clamped session lifetimes.
+ * Tests the Admin options: defaults, clamped values with their problems, the remote-access rule that refuses a non-loopback bind without TLS or the plain-HTTP opt-in and names what to change when both are set, the warnings a binding it allows still carries, and the token that comes from config or a file the current user alone can read, beside the config file where the machine names no data folder, which a caller that only reads it never writes, and the panel options: its folder, found beside the executable by default, the host names allowed beside IP addresses, and the clamped session lifetimes.
  */
 
 #include "ListenerSettings.h"
@@ -223,6 +223,39 @@ TEST(AdminTokenTest, GeneratesAFileTheCurrentUserAloneCanRead)
     ASSERT_TRUE(reread.Succeeded()) << reread.Error;
     EXPECT_FALSE(reread.Generated);
     EXPECT_EQ(reread.Token, generated.Token);
+}
+
+TEST(AdminTokenTest, ReadingTheTokenNeverWritesOne)
+{
+    LogTestDirectory directory;
+    ListenerSettings settings = Loopback();
+    settings.Token.clear();
+
+    AdminTokenResult const missing = AdminToken::Read(settings, "supervisor", directory.Path());
+    EXPECT_FALSE(missing.Succeeded());
+    EXPECT_FALSE(missing.Generated);
+    EXPECT_TRUE(missing.Token.empty());
+    EXPECT_EQ(missing.File, AdminToken::DefaultFile("supervisor", directory.Path()));
+    EXPECT_FALSE(std::filesystem::exists(missing.File)) << "reading a token never makes one";
+    EXPECT_FALSE(std::filesystem::exists(missing.File.parent_path())) << "nor the folder one would go in";
+
+    AdminTokenResult const made = AdminToken::Resolve(settings, "supervisor", directory.Path());
+    ASSERT_TRUE(made.Succeeded()) << made.Error;
+    EXPECT_TRUE(made.Generated);
+    AdminTokenResult const again = AdminToken::Read(settings, "supervisor", directory.Path());
+    ASSERT_TRUE(again.Succeeded()) << again.Error;
+    EXPECT_FALSE(again.Generated);
+    EXPECT_EQ(again.Token, made.Token);
+
+    settings.TokenFile = directory.Write("broken.token", "nope");
+    EXPECT_FALSE(AdminToken::Read(settings, "supervisor", directory.Path()).Succeeded());
+    EXPECT_EQ(directory.ReadBytes(settings.TokenFile), "nope") << "a token file that holds no usable token is left as it was";
+
+    settings.Token = Token;
+    AdminTokenResult const configured = AdminToken::Read(settings, "supervisor", {});
+    ASSERT_TRUE(configured.Succeeded()) << configured.Error;
+    EXPECT_EQ(configured.Token, Token);
+    EXPECT_EQ(configured.Source, "Admin.Token");
 }
 
 TEST(AdminTokenTest, RefusesATokenFileThatHoldsNoUsableToken)

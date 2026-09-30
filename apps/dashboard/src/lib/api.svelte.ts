@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The panel's one way to reach the API of the host that served it: relative requests the browser resolves against the page's own address, with the session's CSRF token on anything that changes something, every answer checked against its shape, every refusal turned into an error carrying its status, code, message, request id and field problems, and the browser session itself, probed on load where finding none is an answer rather than an error, opened by trading the admin token once on an app's own listener or by a panel user's name and password on the panel's, followed by a code or a recovery code when the operator has two-factor sign-in, closed on request, and marked ended when an answer says so. A refusal saying two-factor sign-in is required sends the session to enrollment, and one asking for a fresh check of who the operator is waits on the prompt the page registered and, once that check is made, sends the same request again exactly once, so a check that is refused or cancelled changes nothing. The operator's own two-factor calls live here too; turning it on hands the recovery codes and the operator's new state back to the caller, which adopts that state only once the codes have been shown, moving to another authenticator app sends a current code or recovery code from the app in use beside the new app's code, and nothing here ever keeps a code.
+ * The panel's one way to reach the API of the host that served it: relative requests the browser resolves against the page's own address, with the session's CSRF token on anything that changes something, every answer checked against its shape, every refusal turned into an error carrying its status, code, message, request id and field problems, and the browser session itself, probed on load where finding none is an answer rather than an error, opened by trading the admin token once on an app's own listener, by a panel user's name and password on the panel's, by a one-time link a desktop program opened the page with or by a password link that sets the password first, each followed by a code or a recovery code when the operator has two-factor sign-in, closed on request, and marked ended when an answer says so; a link that asks for a code leaves the sign-in page on its code step, and one that is refused leaves the reason for that page to say. A refusal saying two-factor sign-in is required sends the session to enrollment, and one asking for a fresh check of who the operator is waits on the prompt the page registered and, once that check is made, sends the same request again exactly once, so a check that is refused or cancelled changes nothing. The operator's own two-factor calls live here too; turning it on hands the recovery codes and the operator's new state back to the caller, which adopts that state only once the codes have been shown, moving to another authenticator app sends a current code or recovery code from the app in use beside the new app's code, and nothing here ever keeps a code.
  */
 
 import * as v from "valibot";
@@ -48,6 +48,8 @@ export type SessionState = {
     needsOwner: boolean;
     user: PanelUser | null;
     mustEnroll: boolean;
+    secondFactorPending: boolean;
+    linkProblem: ApiError | null;
 };
 
 export type SecondFactor = { code: string } | { recovery_code: string };
@@ -65,6 +67,8 @@ export const session = $state<SessionState>({
     needsOwner: false,
     user: null,
     mustEnroll: false,
+    secondFactorPending: false,
+    linkProblem: null,
 });
 
 let stepUpPrompt: StepUpPrompt | null = null;
@@ -252,6 +256,31 @@ export async function answerSecondFactor(factor: SecondFactor) {
 
 export async function claimOwner(token: string, username: string, password: string) {
     adoptSignedIn(await request("POST", "api/panel/claim", PanelSignedIn, { token, username, password }));
+}
+
+export async function openLink(token: string) {
+    try {
+        const answer = await request("POST", "api/panel/link", PanelSignInAnswer, { token });
+        const signedIn = v.safeParse(PanelSignedIn, answer);
+        if (signedIn.success) adoptSignedIn(signedIn.output);
+        else session.secondFactorPending = true;
+    } catch (failure) {
+        await probeSession();
+        session.linkProblem =
+            failure instanceof ApiError
+                ? failure
+                : new ApiError(0, "failed", "Opening the link failed for a reason the panel could not read", "");
+        return;
+    }
+    await probeSession();
+}
+
+export async function setPassword(token: string, password: string): Promise<SignInStep> {
+    const answer = await request("POST", "api/panel/reset", PanelSignInAnswer, { token, password });
+    const signedIn = v.safeParse(PanelSignedIn, answer);
+    if (!signedIn.success) return "second-factor";
+    adoptSignedIn(signedIn.output);
+    return "signed-in";
 }
 
 export async function signOut() {

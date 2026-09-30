@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A browser for panel tests: it makes the owner from the link the panel logged, signs in with a name and password and, when the panel asks for a second factor, keeps the challenge cookie and answers it with a code or a recovery code, sends every request with its session cookie, this listener's origin and the session's CSRF token, reads each cookie an answer sets by its name, and turns two-factor sign-in on from the secret a setup answer carries with the code for a moment the test chooses.
+ * A browser for panel tests: it makes the owner from the link the panel logged, signs in with a name and password or trades a sign-in link, from loopback or as the far address a trusted proxy names, and, when the panel asks for a second factor, keeps the challenge cookie and answers it with a code or a recovery code, sends every request over TLS when the panel serves it with its session cookie, this listener's origin and the session's CSRF token, reads each cookie an answer sets by its name, turns two-factor sign-in on from the secret a setup answer carries with the code for a moment the test chooses, and says where any of a list of secrets turns up in the audit rows, their subjects or the captured log.
  */
 
 #ifndef AMBROSE_PANELTESTSESSION_H
@@ -105,9 +105,10 @@ namespace PanelTest
         return body.is_object() ? body.value("error", std::string()) : std::string();
     }
 
-    inline AdminClientResponse Send(Panel& panel, std::string method, std::string path, nlohmann::json const& body = nullptr, Browser const* browser = nullptr)
+    inline AdminClientResponse Send(Panel& panel, std::string method, std::string path, nlohmann::json const& body = nullptr, Browser const* browser = nullptr,
+        std::string const& forwardedFor = {})
     {
-        AdminClient const client("127.0.0.1", panel.GetPort(), "");
+        AdminClient const client("127.0.0.1", panel.GetPort(), "", panel.IsSecure());
         AdminClientRequest request{ std::move(method), std::move(path), body.is_null() ? std::string() : body.dump(), "application/json", "" };
         if (browser)
         {
@@ -117,9 +118,11 @@ namespace PanelTest
             if (!cookie.empty())
                 request.Headers.emplace_back("Cookie", cookie);
         }
+        if (!forwardedFor.empty())
+            request.Headers.emplace_back("X-Forwarded-For", forwardedFor);
         if (request.Method != "GET")
         {
-            request.Headers.emplace_back("Origin", "http://127.0.0.1:" + std::to_string(panel.GetPort()));
+            request.Headers.emplace_back("Origin", std::string(panel.IsSecure() ? "https" : "http") + "://127.0.0.1:" + std::to_string(panel.GetPort()));
             if (browser && !browser->Csrf.empty())
                 request.Headers.emplace_back("X-CSRF-Token", browser->Csrf);
         }
@@ -168,6 +171,66 @@ namespace PanelTest
         else
             Adopt(browser, answer);
         return answer;
+    }
+
+    inline AdminClientResponse LinkIn(Panel& panel, Browser& browser, std::string const& token, std::string const& forwardedFor = {})
+    {
+        AdminClientResponse const answer = Send(panel, "POST", std::string(Panel::LinkPath), { { "token", token } }, nullptr, forwardedFor);
+        if (answer.Status != 200)
+            return answer;
+        nlohmann::json const body = Json(answer);
+        if (body.is_object() && body.value("second_factor", false))
+            browser.Challenge = ChallengeCookie(answer);
+        else
+            Adopt(browser, answer);
+        return answer;
+    }
+
+    inline std::string TokenIn(std::string_view link)
+    {
+        constexpr std::string_view Marker = "token=";
+        std::size_t const at = link.find(Marker);
+        if (at == std::string_view::npos)
+            return {};
+        std::string_view const rest = link.substr(at + Marker.size());
+        return std::string(rest.substr(0, rest.find('&')));
+    }
+
+    inline std::vector<std::string> ScanFor(Panel& panel, LogTestHarness& harness, std::vector<std::string> const& secrets)
+    {
+        std::vector<std::string> found;
+        auto const look = [&](std::string const& text, std::string const& place)
+        {
+            for (std::string const& secret : secrets)
+                if (!secret.empty() && text.find(secret) != std::string::npos)
+                    found.push_back(secret + " in " + place);
+        };
+        std::string error;
+        std::optional<PanelStore::Statement> events = panel.Store().Prepare(
+            "SELECT name, COALESCE(event_id, ''), COALESCE(actor_id, ''), COALESCE(actor_name, ''), COALESCE(address, ''), COALESCE(user_agent, ''), COALESCE(node, ''),"
+            " COALESCE(error, ''), COALESCE(reason, ''), COALESCE(properties, '') FROM audit_event", error);
+        if (!events)
+        {
+            found.push_back("audit_event could not be read: " + error);
+            return found;
+        }
+        while (events->Step(error))
+            for (int column = 0; column < 10; ++column)
+                look(events->Text(column), "audit_event " + events->Text(0));
+        events.reset();
+        std::optional<PanelStore::Statement> subjects = panel.Store().Prepare("SELECT kind, COALESCE(subject_id, ''), COALESCE(name, '') FROM audit_subject", error);
+        if (!subjects)
+        {
+            found.push_back("audit_subject could not be read: " + error);
+            return found;
+        }
+        while (subjects->Step(error))
+            for (int column = 0; column < 3; ++column)
+                look(subjects->Text(column), "audit_subject " + subjects->Text(0));
+        subjects.reset();
+        for (std::string const& line : harness.Store().Texts("Capture"))
+            look(line, "the log");
+        return found;
     }
 
     inline AdminClientResponse SecondFactor(Panel& panel, Browser& browser, nlohmann::json const& body)

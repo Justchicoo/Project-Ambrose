@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Hashes with Botan's Argon2id at a cost a sign-in can afford to wait for, keeping only the PHC string it produces, which carries its own parameters so a row hashed at an older cost still opens after the cost is raised; a sign-in that names nobody, or a disabled account, still spends one verify against a hash made at start, so an attacker cannot tell the three refusals apart by how long they took, and every refusal answers the same way. Whether two-factor sign-in is on is read with every user from the two-factor table, and a generation bump returns the generation it moved to, so the one session that made a change can be carried across to it.
+ * Hashes with Botan's Argon2id at a cost a sign-in can afford to wait for, keeping only the PHC string it produces, which carries its own parameters so a row hashed at an older cost still opens after the cost is raised; a sign-in that names nobody, or a disabled account, still spends one verify against a hash made at start, so an attacker cannot tell the three refusals apart by how long they took, and every refusal answers the same way. Whether two-factor sign-in is on is read with every user from the two-factor table, and a generation bump returns the generation it moved to, so the one session that made a change can be carried across to it. Making an operator checks the name and the policy and hashes before the insert, which checks the name again so one taken meanwhile is still refused by name, and setting a password does the same before its update, so a caller can hash outside a transaction and write inside one.
  */
 
 #include "PanelUsers.h"
@@ -201,7 +201,27 @@ std::vector<PanelUser> PanelUsers::List(std::string& error)
     return users;
 }
 
+std::optional<PanelUser> PanelUsers::FirstOwner(std::string& error)
+{
+    std::optional<PanelStore::Statement> rows = _store.Prepare(
+        fmt::format("SELECT {} FROM panel_user WHERE role = ? AND disabled = 0 ORDER BY created_epoch_ms, id LIMIT 1", UserColumns), error);
+    if (!rows)
+        return std::nullopt;
+    rows->Bind(1, PanelPermissions::NameOf(PanelRole::Owner));
+    if (!rows->Step(error))
+        return std::nullopt;
+    return Read(*rows);
+}
+
 PanelUserResult PanelUsers::Create(std::string_view username, std::string_view password, bool owner, bool mustChange, int64* id, std::string& error)
+{
+    PanelUserDraft draft;
+    if (PanelUserResult const prepared = PrepareUser(username, password, owner, mustChange, draft, error); prepared != PanelUserResult::Ok)
+        return prepared;
+    return InsertUser(draft, id, error);
+}
+
+PanelUserResult PanelUsers::PrepareUser(std::string_view username, std::string_view password, bool owner, bool mustChange, PanelUserDraft& draft, std::string& error)
 {
     switch (Ambrose::AccountText::CheckUsername(username, Ambrose::AccountText::DefaultUsernameMinLength))
     {
@@ -217,23 +237,36 @@ PanelUserResult PanelUsers::Create(std::string_view username, std::string_view p
     if (!error.empty())
         return PanelUserResult::StoreFailed;
 
-    std::string hash;
-    if (!HashPassword(password, hash, error))
+    draft.Username = std::string(username);
+    draft.Owner = owner;
+    draft.MustChange = mustChange;
+    if (!HashPassword(password, draft.Hash, error))
         return PanelUserResult::HashFailed;
+    return PanelUserResult::Ok;
+}
+
+PanelUserResult PanelUsers::InsertUser(PanelUserDraft const& draft, int64* id, std::string& error)
+{
+    if (draft.Hash.empty())
+        return PanelUserResult::HashFailed;
+    if (std::optional<PanelUser> const taken = Find(draft.Username, error); taken)
+        return PanelUserResult::NameTaken;
+    if (!error.empty())
+        return PanelUserResult::StoreFailed;
 
     std::optional<PanelStore::Statement> insert = _store.Prepare(
         "INSERT INTO panel_user (username, username_folded, password_hash, password_set_epoch_ms, must_change, is_owner, created_epoch_ms, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", error);
     if (!insert)
         return PanelUserResult::StoreFailed;
     int64 const now = PanelStore::NowEpochMs();
-    insert->Bind(1, username);
-    insert->Bind(2, Fold(username));
-    insert->Bind(3, hash);
+    insert->Bind(1, draft.Username);
+    insert->Bind(2, Fold(draft.Username));
+    insert->Bind(3, draft.Hash);
     insert->Bind(4, now);
-    insert->Bind(5, mustChange ? int64{ 1 } : int64{ 0 });
-    insert->Bind(6, owner ? int64{ 1 } : int64{ 0 });
+    insert->Bind(5, draft.MustChange ? int64{ 1 } : int64{ 0 });
+    insert->Bind(6, draft.Owner ? int64{ 1 } : int64{ 0 });
     insert->Bind(7, now);
-    insert->Bind(8, PanelPermissions::NameOf(owner ? PanelRole::Owner : PanelRole::Viewer));
+    insert->Bind(8, PanelPermissions::NameOf(draft.Owner ? PanelRole::Owner : PanelRole::Viewer));
     if (!insert->Run(error))
         return PanelUserResult::StoreFailed;
     if (id)
@@ -314,16 +347,28 @@ std::optional<int64> PanelUsers::BumpGeneration(int64 id, std::string& error)
 
 PanelUserResult PanelUsers::SetPassword(int64 id, std::string_view password, bool mustChange, std::string& error)
 {
+    std::string hash;
+    if (PanelUserResult const prepared = PreparePassword(id, password, hash, error); prepared != PanelUserResult::Ok)
+        return prepared;
+    return StoreHash(id, hash, mustChange, error);
+}
+
+PanelUserResult PanelUsers::PreparePassword(int64 id, std::string_view password, std::string& hash, std::string& error)
+{
     std::optional<PanelUser> const found = FindById(id, error);
     if (!found)
         return error.empty() ? PanelUserResult::UnknownUser : PanelUserResult::StoreFailed;
     if (PanelUserResult const problem = _policy.Check(found->Username, password); problem != PanelUserResult::Ok)
         return problem;
-
-    std::string hash;
     if (!HashPassword(password, hash, error))
         return PanelUserResult::HashFailed;
+    return PanelUserResult::Ok;
+}
 
+PanelUserResult PanelUsers::StoreHash(int64 id, std::string const& hash, bool mustChange, std::string& error)
+{
+    if (hash.empty())
+        return PanelUserResult::HashFailed;
     std::optional<PanelStore::Statement> update = _store.Prepare(
         "UPDATE panel_user SET password_hash = ?, password_set_epoch_ms = ?, must_change = ?, generation = generation + 1 WHERE id = ?", error);
     if (!update)

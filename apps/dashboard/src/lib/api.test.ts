@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the panel's API client against a stubbed fetch: a refusal becomes an error with its status, code, message, request id and fields, the CSRF token rides only on requests that change something, an answer of the wrong shape is refused, an unreachable server is named, signing in adopts the session and a 401 afterwards marks it ended, a password that asks for a second factor opens nothing until a code does, a 403 saying two-factor sign-in is required sends the session to enrollment, moving to another authenticator app names a code or recovery code from the app in use, and a 403 asking for a fresh check waits on the registered prompt and sends the request again exactly once, while a refused or cancelled check sends nothing more.
+ * Tests the panel's API client against a stubbed fetch: a refusal becomes an error with its status, code, message, request id and fields, the CSRF token rides only on requests that change something, an answer of the wrong shape is refused, an unreachable server is named, signing in adopts the session and a 401 afterwards marks it ended, a password that asks for a second factor opens nothing until a code does, a sign-in link adopts the session it opens or leaves the sign-in page on its code step, and one refused leaves the session signed out with the reason, a 403 saying two-factor sign-in is required sends the session to enrollment, moving to another authenticator app names a code or recovery code from the app in use, and a 403 asking for a fresh check waits on the registered prompt and sends the request again exactly once, while a refused or cancelled check sends nothing more.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,6 +8,7 @@ import {
     ApiError,
     answerSecondFactor,
     onStepUp,
+    openLink,
     probeSession,
     readProblem,
     request,
@@ -46,6 +47,8 @@ beforeEach(() => {
     session.panel = false;
     session.user = null;
     session.mustEnroll = false;
+    session.secondFactorPending = false;
+    session.linkProblem = null;
 });
 
 afterEach(() => {
@@ -181,6 +184,72 @@ describe("two-factor sign-in", () => {
         await expect(request("GET", "api/status", Status)).rejects.toMatchObject({ status: 403, code: "two_factor_required" });
         expect(session.mustEnroll).toBe(true);
         expect(session.state).toBe("signed-in");
+    });
+});
+
+describe("a one-time sign-in link", () => {
+    const panelAnswer = { ...sessionAnswer, app: "panel", needs_owner: false, user: operator };
+    const signedOut = {
+        ...sessionAnswer,
+        app: "panel",
+        signed_in: false,
+        signed_in_with: null,
+        csrf: null,
+        needs_owner: false,
+        user: null,
+    };
+
+    it("a link that signs in adopts the session, and one that asks for a second factor opens nothing until a code does", async () => {
+        replies.push(answer(200, { csrf: "csrf-from-link", user: operator }), answer(200, panelAnswer));
+        await openLink("a-link-token");
+        expect(sent[0].url).toBe("api/panel/link");
+        expect(JSON.parse(String(sent[0].init.body))).toEqual({ token: "a-link-token" });
+        expect(sent[1].url).toBe("api/session");
+        expect(session.state).toBe("signed-in");
+        expect(session.panel).toBe(true);
+        expect(session.user?.username).toBe("merle");
+        expect(session.secondFactorPending).toBe(false);
+
+        sent = [];
+        session.state = "checking";
+        session.csrf = null;
+        session.user = null;
+        replies.push(
+            answer(200, { second_factor: true, methods: ["totp", "recovery_code"], expires_seconds: 300 }),
+            answer(200, signedOut),
+            answer(200, { csrf: "csrf-after-code", user: { ...operator, two_factor: true } }),
+        );
+        await openLink("a-second-token");
+        expect(session.state).toBe("signed-out");
+        expect(session.csrf).toBeNull();
+        expect(session.secondFactorPending).toBe(true);
+        expect(session.linkProblem).toBeNull();
+        await answerSecondFactor({ code: "123456" });
+        expect(sent[2].url).toBe("api/panel/session/second-factor");
+        expect(session.state).toBe("signed-in");
+        expect(session.csrf).toBe("csrf-after-code");
+    });
+
+    it("a refused link leaves the session signed out with the reason", async () => {
+        replies.push(
+            answer(410, {
+                error: "link_expired",
+                message: "That link has been used or has run out; ask for another",
+                request_id: "id-gone",
+            }),
+            answer(200, signedOut),
+        );
+        await openLink("a-spent-token");
+        expect(sent.map((entry) => entry.url)).toEqual(["api/panel/link", "api/session"]);
+        expect(session.state).toBe("signed-out");
+        expect(session.csrf).toBeNull();
+        expect(session.secondFactorPending).toBe(false);
+        expect(session.linkProblem).toBeInstanceOf(ApiError);
+        expect([session.linkProblem?.status, session.linkProblem?.code, session.linkProblem?.requestId]).toEqual([
+            410,
+            "link_expired",
+            "id-gone",
+        ]);
     });
 });
 

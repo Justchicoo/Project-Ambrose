@@ -141,6 +141,7 @@ namespace
             { "users", "users.invite", "Invite an operator", false, false, false },
             { "users", "users.update", "Change an operator's role or grants", false, false, false },
             { "users", "users.delete", "Remove an operator", false, false, false },
+            { "users", "users.link", "Open a session as any operator through a one-time link", Danger, Owner, false },
 
             { "apikeys", "apikeys.manage", "Manage other operators' API keys; everyone manages their own", false, false, false },
 
