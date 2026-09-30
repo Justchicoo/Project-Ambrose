@@ -56,6 +56,11 @@ LoginSettings LoginSettings::Load(ConfigMgr const& config, std::vector<std::stri
 
     settings.MaxCharactersPerAccount = bounded("Character.MaxPerAccount", DefaultMaxCharactersPerAccount, 0, MaxCharactersPerAccountLimit);
     settings.AllowChosenNames = config.GetOption<bool>("Character.AllowChosenNames", false, true);
+    std::string const deleteMode = config.GetOption<std::string>("Character.DeleteMode", "soft", true);
+    settings.HardDelete = Ambrose::EqualsIgnoreCase(deleteMode, "hard");
+    if (!settings.HardDelete && !Ambrose::EqualsIgnoreCase(deleteMode, "soft"))
+        report(fmt::format("Character.DeleteMode = {} is not soft or hard; using soft", deleteMode));
+    settings.KeepDeletedDays = bounded("Character.KeepDeletedDays", 0, 0, MaxKeepDeletedDays);
 
     settings.AfkTimeout = std::chrono::seconds(bounded("Login.AfkTimeout", DefaultAfkTimeoutSeconds, 0, MaxAfkTimeoutSeconds));
     settings.ShutdownGrace = std::chrono::seconds(bounded("Login.ShutdownGrace", DefaultShutdownGraceSeconds, 0, MaxShutdownGraceSeconds));

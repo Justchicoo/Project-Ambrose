@@ -148,6 +148,10 @@ namespace
             Unsigned("Login.ShutdownGrace", "5", "0", "60", "s", "Login", Login, Live, "How long a stopping login server waits for its shutdown notices to be written."),
 
             Unsigned("Character.MaxPerAccount", "6", "0", "250", "", "Characters", Login, Live, "How many wizards an account may hold."),
+            Text("Character.DeleteMode", "soft", "8", "Characters", Login, Live,
+                "What deleting a wizard from character select does, read on each delete: soft keeps its row, with the time and the account it was taken from, so a game master can restore it; hard removes it and everything it holds."),
+            Unsigned("Character.KeepDeletedDays", "0", "0", "36500", "days", "Characters", Login, Live,
+                "How long a soft-deleted wizard is kept before the next delete removes it for good, read on each delete; 0 keeps them all."),
             Flag("Character.AllowChosenNames", "false", "Characters", Login, Live, "Whether any account may name a wizard freely rather than from the client's name tables."),
 
             Float("Rate.XP.Quest", "1", "0", "100", "times", "Rates", Game, Live, "Multiplies the experience a quest gives."),

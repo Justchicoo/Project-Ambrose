@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The login server's session: routes every client message through the login message table, authenticates MSG_USER_AUTHEN_V3 against the login database without blocking its network thread, holds the account it claimed and admitted, lists the account's characters from the login and characters databases the same way, coalescing a request made meanwhile into one more list, creates a wizard the same way again and answers only that it did or did not, drops the client once it idles past the AFK timeout before choosing a character, and tells it when the login server shuts down.
+ * The login server's session: routes every client message through the login message table, authenticates MSG_USER_AUTHEN_V3 against the login database without blocking its network thread, holds the account it claimed and admitted, deletes one of its wizards for MSG_DELETECHARACTER, lists the account's characters from the login and characters databases the same way, coalescing a request made meanwhile into one more list, creates a wizard the same way again and answers only that it did or did not, drops the client once it idles past the AFK timeout before choosing a character, and tells it when the login server shuts down.
  */
 
 #ifndef AMBROSE_LOGINSESSION_H
@@ -8,6 +8,7 @@
 
 #include "AsyncCallbackProcessor.h"
 #include "AuthResult.h"
+#include "CountedCallback.h"
 #include "LoginMessages.h"
 #include "LoginSalt.h"
 #include "SQLOperation.h"
@@ -47,6 +48,7 @@ public:
     void HandleRequestServerList(LoginMessages::RequestServerList& message);
     void HandleSelectCharacter(LoginMessages::SelectCharacter& message);
     void HandleCreateCharacter(LoginMessages::CreateCharacter& message);
+    void HandleDeleteCharacter(LoginMessages::DeleteCharacter& message);
     void HandleLoginLogCharacterCreation(LoginMessages::LoginLogCharacterCreation& message);
 
 protected:
@@ -84,6 +86,7 @@ private:
 
     AsyncCallbackProcessor<QueryCallback> _queryCallbacks;
     AsyncCallbackProcessor<TransactionCallback> _transactionCallbacks;
+    AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
     std::atomic<std::chrono::steady_clock::rep> _lastActivity{ 0 };
     std::chrono::steady_clock::time_point _nextAfkCheck;
     std::atomic<uint64> _afkChecks{ 0 };

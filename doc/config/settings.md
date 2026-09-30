@@ -22,6 +22,8 @@ Access says who may see and change a setting over the admin API and the panel. A
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
 | `Character.AllowChosenNames` | bool | false | none | live | loginserver | normal | Whether any account may name a wizard freely rather than from the client's name tables. |
+| `Character.DeleteMode` | string | soft | at most 8 bytes | live | loginserver | normal | What deleting a wizard from character select does, read on each delete: soft keeps its row, with the time and the account it was taken from, so a game master can restore it; hard removes it and everything it holds. |
+| `Character.KeepDeletedDays` | unsigned | 0 days | from 0 to 36500 days | live | loginserver | normal | How long a soft-deleted wizard is kept before the next delete removes it for good, read on each delete; 0 keeps them all. |
 | `Character.MaxPerAccount` | unsigned | 6 | from 0 to 250 | live | loginserver | normal | How many wizards an account may hold. |
 
 ## Chat

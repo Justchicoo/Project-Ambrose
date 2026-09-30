@@ -137,6 +137,7 @@ void LoginSession::ProcessCallbacks()
 {
     _queryCallbacks.ProcessReadyCallbacks();
     _transactionCallbacks.ProcessReadyCallbacks();
+    _countedCallbacks.ProcessReadyCallbacks();
     if (_authenticating && _queryCallbacks.GetPendingCount() == 0 && _transactionCallbacks.GetPendingCount() == 0)
     {
         ReleaseClaim();

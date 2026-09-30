@@ -36,6 +36,7 @@ against the login server alone.
 | --- | --- | --- |
 | Three wizards listed | [`charselect-three-wizards.json`](./charselect-three-wizards.json) | 3.09: three wizards seeded on one account with `more_wizards`, a level 1 Fire boy, a level 12 Ice girl and a level 25 Storm boy, listed by the server, each chosen in turn and shot under its own name, level and school. |
 | Creating at the limit | [`create-at-slot-limit.json`](./create-at-slot-limit.json) | 3.12, 3.15 and 3.16: `Character.MaxPerAccount` at 1 with one wizard seeded, the client's creation flow walked with a shot of each screen, the submitted wizard refused with the reason logged, the client's "Character Creation Failed", and the account still holding one wizard. |
+| Deleting a wizard | [`delete-a-wizard.json`](./delete-a-wizard.json) | 3.17: two wizards seeded, the first deleted with the client's own dialog, its word ABRACADABRA typed and its Delete pressed, the row kept with deleted_at set, and after the client restarts and logs in again only the other wizard is listed and shown. |
 | A key that cannot be spent | [`attach-bad-key.json`](./attach-bad-key.json) | 4.06: a `db_exec` trigger spoils every key the login server stores, so the game server refuses the MSG_ATTACH the client sends with MSG_ATTACHFAILED, and the client is shot over its login screen. |
 
 ## World entry

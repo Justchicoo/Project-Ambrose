@@ -770,8 +770,8 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 
 **Acceptance**
 
-- [ ] Another account's CharID, a missing id or an online character gives ErrorCode!=0
-- [ ] Real client: confirm word removes the wizard and it stays gone after relog; DB row has deleted_at
+- [x] Another account's CharID, a missing id or an online character gives ErrorCode!=0 (`CreateCharacterDatabaseTest.AnAccountDeletesItsOwnWizardAndOnlyThatOne`, against a database: the account's own wizard is deleted with ErrorCode 0, its row kept with deleted_at and deleted_account set and gone from the list, while another account's wizard, an id that does not exist, a wizard in the world and one already deleted each give ErrorCode 1 and change nothing; `HardDeletionAndKeptDaysApplyFromTheNextDeleteWithNothingRestarted` holds Character.DeleteMode hard, which removes the row and what it holds, and Character.KeepDeletedDays, which removes wizards deleted longer ago on the next delete)
+- [x] Real client: confirm word removes the wizard and it stays gone after relog; DB row has deleted_at (the client driver's delete-a-wizard run 20260930-135457 on 2026-09-30: character select listed Adam AngleBane and Alicia DaisyCatcher; Delete on Adam brought the client's own dialog, the word it asks for, ABRACADABRA as LocalError_ABRACADABRA holds it, was typed and the dialog's Delete pressed; the login server deleted character 1 of the account, the row kept with deleted_at set and deleted_account holding the account, and after the client quit, started again and logged in, the server listed one wizard and the client showed only Alicia DaisyCatcher, Level 12 Initiate Thaumaturge)
 
 ### Detailed spec from LOG-9: Character deletion: MSG_DELETECHARACTER -> MSG_DELETECHARACTERRESPONSE
 
@@ -781,7 +781,7 @@ A player can delete one of their own wizards from the select screen, and the dat
 
 - CharacterHandler::HandleDeleteCharacter: require that the character belongs to the session's account, is not online, and is not already deleted; set deleted_at and deleted_account, clear account; reply MSG_DELETECHARACTERRESPONSE{ErrorCode}
 - Live settings Character.DeleteMode (soft or hard) and Character.KeepDeletedDays, read on each delete and purge so a change applies without a restart (registered with 4.16 when it lands)
-- src/test/server/apps/loginserver/DeleteCharacterTest.cpp
+- src/test/server/apps/loginserver/Handlers/CreateCharacterTest.cpp, beside creation, whose fixture it shares
 
 **Client messages:** MSG_DELETECHARACTER, MSG_DELETECHARACTERRESPONSE
 
@@ -791,9 +791,9 @@ A player can delete one of their own wizards from the select screen, and the dat
 
 **Acceptance**
 
-- [ ] Unit: deleting your own character gives ErrorCode=0 and removes it from the list; a CharID belonging to another account, a nonexistent id or an online character each give ErrorCode!=0 and change nothing
-- [ ] Real client: the delete confirmation (the client asks the player to type a confirmation word, per LocalError.lang) removes the wizard from the select screen, and it stays gone after a relog
-- [ ] DB: the row still exists with deleted_at set
+- [x] Unit: deleting your own character gives ErrorCode=0 and removes it from the list; a CharID belonging to another account, a nonexistent id or an online character each give ErrorCode!=0 and change nothing (`CreateCharacterDatabaseTest.AnAccountDeletesItsOwnWizardAndOnlyThatOne`, against a database: the account's own wizard is deleted with ErrorCode 0, its row kept with deleted_at and deleted_account set and gone from the list, while another account's wizard, an id that does not exist, a wizard in the world and one already deleted each give ErrorCode 1 and change nothing; `HardDeletionAndKeptDaysApplyFromTheNextDeleteWithNothingRestarted` holds Character.DeleteMode hard, which removes the row and what it holds, and Character.KeepDeletedDays, which removes wizards deleted longer ago on the next delete)
+- [x] Real client: the delete confirmation (the client asks the player to type a confirmation word, per LocalError.lang) removes the wizard from the select screen, and it stays gone after a relog (the client driver's delete-a-wizard run 20260930-135457 on 2026-09-30: character select listed Adam AngleBane and Alicia DaisyCatcher; Delete on Adam brought the client's own dialog, the word it asks for, ABRACADABRA as LocalError_ABRACADABRA holds it, was typed and the dialog's Delete pressed; the login server deleted character 1 of the account, the row kept with deleted_at set and deleted_account holding the account, and after the client quit, started again and logged in, the server listed one wizard and the client showed only Alicia DaisyCatcher, Level 12 Initiate Thaumaturge)
+- [x] DB: the row still exists with deleted_at set (the same run: the wait_db step found the row with deleted_at and deleted_account set and account 0, and `CreateCharacterDatabaseTest.AnAccountDeletesItsOwnWizardAndOnlyThatOne` reads the row back the same way)
 
 **Risks**
 

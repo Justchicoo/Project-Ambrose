@@ -25,12 +25,12 @@ namespace
             Accept<&LoginSession::HandleRequestCharacterList>(SessionStatuses::Authenticated, MessageProcessing::InPlace, "LoginSession::HandleRequestCharacterList");
             Accept<&LoginSession::HandleRequestServerList>(SessionStatuses::Authenticated, MessageProcessing::InPlace, "LoginSession::HandleRequestServerList");
             Accept<&LoginSession::HandleSelectCharacter>(SessionStatuses::Authenticated, MessageProcessing::InPlace, "LoginSession::HandleSelectCharacter");
+            Accept<&LoginSession::HandleDeleteCharacter>(SessionStatuses::Authenticated, MessageProcessing::InPlace, "LoginSession::HandleDeleteCharacter");
             Accept<&LoginSession::HandleCreateCharacter>(SessionStatuses::Authenticated, MessageProcessing::InPlace, "LoginSession::HandleCreateCharacter");
             Accept<&LoginSession::HandleLoginLogCharacterCreation>(SessionStatuses::Authenticated, MessageProcessing::InPlace, "LoginSession::HandleLoginLogCharacterCreation");
             Accept<&LoginSession::HandleLoginNotAfk>(SessionStatuses::Connected | SessionStatuses::Authenticated | SessionStatuses::CharacterSelected, MessageProcessing::InPlace, "LoginSession::HandleLoginNotAfk");
 
             Pending(LoginService, "MSG_USER_VALIDATE", SessionStatuses::Connected);
-            Pending(LoginService, "MSG_DELETECHARACTER", SessionStatuses::Authenticated);
             Pending(LoginService, "MSG_CHANGECHARACTERNAME", SessionStatuses::Authenticated);
             Pending(LoginService, "MSG_SAVECHARACTER", SessionStatuses::Authenticated);
             Pending(LoginService, "MSG_FULFILLPROMOCODE", SessionStatuses::Authenticated);
@@ -50,6 +50,7 @@ namespace
             Refuse(LoginService, "MSG_WEBCHARACTERINFO");
 
             Sends<UserAuthenRsp>();
+            Sends<DeleteCharacterResponse>();
             Sends<UserAdmitInd>();
             Sends<DisconnectLoginAfk>();
             Sends<LoginServerShutdown>();

@@ -33,6 +33,9 @@ void CharacterDatabaseConnection::DoPrepareStatements()
         "WHERE `guid` = ? AND `account` = ? AND `deleted_at` IS NULL AND `online` = 0", ConnectionFlags::Both);
     PrepareStatement(CHAR_UPD_RESTORE, "CHAR_UPD_RESTORE", "UPDATE `characters` SET `account` = `deleted_account`, `deleted_at` = NULL, `deleted_account` = NULL "
         "WHERE `guid` = ? AND `deleted_at` IS NOT NULL AND `deleted_account` IS NOT NULL", ConnectionFlags::Both);
+    PrepareStatement(CHAR_DEL_CHARACTER, "CHAR_DEL_CHARACTER", "DELETE FROM `characters` WHERE `guid` = ? AND `account` = ? AND `deleted_at` IS NULL AND `online` = 0",
+        ConnectionFlags::Both);
+    PrepareStatement(CHAR_DEL_DELETED_BEFORE, "CHAR_DEL_DELETED_BEFORE", "DELETE FROM `characters` WHERE `deleted_at` IS NOT NULL AND `deleted_at` < ?", ConnectionFlags::Both);
     PrepareStatement(CHAR_SEL_COUNT_BY_ACCOUNT, "CHAR_SEL_COUNT_BY_ACCOUNT", "SELECT COUNT(*) FROM `characters` c INNER JOIN `character_appearance` a ON a.`guid` = c.`guid` "
         "WHERE c.`account` = ? AND c.`deleted_at` IS NULL", ConnectionFlags::Both);
     PrepareStatement(CHAR_UPD_ONLINE, "CHAR_UPD_ONLINE", "UPDATE `characters` SET `online` = ? WHERE `guid` = ?", ConnectionFlags::Both);

@@ -36,6 +36,7 @@ struct LoginSettings
     static constexpr uint32 MinKeyTtlSeconds = 5;
     static constexpr uint32 DefaultMaxCharactersPerAccount = 6;
     static constexpr uint32 MaxCharactersPerAccountLimit = 250;
+    static constexpr uint32 MaxKeepDeletedDays = 36500;
     static constexpr uint32 DefaultShutdownGraceSeconds = 5;
     static constexpr uint32 MaxShutdownGraceSeconds = 60;
 
@@ -52,6 +53,8 @@ struct LoginSettings
     std::chrono::seconds SessionKeyLifetime{ DefaultSessionKeyLifetimeSeconds };
     uint32 MaxCharactersPerAccount = DefaultMaxCharactersPerAccount;
     bool AllowChosenNames = false;
+    bool HardDelete = false;
+    uint32 KeepDeletedDays = 0;
     std::chrono::seconds AfkTimeout{ DefaultAfkTimeoutSeconds };
     int8 AfkWarning = DefaultAfkWarning;
     std::chrono::seconds ShutdownGrace{ DefaultShutdownGraceSeconds };
