@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs one app's controller: commands queue under a lock and run on the controller thread, which every tenth of a second reads the app's new output, notices its exit, looks for readiness while it starts and ends a start that runs past its timeout and past the time any step the app reported asked for, naming that step, escalates a stop that has not finished, and starts it again once a restart falls due; the app's admin API is found from the app's own config and token exactly as the app finds them, an adopted app with its admin API off counts as running at once because nothing else could say so, a process it would not take back is said so at the top of the run that replaces it, and a start that never became ready is recorded and not tried again until someone starts it. Every state is entered at the end of the locked section that set everything else about it, so the copy queued for the status observer is whole, and the queue is handed over after each step the controller takes, outside the app's lock, in the order the changes happened; Power only queues a command, so every change comes from the controller thread.
+ * Runs one app's controller: commands queue under a lock and run on the controller thread, which every tenth of a second reads the app's new output, notices its exit, looks for readiness while it starts and ends a start that runs past its timeout and past the time any step the app reported asked for, naming that step, escalates a stop that has not finished, and starts it again once a restart falls due; the app's admin API is found from the app's own config and token exactly as the app finds them, an adopted app with its admin API off counts as running at once because nothing else could say so, a process it would not take back is said so at the top of the run that replaces it, and a start that never became ready is recorded and not tried again until someone starts it. Every state is entered at the end of the locked section that set everything else about it, so the copy queued for the status observer is whole, and the queue is handed over after each step the controller takes, outside the app's lock, in the order the changes happened; Power only queues a command, so every change comes from the controller thread. A start that ends before it is ready says why in its message: the exit code and the first error line the app printed in that run, or its last line on standard error, so the panel shows the cause rather than only that it stopped.
  */
 
 #include "ManagedApp.h"
@@ -38,6 +38,27 @@ namespace
             case StopMethod::None: break;
         }
         return "without a way to reach it";
+    }
+
+    std::string ExitCause(std::vector<OutputLine> const& lines)
+    {
+        for (OutputLine const& line : lines)
+        {
+            if (line.Stream == "note")
+                continue;
+            for (std::string_view const level : { std::string_view(" ERROR "), std::string_view(" FATAL ") })
+            {
+                std::size_t const at = line.Text.find(level);
+                if (at == std::string::npos)
+                    continue;
+                std::size_t const category = line.Text.find("] ", at);
+                return line.Text.substr(category == std::string::npos ? at + level.size() : category + 2);
+            }
+        }
+        for (auto line = lines.rbegin(); line != lines.rend(); ++line)
+            if (line->Stream == "stderr" && line->Text.find_first_not_of(" \t\r") != std::string::npos)
+                return line->Text;
+        return {};
     }
 }
 
@@ -710,7 +731,10 @@ void ManagedApp::OnExit()
         else
         {
             ++_view.FailedStarts;
-            _view.Message = _startTimedOut ? "It " + StartLate(_view.StartStage) : "It exited before it was ready; start it again once the cause in its output is fixed";
+            std::string const cause = _startTimedOut ? std::string() : ExitCause(_output.Lines(OutputRun::Current, 0));
+            _view.Message = _startTimedOut ? "It " + StartLate(_view.StartStage)
+                : fmt::format("It exited before it was ready{}{}; start it again once that is fixed", record.Code ? fmt::format(" with exit code {}", *record.Code) : std::string(),
+                    cause.empty() ? std::string() : ": " + cause);
         }
         _view.RestartEpochMs = restart ? now + std::chrono::duration_cast<std::chrono::milliseconds>(RestartDelay).count() : 0;
         EnterState(AppState::Crashed);
