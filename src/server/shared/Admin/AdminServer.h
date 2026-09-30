@@ -101,7 +101,7 @@ private:
     std::string Capitalised() const;
 
     bool Open(ListenerSettings const& settings, std::string const& token, std::string& error);
-    bool SwapCertificate();
+    bool SwapCertificate(std::filesystem::path const& certificateFile, std::filesystem::path const& keyFile);
     void Close();
     AdminSocketRoute const* FindSocket(std::string const& path) const;
     void ApplyLiveSettings(ListenerSettings const& settings);
