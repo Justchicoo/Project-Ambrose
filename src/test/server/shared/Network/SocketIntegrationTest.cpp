@@ -598,7 +598,7 @@ TEST(NetworkSettingsTest, LoadsAndClampsConfigValues)
     EXPECT_EQ(fallback.Port, 12000);
     EXPECT_EQ(fallback.Threads, 1u);
     EXPECT_EQ(fallback.Limits.MaxFrameSize, FrameLimits::DefaultMaxFrameSize);
-    EXPECT_EQ(fallback.Limits.LongLength, LongFrameLength::BodyOnly);
+    EXPECT_EQ(fallback.Limits.LongLength, LongFrameLength::HeaderAndBody);
     EXPECT_EQ(fallback.Limits.MaxSendQueueBytes, FrameLimits::DefaultMaxSendQueueBytes);
     EXPECT_EQ(fallback.MaxConnectionsPerIP, NetworkSettings::DefaultMaxConnectionsPerIP);
     EXPECT_EQ(fallback.AcceptRatePerSecond, NetworkSettings::DefaultAcceptRatePerSecond);

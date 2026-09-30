@@ -333,6 +333,8 @@ void SessionBase::HandleAccept(Frame const& frame)
     _acceptRoundTripMs.store(roundTrip, std::memory_order_relaxed);
     _state.store(SessionState::Accepted, std::memory_order_relaxed);
     LOG_INFO(SessionLog, "Session {} accepted by {}:{} after {} ms", _sessionId, GetRemoteAddress().to_string(), GetRemotePort(), roundTrip);
+    LOG_DEBUG(SessionLog, "Session {} accept echoes time high {} low {} and {} ms, with {} trailing byte(s)", _sessionId, accept->Time.TimeHigh, accept->Time.TimeLow, accept->Time.Milliseconds,
+        accept->Trailing.size());
 
     OnAccepted();
     while (IsOpen() && !IsKicked() && !_pendingFrames.empty())
@@ -395,6 +397,8 @@ void SessionBase::DispatchDml(Frame& frame)
         CloseNow();
         return;
     }
+    if (messages.size() > 1)
+        LOG_DEBUG(SessionLog, "Session {} got one frame holding {} DML messages", _sessionId, messages.size());
     for (DmlMessageData& message : messages)
     {
         OnMessage(message);

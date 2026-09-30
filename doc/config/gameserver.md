@@ -52,7 +52,7 @@ The Applies column says when a changed value takes effect after a configuration 
 | `Network.AcceptRatePerSecond` | uint32 | `50` | `AMBROSE_NETWORK_ACCEPT_RATE_PER_SECOND` | Live | New client sockets one IP address may establish per second (1-100000) |
 | `Network.RateLimit.Burst` | uint32 | `150` | `AMBROSE_NETWORK_RATE_LIMIT_BURST` | Live, next frame | Inbound frames a session may receive in a burst before frame-rate violations add strikes (1-100000) |
 | `Network.RateLimit.PerSecond` | uint32 | `50` | `AMBROSE_NETWORK_RATE_LIMIT_PER_SECOND` | Live, next frame | Inbound frames per second each session may sustain (1-100000) |
-| `Network.LongFrameLength` | string | `BodyOnly` | `AMBROSE_NETWORK_LONG_FRAME_LENGTH` | Next connection | What a long frame's 32-bit length counts: `BodyOnly` or `HeaderAndBody`, until doc/CAPTURE.md settles it |
+| `Network.LongFrameLength` | string | `HeaderAndBody` | `AMBROSE_NETWORK_LONG_FRAME_LENGTH` | Next connection | What a long frame's 32-bit length counts: `HeaderAndBody`, which the r806919 client reads, as doc/CAPTURE.md records, or `BodyOnly` |
 | `Network.OutKBuff` | int32 | `-1` | `AMBROSE_NETWORK_OUT_K_BUFF` | Next connection | Socket send buffer in bytes; -1 keeps the operating system default |
 | `Network.TcpNoDelay` | bool | `1` | `AMBROSE_NETWORK_TCP_NO_DELAY` | Next connection | Disable Nagle's algorithm so small frames go out at once |
 | `GM.CommandPrefix` | string | `.` | `AMBROSE_GM_COMMAND_PREFIX` | Live, and read again when the commands are loaded | What a player types before a command, so `.character gold 500` is the gold command inside character. A console needs no prefix and is understood either way, and a line that is only the prefix is no command |

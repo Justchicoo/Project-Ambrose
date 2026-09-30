@@ -56,11 +56,11 @@ NetworkSettings NetworkSettings::Load(ConfigMgr const& config, std::string const
     settings.MaxConnectionsPerIP = perIpLimit("Network.MaxConnectionsPerIP", DefaultMaxConnectionsPerIP);
     settings.AcceptRatePerSecond = perIpLimit("Network.AcceptRatePerSecond", DefaultAcceptRatePerSecond);
 
-    std::string const longLength = config.GetOption<std::string>("Network.LongFrameLength", "BodyOnly", true);
-    if (Ambrose::EqualsIgnoreCase(longLength, "HeaderAndBody"))
-        settings.Limits.LongLength = LongFrameLength::HeaderAndBody;
-    else if (!Ambrose::EqualsIgnoreCase(longLength, "BodyOnly"))
-        report(fmt::format("Network.LongFrameLength = {} is not BodyOnly or HeaderAndBody; using BodyOnly", longLength));
+    std::string const longLength = config.GetOption<std::string>("Network.LongFrameLength", "HeaderAndBody", true);
+    if (Ambrose::EqualsIgnoreCase(longLength, "BodyOnly"))
+        settings.Limits.LongLength = LongFrameLength::BodyOnly;
+    else if (!Ambrose::EqualsIgnoreCase(longLength, "HeaderAndBody"))
+        report(fmt::format("Network.LongFrameLength = {} is not BodyOnly or HeaderAndBody; using HeaderAndBody", longLength));
 
     settings.OutKBuff = config.GetOption<int32>("Network.OutKBuff", -1, true);
     settings.TcpNoDelay = config.GetOption<bool>("Network.TcpNoDelay", true, true);

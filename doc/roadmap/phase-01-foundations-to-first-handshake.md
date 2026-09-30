@@ -825,7 +825,7 @@ Raw TCP bytes are split into complete control frames or DML messages regardless 
 **Acceptance**
 
 - [x] Hand-written vectors round-trip
-- [ ] Checklist recorded: offer length (23 vs 28 bytes), server keepalive layout, long-frame semantics, multi-DML frames, keepalive cadence
+- [x] Checklist recorded: offer length (23 vs 28 bytes), server keepalive layout, long-frame semantics, multi-DML frames, keepalive cadence Recorded in doc/CAPTURE.md from the client driver's runs of 2026-09-30.
 
 ### Detailed spec from NET-6: Control messages and wire capture verification
 
@@ -848,8 +848,8 @@ The four control messages are encoded exactly as the 1.610 client expects, and t
 **Acceptance**
 
 - [x] Unit tests round-trip each control message and match the hand-written vectors
-- [ ] Verification checklist answered and recorded in the doc: (a) SessionOffer body length the 1.610 client accepts. A reference server sends a 23-byte frame; the reference patch client fetcher expects a 28-byte offer from the live KI patch server. (b) Server keepalive layout and whether the client answers it with opcode 4. (c) Long-frame length semantics for a frame over 0x7780 bytes. (d) Whether the client ever packs 2+ DML messages in one frame. (e) Client KeepAlive cadence
-- [ ] FrameWriter long-frame test updated to the confirmed semantics
+- [x] Verification checklist answered and recorded in the doc: (a) SessionOffer body length the 1.610 client accepts. A reference server sends a 23-byte frame; the reference patch client fetcher expects a 28-byte offer from the live KI patch server. (b) Server keepalive layout and whether the client answers it with opcode 4. (c) Long-frame length semantics for a frame over 0x7780 bytes. (d) Whether the client ever packs 2+ DML messages in one frame. (e) Client KeepAlive cadence All six answers are in doc/CAPTURE.md, from the client driver's runs on 2026-09-30: c79-idle-login-keepalive 20260930-111824 for (a), (b), (e) and (f), and badges-and-long-frame 20260930-112752, 20260930-113124 and 20260930-114953 for (c) and (d).
+- [x] FrameWriter long-frame test updated to the confirmed semantics (`FrameTest.LongFramesUseTheMarkerInBothLengthModes` pins that a long DML frame written by default declares its header and body, which the r806919 client reads, where it dropped a connection sent the body alone; `NetworkSettingsTest.LoadsAndClampsConfigValues` holds HeaderAndBody as the default)
 
 **Risks**
 
