@@ -6,7 +6,7 @@
     "percent": 24.1
   },
   "checks": {
-    "done": 928,
+    "done": 930,
     "total": 2868,
     "percent": 32.4
   },
@@ -60,7 +60,7 @@
       "title": "Other players are visible",
       "milestones_done": 8,
       "milestones_total": 18,
-      "checks_done": 68,
+      "checks_done": 70,
       "checks_total": 141
     },
     {

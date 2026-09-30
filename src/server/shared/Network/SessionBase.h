@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A client session over one socket: sends SessionOffer at once, waits for a matching SessionAccept, applies live frame-rate limits, answers and sends keepalives, hands DML messages to the app, encodes declared messages against the live definitions straight into their frames, and tracks its status, protocol strikes, ping budget, the messages it has already been reported for sending before the server handles them, and queued inbound work.
+ * A client session over one socket: sends SessionOffer at once, waits for a matching SessionAccept, applies live frame-rate limits, answers and sends keepalives, hands DML messages to the app, encodes declared messages against the live definitions straight into their frames, and tracks its status, protocol strikes, ping budget, the messages it has already been reported for sending before the server handles them, and queued inbound work. Every DML message it receives or sends passes the network hooks first, which may hold it back, and the packet log, and its socket's opening and closing are told to the hooks.
  */
 
 #ifndef AMBROSE_SESSIONBASE_H
@@ -17,6 +17,7 @@
 
 #include <asio/steady_timer.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <deque>
@@ -104,6 +105,9 @@ private:
     template<DeclaredMessage T>
     bool EncodeAndQueue(T const& message);
     void ReportSendFailure(std::string_view tag, std::string_view reason) const;
+    bool AllowSend(uint8 serviceId, uint8 order) const;
+    static bool PacketLogging();
+    void LogSent(uint8 serviceId, uint8 order, std::span<uint8 const> body) const;
     std::shared_ptr<SessionBase> Self();
 
     std::shared_ptr<SessionContext> _context;
@@ -138,6 +142,7 @@ private:
     std::size_t _pendingBytes = 0;
     uint32 _keepAliveSequence = 0;
     bool _awaitingKeepAlive = false;
+    bool _announced = false;
     bool _keepAliveTimeoutSuspended = false;
     bool _idReleased = false;
 };
@@ -175,11 +180,15 @@ bool SessionBase::EncodeAndQueue(T const& message)
         return false;
     }
     MessageInfo const& info = catalog->GetInfo<T>();
+    uint8 const serviceId = info.Protocol->ServiceId;
+    uint8 const order = static_cast<uint8>(info.Definition->Order);
+    if (!AllowSend(serviceId, order))
+        return false;
     ByteBuffer frame;
     try
     {
         frame.Reserve(FrameLayout::LongPrefixSize + FrameLayout::FrameHeaderSize + FrameLayout::DmlHeaderSize + info.MinSize + FrameLayout::TrailerSize + FrameReserveSlack);
-        std::size_t const start = FrameWriter::BeginDml(frame, info.Protocol->ServiceId, static_cast<uint8>(info.Definition->Order));
+        std::size_t const start = FrameWriter::BeginDml(frame, serviceId, order);
         catalog->Encode(message, frame);
         FrameWriter::EndDml(frame, start, GetLongFrameLength());
     }
@@ -187,6 +196,12 @@ bool SessionBase::EncodeAndQueue(T const& message)
     {
         ReportSendFailure(T::Tag, failure.what());
         return false;
+    }
+    if (PacketLogging())
+    {
+        ByteBuffer body;
+        catalog->Encode(message, body);
+        LogSent(serviceId, order, body.GetData().first(std::min(body.GetSize(), body.GetData().size())));
     }
     return QueueFrame(std::move(frame));
 }

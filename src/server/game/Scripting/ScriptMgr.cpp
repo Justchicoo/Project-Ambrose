@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A script registers itself from its own constructor, which is why the loader only has to call each AddSC function, and why the manager takes that loader as an argument rather than calling it by name: the hooks would otherwise depend on the scripts that use them, which is a circle a linker is right to refuse. the manager takes ownership there and frees them when it unloads, so a script file names its classes and nothing else has to know they exist. Every hook runs each script in the order it registered and catches what one throws, naming the script and the hook, because one bad content script must not take the tick down with it.
+ * A script registers itself from its own constructor, which is why the loader only has to call each AddSC function, and why the manager takes that loader as an argument rather than calling it by name: the hooks would otherwise depend on the scripts that use them, which is a circle a linker is right to refuse. the manager takes ownership there and frees them when it unloads, so a script file names its classes and nothing else has to know they exist. Every hook runs each script in the order it registered and catches what one throws, naming the script and the hook, because one bad content script must not take the tick down with it. The manager watches the network for its server scripts once the first registers, asks them in registration order, stops at the first that holds a message back, and takes a script that throws for one that let it through, reported by name, so a broken script never cuts the network.
  */
 
 #include "ScriptMgr.h"
@@ -16,6 +16,11 @@ WorldScript::WorldScript(std::string name) : ScriptObject(std::move(name))
 }
 
 CommandScript::CommandScript(std::string name) : ScriptObject(std::move(name))
+{
+    sScriptMgr.Register(this);
+}
+
+ServerScript::ServerScript(std::string name) : ScriptObject(std::move(name))
 {
     sScriptMgr.Register(this);
 }
@@ -39,6 +44,12 @@ void ScriptMgr::Register(WorldScript* script)
 void ScriptMgr::Register(CommandScript* script)
 {
     _commandScripts.push_back(script);
+}
+
+void ScriptMgr::Register(ServerScript* script)
+{
+    _serverScripts.push_back(script);
+    NetworkHooks::Add(this);
 }
 
 std::vector<ChatCommand> ScriptMgr::CollectCommands() const
@@ -69,6 +80,10 @@ void ScriptMgr::LoadScripts(ScriptLoader loader)
 
 void ScriptMgr::Unload()
 {
+    NetworkHooks::Remove(this);
+    for (ServerScript* script : _serverScripts)
+        delete script;
+    _serverScripts.clear();
     for (WorldScript* script : _worldScripts)
         delete script;
     _worldScripts.clear();
@@ -80,7 +95,7 @@ void ScriptMgr::Unload()
 
 std::size_t ScriptMgr::GetScriptCount() const
 {
-    return _worldScripts.size() + _commandScripts.size();
+    return _worldScripts.size() + _commandScripts.size() + _serverScripts.size();
 }
 
 std::vector<std::string> ScriptMgr::GetScriptNames() const
@@ -90,6 +105,8 @@ std::vector<std::string> ScriptMgr::GetScriptNames() const
     for (WorldScript const* script : _worldScripts)
         names.push_back(script->GetName());
     for (CommandScript const* script : _commandScripts)
+        names.push_back(script->GetName());
+    for (ServerScript const* script : _serverScripts)
         names.push_back(script->GetName());
     return names;
 }
@@ -132,4 +149,51 @@ void ScriptMgr::OnConfigLoad(bool reload)
 void ScriptMgr::OnWorldUpdate(std::chrono::milliseconds diff)
 {
     ForEach("OnUpdate", [diff](WorldScript* script) { script->OnUpdate(diff); });
+}
+
+template<typename Hook>
+bool ScriptMgr::AllServer(std::string_view what, Hook hook)
+{
+    for (ServerScript* script : _serverScripts)
+    {
+        try
+        {
+            if (!hook(script))
+                return false;
+        }
+        catch (std::exception const& failure)
+        {
+            LOG_ERROR("server.scripts", "The script {} threw from {}: {}", script->GetName(), what, failure.what());
+        }
+        catch (...)
+        {
+            LOG_ERROR("server.scripts", "The script {} threw from {} for a reason it did not say", script->GetName(), what);
+        }
+    }
+    return true;
+}
+
+void ScriptMgr::OnNetworkStart(std::string_view app)
+{
+    AllServer("OnNetworkStart", [app](ServerScript* script) { script->OnNetworkStart(app); return true; });
+}
+
+void ScriptMgr::OnSocketOpen(uint16 sessionId, std::string_view address)
+{
+    AllServer("OnSocketOpen", [sessionId, address](ServerScript* script) { script->OnSocketOpen(sessionId, address); return true; });
+}
+
+void ScriptMgr::OnSocketClose(uint16 sessionId)
+{
+    AllServer("OnSocketClose", [sessionId](ServerScript* script) { script->OnSocketClose(sessionId); return true; });
+}
+
+bool ScriptMgr::CanPacketReceive(uint16 sessionId, uint8 serviceId, uint8 order)
+{
+    return AllServer("CanPacketReceive", [=](ServerScript* script) { return script->CanPacketReceive(sessionId, serviceId, order); });
+}
+
+bool ScriptMgr::CanPacketSend(uint16 sessionId, uint8 serviceId, uint8 order)
+{
+    return AllServer("CanPacketSend", [=](ServerScript* script) { return script->CanPacketSend(sessionId, serviceId, order); });
 }

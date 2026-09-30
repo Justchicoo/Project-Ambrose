@@ -108,6 +108,12 @@ namespace
 
             Text("Locale.Default", "en-US", "16", "Locale", Game | Login, Live, "The locale names and texts are read in when a client names none."),
 
+            Flag("Network.PacketLog.Enable", "false", "Network", Game | Login, Live,
+                "Whether every DML message a session sends or receives is written to the network.packets log by name with its fields, read at each message; a message carrying credentials is written without its field values."),
+            Text("Network.PacketLog.Filter", "", "2048", "Network", Game | Login, Live,
+                "The message tags the packet log keeps, separated by commas or spaces, read at each message; empty keeps every message not suppressed."),
+            Text("Network.PacketLog.Suppress", "MSG_CLIENTMOVE,MSG_SERVERMOVE,MSG_NEWOBJECT,MSG_REMOVEOBJECT,MSG_LOGIN_NOT_AFK", "2048", "Network", Game | Login, Live,
+                "The message tags the packet log leaves out, separated by commas or spaces, read at each message; keepalives are control frames and are never written."),
             Unsigned("Network.SessionAcceptTimeout", "15", "1", "3600", "s", "Network", Game | Login, NextUse, "How long a new connection may take to finish its handshake."),
             Unsigned("Network.KeepAliveInterval", "60", "0", "3600", "s", "Network", Game | Login, NextUse, "How often an idle connection is asked whether it is still there; 0 never asks."),
             Unsigned("Network.KeepAliveTimeout", "15", "1", "3600", "s", "Network", Game | Login, NextUse, "How long a keepalive may go unanswered before the connection is closed."),

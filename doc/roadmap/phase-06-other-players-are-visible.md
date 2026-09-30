@@ -850,9 +850,11 @@ Malformed, oversized or abusive traffic can't crash or stall a server and is dis
 **Acceptance**
 
 - [ ] Log shows 'C->S LOGIN MSG_USER_AUTHEN_V3 (7:27)' with credentials redacted; suppressed messages absent
-- [ ] A module blocks one message with no core edits
+- [x] A module blocks one message with no core edits (`ChatHandlerTest.AServerScriptHoldsBackTheOneMessageItRefusesWithNoEditToTheCore`: a ServerScript defined only in the test refuses MSG_REQUESTRADIALQUICKCHAT, and over loopback a real game session queues the other three chat messages and never sees that one, counting it neither unhandled nor a strike; with the script unloaded all four arrive)
 - [ ] '.network sessions' returns live count
 - [ ] '.network packetlog' toggles and filters logging live
+
+Built on 2026-09-30 by the maintainer's track session: `PacketLog` and `NetworkHooks` in src/server/shared/Network, the ServerScript kind in ScriptMgr bridged to them, and the `.network` command group in cs_network.cpp, with `PacketLogTest` and `NetworkHooksTest` proving the line format, the redaction, the filter and suppression and a live settings change from the next message. The login log line and the two commands stay unticked until a real client shows them.
 
 ### Detailed spec from NET-12: Packet logging, diagnostics and network hooks
 
@@ -873,7 +875,7 @@ Developers can see every message by name with fields, and scripts or modules can
 **Acceptance**
 
 - [ ] With PacketLog enabled and a real client at login, the log shows 'C->S LOGIN MSG_USER_AUTHEN_V3 (7:27)' with decoded fields, and suppressed messages are absent
-- [ ] A test module registering CanPacketReceive returning false for one message blocks it with no core edits
+- [x] A test module registering CanPacketReceive returning false for one message blocks it with no core edits (`ChatHandlerTest.AServerScriptHoldsBackTheOneMessageItRefusesWithNoEditToTheCore`: a ServerScript defined only in the test refuses MSG_REQUESTRADIALQUICKCHAT, and over loopback a real game session queues the other three chat messages and never sees that one, counting it neither unhandled nor a strike; with the script unloaded all four arrive)
 - [ ] '.network sessions' in game chat returns the live count
 - [ ] '.network packetlog filter MSG_CLIENTMOVE' on a running server changes what is logged from the next message without a restart
 

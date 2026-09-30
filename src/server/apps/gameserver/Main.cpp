@@ -52,6 +52,7 @@
 #include "GameShutdown.h"
 #include "MessageRegistry.h"
 #include "SessionContext.h"
+#include "NetworkHooks.h"
 #include "SocketMgr.h"
 #include "World.h"
 #include "ServerApp.h"
@@ -408,6 +409,7 @@ namespace
                 return false;
             }
             SetListener(network.BindIp, _sockets->GetPort());
+            NetworkHooks::NetworkStarted("gameserver");
             sStats.Publish("sessions", [this] { return Ambrose::StatValue(static_cast<int64>(_sockets ? _sockets->GetConnectionCount() : 0)); });
             sStats.Publish("realm_beating", [this] { return Ambrose::StatValue(_heartbeat.Beating()); });
 

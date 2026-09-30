@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * The hooks every content script hangs off: a script names itself and registers as it is constructed, the manager keeps each kind in its own list and calls them in registration order, and a hook that throws is reported with the script's name and does not stop the others; WorldScript and CommandScript are the first kinds, carrying the server's startup, shutdown, configuration reload and update tick, and later milestones add the player, npc, quest, zone and command kinds beside it. It knows nothing of the scripts themselves: the caller hands it the loader CMake wrote, so the hooks do not depend on the content that uses them.
+ * The hooks every content script hangs off: a script names itself and registers as it is constructed, the manager keeps each kind in its own list and calls them in registration order, and a hook that throws is reported with the script's name and does not stop the others; WorldScript and CommandScript are the first kinds, carrying the server's startup, shutdown, configuration reload and update tick, and later milestones add the player, npc, quest, zone and command kinds beside it. It knows nothing of the scripts themselves: the caller hands it the loader CMake wrote, so the hooks do not depend on the content that uses them. ServerScript sees the network: when it starts, each socket as it opens and closes, and each DML message a session receives or sends, which any server script may hold back, so a module can stop a message without the core being edited.
  */
 
 #ifndef AMBROSE_SCRIPTMGR_H
 #define AMBROSE_SCRIPTMGR_H
 
 #include "ChatCommand.h"
+#include "NetworkHooks.h"
 #include "Types.h"
 
 #include <chrono>
@@ -52,7 +53,20 @@ protected:
     explicit CommandScript(std::string name);
 };
 
-class ScriptMgr
+class ServerScript : public ScriptObject
+{
+public:
+    virtual void OnNetworkStart(std::string_view app) { (void)app; }
+    virtual void OnSocketOpen(uint16 sessionId, std::string_view address) { (void)sessionId; (void)address; }
+    virtual void OnSocketClose(uint16 sessionId) { (void)sessionId; }
+    virtual bool CanPacketReceive(uint16 sessionId, uint8 serviceId, uint8 order) { (void)sessionId; (void)serviceId; (void)order; return true; }
+    virtual bool CanPacketSend(uint16 sessionId, uint8 serviceId, uint8 order) { (void)sessionId; (void)serviceId; (void)order; return true; }
+
+protected:
+    explicit ServerScript(std::string name);
+};
+
+class ScriptMgr : private NetworkObserver
 {
 public:
     static ScriptMgr& Instance();
@@ -64,6 +78,7 @@ public:
 
     void Register(WorldScript* script);
     void Register(CommandScript* script);
+    void Register(ServerScript* script);
     void LoadScripts(ScriptLoader loader);
     void Unload();
 
@@ -83,12 +98,21 @@ private:
 
     template<typename Hook>
     void ForEach(std::string_view what, Hook hook);
+    template<typename Hook>
+    bool AllServer(std::string_view what, Hook hook);
+
+    void OnNetworkStart(std::string_view app) override;
+    void OnSocketOpen(uint16 sessionId, std::string_view address) override;
+    void OnSocketClose(uint16 sessionId) override;
+    bool CanPacketReceive(uint16 sessionId, uint8 serviceId, uint8 order) override;
+    bool CanPacketSend(uint16 sessionId, uint8 serviceId, uint8 order) override;
 
     std::vector<ChatCommand> CollectCommands() const;
 
     bool _loaded = false;
     std::vector<WorldScript*> _worldScripts;
     std::vector<CommandScript*> _commandScripts;
+    std::vector<ServerScript*> _serverScripts;
 };
 
 #define sScriptMgr ScriptMgr::Instance()
