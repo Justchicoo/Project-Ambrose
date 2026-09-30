@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the admin API listener on a loopback port the operating system picks: health needs the token and carries the step a start is on, wrong tokens are rate limited while the right one still answers, every /api path answers the same way without one whatever method it carries, whatever upgrade it claims and wherever it falls on a kept-alive connection, a certificate and key are served over TLS with HSTS and reported to the log, a reload swaps the certificate live and keeps the old one when the new pair does not match, a certificate that will not load stops the listener opening, a reload rotates the token without a restart and keeps the old listener when the new port is taken, an unsafe remote bind is refused, WebSocket routes registered before or after the listener opens take the same token and carry frames both ways and close with the code their route chose once the frames before it have gone, a route that admits its own upgrades opens without the token or its permission, keeps the request that opened it and has a refusal logged by its path and never its query, a machine with no data folder keeps its generated token beside the config file, an app reloads the listener from its own config, an app whose admin binding is unsafe exits with a failure, the built panel is served without a token and with the security headers, a browser signs in only from its own origin by trading the token for a cookie named after the port, with each wrong field named beside the request id, the cookie's unsafe requests and socket upgrades need its own origin and CSRF token, signing out and rotating the token end the session, a host the listener does not answer for is refused, and a route is handed the query exactly as it was sent beside the decoded values, and a reload naming a certificate and key at new paths swaps them in place, keeping the port and a connection open across it.
+ * Tests the admin API listener on a loopback port the operating system picks: health needs the token and carries the step a start is on, wrong tokens are rate limited while the right one still answers, every /api path answers the same way without one whatever method it carries, whatever upgrade it claims and wherever it falls on a kept-alive connection, a certificate and key are served over TLS with HSTS and reported to the log, a reload swaps the certificate live and keeps the old one when the new pair does not match, a certificate that will not load stops the listener opening, a reload rotates the token without a restart and keeps the old listener when the new port is taken, an unsafe remote bind is refused, WebSocket routes registered before or after the listener opens take the same token and carry frames both ways and close with the code their route chose once the frames before it have gone, a route that admits its own upgrades opens without the token or its permission, keeps the request that opened it and has a refusal logged by its path and never its query, a machine with no data folder keeps its generated token beside the config file, an app reloads the listener from its own config, an app whose admin binding is unsafe exits with a failure, the built panel is served without a token and with the security headers, a browser signs in only from its own origin by trading the token for a cookie named after the port, with each wrong field named beside the request id, the cookie's unsafe requests and socket upgrades need its own origin and CSRF token, signing out and rotating the token end the session, a host the listener does not answer for is refused, and a route is handed the query exactly as it was sent beside the decoded values, and a reload naming a certificate and key at new paths swaps them in place, keeping the port and a connection open across it, and a second listener opening and closing beside a first that is serving requests, as the supervisor's admin API and panel do, changes nothing the first one's connections read.
  */
 
 #include "AdminClient.h"
@@ -525,6 +525,36 @@ TEST_F(AdminServerTest, RotatesTheTokenOnReloadWithoutRestarting)
     EXPECT_EQ(server.GetToken(), OtherToken);
     EXPECT_EQ(Get(port, "/api/health", Token).Status, 401);
     EXPECT_EQ(Get(port, "/api/health", OtherToken).Status, 200);
+}
+
+TEST_F(AdminServerTest, ASecondListenerOpensAndClosesWhileTheFirstServesRequests)
+{
+    AdminServer first = Make();
+    first.SetHealthSource([] { return AdminHealth{ "testserver", "", "rev", 0, "running" }; });
+    std::string error;
+    ASSERT_TRUE(first.Start(Loopback(), error)) << error;
+    uint16 const port = first.GetPort();
+
+    std::atomic<bool> serving{ true };
+    std::atomic<int> answered{ 0 };
+    std::thread caller([&]
+    {
+        while (serving.load())
+            if (Get(port, "/api/health", Token).Status == 200)
+                answered.fetch_add(1);
+    });
+    for (int round = 0; round < 5; ++round)
+    {
+        AdminServer second = Make();
+        second.SetHealthSource([] { return AdminHealth{ "panel", "", "rev", 0, "running" }; });
+        ASSERT_TRUE(second.Start(Loopback(), error)) << error;
+        EXPECT_EQ(Get(second.GetPort(), "/api/health", Token).Status, 200);
+        second.Stop();
+    }
+    serving.store(false);
+    caller.join();
+    EXPECT_GT(answered.load(), 0) << "the first listener kept answering while the second opened and closed beside it";
+    EXPECT_EQ(Get(port, "/api/health", Token).Status, 200);
 }
 
 TEST_F(AdminServerTest, ChangingTheThreadCountRebindsTheSamePort)
