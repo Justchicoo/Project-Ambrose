@@ -47,6 +47,10 @@ Tools build into `build/<configure preset>/bin/<config>/`, for example `build/li
 
 Ask the narrowest question. Use `--list` before the full print, and one address rather than a range. Send sweeps and extractions to a file, then read the counts and failures from it. Report the one line that proves the point.
 
+## Disassemblers beside the tools
+
+A session that has the radare2 or Ghidra MCP servers may use them to explore the client program when `client strings`, `xrefs`, `disasm` or `decompile` can't yet answer. They are for exploration only. Once a question has been answered by hand, teach it to `client`, so the next session gets the answer in one call. Nothing a disassembler prints is committed.
+
 ## When no tool can answer
 
 1. Find the tool whose job it is. That is usually `client`, as a new subcommand or flag. Check src/tools and apps first, because doc/TOOLS.md may be behind.
