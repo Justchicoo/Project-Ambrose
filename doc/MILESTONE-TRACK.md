@@ -108,13 +108,7 @@ Everything not in the table above, including every milestone whose dependencies 
 
 | ID | Why |
 |---|---|
-| 1.18 | Answered against the maintainer's own capture of a session. In the maintainer's world session's real-client batch after 7.01 since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished |
-| 2.14 | Built but for its real-client checks: a banned account refused with a visible message, which contributor item C-77 turns into a scenario, and an optional sniffer check. In the maintainer's world session's real-client batch after 7.01 since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished |
-| 3.02 | Built but for one check, a real client shown the badge window once MSG_BADGES is sent. Kept for the maintainer's world session, which sends MSG_BADGES and closes that check before 7.02, which depends on 3.02. In the maintainer's world session's real-client batch after 7.01 since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished |
-| 3.12 | Only its real-client check is left: the character creation screen offering exactly what the server validates. In the maintainer's world session's real-client batch after 7.01 since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished |
 | 3.23 | Held for the maintainer's own machine, since it needs the pinned installation and its checks are client-gated, and in the maintainer's world session's share since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished. KingsIsle's own launcher and patcher are never run against the pinned install |
-| 4.06 | Built but for one check, a bad key refused with MSG_ATTACHFAILED on a real client, which is next in the maintainer's world session. In the maintainer's world session's real-client batch after 7.01 since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished |
-| 4.11 | Being built now, and the world entry after it runs through the same files. In the maintainer's world session's real-client batch after 7.01 since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished |
 | 16.11 | Overlaps the type extraction already built in 3.21 and is being rethought |
 | 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal, and nothing else left to build |
 | 3.26 | Landed on 2026-09-30 by the maintainer's panel session with six of seven checks. Left: the Dev-gated Play check, which waits for a real-client window on the maintainer's machine |
@@ -146,14 +140,14 @@ Everything not in the table above, including every milestone whose dependencies 
 | 9.02 | Built on 2026-09-26 by the maintainer's world session, 6 of 7 checks. Left: its real-client check, which 6.04's in-game commands unblocked and which is queued in that session |
 | 8.02 | Queued for the maintainer's world session after 8.01: experience and level-up, the next step on the way to a playable game |
 | 6.13 | Queued for the maintainer's world session after its real-client batch since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished: volumes and walk-in trigger events, which 7.07 needs. Every dependency is built since 6.12 landed on 2026-09-30 |
-| 7.02 | Queued for the maintainer's world session after 3.02's badge window check and 6.13: the quest, dialog and madlib model the quest engine rests on. Waiting on 3.02, whose last check needs MSG_BADGES sent to a real client |
-| 7.03 | Queued for the maintainer's world session after 7.02: the quest schema, sQuestMgr and its validator. Waiting on 7.02, which waits on 3.02's badge window check |
-| 7.07 | Queued for the maintainer's world session after 7.03: the NPC service menu. Waiting on 6.13 and on 7.02, which waits on 3.02's badge window check |
-| 7.04 | Queued for the maintainer's world session after 7.07: the requirement engine. Waiting on 7.02, which waits on 3.02's badge window check |
-| 7.06 | Queued for the maintainer's world session after 7.04: character quest persistence. Waiting on 7.02, which waits on 3.02's badge window check |
-| 7.08 | Queued for the maintainer's world session after 7.06: the wizbang indicators above quest givers. Waiting on 7.02, which waits on 3.02's badge window check |
-| 7.09 | Queued for the maintainer's world session after 7.08: the quest offer. Waiting on 7.02, which waits on 3.02's badge window check |
-| 7.10 | Queued for the maintainer's world session after 7.09: accepting a quest and the quest book. Waiting on 7.02, which waits on 3.02's badge window check |
+| 7.02 | Queued for the maintainer's world session after 6.13: the quest, dialog and madlib model the quest engine rests on. 3.02, which it depends on, closed on 2026-09-30 |
+| 7.03 | Queued for the maintainer's world session after 7.02: the quest schema, sQuestMgr and its validator |
+| 7.07 | Queued for the maintainer's world session after 7.03: the NPC service menu. Waiting on 6.13 and 7.02 |
+| 7.04 | Queued for the maintainer's world session after 7.07: the requirement engine |
+| 7.06 | Queued for the maintainer's world session after 7.04: character quest persistence |
+| 7.08 | Queued for the maintainer's world session after 7.06: the wizbang indicators above quest givers |
+| 7.09 | Queued for the maintainer's world session after 7.08: the quest offer |
+| 7.10 | Queued for the maintainer's world session after 7.09: accepting a quest and the quest book |
 | 8.06 | Queued for the maintainer's world session after 7.10: the item template extractor |
 | 8.08 | Queued for the maintainer's world session after 8.06: the backpack's item instances |
 | 8.09 | Queued for the maintainer's world session after 8.08: the backpack's stacks, locks and overflow |
@@ -164,11 +158,6 @@ Everything not in the table above, including every milestone whose dependencies 
 | 6.15 | Being built by the maintainer's track session since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished: the AOI grid and visibility sets at unit level, which the world session's 6.16 builds on |
 | 6.17 | Taken over by the maintainer's track session since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished, building on MeruneFleuruwu's [#12](https://github.com/Justchicoo/Project-Ambrose/pull/12), which landed on 2026-09-29 with six of eight checks. Left: the two 10-minute fuzz runs on the frame and decode paths, which need the `linux-clang-fuzz` preset |
 | 6.18 | Being built by the maintainer's track session since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished: the packet log, diagnostics and network hooks |
-| 1.22 | In the maintainer's world session's real-client batch after 7.01 since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished: its real-client checks, after 1.18 |
-| 2.15 | In the maintainer's world session's real-client batch after 7.01 since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished: its real-client checks, after 2.14 |
-| 3.09 | In the maintainer's world session's real-client batch after 7.01 since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished: its real-client checks, after 2.14 |
-| 3.15 | In the maintainer's world session's real-client batch after 7.01 since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished: its real-client check, after 3.09 |
-| 3.16 | In the maintainer's world session's real-client batch after 7.01 since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished: its real-client checks, after 3.15 |
 | 3.17 | Queued for the maintainer's world session after its real-client batch since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished, after 3.09 |
 | 5.06 | Queued for the maintainer's world session after its real-client batch since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished, after 2.14 |
 | 6.05 | Queued for the maintainer's world session after its real-client batch since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished, after 3.17 |
