@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 101,
+    "done": 102,
     "total": 469,
-    "percent": 21.5
+    "percent": 21.7
   },
   "checks": {
-    "done": 876,
+    "done": 885,
     "total": 2868,
-    "percent": 30.5
+    "percent": 30.9
   },
   "contributor_track": {
     "merged": 92,
@@ -66,9 +66,9 @@
     {
       "phase": 7,
       "title": "An npc offers a quest",
-      "milestones_done": 0,
+      "milestones_done": 1,
       "milestones_total": 13,
-      "checks_done": 0,
+      "checks_done": 9,
       "checks_total": 86
     },
     {
