@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the admin API on Crow: it hands every route the query as it was sent beside Crow's decoded values, resolves the token, tells every route whose socket is still open when the listener stops and detaches the handle first so nothing reaches a connection Crow has let go, refuses a bind the remote-access rule forbids, says out loud what a bind it allows still costs, proves no other socket holds the address before Crow takes it, answers every request from the shared table in a middleware that runs before Crow's own routing, with the host, origin, cookie and CSRF headers a browser session is checked by and a caller's request id when it has the router's form, answers from the same table again after it the requests Crow replies to before a connection has an address of its own, such as OPTIONS, reads the caller a relaying supervisor names and the rights it forwards, hands only a real WebSocket upgrade to the route registered for it under the same host check, authentication, admission rule and the route's own permission, or, for a route that admits its own upgrades, under the host check and that route's admission alone, logging a refusal by its path and never its query, keeps the request that opened each socket for the route to read, serves the built panel and its sign-in, which trades the token once for a session cookie named after the port because cookies ignore ports, logs every error with its request id, gives each open socket a handle a route may keep and write to from any thread until the socket closes, owning every socket's binding in the listener so one Crow drops without a close is still freed, queues a close, with the code its route chose, behind the frames sent before it, and on a reload rotates the token live and ends every session with the old one, applies the panel folder, allowed hosts and session lifetimes without rebinding, rebinds a changed address, or brings the old listener back when the new one cannot bind; an answer that sets more than one cookie sends every one of them, and the fingerprint it reports is the one its TLS context is serving at that moment.
+ * Runs the admin API on Crow: it hands every route the query as it was sent beside Crow's decoded values, resolves the token, tells every route whose socket is still open when the listener stops and detaches the handle first so nothing reaches a connection Crow has let go, refuses a bind the remote-access rule forbids, says out loud what a bind it allows still costs, proves no other socket holds a fixed port before Crow takes it and lets Crow choose a port asked for as 0, answers every request from the shared table in a middleware that runs before Crow's own routing, with the host, origin, cookie and CSRF headers a browser session is checked by and a caller's request id when it has the router's form, answers from the same table again after it the requests Crow replies to before a connection has an address of its own, such as OPTIONS, reads the caller a relaying supervisor names and the rights it forwards, hands only a real WebSocket upgrade to the route registered for it under the same host check, authentication, admission rule and the route's own permission, or, for a route that admits its own upgrades, under the host check and that route's admission alone, logging a refusal by its path and never its query, keeps the request that opened each socket for the route to read, serves the built panel and its sign-in, which trades the token once for a session cookie named after the port because cookies ignore ports, logs every error with its request id, gives each open socket a handle a route may keep and write to from any thread until the socket closes, owning every socket's binding in the listener so one Crow drops without a close is still freed, queues a close, with the code its route chose, behind the frames sent before it, and on a reload rotates the token live and ends every session with the old one, applies the panel folder, allowed hosts and session lifetimes without rebinding, rebinds a changed address, or brings the old listener back when the new one cannot bind; an answer that sets more than one cookie sends every one of them, and the fingerprint it reports is the one its TLS context is serving at that moment.
  */
 
 #include "AdminServer.h"
@@ -282,14 +282,16 @@ namespace
         connection.close(reason, code);
     }
 
-    std::optional<uint16> ReserveEndpoint(std::string const& bindIp, uint16 port, std::string& error)
+    bool CheckEndpoint(std::string const& bindIp, uint16 port, std::string& error)
     {
         std::optional<asio::ip::address> const address = Ambrose::Asio::MakeAddress(bindIp);
         if (!address)
         {
             error = fmt::format("{} is not an IP address", bindIp);
-            return std::nullopt;
+            return false;
         }
+        if (port == 0)
+            return true;
         asio::io_context context;
         asio::ip::tcp::acceptor acceptor(context);
         asio::ip::tcp::endpoint const endpoint(*address, port);
@@ -298,30 +300,24 @@ namespace
         if (code)
         {
             error = code.message();
-            return std::nullopt;
+            return false;
         }
 #ifndef _WIN32
         acceptor.set_option(asio::socket_base::reuse_address(true), code);
         if (code)
         {
             error = code.message();
-            return std::nullopt;
+            return false;
         }
 #endif
         acceptor.bind(endpoint, code);
         if (code)
         {
             error = code.message();
-            return std::nullopt;
-        }
-        asio::ip::tcp::endpoint const bound = acceptor.local_endpoint(code);
-        if (code)
-        {
-            error = code.message();
-            return std::nullopt;
+            return false;
         }
         acceptor.close(code);
-        return bound.port();
+        return true;
     }
 
     SocketBinding* BindingOf(crow::websocket::connection& connection)
@@ -652,7 +648,7 @@ bool AdminServer::Reload(ListenerSettings const& settings)
 
     bool const sameEndpoint = IsRunning() && _listener->BindIp == settings.BindIp && effective.Port == _listener->Port;
     std::string reserveError;
-    if (!sameEndpoint && !ReserveEndpoint(settings.BindIp, settings.Port, reserveError))
+    if (!sameEndpoint && !CheckEndpoint(settings.BindIp, settings.Port, reserveError))
     {
         LogPanelOrAdmin(LogLevel::Error, "{} cannot bind {}:{}: {}; it keeps {}", Capitalised(), settings.BindIp, settings.Port, reserveError,
             IsRunning() ? fmt::format("its binding on {}:{}", _listener->BindIp, _listener->Port) : std::string("its current state"));
@@ -692,8 +688,7 @@ void AdminServer::Stop()
 
 bool AdminServer::Open(ListenerSettings const& settings, std::string const& token, std::string& error)
 {
-    std::optional<uint16> const reserved = ReserveEndpoint(settings.BindIp, settings.Port, error);
-    if (!reserved)
+    if (!CheckEndpoint(settings.BindIp, settings.Port, error))
     {
         error = fmt::format("{} cannot bind {}:{}: {}", Capitalised(), settings.BindIp, settings.Port, error);
         return false;
@@ -709,7 +704,12 @@ bool AdminServer::Open(ListenerSettings const& settings, std::string const& toke
     bool const secure = settings.HasTls();
     _router.SetSecure(secure);
     _router.SetTrustedProxies(TrustedProxies::Parse(settings.TrustedProxies, nullptr, settings.Option("TrustedProxies")));
-    _router.SetBrowserAccess({ _sessionSource ? _sessionSource : &_sessions, fmt::format("{}ambrose_{}_{}", secure ? "__Host-" : "", Ambrose::ToLower(settings.Prefix), *reserved), secure });
+    auto const grantBrowsers = [this, &settings, secure](uint16 port)
+    {
+        _router.SetBrowserAccess({ _sessionSource ? _sessionSource : &_sessions, fmt::format("{}ambrose_{}_{}", secure ? "__Host-" : "", Ambrose::ToLower(settings.Prefix), port), secure });
+    };
+    if (settings.Port != 0)
+        grantBrowsers(settings.Port);
 
     LogBridge().Attach(&_log);
     crow::logger::setHandler(&LogBridge());
@@ -842,13 +842,13 @@ bool AdminServer::Open(ListenerSettings const& settings, std::string const& toke
     listener->App.server_name("Ambrose");
     listener->App.websocket_max_payload(settings.MaxRequestBytes);
     listener->App.bindaddr(settings.BindIp);
-    listener->App.port(*reserved);
+    listener->App.port(settings.Port);
     listener->App.concurrency(settings.Threads);
     listener->Worker = listener->App.run_async();
     if (listener->App.wait_for_server_start(std::chrono::milliseconds(10000)) == std::cv_status::timeout)
     {
         listener->App.stop();
-        return abandon(fmt::format("{} did not start on {}:{}", Capitalised(), settings.BindIp, *reserved));
+        return abandon(fmt::format("{} did not start on {}:{}", Capitalised(), settings.BindIp, settings.Port));
     }
 
     uint16 bound = 0;
@@ -863,8 +863,10 @@ bool AdminServer::Open(ListenerSettings const& settings, std::string const& toke
     if (bound == 0)
     {
         listener->App.stop();
-        return abandon(fmt::format("{} could not bind {}:{}", Capitalised(), settings.BindIp, *reserved));
+        return abandon(fmt::format("{} could not bind {}:{}", Capitalised(), settings.BindIp, settings.Port));
     }
+    if (settings.Port == 0)
+        grantBrowsers(bound);
 
     listener->Port = bound;
     _listener = std::move(listener);
