@@ -83,6 +83,15 @@ std::vector<std::string> SkippedValue::Readings(uint64 bits, std::span<uint8 con
     return readings;
 }
 
+std::optional<std::string> SkippedValue::Text(uint64 bits, std::span<uint8 const> value)
+{
+    if (bits % 8 != 0 || value.size() * uint64{ 8 } < bits || value.empty())
+        return std::nullopt;
+    BitReader reader = Fenced(bits, value);
+    std::optional<std::string> text = ReadCompactText(reader);
+    return text && reader.GetRemainingBits() == 0 ? text : std::nullopt;
+}
+
 std::string SkippedValue::Describe(uint64 bits, std::span<uint8 const> value)
 {
     std::vector<std::string> const readings = Readings(bits, value);
