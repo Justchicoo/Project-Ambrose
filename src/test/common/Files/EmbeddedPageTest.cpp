@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks the manifest ambrose_embed_page generates and how a compiled-in page answers: every file of the fixture folder is there byte for byte with the media type its extension names and an entity tag drawn from its SHA-256, only files under assets/ are marked hashed and given an immutable cache header, the root and an unknown path outside the API prefix answer index.html while an unknown path under the API prefix answers 404, a query or fragment is ignored and a parent segment never matches, and a folder with no built page embeds a placeholder index that says why.
+ * Checks the manifest ambrose_embed_page generates and how a compiled-in page answers: every file of the fixture folder is there byte for byte with the media type its extension names and an entity tag drawn from its SHA-256, only files under assets/ are marked hashed and given an immutable cache header, every answer carries the content policy that keeps the page on its own origin, the root and an unknown path outside the API prefix answer index.html while an unknown path under the API prefix answers 404, a query or fragment is ignored and a parent segment never matches, and a folder with no built page embeds a placeholder index that says why.
  */
 
 #include "EmbeddedPage.h"
@@ -71,6 +71,8 @@ TEST(EmbeddedPageTest, OnlyHashedAssetsAreCachedForever)
     EXPECT_EQ(Header(asset, "Cache-Control"), "public, max-age=31536000, immutable");
     EXPECT_EQ(Header(asset, "Content-Type"), "text/javascript; charset=utf-8");
     EXPECT_EQ(Header(asset, "ETag"), std::string(asset.File->EntityTag));
+    EXPECT_EQ(Header(asset, "Content-Security-Policy"), std::string(EmbeddedPage::ContentPolicy));
+    EXPECT_NE(Header(page.Serve("/"), "Content-Security-Policy").find("connect-src 'self'"), std::string::npos);
 
     for (std::string const path : { "/", "/index.html", "/robots.txt", "/favicon.ico" })
     {

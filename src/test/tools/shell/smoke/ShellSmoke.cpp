@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The desktop shell's smoke program, run by the ShellSmoke test with real web view windows kept off screen. available says whether this machine has a web view; own opens the launcher's page from memory and reports its origin, whether it is a secure context and whether local storage keeps a value; remote serves a page from two loopback listeners, opens a view bound to the first, has the page post to the host channel, set a cookie, navigate to another origin and open a new window, then opens a view bound to the second listener and deletes the first profile, and checks that no answer came, both requests went to the system browser without either reaching the other listener, the view stayed put, the second profile saw no cookie and the deleted one left no file; pin serves the first certificate it is given over TLS on loopback and expects a view pinned to it to load, then writes the second over the same files, as --panel-self-signed rewrites them, reloads, and expects a view with the same pin, and one with none, to be refused with the fingerprints named. It prints what it saw and exits 0 when every check holds, 1 when one fails and 3 when this machine has no web view.
+ * The desktop shell's smoke program, run by the ShellSmoke test with real web view windows kept off screen. available says whether this machine has a web view; own opens the launcher's page from memory and reports its origin, whether it is a secure context, whether local storage keeps a value, that it loaded nothing from any other origin, and that a request it makes to a loopback listener is refused and never arrives; remote serves a page from two loopback listeners, opens a view bound to the first, has the page post to the host channel, set a cookie, navigate to another origin and open a new window, then opens a view bound to the second listener and deletes the first profile, and checks that no answer came, both requests went to the system browser without either reaching the other listener, the view stayed put, the second profile saw no cookie and the deleted one left no file; pin serves the first certificate it is given over TLS on loopback and expects a view pinned to it to load, then writes the second over the same files, as --panel-self-signed rewrites them, reloads, and expects a view with the same pin, and one with none, to be refused with the fingerprints named. It prints what it saw and exits 0 when every check holds, 1 when one fails and 3 when this machine has no web view.
  */
 
 #include "AdminServer.h"
@@ -113,17 +113,43 @@ namespace
 
     int Own(std::filesystem::path const& data)
     {
+        Log log;
+        ListenerSettings listening;
+        std::unique_ptr<AdminServer> const elsewhere = Listen(log, data, "elsewhere", {}, {}, listening);
+        if (!elsewhere)
+            return Failed;
+        std::atomic<int> reached{ 0 };
+        elsewhere->Routes().AddOpen("GET", "/api/reach", [&reached](AdminRequest const&)
+        {
+            ++reached;
+            return AdminResponse::Json(200, "{}");
+        });
+        std::string const target = "http://127.0.0.1:" + std::to_string(elsewhere->GetPort()) + "/api/reach";
+
         Seen seen;
         std::string error;
         ShellWindowOptions options = LauncherWindow::Options(data, std::filesystem::path(), nullptr);
         std::vector<std::string> const results = RunWindow(options,
-            { "JSON.stringify({ secure: window.isSecureContext, origin: location.origin, storage: (() => { try { localStorage.setItem('ambrose-smoke', 'kept'); return localStorage.getItem('ambrose-smoke') === 'kept'; } catch (e) { return false; } })() })" },
+            {
+                "JSON.stringify({ secure: window.isSecureContext, origin: location.origin, storage: (() => { try { localStorage.setItem('ambrose-smoke', 'kept'); return localStorage.getItem('ambrose-smoke') === 'kept'; } catch (e) { return false; } })() })",
+                "JSON.stringify(performance.getEntriesByType('resource').map((entry) => entry.name).filter((name) => !name.startsWith(location.origin)))",
+                "window.reach = 'pending'; fetch('" + target + "').then(() => { window.reach = 'reached'; }, () => { window.reach = 'refused'; }); 'asked'",
+                "window.reach",
+            },
             seen, error);
         nlohmann::json const report = nlohmann::json::parse(Text(results, 0), nullptr, false);
+        nlohmann::json const loaded = nlohmann::json::parse(Text(results, 1), nullptr, false);
         bool ok = Check(error.empty(), "the launcher's window opened from memory");
         ok = Check(report.is_object() && report.value("origin", "") == ShellOrigin::Own(LauncherWindow::Program).Describe(), "the page is on the launcher's own origin") && ok;
         ok = Check(report.is_object() && report.value("secure", false), "the page is a secure context") && ok;
         ok = Check(report.is_object() && report.value("storage", false), "the page can write local storage") && ok;
+        ok = Check(loaded.is_array() && loaded.empty(), "the page loaded nothing from any origin but its own") && ok;
+        ok = Check(Text(results, 3) == "refused" && reached == 0, "a request the page makes to the network is refused and reaches nothing") && ok;
+        int named = 0;
+        for (std::string const& line : seen.Lines)
+            named += line.find("asked for") != std::string::npos ? 1 : 0;
+        ok = Check(named <= 1, "the only request the program named was the one the probe made") && ok;
+        elsewhere->Stop();
         return ok ? Passed : Failed;
     }
 

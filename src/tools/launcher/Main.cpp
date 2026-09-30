@@ -11,6 +11,7 @@
 #include "Launcher.h"
 #include "LauncherChannel.h"
 #include "LauncherFiles.h"
+#include "LauncherSteps.h"
 #include "LauncherWindow.h"
 
 #include <nlohmann/json.hpp>
@@ -184,7 +185,7 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
     }
 
     std::string Answer(std::string const& message, Launcher const& launcher, Arguments const& arguments, SetupMode mode,
-        SetupPrompt& prompt)
+        SetupPrompt& prompt, LauncherSteps& steps)
     {
         nlohmann::json const asked = nlohmann::json::parse(message, nullptr, false);
         if (!asked.is_object())
@@ -202,12 +203,11 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
             return reply.dump();
         };
 
-        if (path == "/launcher/steps")
+        if (path == "/launcher/steps" || path == "/launcher/steps/again")
         {
-            nlohmann::json body;
-            body["schema"] = LauncherChannel::SchemaVersion;
-            body["steps"] = nlohmann::json::array();
-            return answered(std::move(body));
+            if (path == "/launcher/steps/again")
+                steps.Restart();
+            return answered(nlohmann::json::parse(LauncherSteps::Describe(steps.Advance(launcher, arguments.Request, mode, prompt))));
         }
 
         LauncherRequest request = arguments.Request;
@@ -271,8 +271,9 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
             std::filesystem::path const dataFolder = ClientLocator::GetDataFolder(system);
             std::filesystem::path const placeFile = dataFolder / "launcher-window.json";
             std::string windowError;
+            LauncherSteps steps(&LauncherSteps::ReachByTcp);
             bool const shown = LauncherWindow::Show(dataFolder, placeFile,
-                [&](std::string const& message) { return Answer(message, launcher, *arguments, mode, *prompt); }, windowError);
+                [&](std::string const& message) { return Answer(message, launcher, *arguments, mode, *prompt, steps); }, windowError);
             if (shown)
                 return Success;
             std::cerr << fmt::format("launcher: {}, so this terminal is what runs\n", windowError);

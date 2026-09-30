@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The shell window on Windows: a plain window holding a WebView2 whose user data folder is the window's profile, so nothing is written beside the executable. The program's own page is answered from memory for every request to its https origin through a web resource handler, and a message from the page is admitted only from that origin, handed to the program and answered on the view's own thread, because WebView2 is a single-threaded apartment. A view bound to a remote panel has web messages turned off and no handler. A navigation away from the bound origin and every new window go to the system browser, and a document request to any other origin is answered empty in the view so nothing reaches that origin from it, a download is saved only where the save dialog says, and a certificate the view cannot verify is allowed only when its fingerprint equals the pin. Where the window was left is read before it opens and written when it closes, the message loop runs only while the window exists and posts no quit, so the next window this thread opens does not end at once, and a probe runs its scripts after the first page settles and then closes the window.
+ * The shell window on Windows: a plain window holding a WebView2 whose user data folder is the window's profile, so nothing is written beside the executable. The program's own page is answered from memory for every request to its https origin through a web resource handler, and a message from the page is admitted only from that origin, handed to the program and answered on the view's own thread, because WebView2 is a single-threaded apartment. A view bound to a remote panel has web messages turned off and no handler. A navigation away from the bound origin and every new window go to the system browser, a document request to any other origin is answered empty in the view so nothing reaches that origin from it, and the program's own page, which carries a content policy keeping it on its own origin, has every request elsewhere refused in the view and named once, a download is saved only where the save dialog says, and a certificate the view cannot verify is allowed only when its fingerprint equals the pin. Where the window was left is read before it opens and written when it closes, the message loop runs only while the window exists and posts no quit, so the next window this thread opens does not end at once, and a probe runs its scripts after the first page settles and then closes the window.
  */
 
 #include "ShellWindow.h"
@@ -26,6 +26,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <system_error>
@@ -77,6 +78,7 @@ namespace
         ComPtr<ICoreWebView2> View;
         std::optional<ShellOrigin> Bound;
         std::unique_ptr<ShellGate> Gate;
+        std::set<std::string> Refused;
         std::string Failure;
         bool Settled = false;
         bool ProbeStarted = false;
@@ -291,7 +293,7 @@ namespace
         }
 
         EventRegistrationToken token{};
-        view->AddWebResourceRequestedFilter(L"*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT);
+        view->AddWebResourceRequestedFilter(L"*", own ? COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL : COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT);
         if (own)
         {
             std::wstring const filter = Widen(running.Bound->Describe()) + L"/*";
@@ -305,14 +307,23 @@ namespace
                                                if (FAILED(args->get_Request(&request)) || FAILED(request->get_Uri(&uri)))
                                                    return S_OK;
                                                std::optional<ShellOrigin> const origin = ShellOrigin::Of(Take(uri));
-                                               if (origin && *origin == *running.Bound)
+                                               if (!origin)
+                                                   return S_OK;
+                                               if (*origin == *running.Bound)
                                                {
                                                    if (running.Options->Page != nullptr)
                                                        ServeOwnPage(running, args);
                                                    return S_OK;
                                                }
+                                               bool const own = running.Options->Page != nullptr;
+                                               if (own)
+                                               {
+                                                   std::string const named = origin->Describe();
+                                                   if (running.Refused.insert(named).second)
+                                                       running.Log("the program's own page asked for " + named + ", which it never reaches, so nothing was sent");
+                                               }
                                                ComPtr<ICoreWebView2WebResourceResponse> nothing;
-                                               if (SUCCEEDED(running.Environment->CreateWebResourceResponse(nullptr, 204, L"No Content", L"", &nothing)))
+                                               if (SUCCEEDED(running.Environment->CreateWebResourceResponse(nullptr, own ? 403 : 204, own ? L"Forbidden" : L"No Content", L"", &nothing)))
                                                    args->put_Response(nothing.Get());
                                                return S_OK;
                                            })

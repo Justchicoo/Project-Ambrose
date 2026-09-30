@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the launcher window's own logic against a channel a test answers as a launcher would: which screen each answer leads to, what the window sends when the operator plays or changes a setting, that a refusal shows the reason the launcher gave rather than a shape of its own, that a first run still working through its steps holds the first-run screen until it is finished, that the account is remembered by name and the password never is, that a remembered name on its own is never sent as a login, and that nothing the operator changes is decided here rather than sent back to be decided.
+ * Tests the launcher window's own logic against a channel a test answers as a launcher would: which screen each answer leads to, what the window sends when the operator plays or changes a setting, that a refusal shows the reason the launcher gave rather than a shape of its own, that a first run still working through its steps holds the first-run screen and is followed step by step until the server is open or a step names what went wrong, that looking again starts the steps over, that the account is remembered by name and the password never is, that a remembered name on its own is never sent as a login, and that nothing the operator changes is decided here rather than sent back to be decided.
  */
 
 import { describe, expect, it } from "vitest";
@@ -111,6 +111,76 @@ describe("the launcher window", () => {
         expect(state.steps).toHaveLength(2);
         expect(state.steps[1].word).toBe("2198 classes so far");
         expect(made.described, "there is nothing to describe while the setup is still working").toHaveLength(0);
+    });
+
+    it("follows the first run step by step until the server is open, then shows ready to play", async () => {
+        const made = rig();
+        const answers: SetupStep[][] = [
+            [
+                { id: "install", label: "Find your Wizard101 installation", state: "done", word: "Wizard101 r806919 at C:/Games/Wizard101" },
+                { id: "run-folder", label: "Ready the folder the game runs from", state: "doing", word: "Writing the configuration the game reads" },
+                { id: "server", label: "Reach the login server", state: "waiting", word: "Waits for the run folder" },
+            ],
+            [
+                { id: "install", label: "Find your Wizard101 installation", state: "done", word: "Wizard101 r806919 at C:/Games/Wizard101" },
+                { id: "run-folder", label: "Ready the folder the game runs from", state: "done", word: "C:/run with 4 files" },
+                { id: "server", label: "Reach the login server", state: "doing", word: "Waiting for 127.0.0.1:12000 to open, try 1 of 30" },
+            ],
+            [
+                { id: "install", label: "Find your Wizard101 installation", state: "done", word: "Wizard101 r806919 at C:/Games/Wizard101" },
+                { id: "run-folder", label: "Ready the folder the game runs from", state: "done", word: "C:/run with 4 files" },
+                { id: "server", label: "Reach the login server", state: "done", word: "127.0.0.1:12000 is open, answered on try 2" },
+            ],
+        ];
+        const seen: string[] = [];
+        let asked = 0;
+        made.channel.steps = async () => answers[Math.min(asked++, answers.length - 1)];
+        const pauses: number[] = [];
+        const state = new LauncherState(made.channel, memory(), async (milliseconds) => {
+            pauses.push(milliseconds);
+            seen.push(`${state.screen}:${state.steps.map((step) => step.state).join(",")}`);
+        });
+
+        await state.run();
+
+        expect(seen).toEqual(["first-run:done,doing,waiting", "first-run:done,done,doing"]);
+        expect(pauses).toEqual([500, 500]);
+        expect(state.screen).toBe("ready");
+        expect(state.steps[2].word).toBe("127.0.0.1:12000 is open, answered on try 2");
+        expect(made.described).toHaveLength(1);
+    });
+
+    it("stops following when a step goes wrong and shows what it said to do", async () => {
+        const made = rig();
+        let asked = 0;
+        made.channel.steps = async () =>
+            asked++ === 0
+                ? [{ id: "server", label: "Reach the login server", state: "doing", word: "try 1 of 30" }]
+                : [{ id: "server", label: "Reach the login server", state: "wrong", word: "Nothing answered at 127.0.0.1:12000 after 30 tries. Start the Ambrose servers, then look again" }];
+        const state = new LauncherState(made.channel, memory(), async () => undefined);
+
+        await state.run();
+
+        expect(state.screen).toBe("failed");
+        expect(state.reason).toContain("Start the Ambrose servers");
+        expect(made.described).toHaveLength(0);
+    });
+
+    it("starts the steps over when the operator looks again", async () => {
+        const made = rig();
+        const done: SetupStep[] = [{ id: "server", label: "Reach the login server", state: "done", word: "open" }];
+        let restarted = 0;
+        made.channel.again = async () => {
+            restarted++;
+            return [{ id: "server", label: "Reach the login server", state: "doing", word: "try 1 of 30" }];
+        };
+        made.channel.steps = async () => done;
+        const state = new LauncherState(made.channel, memory(), async () => undefined);
+
+        await state.again();
+
+        expect(restarted).toBe(1);
+        expect(state.screen).toBe("ready");
     });
 
     it("names the step that went wrong rather than saying only that something did", async () => {

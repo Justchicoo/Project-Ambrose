@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The test projects: the logic and token checks with no browser, every story in Chromium and in WebKit with the accessibility gate, because the launcher window runs in WebKitGTK, and the panel's own logic with no browser and its pages mounted in Chromium.
+ * The test projects: the logic and token checks with no browser, every story in Chromium and in WebKit with the accessibility gate, because the launcher window runs in WebKitGTK, the launcher window's own logic with no browser and its screens mounted in Chromium and WebKit, and the panel's own logic with no browser and its pages mounted in Chromium.
  */
 
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
@@ -59,6 +59,21 @@ export default defineConfig({
                     name: "launcher",
                     environment: "node",
                     include: ["apps/launcherui/src/**/*.test.ts"],
+                    exclude: ["apps/launcherui/src/**/*.browser.test.ts"],
+                },
+            },
+            {
+                plugins: ambrosePlugins(),
+                test: {
+                    name: "launcher-browser",
+                    include: ["apps/launcherui/src/**/*.browser.test.ts"],
+                    setupFiles: [browserSetup],
+                    browser: {
+                        enabled: true,
+                        headless: true,
+                        provider: playwright(),
+                        instances: [{ browser: "chromium" }, { browser: "webkit" }],
+                    },
                 },
             },
             {

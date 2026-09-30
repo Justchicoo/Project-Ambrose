@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Looks a request up in a compiled-in page: a path matches a file only exactly and with no parent segment, the root and unknown paths outside the API prefix fall back to index.html, the API prefix never does, and the answer carries the file's entity tag with an immutable cache header for hashed assets and a revalidating one for everything else.
+ * Looks a request up in a compiled-in page: a path matches a file only exactly and with no parent segment, the root and unknown paths outside the API prefix fall back to index.html, the API prefix never does, and the answer carries the content policy that keeps the page on its own origin and the file's entity tag, with an immutable cache header for hashed assets and a revalidating one for everything else.
  */
 
 #include "EmbeddedPage.h"
@@ -57,5 +57,6 @@ EmbeddedAnswer EmbeddedPage::Serve(std::string_view target) const
     answer.Headers.emplace_back("Cache-Control", std::string(answer.File->Hashed ? ImmutableCache : RevalidateCache));
     if (!answer.File->EntityTag.empty())
         answer.Headers.emplace_back("ETag", std::string(answer.File->EntityTag));
+    answer.Headers.emplace_back("Content-Security-Policy", std::string(ContentPolicy));
     return answer;
 }

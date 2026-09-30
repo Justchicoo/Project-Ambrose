@@ -1084,12 +1084,12 @@ Added on 2026-09-17 at the maintainer's direction, who approved the look in doc/
 **Acceptance**
 
 - [ ] Dev-gated (the maintainer's own machine): the window opens, shows the install it found and the server it will join, and Play starts the client in the window size shown, with nothing written inside the install
-- [ ] The first run screen shows each step as it happens, ending with the server open, and a step that fails names the cause and what to do
-- [ ] Every screen can be used from the keyboard alone, every control has a label, and the window restores its size and position after a restart
-- [ ] The page and the console options build the same plan, proved by a test that compares them
-- [ ] The window makes no network request: a capture of the run shows traffic only to the login server
-- [ ] On a machine with no web view, the launcher says so once and runs as the console program
-- [ ] Unit tests cover the page's states and its refusals, and they run in CI with the dashboard's job
+- [x] The first run screen shows each step as it happens, ending with the server open, and a step that fails names the cause and what to do (LauncherStepsTest's four cases: one step moves on per ask, the install and run folder carry their own numbers, the login server is asked once a second and the steps end with it open, a failing step names its cause and the setting or option to change, and the server is given up on after thirty tries; the launcher project's page tests follow the steps until the server is open or a step goes wrong; and App.browser.test.ts shows the first run screen with each step labelled)
+- [x] Every screen can be used from the keyboard alone, every control has a label, and the window restores its size and position after a restart (App.browser.test.ts in Chromium and WebKit reaches Play, settings and back, a changed setting and Look again with Tab and Enter alone, and every screen passes the axe gate with every control labelled; LauncherPlaceTest for the place the shell's window writes as it closes and reads back as it opens)
+- [x] The page and the console options build the same plan, proved by a test that compares them (LauncherChannelTest.AMessageAndTheConsoleOptionsBuildTheSamePlan)
+- [x] The window makes no network request: a capture of the run shows traffic only to the login server (ShellSmoke on Windows and Linux: the launcher page's resource timing lists nothing from any origin but its own, and a request the page makes to a loopback listener is refused by its content policy and the shell and never arrives)
+- [x] On a machine with no web view, the launcher says so once and runs as the console program (the Launcher CTest runs --window-ui --dry-run with WebView2 pointed at an empty folder on Windows, and with no display elsewhere, and finds the notice once and the console run)
+- [x] Unit tests cover the page's states and its refusals, and they run in CI with the dashboard's job (apps/launcherui's launcher project, 21 cases, runs in `npm run test:logic` and its launcher-browser project in `npm run test:browser`, both of which the front-end job runs)
 
 ### Detailed spec
 
