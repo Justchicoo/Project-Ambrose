@@ -307,7 +307,9 @@ TEST(FilesServiceTest, AClientDerivedRootRefusesEveryBytePathForAnOwnerAndAViewe
         Json const body = Json::parse(read.Body, nullptr, false);
         EXPECT_EQ(body.value("error", std::string()), "client_derived");
         EXPECT_EQ(body.value("root", std::string()), "client");
-        EXPECT_EQ(read.Body.find("MZ"), std::string::npos);
+        Json refusal = body;
+        refusal.erase("request_id");
+        EXPECT_EQ(refusal.dump().find("MZ"), std::string::npos) << "no byte of the program reaches the answer: " << read.Body;
 
         AdminResponse const types = rig.Get(who, "/api/files/data/content", "path=types/r806919.types.json");
         EXPECT_EQ(types.Status, 403) << types.Body;
