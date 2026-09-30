@@ -681,7 +681,7 @@ class StressTests(unittest.TestCase):
                     "sys.exit(1 if odd else 0)",
                 ]))
             keep = os.path.join(folder, "kept")
-            code = ci_stress.main([sys.executable, "--filter", "Fake.*", "--copies", "2", "--runs", "3", "--keep", keep, "--label", "fake", "--", fake])
+            code = ci_stress.main([sys.executable, "--filter", "Fake.*", "--copies", "2", "--runs", "3", "--keep", keep, "--label", "fake", "--arg", fake])
             self.assertEqual(code, 1)
             self.assertEqual(len([name for name in os.listdir(folder) if name.startswith("count-")]), 6)
             self.assertEqual(len(os.listdir(keep)), 3)

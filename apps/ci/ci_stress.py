@@ -124,7 +124,7 @@ def main(argv=None):
     parser.add_argument("--busy", type=int, default=0, help="busy loops loading the machine beside the copies")
     parser.add_argument("--label", default="stress", help="the name the summary is printed under")
     parser.add_argument("--keep", help="a folder to keep each failing run's output in")
-    parser.add_argument("extra", nargs="*", help="arguments each run is given before the filter, after --")
+    parser.add_argument("--arg", action="append", default=[], dest="extra", help="an argument each run is given before the filter; repeat it for more, and write --arg=<value> for one that starts with a dash")
     args = parser.parse_args(argv)
     if args.copies < 1 or args.runs < 1 or args.busy < 0:
         parser.error("--copies and --runs must be at least 1 and --busy at least 0")
