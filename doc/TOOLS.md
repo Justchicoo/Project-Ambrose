@@ -146,7 +146,7 @@ Turn the 104,869 ObjectData templates, 18,173 Spells, 599 Decks, 740 TalentData,
 Create and update the login, characters and world databases from base/ plus dated updates. Enforce SQL style so that generated and hand-written content is idempotent and consistent. Every other authoring tool relies on it.
 
 - **Form:** CLI (C++ dbimport) + Python/shell CI checks
-- **Inspired by:** AzerothCore dbimport, updates table (SHA-1 hash + state), apps/ci/ci-pending-sql.sh, apps/codestyle/codestyle-sql.py
+- **Inspired by:** AzerothCore dbimport, updates table (SHA-1 hash + state), AzerothCore's ci-pending-sql.sh, apps/codestyle/codestyle-sql.py
 - **Lives in:** src/tools/dbimport/, apps/ci/, apps/codestyle/
 - **Needs:** src/server/database connection pool and updater; data/sql/base/db_world populated
 
@@ -155,7 +155,7 @@ Create and update the login, characters and world databases from base/ plus date
 - updates table: name, SHA-1 hash, state (RELEASED/CUSTOM/MODULE/PENDING/ARCHIVED), timestamp, speed
 - Redundancy mode: re-applies an edited pending file on dev when its hash changes (so Studio re-saves work)
 - Also applies module data/sql folders
-- ci-pending-sql: renames each pending rev_<unix seconds>_<short-name>.sql to the next free YYYY_MM_DD_NN.sql on merge
+- `apps/ci/ci_sql.py` (built in 3.19): `promote` renames each pending rev_<unix seconds>_<short-name>.sql to the next free YYYY_MM_DD_NN.sql at landing, `check` refuses a change to an applied update or a base file and checks new files' names and headers, and `apply` runs base, released and pending SQL in the updater's order on fresh databases through the mysql client, naming the file the server refuses; CI runs all three
 - codestyle-sql: no tabs, trailing whitespace or double blank lines; final newline; every INSERT preceded by a scoped DELETE; column names match base/ schema; Ambrose file header present
 - Schema check: SQL columns and types must match the world schema the stores declare (17.173)
 

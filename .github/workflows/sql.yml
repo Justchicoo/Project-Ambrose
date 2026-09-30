@@ -1,0 +1,41 @@
+# Project Ambrose by Imjustchico
+# Applies every base, released and pending SQL file in the updater's own order to fresh databases on a MySQL 8 container whenever a pull request or a push to main changes the SQL or the tool that applies it, failing and naming the first file the server refuses, with no build of the servers.
+name: sql
+
+on:
+  push:
+    branches: [main]
+    paths: ["data/sql/**", "apps/ci/ci_sql.py", ".github/workflows/sql.yml"]
+  pull_request:
+    paths: ["data/sql/**", "apps/ci/ci_sql.py", ".github/workflows/sql.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: sql-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    name: apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ambrose-sql-check
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pambrose-sql-check --silent"
+          --health-interval=3s --health-timeout=3s --health-retries=40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Apply the SQL to fresh databases
+        env:
+          MYSQL_PWD: ambrose-sql-check
+        run: python apps/ci/ci_sql.py apply --host 127.0.0.1 --port 3306 --user root

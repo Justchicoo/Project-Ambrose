@@ -847,9 +847,9 @@ The updater copes with renamed, edited, deleted and pending update files the way
 
 **Acceptance**
 
-- [ ] Editing an existing updates file fails ci-sql-check
-- [ ] Merged pending_db_world/rev_1767225600_npc.sql becomes <today>_00.sql
-- [ ] Pending SQL with a syntax error fails the DB job
+- [x] Editing an existing updates file fails ci-sql-check (`SqlTests.test_editing_an_applied_update_fails_unless_a_squash_says_why`: `ci_sql.py check` over a commit that edits `data/sql/updates/db_world/2026_01_01_00.sql` fails, and passes only with a squash label or a `Squashes SQL:` line; the checks job runs it as its SQL changes step)
+- [x] Merged pending_db_world/rev_1767225600_npc.sql becomes <today>_00.sql (`SqlTests.test_a_pending_update_takes_the_next_free_number_for_its_day_in_the_order_it_was_written`: rev_1767225600_npc.sql becomes 2026_09_30_01.sql beside an existing _00, as a git rename; on main, `ci_sql.py promote` moved the waiting rev_1790241513_zone-teleport.sql to 2026_09_30_02.sql, and the checks job's Pending SQL on main step fails while one is left)
+- [x] Pending SQL with a syntax error fails the DB job (`ci_sql.py apply` against a fresh MySQL 8.0, as the sql workflow runs it: every base, released and pending file applies, and with a pending rev_1790260000_broken.sql holding an unfinished CREATE TABLE it exits 1 naming that file with ERROR 1064)
 
 ### Detailed spec from FND-19: apps/ci: pending_ SQL promotion and SQL validation jobs
 
@@ -863,10 +863,12 @@ Pending SQL from merged PRs becomes correctly numbered dated files, and CI prove
 
 **Acceptance**
 
-- [ ] A PR editing data/sql/updates/db_world/2026_01_01_00.sql fails ci-sql-check
-- [ ] Merging a PR with pending_db_world/rev_1767225600_npc.sql produces updates/db_world/<today>_00.sql, or _01 if _00 exists
-- [ ] A PR whose pending SQL has a syntax error fails the DB job, naming the file
-- [ ] Real client: n/a
+- [x] A PR editing data/sql/updates/db_world/2026_01_01_00.sql fails ci-sql-check (`SqlTests.test_editing_an_applied_update_fails_unless_a_squash_says_why`: `ci_sql.py check` over a commit that edits `data/sql/updates/db_world/2026_01_01_00.sql` fails, and passes only with a squash label or a `Squashes SQL:` line; the checks job runs it as its SQL changes step)
+- [x] Merging a PR with pending_db_world/rev_1767225600_npc.sql produces updates/db_world/<today>_00.sql, or _01 if _00 exists (`SqlTests.test_a_pending_update_takes_the_next_free_number_for_its_day_in_the_order_it_was_written`: rev_1767225600_npc.sql becomes 2026_09_30_01.sql beside an existing _00, as a git rename; on main, `ci_sql.py promote` moved the waiting rev_1790241513_zone-teleport.sql to 2026_09_30_02.sql, and the checks job's Pending SQL on main step fails while one is left)
+- [x] A PR whose pending SQL has a syntax error fails the DB job, naming the file (`ci_sql.py apply` against a fresh MySQL 8.0, as the sql workflow runs it: every base, released and pending file applies, and with a pending rev_1790260000_broken.sql holding an unfinished CREATE TABLE it exits 1 naming that file with ERROR 1064)
+- [x] Real client: n/a
+
+Built as one tool, `apps/ci/ci_sql.py`, rather than the two scripts the deliverables name, with its three commands run by the checks job and `.github/workflows/sql.yml`. Promotion happens in the landing commit instead of a bot push, as recorded under Resolved in doc/ROADMAP.md, because main's ruleset refuses a push whose checks have not run.
 
 **Risks**
 

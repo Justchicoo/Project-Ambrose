@@ -12,6 +12,7 @@ import tempfile
 import time
 import unittest
 import urllib.error
+from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,6 +28,7 @@ import ci_findings
 import ci_forbidden_files
 import ci_roadmap_state
 import ci_select_legs
+import ci_sql
 import ci_stress
 import ci_triage
 import ci_usage
@@ -549,6 +551,93 @@ class UsageTests(unittest.TestCase):
 
 
 
+class SqlTests(unittest.TestCase):
+    HEADER = "-- Project Ambrose by Imjustchico\n-- Rows for a test.\n"
+
+    def repository(self, folder):
+        root = Path(folder)
+        for command in (["init", "-q", "-b", "main"], ["config", "user.email", "test@example.invalid"], ["config", "user.name", "Test"]):
+            subprocess.run(["git", "-C", folder, *command], check=True, capture_output=True)
+        return root
+
+    def write(self, root, path, text):
+        file = root / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(text, encoding="utf-8")
+
+    def commit(self, root, message="change"):
+        subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(root), "commit", "-q", "-m", message], check=True, capture_output=True)
+        return subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+
+    def test_editing_an_applied_update_fails_unless_a_squash_says_why(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.repository(folder)
+            self.write(root, "data/sql/updates/db_world/2026_01_01_00.sql", self.HEADER + "SELECT 1;\n")
+            before = self.commit(root)
+            self.write(root, "data/sql/updates/db_world/2026_01_01_00.sql", self.HEADER + "SELECT 2;\n")
+            self.commit(root)
+            self.assertEqual(ci_sql.main(["--root", folder, "check", "--range", f"{before}..HEAD"]), 1)
+            self.assertEqual(ci_sql.main(["--root", folder, "check", "--range", f"{before}..HEAD", "--labels", '["squash"]']), 0)
+            self.write(root, "data/sql/updates/db_world/2026_01_01_00.sql", self.HEADER + "SELECT 3;\n")
+            self.commit(root, "Fold the first updates together\n\nSquashes SQL: the three first updates are one now")
+            self.assertEqual(ci_sql.main(["--root", folder, "check", "--range", f"{before}..HEAD"]), 0)
+
+    def test_new_files_are_named_and_headed_as_the_updater_reads_them(self):
+        read = {
+            "data/sql/updates/db_world/2026_09_30_00.sql": self.HEADER,
+            "data/sql/updates/db_world/zone-rows.sql": self.HEADER,
+            "data/sql/updates/pending_db_world/rev_1790241513_zone-teleport.sql": self.HEADER,
+            "data/sql/updates/pending_db_world/doors.sql": self.HEADER,
+            "data/sql/updates/pending_db_login/rev_1790241514_bans.sql": "CREATE TABLE `bans` (`id` INT);\n",
+        }.get
+        problems = ci_sql.check([("A", path) for path in (
+            "data/sql/updates/db_world/2026_09_30_00.sql",
+            "data/sql/updates/db_world/zone-rows.sql",
+            "data/sql/updates/pending_db_world/rev_1790241513_zone-teleport.sql",
+            "data/sql/updates/pending_db_world/doors.sql",
+            "data/sql/updates/pending_db_login/rev_1790241514_bans.sql",
+            "data/sql/updates/pending_db_world/README.md")], read)
+        self.assertEqual(len(problems), 3, problems)
+        self.assertIn("zone-rows.sql: a released update is named", problems[0])
+        self.assertIn("doors.sql: a pending update is named rev_", problems[1])
+        self.assertIn("rev_1790241514_bans.sql: does not open with the two-line header", problems[2])
+
+    def test_a_pending_update_takes_the_next_free_number_for_its_day_in_the_order_it_was_written(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.repository(folder)
+            self.write(root, "data/sql/updates/db_world/2026_09_30_00.sql", self.HEADER)
+            self.write(root, "data/sql/updates/pending_db_world/rev_1790300000_later.sql", self.HEADER)
+            self.write(root, "data/sql/updates/pending_db_world/rev_1767225600_npc.sql", self.HEADER)
+            self.write(root, "data/sql/updates/pending_db_login/rev_1767225600_bans.sql", self.HEADER)
+            self.commit(root)
+            self.assertEqual(ci_sql.main(["--root", folder, "promote", "--check", "--date", "2026-09-30"]), 1)
+            self.assertEqual(ci_sql.main(["--root", folder, "promote", "--date", "2026-09-30"]), 0)
+            self.assertTrue((root / "data/sql/updates/db_world/2026_09_30_01.sql").exists())
+            self.assertTrue((root / "data/sql/updates/db_world/2026_09_30_02.sql").exists())
+            self.assertTrue((root / "data/sql/updates/db_login/2026_09_30_00.sql").exists())
+            self.assertEqual(sorted(path.name for path in (root / "data/sql/updates/pending_db_world").glob("*.sql")), [])
+            first = (root / "data/sql/updates/db_world/2026_09_30_01.sql")
+            self.assertEqual(first.read_text(encoding="utf-8"), self.HEADER)
+            status = subprocess.run(["git", "-C", folder, "status", "--porcelain"], check=True, capture_output=True, text=True).stdout
+            self.assertIn("R  data/sql/updates/pending_db_world/rev_1767225600_npc.sql -> data/sql/updates/db_world/2026_09_30_01.sql", status)
+            self.assertEqual(ci_sql.main(["--root", folder, "promote", "--check", "--date", "2026-09-30"]), 0)
+
+    def test_base_files_come_first_with_the_bookkeeping_tables_last_then_released_then_pending(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for path in ("data/sql/base/db_world/updates.sql", "data/sql/base/db_world/updates_include.sql", "data/sql/base/db_world/zone_extractor.sql",
+                         "data/sql/updates/db_world/2026_09_30_00.sql", "data/sql/updates/db_world/2026_01_01_00.sql",
+                         "data/sql/updates/pending_db_world/rev_1790241513_zone-teleport.sql", "data/sql/base/db_login/updates.sql"):
+                self.write(root, path, self.HEADER)
+            order = [path.relative_to(root).as_posix() for path in ci_sql.ordered_files(root, "world")]
+            self.assertEqual(order, [
+                "data/sql/base/db_world/zone_extractor.sql", "data/sql/base/db_world/updates.sql", "data/sql/base/db_world/updates_include.sql",
+                "data/sql/updates/db_world/2026_01_01_00.sql", "data/sql/updates/db_world/2026_09_30_00.sql",
+                "data/sql/updates/pending_db_world/rev_1790241513_zone-teleport.sql"])
+            self.assertEqual(ci_sql.databases(root), ["login", "world"])
+
+
 class StressTests(unittest.TestCase):
     RACE = "\n".join([
         "[ RUN      ] AdminServerTest.RotatesTheToken",
@@ -958,6 +1047,12 @@ class MilestoneTrackTests(unittest.TestCase):
         self.assertEqual(ci_local.command_for("Contributor track paths", paths, "upstream/main", "milestone/6.10-schemas"),
                          'python apps/ci/ci_contrib_paths.py --range "upstream/main...HEAD" --branch "milestone/6.10-schemas"')
         self.assertIn('--range "upstream/main..HEAD"', ci_local.command_for("Commit trailers", "python apps/ci/ci_commit_trailer.py --from-github-env", "upstream/main", ""))
+        sql = [command for name, command in found if name == "SQL changes"][0]
+        self.assertEqual(ci_local.command_for("SQL changes", sql, "upstream/main", "milestone/3.19-sql"), 'python apps/ci/ci_sql.py check --range "upstream/main...HEAD"')
+        pending = [command for name, command in found if name == "Pending SQL on main"][0]
+        self.assertEqual(ci_local.command_for("Pending SQL on main", pending, "upstream/main", ""), "python apps/ci/ci_sql.py promote --check")
+        self.assertIsNone(ci_local.command_for("Pending SQL on main", pending, "upstream/main", "milestone/3.19-sql"))
+        self.assertEqual(ci_local.skipped_because(pending), "CI runs it only on a push to main")
 
     def test_a_milestone_branch_stays_inside_its_own_phase_file(self):
         other = "doc/roadmap/phase-05-the-zone-comes-alive-for-one-player.md"

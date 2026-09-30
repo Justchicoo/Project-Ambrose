@@ -34,7 +34,15 @@ def command_for(name, command, base, branch):
         return f'python apps/ci/ci_roadmap_state.py --range "{base}..HEAD" --branch "{branch}"'
     if "ci_commit_trailer" in command:
         return f'python apps/ci/ci_commit_trailer.py --range "{base}..HEAD"'
+    if "ci_sql.py check" in command:
+        return f'python apps/ci/ci_sql.py check --range "{base}...HEAD"'
+    if "ci_sql.py promote" in command:
+        return None if branch else command
     return command
+
+
+def skipped_because(command):
+    return "CI runs it only on a push to main" if "ci_sql.py promote" in command else "give --branch to run it"
 
 
 def main(argv=None):
@@ -48,15 +56,15 @@ def main(argv=None):
         remote = upstream(ROOT)
         subprocess.run(["git", "fetch", "-q", remote, "main"], cwd=ROOT)
         base = f"{remote}/main"
-    planned = [(name, command_for(name, command, base, arguments.branch)) for name, command in steps(ROOT)]
+    planned = [(name, command_for(name, command, base, arguments.branch), skipped_because(command)) for name, command in steps(ROOT)]
     if arguments.list:
-        for name, command in planned:
-            print(f"{name}: {command or 'skipped: give --branch to run it'}")
+        for name, command, reason in planned:
+            print(f"{name}: {command or 'skipped: ' + reason}")
         return 0
     failed = []
-    for name, command in planned:
+    for name, command, reason in planned:
         if command is None:
-            print(f"SKIP  {name}: give --branch to run it")
+            print(f"SKIP  {name}: {reason}")
             continue
         result = subprocess.run(command, cwd=ROOT, shell=True, capture_output=True, text=True)
         if result.returncode:
