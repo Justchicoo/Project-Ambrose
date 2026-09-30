@@ -39,6 +39,7 @@ namespace
             Accept<&GameSession::HandleLogClientResolution>(entered, MessageProcessing::InPlace, "GameSession::HandleLogClientResolution");
             Accept<&GameSession::HandleLogPatchClientPatchTime>(entered, MessageProcessing::InPlace, "GameSession::HandleLogPatchClientPatchTime");
             Accept<&GameSession::HandleQuestFinderOption>(entered, MessageProcessing::InPlace, "GameSession::HandleQuestFinderOption");
+            Accept<&GameSession::HandleUsePotion>(entered, MessageProcessing::Queued, "GameSession::HandleUsePotion");
 
             SessionStatusMask const inWorld = SessionStatuses::InWorld;
             Accept<&GameSession::HandleCombatMove>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatMove");
@@ -59,6 +60,12 @@ namespace
             Refuse(GameService, "MSG_RADIALQUICKCHATEXT");
             Refuse(WizardService, "MSG_ADDSPELLTOBOOK");
             Refuse(WizardService, "MSG_REMOVESPELLFROMBOOK");
+            Refuse(WizardService, "MSG_UPDATEGOLD");
+            Refuse(WizardService, "MSG_UPDATEHEALTH");
+            Refuse(WizardService, "MSG_UPDATEMANA");
+            Refuse(WizardService, "MSG_UPDATEPOTIONS");
+            Refuse(WizardService, "MSG_UPDATEPOWERPIP");
+            Refuse(WizardService, "MSG_UPDATESHADOWPIPRATING");
 
             SessionStatusMask const any = SessionStatuses::Connected | SessionStatuses::Authenticated | SessionStatuses::CharacterSelected | SessionStatuses::LoggedIn | SessionStatuses::InWorld;
             PendingRest(GameService, any);
@@ -82,6 +89,12 @@ namespace
             Sends<CombatPhaseForSpectators>();
             Sends<AddSpellToBook>();
             Sends<RemoveSpellFromBook>();
+            Sends<UpdateGold>();
+            Sends<UpdateHealth>();
+            Sends<UpdateMana>();
+            Sends<UpdatePotions>();
+            Sends<UpdatePowerPip>();
+            Sends<UpdateShadowPipRating>();
             Sends<QueryLogout>();
             Sends<ZombiePlayer>();
             Sends<DisconnectAfk>();

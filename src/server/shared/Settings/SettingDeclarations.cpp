@@ -87,6 +87,10 @@ namespace
                 "How long an in-world wizard may be idle before the client receives MSG_DISCONNECT_AFK."),
             Unsigned("Player.AfkTime", "1800", "0", "86400", "s", "Player", Game, Live,
                 "How long an in-world wizard may be idle before its session is disconnected; 0 disables the AFK timer."),
+            Float("Potion.RestoreFraction", "1", "0", "1", "", "Player", Game, Live,
+                "The share of a wizard's maximum health and mana one potion restores, read as each potion is drunk; the real amount is the live game's own and no client file holds it."),
+            Unsigned("Potion.RefillInterval", "0", "0", "86400", "s", "Player", Game, Live,
+                "How often an in-world wizard's potion gains one charge up to its maximum, read at each tick; 0 leaves potions to be filled some other way."),
 
             Text("Realm.Name", "Ambrose", "64", "Realms", Game, NextUse, "The realm's name, announced to the login server with each heartbeat and sent in MSG_LOGINCOMPLETE."),
             Text("Realm.Address", "", "255", "Realms", Game, NextUse, "The address the login server sends players to for this realm; empty uses PublicAddress, then BindIP."),

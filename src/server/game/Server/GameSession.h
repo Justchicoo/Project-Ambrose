@@ -112,6 +112,13 @@ public:
     PlayerSpellbook const* GetSpellbook() const noexcept { return _spellbook ? &*_spellbook : nullptr; }
     SpellbookChange LearnSpell(uint32 spellId);
     SpellbookChange UnlearnSpell(uint32 spellId);
+    bool SetHealth(int32 hitpoints, bool displayDiff = true);
+    bool SetMana(int32 mana, bool displayDiff = true);
+    std::optional<GoldChange> ModifyGold(int64 delta);
+    bool SetPotionCharge(float charge);
+    bool SetPowerPip(float chance);
+    bool SetShadowPipRating(float rating);
+    bool DrinkPotion();
 
     void HandleGetTimedAccessPasses(GameMessages::GetTimedAccessPasses& message);
     void HandleGetSubscriberOnlyItems(GameMessages::GetSubscriberOnlyItems& message);
@@ -120,6 +127,7 @@ public:
     void HandleLogClientResolution(GameMessages::LogClientResolution& message);
     void HandleLogPatchClientPatchTime(GameMessages::LogPatchClientPatchTime& message);
     void HandleQuestFinderOption(GameMessages::QuestFinderOption& message);
+    void HandleUsePotion(GameMessages::UsePotion& message);
 
     void HandleCombatMove(GameMessages::CombatMove& message);
     void HandleCombatDraw(GameMessages::CombatDraw& message);
@@ -140,6 +148,7 @@ protected:
 private:
     friend class World;
     friend struct GameSessionLifecycleTestAccess;
+    friend struct GameSessionVitalsTestAccess;
 
     std::shared_ptr<GameSession> SharedSelf();
     SQLOperation::CompletionHandler MakeCompletionHandler();
@@ -153,6 +162,8 @@ private:
     void LoadSpells(LoginKeyClaim const& claim, CharacterSummary character, std::optional<CharacterStats> stored);
     void EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character, std::optional<CharacterStats> const& stored, std::vector<CharacterSpell> const& spells);
     void SaveStats();
+    void SendPotions();
+    void RefillPotion(std::chrono::steady_clock::time_point now);
     void SaveSpell(CharacterSpell const& spell);
     void SavePosition(PlayerPosition const& position);
     void RefuseEntry(LoginKeyClaim const& claim, std::string const& reason);
@@ -181,6 +192,8 @@ private:
     std::chrono::steady_clock::time_point const _connectedAt = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point _afkStarted;
     bool _afkTimerStarted = false;
+    std::chrono::steady_clock::time_point _potionRefillStarted;
+    bool _potionRefilling = false;
     bool _afkWarned = false;
     bool _linkDeadNotified = false;
     uint8 _reattach = 0;

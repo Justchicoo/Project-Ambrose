@@ -554,6 +554,96 @@ namespace GameMessages
         }
     };
 
+    struct UpdateGold
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_UPDATEGOLD";
+        int32 Gold = 0;
+        int32 MaxGold = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Gold", &UpdateGold::Gold), DmlField("MaxGold", &UpdateGold::MaxGold) };
+        }
+    };
+
+    struct UpdateHealth
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_UPDATEHEALTH";
+        uint64 CharacterId = 0;
+        int32 NewHealth = 0;
+        int32 NewHealthMax = 0;
+        uint8 DisplayDiff = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("CharacterID", &UpdateHealth::CharacterId), DmlField("NewHealth", &UpdateHealth::NewHealth), DmlField("NewHealthMax", &UpdateHealth::NewHealthMax), DmlField("DisplayDiff", &UpdateHealth::DisplayDiff) };
+        }
+    };
+
+    struct UpdateMana
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_UPDATEMANA";
+        int32 Mana = 0;
+        int32 MaxMana = 0;
+        uint8 DisplayDiff = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Mana", &UpdateMana::Mana), DmlField("MaxMana", &UpdateMana::MaxMana), DmlField("DisplayDiff", &UpdateMana::DisplayDiff) };
+        }
+    };
+
+    struct UpdatePotions
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_UPDATEPOTIONS";
+        float PotionMax = 0.0f;
+        float PotionCharge = 0.0f;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("PotionMax", &UpdatePotions::PotionMax), DmlField("PotionCharge", &UpdatePotions::PotionCharge) };
+        }
+    };
+
+    struct UpdatePowerPip
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_UPDATEPOWERPIP";
+        float PowerPip = 0.0f;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("PowerPip", &UpdatePowerPip::PowerPip) };
+        }
+    };
+
+    struct UpdateShadowPipRating
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_UPDATESHADOWPIPRATING";
+        float ShadowPipRating = 0.0f;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ShadowPipRating", &UpdateShadowPipRating::ShadowPipRating) };
+        }
+    };
+
+    struct UsePotion
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_USEPOTION";
+
+        static constexpr auto Fields()
+        {
+            return std::tuple<>{};
+        }
+    };
+
     struct RemoveSpellFromBook
     {
         static constexpr uint8 ServiceId = WizardService;

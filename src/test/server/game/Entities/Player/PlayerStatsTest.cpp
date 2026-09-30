@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -218,4 +219,43 @@ TEST_F(PlayerStatsTest, TheGameStatsAndSchoolBehaviorCarryEveryValueAndReadBackT
             EXPECT_TRUE(*sent == *read) << property.Name << " did not read back";
         }
     }
+}
+
+TEST_F(PlayerStatsTest, GoldStaysWithinThePouchAndWhatDidNotFitIsHandedBack)
+{
+    std::optional<PlayerStats> stats = Create();
+    ASSERT_TRUE(stats);
+    GoldChange const added = stats->ModifyGold(500);
+    EXPECT_EQ(added.Gold, 500);
+    EXPECT_EQ(added.Overflow, 0);
+    GoldChange const over = stats->ModifyGold(int64{ stats->GetGoldPouch() });
+    EXPECT_EQ(over.Gold, stats->GetGoldPouch()) << "a full pouch holds no more";
+    EXPECT_EQ(over.Overflow, 500);
+    GoldChange const under = stats->ModifyGold(-int64{ stats->GetGoldPouch() } - 10);
+    EXPECT_EQ(under.Gold, 0);
+    EXPECT_EQ(under.Overflow, -10) << "gold never goes below zero";
+    EXPECT_EQ(stats->ToStored().Gold, 0);
+}
+
+TEST_F(PlayerStatsTest, APotionWithLessThanOneChargeChangesNothing)
+{
+    CharacterStats stored;
+    stored.Health = 100;
+    stored.Mana = 1;
+    stored.PotionMax = 3.0f;
+    stored.PotionCharge = 0.5f;
+    std::optional<PlayerStats> stats = Create(stored);
+    ASSERT_TRUE(stats);
+    EXPECT_FALSE(stats->UsePotion(1.0f));
+    EXPECT_EQ(stats->GetHitpoints(), 100);
+    EXPECT_EQ(stats->GetMana(), 1);
+    EXPECT_EQ(stats->GetPotionCharge(), 0.5f);
+
+    EXPECT_EQ(stats->SetPotionCharge(5.0f), 3.0f) << "a potion holds no more than its maximum";
+    EXPECT_TRUE(stats->UsePotion(0.5f));
+    EXPECT_EQ(stats->GetPotionCharge(), 2.0f);
+    EXPECT_EQ(stats->GetHitpoints(), 100 + (stats->GetMaxHitpoints() + 1) / 2);
+    EXPECT_EQ(stats->GetMana(), std::min(1 + (stats->GetMaxMana() + 1) / 2, stats->GetMaxMana()));
+    EXPECT_EQ(stats->SetHitpoints(-5), 0);
+    EXPECT_EQ(stats->SetMana(1 << 30), stats->GetMaxMana());
 }

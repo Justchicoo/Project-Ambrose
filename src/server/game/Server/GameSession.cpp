@@ -98,6 +98,7 @@ void GameSession::WorldUpdate(std::chrono::steady_clock::time_point now)
         return;
     if (IsAttached() && _inWorld.load(std::memory_order_relaxed) && GetStatus() == SessionStatus::InWorld)
     {
+        RefillPotion(now);
         if (!_afkTimerStarted)
         {
             _afkStarted = now;
@@ -736,6 +737,134 @@ void GameSession::SaveStats()
     }
     if (CharacterRepository::Statement statement = CharacterRepository::PrepareSaveStats(_worldGuid, stored))
         CharacterDatabase.Execute(std::move(statement));
+}
+
+bool GameSession::SetHealth(int32 hitpoints, bool displayDiff)
+{
+    if (!_stats)
+        return false;
+    GameMessages::UpdateHealth update;
+    update.CharacterId = _worldGuid;
+    update.NewHealth = _stats->SetHitpoints(hitpoints);
+    update.NewHealthMax = _stats->GetMaxHitpoints();
+    update.DisplayDiff = displayDiff ? 1 : 0;
+    SendDmlMessage(update);
+    SaveStats();
+    return true;
+}
+
+bool GameSession::SetMana(int32 mana, bool displayDiff)
+{
+    if (!_stats)
+        return false;
+    GameMessages::UpdateMana update;
+    update.Mana = _stats->SetMana(mana);
+    update.MaxMana = _stats->GetMaxMana();
+    update.DisplayDiff = displayDiff ? 1 : 0;
+    SendDmlMessage(update);
+    SaveStats();
+    return true;
+}
+
+std::optional<GoldChange> GameSession::ModifyGold(int64 delta)
+{
+    if (!_stats)
+        return std::nullopt;
+    GoldChange const change = _stats->ModifyGold(delta);
+    GameMessages::UpdateGold update;
+    update.Gold = change.Gold;
+    update.MaxGold = _stats->GetGoldPouch();
+    SendDmlMessage(update);
+    SaveStats();
+    return change;
+}
+
+void GameSession::SendPotions()
+{
+    GameMessages::UpdatePotions update;
+    update.PotionMax = _stats->GetPotionMax();
+    update.PotionCharge = _stats->GetPotionCharge();
+    SendDmlMessage(update);
+}
+
+bool GameSession::SetPotionCharge(float charge)
+{
+    if (!_stats)
+        return false;
+    _stats->SetPotionCharge(charge);
+    SendPotions();
+    SaveStats();
+    return true;
+}
+
+bool GameSession::SetPowerPip(float chance)
+{
+    if (!_stats)
+        return false;
+    _stats->SetPowerPip(chance);
+    GameMessages::UpdatePowerPip update;
+    update.PowerPip = chance;
+    SendDmlMessage(update);
+    return true;
+}
+
+bool GameSession::SetShadowPipRating(float rating)
+{
+    if (!_stats)
+        return false;
+    _stats->SetShadowPipRating(rating);
+    GameMessages::UpdateShadowPipRating update;
+    update.ShadowPipRating = rating;
+    SendDmlMessage(update);
+    return true;
+}
+
+bool GameSession::DrinkPotion()
+{
+    if (!_stats || !_stats->UsePotion(sSettings.Get<float>("Potion.RestoreFraction")))
+        return false;
+    SendPotions();
+    GameMessages::UpdateHealth health;
+    health.CharacterId = _worldGuid;
+    health.NewHealth = _stats->GetHitpoints();
+    health.NewHealthMax = _stats->GetMaxHitpoints();
+    health.DisplayDiff = 1;
+    SendDmlMessage(health);
+    GameMessages::UpdateMana mana;
+    mana.Mana = _stats->GetMana();
+    mana.MaxMana = _stats->GetMaxMana();
+    mana.DisplayDiff = 1;
+    SendDmlMessage(mana);
+    SaveStats();
+    return true;
+}
+
+void GameSession::HandleUsePotion(GameMessages::UsePotion&)
+{
+    if (!DrinkPotion())
+        LOG_DEBUG("server.gamesession", "Session {} asked to drink a potion with less than one charge, so nothing changed", GetSessionId());
+}
+
+void GameSession::RefillPotion(std::chrono::steady_clock::time_point now)
+{
+    uint32 const interval = sSettings.Get<uint32>("Potion.RefillInterval");
+    if (interval == 0 || !_stats || _stats->GetPotionCharge() >= _stats->GetPotionMax())
+    {
+        _potionRefilling = false;
+        return;
+    }
+    if (!_potionRefilling)
+    {
+        _potionRefillStarted = now;
+        _potionRefilling = true;
+        return;
+    }
+    if (now - _potionRefillStarted < std::chrono::seconds(interval))
+        return;
+    _potionRefillStarted = now;
+    _stats->SetPotionCharge(_stats->GetPotionCharge() + 1.0f);
+    SendPotions();
+    SaveStats();
 }
 
 SpellbookChange GameSession::LearnSpell(uint32 spellId)

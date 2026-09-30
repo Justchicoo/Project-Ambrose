@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds a wizard's stats from its rows and refuses a wizard whose school has no level table, naming what is missing. A wizard with no character_stats row has earned the training points every level up to its own gives and stands at full health and mana; a stored health or mana above its maximum is brought down to it, and gold above the pouch its level allows is brought down to the pouch, which is how the client's own maximums are reached: health and energy are base plus bonus, and nothing a wizard wears adds a bonus yet. A save writes health and mana as full, not as a number, whenever they stand at their maximum, so a wizard stays full when its base values change.
+ * Builds a wizard's stats from its rows and refuses a wizard whose school has no level table, naming what is missing. A wizard with no character_stats row has earned the training points every level up to its own gives and stands at full health and mana; a stored health or mana above its maximum is brought down to it, and gold above the pouch its level allows is brought down to the pouch, which is how the client's own maximums are reached: health and energy are base plus bonus, and nothing a wizard wears adds a bonus yet. A save writes health and mana as full, not as a number, whenever they stand at their maximum, so a wizard stays full when its base values change. Gold never goes below zero, nor above the pouch when the level gives one, and what a change could not hold is handed back as overflow. A potion needs one whole charge: it takes that charge and restores the given fraction of maximum health and mana, and a potion's charge stays between none and the potion's maximum.
  */
 
 #include "PlayerStats.h"
@@ -48,7 +48,47 @@ std::optional<PlayerStats> PlayerStats::Create(CharacterSummary const& character
     stats._mana = stats._stored.Mana ? std::clamp(*stats._stored.Mana, 0, std::max(maxMana, 0)) : maxMana;
     if (row->Gold > 0)
         stats._stored.Gold = std::clamp(stats._stored.Gold, 0, row->Gold);
+    stats._powerPip = row->PipChance;
+    stats._shadowPipRating = row->ShadowPipRating;
     return stats;
+}
+
+int32 PlayerStats::SetHitpoints(int32 hitpoints) noexcept
+{
+    _hitpoints = std::clamp(hitpoints, 0, std::max(GetMaxHitpoints(), 0));
+    return _hitpoints;
+}
+
+int32 PlayerStats::SetMana(int32 mana) noexcept
+{
+    _mana = std::clamp(mana, 0, std::max(GetMaxMana(), 0));
+    return _mana;
+}
+
+GoldChange PlayerStats::ModifyGold(int64 delta) noexcept
+{
+    int64 const ceiling = _base.Gold > 0 ? _base.Gold : std::numeric_limits<int32>::max();
+    int64 const wanted = int64{ _stored.Gold } + delta;
+    int64 const held = std::clamp<int64>(wanted, 0, ceiling);
+    _stored.Gold = static_cast<int32>(held);
+    return { _stored.Gold, wanted - held };
+}
+
+float PlayerStats::SetPotionCharge(float charge) noexcept
+{
+    _stored.PotionCharge = std::clamp(charge, 0.0f, std::max(_stored.PotionMax, 0.0f));
+    return _stored.PotionCharge;
+}
+
+bool PlayerStats::UsePotion(float restoreFraction) noexcept
+{
+    if (_stored.PotionCharge < 1.0f)
+        return false;
+    _stored.PotionCharge -= 1.0f;
+    float const fraction = std::clamp(restoreFraction, 0.0f, 1.0f);
+    SetHitpoints(static_cast<int32>(std::min<int64>(int64{ _hitpoints } + static_cast<int64>(std::lround(GetMaxHitpoints() * fraction)), std::numeric_limits<int32>::max())));
+    SetMana(static_cast<int32>(std::min<int64>(int64{ _mana } + static_cast<int64>(std::lround(GetMaxMana() * fraction)), std::numeric_limits<int32>::max())));
+    return true;
 }
 
 CharacterStats PlayerStats::ToStored() const
@@ -72,9 +112,9 @@ bool PlayerStats::WriteGameStats(PropertyObject& gameStats, std::string& problem
         .Set("m_currentArenaPoints", _stored.ArenaPoints)
         .Set("m_potionMax", _stored.PotionMax)
         .Set("m_potionCharge", _stored.PotionCharge)
-        .Set("m_powerPipBase", _base.PipChance)
+        .Set("m_powerPipBase", _powerPip)
         .Set("m_pipConversionBaseAllSchools", _base.PipConversionAll)
-        .Set("m_shadowPipRating", _base.ShadowPipRating)
+        .Set("m_shadowPipRating", _shadowPipRating)
         .Set("m_archmasteryBase", _base.Archmastery)
         .Set("m_referenceLevel", _level)
         .Set("m_schoolID", _schoolId)
