@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 104,
+    "done": 115,
     "total": 469,
-    "percent": 22.2
+    "percent": 24.5
   },
   "checks": {
-    "done": 907,
+    "done": 929,
     "total": 2868,
-    "percent": 31.6
+    "percent": 32.4
   },
   "contributor_track": {
     "merged": 92,
@@ -18,33 +18,33 @@
     {
       "phase": 1,
       "title": "Foundations to first handshake",
-      "milestones_done": 20,
+      "milestones_done": 22,
       "milestones_total": 22,
-      "checks_done": 192,
+      "checks_done": 197,
       "checks_total": 197
     },
     {
       "phase": 2,
       "title": "Log in to character select",
-      "milestones_done": 13,
+      "milestones_done": 15,
       "milestones_total": 15,
-      "checks_done": 114,
+      "checks_done": 119,
       "checks_total": 119
     },
     {
       "phase": 3,
       "title": "Create list and delete a wizard",
-      "milestones_done": 18,
+      "milestones_done": 23,
       "milestones_total": 28,
-      "checks_done": 151,
+      "checks_done": 158,
       "checks_total": 178
     },
     {
       "phase": 4,
       "title": "A wizard stands in ravenwood",
-      "milestones_done": 13,
+      "milestones_done": 15,
       "milestones_total": 16,
-      "checks_done": 118,
+      "checks_done": 123,
       "checks_total": 127
     },
     {

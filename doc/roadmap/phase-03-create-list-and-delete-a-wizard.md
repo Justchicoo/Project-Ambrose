@@ -363,7 +363,7 @@ Wizards can be stored, loaded per account, counted and soft-deleted, with appear
 **Acceptance**
 
 - [x] Blob starts with class hash 292458316 and decodes identically; empty equipment gives 157-221 bytes (LoginScreenInfoBuilderTest, LoginScreenInfoClientTest; corrected: an empty equipment list gives 96 bytes plus the location, and the captured 157-221 byte blobs carried equipped items)
-- [ ] Real client: 3 seeded characters show gender, hair, colors, name from name_indices, level and school
+- [x] Real client: 3 seeded characters show gender, hair, colors, name from name_indices, level and school (the client driver's charselect-three-wizards run 20260930-111102 on 2026-09-30)
 - [x] 0 characters shows an empty screen without errors (the server side passes in CharacterHandlerTest; the screen waits for the real client) (2026-09-17, retail r806919 client: the client logged 'CHARACTER LIST' and 'WizardCharacterSelect: The scene has been loaded successfully' for an account with no characters, with no error dialog)
 
 ### Detailed spec from LOG-6: Character list: REQUESTCHARACTERLIST -> STARTCHARACTERLIST / CHARACTERINFO* / CHARACTERLIST
@@ -393,7 +393,7 @@ The character select screen shows the account's wizards with correct appearance,
 
 - [x] Unit: the serialized blob starts with class hash 292458316 (WizardCharacterCreationInfo), and decoding it with our OBJ codec returns identical field values; with an empty equipment list the size falls in the observed 157-221 byte range (LoginScreenInfoBuilderTest; corrected in LoginScreenInfoClientTest against r806919: an empty equipment list gives 96 bytes plus the location's bytes, and the captured blobs were larger because the reference server filled the equipment list)
 - [x] Unit: the property flag mask excludes m_shouldRename, m_quarantined and m_lastLoginTime (flags 24), per the type dump (corrected: flags 0x18 are exactly Transmit|AuthorityTransmit, so under that mask those three properties are included; the one left out is m_behaviorTemplateNameID, flags 0x27. The reference server's blobs, which the client displayed, used the same mask; LoginScreenInfoBuilderTest checks both)
-- [ ] Real client: an account seeded with 3 characters via data/sql/custom shows 3 wizards; each shows its gender, hair and colors, and the name built from name_indices (first=(idx>>16)&0xFF, middle=(idx>>8)&0xFF, last=idx&0xFF), level and school, matching capture lines 4-9
+- [x] Real client: an account seeded with 3 characters via data/sql/custom shows 3 wizards; each shows its gender, hair and colors, and the name built from name_indices (first=(idx>>16)&0xFF, middle=(idx>>8)&0xFF, last=idx&0xFF), level and school, matching capture lines 4-9 The client driver's charselect-three-wizards run 20260930-111102 on 2026-09-30, seeding three wizards through the driver's new `more_wizards`: the login server listed 3 characters, and choosing each shows it under its own name, level and school, each with its own gender, hair and colors: Adam AngleBane, Level 1 Novice Pyromancer; Cameron LionRunner, Level 25 Adept Diviner; Alicia DaisyCatcher, Level 12 Initiate Thaumaturge.
 - [x] Real client: an account with 0 characters shows the empty select screen or the create prompt without errors (2026-09-17, retail r806919 client: the client logged 'CHARACTER LIST' and 'WizardCharacterSelect: The scene has been loaded successfully' for an account with no characters, with no error dialog)
 
 **Risks**
@@ -508,7 +508,7 @@ The handful of plain-XML ObjectProperty files (character creation config, action
 
 - [x] Unit test on synthetic XML covers nested lists and enums (XmlObjectReaderTest, with flag lists, colors, vectors, wide text, reported problems and refused documents)
 - [x] Client-gated test: CharacterCreation/CharacterCreationConfig.xml decodes to WizCharacterCreationConfig with non-empty m_creationOptions and m_schoolOptions; ActionList.xml, Chatter.xml, Colors.xml and InputBindings.xml parse with no unknown properties (XmlObjectReaderClientTest: ActionList.xml and InputBindings.xml read with no issue on the dump alone, and with the classes the install holds that the dump does not describe, from the class file the extractor or the game server builds, all five read with no issue: the creation config with its creation option and seven schools, Chatter.xml with its 24 chatter lists and Colors.xml with its 14 primary colours for boys, run on r806919 on 2026-09-29)
-- [ ] Real client, with LOG wiring: the character-creation screen offers exactly the schools and options the server validates against
+- [x] Real client, with LOG wiring: the character-creation screen offers exactly the schools and options the server validates against The client driver's create-at-slot-limit run 20260930-111225 on 2026-09-30 walks the client's creation screens: its school list offers Storm, Myth, Life, Fire, Ice, Balance and Death, exactly the 7 rows of character_create_school that `extractor names` writes and the login server validates against, and the look the client submitted read as one of its creation options.
 
 **Risks**
 
@@ -692,7 +692,7 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 - [x] Unit: a truncated or garbage blob returns ErrorCode!=0 without crashing or closing the session (2026-09-24: CreateCharacterDatabaseTest.ARequestThatIsRefusedWritesNothingAndLeavesTheSessionUsable)
 - [x] Unit: lowering Character.MaxPerAccount on a running server refuses the next create over the new limit without a restart (2026-09-24: CreateCharacterDatabaseTest.LoweringTheLimitTakesHoldOnTheNextRequestWithNothingRestarted, which creates one wizard, lowers the setting on the running server and has the next request refused)
 - [x] Real client: completing the creation flow returns to character select with the new wizard at level 1 with the chosen school, look and name; restarting the client and logging in again still shows it (the same check as 3.16's, earned by the same run on 2026-09-24: a Level 1 Novice Pyromancer created from the client's own flow and still listed after both servers were restarted)
-- [ ] Real client: on an account already at the slot limit, the create attempt shows the client's failure message and the list is unchanged
+- [x] Real client: on an account already at the slot limit, the create attempt shows the client's failure message and the list is unchanged The client driver's create-at-slot-limit run 20260930-111225 on 2026-09-30: with Character.MaxPerAccount at 1 and one wizard on the account, the login server refused the wizard the client's creation flow submitted, "the account already holds 1 wizards and is allowed 1", with MSG_CREATECHARACTERRESPONSE ErrorCode=1; the client showed "Character Creation Failed" and the account still held one wizard.
 
 **Risks**
 
@@ -713,7 +713,7 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 
 - [x] A valid blob creates exactly one character in one transaction (2026-09-24: CreateCharacterDatabaseTest.AValidRequestStoresExactlyOneWizardWhereTheWorldRowsSay, where one request leaves one row in characters and one in character_appearance, at level 1 in the world, zone and place playercreateinfo names, owned by the account that asked, and EachWizardIsGivenAnIdOfItsOwn shows three requests taking three ids with the high-water mark following them)
 - [x] Real client: the creation flow returns to select with the new level-1 wizard; it survives restart (2026-09-24: creation on the maintainer's own client left character 1 stored and the client returned to select showing Luke Wyvernfriend at level 1; both servers were then stopped and started again, the client logged in to a new login server process at 22:26:59 and the same wizard was there to pick at 22:27:12. What that proves is a fresh login against a restarted server rather than a restart of the client process, which was not separately recorded)
-- [ ] At the slot limit the client shows failure and the list is unchanged
+- [x] At the slot limit the client shows failure and the list is unchanged (the client driver's create-at-slot-limit run 20260930-111225 on 2026-09-30)
 
 ### Detailed spec from LOG-8: Character creation: MSG_CREATECHARACTER -> MSG_CREATECHARACTERRESPONSE
 
@@ -751,7 +751,7 @@ A player can go through the client's creation flow (quiz, school, appearance, na
 - [x] Unit: a truncated or garbage blob returns ErrorCode!=0 without crashing or closing the session (2026-09-24: CreateCharacterDatabaseTest.ARequestThatIsRefusedWritesNothingAndLeavesTheSessionUsable)
 - [x] Unit: lowering Character.MaxPerAccount on a running server refuses the next create over the new limit without a restart (2026-09-24: CreateCharacterDatabaseTest.LoweringTheLimitTakesHoldOnTheNextRequestWithNothingRestarted)
 - [x] Real client: completing the creation flow returns to character select with the new wizard at level 1 with the chosen school, look and name; restarting the client and logging in again still shows it (2026-09-24: Luke Wyvernfriend, Level 1 Novice Pyromancer, created from the client's own flow and still there after both servers were restarted and the client logged in again; the first two attempts were refused because the server read the top byte of m_nameIndices as unused, which is recorded in the spec below)
-- [ ] Real client: on an account already at the slot limit, the create attempt shows the client's failure message and the list is unchanged
+- [x] Real client: on an account already at the slot limit, the create attempt shows the client's failure message and the list is unchanged The client driver's create-at-slot-limit run 20260930-111225 on 2026-09-30, as 3.15 records.
 
 **Risks**
 

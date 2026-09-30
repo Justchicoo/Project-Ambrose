@@ -1,0 +1,130 @@
+{
+ "title": "A MSG_ATTACH with a key the game server cannot spend is answered with MSG_ATTACHFAILED, and the client leaves the game server",
+ "include": "parts/common.json",
+ "requires": {
+  "gameserver": true
+ },
+ "game_settings": [
+  "Logger.server=2,Console Server Errors Stream",
+  "Realm.Name=Ambrose Driver",
+  "Logger.network.session=2,Console Server Errors Stream"
+ ],
+ "server_log_allowed": [
+  "character_create_school holds no school, so no wizard can be created until it does",
+  "realmlist holds no realm, so no player can be sent to a gameserver until one is added",
+  "no key like it was ever written"
+ ],
+ "notes": [
+  "4.06's bad-key check: before Play, a trigger on the scratch login database spoils every key the login server stores, so the key",
+  "the client carries to the game server is not one the game server can find; it answers MSG_ATTACHFAILED and closes, and the run shots what",
+  "the client shows."
+ ],
+ "wizard": {
+  "school": 2343174,
+  "zone": "WizardCity/WC_Ravenwood",
+  "zone_display": "Ravenwood",
+  "locale": "en-US",
+  "first": 1,
+  "middle": 1,
+  "last": 1,
+  "level": 1,
+  "appearance": {
+   "gender": 1,
+   "race": 79806088,
+   "hair_model": 6,
+   "hair_color": 60,
+   "hat_color": 4,
+   "hat_decal": 4,
+   "torso_color": 4,
+   "torso_decal": 4,
+   "feet_color": 4,
+   "feet_decal": 12
+  }
+ },
+ "steps": [
+  {
+   "action": "wait_client_log",
+   "name": "the client brings its renderer up",
+   "pattern": "About to initialize graphical client\\.",
+   "timeout": 180
+  },
+  {
+   "action": "wait_screen",
+   "name": "the login window is on the screen",
+   "screens": [
+    "login"
+   ],
+   "timeout": 120
+  },
+  {
+   "action": "submit_login",
+   "name": "log in",
+   "password": "{password}"
+  },
+  {
+   "action": "wait_server_log",
+   "name": "the server accepts the password",
+   "pattern": "authenticated as {user} \\(id \\d+\\)",
+   "timeout": 30
+  },
+  {
+   "action": "wait_client_log",
+   "name": "the client is admitted",
+   "pattern": "The LoginServer has admitted the user",
+   "timeout": 30
+  },
+  {
+   "action": "wait_client_log",
+   "name": "the character selection scene loads",
+   "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+   "timeout": 120
+  },
+  {
+   "action": "wait_screen",
+   "name": "the character selection screen is on the screen",
+   "screens": [
+    "charselect"
+   ],
+   "timeout": 90
+  },
+  {
+   "action": "db_exec",
+   "name": "spoil the keys the login server stores",
+   "database": "login",
+   "statement": "CREATE TRIGGER driver_spoil_key BEFORE INSERT ON login_key FOR EACH ROW SET NEW.`key` = CONCAT('spoiled-', LEFT(NEW.`key`, 50))"
+  },
+  {
+   "action": "click",
+   "name": "press play",
+   "target": "charselect_play",
+   "attempts": 5,
+   "on_screen": "charselect",
+   "until": {
+    "action": "wait_server_log",
+    "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+    "timeout": 20,
+    "expect": "{wizard_guid}",
+    "record": true
+   }
+  },
+  {
+   "action": "wait_game_log",
+   "name": "the game server refuses the key",
+   "pattern": "was refused as account \\d+ with wizard \\d+: (.*)",
+   "timeout": 60,
+   "record": true
+  },
+  {
+   "action": "shot",
+   "name": "what the client shows after the refusal",
+   "file": "after-attach-failed",
+   "settle": 5
+  },
+  {
+   "action": "shot",
+   "name": "the client a little later",
+   "file": "later",
+   "settle": 15
+  }
+ ]
+}
