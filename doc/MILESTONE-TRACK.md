@@ -146,9 +146,9 @@ Everything not in the table above, including every milestone whose dependencies 
 | 17.185 | Queued for the maintainer's panel session after 17.178, 3.26 and 17.24, in order from 17.182 to 17.186: the Ambrose service from the panel program |
 | 17.186 | Queued for the maintainer's panel session after 17.178, 3.26 and 17.24, in order from 17.182 to 17.186: reaching a panel through SSH |
 | 8.04 | Built on 2026-09-26 by the maintainer's world session, 10 of 12 checks. The game master's real-client check is next in that session now that 6.04's in-game commands have landed. The real-client check that shows a spell in the Spell Deck is waiting on the deck 8.10 and 8.11 build, which needs 8.09, 8.07, 7.04 and 8.05 first |
-| 9.02 | Built on 2026-09-26 by the maintainer's world session, 6 of 7 checks. Left: its real-client check, which waits on 6.04 |
+| 9.02 | Built on 2026-09-26 by the maintainer's world session, 6 of 7 checks. Left: its real-client check, which 6.04's in-game commands unblocked and which is queued in that session |
 | 8.02 | Queued for the maintainer's world session after 8.01: experience and level-up, the next step on the way to a playable game |
-| 6.13 | Queued for the maintainer's world session after 8.02, 9.02 and 8.04, and before 7.02: volumes and walk-in trigger events, which 7.07 needs. Its last dependency, 6.12, closes with 6.11's landing |
+| 6.13 | Queued for the maintainer's world session after 8.02, 9.02 and 8.04, and before 7.02: volumes and walk-in trigger events, which 7.07 needs. Every dependency is built since 6.12 landed on 2026-09-30 |
 | 7.02 | Queued for the maintainer's world session after 3.02's badge window check and 6.13: the quest, dialog and madlib model the quest engine rests on. Waiting on 3.02, whose last check needs MSG_BADGES sent to a real client |
 | 7.03 | Queued for the maintainer's world session after 7.02: the quest schema, sQuestMgr and its validator. Waiting on 7.02, which waits on 3.02's badge window check |
 | 7.07 | Queued for the maintainer's world session after 7.03: the NPC service menu. Waiting on 6.13 and on 7.02, which waits on 3.02's badge window check |
@@ -161,7 +161,7 @@ Everything not in the table above, including every milestone whose dependencies 
 | 8.08 | Queued for the maintainer's world session after 8.06: the backpack's item instances |
 | 8.09 | Queued for the maintainer's world session after 8.08: the backpack's stacks, locks and overflow |
 | 4.08 | Taken over by the maintainer's world session on 2026-09-26. 5.02 moved its writer into `extractor zones`, which now writes a row for every entry whose class the type dump describes, with typed columns and the loading type. MeruneFleuruwu's decoding of every zone, with real positions and display keys, is what it builds on. Left: the four checks that count every entry, which wait on the sigils 6.10's class tables describe, and the spawn data the two integration tests read |
-| 7.01 | Next in the maintainer's world session after 6.03 and 6.04: the object template extractor builds on the extraction code 6.10 just changed and leads to the NPC templates a playable game needs |
+| 7.01 | Being built by the maintainer's world session since 2026-09-30, after 6.11 and 6.12 landed: the object template extractor, which leads to the NPC templates a playable game needs |
 | 8.01 | Next in the maintainer's world session after 7.01: live health, mana, gold and potions on the HUD, on the way to a playable game |
 
 ## In flight
