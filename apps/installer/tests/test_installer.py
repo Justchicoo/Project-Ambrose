@@ -139,7 +139,7 @@ class DepsPlanTests(unittest.TestCase):
                      "install: CMake (winget Kitware.CMake)", "install: Git (winget Git.Git)",
                      f"install: vcpkg, cloned into {vcpkg}",
                      f"install: vcpkg, bootstrapped with {os.path.join(vcpkg, 'bootstrap-vcpkg.bat')} -disableMetrics",
-                     "install: MariaDB (winget MariaDB.Server)", "create: the ambrose account",
+                     "install: MariaDB as the service MariaDB on port 3306 (winget MariaDB.Server, SERVICENAME=MariaDB PORT=3306)", "create: the ambrose account",
                      "plan only; nothing was installed"):
             self.assertIn(step, result.stdout)
         self.assertNotIn("skip:", result.stdout)

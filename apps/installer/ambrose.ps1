@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Installs, configures and runs an Ambrose checkout on Windows: deps checks the tools and, with -Install, installs what is missing through winget (Visual Studio 2022 Build Tools with the C++ workload, CMake, Git) and vcpkg, and with -WithDatabase MariaDB and the account the shipped configuration names; -Plan prints those steps without taking them.
+# Installs, configures and runs an Ambrose checkout on Windows: deps checks the tools and, with -Install, installs what is missing through winget (Visual Studio 2022 Build Tools with the C++ workload, CMake, Git) and vcpkg, and with -WithDatabase MariaDB, registered as a service so a server is running, and the account the shipped configuration names; -Plan prints those steps without taking them.
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $EnvFile = if ($env:AMBROSE_INSTALL_ENV) { $env:AMBROSE_INSTALL_ENV } else { Join-Path $Root 'conf\dist\env.dist' }
@@ -98,11 +98,14 @@ function Install-Tools {
 function Install-Database {
     $account = Get-DatabaseAccount
     $user = $account.User
-    $mariadb = Test-Found 'mariadb' { (Get-Service -Name 'MariaDB*', 'MySQL*' -ErrorAction SilentlyContinue) -or (Find-MariaDbClient) }
+    $mariadb = Test-Found 'mariadb' { Get-Service -Name 'MariaDB*', 'MySQL*' -ErrorAction SilentlyContinue }
     if (-not $mariadb -and -not (Get-Command winget -ErrorAction SilentlyContinue)) {
         Fail 'winget is missing; install App Installer from the Microsoft Store, or install MariaDB yourself, then run deps again'
     }
-    Invoke-Step $mariadb 'MariaDB (winget MariaDB.Server)' 'a MySQL or MariaDB service or client' { Install-Winget 'MariaDB.Server' }
+    Invoke-Step $mariadb 'MariaDB as the service MariaDB on port 3306 (winget MariaDB.Server, SERVICENAME=MariaDB PORT=3306)' 'a MySQL or MariaDB service' {
+        $again = if (Find-MariaDbClient) { @('--force') } else { @() }
+        Install-Winget 'MariaDB.Server' (@('--custom', 'SERVICENAME=MariaDB PORT=3306') + $again)
+    }
     Write-Output "create: the $user account for the ${user}_* databases, as root through the MariaDB client, which asks for the root password"
     if ($Plan) { return }
     $client = Find-MariaDbClient
