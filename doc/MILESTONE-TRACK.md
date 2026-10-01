@@ -107,7 +107,6 @@ Everything not in the table above, including every milestone whose dependencies 
 
 | ID | Why |
 |---|---|
-| 3.23 | Held for the maintainer's own machine, since it needs the pinned installation and its checks are client-gated, and in the maintainer's world session's share since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished. KingsIsle's own launcher and patcher are never run against the pinned install |
 | 16.11 | Overlaps the type extraction already built in 3.21 and is being rethought |
 | 17.01 | One Dev-gated check, on the maintainer's own Windows console and Linux terminal, and nothing else left to build |
 | 3.26 | Landed on 2026-09-30 by the maintainer's panel session with six of seven checks. Left: the Dev-gated Play check, which waits for a real-client window on the maintainer's machine |
@@ -157,7 +156,7 @@ Everything not in the table above, including every milestone whose dependencies 
 | 3.28 | Taken over by the maintainer's track session since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished, building on MeruneFleuruwu's [#10](https://github.com/Justchicoo/Project-Ambrose/pull/10), which landed on 2026-09-26 with checks 3 and 4: Type.name, Type.hash and the std::string layout derived from the client's own constructor. Left: the rest of the layout the same way, checks 1 and 2 once every field is derived, check 5 on a second client, and the record of extracted clients |
 | 6.17 | Taken over by the maintainer's track session since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished, building on MeruneFleuruwu's [#12](https://github.com/Justchicoo/Project-Ambrose/pull/12), which landed on 2026-09-29 with six of eight checks. Left: the two 10-minute fuzz runs on the frame and decode paths, which need the `linux-clang-fuzz` preset |
 | 6.18 | Built on 2026-09-30 by the maintainer's track session, with the module hook check earned. Left: a real client at login showing the named, redacted log line, and `.network sessions` and `.network packetlog filter` in game chat, for the next driver run |
-| 5.06 | Queued for the maintainer's world session after its real-client batch since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished, after 2.14 |
+| 5.06 | Being built by the maintainer's world session since 2026-10-01, after 3.23 landed: MSG_USER_VALIDATE checks a PassKey3 against the session key a login stored, now sealed like a verifier, so quitting from the world lands on character select with no password |
 | 6.05 | Queued for the maintainer's world session after its real-client batch since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished, after 3.17 |
 | 6.06 | Queued for the maintainer's world session after its real-client batch since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished |
 | 6.07 | Queued for the maintainer's world session after its real-client batch since 2026-09-30, when the maintainer asked for every milestone before 8.01 to be finished, after 6.06 |
