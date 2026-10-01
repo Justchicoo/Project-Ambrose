@@ -96,6 +96,7 @@ public:
     void HandleRetryTeleport(GameMessages::RetryTeleport& message);
     bool RequestZoneTransfer(ZoneTransfer transfer, std::string& problem);
     bool IsTransferring() const noexcept { return _transfers.Busy(); }
+    void HandlePostZoneEventFromClient(GameMessages::PostZoneEventFromClient& message);
     void ArriveInVolumes();
     void CheckVolumes();
     void LeaveWorld();
@@ -180,6 +181,8 @@ private:
     void MarkOffline();
     void TransferWorldStateTo(GameSession& replacement);
     bool TakeCommandLine(std::string_view packed);
+    std::vector<std::string> PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now);
+    void FollowReloadedVolumes();
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
     AsyncCallbackProcessor<QueryCallback> _queryCallbacks;
