@@ -104,6 +104,29 @@ bool ZoneTriggerMgr::Load(std::vector<std::string>& errors)
                 trigger->FireEvents.push_back(std::move(event));
         } while (rows->NextRow());
     }
+    if (!WorldDatabase.TryQuery("SELECT `zone_path`, `event_name` FROM `zone_client_event`", rows))
+    {
+        errors.push_back("zone_client_event could not be read");
+        return false;
+    }
+    if (rows)
+    {
+        do
+        {
+            Field const* row = rows->Fetch();
+            std::string event = row[1].Get<std::string>();
+            if (event.empty() || event == EnterZoneEvent)
+                errors.push_back(fmt::format("{} lets clients post the event '{}', which only the server may post", row[0].Get<std::string>(), event));
+            else
+                zones[row[0].Get<std::string>()].ClientEvents.insert(std::move(event));
+        } while (rows->NextRow());
+    }
+    for (auto const& [zone, data] : zones)
+        for (auto const* events : { &data.EnterEvents, &data.ExitEvents })
+            for (auto const& [index, names] : *events)
+                for (std::string const& name : names)
+                    if (data.ClientEvents.contains(name))
+                        errors.push_back(fmt::format("{} lets clients post '{}', which volume {} posts as a wizard walks, so a client could fake the walk", zone, name, index));
     if (errors.size() != before)
         return false;
     std::size_t volumes = 0;
