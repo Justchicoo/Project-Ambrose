@@ -66,6 +66,16 @@ All world-entry scenarios require the game server as well as the login server; t
 | No patch connection with -P 0 | [`patch-off.json`](./patch-off.json) | The launcher's client, started with `-P 0` from a run folder holding the install's own `PatchConfig.xml` pointed at a live local listener, shows the login window and logs in while that listener and one on 12500 see no connection and the guard sees nothing off the machine, with no patcher line in the client's log. |
 | The default without -P | [`patch-default.json`](./patch-default.json) | The client started from the launcher's own prepared command with only `-P 0` taken out, so it follows its own default, with the install's own `PatchConfig.xml` in its folder pointed at a local listener; the client connecting to that listener shows it contacts the patch host its configuration names by default, while the guard keeps every connection on this machine and the install check proves nothing on disk changed. |
 
+## Launcher
+
+| Check | Scenario | What it verifies |
+| --- | --- | --- |
+| Play from the launcher window | [`launcher-window-play.json`](./launcher-window-play.json) | 3.26: the launcher opened with `--window-ui` shows the run's server as host:port, the client's revision, the window size and the login server Online on its ready screen and the install the driver found, `{install}`, on its settings screen, read through UI Automation, then its Play, pressed by its accessible name, starts the client as the launcher's child with a client area of the run's window size, and the client reaches its login window. |
+
+`launch: "window"` cannot be combined with `patching: "default"`, a companion
+or `restart_client`, because the window starts one client and only its Play
+starts it.
+
 ## Listing and running
 
 List the scenarios without starting a client or server:

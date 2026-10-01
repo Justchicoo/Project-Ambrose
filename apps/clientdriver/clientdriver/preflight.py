@@ -11,7 +11,7 @@ import tempfile
 from . import paths
 
 PACKAGES = (("win32gui", "pywin32"), ("PIL", "pillow"), ("psutil", "psutil"), ("pymysql", "pymysql"),
-            ("windows_capture", "windows-capture"), ("numpy", "numpy"))
+            ("windows_capture", "windows-capture"), ("numpy", "numpy"), ("comtypes", "comtypes"))
 INSTALL_LINE = re.compile(r"^launcher: install (.*) \((.*)\)$")
 LOOPBACK_DEVICE = "NPF_Loopback"
 NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0

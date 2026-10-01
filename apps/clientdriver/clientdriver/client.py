@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Drives the user's own client: the Ambrose launcher starts it, the window is found by class and size, text and keys are posted as window messages so the machine stays usable, a press borrows the cursor and the foreground for about a second and raises the window above anything covering the point it presses, because the client's interface drops mouse messages while its window is not the active one and hit-tests a press against the real cursor, and says whether it got them, several keys can be held down together, the window can be moved to a screen of the user's choosing, the main client to its top left and a companion to its bottom right, so the user can keep using another screen, a second client of the same run keeps a launcher log of its own, and frames come from the composited window surface so a covered window still reads, with a blank frame, which the client gives while it swaps what it draws, tried again a few times before a step fails on it.
+# Drives the user's own client: the Ambrose launcher starts it, or for a scenario that opens the launcher window it starts that window, found by its class and placed like the client's, and the client starts only when its Play is pressed, and that window is asked to close once the client is done; the client's window is found by class and size, text and keys are posted as window messages so the machine stays usable, a press borrows the cursor and the foreground for about a second and raises the window above anything covering the point it presses, because the client's interface drops mouse messages while its window is not the active one and hit-tests a press against the real cursor, and says whether it got them, several keys can be held down together, the window can be moved to a screen of the user's choosing, the main client to its top left and a companion to its bottom right, so the user can keep using another screen, a second client of the same run keeps a launcher log of its own, and frames come from the composited window surface so a covered window still reads, with a blank frame, which the client gives while it swaps what it draws, tried again a few times before a step fails on it.
 import contextlib
 import ctypes
 import os
@@ -13,6 +13,8 @@ from .errors import StepFailed
 from .logtail import LogTail
 
 WINDOW_CLASS = "Wizard Graphical Client"
+LAUNCHER_CLASS = "AmbroseShellWindow"
+LAUNCHER_CLOSE_SECONDS = 30
 PROGRAM = "WizardGraphicalClient.exe"
 FRAME_ATTEMPTS = 5
 FRAME_RETRY_SECONDS = 0.5
@@ -55,14 +57,14 @@ def wait_until_released(held, what, timeout=IDLE_TIMEOUT):
         time.sleep(0.05)
 
 
-def windows_of(pid):
+def windows_of(pid, window_class=WINDOW_CLASS):
     import win32gui
     import win32process
 
     found = []
 
     def visit(handle, _unused):
-        if win32process.GetWindowThreadProcessId(handle)[1] == pid and win32gui.GetClassName(handle) == WINDOW_CLASS:
+        if win32process.GetWindowThreadProcessId(handle)[1] == pid and win32gui.GetClassName(handle) == window_class:
             found.append(handle)
         return True
 
@@ -149,7 +151,8 @@ def without_patch_flag(command):
 
 class Client:
     def __init__(self, launcher, run_folder, host, port, window, client_dir=None, locale=None, log=None,
-                 install=None, revision=None, character=None, patching="off", patch_config=None, label=None, monitor=None):
+                 install=None, revision=None, character=None, patching="off", patch_config=None, label=None, monitor=None,
+                 launch="console"):
         self.launcher = launcher
         self.run_folder = run_folder
         self.host = host
@@ -171,6 +174,8 @@ class Client:
         self.command = None
         self.patching = patching
         self.patch_config = patch_config
+        self.launch = launch
+        self.launcher_handle = None
         self.started_command = None
         self.previous_foreground = 0
         self.frame_source = None
@@ -183,7 +188,8 @@ class Client:
 
     def arguments(self, prepare=False):
         wanted = [self.launcher, "--host", self.host, "--port", str(self.port),
-                  "--window", f"{self.window[0]}x{self.window[1]}", "--run-dir", self.run_folder, "--prepare" if prepare else "--wait"]
+                  "--window", f"{self.window[0]}x{self.window[1]}", "--run-dir", self.run_folder,
+                  "--prepare" if prepare else "--window-ui" if self.launch == "window" else "--wait"]
         if self.client_dir:
             wanted += ["--client", self.client_dir]
         if self.locale:
@@ -206,6 +212,10 @@ class Client:
         self._output = open(self.launcher_output, "ab")
         self.launcher_process = subprocess.Popen(self.arguments(), stdout=self._output, stderr=subprocess.STDOUT,
                                                  stdin=subprocess.DEVNULL, startupinfo=startup, creationflags=NO_WINDOW)
+        if self.launch == "window":
+            self.launcher_handle = self.find_launcher_window(timeout)
+            return (f"the launcher opened its window {self.launcher_handle:#x} as process {self.launcher_process.pid}{pointed}, "
+                    "and the client starts only when its Play is pressed")
         self.pid = self.find_process(timeout)
         return f"the launcher started the client from {self.install} ({self.revision}) as process {self.pid}{pointed}"
 
@@ -270,6 +280,23 @@ class Client:
             time.sleep(0.2)
         raise StepFailed(f"the launcher did not start {PROGRAM} within {timeout}s")
 
+    def find_launcher_window(self, timeout=180):
+        import win32gui
+
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if not self.launcher_alive():
+                self.launcher_log.poll()
+                lines = " ".join(line.strip() for line in self.launcher_log.lines[-4:])
+                raise StepFailed(f"the launcher stopped before its window appeared: {lines}")
+            visible = [handle for handle in windows_of(self.launcher_process.pid, LAUNCHER_CLASS) if win32gui.IsWindowVisible(handle)]
+            if visible:
+                if self.monitor is not None:
+                    self.place(visible[0])
+                return visible[0]
+            time.sleep(0.2)
+        raise StepFailed(f"the launcher window did not appear within {timeout}s")
+
     def alive(self):
         import psutil
 
@@ -300,13 +327,14 @@ class Client:
             time.sleep(0.2)
         raise StepFailed(f"the client window did not appear within {timeout}s")
 
-    def place(self):
+    def place(self, handle=None):
         import win32con
         import win32gui
 
-        left, top, right, bottom = win32gui.GetWindowRect(self.handle)
+        handle = handle or self.handle
+        left, top, right, bottom = win32gui.GetWindowRect(handle)
         x, y = screen_spot(screen_work_area(self.monitor), (right - left, bottom - top), "bottom right" if self.label else "top left")
-        win32gui.SetWindowPos(self.handle, 0, x, y, 0, 0, win32con.SWP_NOSIZE | win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
+        win32gui.SetWindowPos(handle, 0, x, y, 0, 0, win32con.SWP_NOSIZE | win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
         return x, y
 
     def is_foreground(self):
@@ -326,16 +354,19 @@ class Client:
                 win32gui.SetForegroundWindow(previous)
         return "the client is at the bottom and " + ("still holds" if self.is_foreground() else "no longer holds") + " the foreground"
 
-    def client_box(self, origin):
+    def client_box(self, origin, handle=None):
         import win32gui
 
-        left, top = win32gui.ClientToScreen(self.handle, (0, 0))
-        _x, _y, width, height = win32gui.GetClientRect(self.handle)
+        handle = handle or self.handle
+        left, top = win32gui.ClientToScreen(handle, (0, 0))
+        _x, _y, width, height = win32gui.GetClientRect(handle)
         return (left - origin[0], top - origin[1], left - origin[0] + width, top - origin[1] + height)
 
     def frame(self, attempts=FRAME_ATTEMPTS):
         import win32gui
 
+        if not self.handle:
+            raise StepFailed("the client has no window yet")
         for attempt in range(1, attempts + 1):
             if win32gui.IsIconic(self.handle):
                 raise StepFailed("the client window is minimized, so it draws nothing")
@@ -353,15 +384,21 @@ class Client:
                         raise
                     time.sleep(FRAME_RETRY_SECONDS)
 
-    def frame_from_surface(self, timeout=5):
+    def launcher_frame(self):
+        if not self.launcher_handle:
+            raise StepFailed("the launcher has no window")
+        return self.frame_from_surface(handle=self.launcher_handle)
+
+    def frame_from_surface(self, timeout=5, handle=None):
         import ctypes.wintypes
 
         import numpy
         from windows_capture import WindowsCapture
 
+        handle = handle or self.handle
         taken = {}
         done = threading.Event()
-        session = WindowsCapture(cursor_capture=False, draw_border=False, window_hwnd=self.handle)
+        session = WindowsCapture(cursor_capture=False, draw_border=False, window_hwnd=handle)
 
         @session.event
         def on_frame_arrived(frame, control):
@@ -386,13 +423,13 @@ class Client:
             raise StepFailed("no frame arrived from the window surface")
         width, height = taken["size"]
         bounds = ctypes.wintypes.RECT()
-        ctypes.windll.dwmapi.DwmGetWindowAttribute(self.handle, DWMWA_EXTENDED_FRAME_BOUNDS, ctypes.byref(bounds),
+        ctypes.windll.dwmapi.DwmGetWindowAttribute(handle, DWMWA_EXTENDED_FRAME_BOUNDS, ctypes.byref(bounds),
                                                    ctypes.sizeof(bounds))
         if (bounds.right - bounds.left, bounds.bottom - bounds.top) != (width, height):
             raise StepFailed(f"the frame is {width}x{height} and the window is "
                              f"{bounds.right - bounds.left}x{bounds.bottom - bounds.top}")
         whole = screens.from_bgra(taken["buffer"], width, height)
-        return whole.crop(self.client_box((bounds.left, bounds.top)))
+        return whole.crop(self.client_box((bounds.left, bounds.top), handle))
 
     def frame_from_printwindow(self):
         import win32gui
@@ -538,11 +575,17 @@ class Client:
         return self._stop_launcher(f"the client was {how}")
 
     def _stop_launcher(self, said):
+        import win32con
+        import win32gui
+
         from .netguard import kill_tree
 
         if self.launcher_process is not None:
+            if self.launcher_handle and win32gui.IsWindow(self.launcher_handle):
+                win32gui.PostMessage(self.launcher_handle, win32con.WM_CLOSE, 0, 0)
+                said += ", the launcher window was asked to close"
             try:
-                self.launcher_process.wait(30)
+                self.launcher_process.wait(LAUNCHER_CLOSE_SECONDS)
             except subprocess.TimeoutExpired:
                 kill_tree(self.launcher_process.pid)
                 said += ", and the launcher was killed"

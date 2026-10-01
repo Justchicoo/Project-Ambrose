@@ -1,0 +1,38 @@
+{
+  "title": "The launcher window shows the install and the server it found, and its Play starts the client at the window size the run asks for",
+  "include": "parts/common.json",
+  "launch": "window",
+  "notes": [
+    "The launcher is started with --window-ui rather than --wait, so the run opens the window a player meets and",
+    "starts no client of its own: the scenario reads the window through UI Automation and presses its Play the same",
+    "way, by the button's accessible name, with no cursor, no foreground and no global input.",
+    "The ready screen's bar shows the server as host:port, the client's revision and the window size as WxH, each a value",
+    "of its own, beside the login server's status, which reads Online once the launcher's own first run has reached the",
+    "scratch login server; the one primary button is named for the launcher's state, so it is called Play only once that",
+    "first run is done, and pressing it by name waits for that. The settings screen, opened with its Settings button and",
+    "left with Back, the one in the header, shows the installation as",
+    "a value under the label Installation, which must be exactly the install the driver found itself through",
+    "launcher --dry-run, {install}, taken literally in the pattern.",
+    "Play must start the client as a child of the launcher with a client area of the size the references were measured at.",
+    "The run's install check still holds: the window writes its place and its web view profile in the Ambrose data",
+    "folder, never inside the install.",
+    "No game server runs here, so the login server's two warnings about empty creation and realm tables are expected."
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "steps": [
+    {"action": "launcher_shows", "name": "the ready screen shows the server, the client, the window size and the server online",
+     "patterns": ["{host}:{port}", "{revision}", "{window}", "Online"], "timeout": 120},
+    {"action": "launcher_press", "name": "open the launcher's settings", "control": "Settings", "timeout": 30},
+    {"action": "launcher_shows", "name": "the settings screen shows the install it found",
+     "patterns": ["^{install}$"], "timeout": 30},
+    {"action": "launcher_press", "name": "go back to the ready screen", "control": "Back", "timeout": 30},
+    {"action": "launcher_press", "name": "press Play in the launcher window", "control": "Play", "timeout": 180},
+    {"action": "wait_client_log", "name": "the client brings its renderer up",
+     "pattern": "About to initialize graphical client\\.", "timeout": 180},
+    {"action": "wait_screen", "name": "the login window is on the screen", "screens": ["login"], "timeout": 120},
+    {"action": "shot", "name": "the login window", "file": "login-window"}
+  ]
+}

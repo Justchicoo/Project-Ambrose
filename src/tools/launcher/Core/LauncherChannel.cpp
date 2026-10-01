@@ -1,9 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the window's message into a launcher request and writes the launcher's answer back. A field the message does not carry is left unset rather than defaulted here, because the defaults belong to the launcher and its configuration, and filling one in twice is how a window and a terminal start disagreeing. A field that is not a string is refused by name instead of being coerced, since a window that sent a number where a folder belongs has a bug worth seeing. A password is never written out at all: the window is handed the command with the secret replaced, so a screen anybody can see, or photograph, never carries one. The plan is written out as what a person reads on the screen, the install and its revision, where the client will run, which server it will join and the whole command, so the window shows what will happen rather than a shape only this program understands.
+ * Reads the window's message into a launcher request and writes the launcher's answer back. A field the message does not carry is left unset rather than defaulted here, because the defaults belong to the launcher and its configuration, and filling one in twice is how a window and a terminal start disagreeing. A field that is not a string is refused by name instead of being coerced, since a window that sent a number where a folder belongs has a bug worth seeing. A password is never written out at all: the window is handed the command with the secret replaced, so a screen anybody can see, or photograph, never carries one. The plan is written out as what a person reads on the screen, the install, written with forward slashes as the console names it, and its revision, where the client will run, which server it will join, the window size the client is started at and the whole command, so the window shows what will happen rather than a shape only this program understands. A plan and a refusal each carry the launch state they were answered in, playing or retrying unless the caller names another. The log folder is answered as opened with its path, or as not there yet with the reason, and its file URL keeps letters, digits, slashes and the few marks a path may carry plain and escapes every other byte of its UTF-8 as a percent sign and two hex digits, so a space or a hash in a folder name cannot change what the system opens.
  */
 
 #include "LauncherChannel.h"
+
+#include "ClientLocator.h"
 
 #include <nlohmann/json.hpp>
 
@@ -90,13 +92,14 @@ namespace
     }
 }
 
-std::string LauncherChannel::DescribePlan(LauncherPlan const& plan)
+std::string LauncherChannel::DescribePlan(LauncherPlan const& plan, std::string_view state)
 {
     std::vector<std::string> const shown = WithoutSecrets(plan.Arguments);
     nlohmann::json body;
     body["schema"] = SchemaVersion;
     body["ready"] = true;
-    body["install"] = ConfigMgr::PathToUtf8(plan.Install.Root);
+    body["state"] = std::string(state);
+    body["install"] = ClientLocator::PathText(plan.Install.Root);
     body["revision"] = plan.Install.Revision;
     body["program"] = ConfigMgr::PathToUtf8(plan.Program);
     body["run_folder"] = ConfigMgr::PathToUtf8(plan.RunFolder);
@@ -104,16 +107,52 @@ std::string LauncherChannel::DescribePlan(LauncherPlan const& plan)
     body["host"] = plan.Host;
     body["port"] = plan.Port;
     body["locale"] = plan.Locale;
+    body["window"] = std::to_string(plan.Width) + "x" + std::to_string(plan.Height);
     body["arguments"] = shown;
     body["command"] = Rebuild(plan, shown);
     return body.dump();
 }
 
-std::string LauncherChannel::DescribeRefusal(std::string const& reason)
+std::string LauncherChannel::DescribeRefusal(std::string const& reason, std::string_view state)
 {
     nlohmann::json body;
     body["schema"] = SchemaVersion;
     body["ready"] = false;
+    body["state"] = std::string(state);
     body["reason"] = reason;
     return body.dump();
+}
+
+std::string LauncherChannel::DescribeFolder(std::optional<std::filesystem::path> const& folder)
+{
+    nlohmann::json body;
+    body["schema"] = SchemaVersion;
+    body["opened"] = folder.has_value();
+    if (folder)
+        body["folder"] = ClientLocator::PathText(*folder);
+    else
+        body["reason"] = "the folder the game writes its log to is made once the installation is found, and it has not been yet";
+    return body.dump();
+}
+
+std::string LauncherChannel::FolderAddress(std::filesystem::path const& folder)
+{
+    std::string const text = ClientLocator::PathText(folder);
+    std::string address = text.starts_with('/') ? "file://" : "file:///";
+    constexpr char const* Hex = "0123456789ABCDEF";
+    for (char const c : text)
+    {
+        unsigned char const byte = static_cast<unsigned char>(c);
+        bool const plain = (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '/' || byte == ':'
+            || byte == '-' || byte == '_' || byte == '.' || byte == '~';
+        if (plain)
+        {
+            address += c;
+            continue;
+        }
+        address += '%';
+        address += Hex[byte >> 4];
+        address += Hex[byte & 0x0F];
+    }
+    return address;
 }

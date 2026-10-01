@@ -6,7 +6,7 @@ import time
 
 WATCHED = ("wizardgraphicalclient.exe", "kiwebhelper.exe", "bugreporter.exe", "wizard101.exe", "wizardlauncher.exe",
            "kingsisle patcher.exe")
-STARTED_HERE = ("loginserver.exe", "loginserver", "launcher.exe", "launcher", "tshark.exe", "tshark")
+STARTED_HERE = ("loginserver.exe", "loginserver", "launcher.exe", "launcher", "msedgewebview2.exe", "tshark.exe", "tshark")
 INTERVAL = 0.1
 
 

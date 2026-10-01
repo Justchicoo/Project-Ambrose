@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the launcher on a described machine without starting anything: discovery finds the newest install of two and a named folder wins over it, a relative one is made absolute for the machine described, the command always carries -L, -P 0, -A, -D with a trailing separator and -G in the run folder, the automatic login and character options pass through with the client's own .. prefix, the run folder comes from the option or the Ambrose data folder and is named the same way on a machine that is not Windows, its configuration is written every run while the copies follow the stamp, nothing outside it is written, its own settings are read from the configuration file unless an option overrides it and a blank one means the default, and every refusal names its cause: no install found, a folder that holds none, a missing client program, patching asked for, no host or port, values that make no sense or begin with '-', a revision that cannot name a folder, a run folder inside the install or one that cannot be written, and a machine that cannot start a Windows program.
+ * Tests the launcher on a described machine without starting anything: discovery finds the newest install of two and a named folder wins over it, a relative one is made absolute for the machine described, the command always carries -L, -P 0, -A, -D with a trailing separator and -G in the run folder, the automatic login and character options pass through with the client's own .. prefix, the run folder comes from the option or the Ambrose data folder and is named the same way on a machine that is not Windows, its configuration is written every run while the copies follow the stamp, nothing outside it is written, its own settings are read from the configuration file unless an option overrides it and a blank one means the default, and every refusal names its cause, a folder that holds no install named as it was typed with only control characters escaped: no install found, a folder that holds none, a missing client program, patching asked for, no host or port, values that make no sense or begin with '-', a revision that cannot name a folder, a run folder inside the install or one that cannot be written, and a machine that cannot start a Windows program.
  */
 
 #include "ConfigMgr.h"
@@ -313,6 +313,23 @@ TEST(LauncherTest, RefusesAFolderThatHoldsNoInstall)
     request.ClientDir = "C:/Games/Empty";
     EXPECT_FALSE(harness.Prepare(request));
     EXPECT_NE(harness.Error.find("holds no Wizard101 install"), std::string::npos) << harness.Error;
+}
+
+TEST(LauncherTest, NamesAFolderThatHoldsNoInstallAsItWasTyped)
+{
+    LauncherHarness harness;
+    harness.AddInstall();
+    LauncherRequest request;
+    request.ClientDir = "K:\\no-such-install";
+    EXPECT_FALSE(harness.Prepare(request));
+    EXPECT_EQ(harness.Error.rfind("K:\\no-such-install holds no Wizard101 install", 0), 0u)
+        << "a person reads the path they typed, with its backslash once: " << harness.Error;
+    EXPECT_EQ(harness.Error.find("K:\\\\"), std::string::npos) << harness.Error;
+
+    request.ClientDir = std::string("K:\\odd\nname");
+    EXPECT_FALSE(harness.Prepare(request));
+    EXPECT_NE(harness.Error.find("K:\\odd\\x0Aname holds no Wizard101 install"), std::string::npos)
+        << "a control character is still escaped, so a typed folder cannot forge a second line: " << harness.Error;
 }
 
 TEST(LauncherTest, RefusesAnInstallWithoutTheClientProgram)

@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Opens the launcher's page through the desktop shell: the page compiled into the launcher, its web view data in the launcher's folder under the Ambrose data folder, and its place in the file the launcher names.
+ * Opens the launcher's page through the desktop shell: the page compiled into the launcher, its web view data in the launcher's folder under the Ambrose data folder, and its place in the file the launcher names, and opens the client's log folder through the shell's own way of handing an address to the system.
  */
 
 #include "LauncherWindow.h"
 
+#include "LauncherChannel.h"
 #include "LauncherPage.h"
 
 bool LauncherWindow::Available()
@@ -39,4 +40,9 @@ bool LauncherWindow::Show(std::filesystem::path const& dataFolder, std::filesyst
         return false;
     }
     return ShellWindow::Show(Options(dataFolder, placeFile, std::move(answer)), error);
+}
+
+void LauncherWindow::OpenFolder(std::filesystem::path const& folder)
+{
+    ShellWindow::OpenInSystemBrowser(LauncherChannel::FolderAddress(folder));
 }

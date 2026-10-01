@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Everything the launcher does apart from reading its arguments: it finds the user's own install the way the servers do, from the folder asked for, its own configuration, AMBROSE_CLIENT_DIR or the discovery in ClientLocator, builds the run folder beside it, and builds the command that starts the client with -L, -P 0, -A, -D and -G, because the retail build starts KingsIsle's launcher when it sees none of its own options; it adds the client's own automatic login and character options when they are asked for, refuses with a named reason when no install is found, the client program is missing, patching is asked for, a login host or port is missing, a value makes no sense or begins with '-', the run folder lies inside the install or the machine cannot start a Windows program, and starts the client either through a job object that ends it with the launcher or detached, so closing the launcher leaves the game running.
+ * Everything the launcher does apart from reading its arguments: it finds the user's own install the way the servers do, from the folder asked for, its own configuration, AMBROSE_CLIENT_DIR or the discovery in ClientLocator, builds the run folder beside it, keeps the window size it settled in the plan so the window can show the size the client is started at, and builds the command that starts the client with -L, -P 0, -A, -D and -G, because the retail build starts KingsIsle's launcher when it sees none of its own options; it adds the client's own automatic login and character options when they are asked for, refuses with a named reason when no install is found, the client program is missing, patching is asked for, a login host or port is missing, a value makes no sense or begins with '-', the run folder lies inside the install or the machine cannot start a Windows program, and starts the client either through a job object that ends it with the launcher or detached, so closing the launcher leaves the game running.
  */
 
 #ifndef AMBROSE_LAUNCHER_H
@@ -55,6 +55,8 @@ struct LauncherPlan
     std::string Host;
     uint16 Port = 0;
     std::string Locale;
+    unsigned Width = 0;
+    unsigned Height = 0;
     RunFolderPlan Folder;
     std::vector<std::string> Arguments;
 

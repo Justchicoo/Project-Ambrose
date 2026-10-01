@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The frame both surfaces share: a chrome bar of the fixed height, an optional side bar of the fixed width, and one main region with a skip link to it. A page that fills the frame edge to edge, as the launcher window does, asks to bleed and is given the region whole, with its own regions deciding where the padding and the scrolling go. -->
+<!-- Project Ambrose by Imjustchico: The frame both surfaces share: a chrome bar of the fixed height, an optional side bar of the fixed width, and one main region with a skip link to it, which is visually hidden until it takes focus, so no sliver of it shows at the edge of a window that has not been tabbed into. A page that fills the frame edge to edge, as the launcher window does, asks to bleed and is given the region whole, with its own regions deciding where the padding and the scrolling go. -->
 <script lang="ts">
     import type { Snippet } from "svelte";
     import { classes } from "../internal/classes";
@@ -20,7 +20,7 @@
 <div class={classes("flex h-full min-h-screen flex-col bg-surface-page text-fg-body", extra)}>
     <a
         href="#ambrose-main"
-        class="ambrose-hover absolute left-8 top-8 z-50 -translate-y-44 rounded-input bg-surface-card px-12 py-10 text-13 focus:translate-y-0"
+        class="ambrose-hover absolute left-8 top-8 z-50 rounded-input bg-surface-card px-12 py-10 text-13 not-focus:sr-only"
     >
         {skipLabel}
     </a>
