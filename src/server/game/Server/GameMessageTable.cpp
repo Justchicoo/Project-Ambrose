@@ -33,6 +33,9 @@ namespace
             Accept<&GameSession::HandleRequestPiiRadialMenuPlayEmote>(entered, MessageProcessing::Queued, "GameSession::HandleRequestPiiRadialMenuPlayEmote");
             Accept<&GameSession::HandleQueryLogout>(entered, MessageProcessing::InPlace, "GameSession::HandleQueryLogout");
             Accept<&GameSession::HandleClientDisconnect>(entered, MessageProcessing::InPlace, "GameSession::HandleClientDisconnect");
+            Accept<&GameSession::HandleZoneTransferAck>(entered, MessageProcessing::Queued, "GameSession::HandleZoneTransferAck");
+            Accept<&GameSession::HandleZoneTransferNack>(entered, MessageProcessing::Queued, "GameSession::HandleZoneTransferNack");
+            Accept<&GameSession::HandleRetryTeleport>(entered, MessageProcessing::Queued, "GameSession::HandleRetryTeleport");
             Accept<&GameSession::HandleNotAfk>(entered, MessageProcessing::Queued, "GameSession::HandleNotAfk");
             Accept<&GameSession::HandleGetTimedAccessPasses>(entered, MessageProcessing::InPlace, "GameSession::HandleGetTimedAccessPasses");
             Accept<&GameSession::HandleGetSubscriberOnlyItems>(entered, MessageProcessing::InPlace, "GameSession::HandleGetSubscriberOnlyItems");
@@ -94,6 +97,8 @@ namespace
             Sends<RemoveSpellFromBook>();
             Sends<QueryLogout>();
             Sends<ClientDisconnect>();
+            Sends<ZoneTransferRequest>();
+            Sends<ServerTransfer>();
             Sends<ZombiePlayer>();
             Sends<DisconnectAfk>();
             Sends<ServerShutdown>();

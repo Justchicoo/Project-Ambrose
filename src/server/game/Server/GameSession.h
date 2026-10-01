@@ -20,6 +20,7 @@
 #include "PlayerSpellbook.h"
 #include "PlayerStats.h"
 #include "SessionBase.h"
+#include "ZoneTransferQueue.h"
 
 #include <atomic>
 #include <chrono>
@@ -56,6 +57,7 @@ public:
 
     static void SetRealmId(uint32 realmId) noexcept;
     static uint32 GetRealmId() noexcept;
+    static void SetTransferEndpoint(std::string address, uint16 port);
 
     uint64 GetAccountId() const noexcept { return _accountId.load(std::memory_order_relaxed); }
     void SetAccountId(uint64 accountId) noexcept { _accountId.store(accountId, std::memory_order_relaxed); }
@@ -90,6 +92,11 @@ public:
     void HandleQueryLogout(GameMessages::QueryLogout& message);
     void HandleClientDisconnect(GameMessages::ClientDisconnect& message);
     void HandleNotAfk(GameMessages::NotAfk& message);
+    void HandleZoneTransferAck(GameMessages::ZoneTransferAck& message);
+    void HandleZoneTransferNack(GameMessages::ZoneTransferNack& message);
+    void HandleRetryTeleport(GameMessages::RetryTeleport& message);
+    bool RequestZoneTransfer(ZoneTransfer transfer, std::string& problem);
+    bool IsTransferring() const noexcept { return _transfers.Busy(); }
     void LeaveWorld();
     std::optional<uint32> GetMapId() const noexcept { return _mapId; }
     uint64 GetWorldGuid() const noexcept { return _worldGuid; }
@@ -177,6 +184,9 @@ private:
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
     AsyncCallbackProcessor<QueryCallback> _queryCallbacks;
+    AsyncCallbackProcessor<TransactionCallback> _transactionCallbacks;
+    ZoneTransferQueue _transfers;
+    std::optional<GameMessages::ServerTransfer> _lastTransfer;
     std::atomic<uint64> _accountId{ 0 };
     std::atomic<uint64> _characterId{ 0 };
     std::atomic<uint64> _unhandled{ 0 };

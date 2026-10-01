@@ -12,6 +12,9 @@
 #include "GameMessageTable.h"
 #include "BlobEnvelope.h"
 #include "ConfigMgr.h"
+#include "CryptoRandom.h"
+#include "DisconnectReason.h"
+#include "LocationString.h"
 #include "Log.h"
 #include "MapMgr.h"
 #include "MessageRegistry.h"
@@ -45,6 +48,10 @@ namespace
 {
 
     std::atomic<uint32> RealmId{ 0 };
+    std::mutex TransferEndpointMutex;
+    std::string TransferAddress;
+    uint16 TransferPort = 0;
+    constexpr int64 TransferKeyLifetimeSeconds = 120;
 
     int64 NowEpochSeconds()
     {
@@ -65,6 +72,13 @@ void GameSession::SetRealmId(uint32 realmId) noexcept
 uint32 GameSession::GetRealmId() noexcept
 {
     return RealmId.load(std::memory_order_relaxed);
+}
+
+void GameSession::SetTransferEndpoint(std::string address, uint16 port)
+{
+    std::lock_guard const lock(TransferEndpointMutex);
+    TransferAddress = std::move(address);
+    TransferPort = port;
 }
 
 std::shared_ptr<GameSession> GameSession::SharedSelf()
@@ -162,6 +176,7 @@ void GameSession::ProcessCallbacks()
 {
     _countedCallbacks.ProcessReadyCallbacks();
     _queryCallbacks.ProcessReadyCallbacks();
+    _transactionCallbacks.ProcessReadyCallbacks();
 }
 
 SQLOperation::CompletionHandler GameSession::MakeCompletionHandler()
@@ -201,6 +216,7 @@ void GameSession::OnSessionClosed()
         MarkOffline();
     _countedCallbacks.Clear();
     _queryCallbacks.Clear();
+    _transactionCallbacks.Clear();
     SessionBase::OnSessionClosed();
 }
 
@@ -747,6 +763,123 @@ void GameSession::ShowTeleportOf(GameSession const& mover, PackedMove const& pla
     teleport.Direction = place.Direction;
     teleport.MobileId = mover._mobileId;
     SendDmlMessage(teleport);
+}
+
+bool GameSession::RequestZoneTransfer(ZoneTransfer transfer, std::string& problem)
+{
+    if (!IsShown())
+    {
+        problem = "the wizard does not stand in a zone";
+        return false;
+    }
+    std::string const zone = transfer.Zone;
+    if (!_transfers.Request(std::move(transfer)))
+    {
+        problem = "a transfer is already waiting on this wizard's client";
+        return false;
+    }
+    GameMessages::ZoneTransferRequest request;
+    request.ZoneName = zone;
+    request.SendAck = 1;
+    SendDmlMessage(request);
+    LOG_INFO("server.gamesession", "Session {} asked its client to leave {} for {}", GetSessionId(), Ambrose::ForLog(_zonePath, 128), Ambrose::ForLog(zone, 128));
+    return true;
+}
+
+void GameSession::HandleZoneTransferNack(GameMessages::ZoneTransferNack&)
+{
+    if (_transfers.Nack())
+        LOG_INFO("server.gamesession", "Session {}'s client refused its zone transfer, so the wizard stays in {}", GetSessionId(), Ambrose::ForLog(_zonePath, 128));
+}
+
+void GameSession::HandleRetryTeleport(GameMessages::RetryTeleport&)
+{
+    if (!_lastTransfer)
+        return;
+    SendDmlMessage(*_lastTransfer);
+    LOG_INFO("server.gamesession", "Session {} sent its last MSG_SERVERTRANSFER again, to {}", GetSessionId(), Ambrose::ForLog(_lastTransfer->ZoneName, 128));
+}
+
+void GameSession::HandleZoneTransferAck(GameMessages::ZoneTransferAck&)
+{
+    std::optional<ZoneTransfer> const transfer = _transfers.Ack();
+    if (!transfer)
+        return;
+    std::string const from = _zonePath;
+    int32 key = 0;
+    while (key == 0)
+        key = static_cast<int32>(Ambrose::Crypto::GetRandomUInt32() & 0x7FFFFFFFu);
+    uint64 const characterId = GetCharacterId();
+    uint64 const accountId = GetAccountId();
+    LeaveWorld();
+    CharacterRepository::Statement place = CharacterDatabase.IsOpen() ? CharacterRepository::PrepareSavePlace(characterId, transfer->Zone, transfer->ZoneDisplay, transfer->Place.X,
+        transfer->Place.Y, transfer->Place.Z, transfer->Place.Yaw, ++_characterRevision) : nullptr;
+    std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> insert = LoginDatabase.IsOpen() ? LoginDatabase.GetPreparedStatement(LOGIN_INS_LOGIN_KEY) : nullptr;
+    if (!place || !insert)
+    {
+        _transfers.Finish();
+        KickPlayer(DisconnectReason::User, "The zone transfer could not be written down");
+        return;
+    }
+    int64 const now = NowEpochSeconds();
+    insert->SetData(0, std::to_string(key));
+    insert->SetData(1, accountId);
+    insert->SetData(2, characterId);
+    insert->SetData(3, GetRealmId());
+    insert->SetData(4, uint64{ 0 });
+    insert->SetData(5, static_cast<uint64>(now));
+    insert->SetData(6, static_cast<uint64>(now + TransferKeyLifetimeSeconds));
+
+    GameMessages::ServerTransfer message;
+    {
+        std::lock_guard const lock(TransferEndpointMutex);
+        message.Ip = TransferAddress;
+        message.TcpPort = TransferPort;
+        message.UdpPort = TransferPort;
+        message.FallbackIp = TransferAddress;
+        message.FallbackTcpPort = TransferPort;
+        message.FallbackUdpPort = TransferPort;
+    }
+    message.Key = key;
+    message.UserId = accountId;
+    message.CharId = characterId;
+    message.ZoneName = transfer->Zone;
+    message.Location = LocationString::CoordinatesOf(transfer->Place.X, transfer->Place.Y, transfer->Place.Z, transfer->Place.Yaw).Format();
+    message.FallbackZone = from;
+    message.TransitionId = 1;
+
+    auto characters = CharacterDatabase.BeginTransaction();
+    characters->Append(std::move(place));
+    _transactionCallbacks.AddCallback(CharacterDatabase.AsyncCommitTransaction(std::move(characters), MakeCompletionHandler())
+        .AfterComplete([this, held = std::make_shared<std::unique_ptr<PreparedStatement<LoginDatabaseConnection>>>(std::move(insert)), message, from](bool placed)
+    {
+        if (!IsOpen() || IsKicked())
+            return;
+        if (!placed)
+        {
+            _transfers.Finish();
+            KickPlayer(DisconnectReason::User, "The zone transfer could not be written down");
+            return;
+        }
+        auto login = LoginDatabase.BeginTransaction();
+        login->Append(std::move(*held));
+        _transactionCallbacks.AddCallback(LoginDatabase.AsyncCommitTransaction(std::move(login), MakeCompletionHandler()).AfterComplete([this, message, from](bool keyed)
+        {
+            if (!IsOpen() || IsKicked())
+                return;
+            _transfers.Finish();
+            if (!keyed)
+            {
+                KickPlayer(DisconnectReason::User, "The zone transfer could not be written down");
+                return;
+            }
+            _intentionalDisconnect.store(true, std::memory_order_relaxed);
+            _lastTransfer = message;
+            SendDmlMessage(message);
+            LOG_INFO("server.gamesession", "Session {} sent wizard {} from {} to {} at {} with a single-use transfer key", GetSessionId(), message.CharId,
+                Ambrose::ForLog(from, 128), Ambrose::ForLog(message.ZoneName, 128), message.Location);
+        }));
+    }));
 }
 
 void GameSession::SendMapObjects(Map const& map)
