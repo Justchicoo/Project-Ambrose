@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Teleports within a zone. '.tele <place> [wizard]' moves the caller's wizard, or a wizard named by character id or name, to one of its zone's own locations, such as Start, or to a game_tele point in that zone, and the wizard and everyone who sees it are sent MSG_SERVERTELEPORT, so it snaps there with no loading screen; '.go xyz <x> <y> <z> [yaw]' moves the caller's wizard to coordinates and refuses ones a position cannot be sent as; '.gps' says the caller's zone, place, facing and zone instance; '.tele add <name>' keeps the caller's place as a game_tele point that works at once, and '.tele del <name>' removes one. The move runs on the world thread, where positions are kept, and is answered once it has.
+ * Teleports within a zone. '.tele <place> [wizard]' moves the caller's wizard, or a wizard named by character id or name, to one of its zone's own locations, such as Start, or to a game_tele point in that zone, and the wizard and everyone who sees it are sent MSG_SERVERTELEPORT, so it snaps there with no loading screen; '.go xyz <x> <y> <z> [yaw]' moves the caller's wizard to coordinates and refuses ones a position cannot be sent as; '.gps' says the caller's zone, place, facing and zone instance; '.tele add <name>' keeps the caller's place as a game_tele point that works at once, and '.tele del <name>' removes one. '.tele zone <zone path> [location] [wizard]' sends a wizard to another zone the way the client changes zones, through MSG_ZONETRANSFERREQUEST, its acknowledgement and MSG_SERVERTRANSFER, and refuses a zone path or location the server does not hold before anything is sent, so the wizard stays. The move runs on the world thread, where positions are kept, and is answered once it has.
  */
 
 #include "AccountMgr.h"
@@ -120,6 +120,7 @@ namespace
                 { .Name = "tele", .SecurityLevel = SEC_GAMEMASTER, .Help = "teleport within a zone to one of its locations or a teleport point: <place> [wizard]", .Run = Tele, .Children = {
                     { .Name = "add", .SecurityLevel = SEC_GAMEMASTER, .AvailableOnConsole = false, .Help = "keep where you stand as a teleport point: <name>", .Run = TeleAdd },
                     { .Name = "del", .SecurityLevel = SEC_GAMEMASTER, .Help = "remove a teleport point: <name>", .Run = TeleDel },
+                    { .Name = "zone", .SecurityLevel = SEC_GAMEMASTER, .Help = "travel to another zone, through its loading screen: <zone path> [location] [wizard]", .Run = TeleZone },
                 } },
                 { .Name = "go", .SecurityLevel = SEC_GAMEMASTER, .AvailableOnConsole = false, .Help = "go somewhere in your zone", .Children = {
                     { .Name = "xyz", .SecurityLevel = SEC_GAMEMASTER, .AvailableOnConsole = false, .Help = "go to coordinates in your zone: <x> <y> <z> [yaw]", .Run = GoXyz },
@@ -209,6 +210,46 @@ namespace
             }
             caller.Reply(fmt::format("Added teleport point {} in {} at ({:.2f}, {:.2f}, {:.2f}); .tele {} works now", tele->Name, tele->Zone, tele->X, tele->Y, tele->Z, tele->Name));
             return true;
+        }
+
+        static bool TeleZone(CommandCaller& caller, std::vector<std::string> const& arguments)
+        {
+            if (arguments.empty() || arguments.size() > 3)
+            {
+                caller.Reply("Give a zone path, such as WizardCity/WC_Ravenwood, a location in it if not Start, and the wizard to send if not your own");
+                return false;
+            }
+            std::string const zone = arguments[0];
+            std::string const location = arguments.size() >= 2 ? arguments[1] : std::string(ZoneLocations::StartName);
+            std::shared_ptr<ZoneTemplates const> const templates = sZoneMgr.GetTemplates();
+            if (!templates || !templates->Has(zone))
+            {
+                caller.Reply(fmt::format("No zone has the path {}, so nobody was moved", zone));
+                return false;
+            }
+            ZonePlace const place = sZoneMgr.FindPlace(zone, location);
+            if (place.Result != ZoneLookup::Ok)
+            {
+                caller.Reply(fmt::format("{} has no location named {}, so nobody was moved", zone, location));
+                return false;
+            }
+            std::shared_ptr<GameSession> const wizard = arguments.size() == 3 ? NamedWizard(caller, arguments[2]) : CallerWizard(caller);
+            if (!wizard)
+                return false;
+            auto const problem = std::make_shared<std::string>();
+            auto const asked = std::make_shared<bool>(false);
+            ZoneTransfer transfer{ zone, zone, location, PlayerPosition{ place.Location.X, place.Location.Y, place.Location.Z, place.Location.Yaw } };
+            bool const ran = sWorld.RunFor(wizard, [problem, asked, transfer](GameSession& session) mutable
+            {
+                *asked = session.RequestZoneTransfer(std::move(transfer), *problem);
+            }, World::CommandTimeout);
+            if (!ran)
+            {
+                caller.Reply(fmt::format("The world did not answer within {} s, so the wizard may yet travel", World::CommandTimeout.count()));
+                return false;
+            }
+            caller.Reply(*asked ? fmt::format("Sending the wizard to {} in {}", location, zone) : fmt::format("Not sent: {}", *problem));
+            return *asked;
         }
 
         static bool TeleDel(CommandCaller& caller, std::vector<std::string> const& arguments)
