@@ -76,6 +76,7 @@ namespace
             Sends<NewObject>();
             Sends<RemoveObject>();
             Sends<ServerMove>();
+            Sends<ServerTeleport>();
             Sends<MoveState>();
             Sends<EnterState>();
             Sends<WizBang>();
