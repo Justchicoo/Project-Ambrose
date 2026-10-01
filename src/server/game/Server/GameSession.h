@@ -109,6 +109,9 @@ public:
     void SetSecurityLevel(uint8 level) noexcept { _securityLevel.store(level, std::memory_order_relaxed); }
     MovementUpdate TakeMovementUpdate(uint32 idleFlushes);
     void ShowMovementOf(GameSession const& mover, MovementUpdate const& update);
+    bool TeleportWithinMap(PlayerPosition const& target, std::vector<std::shared_ptr<GameSession>> const& onlookers, std::string& problem);
+    void ShowTeleportOf(GameSession const& mover, PackedMove const& place);
+    std::string const& GetZonePath() const noexcept { return _zonePath; }
     void SendObjectChanges(MapObjectChanges const& changes);
     PlayerStats const* GetStats() const noexcept { return _stats ? &*_stats : nullptr; }
     PlayerMovement const& GetMovement() const noexcept { return _movement; }
