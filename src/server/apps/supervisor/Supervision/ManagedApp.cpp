@@ -8,6 +8,8 @@
 #include "AdminToken.h"
 #include "ConfigMgr.h"
 #include "Log.h"
+#include "StartProgress.h"
+#include "StringUtil.h"
 #include "ThreadName.h"
 
 #include <fmt/format.h>
@@ -16,6 +18,8 @@
 
 #include <algorithm>
 #include <exception>
+#include <optional>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -66,6 +70,7 @@ ManagedApp::ManagedApp(AppDefinition definition, SupervisorState& state, std::fi
     : _definition(std::move(definition)), _state(state), _output(outputFolder / ConfigMgr::PathFromUtf8(_definition.Name), maxOutputBytes), _dataFolder(std::move(dataFolder)), _sendBreak(std::move(sendBreak)), _log(log)
 {
     _readySuffix = fmt::format("[server.{}] {} ready", _definition.ProgramName, _definition.ProgramName);
+    _stepMarker = fmt::format("[server.{}] {}", _definition.ProgramName, StartProgress::StepPrefix(_definition.ProgramName));
     _view.Name = _definition.Name;
     _view.ProgramName = _definition.ProgramName;
     _view.Program = _definition.Program;
@@ -578,13 +583,26 @@ void ManagedApp::CheckReady(std::vector<OutputLine> const& lines)
 {
     for (OutputLine const& line : lines)
     {
-        if (line.Stream != "stdout" || line.Text.size() < _readySuffix.size())
+        if (line.Stream != "stdout")
             continue;
-        if (std::string_view(line.Text).substr(line.Text.size() - _readySuffix.size()) == _readySuffix)
+        std::string_view const text(line.Text);
+        if (text.size() >= _readySuffix.size() && text.substr(text.size() - _readySuffix.size()) == _readySuffix)
         {
             MarkReady("it printed its ready line");
             return;
         }
+        std::size_t const marker = text.find(_stepMarker);
+        if (marker == std::string_view::npos)
+            continue;
+        std::string_view rest = text.substr(marker + _stepMarker.size());
+        std::size_t const unit = rest.find(" s: ");
+        if (unit == std::string_view::npos)
+            continue;
+        std::optional<uint32> const seconds = Ambrose::StringTo<uint32>(rest.substr(0, unit));
+        std::string const stage(rest.substr(unit + 4));
+        if (!seconds || stage.empty())
+            continue;
+        GrantStart(stage, std::min<int64>(int64{ *seconds } * 1000, std::chrono::duration_cast<std::chrono::milliseconds>(MaxStartGrant).count()));
     }
 }
 
@@ -613,8 +631,12 @@ void ManagedApp::CheckHealth()
         return;
     std::string const stage = (*start)["stage"].get<std::string>();
     int64 const until = (*start)["until_ms"].get<int64>();
-    int64 const remainingMs = std::clamp<int64>(until - NowEpochMs(), 0, std::chrono::duration_cast<std::chrono::milliseconds>(MaxStartGrant).count());
-    _startGrantedUntil = now + std::chrono::milliseconds(remainingMs);
+    GrantStart(stage, std::clamp<int64>(until - NowEpochMs(), 0, std::chrono::duration_cast<std::chrono::milliseconds>(MaxStartGrant).count()));
+}
+
+void ManagedApp::GrantStart(std::string const& stage, int64 remainingMs)
+{
+    _startGrantedUntil = Clock::now() + std::chrono::milliseconds(remainingMs);
     bool changed = false;
     {
         std::lock_guard<std::mutex> const lock(_mutex);

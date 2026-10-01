@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, opens the admin API with the app's own routes and the live log stream already in it before the app starts, keeping a generated token in the data folder or, where the machine names none, beside the config file, and refuses to run when its binding is unsafe, stops gracefully on signals, requests, the shutdown command or POST /api/shutdown, now or after a delay either can cancel, with the reason logged when the delay runs out, answers GET /api/settings with the options the app declares restart-required and, for an app with live settings, their changes, batches and history, records each secret revealed to a caller in its activity record, announces every setting change as it is written and every reload's result on /api/events and stops announcing before the feed goes, moves the one lifecycle state the console and the admin API both read, with the start step its code last reported while it starts, tells an app whether it runs only to check its start, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use, and registers the config reload target before the app starts and the messages one when the app names the install its definitions come from, which it only knows once it has started. An app that reads live settings declares them as soon as its configuration loads, so nothing reads one undeclared, opens them over its own database once that is open, re-resolves them when the configuration changes, and hands their changes to subscribers at the top of each tick. GET /api/client is served only once the app has said which client install it runs on, so an app that runs on none answers that it has no such page rather than that its install is missing.
+ * Runs an app from arguments to exit: rejects bad options and missing config with exit code 1, opens the admin API with the app's own routes and the live log stream already in it before the app starts, keeping a generated token in the data folder or, where the machine names none, beside the config file, and refuses to run when its binding is unsafe, stops gracefully on signals, requests, the shutdown command or POST /api/shutdown, now or after a delay either can cancel, with the reason logged when the delay runs out, answers GET /api/settings with the options the app declares restart-required and, for an app with live settings, their changes, batches and history, records each secret revealed to a caller in its activity record, announces every setting change as it is written and every reload's result on /api/events and stops announcing before the feed goes, moves the one lifecycle state the console and the admin API both read, with the start step its code last reported while it starts, tells an app whether it runs only to check its start, lets a start in progress run queued signal handlers without blocking so a stop during OnStart exits cleanly without reporting ready, ticks updates on its io loop, runs queued console lines on a command thread that shutdown waits for, answering on the same writer the log lines use, and registers the config reload target before the app starts and the messages one when the app names the install its definitions come from, which it only knows once it has started. An app that reads live settings declares them as soon as its configuration loads, so nothing reads one undeclared, opens them over its own database once that is open, re-resolves them when the configuration changes, and hands their changes to subscribers at the top of each tick. GET /api/client is served only once the app has said which client install it runs on, so an app that runs on none answers that it has no such page rather than that its install is missing. Each start step it reports is also printed as a line, the same step again at most every ten seconds, since with the admin API off that line is all the supervisor sees of a long start.
  */
 
 #include "ServerApp.h"
@@ -52,10 +52,12 @@
 #include <exception>
 #include <filesystem>
 #include <ostream>
+#include <utility>
 
 namespace
 {
     constexpr std::size_t LogBacklogPage = 500;
+    constexpr std::chrono::seconds StartStepRepeat{ 10 };
 }
 
 ServerApp::ServerApp(ServerAppInfo info, ConfigMgr& config, Log& log, std::ostream& out, std::ostream& err)
@@ -849,6 +851,19 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
 #endif
 
     StartProgress::Clear();
+    auto const lastStep = std::make_shared<std::pair<std::string, std::chrono::steady_clock::time_point>>();
+    auto const stepGuard = std::make_shared<std::mutex>();
+    StartProgress::SetListener([this, lastStep, stepGuard](std::string_view stage, std::chrono::seconds allowance)
+    {
+        {
+            std::lock_guard const lock(*stepGuard);
+            std::chrono::steady_clock::time_point const now = std::chrono::steady_clock::now();
+            if (lastStep->first == stage && now - lastStep->second < StartStepRepeat)
+                return;
+            *lastStep = { std::string(stage), now };
+        }
+        LogLifecycle(LogLevel::Info, StartProgress::StepText(_info.Name, stage, allowance));
+    });
     if (!StartAdminApi())
     {
         LogLifecycle(LogLevel::Error, fmt::format("{} failed to start", _info.Name));
@@ -888,6 +903,7 @@ int ServerApp::Run(std::vector<std::string> const& arguments)
     {
         if (GetUpdateInterval().count() > 0)
             ScheduleUpdate();
+        StartProgress::SetListener({});
         StartProgress::Clear();
         _lifecycle = AppLifecycle::Running;
         LogLifecycle(LogLevel::Info, fmt::format("{} ready", _info.Name));
@@ -1142,6 +1158,7 @@ bool ServerApp::StartSettings(std::shared_ptr<SettingStore> store)
 
 void ServerApp::FinishShutdown()
 {
+    StartProgress::SetListener({});
     if (_revisionWorker.joinable())
         _revisionWorker.join();
     if (GetSettingApps() != 0)
