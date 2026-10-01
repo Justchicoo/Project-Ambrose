@@ -4,6 +4,7 @@
  */
 
 #include "Environment.h"
+#include "CustomEmoteMgr.h"
 #include "KiwadArchive.h"
 #include "KiwadBuilder.h"
 #include "LogConfig.h"
@@ -115,6 +116,18 @@ TEST_F(ObjectTemplateMgrClientTest, TemplateOneIsThePlayerObjectEveryWizardIsMad
     std::vector<std::string> errors;
     ASSERT_TRUE(_store.LoadPlayer(errors)) << errors.front();
     EXPECT_EQ(_store.GetPlayer()->Behaviors, player.Behaviors);
+}
+
+TEST_F(ObjectTemplateMgrClientTest, CustomEmoteCatalogReadsAnimationsAndLeavesTeleportEffectsSeparate)
+{
+    std::vector<std::string> errors;
+    std::size_t threads = 0;
+    std::optional<CustomEmoteStore> const emotes = CustomEmoteStore::Read(s_install / "Data" / "GameData", sTypeRegistry.GetCatalog(), *_store.GetManifest(), errors, threads);
+    ASSERT_TRUE(emotes.has_value()) << (errors.empty() ? std::string() : errors.front());
+    EXPECT_GT(emotes->Size(), 0u);
+    EXPECT_TRUE(emotes->OwnsAnimation("Fresh", { uint32{ 1 }, 0, 0 }));
+    EXPECT_FALSE(emotes->OwnsAnimation("Fresh", {}));
+    EXPECT_FALSE(emotes->OwnsAnimation("Teleport0", { 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu }));
 }
 
 TEST_F(ObjectTemplateMgrClientTest, Template1652259IsTheBalanceHat)

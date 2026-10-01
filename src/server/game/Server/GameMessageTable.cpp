@@ -29,6 +29,8 @@ namespace
             Accept<&GameSession::HandleRequestRadialQuickChat>(entered, MessageProcessing::Queued, "GameSession::HandleRequestRadialQuickChat");
             Accept<&GameSession::HandleRequestRadialQuickChatExt>(entered, MessageProcessing::Queued, "GameSession::HandleRequestRadialQuickChatExt");
             Accept<&GameSession::HandleCoreEmote>(entered, MessageProcessing::Queued, "GameSession::HandleCoreEmote");
+            Accept<&GameSession::HandleCorePiiRadialMenuEmote>(entered, MessageProcessing::Queued, "GameSession::HandleCorePiiRadialMenuEmote");
+            Accept<&GameSession::HandleRequestPiiRadialMenuPlayEmote>(entered, MessageProcessing::Queued, "GameSession::HandleRequestPiiRadialMenuPlayEmote");
             Accept<&GameSession::HandleQueryLogout>(entered, MessageProcessing::InPlace, "GameSession::HandleQueryLogout");
             Accept<&GameSession::HandleClientDisconnect>(entered, MessageProcessing::InPlace, "GameSession::HandleClientDisconnect");
             Accept<&GameSession::HandleNotAfk>(entered, MessageProcessing::Queued, "GameSession::HandleNotAfk");
@@ -71,6 +73,7 @@ namespace
             Sends<AttachFailed>();
             Sends<Badges>();
             Sends<LoginComplete>();
+            Sends<UpdateCustomEmotes>();
             Sends<NewObject>();
             Sends<RemoveObject>();
             Sends<ServerMove>();
@@ -79,6 +82,7 @@ namespace
             Sends<RadialChat>();
             Sends<RadialQuickChat>();
             Sends<RadialQuickChatExt>();
+            Sends<PiiRadialMenuPlayEmote>();
             Sends<TimedAccessPasses>();
             Sends<SubscriberOnlyItems>();
             Sends<CombatPhaseForSpectators>();

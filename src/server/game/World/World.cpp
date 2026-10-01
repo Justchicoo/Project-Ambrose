@@ -110,6 +110,7 @@ namespace
             case SpeechKind::QuickChat: return fmt::format("quick chat phrase {}", speech.PhraseId);
             case SpeechKind::QuickChatExt: return "an extended quick chat phrase";
             case SpeechKind::Emote: return fmt::format("the emote {}", speech.Animation);
+            case SpeechKind::CustomEmote: return fmt::format("the custom emote {}", speech.Animation);
         }
         return "something";
     }
@@ -139,7 +140,10 @@ namespace
             {
                 std::vector<std::size_t> const hearers = PlanHearers(listeners, index, speech.SpeakerSees, range);
                 for (std::size_t const hearer : hearers)
-                    sessions[hearer]->HearSpeech(who, speech);
+                    if (speech.Kind == SpeechKind::CustomEmote)
+                        sessions[hearer]->HearCustomEmote(who, speech);
+                    else
+                        sessions[hearer]->HearSpeech(who, speech);
                 std::size_t const others = hearers.size() - (speech.SpeakerSees && std::find(hearers.begin(), hearers.end(), index) != hearers.end() ? 1 : 0);
                 LOG_DEBUG("server.world", "Session {}'s wizard {} sent {}, shown to {} other wizard(s){}", speaker.GetSessionId(), speaker.GetWorldGuid(), SpeechName(speech),
                     others, speech.SpeakerSees ? " and to itself" : "");
