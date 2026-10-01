@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Makes the player object from the catalog's own classes and defaults and sets only what the stored wizard decides: a behavior the template names that behavior_client_class does not know refuses the build rather than being guessed or dropped, because the client reads the behaviors by position and one missing slot shifts every later one, and a slot the template itself leaves empty stays empty; the name behavior's m_chatPermissions is the account's permissions, the same the session hands the client in MSG_LOGINCOMPLETE, because the client draws no chat mark beside a name whose low four bits are all set, the filtered balloon beside one that holds menu chat and its display without all four, and the word balloon beside any other, so leaving it at 0 drew the word balloon beside every wizard; the school behavior and the stats come from the wizard's stats, with its level as the highest on the account, the spellbook holds a SpellIDTracker for each spell the wizard knows, which the client's spellbook reads when the object arrives, and every other field keeps the class's default.
+ * Makes the player object from the catalog's own classes and defaults and sets only what the stored wizard decides: a behavior the template names that behavior_client_class does not know refuses the build rather than being guessed or dropped, because the client reads the behaviors by position and one missing slot shifts every later one, and a slot the template itself leaves empty stays empty; the name behavior's m_chatPermissions is the account's permissions, the same the session hands the client in MSG_LOGINCOMPLETE, because the client draws no chat mark beside a name whose low four bits are all set, the filtered balloon beside one that holds menu chat and its display without all four, and the word balloon beside any other, so leaving it at 0 drew the word balloon beside every wizard; the school behavior and stats come from the wizard's stats, the spellbook holds a SpellIDTracker for each spell the wizard knows, and the radial-emote behavior holds the owned templates in its versioned first page.
  */
 
 #include "PlayerObjectBuilder.h"
@@ -10,7 +10,9 @@
 
 #include <fmt/format.h>
 
+#include <limits>
 #include <optional>
+#include <type_traits>
 #include <utility>
 
 namespace
@@ -21,6 +23,42 @@ namespace
         if (!object && problem.empty())
             problem = fmt::format("the type dump has no property class {}", className);
         return object;
+    }
+
+    template<typename T>
+    void AppendLittleEndian(std::string& bytes, T value)
+    {
+        static_assert(std::is_unsigned_v<T>);
+        for (std::size_t index = 0; index < sizeof(T); ++index)
+            bytes.push_back(static_cast<char>((value >> (index * 8)) & 0xFF));
+    }
+
+    std::optional<std::string> BuildEmotePage(std::vector<uint32> const& templateIds, std::string& problem)
+    {
+        if (templateIds.size() > std::numeric_limits<uint16>::max())
+        {
+            problem = "the wizard owns more custom-emote templates than one radial page can encode";
+            return std::nullopt;
+        }
+        std::string bytes;
+        if (templateIds.empty())
+            return bytes;
+        bytes.reserve(10 + templateIds.size() * 14);
+        AppendLittleEndian(bytes, uint32{ 0xFACEACE8 });
+        AppendLittleEndian(bytes, uint32{ 1 });
+        AppendLittleEndian(bytes, static_cast<uint16>(templateIds.size()));
+        for (std::size_t index = 0; index < templateIds.size(); ++index)
+        {
+            if (templateIds[index] == 0)
+            {
+                problem = "a custom-emote template has id zero and cannot be placed in the radial menu";
+                return std::nullopt;
+            }
+            AppendLittleEndian(bytes, static_cast<uint16>(index));
+            AppendLittleEndian(bytes, static_cast<uint64>(index + 1));
+            AppendLittleEndian(bytes, templateIds[index]);
+        }
+        return bytes;
     }
 
     bool FillSpellbook(PropertyObject& behavior, std::vector<SpellTracker> const& spells, std::string& problem)
@@ -42,8 +80,8 @@ namespace
         return problem.empty();
     }
 
-    bool FillBehavior(PropertyObject& behavior, CharacterSummary const& character, PlayerStats const& stats, std::vector<SpellTracker> const& spells, uint32 permissions,
-        std::string& problem)
+    bool FillBehavior(PropertyObject& behavior, CharacterSummary const& character, PlayerStats const& stats, std::vector<SpellTracker> const& spells,
+        std::vector<uint32> const& emoteTemplateIds, uint32 permissions, std::string& problem)
     {
         std::string_view const name = behavior.GetClass().Name;
         if (name == "class WizardCharacterBehavior")
@@ -73,12 +111,21 @@ namespace
             return stats.WriteSchool(behavior, problem);
         if (name == "class ClientSpellbookBehavior")
             return FillSpellbook(behavior, spells, problem);
+        if (name == "class EmotesRadialMenuBehavior")
+        {
+            std::optional<std::string> page = BuildEmotePage(emoteTemplateIds, problem);
+            if (!page)
+                return false;
+            PropertyFiller(behavior, problem).Set("m_radialMenuData", std::move(*page));
+            return problem.empty();
+        }
         return true;
     }
 }
 
 PropertyObjectPtr PlayerObjectBuilder::Build(TypeCatalogPtr const& catalog, CoreObjectTypeTable const& types, BehaviorClientClasses const& behaviors, ObjectTemplate const& playerTemplate,
-    CharacterSummary const& character, PlayerStats const& stats, std::vector<SpellTracker> const& spells, PlayerPlacement const& placement, uint32 permissions, std::string& problem)
+    CharacterSummary const& character, PlayerStats const& stats, std::vector<SpellTracker> const& spells, std::vector<uint32> const& emoteTemplateIds, PlayerPlacement const& placement,
+    uint32 permissions, std::string& problem)
 {
     problem.clear();
     if (!catalog)
@@ -131,7 +178,7 @@ PropertyObjectPtr PlayerObjectBuilder::Build(TypeCatalogPtr const& catalog, Core
             continue;
         }
         PropertyObjectPtr behavior = Create(catalog, *row->ClassName, problem);
-        if (!behavior || !FillBehavior(*behavior, character, stats, spells, permissions, problem))
+        if (!behavior || !FillBehavior(*behavior, character, stats, spells, emoteTemplateIds, permissions, problem))
             return nullptr;
         inactive.emplace_back(std::move(behavior));
     }

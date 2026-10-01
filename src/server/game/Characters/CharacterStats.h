@@ -8,6 +8,7 @@
 
 #include "Types.h"
 
+#include <array>
 #include <optional>
 
 struct CharacterStats
@@ -22,6 +23,8 @@ struct CharacterStats
     float PotionMax = 0.0f;
     int32 ArenaPoints = 0;
     bool LevelLocked = false;
+    std::array<uint32, 3> PurchasedCustomEmotes{};
+    std::array<uint32, 3> PurchasedCustomTeleportEffects{};
     uint64 Revision = 0;
 
     bool operator==(CharacterStats const&) const = default;

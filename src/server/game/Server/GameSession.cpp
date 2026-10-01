@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, chat, and outbound instance updates.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, chat, outbound instance updates, and owned radial-emote pages.
  */
 
 #include "GameSession.h"
@@ -11,6 +11,7 @@
 #include "Frame.h"
 #include "GameMessageTable.h"
 #include "BlobEnvelope.h"
+#include "CustomEmoteMgr.h"
 #include "ConfigMgr.h"
 #include "Log.h"
 #include "MapMgr.h"
@@ -512,7 +513,17 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     std::shared_ptr<BehaviorClientClasses const> const behaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
     std::shared_ptr<ObjectTemplate const> const playerTemplate = sObjectTemplateMgr.GetPlayer();
     uint32 const permissions = sSettings.Get<uint32>("LoginComplete.Permissions");
-    PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, entering, *stats, trackers, placement, permissions, problem);
+    std::shared_ptr<CustomEmoteStore const> const customEmotes = sCustomEmoteMgr.GetEmotes();
+    if (!customEmotes)
+    {
+        if (!resumed)
+            LeaveWorld();
+        RefuseEntry(claim, "the custom-emote catalog is not loaded");
+        return;
+    }
+    std::vector<uint32> const emoteTemplateIds = customEmotes->OwnedTemplateIds(stats->GetPurchasedCustomEmotes());
+    PropertyObjectPtr const player =
+        PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, entering, *stats, trackers, emoteTemplateIds, placement, permissions, problem);
     ObjectField const* const field = ObjectFields::Find("MSG_LOGINCOMPLETE", "Data");
     EncodeResult const data = player && field ? CoreObjectSerializer::EncodeField(*field, *player, *types) : EncodeResult{};
     if (!player || !field || !data.Ok())
@@ -597,6 +608,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     SendDmlMessage(complete);
     SendBadges();
     SendMapObjects(*map);
+    SendCustomEmotes();
     if (!resumed)
         _arrived = true;
     SetStatus(SessionStatus::LoggedIn);
@@ -702,6 +714,20 @@ void GameSession::SendMapObjects(Map const& map)
     {
         GameMessages::NewObject message;
         message.Data.assign(object.Data.begin(), object.Data.end());
+        SendDmlMessage(message);
+    }
+}
+
+void GameSession::SendCustomEmotes()
+{
+    std::array<uint32, 3> const& emotes = _stats->GetPurchasedCustomEmotes();
+    std::array<uint32, 3> const& teleportEffects = _stats->GetPurchasedCustomTeleportEffects();
+    for (uint8 rank = 0; rank < emotes.size(); ++rank)
+    {
+        GameMessages::UpdateCustomEmotes message;
+        message.CustomEmotes = emotes[rank];
+        message.CustomTeleportEffects = teleportEffects[rank];
+        message.Rank = rank;
         SendDmlMessage(message);
     }
 }

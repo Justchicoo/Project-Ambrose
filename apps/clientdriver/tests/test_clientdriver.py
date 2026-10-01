@@ -395,10 +395,11 @@ class WorldEntryTests(TemporaryFolder):
         steps = [{"action": "wait_game_log", "name": "in", "pattern": "stands in the world", "timeout": 1},
                  {"action": "shot", "name": "look", "settle": 2.5}]
         search = (os.path.join(self.folder, "scenarios"),)
-        stats = {"gold": 1234, "health": 300, "mana": 10, "training_points": 1, "level_locked": 1, "potion_charge": 1.5}
+        stats = {"gold": 1234, "health": 300, "mana": 10, "training_points": 1, "level_locked": 1, "potion_charge": 1.5, "purchased_custom_emotes_1": 1}
         self.scenario_file("stats.json", {"title": "stats", "requires": {"gameserver": True}, "wizard": dict(self.WIZARD, level=5, experience=900, stats=stats), "steps": steps})
         loaded = scenario.load("stats.json", search=search)
         self.assertEqual(loaded.wizard["stats"]["gold"], 1234)
+        self.assertEqual(loaded.wizard["stats"]["purchased_custom_emotes_1"], 1)
         for bad, said in (({"copper": 3}, "which a wizard does not carry"), ({"gold": -1}, "must be a number of zero or more"), ({"gold": "lots"}, "must be a number"), ([1], "must be an object")):
             self.scenario_file("bad.json", {"title": "bad", "requires": {"gameserver": True}, "wizard": dict(self.WIZARD, stats=bad), "steps": steps})
             with self.assertRaises(Refused) as raised:

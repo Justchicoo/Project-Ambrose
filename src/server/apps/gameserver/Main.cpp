@@ -14,6 +14,7 @@
 #include "AppenderDB.h"
 #include "CharacterNameExtractor.h"
 #include "CharacterNameMgr.h"
+#include "CustomEmoteMgr.h"
 #include "MapMgr.h"
 #include "ObjectSchemaMgr.h"
 #include "ObjectTemplateMgr.h"
@@ -323,7 +324,7 @@ namespace
             }
             _settingsSubscription = sSettings.Subscribe([this](SettingChange const& change) { ApplySetting(change); });
             ExtractServerClasses(setup, system, *prompt);
-            if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup) || !LoadSpells(setup) || !LoadSigils(setup) || !LoadChatData(setup))
+            if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup) || !LoadSpells(setup) || !LoadCustomEmotes(setup) || !LoadSigils(setup) || !LoadChatData(setup))
             {
                 _databases.Close();
                 return false;
@@ -565,6 +566,24 @@ namespace
             for (std::string const& problem : errors)
                 LOG_ERROR("server.gameserver", "Spells: {}", problem);
             LOG_ERROR("server.gameserver", "Cannot read the spells from {}", ClientLocator::PathText(setup.Install->Root));
+            return false;
+        }
+
+        bool LoadCustomEmotes(ClientSetupResult const& setup)
+        {
+            sCustomEmoteMgr.RegisterReloadTargets();
+            if (!setup.Install || !sTypeRegistry.IsLoaded())
+            {
+                LOG_WARN("server.gameserver", "No Wizard101 install or type dump is in use, so no custom emote is read");
+                return true;
+            }
+            sCustomEmoteMgr.SetInstall(setup.Install->Root);
+            std::vector<std::string> errors;
+            if (sCustomEmoteMgr.Load(errors))
+                return true;
+            for (std::string const& problem : errors)
+                LOG_ERROR("server.gameserver", "Custom emotes: {}", problem);
+            LOG_ERROR("server.gameserver", "Cannot read the custom emotes from {}", ClientLocator::PathText(setup.Install->Root));
             return false;
         }
 
