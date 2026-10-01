@@ -291,10 +291,10 @@ Players can set privacy toggles (friend requests, teleports, trade, hatch, party
 
 **Acceptance**
 
-- [ ] Blacklisted word flagged; whitelisted phrase passes
-- [ ] Muted REQUESTRADIALCHAT dropped with notice
-- [ ] Real client: '.mute <name> 5m' works
-- [ ] `.reload chatfilter` keeps the old lists on a failed load
+- [x] Blacklisted word flagged; whitelisted phrase passes [ChatFilterTest.FindsBlacklistedWordsAndLetsWhitelistEntriesPass]
+- [x] Muted REQUESTRADIALCHAT dropped with notice [ChatHandlerTest.AMutedChatRequestIsDroppedAndTheClientIsNotified]
+- [x] Real client: '.mute <name> 5m' works [clientdriver.chat-moderation run 20261001-155327: mute notice, suppressed chat, filtered recipient, and expiry verified]
+- [x] `.reload chatfilter` keeps the old lists on a failed load [ChatFilterTest.FailedReloadKeepsOldListsAndValidReloadSwapsTheWholeSnapshot]
 
 ### Detailed spec from WIZ-21: Chat moderation: filter, permissions and mute
 
@@ -320,10 +320,10 @@ Accounts get open or filtered chat, filtered words are handled the way the clien
 
 **Acceptance**
 
-- [ ] Unit test: a blacklisted word from a fixture list is flagged and a whitelisted phrase passes
-- [ ] Unit test: a muted account's REQUESTRADIALCHAT is dropped with a notice
-- [ ] Unit test: `.reload chatfilter` with a missing list file keeps the old lists and reports the error; with valid files a newly blacklisted word is flagged without a restart
-- [ ] Real client: after '.mute <name> 5m', the muted player gets the mute notice and nobody sees their chat until it expires. A filtered-chat account sees another player's off-whitelist message as filtered text.
+- [x] Unit test: a blacklisted word from a fixture list is flagged and a whitelisted phrase passes [ChatFilterTest.FindsBlacklistedWordsAndLetsWhitelistEntriesPass]
+- [x] Unit test: a muted account's REQUESTRADIALCHAT is dropped with a notice [ChatHandlerTest.AMutedChatRequestIsDroppedAndTheClientIsNotified]
+- [x] Unit test: `.reload chatfilter` with a missing list file keeps the old lists and reports the error; with valid files a newly blacklisted word is flagged without a restart [ChatFilterTest.FailedReloadKeepsOldListsAndValidReloadSwapsTheWholeSnapshot]
+- [x] Real client: after '.mute <name> 5m', the muted player gets the mute notice and nobody sees their chat until it expires. A filtered-chat account sees another player's off-whitelist message as filtered text. [clientdriver.chat-moderation run 20261001-155327: timed mute suppressed chat through expiry and the filtered recipient saw the uncommon off-whitelist word obscured]
 
 **Risks**
 

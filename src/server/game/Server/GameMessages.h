@@ -662,6 +662,59 @@ namespace GameMessages
         }
     };
 
+    struct ChatFilterBlack
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_CHATFILTERBLACK";
+
+        uint64 GlobalId = 0;
+        std::string Blacklist;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GlobalID", &ChatFilterBlack::GlobalId), DmlField("Blacklist", &ChatFilterBlack::Blacklist) };
+        }
+    };
+
+    struct ChatFilterWhite
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_CHATFILTERWHITE";
+
+        uint64 GlobalId = 0;
+        std::string Whitelist;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("GlobalID", &ChatFilterWhite::GlobalId), DmlField("Whitelist", &ChatFilterWhite::Whitelist) };
+        }
+    };
+
+    struct Mute
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_MUTE";
+
+        std::string MuteTime;
+        uint8 ForceMessage = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("MuteTime", &Mute::MuteTime), DmlField("ForceMessage", &Mute::ForceMessage) };
+        }
+    };
+
+    struct NotMuted
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_NOTMUTED";
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{};
+        }
+    };
+
     struct RequestRadialQuickChat
     {
         static constexpr uint8 ServiceId = GameService;

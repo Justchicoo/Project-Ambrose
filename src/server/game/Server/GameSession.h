@@ -107,6 +107,9 @@ public:
     uint8 GetChatFilter() const noexcept { return _chatFilter; }
     uint8 GetSecurityLevel() const noexcept { return _securityLevel.load(std::memory_order_relaxed); }
     void SetSecurityLevel(uint8 level) noexcept { _securityLevel.store(level, std::memory_order_relaxed); }
+    void SetChatMode(uint8 mode) noexcept { _chatMode = mode; }
+    void ApplyMute(uint64 until);
+    void ClearMute();
     MovementUpdate TakeMovementUpdate(uint32 idleFlushes);
     void ShowMovementOf(GameSession const& mover, MovementUpdate const& update);
     void SendObjectChanges(MapObjectChanges const& changes);
@@ -162,6 +165,9 @@ private:
     void SavePosition(PlayerPosition const& position);
     void RefuseEntry(LoginKeyClaim const& claim, std::string const& reason);
     bool CanSpeak(std::string_view what) const;
+    bool RejectClosedChat();
+    bool RejectMutedSpeech();
+    void SendMuteNotice();
     void QueueSpeech(Speech speech, std::string_view what);
     void QueueEmote(std::string_view name, uint8 excludeOriginator, std::string_view what);
     void MarkOffline();
@@ -183,6 +189,8 @@ private:
     std::atomic<bool> _linkDeadStartPending{ false };
     std::atomic<int64> _socketLostAtNanoseconds{ 0 };
     std::atomic<uint8> _securityLevel{ 0 };
+    uint8 _chatMode = 0;
+    uint64 _muteUntil = 0;
     std::chrono::steady_clock::time_point const _connectedAt = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point _afkStarted;
     bool _afkTimerStarted = false;

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Validates names and passwords, stores base64 SHA-512 verifiers sealed with the active key, maps unique-name races to 'already exists', revokes the account's session key when its password changes and when it is banned, in the same transaction as the ban, and reads accounts and active bans through synchronous login database statements that report a closed database as an error.
+ * Validates names and passwords, stores base64 SHA-512 verifiers sealed with the active key, maps unique-name races to 'already exists', revokes the account's session key when its password changes or when it is banned, replaces bans and timed mutes, and reads accounts and active moderation records through synchronous login database statements that report a closed database as an error.
  */
 
 #include "AccountMgr.h"
@@ -289,6 +289,53 @@ AccountOpResult AccountMgr::Unban(uint64 accountId)
     return AccountOpResult::Ok;
 }
 
+AccountOpResult AccountMgr::MuteAccount(uint64 accountId, std::chrono::seconds duration, std::string_view mutedBy, std::string_view reason, uint64* muteUntil)
+{
+    if (duration <= std::chrono::seconds::zero() || duration > MaxMuteDuration)
+        return AccountOpResult::BadDuration;
+    if (mutedBy.size() > MaxBannedByLength || reason.size() > MaxReasonLength)
+        return AccountOpResult::ReasonTooLong;
+    if (!Ambrose::AccountText::IsStorable(mutedBy) || !Ambrose::AccountText::IsStorable(reason))
+        return AccountOpResult::ReasonInvalid;
+    AccountLookup const lookup = GetAccountById(accountId);
+    if (lookup.Result != AccountOpResult::Ok)
+        return lookup.Result;
+    if (!lookup.Account)
+        return AccountOpResult::NameNotExist;
+    LoginStatement statement = LoginDatabase.GetPreparedStatement(LOGIN_REP_ACCOUNT_MUTED);
+    if (!statement)
+        return AccountOpResult::DatabaseError;
+    uint64 const now = Now();
+    uint64 const until = now + static_cast<uint64>(duration.count());
+    statement->SetData(0, accountId);
+    statement->SetData(1, until);
+    statement->SetData(2, reason);
+    statement->SetData(3, mutedBy);
+    if (!LoginDatabase.DirectExecute(*statement))
+        return AccountOpResult::DatabaseError;
+    if (muteUntil)
+        *muteUntil = until;
+    LOG_INFO("accounts", "Muted account {} (id {}) for {} second(s) by {}: {}", lookup.Account->Username, accountId, duration.count(), mutedBy, reason);
+    return AccountOpResult::Ok;
+}
+
+AccountOpResult AccountMgr::UnmuteAccount(uint64 accountId)
+{
+    AccountLookup const lookup = GetAccountById(accountId);
+    if (lookup.Result != AccountOpResult::Ok)
+        return lookup.Result;
+    if (!lookup.Account)
+        return AccountOpResult::NameNotExist;
+    LoginStatement statement = LoginDatabase.GetPreparedStatement(LOGIN_DEL_ACCOUNT_MUTED);
+    if (!statement)
+        return AccountOpResult::DatabaseError;
+    statement->SetData(0, accountId);
+    if (!LoginDatabase.DirectExecute(*statement))
+        return AccountOpResult::DatabaseError;
+    LOG_INFO("accounts", "Unmuted account {} (id {})", lookup.Account->Username, accountId);
+    return AccountOpResult::Ok;
+}
+
 AccountLookup AccountMgr::GetAccountByName(std::string_view username) const
 {
     if (!IsLookupName(username))
@@ -324,6 +371,24 @@ std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> AccountMgr::PrepareG
     if (statement)
         statement->SetData(0, accountId);
     return statement;
+}
+
+std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> AccountMgr::PrepareGetAccountByIdWithMute(uint64 accountId, uint64 now)
+{
+    LoginStatement statement = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_BY_ID_WITH_MUTE);
+    if (statement)
+    {
+        statement->SetData(0, now);
+        statement->SetData(1, accountId);
+    }
+    return statement;
+}
+
+std::optional<AccountMute> AccountMgr::ReadAccountMuteRow(PreparedResultSet const& row)
+{
+    if (row[14].IsNull())
+        return std::nullopt;
+    return AccountMute{ row[14].Get<uint64>(), row[15].Get<std::string>(), row[16].Get<std::string>() };
 }
 
 AccountInfo AccountMgr::ReadAccountRow(PreparedResultSet const& row)
@@ -393,8 +458,8 @@ std::string_view AccountMgr::Describe(AccountOpResult result) noexcept
         case AccountOpResult::NameAlreadyExists: return "an account with that username already exists";
         case AccountOpResult::NameNotExist: return "no account has that name";
         case AccountOpResult::BadSecurityLevel: return "the security level must be 0 to 4";
-        case AccountOpResult::ReasonTooLong: return "the ban author must be at most 64 bytes and the reason at most 255";
-        case AccountOpResult::ReasonInvalid: return "the ban reason must be valid UTF-8 without control characters";
+        case AccountOpResult::ReasonTooLong: return "the moderator must be at most 64 bytes and the reason at most 255";
+        case AccountOpResult::ReasonInvalid: return "the reason must be valid UTF-8 without control characters";
         case AccountOpResult::ReadBackFailed: return "the account was created but could not be read back; check the login database";
         case AccountOpResult::BadDuration: return "a ban lasts from one second to 100 years, or is permanent";
         case AccountOpResult::DatabaseError: return "the login database failed or is not open; see the sql log";

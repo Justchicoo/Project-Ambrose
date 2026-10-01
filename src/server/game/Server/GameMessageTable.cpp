@@ -60,6 +60,10 @@ namespace
             Refuse(GameService, "MSG_RADIALCHAT");
             Refuse(GameService, "MSG_RADIALQUICKCHAT");
             Refuse(GameService, "MSG_RADIALQUICKCHATEXT");
+            Refuse(GameService, "MSG_MUTE");
+            Refuse(GameService, "MSG_NOTMUTED");
+            Refuse(WizardService, "MSG_CHATFILTERBLACK");
+            Refuse(WizardService, "MSG_CHATFILTERWHITE");
             Refuse(WizardService, "MSG_ADDSPELLTOBOOK");
             Refuse(WizardService, "MSG_REMOVESPELLFROMBOOK");
 
@@ -82,6 +86,10 @@ namespace
             Sends<RadialChat>();
             Sends<RadialQuickChat>();
             Sends<RadialQuickChatExt>();
+            Sends<ChatFilterBlack>();
+            Sends<ChatFilterWhite>();
+            Sends<Mute>();
+            Sends<NotMuted>();
             Sends<TimedAccessPasses>();
             Sends<SubscriberOnlyItems>();
             Sends<CombatPhaseForSpectators>();

@@ -30,6 +30,7 @@
      "because": "a client that has been refused a login opens a page of KingsIsle's in the machine's own browser the moment it is asked to quit, and no setting the launcher writes stops it; taking it off the dialog does not help, because the state outlasts the dialog and outlasts the login window coming back, so a client still in that state is ended instead of being asked to quit"}
   ],
   "targets": {
+    "login_account": {"at": [640, 355], "presses": "the account field of the login window"},
     "login_reconnect": {"at": [771, 428], "presses": "the button of the refused-login dialog that reconnects"},
     "charselect_play": {"at": [640, 689], "presses": "the button of the character selection screen that plays the chosen wizard"},
     "spellbook_character": {"at": [975, 108], "presses": "the Character tab at the top of the spellbook's right edge, whose page holds the wizard's badges"},

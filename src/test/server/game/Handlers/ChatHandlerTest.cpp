@@ -10,6 +10,7 @@
 #include "CommandMgr.h"
 #include "GameTestHarness.h"
 #include "ScriptMgr.h"
+#include "SystemMessages.h"
 
 #include <gtest/gtest.h>
 
@@ -112,6 +113,97 @@ TEST_F(ChatHandlerTest, AClientThatHasNotAttachedIsNotListenedTo)
     SendEach(*client);
     EXPECT_FALSE(ReadNextDml(*client, std::chrono::milliseconds(500)));
     EXPECT_EQ(session->GetQueuedMessageCount(), 0u) << "nothing a client says before it attaches reaches the world";
+}
+
+TEST_F(ChatHandlerTest, AMutedChatRequestIsDroppedAndTheClientIsNotified)
+{
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Connect(client, true);
+    ASSERT_TRUE(session);
+
+    session->ApplyMute(AccountMgr::Now() + 60);
+    std::optional<GameMessages::Mute> const initial = ReadReply<GameMessages::Mute>(*client);
+    ASSERT_TRUE(initial);
+    EXPECT_GT(std::stoll(initial->MuteTime), 0);
+    EXPECT_LE(std::stoll(initial->MuteTime), 60);
+    EXPECT_EQ(initial->ForceMessage, 1);
+
+    GameMessages::RequestRadialChat line;
+    line.Message = ChatText::Write(u"hello");
+    Send(*client, line);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 1; }));
+    EXPECT_EQ(session->DrainQueue(), 1u);
+    std::optional<GameMessages::Mute> const notice = ReadReply<GameMessages::Mute>(*client);
+    ASSERT_TRUE(notice) << "the client gets an explicit mute notice for a rejected request";
+    EXPECT_GT(std::stoll(notice->MuteTime), 0);
+    EXPECT_TRUE(session->TakeSpeech().empty());
+    EXPECT_EQ(session->GetUnhandledMessageCount(), 0u);
+    EXPECT_EQ(session->GetStrikes(), 0u);
+}
+
+TEST_F(ChatHandlerTest, ClearingMuteSendsOnlyAClientSafeNotice)
+{
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Connect(client, true);
+    ASSERT_TRUE(session);
+
+    session->ApplyMute(AccountMgr::Now() + 60);
+    ASSERT_TRUE(ReadReply<GameMessages::Mute>(*client));
+
+    session->ClearMute();
+    std::optional<SystemMessages::ServerMessage> const notice = ReadReply<SystemMessages::ServerMessage>(*client);
+    ASSERT_TRUE(notice);
+    EXPECT_EQ(notice->Message, u"You have been unmuted.");
+}
+
+TEST_F(ChatHandlerTest, AnExpiredMuteIsClearedWhenTheClientSendsChat)
+{
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Connect(client, true);
+    ASSERT_TRUE(session);
+
+    session->ApplyMute(AccountMgr::Now() - 1);
+
+    GameMessages::RequestRadialChat line;
+    line.Message = ChatText::Write(u"hello");
+    Send(*client, line);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 1; }));
+    EXPECT_EQ(session->DrainQueue(), 1u);
+    std::optional<SystemMessages::ServerMessage> const notice = ReadReply<SystemMessages::ServerMessage>(*client);
+    ASSERT_TRUE(notice);
+    EXPECT_EQ(notice->Message, u"You have been unmuted.");
+    EXPECT_EQ(session->GetUnhandledMessageCount(), 0u);
+    EXPECT_EQ(session->GetStrikes(), 0u);
+}
+
+TEST_F(ChatHandlerTest, ClosedChatModeRejectsTypedAndQuickChat)
+{
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Connect(client, true);
+    ASSERT_TRUE(session);
+    session->SetChatMode(2);
+
+    GameMessages::RequestRadialChat line;
+    line.Message = ChatText::Write(u"hello");
+    Send(*client, line);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 1; }));
+    EXPECT_EQ(session->DrainQueue(), 1u);
+    std::optional<SystemMessages::ServerMessage> const typedNotice = ReadReply<SystemMessages::ServerMessage>(*client);
+    ASSERT_TRUE(typedNotice);
+    EXPECT_EQ(typedNotice->Message, u"Chat is disabled for this account.");
+    EXPECT_TRUE(session->TakeSpeech().empty());
+
+    GameMessages::RequestRadialQuickChat phrase;
+    phrase.MessageId = 267;
+    Send(*client, phrase);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 1; }));
+    EXPECT_EQ(session->DrainQueue(), 1u);
+    std::optional<SystemMessages::ServerMessage> const quickChatNotice = ReadReply<SystemMessages::ServerMessage>(*client);
+    ASSERT_TRUE(quickChatNotice);
+    EXPECT_EQ(quickChatNotice->Message, u"Chat is disabled for this account.");
+    EXPECT_TRUE(session->TakeSpeech().empty());
+    EXPECT_EQ(session->GetUnhandledMessageCount(), 0u);
+    EXPECT_EQ(session->GetStrikes(), 0u);
 }
 
 TEST_F(ChatHandlerTest, AGameMastersCommandRunsAndItsRepliesComeBackAsServerMessages)
