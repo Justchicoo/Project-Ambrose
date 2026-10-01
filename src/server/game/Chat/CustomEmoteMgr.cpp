@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads each custom-emote template from the user's install through TemplateFolder, indexes its animation names by the purchased bitfield, and atomically replaces the catalog only after the full folder has loaded.
+ * Reads each custom-emote template from the user's install through TemplateFolder, indexes its animation names and ids by the purchased bitfield, and atomically replaces the catalog only after the full folder has loaded.
  */
 
 #include "CustomEmoteMgr.h"
@@ -31,7 +31,7 @@ namespace
         return value == nullptr ? nullptr : value->GetIf<T>();
     }
 
-    bool ReadEmoteTemplate(PropertyObject const& object, std::string_view path, std::vector<CustomEmoteAnimation>& animations, std::string& error)
+    bool ReadEmoteTemplate(PropertyObject const& object, uint32 templateId, std::string_view path, std::vector<CustomEmoteAnimation>& animations, std::string& error)
     {
         PropertyValue const* const behaviorsValue = object.Get("m_behaviors");
         if (behaviorsValue == nullptr)
@@ -70,9 +70,9 @@ namespace
                 return false;
             }
             if (!animation1->empty())
-                animations.push_back({ *animation1, *bitFieldNumber, *isDefault });
+                animations.push_back({ *animation1, *bitFieldNumber, *isDefault, templateId });
             if (!animation2->empty())
-                animations.push_back({ *animation2, *bitFieldNumber, *isDefault });
+                animations.push_back({ *animation2, *bitFieldNumber, *isDefault, templateId });
         }
         return true;
     }
@@ -94,7 +94,10 @@ std::optional<CustomEmoteStore> CustomEmoteStore::Build(std::vector<CustomEmoteA
             errors.push_back(fmt::format("custom emote animation {} has bitfield number {}, outside the three ownership ranks", animation.Animation, animation.BitFieldNumber));
             return std::nullopt;
         }
-        store._animations[std::move(animation.Animation)].push_back({ animation.BitFieldNumber, animation.IsDefault });
+        CustomEmoteStore::Ownership const ownership{ animation.BitFieldNumber, animation.IsDefault };
+        store._animations[animation.Animation].push_back(ownership);
+        if (animation.TemplateId != 0)
+            store._templates[animation.TemplateId].push_back(ownership);
     }
     if (store._animations.empty())
     {
@@ -135,7 +138,7 @@ std::optional<CustomEmoteStore> CustomEmoteStore::Read(std::filesystem::path con
     if (!TemplateFolder::ReadAll(gameData, catalog, entries, "custom emotes", Folder,
             [&decoded](std::size_t index, TemplateFolderEntry const& entry, PropertyObject const& object, std::string& error)
             {
-                return ReadEmoteTemplate(object, entry.Location.Path, decoded[index], error);
+                return ReadEmoteTemplate(object, entry.Id, entry.Location.Path, decoded[index], error);
             },
             errors, threads))
         return std::nullopt;
@@ -162,6 +165,31 @@ bool CustomEmoteStore::OwnsAnimation(std::string_view animation, std::array<uint
             return true;
     }
     return false;
+}
+
+std::vector<uint32> CustomEmoteStore::OwnedTemplateIds(std::array<uint32, RankCount> const& ownership) const
+{
+    std::vector<uint32> templates;
+    for (auto const& [templateId, requirements] : _templates)
+    {
+        for (Ownership const& requirement : requirements)
+        {
+            if (requirement.IsDefault)
+            {
+                templates.push_back(templateId);
+                break;
+            }
+            if (requirement.BitFieldNumber < 0)
+                continue;
+            uint32 const bit = static_cast<uint32>(requirement.BitFieldNumber);
+            if ((ownership[bit / 32] & (uint32{ 1 } << (bit % 32))) != 0)
+            {
+                templates.push_back(templateId);
+                break;
+            }
+        }
+    }
+    return templates;
 }
 
 CustomEmoteMgr& CustomEmoteMgr::Instance()

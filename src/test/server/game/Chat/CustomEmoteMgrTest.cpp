@@ -92,6 +92,21 @@ TEST(CustomEmoteStoreTest, AcceptsAnAnimationWhenAnyTemplateVariantIsOwned)
     EXPECT_FALSE(store->OwnsAnimation("Emote_Shared", {}));
 }
 
+TEST(CustomEmoteStoreTest, ListsOnlyOwnedTemplatesInTemplateOrder)
+{
+    std::vector<std::string> errors;
+    std::optional<CustomEmoteStore> const store = CustomEmoteStore::Build({
+        { "Emote_First", 4, false, 900 },
+        { "Emote_Alternate", 36, false, 300 },
+        { "Emote_Default", 0, true, 100 },
+        { "Emote_Unknown", -1, false, 200 },
+    }, errors);
+
+    ASSERT_TRUE(store.has_value()) << (errors.empty() ? "" : errors.front());
+    EXPECT_EQ(store->OwnedTemplateIds({ uint32{ 1 } << 4, uint32{ 1 } << 4, 0 }), (std::vector<uint32>{ 100, 300, 900 }));
+    EXPECT_EQ(store->OwnedTemplateIds({}), (std::vector<uint32>{ 100 }));
+}
+
 TEST(CustomEmoteStoreTest, RejectsMalformedAnimationData)
 {
     std::vector<std::string> errors;

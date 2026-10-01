@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads custom-emote animations from the user's own ObjectData/Emotes templates, keeps the bitfield each animation requires, and answers whether a wizard's saved ownership masks unlock it.
+ * Reads custom-emote animations and template ids from the user's own ObjectData/Emotes templates, keeps the bitfield each requires, and answers what a wizard's saved ownership masks unlock.
  */
 
 #ifndef AMBROSE_CUSTOMEMOTEMGR_H
@@ -26,6 +26,7 @@ struct CustomEmoteAnimation
     std::string Animation;
     int32 BitFieldNumber = 0;
     bool IsDefault = false;
+    uint32 TemplateId = 0;
 };
 
 class CustomEmoteStore
@@ -40,6 +41,7 @@ public:
         std::vector<std::string>& errors, std::size_t& threads);
 
     bool OwnsAnimation(std::string_view animation, std::array<uint32, RankCount> const& ownership) const noexcept;
+    std::vector<uint32> OwnedTemplateIds(std::array<uint32, RankCount> const& ownership) const;
     std::size_t Size() const noexcept { return _animations.size(); }
 
 private:
@@ -50,6 +52,7 @@ private:
     };
 
     std::map<std::string, std::vector<Ownership>, std::less<>> _animations;
+    std::map<uint32, std::vector<Ownership>> _templates;
 };
 
 class CustomEmoteMgr
