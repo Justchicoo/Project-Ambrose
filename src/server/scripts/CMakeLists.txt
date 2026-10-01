@@ -20,4 +20,5 @@ target_link_libraries(scripts
         zones
         spells
         combat
+        items
         globals)
