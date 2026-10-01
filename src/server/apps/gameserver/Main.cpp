@@ -23,6 +23,7 @@
 #include "SigilMgr.h"
 #include "SpellMgr.h"
 #include "ZoneMgr.h"
+#include "ZoneTriggerMgr.h"
 #include "CharacterNameScript.h"
 #include "ClientExtractionScript.h"
 #include "ClientSystem.h"
@@ -369,6 +370,11 @@ namespace
                 return false;
             }
             sZoneMgr.RegisterReloadTargets();
+            std::vector<std::string> triggerErrors;
+            if (WorldDatabase.IsOpen() && !sZoneTriggerMgr.Load(triggerErrors))
+                for (std::string const& error : triggerErrors)
+                    LOG_ERROR("server.world", "Zone volumes and triggers: {}", error);
+            sZoneTriggerMgr.RegisterReloadTargets();
             sMapMgr.SetSettingsReader([]
             {
                 MapSettings settings;

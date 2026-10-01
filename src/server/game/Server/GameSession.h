@@ -21,6 +21,7 @@
 #include "PlayerStats.h"
 #include "SessionBase.h"
 #include "ZoneTransferQueue.h"
+#include "ZoneTriggerMgr.h"
 
 #include <atomic>
 #include <chrono>
@@ -97,6 +98,8 @@ public:
     void HandleRetryTeleport(GameMessages::RetryTeleport& message);
     bool RequestZoneTransfer(ZoneTransfer transfer, std::string& problem);
     bool IsTransferring() const noexcept { return _transfers.Busy(); }
+    void ArriveInVolumes();
+    void CheckVolumes();
     void LeaveWorld();
     std::optional<uint32> GetMapId() const noexcept { return _mapId; }
     uint64 GetWorldGuid() const noexcept { return _worldGuid; }
@@ -187,6 +190,8 @@ private:
     AsyncCallbackProcessor<TransactionCallback> _transactionCallbacks;
     ZoneTransferQueue _transfers;
     std::optional<GameMessages::ServerTransfer> _lastTransfer;
+    std::shared_ptr<ZoneTriggerData const> _volumeData;
+    std::vector<VolumePresence> _volumePresence;
     std::atomic<uint64> _accountId{ 0 };
     std::atomic<uint64> _characterId{ 0 };
     std::atomic<uint64> _unhandled{ 0 };
