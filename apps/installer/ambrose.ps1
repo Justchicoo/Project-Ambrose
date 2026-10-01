@@ -108,9 +108,11 @@ function Install-Database {
     if (-not $mariadb -and -not (Get-Command winget -ErrorAction SilentlyContinue)) {
         Fail 'winget is missing; install App Installer from the Microsoft Store, or install MariaDB yourself, then run deps again'
     }
+    if (-not $mariadb -and -not $Plan -and (Find-MariaDbClient)) {
+        Fail 'MariaDB or MySQL is installed but runs as no service, so no server answers; register it as a service from an administrator prompt (mariadb-install-db.exe --service=MariaDB --port=3306 with your data folder), or uninstall it, then run deps -WithDatabase again'
+    }
     Invoke-Step $mariadb 'MariaDB as the service MariaDB on port 3306 (winget MariaDB.Server, SERVICENAME=MariaDB PORT=3306)' 'a MySQL or MariaDB service' {
-        $again = if (Find-MariaDbClient) { @('--force') } else { @() }
-        Install-Winget 'MariaDB.Server' (@('--custom', 'SERVICENAME=MariaDB PORT=3306') + $again)
+        Install-Winget 'MariaDB.Server' @('--custom', 'SERVICENAME=MariaDB PORT=3306')
     }
     Write-Output "create: the $user account for the ${user}_* databases, as root through the MariaDB client, which asks for the root password"
     if ($Plan) { return }
