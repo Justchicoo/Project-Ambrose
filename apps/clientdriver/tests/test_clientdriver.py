@@ -2191,6 +2191,33 @@ class NetGuardAllowanceTests(unittest.TestCase):
         self.assertIsNone(self.check(address="2603:1037::2"))
         self.assertIsNone(self.check(address="203.0.113.5"))
 
+    def test_a_web_view_that_outlives_its_launcher_is_known_by_the_parents_it_had(self):
+        class Named:
+            def __init__(self, name):
+                self._name = name
+
+            def name(self):
+                return self._name
+
+        class Process:
+            def __init__(self, pid, parents):
+                self.pid = pid
+                self._parents = parents
+
+            def parents(self):
+                return self._parents
+
+            def cmdline(self):
+                return ["msedgewebview2.exe", "--embedded-browser-webview=1"]
+
+        with tempfile.TemporaryDirectory() as folder:
+            guard = netguard.NetGuard([], os.path.join(folder, "guard.json"), allowances=[self.ENTRY],
+                                      resolve=lambda host, port, proto=0: [(0, 0, 0, "", ("2603:1036:309:8b::2", 443, 0, 0))])
+            guard.remember_lineage({7: Process(7, [Named("launcher.exe"), Named("python.exe")])})
+            orphan = Process(7, [])
+            self.assertEqual(guard.allowance(orphan, "msedgewebview2.exe", "2603:1036:309:f::2", 443)["host"], "substrate.office.com")
+            self.assertIsNone(guard.allowance(Process(8, []), "msedgewebview2.exe", "2603:1036:309:f::2", 443))
+
     def test_a_host_that_cannot_be_resolved_lets_nothing_through(self):
         def refuse(host, port, proto=0):
             raise OSError("no such host")

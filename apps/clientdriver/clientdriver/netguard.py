@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Watches the client tree the driver started, and nothing else on the machine, and kills that tree the moment one of its processes connects to an address that is not on this machine, recording every address any of them reached and every helper that appeared after the client died. The only exceptions are the ones netguard-allow.json declares, each with its evidence and the day it was settled: a connection passes only when its process name, its port and the processes above it all match and its address lies in the same /48, or /24 for IPv4, as an address the declared host resolves to now, and when the host cannot be resolved nothing passes. Each connection let through is still recorded, with the allowance that let it.
+# Watches the client tree the driver started, and nothing else on the machine, and kills that tree the moment one of its processes connects to an address that is not on this machine, recording every address any of them reached and every helper that appeared after the client died. The only exceptions are the ones netguard-allow.json declares, each with its evidence and the day it was settled: a connection passes only when its process name, its port and the processes above it all match and its address lies in the same /48, its parents being those the guard saw when it first met the process so one that outlives its launcher is still known by it, or /24 for IPv4, as an address the declared host resolves to now, and when the host cannot be resolved nothing passes. Each connection let through is still recorded, with the allowance that let it.
 import ipaddress
 import json
 import os
@@ -163,6 +163,7 @@ class NetGuard(threading.Thread):
         self.networks = {}
         self.resolved_at = None
         self.allowed = {}
+        self.lineage = {}
         self.record_path = record_path
         self.started = started if started is not None else time.time() - 5
         self.interval = interval
@@ -221,6 +222,7 @@ class NetGuard(threading.Thread):
 
         while not self._halt.is_set():
             processes = self.processes()
+            self.remember_lineage(processes)
             for process in list(processes.values()):
                 try:
                     connections = process.net_connections(kind="inet")
@@ -249,6 +251,19 @@ class NetGuard(threading.Thread):
             self.flush()
             self._halt.wait(self.interval)
 
+    def remember_lineage(self, processes):
+        import psutil
+
+        if not self.allowances:
+            return
+        for pid, process in processes.items():
+            if pid in self.lineage:
+                continue
+            try:
+                self.lineage[pid] = [parent.name() for parent in process.parents()]
+            except psutil.Error:
+                continue
+
     def allowance(self, process, name, address, port):
         import psutil
 
@@ -259,7 +274,7 @@ class NetGuard(threading.Thread):
             self.resolved_at = time.monotonic()
         try:
             cmdline = process.cmdline()
-            ancestors = [parent.name() for parent in process.parents()]
+            ancestors = self.lineage.get(process.pid) or [parent.name() for parent in process.parents()]
         except psutil.Error:
             return None
         return allowance_for(self.allowances, name, cmdline, ancestors, address, port, self.networks)
