@@ -25,6 +25,7 @@
 #include "PlayerLevelMgr.h"
 #include "PackedName.h"
 #include "PlayerObjectBuilder.h"
+#include "ScriptMgr.h"
 #include "Settings.h"
 #include "SpellMgr.h"
 #include "StringHash.h"
@@ -913,6 +914,10 @@ void GameSession::CheckVolumes()
         VolumePresence::Change const change = _volumePresence[index].Update(volume, at.X, at.Y, at.Z);
         if (change == VolumePresence::Change::None)
             continue;
+        if (change == VolumePresence::Change::Entered)
+            sScriptMgr.OnVolumeEnter(_zonePath, *_mapId, volume.Name, _worldGuid);
+        else
+            sScriptMgr.OnVolumeExit(_zonePath, *_mapId, volume.Name, _worldGuid);
         auto const& events = change == VolumePresence::Change::Entered ? _volumeData->EnterEvents : _volumeData->ExitEvents;
         auto const found = events.find(volume.Index);
         if (found == events.end())
@@ -920,6 +925,8 @@ void GameSession::CheckVolumes()
         for (std::string const& event : found->second)
         {
             std::vector<std::string> const fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now);
+            for (std::string const& trigger : fired)
+                sScriptMgr.OnTriggerFired(_zonePath, *_mapId, trigger, _worldGuid);
             LOG_INFO("server.gamesession", "Session {}'s wizard {} {} volume {} ({}) in {}, posting {}, which fired {}", GetSessionId(), _worldGuid,
                 change == VolumePresence::Change::Entered ? "entered" : "left", volume.Index, volume.Name, Ambrose::ForLog(_zonePath, 128), event,
                 fired.empty() ? std::string("no trigger") : fmt::format("{}", fmt::join(fired, ", ")));
