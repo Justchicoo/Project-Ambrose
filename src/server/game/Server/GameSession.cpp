@@ -607,6 +607,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         _relay.Reset(_movement);
         _characterRevision = entering.StateRevision;
     }
+    ArriveInVolumes();
     _stats = std::move(stats);
     if (!resumed)
         _statsRevision = stored ? stored->Revision : 0;
@@ -879,6 +880,50 @@ void GameSession::HandleZoneTransferAck(GameMessages::ZoneTransferAck&)
                 Ambrose::ForLog(from, 128), Ambrose::ForLog(message.ZoneName, 128), message.Location);
         }));
     }));
+}
+
+void GameSession::ArriveInVolumes()
+{
+    _volumeData = sZoneTriggerMgr.Find(_zonePath);
+    _volumePresence.assign(_volumeData ? _volumeData->Volumes.size() : 0, VolumePresence{});
+    if (!_mapId)
+        return;
+    PlayerPosition const& at = _movement.GetPosition();
+    std::size_t inside = 0;
+    for (std::size_t index = 0; index < _volumePresence.size(); ++index)
+    {
+        _volumePresence[index].Place(_volumeData->Volumes[index], at.X, at.Y, at.Z);
+        inside += _volumePresence[index].Inside() ? 1 : 0;
+    }
+    std::vector<std::string> const fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, ZoneTriggerMgr::EnterZoneEvent, _worldGuid, std::chrono::steady_clock::now());
+    LOG_INFO("server.gamesession", "Session {}'s wizard {} arrived in {} inside {} of its {} volume(s), firing no enter; EnterZone fired {} trigger(s)", GetSessionId(), _worldGuid,
+        Ambrose::ForLog(_zonePath, 128), inside, _volumePresence.size(), fired.size());
+}
+
+void GameSession::CheckVolumes()
+{
+    if (!_mapId || !_volumeData)
+        return;
+    PlayerPosition const& at = _movement.GetPosition();
+    auto const now = std::chrono::steady_clock::now();
+    for (std::size_t index = 0; index < _volumePresence.size(); ++index)
+    {
+        ZoneVolume const& volume = _volumeData->Volumes[index];
+        VolumePresence::Change const change = _volumePresence[index].Update(volume, at.X, at.Y, at.Z);
+        if (change == VolumePresence::Change::None)
+            continue;
+        auto const& events = change == VolumePresence::Change::Entered ? _volumeData->EnterEvents : _volumeData->ExitEvents;
+        auto const found = events.find(volume.Index);
+        if (found == events.end())
+            continue;
+        for (std::string const& event : found->second)
+        {
+            std::vector<std::string> const fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now);
+            LOG_INFO("server.gamesession", "Session {}'s wizard {} {} volume {} ({}) in {}, posting {}, which fired {}", GetSessionId(), _worldGuid,
+                change == VolumePresence::Change::Entered ? "entered" : "left", volume.Index, volume.Name, Ambrose::ForLog(_zonePath, 128), event,
+                fired.empty() ? std::string("no trigger") : fmt::format("{}", fmt::join(fired, ", ")));
+        }
+    }
 }
 
 void GameSession::SendMapObjects(Map const& map)
