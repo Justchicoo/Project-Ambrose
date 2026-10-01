@@ -1167,10 +1167,10 @@ Added on 2026-09-17 at the maintainer's direction: the live client moves past r8
 
 **Acceptance**
 
-- [ ] No runtime check or warning names r806919, and installs sort newest revision first
-- [ ] Extracted data is kept per revision: type dumps as types/<revision>.json and name tables tagged with the revision they came from, and each is rebuilt when the install's revision or executable changes
-- [ ] A running server notices its install's revision change, extracts in the background, and reloads message definitions, types and names live, keeping the old ones if anything fails
-- [ ] Client-gated tests take their expected counts from the installed revision rather than r806919 constants, and still pass on r806919
+- [x] No runtime check or warning names r806919, and installs sort newest revision first (no server or tool code checks or warns on r806919, only file briefs and typeextract's reference layout, which 3.28 keeps as a check; ClientLocatorTest.WindowsInstallsAreFoundOnceNewestRevisionFirst and AnInstallNeedsRootWadAndReadsItsRevisionAndProgramAndANewerRevisionIsPreferred)
+- [x] Extracted data is kept per revision: type dumps as types/<revision>.json and name tables tagged with the revision they came from, and each is rebuilt when the install's revision or executable changes (ClientLocatorTest.TypeDumpsAreFoundWhereTheirHeaderReadsAsADump finds types/<revision>.json in the data folder; client_extraction records each set's revision and program, ClientRevisionWatchTest.ARecordedExtractionIsCurrentOnlyForItsRevisionAndProgram and ANewProgramIsAnUpdateAndAnUpdateStillBeingWrittenIsNot; client driver run 20261001-084050, revision-records.json: a fresh world database recorded r806919.Wizard_1_610 for the name and level tables, and after the level row was marked r1.Older the restarted game server logged that the levels came from r1.Older, extracted 1267 level rows again and recorded the install's revision, with the client at its login screen throughout)
+- [x] A running server notices its install's revision change, extracts in the background, and reloads message definitions, types and names live, keeping the old ones if anything fails (ClientRevisionWatchTest.AnUpdateIsReportedOnceTwoPollsAgreeAndNotAgainOnceAccepted, under Client.RevisionCheckInterval; ServerAppTest.AnUpdatedInstallIsReadInTheBackgroundAndServedOnlyWhenEveryPartOfItLoads; the game server's names reload target re-extracts a set recorded from another revision)
+- [x] Client-gated tests take their expected counts from the installed revision rather than r806919 constants, and still pass on r806919 (src/test/client/InstalledRevision.h keys every recorded count by revision and checks only that a count is positive on a revision with none recorded; client_tests passed 76 of 76 on Windows and on Linux GCC against r806919, and typeextract's client tests 3 of 3)
 
 ### Detailed spec
 

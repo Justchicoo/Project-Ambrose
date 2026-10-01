@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads BINd files from the user's own r806919 install, when AMBROSE_CLIENT_DIR names it and AMBROSE_TYPE_DUMP_PATH its type dump: the compressed TemplateManifest.xml holds 137423 template locations starting with ObjectData/PlayerObject.xml, a Series 58 crown hat decodes through the typed views to template 1652259 with its display name, three jewel sockets and its school and level requirements, and a sweep of every Root.wad BINd file decodes all but those whose root class the dump does not list, with no size mismatch or other issue, and prints the unknown class report; the same sweep lists every property an object of an unknown class holds, the property oracle names the NPC behavior 520243970's m_behaviorName, m_npcProximity, m_questList and m_personaName from the dump's own types and names, and unknown result and requirement classes are found under m_results and m_requirements.
+ * Reads BINd files from the user's own install, when AMBROSE_CLIENT_DIR names it and AMBROSE_TYPE_DUMP_PATH its type dump, with the counts recorded for the installed revision, r806919's below: the compressed TemplateManifest.xml holds 137423 template locations starting with ObjectData/PlayerObject.xml, a Series 58 crown hat decodes through the typed views to template 1652259 with its display name, three jewel sockets and its school and level requirements, and a sweep of every Root.wad BINd file decodes all but those whose root class the dump does not list, with no size mismatch or other issue, and prints the unknown class report; the same sweep lists every property an object of an unknown class holds, the property oracle names the NPC behavior 520243970's m_behaviorName, m_npcProximity, m_questList and m_personaName from the dump's own types and names, and unknown result and requirement classes are found under m_results and m_requirements.
  */
 
 #include "BindSweep.h"
 #include "Environment.h"
+#include "InstalledRevision.h"
 #include "KiwadArchive.h"
 #include "LogConfig.h"
 #include "ObjectViews.h"
@@ -32,7 +33,7 @@ namespace
             std::optional<std::string> const client = Ambrose::GetEnv("AMBROSE_CLIENT_DIR");
             std::optional<std::string> const dump = Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH");
             if (!client || client->empty() || !dump || dump->empty())
-                GTEST_SKIP() << "set AMBROSE_CLIENT_DIR to your own r806919 install and AMBROSE_TYPE_DUMP_PATH to its type dump to run this test";
+                GTEST_SKIP() << "set AMBROSE_CLIENT_DIR to your own install and AMBROSE_TYPE_DUMP_PATH to its type dump to run this test";
             _registry = std::make_unique<TypeRegistry>(&sTypedViewRegistry);
             ASSERT_TRUE(_registry->LoadFromFile(LogConfig::Utf8Path(*dump))) << (_registry->GetErrors().empty() ? std::string() : _registry->GetErrors().front());
             _catalog = _registry->GetCatalog();
@@ -71,7 +72,8 @@ TEST_F(BindFileClientTest, TheTemplateManifestListsEveryTemplateLocation)
     std::optional<TemplateManifestView> const view = TemplateManifestView::From(*manifest.Decoded.Object);
     ASSERT_TRUE(view);
     PropertyValue::List const& locations = view->GetSerializedTemplates();
-    ASSERT_EQ(locations.size(), 137423u);
+    InstalledRevision::Expect(locations.size(), { { "r806919", 137423u } }, "template locations");
+    ASSERT_FALSE(locations.empty());
     std::optional<TemplateLocationView> const first = TemplateLocationView::From(*locations.front().AsObject());
     ASSERT_TRUE(first);
     EXPECT_EQ(first->GetFilename(), "ObjectData/PlayerObject.xml");
@@ -124,7 +126,7 @@ TEST_F(BindFileClientTest, EveryRootWadBindFileDecodesOrNamesItsUnknownRootClass
     for (BindSweepFailure const& failure : report.Failures)
         std::cout << "[ FAILED   ] " << failure.File << ": " << failure.Detail << std::endl;
 
-    EXPECT_EQ(report.Files, 134640u);
+    InstalledRevision::Expect(report.Files, { { "r806919", 134640u } }, "BINd files");
     EXPECT_EQ(report.ReadErrors, 0u);
     EXPECT_EQ(report.Decoded + report.Failures.size(), report.Files);
     for (BindSweepFailure const& failure : report.Failures)
@@ -143,7 +145,7 @@ TEST_F(BindFileClientTest, EachPropertyOfAnUnknownClassIsListedAndTheOracleNames
     constexpr uint32 NpcBehavior = 520243970;
     auto const unknown = std::find_if(report.UnknownClasses.begin(), report.UnknownClasses.end(), [](BindSweepUnknownClass const& item) { return item.Hash == NpcBehavior; });
     ASSERT_NE(unknown, report.UnknownClasses.end());
-    EXPECT_EQ(unknown->Count, 6875u);
+    InstalledRevision::Expect(unknown->Count, { { "r806919", 6875u } }, "NPC behaviors");
 
     PropertyOracle const oracle(*_catalog);
     std::vector<std::string> named;
@@ -153,11 +155,11 @@ TEST_F(BindFileClientTest, EachPropertyOfAnUnknownClassIsListedAndTheOracleNames
         if (property.Owner != NpcBehavior)
             continue;
         ++listed;
-        EXPECT_EQ(property.Count, 6875u) << "every NPC behavior holds property " << property.Hash;
+        EXPECT_EQ(property.Count, unknown->Count) << "every NPC behavior holds property " << property.Hash;
         for (PropertyGuess const& guess : oracle.Guess(property.Hash))
             named.push_back(guess.Type + ":" + guess.Name);
     }
-    EXPECT_EQ(listed, 5u);
+    InstalledRevision::Expect(listed, { { "r806919", 5u } }, "NPC behavior properties");
     for (std::string_view const expected : { "std::string:m_behaviorName", "float:m_npcProximity", "std::string:m_questList", "std::string:m_personaName" })
         EXPECT_NE(std::find(named.begin(), named.end(), expected), named.end()) << expected << " is not among " << named.size() << " guesses";
 

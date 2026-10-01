@@ -35,6 +35,8 @@
 #include "SignalHandler.h"
 #include "StartProgress.h"
 #include "StringUtil.h"
+#include "TypeDumpCache.h"
+#include "TypeRegistry.h"
 #include "TerminalConsoleInput.h"
 
 #include <asio/post.hpp>
@@ -439,12 +441,215 @@ void ServerApp::SetMessageSource(std::filesystem::path clientRoot)
         sAdminCapabilities.AddReloadTarget("messages");
 }
 
+void ServerApp::SetTypeDumpSource(std::filesystem::path dump, std::string revision)
+{
+    _typeSource = std::move(dump);
+    _typeRevision = std::move(revision);
+    bool const added = sReloadMgr.Register("types", [this](std::vector<std::string>& errors)
+    {
+        return LoadTypeDump(_typeSource, _typeRevision, errors);
+    });
+    if (added)
+        sAdminCapabilities.AddReloadTarget("types");
+}
+
+bool ServerApp::LoadTypeDump(std::filesystem::path const& dump, std::string_view revision, std::vector<std::string>& errors)
+{
+    std::filesystem::path const binary = TypeDumpCache::FastCopyOf(dump);
+    if (std::string fastCopyError; !TypeDumpCache::EnsureFastCopy(dump, fastCopyError))
+        LOG_WARN("server.loading", "The type dump's fast copy could not be built, so it is read from JSON this time: {}", fastCopyError);
+    std::error_code exists;
+    bool const loaded = std::filesystem::exists(binary, exists) ? sTypeRegistry.LoadBinary(binary, dump, revision) : sTypeRegistry.LoadFromFile(dump);
+    if (!loaded)
+    {
+        errors.push_back(fmt::format("the type dump {} could not be loaded", ConfigMgr::PathToUtf8(dump)));
+        for (std::string const& problem : sTypeRegistry.GetErrors())
+            errors.push_back(problem);
+    }
+    return loaded;
+}
+
 void ServerApp::SetClientSetup(ClientSetupResult setup)
 {
-    _clientSetup = std::move(setup);
+    {
+        std::lock_guard const lock(_clientSetupMutex);
+        _clientSetup = std::move(setup);
+    }
     _usesClient = true;
     if (_admin)
-        AdminClientView::Register(_admin->Routes(), [this]() -> ClientSetupResult const& { return _clientSetup; });
+        AdminClientView::Register(_admin->Routes(), [this] { return ClientAnswer(); });
+}
+
+AdminClientView::Answer ServerApp::ClientAnswer() const
+{
+    AdminClientView::Answer answer;
+    {
+        std::lock_guard const lock(_clientSetupMutex);
+        answer.Setup = _clientSetup;
+    }
+    answer.Revision = GetRevisionStatus();
+    return answer;
+}
+
+ClientRevisionStatus ServerApp::GetRevisionStatus() const
+{
+    std::lock_guard const lock(_revisionMutex);
+    return _revisionStatus;
+}
+
+void ServerApp::FollowClientRevision(ClientFollow follow)
+{
+    std::lock_guard const setupLock(_clientSetupMutex);
+    if (!_clientSetup.Install)
+        return;
+    LocalClientSystem const system;
+    std::optional<ClientFingerprint> const current = ClientFingerprint::Read(system, _clientSetup.Install->Root);
+    if (!current)
+    {
+        AMBROSE_LOG(_log, LogLevel::Warn, "server.client", "{} cannot be read well enough to notice its updates, so this app keeps its revision until it starts again", _clientSetup.Install->Describe());
+        return;
+    }
+    _follow = std::move(follow);
+    _revisionWatch.Watch(_clientSetup.Install->Root, *current);
+    _nextRevisionCheck = std::chrono::steady_clock::now() + std::chrono::seconds(_config.GetOption<uint32>(std::string(RevisionCheckKey), DefaultRevisionCheckSeconds));
+    std::lock_guard const lock(_revisionMutex);
+    _revisionStatus.Watching = true;
+    _revisionStatus.Current = current->Describe();
+}
+
+void ServerApp::PollClientRevision()
+{
+    if (!_revisionWatch.IsWatching())
+        return;
+    std::optional<RevisionUpdate> done;
+    {
+        std::lock_guard const lock(_revisionMutex);
+        done.swap(_revisionDone);
+    }
+    if (done)
+    {
+        if (_revisionWorker.joinable())
+            _revisionWorker.join();
+        FinishRevisionUpdate(std::move(*done));
+        return;
+    }
+    uint32 const seconds = _config.GetOption<uint32>(std::string(RevisionCheckKey), DefaultRevisionCheckSeconds);
+    auto const now = std::chrono::steady_clock::now();
+    if (seconds == 0 || _revisionWorking || now < _nextRevisionCheck)
+        return;
+    _nextRevisionCheck = now + std::chrono::seconds(seconds);
+    LocalClientSystem const system;
+    if (std::optional<ClientFingerprint> changed = _revisionWatch.Poll(system))
+        StartRevisionUpdate(std::move(*changed));
+}
+
+void ServerApp::StartRevisionUpdate(ClientFingerprint fingerprint)
+{
+    ClientSetupResult base;
+    {
+        std::lock_guard const lock(_clientSetupMutex);
+        base = _clientSetup;
+    }
+    AMBROSE_LOG(_log, LogLevel::Info, "server.client", "The install {} was updated to {}, so this app reads it again in the background and keeps serving {} until that is done",
+        ClientLocator::PathText(_revisionWatch.GetRoot()), fingerprint.Describe(), _revisionWatch.GetCurrent().Describe());
+    {
+        std::lock_guard const lock(_revisionMutex);
+        _revisionStatus.Updating = fmt::format("reading {}", fingerprint.Describe());
+    }
+    _revisionWorking = true;
+    _revisionWorker = std::thread([this, base = std::move(base), fingerprint = std::move(fingerprint)]() mutable
+    {
+        RevisionUpdate update;
+        update.Fingerprint = fingerprint;
+        LocalClientSystem const system;
+        std::optional<ClientInstall> install = ClientInstall::Inspect(system, _revisionWatch.GetRoot());
+        if (!install)
+            update.Errors.push_back("the install can no longer be read");
+        else
+        {
+            base.Install = std::move(install);
+            if (_follow.Types)
+            {
+                std::string error;
+                std::optional<std::filesystem::path> dump = _follow.Types(*base.Install, TypeDumpBuild::IfNeeded, error);
+                if (!dump)
+                    update.Errors.push_back(fmt::format("no type dump could be built for {}: {}", base.Install->Describe(), error));
+                else
+                {
+                    base.TypeDumpBuilt = base.TypeDump != dump;
+                    base.TypeDump = std::move(dump);
+                    base.TypeDumpError.clear();
+                }
+            }
+            if (update.Errors.empty() && _follow.Prepare)
+                _follow.Prepare(base, update.Errors);
+        }
+        update.Ok = update.Errors.empty();
+        update.Setup = std::move(base);
+        std::lock_guard const lock(_revisionMutex);
+        _revisionDone = std::move(update);
+        _revisionWorking = false;
+    });
+}
+
+void ServerApp::FinishRevisionUpdate(RevisionUpdate update)
+{
+    std::string const revision = update.Fingerprint.Describe();
+    std::string const previous = _revisionWatch.GetCurrent().Describe();
+    bool kept = !update.Ok;
+    std::string outcome;
+    if (kept)
+        outcome = fmt::format("kept {} because {} could not be read: {}", previous, revision, fmt::join(update.Errors, "; "));
+    else
+    {
+        std::filesystem::path const oldTypes = _typeSource;
+        std::string const oldRevision = _typeRevision;
+        std::filesystem::path const oldMessages = _messageSource;
+        if (update.Setup.TypeDump)
+        {
+            _typeSource = *update.Setup.TypeDump;
+            _typeRevision = update.Setup.Install->Revision;
+        }
+        _messageSource = update.Setup.Install->Root;
+        std::vector<std::string> failed;
+        for (std::string_view const target : { std::string_view("types"), std::string_view("messages") })
+            if (sReloadMgr.IsRegistered(target))
+                if (ReloadOutcome const reloaded = sReloadMgr.Reload(target); !reloaded.Ok)
+                    failed.push_back(fmt::format("{}: {}", target, fmt::join(reloaded.Errors, "; ")));
+        if (!failed.empty())
+        {
+            _typeSource = oldTypes;
+            _typeRevision = oldRevision;
+            _messageSource = oldMessages;
+            for (std::string_view const target : { std::string_view("types"), std::string_view("messages") })
+                if (sReloadMgr.IsRegistered(target))
+                    sReloadMgr.Reload(target);
+            kept = true;
+            outcome = fmt::format("kept {} because {} did not load: {}", previous, revision, fmt::join(failed, "; "));
+        }
+        else
+        {
+            for (std::string const& target : sReloadMgr.GetOrderedTargets())
+                if (target != "types" && target != "messages" && target != "config")
+                    if (ReloadOutcome const reloaded = sReloadMgr.Reload(target); !reloaded.Ok)
+                        failed.push_back(fmt::format("{}: {}", target, fmt::join(reloaded.Errors, "; ")));
+            {
+                std::lock_guard const lock(_clientSetupMutex);
+                _clientSetup = std::move(update.Setup);
+            }
+            outcome = failed.empty() ? fmt::format("now serves {}", revision)
+                : fmt::format("now serves {}, keeping the earlier data of {}", revision, fmt::join(failed, "; "));
+        }
+    }
+    _revisionWatch.Accept(update.Fingerprint);
+    if (kept)
+        AMBROSE_LOG(_log, LogLevel::Warn, "server.client", "The install was updated, and this app {}", outcome);
+    else
+        AMBROSE_LOG(_log, LogLevel::Info, "server.client", "The install was updated, and this app {}", outcome);
+    std::lock_guard const lock(_revisionMutex);
+    _revisionStatus.Updating.clear();
+    _revisionStatus.LastUpdate = outcome;
+    _revisionStatus.Current = revision;
 }
 
 void ServerApp::RegisterReloadTargets()
@@ -489,7 +694,7 @@ void ServerApp::RegisterStandardRoutes(AdminRouter& routes)
     AdminMetricsView::Register(routes);
     AdminActivityView::Register(routes, CommandAuditFile());
     if (_usesClient)
-        AdminClientView::Register(routes, [this]() -> ClientSetupResult const& { return _clientSetup; });
+        AdminClientView::Register(routes, [this] { return ClientAnswer(); });
     RegisterAdminCommand(routes);
     routes.AddGuarded("POST", "/api/shutdown", "power.stop", [this](AdminRequest const& request)
     {
@@ -937,6 +1142,8 @@ bool ServerApp::StartSettings(std::shared_ptr<SettingStore> store)
 
 void ServerApp::FinishShutdown()
 {
+    if (_revisionWorker.joinable())
+        _revisionWorker.join();
     if (GetSettingApps() != 0)
         sSettings.Clear();
     _lifecycle = AppLifecycle::Stopped;
@@ -959,6 +1166,7 @@ void ServerApp::ScheduleUpdate()
         auto const diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - _lastUpdate);
         _lastUpdate = now;
         sSettings.DispatchChanges();
+        PollClientRevision();
         if (GetUpdateInterval().count() > 0)
         {
             OnUpdate(diff);

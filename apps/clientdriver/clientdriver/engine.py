@@ -167,7 +167,7 @@ class Engine:
 
     def wait_log(self, tail, step, alive):
         from_start = step.get("from") == "start"
-        found = tail.wait(self.fill(step["pattern"]), step["timeout"], since=0 if from_start else None,
+        found = tail.wait(self.fill(step["pattern"]), step["timeout"], since=tail.start if from_start else None,
                           fail=self.fill(step["fail"]) if step.get("fail") else None, alive=alive, advance=not from_start)
         said = found.group(1) if found.re.groups else found.group(0)
         line = found.string.strip()

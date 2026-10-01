@@ -14,11 +14,11 @@
 #include <optional>
 #include <utility>
 
-std::string AdminClientView::ClientJson(ClientSetupResult const& setup)
+std::string AdminClientView::ClientJson(Answer const& answer)
 {
+    ClientSetupResult const& setup = answer.Setup;
     nlohmann::json body;
     body["schema"] = SchemaVersion;
-    body["pinned_revision"] = std::string(ClientInstall::PinnedRevision);
 
     nlohmann::json install;
     install["found"] = setup.Install.has_value();
@@ -26,11 +26,17 @@ std::string AdminClientView::ClientJson(ClientSetupResult const& setup)
     {
         install["root"] = ConfigMgr::PathToUtf8(setup.Install->Root);
         install["revision"] = setup.Install->Revision;
-        install["pinned"] = setup.Install->IsPinned();
         install["has_program"] = setup.Install->HasProgram;
         install["described"] = setup.Install->Describe();
     }
     body["install"] = std::move(install);
+
+    nlohmann::json follow;
+    follow["watching"] = answer.Revision.Watching;
+    follow["current"] = answer.Revision.Current;
+    follow["updating"] = answer.Revision.Updating;
+    follow["last_update"] = answer.Revision.LastUpdate;
+    body["follow"] = std::move(follow);
 
     nlohmann::json dump;
     dump["found"] = setup.TypeDump.has_value();

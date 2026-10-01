@@ -310,20 +310,14 @@ namespace
                 LOG_WARN("server.loginserver", "No type dump is in use, so ObjectProperty data cannot be read or written: {}", setup.TypeDumpError);
             else
             {
-                std::filesystem::path const binary = TypeDumpCache::FastCopyOf(*setup.TypeDump);
-                if (std::string fastCopyError; !TypeDumpCache::EnsureFastCopy(*setup.TypeDump, fastCopyError))
-                    LOG_WARN("server.loginserver", "The type dump's fast copy could not be built, so it is read from JSON this time: {}", fastCopyError);
-                bool loaded = false;
-                if (std::filesystem::exists(binary))
-                    loaded = sTypeRegistry.LoadBinary(binary, *setup.TypeDump, setup.Install ? setup.Install->Revision : std::string_view{});
-                else
-                    loaded = sTypeRegistry.LoadFromFile(*setup.TypeDump);
-                if (!loaded)
+                std::string const revision = setup.Install ? setup.Install->Revision : std::string();
+                if (std::vector<std::string> typeErrors; !LoadTypeDump(*setup.TypeDump, revision, typeErrors))
                 {
                     LOG_ERROR("server.loginserver", "Cannot load the type dump {}", ConfigMgr::PathToUtf8(*setup.TypeDump));
                     _databases.Close();
                     return false;
                 }
+                SetTypeDumpSource(*setup.TypeDump, revision);
             }
             sObjectSchemaMgr.RegisterClassReloadTarget();
             AppenderDB::Enable(Logger(), 0);
@@ -361,6 +355,8 @@ namespace
             sStats.Publish("keys_outstanding", [] { return Ambrose::StatValue(CountOutstandingKeys()); });
             AccountCommands::Register(Commands());
             _realms.Configure(RealmLoaderSettings::Load(Config()));
+            static LocalClientSystem const followed;
+            FollowClientRevision({ ClientSetup::ServerTypeDumps(Config(), followed, report, [this] { return PollStopRequested(); }), {} });
             return true;
         }
 

@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests every message protocol in the user's own Root.wad (r806919): counts, wire ids, type census, warnings, and a digest of the whole model.
+ * Tests every message protocol in the user's own Root.wad: counts recorded for the installed revision, and on r806919 its wire ids, type census, warnings, and a digest of the whole model.
  */
 
 #include "Environment.h"
 #include "Hex.h"
+#include "InstalledRevision.h"
 #include "KiwadArchive.h"
 #include "LogConfig.h"
 #include "MessageDefinitionSet.h"
@@ -83,9 +84,9 @@ TEST_F(MessageDefinitionClientTest, LoadsEveryProtocolWithoutErrors)
 {
     EXPECT_TRUE(_loaded);
     EXPECT_TRUE(_set->GetErrors().empty()) << Join(_set->GetErrors());
-    EXPECT_EQ(_set->GetProtocols().size(), 29u);
-    EXPECT_EQ(_set->GetRecordCount(), 1448u);
-    EXPECT_EQ(_set->GetMessageCount(), 1446u);
+    InstalledRevision::Expect(_set->GetProtocols().size(), { { "r806919", 29u } }, "protocols");
+    InstalledRevision::Expect(_set->GetRecordCount(), { { "r806919", 1448u } }, "records");
+    InstalledRevision::Expect(_set->GetMessageCount(), { { "r806919", 1446u } }, "messages");
 }
 
 TEST_F(MessageDefinitionClientTest, IdsPerServiceMatchTheClient)
@@ -104,7 +105,10 @@ TEST_F(MessageDefinitionClientTest, IdsPerServiceMatchTheClient)
         EXPECT_EQ(protocol.Version, 1) << protocol.SourceFile;
         EXPECT_EQ(protocol.RecordCount, protocol.Messages.size() + ((serviceId == 5 || serviceId == 12) ? 1u : 0u)) << protocol.SourceFile;
     }
-    EXPECT_EQ(actual, expected);
+    if (InstalledRevision::Is("r806919"))
+    {
+        EXPECT_EQ(actual, expected);
+    }
     EXPECT_EQ(Service(5).SourceFile, "GameMessages.xml");
     EXPECT_EQ(Service(51).ProtocolType, "DOODLEDOUG_MESSAGES");
     EXPECT_EQ(Service(41).ProtocolType, "DOODLEDOUG_MESSAGES");
@@ -116,6 +120,8 @@ TEST_F(MessageDefinitionClientTest, IdsPerServiceMatchTheClient)
 
 TEST_F(MessageDefinitionClientTest, OrdinalSpotChecks)
 {
+    if (!InstalledRevision::Is("r806919"))
+        GTEST_SKIP() << "these ordinals are r806919's, and the install is " << InstalledRevision::Get();
     EXPECT_EQ(Get(1, "MSG_PING").Order, 1);
     EXPECT_EQ(Get(1, "MSG_PING_RSP").Order, 2);
     EXPECT_EQ(Get(2, "MSG_CUSTOMDICT").Order, 1);
@@ -156,8 +162,12 @@ TEST_F(MessageDefinitionClientTest, FieldTypeCensusHasExactlyNineTypes)
         { DmlType::Gid, 1193 }, { DmlType::Str, 911 }, { DmlType::Uint, 740 }, { DmlType::Int, 530 }, { DmlType::Ubyt, 459 },
         { DmlType::Flt, 241 }, { DmlType::Byt, 172 }, { DmlType::Wstr, 38 }, { DmlType::Ushrt, 27 }
     };
-    EXPECT_EQ(_set->GetTypeCensus(), expected);
-    EXPECT_EQ(_set->GetFieldCount(), 4311u);
+    if (InstalledRevision::Is("r806919"))
+    {
+        EXPECT_EQ(_set->GetTypeCensus(), expected);
+    }
+    EXPECT_EQ(_set->GetTypeCensus().size(), expected.size());
+    InstalledRevision::Expect(_set->GetFieldCount(), { { "r806919", 4311u } }, "fields");
 
     std::size_t recordFields = 0;
     std::size_t defaults = 0;
@@ -176,11 +186,11 @@ TEST_F(MessageDefinitionClientTest, FieldTypeCensusHasExactlyNineTypes)
                 defaults += field.DefaultValue.has_value() ? 1 : 0;
         }
     }
-    EXPECT_EQ(recordFields, 4315u);
-    EXPECT_EQ(defaults, 10u);
-    EXPECT_EQ(accessLevels, 14u);
-    EXPECT_EQ(empty, 130u);
-    EXPECT_EQ(renamed, 9u);
+    InstalledRevision::Expect(recordFields, { { "r806919", 4315u } }, "record fields");
+    InstalledRevision::Expect(defaults, { { "r806919", 10u } }, "fields with a default");
+    InstalledRevision::Expect(accessLevels, { { "r806919", 14u } }, "messages with an access level");
+    InstalledRevision::Expect(empty, { { "r806919", 130u } }, "messages without fields");
+    InstalledRevision::Expect(renamed, { { "r806919", 9u } }, "renamed messages");
     FieldDef const* const crowns = Get(12, "MSG_CROWNBALANCE").FindField("TotalCrowns");
     ASSERT_NE(crowns, nullptr);
     EXPECT_EQ(crowns->DefaultValue, std::optional<std::string>("0"));
@@ -189,6 +199,11 @@ TEST_F(MessageDefinitionClientTest, FieldTypeCensusHasExactlyNineTypes)
 TEST_F(MessageDefinitionClientTest, ExactlyThreeWarnings)
 {
     std::vector<MessageIssue> const& warnings = _set->GetWarnings();
+    for (MessageIssue const& warning : warnings)
+        EXPECT_GT(warning.Line, 0u) << warning.ToString();
+    InstalledRevision::Expect(warnings.size(), { { "r806919", 3u } }, "warnings");
+    if (!InstalledRevision::Is("r806919"))
+        return;
     ASSERT_EQ(warnings.size(), 3u) << Join(warnings);
     EXPECT_EQ(warnings[0].SourceFile, "Messages/PhysicsBehaviorMessages.xml");
     EXPECT_NE(warnings[0].Message.find("MSG_PHYSICS_GRAB.Force spells TYPE as TPYE"), std::string::npos) << warnings[0].ToString();
@@ -196,8 +211,6 @@ TEST_F(MessageDefinitionClientTest, ExactlyThreeWarnings)
     EXPECT_NE(warnings[1].Message.find("MSG_MINIGAMEREWARDS.GlobalID has no TYPE"), std::string::npos) << warnings[1].ToString();
     EXPECT_EQ(warnings[2].SourceFile, "WizardMessages2.xml");
     EXPECT_NE(warnings[2].Message.find("MSG_BATTLEGROUNDQUEUEUPDATE.Kicked spells TYPE as TYP"), std::string::npos) << warnings[2].ToString();
-    for (MessageIssue const& warning : warnings)
-        EXPECT_GT(warning.Line, 0u) << warning.ToString();
 
     FieldDef const* const force = Get(16, "MSG_PHYSICS_GRAB").FindField("Force");
     ASSERT_NE(force, nullptr);
@@ -224,7 +237,7 @@ TEST_F(MessageDefinitionClientTest, SortingByMsgNameWouldBreakGameIds)
     std::size_t differing = 0;
     for (std::size_t i = 0; i < byName.size(); ++i)
         differing += byName[i]->Tag != game->Messages[i].Tag ? 1 : 0;
-    EXPECT_EQ(differing, 191u);
+    InstalledRevision::Expect(differing, { { "r806919", 191u } }, "game messages whose place changes when sorted by name");
 }
 
 TEST_F(MessageDefinitionClientTest, WholeModelDigestMatchesTheReference)
@@ -241,5 +254,5 @@ TEST_F(MessageDefinitionClientTest, WholeModelDigestMatchesTheReference)
         }
     }
     SHA256::Digest const digest = hash.Finalize();
-    EXPECT_EQ(Hex::Encode(digest), "c60bc78799a16f2c4ca2537b2e4482166364989b25061659b13667a94f0a5211");
+    InstalledRevision::Expect(Hex::Encode(digest), { { "r806919", "c60bc78799a16f2c4ca2537b2e4482166364989b25061659b13667a94f0a5211" } }, "model digest");
 }

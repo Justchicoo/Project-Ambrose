@@ -18,7 +18,7 @@
 
 struct ClientInstall
 {
-    static constexpr std::string_view PinnedRevision = "r806919";
+    static constexpr std::string_view ProgramFile = "WizardGraphicalClient.exe";
     static constexpr std::size_t MaxArchives = 65536;
 
     std::filesystem::path Root;
@@ -26,7 +26,7 @@ struct ClientInstall
     bool HasProgram = false;
     std::size_t Archives = 0;
 
-    bool IsPinned() const noexcept;
+    std::filesystem::path ProgramPath() const;
     uint64 RevisionNumber() const noexcept;
     bool IsPreferredTo(ClientInstall const& other) const noexcept;
     std::string Describe() const;

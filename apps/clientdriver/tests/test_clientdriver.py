@@ -92,6 +92,15 @@ class LogTailTests(TemporaryFolder):
         tail.wait(r"An AI-built Wizard101 server", 1, since=0, advance=False)
         self.assertEqual(tail.cursor, cursor)
 
+    def test_a_wait_from_the_start_sees_only_what_the_latest_start_wrote(self):
+        path = self.write("Game.log", ["Extracted 1267 level rows", "stopped"])
+        tail = LogTail(path, interval=0.01)
+        tail.begin()
+        self.write("Game.log", ["levels came from r1.Older", "Extracted 1268 level rows"])
+        tail.wait(r"came from r1\.Older", 1, since=tail.start, advance=False)
+        found = tail.wait(r"Extracted (\d+) level rows", 1, since=tail.start, advance=False)
+        self.assertEqual(found.group(1), "1268")
+
     def test_a_timeout_names_the_pattern_and_the_file(self):
         path = self.write("Login.log", ["2026-09-17_15:52:15.900 INFO  [server.loginserver] loginserver ready"])
         tail = LogTail(path, interval=0.01)

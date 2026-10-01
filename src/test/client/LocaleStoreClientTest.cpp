@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Loads the locale files of the user's own r806919 install, when AMBROSE_CLIENT_DIR names it: en-US holds 5132 files, 217032 entries and 216992 keys and resolves the item, quest title, zone, quest goal and NPC format keys the roadmap names, every installed locale loads with Polish skipping only its malformed WizardFurniture.lang, the German item text differs from the English, and when AMBROSE_TYPE_DUMP_PATH names the type dump every display name of the first 2000 object templates in Root.wad resolves or is reported as missing, with at most one percent missing.
+ * Loads the locale files of the user's own install, when AMBROSE_CLIENT_DIR names it: en-US holds the files, entries and keys recorded for the installed revision, r806919's 5132, 217032 and 216992, and resolves the item, quest title, zone, quest goal and NPC format keys the roadmap names, every installed locale loads with Polish skipping only its malformed WizardFurniture.lang, the German item text differs from the English, and when AMBROSE_TYPE_DUMP_PATH names the type dump every display name of the first 2000 object templates in Root.wad resolves or is reported as missing, with at most one percent missing.
  */
 
 #include "BindFile.h"
 #include "Environment.h"
+#include "InstalledRevision.h"
 #include "KiwadArchive.h"
 #include "LocaleStore.h"
 #include "LogConfig.h"
@@ -29,7 +30,7 @@ namespace
         {
             std::optional<std::string> const client = Ambrose::GetEnv("AMBROSE_CLIENT_DIR");
             if (!client || client->empty())
-                GTEST_SKIP() << "set AMBROSE_CLIENT_DIR to your own r806919 install to run this test";
+                GTEST_SKIP() << "set AMBROSE_CLIENT_DIR to your own install to run this test";
             std::string error;
             std::unique_ptr<KiwadArchive> archive = KiwadArchive::Open(LogConfig::Utf8Path(*client) / "Data" / "GameData" / "Root.wad", error);
             ASSERT_TRUE(archive) << error;
@@ -51,10 +52,10 @@ TEST_F(LocaleStoreClientTest, EnglishLoadsEveryTableAndResolvesTheNamedKeys)
     for (std::string const& locale : _store.GetLocales())
         std::cout << ' ' << locale;
     std::cout << std::endl;
-    EXPECT_EQ(english->GetFileCount(), 5132u);
-    EXPECT_EQ(english->GetEntryCount(), 217032u);
-    EXPECT_EQ(english->GetKeyCount(), 216992u);
-    EXPECT_EQ(english->GetDuplicateCount(), 40u);
+    InstalledRevision::Expect(english->GetFileCount(), { { "r806919", 5132u } }, "en-US files");
+    InstalledRevision::Expect(english->GetEntryCount(), { { "r806919", 217032u } }, "en-US entries");
+    InstalledRevision::Expect(english->GetKeyCount(), { { "r806919", 216992u } }, "en-US keys");
+    InstalledRevision::Expect(english->GetDuplicateCount(), { { "r806919", 40u } }, "en-US repeated keys");
     EXPECT_TRUE(english->GetProblems().empty());
     EXPECT_EQ(_store.Resolve("Items_00028316"), "Cute Fairy Kei Broadbrim");
     EXPECT_EQ(_store.Resolve("QuestTitle_00001718"), "To Ravenwood!");
@@ -99,7 +100,7 @@ TEST_F(LocaleStoreClientTest, EveryDisplayNameInTheTemplateSampleResolvesOrIsRep
 {
     std::optional<std::string> const dump = Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH");
     if (!dump || dump->empty())
-        GTEST_SKIP() << "set AMBROSE_TYPE_DUMP_PATH to the r806919 type dump to run this test";
+        GTEST_SKIP() << "set AMBROSE_TYPE_DUMP_PATH to the install's type dump to run this test";
     TypeRegistry registry(&sTypedViewRegistry);
     ASSERT_TRUE(registry.LoadFromFile(LogConfig::Utf8Path(*dump)));
     TypeCatalogPtr const catalog = registry.GetCatalog();

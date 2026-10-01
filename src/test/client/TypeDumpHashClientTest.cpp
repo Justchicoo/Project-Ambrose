@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks every class hash and property hash in the user's own type dump against the client string hashes, when AMBROSE_TYPE_DUMP_PATH names the dump, and for r806919 checks its class and property counts against the shape its own header names, the reference dump's or the larger one this project's extractor writes.
+ * Checks every class hash and property hash in the user's own type dump against the client string hashes, when AMBROSE_TYPE_DUMP_PATH names the dump, and checks its class and property counts against those recorded for the revision it names, or else the install's, in the shape its own header names, the reference dump's or the larger one this project's extractor writes.
  */
 
 #include "Environment.h"
+#include "InstalledRevision.h"
 #include "LogConfig.h"
 #include "StringHash.h"
 
@@ -19,7 +20,6 @@
 namespace
 {
     constexpr std::size_t ReportedMismatches = 20;
-    constexpr std::string_view PinnedRevision = "r806919.Wizard_1_610";
     constexpr std::string_view OurExtractor = "typeextract";
 
     std::optional<uint32> ReadHash(nlohmann::json const& value)
@@ -34,7 +34,7 @@ TEST(TypeDumpHashClientTest, EveryClassAndPropertyHashMatches)
 {
     std::optional<std::string> const path = Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH");
     if (!path || path->empty())
-        GTEST_SKIP() << "set AMBROSE_TYPE_DUMP_PATH to the r806919 type dump (format v2) from your own client to run this test";
+        GTEST_SKIP() << "set AMBROSE_TYPE_DUMP_PATH to the type dump (format v2) from your own client to run this test";
 
     std::ifstream stream(LogConfig::Utf8Path(*path), std::ios::binary);
     ASSERT_TRUE(stream) << "cannot open " << *path;
@@ -70,9 +70,7 @@ TEST(TypeDumpHashClientTest, EveryClassAndPropertyHashMatches)
     std::cout << "Checked " << classes << " classes and " << properties << " properties of "
               << (revision.empty() ? std::string("a dump naming no revision") : revision)
               << (ours ? ", written by this project's extractor" : ", not written by this project's extractor") << std::endl;
-    if (revision.empty() || revision == PinnedRevision)
-    {
-        EXPECT_EQ(classes, ours ? 6986u : 6981u);
-        EXPECT_EQ(properties, ours ? 49465u : 49461u);
-    }
+    std::string const counted = revision.empty() ? InstalledRevision::Get() : revision;
+    InstalledRevision::ExpectFor(counted, classes, { { "r806919", ours ? 6986u : 6981u } }, "classes");
+    InstalledRevision::ExpectFor(counted, properties, { { "r806919", ours ? 49465u : 49461u } }, "properties");
 }
