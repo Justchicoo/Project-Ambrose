@@ -1626,7 +1626,7 @@ class RunOrderTests(TemporaryFolder):
                 return "closed"
 
         class FakeGuard:
-            def __init__(self, pids, path, started=None):
+            def __init__(self, pids, path, started=None, allowances=()):
                 self.known = {pid: 0.0 for pid in pids}
                 self.path = path
 
@@ -2014,6 +2014,14 @@ class ReportTests(unittest.TestCase):
         self.assertFalse(self.passed(self.clean_report(databases_after=["ambrose_driver_run_login"]),
                                      "no database was left behind"))
 
+    def test_an_allowed_connection_passes_and_is_named_in_the_report(self):
+        allowed = {"remote": "msedgewebview2.exe 2603:1036:309:8b::2:443", "host": "substrate.office.com", "reason": "runtime behaviour",
+                   "since": "2026-10-01", "first_seen": "12:00:00"}
+        built = self.clean_report(netguard={"remotes": [{"remote": allowed["remote"]}], "allowed": [allowed], "violations": []})
+        check = [check for check in built["checks"] if check["check"] == "the client contacted only this machine"][0]
+        self.assertTrue(check["ok"])
+        self.assertIn("substrate.office.com by netguard-allow.json (runtime behaviour)", check["detail"])
+
     def test_a_connection_off_the_machine_fails_the_run(self):
         built = self.clean_report(netguard={"remotes": [], "violations": [{"remote": "203.0.113.5:443"}]})
         self.assertFalse(self.passed(built, "the client contacted only this machine"))
@@ -2158,6 +2166,55 @@ class GuardTests(unittest.TestCase):
     def test_a_process_that_was_running_before_the_run_is_not_a_leftover(self):
         self.assertEqual(netguard.leftovers_among(self.rows(), 90.0, {31}), [])
 
+
+class NetGuardAllowanceTests(unittest.TestCase):
+    ENTRY = {"host": "substrate.office.com", "port": 443, "process": "msedgewebview2.exe", "browser_process_only": True,
+             "under": "launcher.exe", "since": "2026-10-01", "reason": "runtime", "evidence": "capture"}
+
+    def networks(self):
+        resolve = lambda host, port, proto=0: [(0, 0, 0, "", ("2603:1036:309:8b::2", 443, 0, 0))]
+        return {"substrate.office.com": netguard.networks_of("substrate.office.com", resolve)}
+
+    def check(self, name="msedgewebview2.exe", cmdline=("msedgewebview2.exe", "--embedded-browser-webview=1"),
+              ancestors=("launcher.exe", "python.exe"), address="2603:1036:309:800::2", port=443, networks=None):
+        return netguard.allowance_for([self.ENTRY], name, list(cmdline), list(ancestors), address, port,
+                                      self.networks() if networks is None else networks)
+
+    def test_the_web_views_own_call_is_let_through_and_named(self):
+        self.assertEqual(self.check()["host"], "substrate.office.com")
+
+    def test_everything_else_is_still_off_the_machine(self):
+        self.assertIsNone(self.check(cmdline=("msedgewebview2.exe", "--type=renderer")))
+        self.assertIsNone(self.check(ancestors=("explorer.exe",)))
+        self.assertIsNone(self.check(port=80))
+        self.assertIsNone(self.check(name="WizardGraphicalClient.exe"))
+        self.assertIsNone(self.check(address="2603:1037::2"))
+        self.assertIsNone(self.check(address="203.0.113.5"))
+
+    def test_a_host_that_cannot_be_resolved_lets_nothing_through(self):
+        def refuse(host, port, proto=0):
+            raise OSError("no such host")
+        self.assertEqual(netguard.networks_of("substrate.office.com", refuse), set())
+        self.assertIsNone(self.check(networks={"substrate.office.com": set()}))
+
+    def test_an_allowance_file_must_be_complete(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "allow.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump([{k: v for k, v in self.ENTRY.items() if k != "evidence"}], handle)
+            with self.assertRaises(ValueError):
+                netguard.load_allowances(path)
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump([dict(self.ENTRY, reason="")], handle)
+            with self.assertRaises(ValueError):
+                netguard.load_allowances(path)
+        self.assertEqual(netguard.load_allowances(os.path.join(tempfile.gettempdir(), "no-such-allow.json")), [])
+
+    def test_the_shipped_allowance_names_only_the_web_views_call(self):
+        entries = netguard.load_allowances()
+        self.assertEqual([(entry["host"], entry["port"], entry["process"], entry["under"]) for entry in entries],
+                         [("substrate.office.com", 443, "msedgewebview2.exe", "launcher.exe")])
+        self.assertTrue(entries[0]["browser_process_only"])
 
 class LingeringProcess:
     def __init__(self, pid=4242):

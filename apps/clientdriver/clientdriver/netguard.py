@@ -1,6 +1,9 @@
 # Project Ambrose by Imjustchico
-# Watches the client tree the driver started, and nothing else on the machine, and kills that tree the moment one of its processes connects to an address that is not on this machine, recording every address any of them reached and every helper that appeared after the client died.
+# Watches the client tree the driver started, and nothing else on the machine, and kills that tree the moment one of its processes connects to an address that is not on this machine, recording every address any of them reached and every helper that appeared after the client died. The only exceptions are the ones netguard-allow.json declares, each with its evidence and the day it was settled: a connection passes only when its process name, its port and the processes above it all match and its address lies in the same /48, or /24 for IPv4, as an address the declared host resolves to now, and when the host cannot be resolved nothing passes. Each connection let through is still recorded, with the allowance that let it.
+import ipaddress
 import json
+import os
+import socket
 import threading
 import time
 
@@ -8,6 +11,53 @@ WATCHED = ("wizardgraphicalclient.exe", "kiwebhelper.exe", "bugreporter.exe", "w
            "kingsisle patcher.exe")
 STARTED_HERE = ("loginserver.exe", "loginserver", "launcher.exe", "launcher", "msedgewebview2.exe", "tshark.exe", "tshark")
 INTERVAL = 0.1
+ALLOW_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "netguard-allow.json")
+ALLOW_KEYS = ("host", "port", "process", "browser_process_only", "under", "since", "reason", "evidence")
+RESOLVE_EVERY = 60
+
+
+def load_allowances(path=ALLOW_FILE):
+    if not os.path.exists(path):
+        return []
+    with open(path, "r", encoding="utf-8") as handle:
+        entries = json.load(handle)
+    if not isinstance(entries, list):
+        raise ValueError(f"{path} must hold a list of allowances")
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != set(ALLOW_KEYS):
+            raise ValueError(f"{path}: an allowance must have exactly {', '.join(ALLOW_KEYS)}")
+        if not isinstance(entry["port"], int) or not all(isinstance(entry[key], str) and entry[key] for key in ALLOW_KEYS if key not in ("port", "browser_process_only")):
+            raise ValueError(f"{path}: an allowance for {entry.get('host')!r} has an empty or mistyped field")
+    return entries
+
+
+def networks_of(host, resolve=socket.getaddrinfo):
+    try:
+        found = resolve(host, 443, proto=socket.IPPROTO_TCP)
+    except OSError:
+        return set()
+    networks = set()
+    for row in found:
+        address = ipaddress.ip_address(row[4][0].split("%")[0])
+        networks.add(ipaddress.ip_network(f"{address}/{48 if address.version == 6 else 24}", strict=False))
+    return networks
+
+
+def allowance_for(allowances, name, cmdline, ancestors, address, port, networks):
+    try:
+        plain = ipaddress.ip_address(str(address).split("%")[0])
+    except ValueError:
+        return None
+    for entry in allowances:
+        if name.lower() != entry["process"].lower() or port != entry["port"]:
+            continue
+        if entry["browser_process_only"] and any(part.startswith("--type=") for part in cmdline):
+            continue
+        if entry["under"].lower() not in (ancestor.lower() for ancestor in ancestors):
+            continue
+        if any(plain in network for network in networks.get(entry["host"], ())):
+            return entry
+    return None
 
 
 def local_addresses():
@@ -106,8 +156,13 @@ def kill_leftovers(started, known=()):
 
 
 class NetGuard(threading.Thread):
-    def __init__(self, pids, record_path, started=None, interval=INTERVAL):
+    def __init__(self, pids, record_path, started=None, interval=INTERVAL, allowances=(), resolve=socket.getaddrinfo):
         super().__init__(daemon=True)
+        self.allowances = list(allowances)
+        self.resolve = resolve
+        self.networks = {}
+        self.resolved_at = None
+        self.allowed = {}
         self.record_path = record_path
         self.started = started if started is not None else time.time() - 5
         self.interval = interval
@@ -178,6 +233,11 @@ class NetGuard(threading.Thread):
                     key = f"{name} {connection.raddr.ip}:{connection.raddr.port}"
                     self.seen.setdefault(key, time.strftime("%H:%M:%S"))
                     if not is_local(connection.raddr.ip, self.local):
+                        entry = self.allowance(process, name, connection.raddr.ip, connection.raddr.port)
+                        if entry is not None:
+                            self.allowed.setdefault(key, {"host": entry["host"], "reason": entry["reason"], "since": entry["since"],
+                                                          "first_seen": time.strftime("%H:%M:%S")})
+                            continue
                         self.violations.append({"time": time.strftime("%H:%M:%S"), "process": name, "pid": process.pid,
                                                 "remote": f"{connection.raddr.ip}:{connection.raddr.port}",
                                                 "status": connection.status})
@@ -189,8 +249,24 @@ class NetGuard(threading.Thread):
             self.flush()
             self._halt.wait(self.interval)
 
+    def allowance(self, process, name, address, port):
+        import psutil
+
+        if not self.allowances:
+            return None
+        if self.resolved_at is None or time.monotonic() - self.resolved_at > RESOLVE_EVERY:
+            self.networks = {entry["host"]: networks_of(entry["host"], self.resolve) for entry in self.allowances}
+            self.resolved_at = time.monotonic()
+        try:
+            cmdline = process.cmdline()
+            ancestors = [parent.name() for parent in process.parents()]
+        except psutil.Error:
+            return None
+        return allowance_for(self.allowances, name, cmdline, ancestors, address, port, self.networks)
+
     def record(self):
         return {"remotes": [{"remote": key, "first_seen": when} for key, when in sorted(self.seen.items())],
+                "allowed": [dict(remote=key, **detail) for key, detail in sorted(self.allowed.items())],
                 "violations": self.violations, "failed": self.failed,
                 "watched": sorted(self.known)}
 

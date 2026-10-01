@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# One run end to end: it drops and lets the server rebuild its own databases, starts the capture, the login server and its account, and for a scenario that enters the world loads the zone rows into its world database, starts the game server, which announces its realm to the login server, and seeds the scenario's wizard, then snapshots the install, opens the ports the scenario watches, starts the client through the launcher, or opens the launcher window and leaves the client to the Play the scenario presses in it, or from the command the launcher prepared less its -P 0 for a scenario that follows the client's own patching default, with the install's PatchConfig.xml copied into the run folder and pointed at a local port first when the scenario asks, whichever way the client starts, and guards it from the moment it exists against any connection off this machine, starts a companion client the same way for a scenario that shows two wizards to each other, on an account and with a wizard of its own and under the same guard, runs the scenario, then asks each client to quit or ends it outright when its own log says quitting would reach off the machine, stops everything in the order it started it with the guard watching until last, and writes the report over both servers' logs whether the scenario passed or failed.
+# One run end to end: it drops and lets the server rebuild its own databases, starts the capture, the login server and its account, and for a scenario that enters the world loads the zone rows into its world database, starts the game server, which announces its realm to the login server, and seeds the scenario's wizard, then snapshots the install, opens the ports the scenario watches, starts the client through the launcher, or opens the launcher window and leaves the client to the Play the scenario presses in it, or from the command the launcher prepared less its -P 0 for a scenario that follows the client's own patching default, with the install's PatchConfig.xml copied into the run folder and pointed at a local port first when the scenario asks, whichever way the client starts, and guards it from the moment it exists against any connection off this machine but the ones netguard-allow.json declares, starts a companion client the same way for a scenario that shows two wizards to each other, on an account and with a wizard of its own and under the same guard, runs the scenario, then asks each client to quit or ends it outright when its own log says quitting would reach off the machine, stops everything in the order it started it with the guard watching until last, and writes the report over both servers' logs whether the scenario passed or failed.
 import os
 import re
 import secrets
@@ -12,7 +12,7 @@ from .database import Scratch
 from .engine import Engine
 from .listeners import PortListener
 from .logtail import read_lines
-from .netguard import NetGuard, kill_leftovers
+from .netguard import NetGuard, kill_leftovers, load_allowances
 from .server import GameServer, LoginServer
 
 USER = "clientdriver"
@@ -159,7 +159,7 @@ class Run:
                 self.note(listener.label, listener.open())
             self.cleanups.append(("close the client", lambda: client.close(force=self.force_close)))
             self.note("the client", client.start(timeout=options["client_timeout"]))
-            guard = NetGuard(client.pids, os.path.join(self.folder, "netguard.json"), started=started)
+            guard = NetGuard(client.pids, os.path.join(self.folder, "netguard.json"), started=started, allowances=load_allowances())
             guard.start()
             engine.restart = lambda timeout: self.restart_client(client, guard, timeout, options)
             self.cleanups.append(("decide how the client is stopped", lambda: self.quit_safely(client)))
