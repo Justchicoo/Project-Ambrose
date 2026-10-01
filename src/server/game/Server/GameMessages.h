@@ -322,6 +322,19 @@ namespace GameMessages
         }
     };
 
+    struct PostZoneEventFromClient
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_POSTZONEEVENTFROMCLIENT";
+
+        std::string EventName;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("EventName", &PostZoneEventFromClient::EventName) };
+        }
+    };
+
     struct ZoneTransferAck
     {
         static constexpr uint8 ServiceId = GameService;
