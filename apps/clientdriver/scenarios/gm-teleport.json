@@ -389,7 +389,7 @@
     {
       "action": "type",
       "name": "type .tele add",
-      "text": ".tele add Driver Spot"
+      "text": ".tele add DriverSpot"
     },
     {
       "action": "char",
@@ -399,7 +399,7 @@
     {
       "action": "wait_game_log",
       "name": "the game master's point is added",
-      "pattern": "account \\d+ with wizard {wizard_guid} ran tele add Driver Spot, which worked",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran tele add DriverSpot, which worked",
       "timeout": 20,
       "record": true
     },
@@ -431,28 +431,28 @@
     },
     {
       "action": "key",
-      "name": "open the chat line to type .tele Driver Spot",
+      "name": "open the chat line to type .tele DriverSpot",
       "vk": "0xBF"
     },
     {
       "action": "char",
-      "name": "take out the slash the key writes before .tele Driver Spot",
+      "name": "take out the slash the key writes before .tele DriverSpot",
       "code": 8
     },
     {
       "action": "type",
-      "name": "type .tele Driver Spot",
-      "text": ".tele \"Driver Spot\""
+      "name": "type .tele DriverSpot",
+      "text": ".tele DriverSpot"
     },
     {
       "action": "char",
-      "name": "send .tele Driver Spot",
+      "name": "send .tele DriverSpot",
       "code": 13
     },
     {
       "action": "wait_game_log",
       "name": "the new point works at once",
-      "pattern": "account \\d+ with wizard {wizard_guid} ran tele Driver Spot, which worked",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran tele DriverSpot, which worked",
       "timeout": 20,
       "record": true
     },
@@ -482,7 +482,7 @@
     {
       "action": "type",
       "name": "type .tele del",
-      "text": ".tele del \"Driver Spot\""
+      "text": ".tele del DriverSpot"
     },
     {
       "action": "char",
@@ -492,7 +492,7 @@
     {
       "action": "wait_game_log",
       "name": "the point is removed",
-      "pattern": "account \\d+ with wizard {wizard_guid} ran tele del Driver Spot, which worked",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran tele del DriverSpot, which worked",
       "timeout": 20
     }
   ]
