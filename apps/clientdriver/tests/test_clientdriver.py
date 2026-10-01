@@ -2210,7 +2210,8 @@ class NetGuardAllowanceTests(unittest.TestCase):
             def cmdline(self):
                 return ["msedgewebview2.exe", "--embedded-browser-webview=1"]
 
-        with tempfile.TemporaryDirectory() as folder:
+        stand_in = mock.Mock(Error=OSError, net_if_addrs=dict)
+        with tempfile.TemporaryDirectory() as folder, mock.patch.dict(sys.modules, {"psutil": stand_in}):
             guard = netguard.NetGuard([], os.path.join(folder, "guard.json"), allowances=[self.ENTRY],
                                       resolve=lambda host, port, proto=0: [(0, 0, 0, "", ("2603:1036:309:8b::2", 443, 0, 0))])
             guard.remember_lineage({7: Process(7, [Named("launcher.exe"), Named("python.exe")])})
