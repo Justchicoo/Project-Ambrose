@@ -202,6 +202,14 @@ A single entry point for contributors and agents: install deps, compile, run the
 - module new/list; studio (launch local web editor)
 - Reads client data only from the user's own install and never downloads it from a host the project runs. An opt-in step that fills a separate copy from KingsIsle's patch servers is planned, not yet scheduled; using it is the user's own choice on their own account and machine, may break KingsIsle's terms, and never touches the pinned development install
 
+### ci_build (taught parallel tests and legs on 2026-10-01)
+
+Configures, builds and tests one preset the way CI does: `python apps/ci/ci_build.py --configure-preset linux-gcc --build-preset linux-gcc-debug [--warnings-as-errors] [--setup-vcpkg <folder>] [--stage configure|build-test]`. Tests run in parallel on every core, and `--test-jobs 1` runs them one at a time; `--exclude-label render` skips the tests that need a real display, which WSL's legs leave to the Windows leg. For local verification it also runs several presets as legs, `--leg linux-gcc:linux-gcc-debug --leg linux-gcc-asan ...`, each a configure, build and test, going on past a failed leg and ending with a table of each leg's configure, build and test seconds and its result. `--sync <repository> --commit <commit>` first brings the clone the tool runs from to that commit of another repository, fetching its branches, checking the commit out and removing everything untracked but `build/`, so every build is incremental, then runs the rest from the checked-out tool; it refuses to sync the repository it is run from. The local Linux legs run it from a clone on WSL's own disk, `python3 apps/ci/ci_build.py --sync /mnt/k/Project-Ambrose --commit <sha> --leg ... --warnings-as-errors --exclude-label render` with `AMBROSE_TEST_DB` set.
+
+- **Form:** CLI (Python)
+- **Lives in:** apps/ci/ci_build.py, with its self-tests in apps/ci/tests/test_ci.py
+- **Needs:** CMake, Ninja on Linux, and VCPKG_ROOT or `--setup-vcpkg`
+
 ### ci_stress (built on 2026-09-30)
 
 Measures a flaky test before and after its fix the same way every time: `python apps/ci/ci_stress.py <unit_tests> --filter 'AdminServerTest.*' --copies 32 --runs 100 [--busy 8] [--keep <folder>] [--label fixed] [--arg <argument>]...` runs the gtest executable as that many concurrent copies, each that many times, optionally beside busy loops that load the machine, and prints how many runs failed, grouped by the first failure each printed, with ports, timings and addresses made alike so one cause counts once, and which tests failed. It exits 1 when any run failed, and `--keep` holds each failing run's whole output. It took over the loops written by hand for flake 1 and flake 2; a stress proof a fix lands on is run with it, and the numbers go in the fix's message.

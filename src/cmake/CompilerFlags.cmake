@@ -1,12 +1,11 @@
 # Project Ambrose by Imjustchico
-# Defines the ambrose-compile-options target that carries warnings and platform defines for project code.
+# Defines the ambrose-compile-options target that carries warnings and platform defines for project code, and under Visual Studio's generator compiles a project's files on every core, which MSBuild's own parallelism across projects does not; the source root reaches the code as a define only under MSVC, since GCC and Clang trim it from __FILE__ with a prefix map, so their command lines name no clone and a compiler cache can share objects between clones.
 add_library(ambrose-compile-options INTERFACE)
 
 target_compile_features(ambrose-compile-options INTERFACE cxx_std_20)
 
-target_compile_definitions(ambrose-compile-options INTERFACE AMBROSE_SOURCE_ROOT="${CMAKE_SOURCE_DIR}/")
-
 if(MSVC)
+    target_compile_definitions(ambrose-compile-options INTERFACE AMBROSE_SOURCE_ROOT="${CMAKE_SOURCE_DIR}/")
     target_compile_options(ambrose-compile-options INTERFACE
         /W4
         /permissive-
@@ -21,6 +20,9 @@ if(MSVC)
         WIN32_LEAN_AND_MEAN)
     if(AMBROSE_WARNINGS_AS_ERRORS)
         target_compile_options(ambrose-compile-options INTERFACE /WX)
+    endif()
+    if(CMAKE_GENERATOR MATCHES "Visual Studio")
+        target_compile_options(ambrose-compile-options INTERFACE /MP)
     endif()
 else()
     target_compile_options(ambrose-compile-options INTERFACE
