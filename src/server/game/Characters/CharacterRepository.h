@@ -97,6 +97,7 @@ public:
     static Statement PrepareLoadStats(uint64 guid);
     static Statement PrepareSaveStats(uint64 guid, CharacterStats const& stats);
     static Statement PrepareSavePosition(uint64 guid, float x, float y, float z, float orientation, uint64 revision);
+    static Statement PrepareSavePlace(uint64 guid, std::string const& zone, std::string const& zoneDisplay, float x, float y, float z, float orientation, uint64 revision);
     static std::optional<CharacterStats> ReadStats(PreparedResultSet& result);
     static Statement PrepareLoadSpells(uint64 guid);
     static Statement PrepareSaveSpell(uint64 guid, CharacterSpell const& spell);
