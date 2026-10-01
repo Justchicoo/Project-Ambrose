@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Installs, configures and runs an Ambrose checkout on Windows: deps checks the tools and, with -Install, installs what is missing through winget (Visual Studio 2022 Build Tools with the C++ workload, CMake, Git) and vcpkg, and with -WithDatabase MariaDB, registered as a service so a server is running, and the account the shipped configuration names; -Plan prints those steps without taking them.
+# Installs, configures and runs an Ambrose checkout on Windows: deps checks the tools and, with -Install, installs what is missing through winget (Visual Studio 2022 Build Tools with the C++ workload, CMake, Git) and vcpkg, and with -WithDatabase MariaDB, registered as a service so a server is running, and the account the shipped configuration names; -Plan prints those steps without taking them. It reads PATH afresh before looking, so a tool an earlier run installed is found, and winget's answer that a package is already installed counts as done.
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $EnvFile = if ($env:AMBROSE_INSTALL_ENV) { $env:AMBROSE_INSTALL_ENV } else { Join-Path $Root 'conf\dist\env.dist' }
@@ -56,6 +56,7 @@ function Get-DatabaseAccount {
 }
 
 function Update-Path {
+    if ($Plan -or $env:OS -ne 'Windows_NT') { return }
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
 }
 
@@ -65,12 +66,16 @@ function Invoke-Step([bool]$Found, [string]$What, [string]$Seen, [scriptblock]$A
     if (-not $Plan) { & $Action }
 }
 
+$WingetNothingToUpgrade = -1978335189
+
 function Install-Winget([string]$Id, [string[]]$Extra = @()) {
-    Invoke-Checked winget (@('install', '--exact', '--id', $Id, '--accept-package-agreements', '--accept-source-agreements', '--silent') + $Extra)
+    & winget @('install', '--exact', '--id', $Id, '--accept-package-agreements', '--accept-source-agreements', '--silent') @Extra
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $WingetNothingToUpgrade) { Fail "winget failed with exit code $LASTEXITCODE" }
     Update-Path
 }
 
 function Install-Tools {
+    Update-Path
     $vs = Test-Found 'vs' { $VsWhere -and (Test-Path $VsWhere) -and (& $VsWhere -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath) }
     $cmake = Test-Found 'cmake' { Get-Command cmake -ErrorAction SilentlyContinue }
     $git = Test-Found 'git' { Get-Command git -ErrorAction SilentlyContinue }
@@ -96,6 +101,7 @@ function Install-Tools {
 }
 
 function Install-Database {
+    Update-Path
     $account = Get-DatabaseAccount
     $user = $account.User
     $mariadb = Test-Found 'mariadb' { Get-Service -Name 'MariaDB*', 'MySQL*' -ErrorAction SilentlyContinue }
