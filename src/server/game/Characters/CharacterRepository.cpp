@@ -232,6 +232,43 @@ CharacterOpResult CharacterRepository::Restore(uint64 guid)
     return CharacterOpResult::Ok;
 }
 
+std::optional<std::vector<DeletedCharacter>> CharacterRepository::ListDeleted(uint64 account, uint32 limit)
+{
+    Statement const statement = Prepare(CHAR_SEL_DELETED);
+    if (!statement)
+        return std::nullopt;
+    statement->SetData(0, account);
+    statement->SetData(1, account);
+    statement->SetData(2, limit);
+    PreparedQueryResult result;
+    if (!CharacterDatabase.TryQuery(*statement, result))
+        return std::nullopt;
+    std::vector<DeletedCharacter> deleted;
+    if (!result)
+        return deleted;
+    do
+    {
+        PreparedResultSet const& row = *result;
+        deleted.push_back({ row[0].Get<uint64>(), row[1].Get<uint64>(), row[2].Get<uint64>(), row[3].Get<int32>(), row[4].Get<uint32>() });
+    } while (result->NextRow());
+    return deleted;
+}
+
+CharacterOpResult CharacterRepository::FlagRename(uint64 guid)
+{
+    Statement const statement = Prepare(CHAR_UPD_SHOULD_RENAME);
+    if (!statement)
+        return CharacterOpResult::DatabaseError;
+    statement->SetData(0, guid);
+    std::optional<uint64> const changed = CharacterDatabase.DirectExecuteCounted(*statement);
+    if (!changed)
+        return CharacterOpResult::DatabaseError;
+    if (*changed == 0)
+        return CharacterOpResult::NotFound;
+    LOG_INFO("characters", "Character {} will choose a new name at its next login", guid);
+    return CharacterOpResult::Ok;
+}
+
 CharacterOpResult CharacterRepository::SetOnline(uint64 guid, bool online)
 {
     Statement const statement = Prepare(CHAR_UPD_ONLINE);
