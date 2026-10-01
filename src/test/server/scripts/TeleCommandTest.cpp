@@ -122,9 +122,9 @@ TEST_F(TeleCommandTest, APlayerCannotTeleportOrAskWhereItStands)
     for (std::string const line : { "tele Start", "tele add Here", "tele del Here", "go xyz 1 2 3", "gps" })
     {
         WizardCaller player(SEC_PLAYER, 7301);
-        EXPECT_EQ(sCommandMgr.Execute(player, line), CommandResult::Refused) << line;
+        EXPECT_EQ(sCommandMgr.Execute(player, line), CommandResult::Unknown) << line;
         WizardCaller gm(SEC_GAMEMASTER, 7301);
-        EXPECT_NE(sCommandMgr.Execute(gm, line), CommandResult::Refused) << line;
+        EXPECT_NE(sCommandMgr.Execute(gm, line), CommandResult::Unknown) << line;
     }
 }
 
