@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The decisions a desktop web view window makes, with no window in sight so tests can drive each one: the origin a URL belongs to, the program's own origin on each web view, where a navigation or a new window goes from a view bound to one origin, which pages the host channel answers, logging each other origin that tries once, and whether a certificate the web view could not verify is accepted, which it is only when its SHA-256 fingerprint equals the pin held for that host and port.
+ * The decisions a desktop web view window makes, with no window in sight so tests can drive each one: the origin a URL belongs to, the program's own origin on each web view, where a navigation or a new window goes from a view bound to one origin, which pages the host channel answers, logging each other origin that tries once, the browser switches that keep the web view itself from calling anywhere the program did not ask, and whether a certificate the web view could not verify is accepted, which it is only when its SHA-256 fingerprint equals the pin held for that host and port.
  */
 
 #ifndef AMBROSE_SHELLRULES_H
@@ -49,6 +49,7 @@ public:
     static ShellNavigation Navigate(ShellOrigin const& bound, std::string_view url, bool newWindow);
     static ShellPinDecision Certificate(ShellOrigin const& origin, std::string_view fingerprint, std::string_view pin);
     static std::string NormalFingerprint(std::string_view fingerprint);
+    static std::string BrowserArguments();
 };
 
 class ShellGate

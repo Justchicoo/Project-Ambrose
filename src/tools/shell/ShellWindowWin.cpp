@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The shell window on Windows: a plain window holding a WebView2 whose user data folder is the window's profile, so nothing is written beside the executable. The program's own page is answered from memory for every request to its https origin through a web resource handler, and a message from the page is admitted only from that origin, handed to the program and answered on the view's own thread, because WebView2 is a single-threaded apartment. A view bound to a remote panel has web messages turned off and no handler. A navigation away from the bound origin and every new window go to the system browser, a document request to any other origin is answered empty in the view so nothing reaches that origin from it, and the program's own page, which carries a content policy keeping it on its own origin, has every request elsewhere refused in the view and named once, a download is saved only where the save dialog says, and a certificate the view cannot verify is allowed only when its fingerprint equals the pin. A page that has not finished its first navigation within the start timeout closes the window and is reported, so the program can fall back. The size a program asks for is the page's own area, so a window opened for the first time is made larger by exactly its frame and title bar, and where the window was left, frame and all, is read before it opens and written when it closes, the message loop runs only while the window exists and posts no quit, so the next window this thread opens does not end at once, and a probe runs its scripts after the first page settles and then closes the window.
+ * The shell window on Windows: a plain window holding a WebView2 whose user data folder is the window's profile, so nothing is written beside the executable, started with the switches ShellRules gives and with reputation checks off so the web view itself calls nowhere. The program's own page is answered from memory for every request to its https origin through a web resource handler, and a message from the page is admitted only from that origin, handed to the program and answered on the view's own thread, because WebView2 is a single-threaded apartment. A view bound to a remote panel has web messages turned off and no handler. A navigation away from the bound origin and every new window go to the system browser, a document request to any other origin is answered empty in the view so nothing reaches that origin from it, and the program's own page, which carries a content policy keeping it on its own origin, has every request elsewhere refused in the view and named once, a download is saved only where the save dialog says, and a certificate the view cannot verify is allowed only when its fingerprint equals the pin. A page that has not finished its first navigation within the start timeout closes the window and is reported, so the program can fall back. The size a program asks for is the page's own area, so a window opened for the first time is made larger by exactly its frame and title bar, and where the window was left, frame and all, is read before it opens and written when it closes, the message loop runs only while the window exists and posts no quit, so the next window this thread opens does not end at once, and a probe runs its scripts after the first page settles and then closes the window.
  */
 
 #include "ShellWindow.h"
@@ -19,6 +19,7 @@
 #include <shlwapi.h>
 #include <wrl.h>
 #include <WebView2.h>
+#include <WebView2EnvironmentOptions.h>
 
 #include <fmt/format.h>
 
@@ -35,6 +36,7 @@ namespace
 {
     using Microsoft::WRL::Callback;
     using Microsoft::WRL::ComPtr;
+    using Microsoft::WRL::Make;
 
     constexpr wchar_t const* WindowClass = L"AmbroseShellWindow";
     constexpr UINT_PTR ProbeTimer = 1;
@@ -311,6 +313,9 @@ namespace
             settings->put_IsWebMessageEnabled(own ? TRUE : FALSE);
             settings->put_AreHostObjectsAllowed(FALSE);
             settings->put_IsStatusBarEnabled(FALSE);
+            ComPtr<ICoreWebView2Settings8> reputation;
+            if (SUCCEEDED(settings.As(&reputation)))
+                reputation->put_IsReputationCheckingRequired(FALSE);
         }
 
         EventRegistrationToken token{};
@@ -559,7 +564,9 @@ bool ShellWindow::Show(ShellWindowOptions const& options, std::string& error)
     ShowWindow(window, options.OffScreen ? SW_SHOWNOACTIVATE : (remembered && remembered->Maximised ? SW_SHOWMAXIMIZED : SW_SHOW));
     UpdateWindow(window);
 
-    HRESULT const asked = CreateCoreWebView2EnvironmentWithOptions(nullptr, profile.wstring().c_str(), nullptr,
+    auto const environmentOptions = Make<CoreWebView2EnvironmentOptions>();
+    environmentOptions->put_AdditionalBrowserArguments(Widen(ShellRules::BrowserArguments()).c_str());
+    HRESULT const asked = CreateCoreWebView2EnvironmentWithOptions(nullptr, profile.wstring().c_str(), environmentOptions.Get(),
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
             [&running](HRESULT made2, ICoreWebView2Environment* environment) -> HRESULT
             {
