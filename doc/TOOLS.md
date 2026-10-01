@@ -210,6 +210,14 @@ Measures a flaky test before and after its fix the same way every time: `python 
 - **Lives in:** apps/ci/ci_stress.py, with its self-tests in apps/ci/tests/test_ci.py
 - **Needs:** a built unit_tests; nothing else
 
+### ci_local (built on 2026-09-27)
+
+Runs every step of CI's checks job on a local clone, read from `.github/workflows/core-build.yml` so it follows the workflow as it changes: `python apps/ci/ci_local.py [--branch <pull request branch>] [--base <ref>] [--list] [--stamp <file>]`. The range steps run over what the next push would send, against the project's `main` fetched first. `--branch` adds the contributor path check, and without it the step CI runs only on a push to `main` runs instead, so a run with no branch is the check before pushing to `main`. `--stamp` writes the commit a green run covered to a file, which a pre-push guard can compare with the commit being pushed.
+
+- **Form:** CLI (Python)
+- **Lives in:** apps/ci/ci_local.py, with its self-tests in apps/ci/tests/test_ci.py
+- **Needs:** git and Python; nothing built
+
 ### Reload channel (.reload + admin API)
 
 Let editors, GMs and operators push world database changes into any running gameserver without a restart, so a tester in the Wizard101 client sees a change within seconds.

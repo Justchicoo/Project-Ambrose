@@ -1054,6 +1054,13 @@ class MilestoneTrackTests(unittest.TestCase):
         self.assertIsNone(ci_local.command_for("Pending SQL on main", pending, "upstream/main", "milestone/3.19-sql"))
         self.assertEqual(ci_local.skipped_because(pending), "CI runs it only on a push to main")
 
+    def test_the_local_run_stamps_the_commit_it_covered(self):
+        with tempfile.TemporaryDirectory() as folder:
+            stamp = os.path.join(folder, "checks-passed")
+            head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+            self.assertEqual(ci_local.write_stamp(ROOT, stamp), head)
+            self.assertEqual(io.open(stamp, encoding="utf-8").read(), head)
+
     def test_a_milestone_branch_stays_inside_its_own_phase_file(self):
         other = "doc/roadmap/phase-05-the-zone-comes-alive-for-one-player.md"
         refused = ci_contrib_paths.check_milestone([self.PHASE, other], "4.04")
