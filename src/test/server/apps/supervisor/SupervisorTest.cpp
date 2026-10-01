@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, hands every state the app passes through to the status observer once and in order with when each began and the data the panel's status event carries, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, waits past its timeout for a start step a stand-in admin API reports, or the app prints with its admin API off, until the app is ready and ends one that runs past the time it asked for, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant.
+ * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, hands every state the app passes through to the status observer once and in order with when each began and the data the panel's status event carries, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, waits past its timeout for a start step a stand-in admin API reports, or the app prints with its admin API off, until the app is ready, grants a printed step six hours at most, and ends one that runs past the time it asked for, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant.
  */
 
 #include "AdminAuth.h"
@@ -496,6 +496,17 @@ TEST(SupervisorTest, AStartStepLineIsWaitedForWhenTheAdminApiIsOff)
     EXPECT_EQ(rig.App().FailedStarts, 0u) << "a first start that builds the type dump outlasts a short start timeout: " << rig.App().Message;
     EXPECT_TRUE(rig.App().StartStage.empty());
     EXPECT_TRUE(rig.Said("building the type dump for revision r1, which may take up to 60 s more"));
+}
+
+TEST(SupervisorTest, AStartStepLineIsGrantedSixHoursAtMost)
+{
+    Rig rig({ "echo", StepLine("waiting forever", std::chrono::seconds(4000000000LL)), "sleep", "60000" }, "App.helper.StartTimeout = 1\n");
+    ASSERT_TRUE(rig.Open());
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.StartStage == "waiting forever"; }));
+    auto const now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    auto const sixHours = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::hours(6)).count();
+    EXPECT_LE(rig.App().StartUntilEpochMs, now + sixHours) << "an app cannot hold its start open past the ceiling by asking for more";
+    EXPECT_GT(rig.App().StartUntilEpochMs, now + sixHours - 60000);
 }
 
 TEST(SupervisorTest, AStartStepLineThatRunsPastItsTimeEndsTheStart)
