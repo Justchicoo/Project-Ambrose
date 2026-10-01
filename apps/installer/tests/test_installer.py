@@ -111,9 +111,14 @@ def run_powershell_plan(found, *options, with_winget=True):
     tools = os.path.join(folder, "tools")
     os.makedirs(tools)
     marker = os.path.join(folder, "winget-ran")
-    if with_winget:
+    if with_winget and os.name == "nt":
         with open(os.path.join(tools, "winget.cmd"), "w", encoding="utf-8", newline="\r\n") as handle:
             handle.write(f'@echo off\necho ran> "{marker}"\n')
+    elif with_winget:
+        shim = os.path.join(tools, "winget")
+        with open(shim, "w", encoding="utf-8") as handle:
+            handle.write(f'#!/bin/sh\necho ran > "{marker}"\n')
+        os.chmod(shim, 0o755)
     environment = {key: value for key, value in os.environ.items() if key.upper() != "VCPKG_ROOT"}
     environment.update(AMBROSE_DEPS_FOUND=found, USERPROFILE=folder,
                        PATH=tools + os.pathsep + environment.get("PATH", "") if with_winget else tools)

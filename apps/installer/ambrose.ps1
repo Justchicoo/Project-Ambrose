@@ -30,8 +30,8 @@ function Invoke-Checked([string]$Command, [string[]]$Arguments) {
     if ($LASTEXITCODE -ne 0) { Fail "$Command failed with exit code $LASTEXITCODE" }
 }
 
-$VsWhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-$VcpkgDir = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } else { Join-Path $env:USERPROFILE 'vcpkg' }
+$VsWhere = if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe' } else { '' }
+$VcpkgDir = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } elseif ($env:USERPROFILE) { Join-Path $env:USERPROFILE 'vcpkg' } else { Join-Path $HOME 'vcpkg' }
 
 function Test-Found([string]$Name, [scriptblock]$Probe) {
     if ($env:AMBROSE_DEPS_FOUND) { return $Name -in ($env:AMBROSE_DEPS_FOUND -split ',' | ForEach-Object { $_.Trim() }) }
@@ -71,7 +71,7 @@ function Install-Winget([string]$Id, [string[]]$Extra = @()) {
 }
 
 function Install-Tools {
-    $vs = Test-Found 'vs' { (Test-Path $VsWhere) -and (& $VsWhere -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath) }
+    $vs = Test-Found 'vs' { $VsWhere -and (Test-Path $VsWhere) -and (& $VsWhere -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath) }
     $cmake = Test-Found 'cmake' { Get-Command cmake -ErrorAction SilentlyContinue }
     $git = Test-Found 'git' { Get-Command git -ErrorAction SilentlyContinue }
     $cloned = Test-Found 'vcpkg' { Test-Path (Join-Path $VcpkgDir 'scripts\buildsystems\vcpkg.cmake') }
