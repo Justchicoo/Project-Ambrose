@@ -52,6 +52,7 @@
 #include "ScriptMgr.h"
 #include "GameMessageTable.h"
 #include "GameSession.h"
+#include "GameTeleMgr.h"
 #include "GameShutdown.h"
 #include "MessageRegistry.h"
 #include "SessionContext.h"
@@ -865,6 +866,11 @@ namespace
             sCommandMgr.Load(sScriptMgr.GetCommands());
             sCommandMgr.LoadSecurity();
             sCommandMgr.RegisterReloadTargets();
+            std::vector<std::string> teleErrors;
+            if (WorldDatabase.IsOpen() && !sGameTeleMgr.Load(teleErrors))
+                for (std::string const& error : teleErrors)
+                    LOG_ERROR("server.world", "Teleport points: {}", error);
+            sGameTeleMgr.RegisterReloadTargets();
             RegisterCommandConsole();
             LOG_INFO("server.commands", "{} command(s) are ready, typed after {}", sCommandMgr.GetCommandCount(), sCommandMgr.GetPrefix());
         }
