@@ -79,7 +79,7 @@ Each app lists every client message once in a `MessageHandlerTable`: the message
 
 ### GM commands
 
-Each command group is one file, `scripts/Commands/cs_<group>.cpp`, holding a `CommandScript` with a command table and the default account security level each command requires. A `command_security` table overrides levels live and reloads with the other command data.
+Each command group is one file, `scripts/Commands/cs_<group>.cpp`, holding a `CommandScript` with a command table and the default account security level each command requires. A `command_security` row in the world database overrides one command's level, read at start and again by `.reload command_security`, which keeps the levels it had when the table cannot be read. The account, ban and character groups added in 6.05 act on an account only when the caller in game holds a level above it, and never give a level as high as the caller's own, so no game master raises another to its rank or locks out its peers; the console may do all of it. A ban of an account disconnects its wizards in the world with MSG_FORCE_DISCONNECT's AccountBanned, and the login server refuses its next login from the same rows. An account's own `permissions`, NULL by default, take the place of `LoginComplete.Permissions` for its wizards from their next entry, in MSG_LOGINCOMPLETE and in the name behavior's `m_chatPermissions`.
 
 ### Modules
 
