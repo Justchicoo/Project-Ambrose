@@ -360,10 +360,24 @@ TEST(SupervisorTest, AStartThatEndsBeforeItIsReadyIsRecordedAndNotStartedAgain)
     EXPECT_EQ(crashed.Exits.back().Code, std::optional<int64>(3));
     EXPECT_EQ(crashed.Exits.back().During, AppState::Starting);
     EXPECT_NE(crashed.Message.find("before it was ready"), std::string::npos) << crashed.Message;
+    EXPECT_NE(crashed.Message.find("exit code 3"), std::string::npos) << crashed.Message;
+    EXPECT_NE(crashed.Message.find("nothing works"), std::string::npos) << "the panel shows why it stopped, not only that it did: " << crashed.Message;
     EXPECT_TRUE(rig.Said("nothing works"));
     std::this_thread::sleep_for(2s);
     EXPECT_EQ(rig.App().State, AppState::Crashed);
     EXPECT_EQ(rig.App().Restarts, 0u);
+}
+
+TEST(SupervisorTest, AStartThatEndsBeforeItIsReadyNamesTheFirstErrorItLogged)
+{
+    Rig rig({ "echo", "2026-09-30_19:10:27.884 ERROR [server.loginserver] it has no type dump: TypeDumpPath is not set", "echo",
+        "2026-09-30_19:10:27.886 ERROR [server.loginserver] loginserver failed to start", "exit", "1" });
+    ASSERT_TRUE(rig.Open());
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Crashed; }));
+    std::string const message = rig.App().Message;
+    EXPECT_NE(message.find("exit code 1: it has no type dump: TypeDumpPath is not set"), std::string::npos)
+        << "the first error is the cause and the last only says it failed: " << message;
+    EXPECT_EQ(message.find("[server.loginserver]"), std::string::npos) << "the time, level and category are left out: " << message;
 }
 
 TEST(SupervisorTest, AStartThatNeverReportsReadyIsEndedAtItsTimeout)

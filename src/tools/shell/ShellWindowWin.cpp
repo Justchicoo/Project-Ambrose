@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The shell window on Windows: a plain window holding a WebView2 whose user data folder is the window's profile, so nothing is written beside the executable. The program's own page is answered from memory for every request to its https origin through a web resource handler, and a message from the page is admitted only from that origin, handed to the program and answered on the view's own thread, because WebView2 is a single-threaded apartment. A view bound to a remote panel has web messages turned off and no handler. A navigation away from the bound origin and every new window go to the system browser, a document request to any other origin is answered empty in the view so nothing reaches that origin from it, and the program's own page, which carries a content policy keeping it on its own origin, has every request elsewhere refused in the view and named once, a download is saved only where the save dialog says, and a certificate the view cannot verify is allowed only when its fingerprint equals the pin. Where the window was left is read before it opens and written when it closes, the message loop runs only while the window exists and posts no quit, so the next window this thread opens does not end at once, and a probe runs its scripts after the first page settles and then closes the window.
+ * The shell window on Windows: a plain window holding a WebView2 whose user data folder is the window's profile, so nothing is written beside the executable. The program's own page is answered from memory for every request to its https origin through a web resource handler, and a message from the page is admitted only from that origin, handed to the program and answered on the view's own thread, because WebView2 is a single-threaded apartment. A view bound to a remote panel has web messages turned off and no handler. A navigation away from the bound origin and every new window go to the system browser, a document request to any other origin is answered empty in the view so nothing reaches that origin from it, and the program's own page, which carries a content policy keeping it on its own origin, has every request elsewhere refused in the view and named once, a download is saved only where the save dialog says, and a certificate the view cannot verify is allowed only when its fingerprint equals the pin. A page that has not finished its first navigation within the start timeout closes the window and is reported, so the program can fall back. Where the window was left is read before it opens and written when it closes, the message loop runs only while the window exists and posts no quit, so the next window this thread opens does not end at once, and a probe runs its scripts after the first page settles and then closes the window.
  */
 
 #include "ShellWindow.h"
@@ -39,6 +39,7 @@ namespace
     constexpr wchar_t const* WindowClass = L"AmbroseShellWindow";
     constexpr UINT_PTR ProbeTimer = 1;
     constexpr UINT_PTR ProbeDeadline = 2;
+    constexpr UINT_PTR StartDeadline = 3;
 
     std::wstring Widen(std::string const& text)
     {
@@ -85,6 +86,7 @@ namespace
         std::size_t ProbeNext = 0;
         std::vector<std::string> ProbeResults;
         bool ProbeDone = false;
+        bool Loaded = false;
 
         void Log(std::string const& line) const
         {
@@ -204,6 +206,17 @@ namespace
             {
                 KillTimer(window, ProbeTimer);
                 RunProbeStep(*running);
+                return 0;
+            }
+            if (wide == StartDeadline)
+            {
+                KillTimer(window, StartDeadline);
+                if (!running->Loaded)
+                {
+                    running->Failure = fmt::format("the web view did not show its page within {} seconds", running->Options->StartTimeout.count() / 1000);
+                    running->Settled = true;
+                    PostMessageW(window, WM_CLOSE, 0, 0);
+                }
                 return 0;
             }
             if (wide == ProbeDeadline)
@@ -380,6 +393,11 @@ namespace
         view->add_NavigationCompleted(Callback<ICoreWebView2NavigationCompletedEventHandler>(
                                           [&running](ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*) -> HRESULT
                                           {
+                                              if (!running.Loaded)
+                                              {
+                                                  running.Loaded = true;
+                                                  KillTimer(running.Window, StartDeadline);
+                                              }
                                               if (running.Options->Probe && !running.ProbeStarted)
                                               {
                                                   running.ProbeStarted = true;
@@ -527,6 +545,8 @@ bool ShellWindow::Show(ShellWindowOptions const& options, std::string& error)
 
     if (options.Probe)
         SetTimer(window, ProbeDeadline, static_cast<UINT>(options.Probe->Timeout.count()), nullptr);
+    if (options.StartTimeout.count() > 0)
+        SetTimer(window, StartDeadline, static_cast<UINT>(options.StartTimeout.count()), nullptr);
     ShowWindow(window, options.OffScreen ? SW_SHOWNOACTIVATE : (remembered && remembered->Maximised ? SW_SHOWMAXIMIZED : SW_SHOW));
     UpdateWindow(window);
 

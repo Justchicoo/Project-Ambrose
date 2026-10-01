@@ -23,7 +23,6 @@ namespace
 {
     constexpr std::string_view KingsIsleFolder = "KingsIsle Entertainment";
     constexpr std::string_view GameFolder = "Wizard101";
-    constexpr std::string_view ProgramFile = "WizardGraphicalClient.exe";
     constexpr std::size_t MaxRevisionBytes = 128;
     constexpr int ProgramDepth = 2;
     constexpr int WalkedAsInstall = std::numeric_limits<int>::max();
@@ -323,9 +322,9 @@ namespace
     }
 }
 
-bool ClientInstall::IsPinned() const noexcept
+std::filesystem::path ClientInstall::ProgramPath() const
 {
-    return Revision.starts_with(PinnedRevision) && (Revision.size() == PinnedRevision.size() || Revision[PinnedRevision.size()] == '.');
+    return Root / "Bin" / FromUtf8(ProgramFile);
 }
 
 uint64 ClientInstall::RevisionNumber() const noexcept
@@ -362,7 +361,7 @@ std::optional<ClientInstall> ClientInstall::Inspect(ClientSystem const& system, 
     install.Root = root.lexically_normal();
     if (!install.Root.has_filename() && install.Root.has_relative_path())
         install.Root = install.Root.parent_path();
-    install.HasProgram = system.IsFile(install.Root / "Bin" / FromUtf8(ProgramFile));
+    install.HasProgram = system.IsFile(install.Root / "Bin" / FromUtf8(ClientInstall::ProgramFile));
     for (std::filesystem::path const& file : system.ListFiles(install.Root / "Data" / "GameData", MaxArchives))
         if (Ambrose::EqualsIgnoreCase(ClientLocator::PathText(file.extension()), ".wad"))
             ++install.Archives;

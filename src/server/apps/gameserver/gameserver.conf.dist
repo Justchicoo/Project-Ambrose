@@ -14,6 +14,7 @@ Setup.SchemaProbe =
 Setup.SchemaProbeTimeout = 3600
 Setup.TypeExtractor =
 Setup.TypeExtractTimeout = 900
+Client.RevisionCheckInterval = 60
 ObjectProperty.MaxDepth = 64
 ObjectProperty.MaxObjects = 65536
 ObjectProperty.MaxContainerCount = 65536

@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks the game message table against the user's own client install: its declarations resolve, every GAME, WIZARD, DOODLEDOUG_MESSAGES, WIZARD2 and WIZARD3 message has exactly one rule, named for it or standing for the rest of its service, the requests and notes a client sends as it enters are handled, MSG_PETHATCHREADYSTATUS, which the XML defines twice, is one message at one order, and the WIZARD and combat orders are the 1-based places of their tags sorted without repeats.
+ * Checks the game message table against the user's own client install: its declarations resolve, every GAME, WIZARD, DOODLEDOUG_MESSAGES, WIZARD2 and WIZARD3 message has exactly one rule, named for it or standing for the rest of its service, the requests and notes a client sends as it enters are handled, MSG_PETHATCHREADYSTATUS, which the XML defines twice, is one message at one order, 122 on r806919, and the WIZARD and combat orders are the 1-based places of their tags sorted without repeats.
  */
 
 #include "Environment.h"
 #include "GameMessageTable.h"
+#include "InstalledRevision.h"
 #include "LogConfig.h"
 #include "MessageRegistry.h"
 
@@ -83,20 +84,23 @@ TEST(GameMessageTableClientTest, EveryWorldMessageHasExactlyOneRuleAndTheEntryCh
 
     MessageInfoPtr const hatch = loaded.Registry.Find(GameMessages::WizardService, "MSG_PETHATCHREADYSTATUS");
     ASSERT_NE(hatch, nullptr);
-    EXPECT_EQ(hatch->Definition->Order, 122u);
+    if (InstalledRevision::Is("r806919"))
+    {
+        EXPECT_EQ(hatch->Definition->Order, 122u);
+    }
     EXPECT_EQ(hatch->Definition->RecordCount, 2u) << "the XML defines it twice, and the two records are one message";
 
     ProtocolDef const* const combat = loaded.Catalog->GetDefinitions().FindService(GameMessages::CombatService);
     ASSERT_NE(combat, nullptr);
     EXPECT_EQ(combat->ProtocolType, "DOODLEDOUG_MESSAGES");
-    ASSERT_EQ(combat->Messages.size(), 36u);
+    InstalledRevision::Expect(combat->Messages.size(), { { "r806919", 36u } }, "combat messages");
 
     std::vector<std::string> combatTags;
     for (MessageDef const& message : combat->Messages)
         combatTags.push_back(message.Tag);
     std::sort(combatTags.begin(), combatTags.end());
     combatTags.erase(std::unique(combatTags.begin(), combatTags.end()), combatTags.end());
-    EXPECT_EQ(combatTags.size(), 36u);
+    EXPECT_EQ(combatTags.size(), combat->Messages.size());
     for (MessageDef const& message : combat->Messages)
     {
         auto const place = std::lower_bound(combatTags.begin(), combatTags.end(), message.Tag);
@@ -109,9 +113,12 @@ TEST(GameMessageTableClientTest, EveryWorldMessageHasExactlyOneRuleAndTheEntryCh
     ASSERT_NE(allowLeave, nullptr);
     ASSERT_NE(actions, nullptr);
     ASSERT_NE(duelTimer, nullptr);
-    EXPECT_EQ(allowLeave->Definition->Order, 1u);
-    EXPECT_EQ(actions->Definition->Order, 2u);
-    EXPECT_EQ(duelTimer->Definition->Order, 36u);
+    if (InstalledRevision::Is("r806919"))
+    {
+        EXPECT_EQ(allowLeave->Definition->Order, 1u);
+        EXPECT_EQ(actions->Definition->Order, 2u);
+        EXPECT_EQ(duelTimer->Definition->Order, 36u);
+    }
 }
 
 TEST(GameMessageTableClientTest, WizardOrdersAreThePlacesOfTheirTagsSortedWithoutRepeats)
@@ -139,6 +146,9 @@ TEST(GameMessageTableClientTest, WizardOrdersAreThePlacesOfTheirTagsSortedWithou
         ASSERT_NE(place, tags.end());
         EXPECT_EQ(message.Order, static_cast<uint32>(place - tags.begin() + 1)) << message.Tag;
     }
-    EXPECT_EQ(loaded.Registry.Find(GameMessages::WizardService, "MSG_ADDSPELLTOBOOK")->Definition->Order, 10u);
-    EXPECT_EQ(loaded.Registry.Find(GameMessages::WizardService, "MSG_UPDATEMANA")->Definition->Order, 233u);
+    if (InstalledRevision::Is("r806919"))
+    {
+        EXPECT_EQ(loaded.Registry.Find(GameMessages::WizardService, "MSG_ADDSPELLTOBOOK")->Definition->Order, 10u);
+        EXPECT_EQ(loaded.Registry.Find(GameMessages::WizardService, "MSG_UPDATEMANA")->Definition->Order, 233u);
+    }
 }

@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the plain-XML ObjectProperty files of the user's own r806919 install, when AMBROSE_CLIENT_DIR names it and AMBROSE_TYPE_DUMP_PATH its type dump: ActionList.xml and InputBindings.xml read with no issue into their action and binding lists, and CharacterCreationConfig.xml, Chatter.xml and Colors.xml read as well-formed documents whose root classes the r806919 dump does not list, which is reported rather than failing; with the classes the install holds that its dump does not describe, from the class file the extractor or the game server builds for it, all five read with no issue, the creation config with its creation options and seven schools, the chatter with its 24 lists and the colors with their 14 choices.
+ * Reads the plain-XML ObjectProperty files of the user's own install, when AMBROSE_CLIENT_DIR names it and AMBROSE_TYPE_DUMP_PATH its type dump: ActionList.xml and InputBindings.xml read with no issue into their action and binding lists, and CharacterCreationConfig.xml, Chatter.xml and Colors.xml read as well-formed documents whose root classes the r806919 dump does not list, which is reported rather than failing; with the classes the install holds that its dump does not describe, from the class file the extractor or the game server builds for it, all five read with no issue, the creation config with its creation options and seven schools, the chatter with its lists and the colors with their choices, as many as recorded for the installed revision, r806919's 24 and 14.
  */
 
 #include "ClientLocator.h"
 #include "ClientSystem.h"
 #include "ConfigMgr.h"
 #include "Environment.h"
+#include "InstalledRevision.h"
 #include "KiwadArchive.h"
 #include "LogConfig.h"
 #include "ServerClassCache.h"
@@ -32,7 +33,7 @@ namespace
             std::optional<std::string> const client = Ambrose::GetEnv("AMBROSE_CLIENT_DIR");
             std::optional<std::string> const dump = Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH");
             if (!client || client->empty() || !dump || dump->empty())
-                GTEST_SKIP() << "set AMBROSE_CLIENT_DIR to your own r806919 install and AMBROSE_TYPE_DUMP_PATH to its type dump to run this test";
+                GTEST_SKIP() << "set AMBROSE_CLIENT_DIR to your own install and AMBROSE_TYPE_DUMP_PATH to its type dump to run this test";
             ASSERT_TRUE(_registry.LoadFromFile(LogConfig::Utf8Path(*dump))) << (_registry.GetErrors().empty() ? std::string() : _registry.GetErrors().front());
             std::string error;
             _archive = KiwadArchive::Open(LogConfig::Utf8Path(*client) / "Data" / "GameData" / "Root.wad", error);
@@ -118,8 +119,8 @@ TEST_F(XmlObjectReaderClientTest, WithTheClassesTheInstallHoldsCreationChatterAn
 
     XmlReadResult const chatter = ReadEntry("Chatter.xml");
     EXPECT_EQ(chatter.Objects.front()->GetClass().Name, "class ChatterManager");
-    EXPECT_EQ(chatter.Objects.front()->Get("m_loadItems")->GetList()->size(), 24u);
+    InstalledRevision::Expect(chatter.Objects.front()->Get("m_loadItems")->GetList()->size(), { { "r806919", 24u } }, "chatter lists");
     XmlReadResult const colors = ReadEntry("Colors.xml");
     EXPECT_EQ(colors.Objects.front()->GetClass().Name, "class ShoppingColors");
-    EXPECT_EQ(colors.Objects.front()->Get("m_boysPrimary")->GetList()->size(), 14u);
+    InstalledRevision::Expect(colors.Objects.front()->Get("m_boysPrimary")->GetList()->size(), { { "r806919", 14u } }, "color choices");
 }

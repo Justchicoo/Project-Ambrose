@@ -167,7 +167,7 @@ class Engine:
 
     def wait_log(self, tail, step, alive):
         from_start = step.get("from") == "start"
-        found = tail.wait(self.fill(step["pattern"]), step["timeout"], since=0 if from_start else None,
+        found = tail.wait(self.fill(step["pattern"]), step["timeout"], since=tail.start if from_start else None,
                           fail=self.fill(step["fail"]) if step.get("fail") else None, alive=alive, advance=not from_start)
         said = found.group(1) if found.re.groups else found.group(0)
         line = found.string.strip()
@@ -288,6 +288,12 @@ class Engine:
 
     def act_kill_client(self, step):
         return self.client.close(force=True)
+
+    def act_play(self, step):
+        began = time.monotonic()
+        while self.client.alive():
+            time.sleep(2)
+        return f"played for {round((time.monotonic() - began) / 60)} minute(s) until the client was closed"
 
     def hold(self, keys, seconds):
         if len(keys) == 1:

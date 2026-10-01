@@ -28,13 +28,14 @@ ACTIONS = {
     "start_game_server": ((), ("timeout",)),
     "wait_game_log": (("pattern", "timeout"), ("from", "fail", "expect", "reject", "record", "keep")),
     "kill_client": ((), ()),
+    "play": ((), ()),
     "restart_client": ((), ("timeout",)),
     "wait_listener": (("listener", "timeout"), ()),
 }
 COMMON_KEYS = ("action", "name", "client")
 CLIENTS = ("main", "companion")
 CLIENT_ACTIONS = ("wait_client_log", "forbid_log", "wait_screen", "submit_login", "type", "char", "key", "hold_key", "click", "shot",
-                  "kill_client", "restart_client", "wait_listener")
+                  "kill_client", "restart_client", "wait_listener", "play")
 ALLOW_LISTS = ("pending_allowed", "dropped_allowed", "server_log_allowed", "client_log_allowed")
 TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "game_settings", "wizard", "more_wizards", "companion", "variables", "expect", "steps",
              "patching", "listeners", "patch_config") + ALLOW_LISTS

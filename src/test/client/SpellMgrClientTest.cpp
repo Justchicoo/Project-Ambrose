@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads every spell of the user's own r806919 install through the spell manager, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: all 18173 templates the manifest lists under Spells/ load with no failure, each one's template id the hash of its name, so the name-hash and id lookups agree for every spell; Fire Cat - Amulet deals Fire damage to one enemy through the random effect that chooses its amount; and Fire Cat is described by its school, rank, accuracy and effects, the damage it deals chosen among five amounts by a random effect, and filed with the twelve tiers above it under tiered spell group 4, not retired, while its amulet is no tiered spell.
+ * Reads every spell of the user's own install through the spell manager, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: every template the manifest lists under Spells/, as many as recorded for the installed revision, r806919's 18173, loads with no failure, each one's template id the hash of its name, so the name-hash and id lookups agree for every spell; Fire Cat - Amulet deals Fire damage to one enemy through the random effect that chooses its amount; and Fire Cat is described by its school, rank, accuracy and effects, the damage it deals chosen among five amounts by a random effect, and filed with the twelve tiers above it under tiered spell group 4, not retired, while its amulet is no tiered spell.
  */
 
 #include "Environment.h"
+#include "InstalledRevision.h"
 #include "LogConfig.h"
 #include "ObjectTemplateMgr.h"
 #include "SpellMgr.h"
@@ -85,7 +86,7 @@ namespace
 TEST_F(SpellMgrClientTest, EverySpellUnderSpellsLoadsWithNoFailure)
 {
     std::shared_ptr<SpellStore const> const spells = s_spells->GetSpells();
-    EXPECT_EQ(spells->Size(), 18173u);
+    InstalledRevision::Expect(spells->Size(), { { "r806919", 18173u } }, "spells");
     std::size_t effects = 0;
     for (SpellInfo const& spell : spells->GetAll())
         effects += spell.CountEffects();

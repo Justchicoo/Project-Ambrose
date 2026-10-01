@@ -61,7 +61,7 @@ namespace
         routes.AddGuarded("GET", "/api/tick-profile", "metrics.profile", [](AdminRequest const&) { return AdminResponse::Json(200, "{}"); });
         routes.AddGuarded("GET", "/api/tick-profile/trace", "metrics.profile", [](AdminRequest const&) { return AdminResponse::Json(200, "{}"); });
         AdminActivityView::Register(routes, "activity.jsonl");
-        AdminClientView::Register(routes, [] () -> ClientSetupResult const& { return NoClient(); });
+        AdminClientView::Register(routes, [] { return AdminClientView::Answer{ NoClient(), {} }; });
         AdminCommand::Register(routes, commands, "gameserver", "activity.jsonl");
         AdminRealmsView::Register(routes);
         OnlinePlayersView::Register(routes);

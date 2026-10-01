@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * With AMBROSE_TEST_DB set and a built login server, runs the real login server under the supervisor and stops it the way the panel does: the stop goes through the app's own admin API and the exit is recorded as one that was asked for, and, with AMBROSE_CLIENT_DIR naming an install so the server has the client's message definitions, a client that finished the session handshake is told the server is shutting down before the process ends, and a restart of the game server beside it leaves that client connected and counted, while a game server something else ends is counted as one crash and started again.
+ * With AMBROSE_TEST_DB set and a built login server, runs the real login server under the supervisor and stops it the way the panel does: the stop goes through the app's own admin API and the exit is recorded as one that was asked for, and, with AMBROSE_CLIENT_DIR naming an install so the server has the client's message definitions, a client that finished the session handshake is told the server is shutting down before the process ends, and a restart of the game server beside it leaves that client connected and counted, while a game server something else ends is counted as one crash and started again. A server run without a client is started with AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH hidden from it, since an empty ClientDir means the install is found as usual, the environment first, and one with a client needs both set.
  */
 
 #include "AdminClient.h"
@@ -28,9 +28,12 @@
 #include <chrono>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <random>
 #include <string>
 #include <thread>
+#include <utility>
+#include <vector>
 
 namespace
 {
@@ -106,6 +109,33 @@ namespace
 
 namespace
 {
+    class HiddenEnvironment
+    {
+    public:
+        explicit HiddenEnvironment(std::vector<std::string> names)
+        {
+            for (std::string& name : names)
+            {
+                std::optional<std::string> value = Ambrose::GetEnv(name);
+                Ambrose::UnsetEnv(name);
+                _saved.emplace_back(std::move(name), std::move(value));
+            }
+        }
+
+        ~HiddenEnvironment()
+        {
+            for (auto const& [name, value] : _saved)
+                if (value)
+                    Ambrose::SetEnv(name, *value);
+        }
+
+        HiddenEnvironment(HiddenEnvironment const&) = delete;
+        HiddenEnvironment& operator=(HiddenEnvironment const&) = delete;
+
+    private:
+        std::vector<std::pair<std::string, std::optional<std::string>>> _saved;
+    };
+
     class SupervisedLoginServer
     {
     public:
@@ -113,6 +143,8 @@ namespace
             std::optional<MySQLConnectionInfo> const& world = std::nullopt)
             : Clients(FreePort()), Admin(FreePort())
         {
+            if (!withClient)
+                _hidden.emplace(std::vector<std::string>{ "AMBROSE_CLIENT_DIR", "AMBROSE_TYPE_DUMP_PATH" });
             std::error_code code;
             std::filesystem::copy_file(BuiltFolder() / "loginserver.conf.dist", _directory.Path() / "loginserver.conf.dist", code);
             std::string const client = withClient ? Ambrose::GetEnv("AMBROSE_CLIENT_DIR").value_or(std::string()) : std::string();
@@ -228,6 +260,7 @@ namespace
         uint16 const Admin;
 
     private:
+        std::optional<HiddenEnvironment> _hidden;
         LogTestHarness _harness;
         LogTestDirectory _directory;
         ConfigMgr _config;
@@ -237,7 +270,8 @@ namespace
     bool HasClientInstall()
     {
         std::optional<std::string> const folder = Ambrose::GetEnv("AMBROSE_CLIENT_DIR");
-        return folder.has_value() && !folder->empty();
+        std::optional<std::string> const dump = Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH");
+        return folder.has_value() && !folder->empty() && dump.has_value() && !dump->empty();
     }
 }
 
@@ -274,7 +308,7 @@ TEST(SupervisorLoginClientTest, AStopFromThePanelTellsAConnectedClientBeforeTheL
     if (!login || !characters)
         GTEST_SKIP() << "AMBROSE_TEST_DB is not set";
     if (!HasClientInstall())
-        GTEST_SKIP() << "AMBROSE_CLIENT_DIR is not set, and the notice needs the client's message definitions";
+        GTEST_SKIP() << "AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH are not both set, and the notice needs the client's message definitions, which a login server with an install serves only with its type dump";
     std::error_code exists;
     if (!std::filesystem::is_regular_file(LoginServer(), exists))
         GTEST_SKIP() << "the login server is not built beside the test helper";
@@ -306,7 +340,7 @@ TEST(SupervisorLoginClientTest, RestartingTheGameServerLeavesTheLoginServersSess
     if (!login || !characters || !world)
         GTEST_SKIP() << "AMBROSE_TEST_DB is not set";
     if (!HasClientInstall())
-        GTEST_SKIP() << "AMBROSE_CLIENT_DIR is not set, and a game server needs an install";
+        GTEST_SKIP() << "AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH are not both set, and a game server needs an install and its type dump";
     std::error_code exists;
     if (!std::filesystem::is_regular_file(LoginServer(), exists) || !std::filesystem::is_regular_file(GameServer(), exists))
         GTEST_SKIP() << "the login and game servers are not built beside the test helper";
@@ -347,7 +381,7 @@ TEST(SupervisorLoginClientTest, AGameServerEndedFromOutsideIsOneCrashAndStartsAg
     if (!login || !characters || !world)
         GTEST_SKIP() << "AMBROSE_TEST_DB is not set";
     if (!HasClientInstall())
-        GTEST_SKIP() << "AMBROSE_CLIENT_DIR is not set, and a game server needs an install";
+        GTEST_SKIP() << "AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH are not both set, and a game server needs an install and its type dump";
     std::error_code exists;
     if (!std::filesystem::is_regular_file(GameServer(), exists))
         GTEST_SKIP() << "the game server is not built beside the test helper";

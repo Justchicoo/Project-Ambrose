@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks the login message table against the user's own client install: its declarations resolve, every one of the 29 LOGIN messages and every SYSTEM and EXTENDEDBASE message has exactly one rule with matching order and tag, game messages stay outside the login server's services, the shared ping rule is handled, and a server message encodes against the real definitions.
+ * Checks the login message table against the user's own client install: its declarations resolve, every LOGIN message, as many as recorded for the installed revision, r806919's 29, and every SYSTEM and EXTENDEDBASE message has exactly one rule with matching order and tag, game messages stay outside the login server's services, the shared ping rule is handled, and a server message encodes against the real definitions.
  */
 
 #include "Environment.h"
+#include "InstalledRevision.h"
 #include "LogConfig.h"
 #include "LoginMessageTable.h"
 #include "MessageRegistry.h"
@@ -35,7 +36,8 @@ TEST(LoginMessageTableClientTest, EveryLoginMessageHasOneRuleThatMatchesTheInsta
     auto const login = protocols.find(LoginMessages::LoginService);
     ASSERT_NE(login, protocols.end());
     EXPECT_EQ(login->second.ProtocolType, "LOGIN");
-    ASSERT_EQ(login->second.Messages.size(), 29u);
+    InstalledRevision::Expect(login->second.Messages.size(), { { "r806919", 29u } }, "login messages");
+    ASSERT_FALSE(login->second.Messages.empty());
 
     std::set<uint32> orders;
     std::size_t handled = 0;
@@ -54,12 +56,12 @@ TEST(LoginMessageTableClientTest, EveryLoginMessageHasOneRuleThatMatchesTheInsta
             case MessageRuleKind::Refused: ++refused; break;
         }
     }
-    EXPECT_EQ(orders.size(), 29u);
+    EXPECT_EQ(orders.size(), login->second.Messages.size());
     EXPECT_EQ(*orders.begin(), 1u);
-    EXPECT_EQ(*orders.rbegin(), 29u);
+    EXPECT_EQ(*orders.rbegin(), login->second.Messages.size());
     EXPECT_EQ(handled, 12u) << "MSG_SELECTCHARACTER joined the handled messages when 4.05 answered it, MSG_CREATECHARACTER and MSG_LOGINLOGCHARACTERCREATION when 3.16 did, and MSG_DELETECHARACTER when 3.17 did";
     EXPECT_EQ(pending, 4u) << "and left the pending ones, which is the same messages counted once either way";
-    EXPECT_EQ(refused, 13u);
+    InstalledRevision::Expect(refused, { { "r806919", 13u } }, "refused login messages");
     EXPECT_EQ(handled + pending + refused, orders.size()) << "every message of this service is counted exactly once";
 
     MessageRule const* const authen = table.FindRule(catalog, LoginMessages::LoginService, 27);

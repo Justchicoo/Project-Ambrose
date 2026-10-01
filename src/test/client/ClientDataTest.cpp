@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests archives and formats against the user's own client install (r806919), skipped unless AMBROSE_CLIENT_DIR is set.
+ * Tests archives and formats against the user's own client install, with the counts recorded for its revision, skipped unless AMBROSE_CLIENT_DIR is set.
  */
 
 #include "Compression.h"
 #include "Crc32.h"
 #include "Environment.h"
+#include "InstalledRevision.h"
 #include "KiwadArchive.h"
 #include "LogConfig.h"
 #include "Utf.h"
@@ -49,7 +50,8 @@ TEST_F(ClientDataTest, RootWadListsItsEntries)
 {
     std::unique_ptr<KiwadArchive> const root = OpenRoot();
     ASSERT_NE(root, nullptr);
-    ASSERT_EQ(root->GetEntries().size(), 173088u);
+    InstalledRevision::Expect(root->GetEntries().size(), { { "r806919", 173088u } }, "Root.wad entries");
+    ASSERT_FALSE(root->GetEntries().empty());
     EXPECT_EQ(root->GetHeader().Version, 1u);
     EXPECT_EQ(root->GetDuplicateNameCount(), 0u);
     EXPECT_EQ(root->GetCaseCollisionCount(), 0u);
@@ -101,9 +103,9 @@ TEST_F(ClientDataTest, EveryGameDataWadParsesWithinBounds)
         caseCollisions += archive->GetCaseCollisionCount();
         duplicates += archive->GetDuplicateNameCount();
     }
-    EXPECT_EQ(wads, 3589u);
+    InstalledRevision::Expect(wads, { { "r806919", 3589u } }, "archives");
     EXPECT_EQ(duplicates, 0u);
-    EXPECT_EQ(caseCollisions, 188u);
+    InstalledRevision::Expect(caseCollisions, { { "r806919", 188u } }, "case collisions");
 }
 
 TEST_F(ClientDataTest, LocaleLangEntryDecodesAsUtf16)

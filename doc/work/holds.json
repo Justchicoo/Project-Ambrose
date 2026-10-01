@@ -2,12 +2,6 @@
   "schema": 1,
   "holds": [
     {
-      "scope": "milestone:3.23",
-      "who": "the maintainer's own machine",
-      "what": "keeping up with KingsIsle's client revisions, which needs the pinned installation",
-      "since": "2026-09-22"
-    },
-    {
       "scope": "milestone:3.26",
       "who": "the maintainer's panel session",
       "what": "the launcher window, which the panel's own installable program shares",
@@ -60,6 +54,12 @@
       "who": "the maintainer's panel session",
       "what": "the installer, taken over to finish every milestone before 8.01",
       "since": "2026-09-30"
+    },
+    {
+      "scope": "milestone:5.06",
+      "who": "the maintainer's world session",
+      "what": "return to character select with MSG_USER_VALIDATE, finishing every milestone before 8.01",
+      "since": "2026-10-01"
     }
   ]
 }

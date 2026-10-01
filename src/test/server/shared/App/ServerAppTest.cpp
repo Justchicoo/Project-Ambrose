@@ -1,14 +1,16 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the shared app lifecycle in process: options, version, missing or broken config, ready and stop logging, --check, console commands and input with their replies on the log's writer, status and delayed shutdowns, live update intervals, repeated runs, shutdown on signals, and a signal polled during start ending the run cleanly without reporting ready.
+ * Tests the shared app lifecycle in process: options, version, missing or broken config, ready and stop logging, --check, console commands and input with their replies on the log's writer, status and delayed shutdowns, live update intervals, repeated runs, shutdown on signals, a signal polled during start ending the run cleanly without reporting ready, and an updated install read in the background and served only when every part of it loads.
  */
 
 #include "AppOptions.h"
+#include "ClientSystem.h"
 #include "ConfigMgr.h"
 #include "ConsoleInput.h"
 #include "GitRevision.h"
 #include "LogTestDirectory.h"
 #include "LogTestHarness.h"
+#include "ReloadMgr.h"
 #include "ScopeExit.h"
 #include "ServerApp.h"
 
@@ -24,6 +26,7 @@
 #include <mutex>
 #include <sstream>
 #include <thread>
+#include <vector>
 
 namespace
 {
@@ -492,4 +495,74 @@ TEST_F(ServerAppTest, ASignalPolledDuringStartEndsTheRunCleanly)
     output = _harness.Device().Output();
     EXPECT_NE(output.find("testserver shutting down after a stop request"), std::string::npos) << output;
     EXPECT_NE(output.find("testserver ready"), output.rfind("testserver ready")) << output;
+}
+
+TEST_F(ServerAppTest, AnUpdatedInstallIsReadInTheBackgroundAndServedOnlyWhenEveryPartOfItLoads)
+{
+    sReloadMgr.Clear();
+    ScopeExit const cleared([] { sReloadMgr.Clear(); });
+    std::filesystem::path const root = _directory.Path() / "Wizard101";
+    std::filesystem::create_directories(root / "Data" / "GameData");
+    std::filesystem::create_directories(root / "Bin");
+    std::ofstream(root / "Data" / "GameData" / "Root.wad") << "KIWAD";
+    std::ofstream(root / "Bin" / "revision.dat") << "r900001.Test";
+    std::filesystem::path const file = WriteConfig("Client.RevisionCheckInterval = 1\n");
+
+    std::mutex seenMutex;
+    std::vector<std::string> built;
+    std::vector<std::string> prepared;
+    std::atomic<bool> refuse{ false };
+    TickApp app({ "testserver", "testserver.conf" }, _config, _harness.GetLog(), _out, _err);
+    app.IntervalMs = 10;
+    app.StartHook = [&](TickApp& started)
+    {
+        ClientSetupResult setup;
+        setup.Install = ClientInstall::Inspect(LocalClientSystem(), root);
+        setup.TypeDump = _directory.Path() / "r900001.Test.json";
+        started.SetClientSetup(setup);
+        started.FollowClientRevision({ [&](ClientInstall const& install, TypeDumpBuild, std::string& error) -> std::optional<std::filesystem::path>
+        {
+            std::lock_guard const lock(seenMutex);
+            built.push_back(install.Revision);
+            if (refuse)
+            {
+                error = "typeextract could not read this program";
+                return std::nullopt;
+            }
+            return _directory.Path() / (install.Revision + ".json");
+        },
+        [&](ClientSetupResult const& updated, std::vector<std::string>&)
+        {
+            std::lock_guard const lock(seenMutex);
+            prepared.push_back(updated.Install->Revision);
+            return true;
+        } });
+        return true;
+    };
+    std::thread runner([&] { app.Run({ "testserver", "-c", ConfigMgr::PathToUtf8(file) }); });
+    ScopeExit const stopped([&] { app.RequestStop(); runner.join(); });
+    ASSERT_TRUE(WaitFor([&] { return app.IsReady(); }));
+    EXPECT_TRUE(app.GetRevisionStatus().Watching);
+    EXPECT_NE(app.GetRevisionStatus().Current.find("r900001.Test"), std::string::npos);
+
+    std::ofstream(root / "Bin" / "revision.dat", std::ios::trunc) << "r900002.Test";
+    ASSERT_TRUE(WaitFor([&] { return !app.GetRevisionStatus().LastUpdate.empty(); })) << "the update was never finished";
+    EXPECT_EQ(app.GetRevisionStatus().LastUpdate, "now serves r900002.Test");
+    EXPECT_NE(app.GetRevisionStatus().Current.find("r900002.Test"), std::string::npos);
+    {
+        std::lock_guard const lock(seenMutex);
+        EXPECT_EQ(built, std::vector<std::string>{ "r900002.Test" });
+        EXPECT_EQ(prepared, std::vector<std::string>{ "r900002.Test" });
+    }
+
+    refuse = true;
+    std::ofstream(root / "Bin" / "revision.dat", std::ios::trunc) << "r900003.Test";
+    ASSERT_TRUE(WaitFor([&] { return app.GetRevisionStatus().LastUpdate.starts_with("kept"); })) << app.GetRevisionStatus().LastUpdate;
+    EXPECT_NE(app.GetRevisionStatus().LastUpdate.find("typeextract could not read this program"), std::string::npos) << app.GetRevisionStatus().LastUpdate;
+    {
+        std::lock_guard const lock(seenMutex);
+        EXPECT_EQ(prepared.size(), 1u) << "nothing is extracted for a revision whose type dump could not be built";
+    }
+    std::string const output = _harness.Device().Output();
+    EXPECT_NE(output.find("was updated to r900002.Test"), std::string::npos) << output;
 }

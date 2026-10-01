@@ -76,6 +76,7 @@ def classify(relpath):
         ".cmd": "batch",
         ".md": "markdown",
         ".txt": "linehash",
+        ".supp": "linehash",
         ".json": "exempt",
         ".service": "conf",
         ".socket": "conf",

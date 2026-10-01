@@ -6,8 +6,10 @@
 #ifndef AMBROSE_SERVERAPP_H
 #define AMBROSE_SERVERAPP_H
 
+#include "AdminClientView.h"
 #include "AdminStatus.h"
 #include "TerminalDashboard.h"
+#include "ClientRevisionWatch.h"
 #include "ClientSetup.h"
 #include "ConfigMgr.h"
 #include "ConsoleCommandTable.h"
@@ -90,7 +92,20 @@ public:
     void RegisterStandardRoutes(AdminRouter& routes);
     void RegisterReloadTargets();
     void SetMessageSource(std::filesystem::path clientRoot);
+    void SetTypeDumpSource(std::filesystem::path dump, std::string revision);
     void SetClientSetup(ClientSetupResult setup);
+
+    struct ClientFollow
+    {
+        ClientSetup::TypeDumpProvider Types;
+        std::function<bool(ClientSetupResult const& setup, std::vector<std::string>& errors)> Prepare;
+    };
+
+    static constexpr std::string_view RevisionCheckKey = "Client.RevisionCheckInterval";
+    static constexpr uint32 DefaultRevisionCheckSeconds = 60;
+    void FollowClientRevision(ClientFollow follow);
+    ClientRevisionStatus GetRevisionStatus() const;
+    static bool LoadTypeDump(std::filesystem::path const& dump, std::string_view revision, std::vector<std::string>& errors);
     std::filesystem::path CommandAuditFile() const;
 
     void SetListener(std::string address, uint16 port);
@@ -126,8 +141,33 @@ protected:
 private:
     uint64 _configSubscription = 0;
     std::filesystem::path _messageSource;
+    std::filesystem::path _typeSource;
+    std::string _typeRevision;
+    mutable std::mutex _clientSetupMutex;
     ClientSetupResult _clientSetup;
     bool _usesClient = false;
+
+    struct RevisionUpdate
+    {
+        ClientFingerprint Fingerprint;
+        ClientSetupResult Setup;
+        bool Ok = false;
+        std::vector<std::string> Errors;
+    };
+
+    void PollClientRevision();
+    void StartRevisionUpdate(ClientFingerprint fingerprint);
+    void FinishRevisionUpdate(RevisionUpdate update);
+    AdminClientView::Answer ClientAnswer() const;
+
+    ClientFollow _follow;
+    ClientRevisionWatch _revisionWatch;
+    std::chrono::steady_clock::time_point _nextRevisionCheck;
+    std::thread _revisionWorker;
+    std::atomic<bool> _revisionWorking{ false };
+    std::optional<RevisionUpdate> _revisionDone;
+    mutable std::mutex _revisionMutex;
+    ClientRevisionStatus _revisionStatus;
 
     bool IsStopping() const noexcept { return GetLifecycleState() == AppLifecycle::Stopping; }
     bool DeclareSettings();

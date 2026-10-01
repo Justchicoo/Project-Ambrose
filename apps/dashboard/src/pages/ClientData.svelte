@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: What client data an app is running on, live from the app itself: the install it found and whether that revision is the one the project pins, the type dump in use with the revision, executable hash and extractor that made it and whether it was built at this start, and how many message definitions were read from the client. It shows facts about the install rather than anything out of it, so no path here is a link and no client file's bytes are ever fetched. Rebuilding the data and switching an app to another install belong to 17.20 and wait on the setup path 3.23 owns. -->
+<!-- Project Ambrose by Imjustchico: What client data an app is running on, live from the app itself: the install it found, its revision and whether the app follows that install's updates, the type dump in use with the revision, executable hash and extractor that made it and whether it was built at this start, and how many message definitions were read from the client. It shows facts about the install rather than anything out of it, so no path here is a link and no client file's bytes are ever fetched. Rebuilding the data and switching an app to another install belong to 17.20. -->
 <script lang="ts">
     import * as Card from "$lib/components/ui/card/index.js";
     import * as Table from "$lib/components/ui/table/index.js";
@@ -84,10 +84,10 @@
                     <StatusBadge tone="unknown">Reading</StatusBadge>
                 {:else if !install.found}
                     <StatusBadge tone="wrong">Not found</StatusBadge>
-                {:else if install.pinned}
-                    <StatusBadge tone="healthy">Pinned revision</StatusBadge>
+                {:else if answer?.follow.updating}
+                    <StatusBadge tone="waiting">Updating</StatusBadge>
                 {:else}
-                    <StatusBadge tone="waiting">Another revision</StatusBadge>
+                    <StatusBadge tone="healthy">Found</StatusBadge>
                 {/if}
             </Card.Action>
         </Card.Header>
@@ -107,7 +107,10 @@
                             ></Table.Row
                         >
                         <Table.Row
-                            ><Table.Cell class="text-muted-foreground">Pinned</Table.Cell><Table.Cell>{answer?.pinned_revision}</Table.Cell
+                            ><Table.Cell class="text-muted-foreground">Updates</Table.Cell><Table.Cell
+                                >{answer?.follow.updating ||
+                                    answer?.follow.last_update ||
+                                    (answer?.follow.watching ? "watched for a new revision" : "not watched")}</Table.Cell
                             ></Table.Row
                         >
                         <Table.Row

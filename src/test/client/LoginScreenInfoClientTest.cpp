@@ -17,7 +17,7 @@ TEST(LoginScreenInfoClientTest, TheCharacterSelectBlobDecodesToTheBuiltWizardAnd
 {
     std::optional<std::string> const path = Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH");
     if (!path || path->empty())
-        GTEST_SKIP() << "set AMBROSE_TYPE_DUMP_PATH to the r806919 type dump (format v2) from your own client to run this test";
+        GTEST_SKIP() << "set AMBROSE_TYPE_DUMP_PATH to the type dump (format v2) from your own client to run this test";
 
     TypeRegistry registry;
     ASSERT_TRUE(registry.LoadFromFile(LogConfig::Utf8Path(*path)));

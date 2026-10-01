@@ -1,0 +1,75 @@
+{
+ "title": "The world tables record the revision they came from, and a game server started against another revision's tables extracts them again",
+ "include": "parts/common.json",
+ "notes": [
+  "3.23: the game server extracts the character name and level tables into an empty world database and records the install's revision with each set in client_extraction.",
+  "The run then marks the level tables as an older revision's and starts the game server again, which extracts them again and records the install's revision; the name tables, still current, are left as they are.",
+  "No wizard enters the world: the client stays at its login screen."
+ ],
+ "requires": {
+  "gameserver": true
+ },
+ "server_log_allowed": [
+  "character_create_school holds no school, so no wizard can be created until it does",
+  "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+ ],
+ "steps": [
+  {
+   "action": "wait_db",
+   "name": "the name tables record the install's revision",
+   "database": "world",
+   "query": "SELECT revision FROM client_extraction WHERE kind = 'names'",
+   "expect": "{revision}",
+   "timeout": 120
+  },
+  {
+   "action": "wait_db",
+   "name": "the level tables record the install's revision",
+   "database": "world",
+   "query": "SELECT revision FROM client_extraction WHERE kind = 'levels'",
+   "expect": "{revision}",
+   "timeout": 30
+  },
+  {
+   "action": "db_exec",
+   "name": "mark the level tables as an older revision's",
+   "database": "world",
+   "statement": "UPDATE client_extraction SET revision = 'r1.Older', extracted_at = 1 WHERE kind = 'levels'"
+  },
+  {
+   "action": "stop_game_server",
+   "name": "stop the game server"
+  },
+  {
+   "action": "start_game_server",
+   "name": "start the game server again",
+   "timeout": 300
+  },
+  {
+   "action": "wait_game_log",
+   "name": "the game server sees the level tables came from another revision",
+   "pattern": "The world database's levels came from r1\\.Older, and the install is now .*, so they are extracted again",
+   "timeout": 60,
+   "from": "start"
+  },
+  {
+   "action": "wait_game_log",
+   "name": "the game server extracts the level tables again",
+   "pattern": "Extracted \\d+ level rows for \\d+ schools",
+   "timeout": 120,
+   "from": "start"
+  },
+  {
+   "action": "wait_db",
+   "name": "the level tables record the install's revision again",
+   "database": "world",
+   "query": "SELECT revision FROM client_extraction WHERE kind = 'levels' AND extracted_at > 1",
+   "expect": "{revision}",
+   "timeout": 30
+  },
+  {
+   "action": "shot",
+   "name": "the client at its login screen throughout"
+  }
+ ]
+}

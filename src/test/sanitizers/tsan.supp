@@ -1,0 +1,24 @@
+# Project Ambrose by Imjustchico
+# ThreadSanitizer reports that belong to libraries the sanitizer cannot see into: glib, GTK and WebKitGTK run their own worker threads and queues uninstrumented, so a race or a recursive mutex they lock and unlock inside them, reached through gtk_init_check or gtk_main_quit in the desktop shell, is theirs to report, not ours. The preset also sets ignore_noninstrumented_modules, since every system library in the GTK stack, atk and gdk-pixbuf among them, unlocks glib's recursive mutexes where the sanitizer saw no lock; the names here catch what that flag lets through.
+called_from_lib:libglib-2.0.so
+called_from_lib:libgobject-2.0.so
+called_from_lib:libgio-2.0.so
+called_from_lib:libgtk-3.so
+called_from_lib:libgdk-3.so
+called_from_lib:libgdk_pixbuf-2.0.so
+called_from_lib:libwebkit2gtk-4.1.so
+called_from_lib:libjavascriptcoregtk-4.1.so
+race:libglib-2.0.so
+race:libgobject-2.0.so
+race:libgio-2.0.so
+race:libgtk-3.so
+race:libgdk-3.so
+race:libgdk_pixbuf-2.0.so
+race:libwebkit2gtk-4.1.so
+mutex:libglib-2.0.so
+mutex:libgobject-2.0.so
+mutex:libgio-2.0.so
+mutex:libgtk-3.so
+mutex:libgdk-3.so
+mutex:libgdk_pixbuf-2.0.so
+mutex:libwebkit2gtk-4.1.so

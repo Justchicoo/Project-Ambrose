@@ -23,6 +23,8 @@
 #include "SpellMgr.h"
 #include "ZoneMgr.h"
 #include "CharacterNameScript.h"
+#include "ClientExtractionScript.h"
+#include "ClientSystem.h"
 #include "LevelExtractor.h"
 #include "LevelScript.h"
 #include "MapObjectSpawner.h"
@@ -33,6 +35,7 @@
 #include "StringUtil.h"
 #include "StartProgress.h"
 #include "PlayerLevelMgr.h"
+#include "ReloadMgr.h"
 #include "AccountMgr.h"
 #include "AdminCommand.h"
 #include "ClientSetup.h"
@@ -332,7 +335,7 @@ namespace
             else
             {
                 CharacterNameLoadResult names = sCharacterNameMgr.Load();
-                if (names.Loaded && names.Tables == 0 && ExtractNames(setup, *prompt))
+                if (names.Loaded && (names.Tables == 0 || IsFromAnotherRevision(setup, ClientExtractionScript::Names)) && ExtractNames(setup, *prompt))
                     names = sCharacterNameMgr.Load();
                 if (!names.Loaded)
                 {
@@ -349,6 +352,12 @@ namespace
                 for (std::string const& warning : names.Warnings)
                     LOG_WARN("server.gameserver", "Character name tables: {}", warning);
             }
+            sReloadMgr.Register("names", [](std::vector<std::string>& errors)
+            {
+                CharacterNameLoadResult const names = sCharacterNameMgr.Load();
+                errors.insert(errors.end(), names.Errors.begin(), names.Errors.end());
+                return names.Loaded;
+            });
             sPlayerLevelMgr.RegisterReloadTargets();
             if (!WorldDatabase.IsOpen())
                 LOG_WARN("server.gameserver", "WorldDatabaseInfo is empty, so the level and stat tables are not loaded");
@@ -369,7 +378,7 @@ namespace
             if (WorldDatabase.IsOpen())
             {
                 ZoneLoadResult zones = sZoneMgr.LoadAll();
-                if (zones.Loaded && zones.Zones == 0 && ExtractZones(setup, *prompt))
+                if (zones.Loaded && (zones.Zones == 0 || IsFromAnotherRevision(setup, ClientExtractionScript::Zones)) && ExtractZones(setup, *prompt))
                     zones = sZoneMgr.LoadAll();
                 if (!zones.Loaded)
                 {
@@ -445,7 +454,21 @@ namespace
                             realm.RealmName, realm.Address, realm.Port);
                 },
                 [] { return LoginDatabase.IsOpen(); });
+            static LocalClientSystem const followed;
+            FollowClientRevision({ ClientSetup::ServerTypeDumps(Config(), followed, ClientReport(), [this] { return PollStopRequested(); }),
+                [this](ClientSetupResult const& updated, std::vector<std::string>& errors) { return PrepareRevision(updated, errors); } });
             return true;
+        }
+
+        static ClientSetup::Report ClientReport()
+        {
+            return [](bool warning, std::string const& text)
+            {
+                if (warning)
+                    LOG_WARN("server.gameserver", "{}", text);
+                else
+                    LOG_INFO("server.gameserver", "{}", text);
+            };
         }
 
         bool LoadObjectSchema(ClientSetupResult const& setup)
@@ -465,19 +488,13 @@ namespace
                 LOG_WARN("server.gameserver", "No type dump is in use, so ObjectProperty data cannot be read or written: {}", setup.TypeDumpError);
             else
             {
-                std::filesystem::path const binary = TypeDumpCache::FastCopyOf(*setup.TypeDump);
-                if (std::string fastCopyError; !TypeDumpCache::EnsureFastCopy(*setup.TypeDump, fastCopyError))
-                    LOG_WARN("server.worldserver", "The type dump's fast copy could not be built, so it is read from JSON this time: {}", fastCopyError);
-                bool loaded = false;
-                if (std::filesystem::exists(binary))
-                    loaded = sTypeRegistry.LoadBinary(binary, *setup.TypeDump, setup.Install ? setup.Install->Revision : std::string_view{});
-                else
-                    loaded = sTypeRegistry.LoadFromFile(*setup.TypeDump);
-                if (!loaded)
+                std::string const revision = setup.Install ? setup.Install->Revision : std::string();
+                if (std::vector<std::string> typeErrors; !LoadTypeDump(*setup.TypeDump, revision, typeErrors))
                 {
                     LOG_ERROR("server.gameserver", "Cannot load the type dump {}", ConfigMgr::PathToUtf8(*setup.TypeDump));
                     return false;
                 }
+                SetTypeDumpSource(*setup.TypeDump, revision);
             }
 
             sObjectSchemaMgr.RegisterReloadTargets();
@@ -593,6 +610,55 @@ namespace
         static constexpr std::chrono::minutes ArchiveAllowance{ 2 };
         static constexpr std::chrono::minutes WriteAllowance{ 15 };
 
+        static std::string ExecutableSha256(ClientSetupResult const& setup)
+        {
+            std::string error;
+            std::optional<std::string> const sha = setup.Install && setup.Install->HasProgram ? TypeDumpCache::ExecutableSha256(*setup.Install, error) : std::nullopt;
+            return sha.value_or(std::string());
+        }
+
+        static WorldSqlScript Recorded(WorldSqlScript script, ClientSetupResult const& setup, std::string_view kind)
+        {
+            if (setup.Install && !setup.Install->Revision.empty())
+                script.Append(ClientExtractionScript::Build(kind, setup.Install->Revision, ExecutableSha256(setup)));
+            return script;
+        }
+
+        static bool IsFromAnotherRevision(ClientSetupResult const& setup, std::string_view kind)
+        {
+            if (!setup.Install || setup.Install->Revision.empty())
+                return false;
+            std::string error;
+            std::optional<ClientExtractionRecord> const record = ClientExtractionScript::Read(kind, error);
+            if (!record)
+            {
+                if (!error.empty())
+                    LOG_WARN("server.gameserver", "Which revision the world database's {} came from cannot be read, so they are kept: {}", kind, error);
+                return false;
+            }
+            if (record->IsFrom(setup.Install->Revision, ExecutableSha256(setup)))
+                return false;
+            LOG_INFO("server.gameserver", "The world database's {} came from {}, and the install is now {}, so they are extracted again", kind,
+                record->Revision.empty() ? std::string("an unknown revision") : record->Revision, setup.Install->Describe());
+            return true;
+        }
+
+        bool PrepareRevision(ClientSetupResult const& setup, std::vector<std::string>& errors)
+        {
+            if (!WorldDatabase.IsOpen())
+                return true;
+            std::unique_ptr<SetupPrompt> const quiet = SetupPrompt::ForProcess(std::cout, false, std::chrono::seconds(0));
+            LocalClientSystem const system;
+            ExtractServerClasses(setup, system, *quiet);
+            if (!ExtractNames(setup, *quiet, "holds an earlier revision's"))
+                errors.emplace_back("the character name tables could not be extracted from the updated install");
+            else if (!ExtractLevels(setup, *quiet, "holds an earlier revision's"))
+                errors.emplace_back("the level and stat tables could not be extracted from the updated install");
+            else if (!ExtractZones(setup, *quiet, "holds an earlier revision's"))
+                errors.emplace_back("the zones could not be extracted from the updated install");
+            return errors.empty();
+        }
+
         bool ConfirmExtraction(ClientSetupResult const& setup, SetupPrompt& prompt, std::string_view tables, std::string_view command, std::string_view state = "has no")
         {
             if (!setup.Install || !setup.TypeDump)
@@ -680,9 +746,9 @@ namespace
                 ServerClassScript::InstallClasses(found).Classes.size(), setup.Install->Describe(), ConfigMgr::PathToUtf8(*classes));
         }
 
-        bool ExtractNames(ClientSetupResult const& setup, SetupPrompt& prompt)
+        bool ExtractNames(ClientSetupResult const& setup, SetupPrompt& prompt, std::string_view state = "has no")
         {
-            if (!ConfirmExtraction(setup, prompt, "character name tables", "names"))
+            if (!ConfirmExtraction(setup, prompt, "character name tables", "names", state))
                 return false;
             StartProgress::Report("extracting the character name tables", ExtractionAllowance);
             std::string const install = setup.Install->Describe();
@@ -701,7 +767,7 @@ namespace
             }
             std::optional<MySQLConnectionInfo> const world = MySQLConnectionInfo::Parse(Config().GetOption<std::string>("WorldDatabaseInfo", "", true), &error);
             StartProgress::Report("writing the character name tables to the world database", WriteAllowance);
-            if (!world || !CharacterNameScript::Build(*extraction).Apply(*world, error))
+            if (!world || !Recorded(CharacterNameScript::Build(*extraction), setup, ClientExtractionScript::Names).Apply(*world, error))
             {
                 LOG_ERROR("server.gameserver", "Cannot write the character name tables to the world database: {}", error);
                 return false;
@@ -713,7 +779,7 @@ namespace
         bool LoadPlayerLevels(ClientSetupResult const& setup, SetupPrompt& prompt)
         {
             PlayerLevelLoadResult levels = sPlayerLevelMgr.Load();
-            if (levels.Loaded && levels.Empty && ExtractLevels(setup, prompt))
+            if (levels.Loaded && (levels.Empty || IsFromAnotherRevision(setup, ClientExtractionScript::Levels)) && ExtractLevels(setup, prompt))
                 levels = sPlayerLevelMgr.Load();
             if (!levels.Loaded)
             {
@@ -733,9 +799,9 @@ namespace
             return true;
         }
 
-        bool ExtractLevels(ClientSetupResult const& setup, SetupPrompt& prompt)
+        bool ExtractLevels(ClientSetupResult const& setup, SetupPrompt& prompt, std::string_view state = "has no")
         {
-            if (!ConfirmExtraction(setup, prompt, "level or stat tables", "levels"))
+            if (!ConfirmExtraction(setup, prompt, "level or stat tables", "levels", state))
                 return false;
             StartProgress::Report("extracting the level and stat tables", ExtractionAllowance);
             std::string const install = setup.Install->Describe();
@@ -754,7 +820,7 @@ namespace
             }
             std::optional<MySQLConnectionInfo> const world = MySQLConnectionInfo::Parse(Config().GetOption<std::string>("WorldDatabaseInfo", "", true), &error);
             StartProgress::Report("writing the level and stat tables to the world database", WriteAllowance);
-            if (!world || !LevelScript::Build(*extraction).Apply(*world, error))
+            if (!world || !Recorded(LevelScript::Build(*extraction), setup, ClientExtractionScript::Levels).Apply(*world, error))
             {
                 LOG_ERROR("server.gameserver", "Cannot write the level and stat tables to the world database: {}", error);
                 return false;
@@ -764,9 +830,9 @@ namespace
             return true;
         }
 
-        bool ExtractZones(ClientSetupResult const& setup, SetupPrompt& prompt)
+        bool ExtractZones(ClientSetupResult const& setup, SetupPrompt& prompt, std::string_view state = "has no")
         {
-            if (!ConfirmExtraction(setup, prompt, "zones", "zones"))
+            if (!ConfirmExtraction(setup, prompt, "zones", "zones", state))
                 return false;
             StartProgress::Report("extracting the zones", ExtractionAllowance);
             std::string const install = setup.Install->Describe();
@@ -794,7 +860,7 @@ namespace
             }
             std::optional<MySQLConnectionInfo> const world = MySQLConnectionInfo::Parse(Config().GetOption<std::string>("WorldDatabaseInfo", "", true), &error);
             StartProgress::Report("writing the zones to the world database", WriteAllowance);
-            if (!world || !ZoneScript::Build(*extraction).Apply(*world, error))
+            if (!world || !Recorded(ZoneScript::Build(*extraction), setup, ClientExtractionScript::Zones).Apply(*world, error))
             {
                 LOG_ERROR("server.gameserver", "Cannot write the zones to the world database: {}", error);
                 return false;

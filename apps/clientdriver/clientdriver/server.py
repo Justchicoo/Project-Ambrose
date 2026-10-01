@@ -64,6 +64,7 @@ class LoginServer:
         self.prepare()
         if not os.path.isfile(self.program):
             raise StepFailed(f"{self.program} is missing; build the server first")
+        self.log.begin()
         self._output = open(self.console_path, "wb")
         self.process = subprocess.Popen(self.command(), cwd=self.folder, stdin=subprocess.PIPE, stdout=self._output,
                                         stderr=subprocess.STDOUT, creationflags=NO_WINDOW)

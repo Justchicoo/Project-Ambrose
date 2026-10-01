@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads templates from the user's own r806919 install through the template store, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: the manifest lists 137423 templates in 27 archives, 12807 of them in a World-Part.wad, template 1 is the PlayerObject every wizard is made from and 1652259 the Balance hat, read through their typed views, a recipe is a template named by its recipe name, a manifest path the install does not hold is named with its archive and entry, a first access takes under 5 ms once its archive is open, every one of them in an optimized build and on average in a debug build, which runs about ten times slower, and 10000 random templates of every kind, game objects, items, spells, recipes, decks and sounds among them, decode with each game object template carrying the id the manifest lists it under, and under a small budget never hold more than it.
+ * Reads templates from the user's own install through the template store, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: the manifest lists the templates, archives and World-Part.wad templates recorded for the installed revision, r806919's 137423 in 27 archives, 12807 of them in a World-Part.wad, template 1 is the PlayerObject every wizard is made from and 1652259 the Balance hat, read through their typed views, a recipe is a template named by its recipe name, a manifest path the install does not hold is named with its archive and entry, a first access takes under 5 ms once its archive is open, every one of them in an optimized build and on average in a debug build, which runs about ten times slower, and 10000 random templates of every kind, game objects, items, spells, recipes, decks and sounds among them, decode with each game object template carrying the id the manifest lists it under, and under a small budget never hold more than it.
  */
 
 #include "Environment.h"
 #include "CustomEmoteMgr.h"
+#include "InstalledRevision.h"
 #include "KiwadArchive.h"
 #include "KiwadBuilder.h"
 #include "LogConfig.h"
@@ -85,15 +86,18 @@ namespace
 TEST_F(ObjectTemplateMgrClientTest, TheManifestListsEveryTemplateWithTheWorldArchivesItsPipedPathsName)
 {
     std::shared_ptr<TemplateManifest const> const manifest = _store.GetManifest();
-    EXPECT_EQ(manifest->Size(), 137423u);
-    EXPECT_EQ(manifest->GetArchives().size(), 27u);
+    InstalledRevision::Expect(manifest->Size(), { { "r806919", 137423u } }, "manifest templates");
+    InstalledRevision::Expect(manifest->GetArchives().size(), { { "r806919", 27u } }, "manifest archives");
     std::size_t piped = 0;
     for (auto const& [id, location] : manifest->GetLocations())
         if (location.Archive != TemplateManifest::RootArchive)
             ++piped;
-    EXPECT_EQ(piped, 12807u);
-    ASSERT_NE(manifest->Find(4188), nullptr);
-    EXPECT_EQ(*manifest->Find(4188), (TemplateLocation{ "Krokotopia-WorldData.wad", "ObjectData/KT/DynaTrigger_KT_Gate1_Fire.xml" }));
+    InstalledRevision::Expect(piped, { { "r806919", 12807u } }, "templates in a World-Part.wad");
+    if (InstalledRevision::Is("r806919"))
+    {
+        ASSERT_NE(manifest->Find(4188), nullptr);
+        EXPECT_EQ(*manifest->Find(4188), (TemplateLocation{ "Krokotopia-WorldData.wad", "ObjectData/KT/DynaTrigger_KT_Gate1_Fire.xml" }));
+    }
 }
 
 TEST_F(ObjectTemplateMgrClientTest, TemplateOneIsThePlayerObjectEveryWizardIsMadeFrom)
@@ -105,9 +109,13 @@ TEST_F(ObjectTemplateMgrClientTest, TemplateOneIsThePlayerObjectEveryWizardIsMad
     EXPECT_EQ(player.Archive, "Root.wad");
     EXPECT_EQ(player.File, "ObjectData/PlayerObject.xml");
     EXPECT_EQ(player.ObjectName, "Player Object");
-    ASSERT_EQ(player.Behaviors.size(), 39u);
-    EXPECT_EQ(player.Behaviors.front(), "WizardEquipmentBehavior");
-    EXPECT_EQ(player.Behaviors.back(), "EmotesRadialMenuBehavior");
+    InstalledRevision::Expect(player.Behaviors.size(), { { "r806919", 39u } }, "player behaviors");
+    ASSERT_FALSE(player.Behaviors.empty());
+    if (InstalledRevision::Is("r806919"))
+    {
+        EXPECT_EQ(player.Behaviors.front(), "WizardEquipmentBehavior");
+        EXPECT_EQ(player.Behaviors.back(), "EmotesRadialMenuBehavior");
+    }
     std::optional<GameObjectTemplateView> const view = player.As<GameObjectTemplateView>();
     ASSERT_TRUE(view) << "the player's template reads through the GameObjectTemplate view";
     EXPECT_EQ(view->GetTemplateId(), 1u);
@@ -190,7 +198,7 @@ TEST_F(ObjectTemplateMgrClientTest, AManifestPathTheInstallDoesNotHoldIsNamedWit
     store.SetInstall(directory.Path());
     std::vector<std::string> errors;
     ASSERT_TRUE(store.LoadManifest(errors)) << errors.front();
-    EXPECT_EQ(store.GetManifest()->Size(), 137423u) << "the install's own manifest, in a Root.wad that holds nothing else";
+    EXPECT_EQ(store.GetManifest()->Size(), _store.GetManifest()->Size()) << "the install's own manifest, in a Root.wad that holds nothing else";
 
     TemplateLookup const player = store.Lookup(1);
     EXPECT_FALSE(player.Template);
@@ -213,7 +221,7 @@ TEST_F(ObjectTemplateMgrClientTest, AFirstAccessTakesUnderFiveMillisecondsOnceIt
             ASSERT_TRUE(_store.GetTemplate(id)) << _store.Lookup(id).Error;
             warmed.insert(id);
         }
-    ASSERT_EQ(opened.size(), 27u);
+    ASSERT_EQ(opened.size(), manifest->GetArchives().size());
 
     std::vector<double> took;
     for (uint32 const id : PickIds(1000 + warmed.size(), 806919))
