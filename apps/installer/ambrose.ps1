@@ -171,7 +171,9 @@ function Invoke-Db {
 function Invoke-Run([string]$App) {
     if ($App -notin @('loginserver', 'gameserver', 'patchserver', 'supervisor')) { Fail 'run expects loginserver, gameserver, patchserver or supervisor' }
     Invoke-Conf
-    Invoke-Checked (Join-Path $BinDir "$App.exe") @('--config', (Join-Path $BinDir "${App}.conf"))
+    Push-Location $BinDir
+    try { Invoke-Checked (Join-Path $BinDir "$App.exe") @('--config', (Join-Path $BinDir "${App}.conf")) }
+    finally { Pop-Location }
 }
 
 switch ($args[0]) {

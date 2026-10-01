@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the installer: that conf copies each installed template once, that running it again leaves an edited .conf alone, that a relative install prefix resolves against the checkout rather than the working directory, that compile installs the configuration the release presets build, RelWithDebInfo, rather than the build type's name, that both the shell and the PowerShell script agree, each skipping where its interpreter is absent, and that the PowerShell deps -Plan lists every install step it would take, or skip for what it found, never runs winget, and fails clearly without winget.
+# Self-tests for the installer: that conf copies each installed template once, that running it again leaves an edited .conf alone, that a relative install prefix resolves against the checkout rather than the working directory, that compile installs the configuration the release presets build, RelWithDebInfo, rather than the build type's name, that run starts an app from its bin folder, so a supervisor finds the configurations it names relatively, that both the shell and the PowerShell script agree, each skipping where its interpreter is absent, and that the PowerShell deps -Plan lists every install step it would take, or skip for what it found, never runs winget, and fails clearly without winget.
 import json
 import os
 import shutil
@@ -42,6 +42,23 @@ def run_powershell(command, prefix, cwd=None):
     environment = dict(os.environ, AMBROSE_INSTALL_PREFIX=prefix)
     return subprocess.run([powershell(), "-NoProfile", "-File", POWERSHELL, command], cwd=cwd or ROOT,
                           env=environment, capture_output=True, text=True)
+
+
+class RunTests(unittest.TestCase):
+    @unittest.skipUnless(bash(), "bash is not installed")
+    def test_run_starts_the_app_from_its_bin_folder_so_its_relative_paths_resolve_there(self):
+        with tempfile.TemporaryDirectory() as folder:
+            prefix_with_templates(folder, ("supervisor",))
+            bin_folder = os.path.join(folder, "bin")
+            os.makedirs(bin_folder, exist_ok=True)
+            fake = os.path.join(bin_folder, "supervisor")
+            with open(fake, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write("#!/usr/bin/env bash\nif [ -f supervisor.conf ]; then echo started-in-bin; else echo started-elsewhere; fi\n")
+            os.chmod(fake, 0o755)
+            environment = dict(os.environ, AMBROSE_INSTALL_PREFIX=folder)
+            result = subprocess.run([bash(), SHELL, "run", "supervisor"], cwd=ROOT, env=environment, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("started-in-bin", result.stdout)
 
 
 class InstallConfigTests(unittest.TestCase):

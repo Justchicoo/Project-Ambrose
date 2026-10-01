@@ -36,9 +36,11 @@ the C++ workload, CMake, Git, and vcpkg into `$env:USERPROFILE\vcpkg`. `-WithDat
 `MariaDB` service on port 3306, so a server is running, and makes the `ambrose` account the shipped configuration names. winget asks for elevation itself through UAC, and
 the MariaDB client asks for the root password. Add `-Plan` to see what would be done without doing it.
 
-Run these in a Visual Studio Developer PowerShell, setting `VCPKG_ROOT` once `deps -Install` is done:
+Run these in PowerShell from the checkout, setting `VCPKG_ROOT` once `deps -Install` is done. Windows refuses to run
+scripts by default, so the first line allows them for this window only:
 
 ```powershell
+Set-ExecutionPolicy -Scope Process Bypass
 .\apps\installer\ambrose.ps1 deps -Install -WithDatabase
 [Environment]::SetEnvironmentVariable('VCPKG_ROOT', "$env:USERPROFILE\vcpkg", 'User')
 $env:VCPKG_ROOT = "$env:USERPROFILE\vcpkg"
