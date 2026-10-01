@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Draining is what this adds to a session, and dispatching what it can answer: the world calls DrainQueue on its own thread and the queued work runs there, bounded so one talkative client cannot hold the tick, and every handler is written knowing it runs on that thread and nowhere else. MSG_ATTACH is taken as soon as a client connects, because a client that has not attached has nothing else to say, and the key it carries is spent before the client is let in: the spend is one conditional update, so two clients holding the same key cannot both win it, and a spend that changed no row is read back only to say why, because the reason a client was turned away is worth knowing while the reason it was let in is not. A refused attach is told once and the socket closed behind it, and a session that was let in gives its wizard back when it goes. Entering the world is refused with MSG_ATTACHFAILED, the reason logged, when the wizard is missing, deleted or another account's, when its stats or spellbook cannot be read or its school has no level table, when its zone is one this server cannot load, when the instance has no mobile id left, or when its object cannot be built; the stats are read through the wizard's own row, so a failed read is never mistaken for a wizard with no stats yet, whose save would then write over what it has; a spell it knows that the spells this server holds do not name is left out of its book and named, and stays in its rows; the object is encoded with the transmit mask the owner's own object is read with, CriticalObjects names the zone's objects the client waits for before it leaves the loading screen, and is empty when there are none, which the client reads as nothing to wait for, and every object the zone instance holds follows as its own MSG_NEWOBJECT, as a change to them later is told to every wizard already in the instance. The wizard's own object is also encoded with the Public mask, the one the client reads another wizard with, and the session marks that it arrived, and when it leaves where it left from, for the world to show it to the wizards in the instance and take it away from them; showing another wizard sends that wizard's public object followed by its last move and, when it is moving, its state, taking one away sends MSG_REMOVEOBJECT, and at each flush the world hands a wizard's move and state to the others in its instance. As a wizard enters, its name is packed as the client's name codec packs it, from its custom name when that fits and its name parts otherwise, and its chat level is read from the permissions it is sent.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, chat, and outbound instance updates.
  */
 
 #include "GameSession.h"
@@ -614,6 +614,8 @@ void GameSession::ShowPlayer(GameSession const& other)
     message.Data.assign(other._publicObject.begin(), other._publicObject.end());
     SendDmlMessage(message);
     ShowMovementOf(other, other._relay.Current(other._movement));
+    if (other._wizBangId != 0)
+        ShowWizBangOf(other._worldGuid, other._wizBangId);
     if (other.IsLinkDead() && other._linkDeadNotified)
         ShowZombiePlayer(other);
 }
@@ -630,6 +632,14 @@ void GameSession::HidePlayer(uint64 worldGuid)
 {
     GameMessages::RemoveObject message;
     message.GameObjectId = worldGuid;
+    SendDmlMessage(message);
+}
+
+void GameSession::ShowWizBangOf(uint64 worldGuid, uint32 wizBangId)
+{
+    GameMessages::WizBang message;
+    message.GameObjectId = worldGuid;
+    message.WizBangId = wizBangId;
     SendDmlMessage(message);
 }
 
@@ -827,6 +837,8 @@ void GameSession::LeaveWorld()
     _linkDeadStartPending.store(false, std::memory_order_relaxed);
     MarkOffline();
     SetCharacterName(std::string());
+    _wizBangId = 0;
+    _pendingWizBang.reset();
     if (_stats)
     {
         SaveStats();

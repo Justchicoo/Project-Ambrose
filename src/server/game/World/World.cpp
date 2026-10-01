@@ -102,6 +102,29 @@ namespace
         }
     }
 
+    void RelayWizBangs(std::vector<std::shared_ptr<GameSession>> const& sessions)
+    {
+        for (std::shared_ptr<GameSession> const& sender : sessions)
+        {
+            std::optional<uint32> const wizBangId = sender->TakeWizBangChange();
+            if (!wizBangId || !sender->IsOpen() || !sender->IsShown())
+                continue;
+
+            std::optional<uint32> const mapId = sender->GetMapId();
+            std::size_t recipients = 0;
+            for (std::shared_ptr<GameSession> const& viewer : sessions)
+            {
+                if (!viewer->IsOpen() || !viewer->IsShown() || viewer->GetMapId() != mapId)
+                    continue;
+                viewer->ShowWizBangOf(sender->GetWorldGuid(), *wizBangId);
+                ++recipients;
+            }
+
+            LOG_DEBUG("server.world", "Session {} changed wizard {}'s wizbang to {} for {} wizard(s) in zone instance {}", sender->GetSessionId(),
+                sender->GetWorldGuid(), *wizBangId, recipients, *mapId);
+        }
+    }
+
     std::string SpeechName(Speech const& speech)
     {
         switch (speech.Kind)
@@ -438,6 +461,7 @@ void World::Update(std::chrono::milliseconds diff)
     auto const meetingStarted = std::chrono::steady_clock::now();
     MeetPlayers(sessions);
     RelayJumps(sessions);
+    RelayWizBangs(sessions);
     auto const meetingEnded = std::chrono::steady_clock::now();
     measured[4] = std::chrono::duration_cast<std::chrono::nanoseconds>(meetingEnded - meetingStarted);
     RecordProfileEvent("movement", meetingStarted, meetingEnded);

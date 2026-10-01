@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook and stats stay with the world thread and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window.
+ * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook and stats stay with the world thread and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it.
  */
 
 #ifndef AMBROSE_GAMESESSION_H
@@ -28,6 +28,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 struct ChatSpeaker;
@@ -96,6 +97,8 @@ public:
     void ShowPlayer(GameSession const& other);
     void ShowZombiePlayer(GameSession const& other);
     void HidePlayer(uint64 worldGuid);
+    void ShowWizBangOf(uint64 worldGuid, uint32 wizBangId);
+    std::optional<uint32> TakeWizBangChange() noexcept { return std::exchange(_pendingWizBang, std::nullopt); }
     std::optional<uint8> TakeJump() noexcept;
     void ShowStateOf(uint64 worldGuid, uint32 state);
     std::vector<Speech> TakeSpeech();
@@ -121,6 +124,7 @@ public:
     void HandleLogPatchClientPatchTime(GameMessages::LogPatchClientPatchTime& message);
     void HandleQuestFinderOption(GameMessages::QuestFinderOption& message);
     void SendBadges();
+    void HandlePlayerWizBang(GameMessages::PlayerWizBang& message);
 
     void HandleCombatMove(GameMessages::CombatMove& message);
     void HandleCombatDraw(GameMessages::CombatDraw& message);
@@ -188,6 +192,8 @@ private:
     std::optional<uint32> _mapId;
     std::string _zonePath;
     uint64 _worldGuid = 0;
+    uint32 _wizBangId = 0;
+    std::optional<uint32> _pendingWizBang;
     std::optional<PlayerStats> _stats;
     uint64 _statsRevision = 0;
     std::optional<PlayerSpellbook> _spellbook;
