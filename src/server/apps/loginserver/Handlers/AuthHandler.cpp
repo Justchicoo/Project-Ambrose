@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Authenticates MSG_USER_AUTHEN_V3: reserves the attempt against the address's lockout, decrypts Rec1 with the session's offer, checks the session id, revision, machine and address bans, account, ClientKey1, and account bans and locks from one asynchronous query, kicks any earlier session holding the account, stores the session key sealed like a verifier with the last login and a resealed verifier in one transaction, then admits the client or answers with the error, closing after too many failures, and refuses the older authentication messages. A ban or lock refusal carries the ban's end as TimeStamp, in Unix seconds or forever.
+ * Authenticates MSG_USER_AUTHEN_V3: reserves the attempt against the address's lockout, decrypts Rec1 with the session's offer, checks the session id, revision, machine and address bans, account, ClientKey1, and account bans and locks from one asynchronous query, kicks any earlier session holding the account, stores the session key sealed like a verifier with the last login and a resealed verifier in one transaction, then admits the client or answers with the error, closing after too many failures, and refuses the older authentication messages. A ban or lock refusal carries the ban's end as TimeStamp, in Unix seconds or forever, and no Reason, since the client would show GUI_<Reason> beside its dated ban line.
  */
 
 #include "AccountMgr.h"
@@ -26,9 +26,10 @@ namespace
     {
         LoginMessages::UserAuthenRsp response;
         response.Error = result;
-        response.Reason = std::string(AuthResults::GetName(result));
         if (SystemMessages::CarriesBanEnd(static_cast<uint32>(result)))
             response.TimeStamp = SystemMessages::FormatBanEnd(unbanDate);
+        else
+            response.Reason = std::string(AuthResults::GetName(result));
         return response;
     }
 

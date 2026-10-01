@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Validates MSG_USER_VALIDATE, which a client sends to come back to character select without its password: reserves the attempt against the address's lockout, reads the account, its bans, lock and session key in one asynchronous query, refuses a key issued to another machine, one renewed longer ago than Login.SessionKeyLifetime as it stands now, and a PassKey3 not made from that key and this connection's offer, kicks any earlier session holding the account, renews the key and the last login in one transaction, then sends MSG_USER_VALIDATE_RSP with Error=0 and MSG_USER_ADMIT_IND; every refusal sends only MSG_USER_VALIDATE_RSP with the error and closes. A ban or lock refusal carries the ban's end as TimeStamp, in Unix seconds or forever.
+ * Validates MSG_USER_VALIDATE, which a client sends to come back to character select without its password: reserves the attempt against the address's lockout, reads the account, its bans, lock and session key in one asynchronous query, refuses a key issued to another machine, one renewed longer ago than Login.SessionKeyLifetime as it stands now, and a PassKey3 not made from that key and this connection's offer, kicks any earlier session holding the account, renews the key and the last login in one transaction, then sends MSG_USER_VALIDATE_RSP with Error=0 and MSG_USER_ADMIT_IND; every refusal sends only MSG_USER_VALIDATE_RSP with the error and closes. A ban or lock refusal carries the ban's end as TimeStamp, in Unix seconds or forever, and no Reason, since the client would show GUI_<Reason> beside its dated ban line.
  */
 
 #include "AccountMgr.h"
@@ -282,8 +282,9 @@ void LoginSession::FailValidation(ValidateAttempt* attempt, AuthResult result, s
             AuthResults::GetName(result));
     LoginMessages::UserValidateRsp response;
     response.Error = result;
-    response.Reason = std::string(AuthResults::GetName(result));
     if (SystemMessages::CarriesBanEnd(static_cast<uint32>(result)))
         response.TimeStamp = SystemMessages::FormatBanEnd(unbanDate);
+    else
+        response.Reason = std::string(AuthResults::GetName(result));
     SendDmlMessageDelayedClose(response);
 }

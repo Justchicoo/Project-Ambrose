@@ -237,10 +237,10 @@ Four deliverables wait on other work:
 
 **Acceptance**
 
-- [ ] Lower security levels refused
-- [ ] A command_security override applies after `.reload command_security` without a restart
-- [ ] `ban account test 1h spam` disconnects and blocks next login; unban restores
-- [ ] `character deleted restore <guid>` brings the wizard back
+- [x] Lower security levels refused (GmAccountCommandTest.EachCommandRefusesAnAccountBelowItsLevel)
+- [x] A command_security override applies after `.reload command_security` without a restart (GmAccountCommandDatabaseTest.RaisingBanAccountAndReloadingRefusesAGameMasterWithNothingRestarted)
+- [x] `ban account test 1h spam` disconnects and blocks next login; unban restores (GmAccountCommandDatabaseTest.ABanBlocksTheAccountAndUnbanLiftsIt; client driver run 20261001-184159, gm-ban-and-restore.json: the game master's `.ban account clientdriver2 1h spam` kicked the companion's session with This account is banned: spam, though the kicked client did not visibly show the disconnect, which the ban TimeStamp hang the Server thread is fixing is suspected of, and its next login was refused with MSG_USER_AUTHEN_RSP Error=AccountBanned and the client showed the suspension notice, and after `.unban account` it was let back in)
+- [x] `character deleted restore <guid>` brings the wizard back (GmAccountCommandDatabaseTest.ADeletedWizardIsRestoredToTheAccountItWasDeletedFrom; client driver run 20261001-184159, gm-ban-and-restore.json: after its owner's delete the companion's list held 0 characters, and after `.character deleted restore 2` and a relog it held 1 and the select screen showed the wizard)
 
 ### Detailed spec from LOG-17: GM account and character commands
 
@@ -267,12 +267,12 @@ Operators can manage accounts, bans, security levels and deleted characters from
 
 **Acceptance**
 
-- [ ] Unit: each command's permission check refuses a lower security level
-- [ ] Unit: a world.command_security row raising '.ban account' to ADMINISTRATOR, then `.reload command_security`, refuses a GAMEMASTER account without a restart
-- [ ] Real client: `ban account test 1h spam` from a GM character disconnects the target, whose next login attempt is refused; `unban` lets them back in
-- [ ] Real client: `character deleted restore <guid>` makes a deleted wizard reappear on its owner's select screen after a relog
-- [ ] Unit: an account's own permissions reach MSG_LOGINCOMPLETE and the name behavior, and an account without them gets `LoginComplete.Permissions`
-- [ ] Real client: an account set to menu chat only shows the filtered balloon beside its wizard's name on another client, and one with open chat shows no mark
+- [x] Unit: each command's permission check refuses a lower security level (GmAccountCommandTest.EachCommandRefusesAnAccountBelowItsLevel)
+- [x] Unit: a world.command_security row raising '.ban account' to ADMINISTRATOR, then `.reload command_security`, refuses a GAMEMASTER account without a restart (GmAccountCommandDatabaseTest.RaisingBanAccountAndReloadingRefusesAGameMasterWithNothingRestarted)
+- [x] Real client: `ban account test 1h spam` from a GM character disconnects the target, whose next login attempt is refused; `unban` lets them back in (client driver run 20261001-184159, gm-ban-and-restore.json: typed in game chat, `.ban account clientdriver2 1h spam` kicked the companion with disconnect type 87620544, This account is banned: spam, though its client still showed it standing in the world 2 s later, which the ban TimeStamp hang the Server thread is fixing is suspected of; its next login was refused with Error=AccountBanned; `.unban account clientdriver2` let it log in again)
+- [x] Real client: `character deleted restore <guid>` makes a deleted wizard reappear on its owner's select screen after a relog (client driver run 20261001-184159, gm-ban-and-restore.json: the deleted wizard was gone from the companion's list, and after `.character deleted restore 2` and a relog the select screen showed it again)
+- [x] Unit: an account's own permissions reach MSG_LOGINCOMPLETE and the name behavior, and an account without them gets `LoginComplete.Permissions` (GmAccountCommandTest.AnAccountsOwnPermissionsTakeThePlaceOfTheSetting chooses the account's own over the setting, and PlayerObjectBuilderTest.TheWizardsObjectCarriesItsHeaderIdsPlaceAndBehaviorsInTemplateOrder puts what it is given in the name behavior's m_chatPermissions of the object MSG_LOGINCOMPLETE carries)
+- [x] Real client: an account set to menu chat only shows the filtered balloon beside its wizard's name on another client, and one with open chat shows no mark (client driver run 20261001-184159, gm-ban-and-restore.json: the companion's account, set to 0x23 on the console, showed the filtered balloon beside its wizard's name on the game master's client; client driver run 20261001-184643, gm-teleport.json: the game master's account with the default open chat showed no mark beside its name on the companion's client)
 
 **Risks**
 
