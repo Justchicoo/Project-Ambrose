@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * With AMBROSE_TEST_DB set, reads a zone's volumes, triggers and events from a fresh world database: a volume's enter event fires the trigger that listens for it, editing that trigger's fire event and running `.reload zone_trigger` changes what fires on the next enter with nothing restarted, and a volume row whose shape Ambrose does not know fails the reload, which names the row and keeps the triggers it had.
+ * With AMBROSE_TEST_DB set, reads a zone's volumes, triggers and events from a fresh world database: a volume's enter event fires the trigger that listens for it, editing that trigger's fire event and running `.reload zone_trigger` changes what fires on the next enter with nothing restarted, and a volume row whose shape Ambrose does not know fails the reload, which names the row and keeps the triggers it had; a client may post only the events zone_client_event lists for its zone, and listing an event a volume posts fails the load.
  */
 
 #include "DBUpdater.h"
@@ -100,4 +100,22 @@ TEST_F(ZoneTriggerMgrDatabaseTest, AnEditedTriggerTakesHoldAtTheReloadAndABadRow
     ASSERT_EQ(errors.size(), 1u);
     EXPECT_NE(errors.front().find("volume 1 (Odd) has the shape TORUS"), std::string::npos) << errors.front();
     EXPECT_EQ(sZoneTriggerMgr.Post(1, Hub, "Enter_Something Else", 9, now), std::vector<std::string>{ "Trigger POI Ravenwood" }) << "a failed reload keeps the set it had";
+}
+
+TEST_F(ZoneTriggerMgrDatabaseTest, ClientsMayPostOnlyTheEventsTheirZoneListsAndNeverAVolumesOwn)
+{
+    Insert(fmt::format("INSERT INTO `zone_client_event` (`zone_path`, `event_name`) VALUES ('{}', 'CinematicDone')", Hub));
+    std::vector<std::string> errors;
+    ASSERT_TRUE(sZoneTriggerMgr.Load(errors)) << (errors.empty() ? std::string() : errors.front());
+    std::shared_ptr<ZoneTriggerData const> const data = sZoneTriggerMgr.Find(Hub);
+    ASSERT_TRUE(data);
+    EXPECT_TRUE(data->ClientEvents.contains("CinematicDone"));
+    EXPECT_FALSE(data->ClientEvents.contains("Enter_Ravenwood POI"));
+
+    Insert(fmt::format("INSERT INTO `zone_client_event` (`zone_path`, `event_name`) VALUES ('{}', 'Enter_Ravenwood POI')", Hub));
+    errors.clear();
+    EXPECT_FALSE(sZoneTriggerMgr.Load(errors));
+    ASSERT_EQ(errors.size(), 1u);
+    EXPECT_NE(errors.front().find("volume 0 posts"), std::string::npos) << errors.front();
+    EXPECT_FALSE(sZoneTriggerMgr.Find(Hub)->ClientEvents.contains("Enter_Ravenwood POI")) << "a failed reload keeps the set it had";
 }
