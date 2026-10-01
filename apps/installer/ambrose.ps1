@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Installs, configures and runs an Ambrose checkout on Windows: deps checks the tools and, with -Install, installs what is missing through winget (Visual Studio 2022 Build Tools with the C++ workload, CMake, Git) and vcpkg, and with -WithDatabase MariaDB, registered as a service so a server is running, and the account the shipped configuration names; -Plan prints those steps without taking them. It reads PATH afresh before looking, so a tool an earlier run installed is found, and winget's answer that a package is already installed counts as done.
+# Installs, configures and runs an Ambrose checkout on Windows: deps checks the tools and, with -Install, installs what is missing through winget (Visual Studio 2022 Build Tools with the C++ workload, CMake, Git) and vcpkg, and with -WithDatabase MariaDB, registered as a service so a server is running, and the account the shipped configuration names; -Plan prints those steps without taking them. It reads PATH, and VCPKG_ROOT when the shell has none, afresh before looking, so a tool an earlier run installed is found from a shell opened before it, and winget's answer that a package is already installed counts as done.
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $EnvFile = if ($env:AMBROSE_INSTALL_ENV) { $env:AMBROSE_INSTALL_ENV } else { Join-Path $Root 'conf\dist\env.dist' }
@@ -137,6 +137,8 @@ function Invoke-Deps([string[]]$Options = @()) {
     if ($install) { Install-Tools }
     if ($database) { Install-Database }
     if ($Plan) { Write-Output 'plan only; nothing was installed'; return }
+    Update-Path
+    if (-not $env:VCPKG_ROOT -and $env:OS -eq 'Windows_NT') { $env:VCPKG_ROOT = [Environment]::GetEnvironmentVariable('VCPKG_ROOT', 'User') }
     if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) { Fail "missing 'cmake'; install it and run deps again" }
     if (-not $env:VCPKG_ROOT) { Fail 'VCPKG_ROOT is not set; install vcpkg and set VCPKG_ROOT' }
     if (-not (Test-Path (Join-Path $env:VCPKG_ROOT 'scripts\buildsystems\vcpkg.cmake'))) { Fail 'VCPKG_ROOT does not contain vcpkg' }
