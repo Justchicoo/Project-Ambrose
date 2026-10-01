@@ -261,8 +261,14 @@ void GameSession::HandleAttach(GameMessages::Attach& message)
 
 void GameSession::HandleQueryLogout(GameMessages::QueryLogout& message)
 {
+    if (message.IsInstance == 0)
+    {
+        _intentionalDisconnect.store(true, std::memory_order_relaxed);
+        SendDmlMessage(GameMessages::ClientDisconnect{});
+    }
     SendDmlMessage(message);
-    LOG_INFO("server.gamesession", "Session {} replied to MSG_QUERY_LOGOUT with IsInstance={}", GetSessionId(), message.IsInstance);
+    LOG_INFO("server.gamesession", "Session {} replied to MSG_QUERY_LOGOUT with IsInstance={}{}", GetSessionId(), message.IsInstance,
+        message.IsInstance == 0 ? ", after MSG_CLIENT_DISCONNECT, which sends its client back to the login server" : "");
 }
 
 void GameSession::HandleClientDisconnect(GameMessages::ClientDisconnect&)

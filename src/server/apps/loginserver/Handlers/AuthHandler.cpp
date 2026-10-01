@@ -1,17 +1,15 @@
 /*
  * Project Ambrose by Imjustchico
- * Authenticates MSG_USER_AUTHEN_V3: reserves the attempt against the address's lockout, decrypts Rec1 with the session's offer, checks the session id, revision, machine and address bans, account, ClientKey1, and account bans and locks from one asynchronous query, kicks any earlier session holding the account, stores a hashed session key with the last login and a resealed verifier in one transaction, then admits the client or answers with the error, closing after too many failures, and refuses the older authentication messages.
+ * Authenticates MSG_USER_AUTHEN_V3: reserves the attempt against the address's lockout, decrypts Rec1 with the session's offer, checks the session id, revision, machine and address bans, account, ClientKey1, and account bans and locks from one asynchronous query, kicks any earlier session holding the account, stores the session key sealed like a verifier with the last login and a resealed verifier in one transaction, then admits the client or answers with the error, closing after too many failures, and refuses the older authentication messages.
  */
 
 #include "AccountMgr.h"
-#include "Base64.h"
 #include "ClientKey.h"
 #include "DatabaseEnv.h"
 #include "Log.h"
 #include "LoginMgr.h"
 #include "LoginSession.h"
 #include "Rec1.h"
-#include "SHA256.h"
 #include "StringUtil.h"
 
 #include <fmt/format.h>
@@ -35,11 +33,6 @@ namespace
     {
         static std::string const verifier = ClientKey::HashPassword("Project Ambrose has no account by this name");
         return verifier;
-    }
-
-    std::string HashSessionKey(std::string_view sessionKey)
-    {
-        return Base64::Encode(SHA256::GetDigestOf(sessionKey));
     }
 }
 
@@ -233,19 +226,24 @@ void LoginSession::ContinueAuthentication(std::shared_ptr<AuthAttempt> const& at
         return;
     }
     attempt->SessionKey = ClientKey::GenerateSessionKey(attempt->Salt);
-    std::string const keyHash = HashSessionKey(attempt->SessionKey);
+    std::shared_ptr<AccountSettings const> const accountSettings = sAccountMgr.GetSettings();
+    VerifierKeyRing::SealedVerifier const sealedKey = accountSettings->Keys.SealSessionKey(attempt->SessionKey, account.Id);
     uint64 const now = AccountMgr::Now();
     uint64 const expires = now + static_cast<uint64>(attempt->Settings->SessionKeyLifetime.count());
     auto transaction = LoginDatabase.BeginTransaction();
     session->SetData(0, account.Id);
     session->SetData(1, attempt->MachineId);
-    session->SetData(2, keyHash);
-    session->SetData(3, now);
-    session->SetData(4, expires);
-    session->SetData(5, attempt->MachineId);
-    session->SetData(6, keyHash);
-    session->SetData(7, now);
-    session->SetData(8, expires);
+    session->SetData(2, sealedKey.Stored);
+    session->SetData(3, sealedKey.KeyId);
+    session->SetData(4, now);
+    session->SetData(5, now);
+    session->SetData(6, expires);
+    session->SetData(7, attempt->MachineId);
+    session->SetData(8, sealedKey.Stored);
+    session->SetData(9, sealedKey.KeyId);
+    session->SetData(10, now);
+    session->SetData(11, now);
+    session->SetData(12, expires);
     transaction->Append(std::move(session));
     lastLogin->SetData(0, now);
     lastLogin->SetData(1, attempt->AddressText);
@@ -253,7 +251,6 @@ void LoginSession::ContinueAuthentication(std::shared_ptr<AuthAttempt> const& at
     lastLogin->SetData(3, account.Id);
     transaction->Append(std::move(lastLogin));
 
-    std::shared_ptr<AccountSettings const> const accountSettings = sAccountMgr.GetSettings();
     if (account.VerifierKeyId != accountSettings->Keys.GetActiveKeyId())
     {
         if (auto reseal = LoginDatabase.GetPreparedStatement(LOGIN_UPD_VERIFIER_RESEAL))

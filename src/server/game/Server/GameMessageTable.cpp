@@ -88,6 +88,7 @@ namespace
             Sends<AddSpellToBook>();
             Sends<RemoveSpellFromBook>();
             Sends<QueryLogout>();
+            Sends<ClientDisconnect>();
             Sends<ZombiePlayer>();
             Sends<DisconnectAfk>();
             Sends<ServerShutdown>();

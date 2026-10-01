@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The keys that encrypt stored password verifiers at rest: numbered AES-256 keys parsed from configuration, one of them active for new verifiers, all of them able to open older ones.
+ * The keys that encrypt stored password verifiers and session keys at rest: numbered AES-256 keys parsed from configuration, one of them active for new seals, all of them able to open older ones.
  */
 
 #ifndef AMBROSE_VERIFIERKEYRING_H
@@ -35,8 +35,12 @@ public:
 
     SealedVerifier Seal(std::string_view verifier, std::string_view username) const;
     std::optional<std::string> Open(std::string_view stored, uint8 keyId, std::string_view username) const;
+    SealedVerifier SealSessionKey(std::string_view sessionKey, uint64 accountId) const;
+    std::optional<std::string> OpenSessionKey(std::string_view stored, uint8 keyId, uint64 accountId) const;
 
 private:
+    SealedVerifier SealWith(std::string_view text, std::string const& associatedData) const;
+    std::optional<std::string> OpenWith(std::string_view stored, uint8 keyId, std::string const& associatedData) const;
     void Wipe() noexcept;
 
     std::map<uint8, AES256GCM::Key> _keys;

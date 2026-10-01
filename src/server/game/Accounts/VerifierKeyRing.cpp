@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Parses id:hex key lists without echoing key material, seals verifiers as base64 nonce, ciphertext and tag bound to the lowercased username, opens them by key id, and scrubs key bytes when a ring is copied over or destroyed.
+ * Parses id:hex key lists without echoing key material, seals verifiers as base64 nonce, ciphertext and tag bound to the lowercased username and session keys the same way bound to the account id, so neither opens in the other's place, opens them by key id, and scrubs key bytes when a ring is copied over or destroyed.
  */
 
 #include "VerifierKeyRing.h"
@@ -18,6 +18,11 @@ namespace
     std::string AssociatedData(std::string_view username)
     {
         return "ambrose.verifier:" + Ambrose::ToLower(username);
+    }
+
+    std::string SessionAssociatedData(uint64 accountId)
+    {
+        return fmt::format("ambrose.session:{}", accountId);
     }
 
     std::span<uint8 const> AsBytes(std::string_view text) noexcept
@@ -98,15 +103,34 @@ std::optional<VerifierKeyRing> VerifierKeyRing::Parse(std::string_view keys, uin
 
 VerifierKeyRing::SealedVerifier VerifierKeyRing::Seal(std::string_view verifier, std::string_view username) const
 {
-    auto const key = _keys.find(_activeKeyId);
-    if (_activeKeyId == 0 || key == _keys.end())
-        return { std::string(verifier), 0 };
-    std::string const associatedData = AssociatedData(username);
-    std::vector<uint8> const sealed = AES256GCM::Seal(key->second, AsBytes(verifier), AsBytes(associatedData));
-    return { Base64::Encode(sealed), _activeKeyId };
+    return SealWith(verifier, AssociatedData(username));
 }
 
 std::optional<std::string> VerifierKeyRing::Open(std::string_view stored, uint8 keyId, std::string_view username) const
+{
+    return OpenWith(stored, keyId, AssociatedData(username));
+}
+
+VerifierKeyRing::SealedVerifier VerifierKeyRing::SealSessionKey(std::string_view sessionKey, uint64 accountId) const
+{
+    return SealWith(sessionKey, SessionAssociatedData(accountId));
+}
+
+std::optional<std::string> VerifierKeyRing::OpenSessionKey(std::string_view stored, uint8 keyId, uint64 accountId) const
+{
+    return OpenWith(stored, keyId, SessionAssociatedData(accountId));
+}
+
+VerifierKeyRing::SealedVerifier VerifierKeyRing::SealWith(std::string_view text, std::string const& associatedData) const
+{
+    auto const key = _keys.find(_activeKeyId);
+    if (_activeKeyId == 0 || key == _keys.end())
+        return { std::string(text), 0 };
+    std::vector<uint8> const sealed = AES256GCM::Seal(key->second, AsBytes(text), AsBytes(associatedData));
+    return { Base64::Encode(sealed), _activeKeyId };
+}
+
+std::optional<std::string> VerifierKeyRing::OpenWith(std::string_view stored, uint8 keyId, std::string const& associatedData) const
 {
     if (keyId == 0)
         return std::string(stored);
@@ -116,7 +140,6 @@ std::optional<std::string> VerifierKeyRing::Open(std::string_view stored, uint8 
     std::optional<std::vector<uint8>> const sealed = Base64::Decode(stored);
     if (!sealed)
         return std::nullopt;
-    std::string const associatedData = AssociatedData(username);
     std::optional<std::vector<uint8>> const opened = AES256GCM::Open(key->second, *sealed, AsBytes(associatedData));
     if (!opened)
         return std::nullopt;

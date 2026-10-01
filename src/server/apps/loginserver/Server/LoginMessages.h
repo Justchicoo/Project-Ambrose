@@ -63,6 +63,45 @@ namespace LoginMessages
         }
     };
 
+    struct UserValidate
+    {
+        static constexpr uint8 ServiceId = LoginService;
+        static constexpr std::string_view Tag = "MSG_USER_VALIDATE";
+
+        uint64 UserId = 0;
+        std::string PassKey3;
+        uint64 MachineId = 0;
+        std::string Locale;
+        std::string PatchClientId;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("UserID", &UserValidate::UserId), DmlField("PassKey3", &UserValidate::PassKey3), DmlField("MachineID", &UserValidate::MachineId),
+                DmlField("Locale", &UserValidate::Locale), DmlField("PatchClientID", &UserValidate::PatchClientId) };
+        }
+    };
+
+    struct UserValidateRsp
+    {
+        static constexpr uint8 ServiceId = LoginService;
+        static constexpr std::string_view Tag = "MSG_USER_VALIDATE_RSP";
+
+        AuthResult Error = AuthResult::Success;
+        std::string Reason;
+        uint64 UserId = 0;
+        std::string TimeStamp;
+        int32 PayingUser = 0;
+        int32 Flags = 0;
+        std::string SupportId;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Error", &UserValidateRsp::Error), DmlField("Reason", &UserValidateRsp::Reason), DmlField("UserID", &UserValidateRsp::UserId),
+                DmlField("TimeStamp", &UserValidateRsp::TimeStamp), DmlField("PayingUser", &UserValidateRsp::PayingUser), DmlField("Flags", &UserValidateRsp::Flags),
+                DmlField("SupportID", &UserValidateRsp::SupportId) };
+        }
+    };
+
     struct UserAdmitInd
     {
         static constexpr uint8 ServiceId = LoginService;

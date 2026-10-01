@@ -256,10 +256,10 @@ A logged-in character's level, school, XP, training points, gold, health, mana a
 
 **Acceptance**
 
-- [ ] PassKey3 from the stored key and this offer passes; previous offer, wrong key or other MachineID fails
-- [ ] Real client: quit to select shows USER_VALIDATE -> VALIDATE_RSP Error=0 -> ADMIT_IND -> list, no password prompt
-- [ ] DB online=0 with saved zone and position
-- [ ] Changing Login.SessionKeyTTL applies from the next validate
+- [x] PassKey3 from the stored key and this offer passes; previous offer, wrong key or other MachineID fails (ValidateHandlerDatabaseTest.APassKey3FromTheStoredKeyAndThisOfferIsAdmittedAndRenewsTheKey and ThePreviousOfferAWrongKeyAnotherMachineAndAnUnknownAccountAreRefused)
+- [x] Real client: quit to select shows USER_VALIDATE -> VALIDATE_RSP Error=0 -> ADMIT_IND -> list, no password prompt (client driver run 20261001-120642, return-to-select.json: after Quit from the in-world menu the game server sent MSG_CLIENT_DISCONNECT before its MSG_QUERY_LOGOUT reply, the client sent MSG_USER_VALIDATE with an 88-byte PassKey3, the login server answered MSG_USER_VALIDATE_RSP Error=0 and MSG_USER_ADMIT_IND Status=1 and listed 1 character, and the character select screen came back with no login box)
+- [x] DB online=0 with saved zone and position (client driver run 20261001-120642: characters.online answered 0, zone WizardCity/WC_Ravenwood, no realm_online_character row, and the save line gave the place the wizard walked to)
+- [x] Changing Login.SessionKeyTTL applies from the next validate (ValidateHandlerDatabaseTest.LoweringTheLifetimeRefusesAnOlderKeyFromTheNextValidate; the spec's Login.SessionKeyTTL is the live setting Login.SessionKeyLifetime, which 2.12 built)
 
 ### Detailed spec from LOG-13: Return to character select: MSG_QUERY_LOGOUT and MSG_USER_VALIDATE
 
@@ -286,11 +286,11 @@ A player in game can quit to character select and land on the list without re-en
 
 **Acceptance**
 
-- [ ] Unit: a PassKey3 computed from the stored key and this session's offer passes; one computed from the previous connection's offer, a wrong key or a different MachineID fails
-- [ ] Real client: in game, choose to quit to character select; the client reconnects to the loginserver and the log shows USER_VALIDATE -> VALIDATE_RSP Error=0 -> ADMIT_IND -> character list, matching capture lines 21852-21860; the select screen appears with no password prompt
-- [ ] Real client: selecting the same wizard again enters the world at the saved position
-- [ ] DB: after quitting, characters.online=0 and the saved zone and position reflect where the player stood
-- [ ] Unit: lowering Login.SessionKeyTTL makes the next validate of an older key fail without a restart
+- [x] Unit: a PassKey3 computed from the stored key and this session's offer passes; one computed from the previous connection's offer, a wrong key or a different MachineID fails (ValidateHandlerDatabaseTest.APassKey3FromTheStoredKeyAndThisOfferIsAdmittedAndRenewsTheKey and ThePreviousOfferAWrongKeyAnotherMachineAndAnUnknownAccountAreRefused)
+- [x] Real client: in game, choose to quit to character select; the client reconnects to the loginserver and the log shows USER_VALIDATE -> VALIDATE_RSP Error=0 -> ADMIT_IND -> character list, matching capture lines 21852-21860; the select screen appears with no password prompt (client driver run 20261001-120642, return-to-select.json: after Quit from the in-world menu the game server sent MSG_CLIENT_DISCONNECT before its MSG_QUERY_LOGOUT reply, the client sent MSG_USER_VALIDATE with an 88-byte PassKey3, the login server answered MSG_USER_VALIDATE_RSP Error=0 and MSG_USER_ADMIT_IND Status=1 and listed 1 character, and the character select screen came back with no login box)
+- [x] Real client: selecting the same wizard again enters the world at the saved position (client driver run 20261001-120642: Play put the wizard back in Ravenwood at the exact place the game server saved)
+- [x] DB: after quitting, characters.online=0 and the saved zone and position reflect where the player stood (client driver run 20261001-120642: characters.online answered 0, zone WizardCity/WC_Ravenwood, no realm_online_character row, and the save line gave the place the wizard walked to)
+- [x] Unit: lowering Login.SessionKeyTTL makes the next validate of an older key fail without a restart (ValidateHandlerDatabaseTest.LoweringTheLifetimeRefusesAnOlderKeyFromTheNextValidate; the spec's Login.SessionKeyTTL is the live setting Login.SessionKeyLifetime, which 2.12 built)
 
 **Risks**
 
