@@ -288,10 +288,10 @@ Operators can manage accounts, bans, security levels and deleted characters from
 
 **Acceptance**
 
-- [ ] '.tele Start' snaps without loading; B sees it
-- [ ] '.gps' matches minimap
-- [ ] Out-of-range '.go xyz' refused; players cannot '.tele'
-- [ ] A point from '.tele add' works at once without a reload
+- [x] '.tele Start' snaps without loading; B sees it (client driver run 20261001-184643, gm-teleport.json: typed in chat, it put the game master at (0, 48, -28) facing 5.1 with no loading screen, shown to 1 other wizard, and the companion's client showed it at the fountain)
+- [x] '.gps' matches minimap (client driver run 20261001-184643, gm-teleport.json: `.gps` printed Zone WizardCity/WC_Hub, x 0.00, y 48.00, z -28.00, yaw 5.100, zone instance 1, the place the teleport had just put the wizard at the Start fountain, where the client drew it)
+- [x] Out-of-range '.go xyz' refused; players cannot '.tele' (TeleCommandTest.APlaceOutsideWhatAPositionCanBeSentAsIsRefusedWithTheRange and TeleCommandTest.APlayerCannotTeleportOrAskWhereItStands)
+- [x] A point from '.tele add' works at once without a reload (GameTeleDatabaseTest.APointAddedWorksAtOnceIsJournaledAndAReloadKeepsTheListOnABadRow; client driver run 20261001-184643, gm-teleport.json: `.tele add DriverSpot`, then `.tele Start` and `.tele DriverSpot`, which worked at once)
 
 ### Detailed spec from WLD-12: Same-zone teleport and GM teleport commands
 
@@ -316,11 +316,11 @@ A GM can instantly move themselves or another player to a named location or coor
 
 **Acceptance**
 
-- [ ] Real client: '.tele Start' in WC_Hub snaps the wizard to the Start fountain with no loading screen, and B sees A pop to the new spot
-- [ ] Real client: '.gps' prints coordinates matching the minimap position
-- [ ] Unit: '.go xyz' outside the packable range is refused with a message
-- [ ] A player-level account cannot run '.tele'
-- [ ] Real client: a point added with '.tele add' works immediately without a reload or restart
+- [x] Real client: '.tele Start' in WC_Hub snaps the wizard to the Start fountain with no loading screen, and B sees A pop to the new spot (client driver run 20261001-184643, gm-teleport.json: MSG_SERVERTELEPORT put the game master at (0, 48, -28), shown to 1 other wizard, and the companion's screenshot shows it at the fountain)
+- [x] Real client: '.gps' prints coordinates matching the minimap position (client driver run 20261001-184643, gm-teleport.json: `.gps` printed x 0.00, y 48.00, z -28.00, yaw 5.100 in the chat box and beside the minimap, the place the teleport had just set)
+- [x] Unit: '.go xyz' outside the packable range is refused with a message (TeleCommandTest.APlaceOutsideWhatAPositionCanBeSentAsIsRefusedWithTheRange)
+- [x] A player-level account cannot run '.tele' (TeleCommandTest.APlayerCannotTeleportOrAskWhereItStands)
+- [x] Real client: a point added with '.tele add' works immediately without a reload or restart (client driver run 20261001-184643, gm-teleport.json: `.tele add DriverSpot` and then `.tele DriverSpot` moved the game master there at once, with no reload or restart)
 
 **Risks**
 
