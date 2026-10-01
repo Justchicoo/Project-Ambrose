@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the installer: that conf copies each installed template once, that running it again leaves an edited .conf alone, that a relative install prefix resolves against the checkout rather than the working directory, that compile installs the configuration the release presets build, RelWithDebInfo, rather than the build type's name, and that both the shell and the PowerShell script agree, each skipping where its interpreter is absent.
+# Self-tests for the installer: that conf copies each installed template once, that running it again leaves an edited .conf alone, that a relative install prefix resolves against the checkout rather than the working directory, that compile installs the configuration the release presets build, RelWithDebInfo, rather than the build type's name, that both the shell and the PowerShell script agree, each skipping where its interpreter is absent, and that the PowerShell deps -Plan lists every install step it would take, or skip for what it found, never runs winget, and fails clearly without winget.
 import json
 import os
 import shutil
@@ -104,6 +104,66 @@ class ConfTests(unittest.TestCase):
             result = run_shell("conf", folder)
             self.assertNotEqual(result.returncode, 0, result.stdout)
             self.assertIn("run compile first", result.stderr)
+
+
+def run_powershell_plan(found, *options, with_winget=True):
+    folder = tempfile.mkdtemp()
+    tools = os.path.join(folder, "tools")
+    os.makedirs(tools)
+    marker = os.path.join(folder, "winget-ran")
+    if with_winget:
+        with open(os.path.join(tools, "winget.cmd"), "w", encoding="utf-8", newline="\r\n") as handle:
+            handle.write(f'@echo off\necho ran> "{marker}"\n')
+    environment = {key: value for key, value in os.environ.items() if key.upper() != "VCPKG_ROOT"}
+    environment.update(AMBROSE_DEPS_FOUND=found, USERPROFILE=folder,
+                       PATH=tools + os.pathsep + environment.get("PATH", "") if with_winget else tools)
+    result = subprocess.run([powershell(), "-NoProfile", "-File", POWERSHELL, "deps", *options], cwd=ROOT,
+                            env=environment, capture_output=True, text=True)
+    ran = os.path.exists(marker)
+    shutil.rmtree(folder, ignore_errors=True)
+    return result, folder, ran
+
+
+@unittest.skipUnless(powershell(), "PowerShell is not installed")
+class DepsPlanTests(unittest.TestCase):
+    def test_the_plan_lists_every_install_step_when_nothing_is_found(self):
+        result, folder, ran = run_powershell_plan("none", "-Install", "-WithDatabase", "-Plan")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        vcpkg = os.path.join(folder, "vcpkg")
+        for step in ("install: Visual Studio 2022 Build Tools with the C++ workload (winget Microsoft.VisualStudio.2022.BuildTools, --add Microsoft.VisualStudio.Workload.VCTools)",
+                     "install: CMake (winget Kitware.CMake)", "install: Git (winget Git.Git)",
+                     f"install: vcpkg, cloned into {vcpkg}",
+                     f"install: vcpkg, bootstrapped with {os.path.join(vcpkg, 'bootstrap-vcpkg.bat')} -disableMetrics",
+                     "install: MariaDB (winget MariaDB.Server)", "create: the ambrose account",
+                     "plan only; nothing was installed"):
+            self.assertIn(step, result.stdout)
+        self.assertNotIn("skip:", result.stdout)
+        self.assertFalse(ran, "the plan ran winget")
+
+    def test_the_plan_skips_what_it_finds(self):
+        result, _, ran = run_powershell_plan("vs,cmake,git,vcpkg,mariadb", "--install", "--with-database", "--plan")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for tool in ("Visual Studio 2022 Build Tools", "CMake", "Git", "vcpkg, cloned", "vcpkg, bootstrapped", "MariaDB"):
+            self.assertIn(f"skip: {tool}", result.stdout)
+        self.assertNotIn("install:", result.stdout)
+        self.assertFalse(ran, "the plan ran winget")
+
+    def test_the_plan_never_creates_the_account_without_with_database(self):
+        result, _, _ = run_powershell_plan("none", "-Install", "-Plan")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("MariaDB", result.stdout)
+        self.assertNotIn("create:", result.stdout)
+
+    def test_install_fails_clearly_without_winget(self):
+        result, _, _ = run_powershell_plan("none", "-Install", "-Plan", with_winget=False)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("winget is missing", result.stderr + result.stdout)
+        self.assertNotIn("install:", result.stdout)
+
+    def test_deps_refuses_an_unknown_option(self):
+        result, _, _ = run_powershell_plan("none", "-Bogus")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("deps takes -Install, -WithDatabase and -Plan", result.stderr + result.stdout)
 
 
 if __name__ == "__main__":
