@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the KI session handshake and keepalives on the socket's network thread, queues DML frames that arrive before SessionAccept, closes on mismatched ids, silence or too many strikes, holds inbound work for the app to drain, answers pings within the ping budget, and sends server messages and forced disconnects. Each DML message received is written to the packet log and offered to the network hooks before the app sees it, each one sent is offered to them before it is encoded and written to the log when it is on, and a session that was offered tells the hooks once that its socket opened and once that it closed.
+ * Runs the KI session handshake and keepalives on the socket's network thread, queues DML frames that arrive before SessionAccept, closes on mismatched ids, silence or too many strikes, holds inbound work for the app to drain, answers pings within the ping budget, and sends server messages and forced disconnects, a ban's carrying the ban's end and every other one no TimeStamp. Each DML message received is written to the packet log and offered to the network hooks before the app sees it, each one sent is offered to them before it is encoded and written to the log when it is on, and a session that was offered tells the hooks once that its socket opened and once that it closed.
  */
 
 #include "SessionBase.h"
@@ -158,7 +158,7 @@ bool SessionBase::SendServerMessage(std::u16string text, bool modal)
     return SendDmlMessage(message);
 }
 
-void SessionBase::KickPlayer(uint32 type, std::string_view reason)
+void SessionBase::KickPlayer(uint32 type, std::string_view reason, uint64 unbanDate)
 {
     if (!IsOpen() || _kicked.exchange(true, std::memory_order_relaxed))
         return;
@@ -167,7 +167,8 @@ void SessionBase::KickPlayer(uint32 type, std::string_view reason)
     {
         SystemMessages::ForceDisconnect message;
         message.Type = type;
-        message.TimeStamp = SystemMessages::FormatTimeStamp(std::chrono::system_clock::now());
+        if (SystemMessages::CarriesBanEnd(type))
+            message.TimeStamp = SystemMessages::FormatBanEnd(unbanDate);
         message.Message = std::string(Ambrose::TruncateUtf8(reason, MaxKickReasonBytes));
         EncodeAndQueue(message);
     }
