@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the volumes, triggers and their events zone by zone, refusing a volume whose shape is unknown or whose size or place is not a usable number, a trigger whose cooldown is not, and an event that names a trigger the zone does not hold; swaps a whole good set in at once, dropping each instance's counts and cooldowns with it, and keeps each zone instance's trigger state until its map is forgotten.
+ * Reads the volumes, triggers and their events zone by zone, taking a volume with no shape and only a radius as a sphere, refusing a volume whose shape is unknown or whose size or place is not a usable number, a trigger whose cooldown is not, and an event that names a trigger the zone does not hold; swaps a whole good set in at once, dropping each instance's counts and cooldowns with it, and keeps each zone instance's trigger state until its map is forgotten.
  */
 
 #include "ZoneTriggerMgr.h"
@@ -43,6 +43,9 @@ bool ZoneTriggerMgr::Load(std::vector<std::string>& errors)
             ZoneVolume volume{ row[1].Get<uint32>(), row[2].Get<std::string>(), ZoneVolume::ShapeOf(row[3].Get<std::string>()), row[4].Get<float>(), row[5].Get<float>(),
                 row[6].Get<float>(), row[7].Get<float>(), row[8].Get<float>(), row[9].Get<float>(), row[10].Get<float>() };
             std::string const zone = row[0].Get<std::string>();
+            // 6054 of the install's volumes leave m_shape out; every one gives only a radius, so it is the sphere the field defaults to.
+            if (row[3].Get<std::string>().empty() && volume.Radius > 0.0f && volume.Length == 0.0f && volume.Width == 0.0f && volume.Depth == 0.0f)
+                volume.Shape = VolumeShape::Sphere;
             bool const sized = volume.Shape == VolumeShape::Box ? volume.Width > 0.0f && volume.Depth > 0.0f && volume.Length > 0.0f
                 : volume.Shape == VolumeShape::Cylinder ? volume.Radius > 0.0f && volume.Length > 0.0f : volume.Radius > 0.0f;
             if (volume.Shape == VolumeShape::Unknown)

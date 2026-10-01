@@ -190,7 +190,9 @@ class Engine:
         return line
 
     def act_forbid_log(self, step):
-        tail = self.server.log if step["side"] == "server" else self.client.log
+        if step["side"] == "game" and self.game is None:
+            raise StepFailed("the scenario forbids lines in the game server's log, but it does not require the game server")
+        tail = {"server": self.server.log, "game": self.game.log if self.game else None}.get(step["side"], self.client.log)
         said = tail.matching(self.fill_pattern(step["pattern"]), since=0)
         if said:
             raise StepFailed(f"{tail.name} holds {len(said)} line(s) the step forbids: {said[0].strip()}")
