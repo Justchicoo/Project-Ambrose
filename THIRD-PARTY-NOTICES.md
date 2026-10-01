@@ -49,6 +49,14 @@ Installed with milestone 17.73 at the versions doc/UI-STACK.md settled. Every on
 
 shadcn-svelte is not installed and never will be: it is a scaffold whose source is copied in once per component and owned from then on, under MIT.
 
+## What drives the client in the client driver, and never ships
+
+Python packages installed from `apps/clientdriver/requirements.txt` on the machine that drives a client. None of them is linked into a program or served.
+
+| Package | Version | Used for | Licence | What it asks |
+|---|---|---|---|---|
+| comtypes | 1.4.17 | Reading and pressing the launcher window through UI Automation | MIT | Keep the notice |
+
 ## What builds and tests the servers, and never ships
 
 A development dependency. It is linked into the test programs only, and no server or tool carries it.

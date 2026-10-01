@@ -1,15 +1,18 @@
 # Project Ambrose by Imjustchico
-# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, a client may be ended without its logout path, and a scenario may stop and start its game server around a connected client; for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect; a step may drive a companion client instead of the main one, each client keeping its own last frame and its own restart, so one run can show two wizards to each other, and a held key, or several held together, or a press may be watched, the other client filmed at a steady pace while the key is held or the press made and for a while after.
+# Runs a scenario's steps: every step waits on a server line, a client line, a screen or a database row within its own timeout, a press is retried until the check that proves it took passes and fails when the window never became the active one, the waiting between attempts is done with the window released rather than held, and the frame after each step is kept so a step that changed the screen always leaves a screenshot behind; a shot may first let the screen settle, for a window a key opens, a restart asks the client to quit and starts it again under the same guard, a client may be ended without its logout path, and a scenario may stop and start its game server around a connected client; for a scenario that logs a wizard in twice, a listener wait the moment something connects to a port the scenario watches, and a log wait can keep what it matched for a later step to expect; the launcher window is read and pressed through UI Automation, a read passing when every pattern matches some text the window shows and a press of Play going on to find the client the launcher starts and its window; a step may drive a companion client instead of the main one, each client keeping its own last frame and its own restart, so one run can show two wizards to each other, and a held key, or several held together, or a press may be watched, the other client filmed at a steady pace while the key is held or the press made and for a while after.
 import os
 import re
 import threading
 import time
 
 from . import screens
+from .automation import WindowAutomation
 from .errors import StepFailed
-from .scenario import fill
+from .scenario import LITERAL_IN_PATTERNS, fill
 
 MAX_DWELL = 0.5
+LAUNCHER_POLL = 0.5
+SEEN_SAMPLE = 8
 
 
 def answered(said, wanted):
@@ -55,9 +58,14 @@ class Engine:
         self.restart = None
         self.restarts = {}
         self.listeners = {}
+        self.automation = WindowAutomation()
+        self.background = True
 
     def fill(self, value):
         return fill(value, self.variables)
+
+    def fill_pattern(self, value):
+        return fill(value, self.variables, escape=LITERAL_IN_PATTERNS)
 
     def run(self):
         for step in self.scenario.steps:
@@ -167,8 +175,8 @@ class Engine:
 
     def wait_log(self, tail, step, alive):
         from_start = step.get("from") == "start"
-        found = tail.wait(self.fill(step["pattern"]), step["timeout"], since=tail.start if from_start else None,
-                          fail=self.fill(step["fail"]) if step.get("fail") else None, alive=alive, advance=not from_start)
+        found = tail.wait(self.fill_pattern(step["pattern"]), step["timeout"], since=tail.start if from_start else None,
+                          fail=self.fill_pattern(step["fail"]) if step.get("fail") else None, alive=alive, advance=not from_start)
         said = found.group(1) if found.re.groups else found.group(0)
         line = found.string.strip()
         if "expect" in step and said != self.fill(step["expect"]):
@@ -183,10 +191,10 @@ class Engine:
 
     def act_forbid_log(self, step):
         tail = self.server.log if step["side"] == "server" else self.client.log
-        said = tail.matching(self.fill(step["pattern"]), since=0)
+        said = tail.matching(self.fill_pattern(step["pattern"]), since=0)
         if said:
             raise StepFailed(f"{tail.name} holds {len(said)} line(s) the step forbids: {said[0].strip()}")
-        return f"nothing in {tail.name} matches /{self.fill(step['pattern'])}/"
+        return f"nothing in {tail.name} matches /{self.fill_pattern(step['pattern'])}/"
 
     def act_wait_screen(self, step):
         return self.wait_screen(step["screens"], step["timeout"])
@@ -279,6 +287,68 @@ class Engine:
                 raise StepFailed(f"the client ended before anything connected to {listener.label}")
             time.sleep(0.1)
         raise StepFailed(f"nothing connected to {listener.label} on {listener.address}:{listener.port} within {step['timeout']}s")
+
+    def launcher_window(self):
+        handle = getattr(self.client, "launcher_handle", None)
+        if not handle:
+            raise StepFailed("the run opened no launcher window")
+        return handle
+
+    def act_launcher_shows(self, step):
+        handle = self.launcher_window()
+        wanted = [self.fill_pattern(pattern) for pattern in step["patterns"]]
+        deadline = time.monotonic() + float(step["timeout"])
+        seen = []
+        unread = None
+        while True:
+            try:
+                seen = self.automation.texts(handle)
+                unread = None
+            except Exception as error:
+                unread = error
+            matched = {}
+            for pattern in wanted:
+                found = next((text for text in seen if re.search(pattern, text)), None)
+                if found is not None:
+                    matched[pattern] = found
+            if unread is None and len(matched) == len(wanted):
+                break
+            if time.monotonic() > deadline:
+                if unread is not None:
+                    raise StepFailed(f"the launcher window could not be read through UI Automation within {step['timeout']}s: {unread}")
+                missing = [pattern for pattern in wanted if pattern not in matched]
+                raise StepFailed(f"the launcher window did not show /{'/, /'.join(missing)}/ within {step['timeout']}s; "
+                                 f"it showed {seen[:SEEN_SAMPLE]!r}")
+            time.sleep(LAUNCHER_POLL)
+        self.notes.append({"step": step.get("name"), "launcher_shows": [matched[pattern] for pattern in wanted]})
+        try:
+            self.current = self.client.launcher_frame()
+        except Exception as error:
+            self.notes.append({"note": f"no frame of the launcher window for {step.get('name')}: {error}"})
+        return "the launcher window shows " + "; ".join(repr(matched[pattern]) for pattern in wanted)
+
+    def act_launcher_press(self, step):
+        handle = self.launcher_window()
+        control = step["control"]
+        deadline = time.monotonic() + float(step["timeout"])
+        while True:
+            try:
+                said = self.automation.press(handle, control)
+                break
+            except Exception as error:
+                if time.monotonic() > deadline:
+                    raise StepFailed(f"{control!r} in the launcher window could not be pressed within {step['timeout']}s: {error}")
+            time.sleep(LAUNCHER_POLL)
+        if control != "Play":
+            return said
+        left = max(1.0, deadline - time.monotonic())
+        pid = self.client.find_process(left)
+        self.client.pid = pid
+        window = self.client.find_window(timeout=max(1.0, deadline - time.monotonic()))
+        said += f"; the launcher started the client as process {pid}, window {window:#x} at {self.client.window[0]}x{self.client.window[1]}"
+        if self.background:
+            said += f"; {self.client.to_background()}"
+        return said
 
     def act_restart_client(self, step):
         restart = self.restarts.get(self.which) or (self.restart if self.which == "main" else None)
@@ -391,7 +461,7 @@ class Engine:
     def console_command(self, server, step):
         server.send(self.fill(step["command"]))
         if step.get("pattern"):
-            found = server.console.wait(self.fill(step["pattern"]), step.get("timeout", 30), alive=server.alive)
+            found = server.console.wait(self.fill_pattern(step["pattern"]), step.get("timeout", 30), alive=server.alive)
             return found.group(0).strip()
         return f"sent {server.WHAT} the console command {self.fill(step['command'])!r}"
 

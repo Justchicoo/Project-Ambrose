@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * launcher entry point: reads its arguments and environment as UTF-8, loads launcher.conf when there is one, lets every option override it, and then has the Launcher library find the user's own install, build the folder the client runs from and the command that starts the client against an Ambrose login server; a machine that cannot start a Windows program is named before anything is written, --dry-run prints the folder and the command and starts nothing, --prepare writes the folder and prints the command and starts nothing, on any machine, so another program can start the client from it, --wait returns the client's own exit code and ends the client if the launcher is stopped, --tail waits and prints the client's own log lines, and without either the client is started detached so closing the launcher leaves the game running; it exits 0 on success, 1 when a refusal names its cause or the client cannot be started, and 2 on bad usage.
+ * launcher entry point: reads its arguments and environment as UTF-8, loads launcher.conf when there is one, lets every option override it, and then has the Launcher library find the user's own install, build the folder the client runs from and the command that starts the client against an Ambrose login server; a machine that cannot start a Windows program is named before anything is written, --dry-run prints the folder and the command and starts nothing, --prepare writes the folder and prints the command and starts nothing, on any machine, so another program can start the client from it, --wait returns the client's own exit code and ends the client if the launcher is stopped, --tail waits and prints the client's own log lines, and without either the client is started detached so closing the launcher leaves the game running; --window-ui opens the window instead, whose every message is answered from the same Prepare and the first-run steps, with the launch state those steps decide carried on each answer so the window's one primary button follows the launcher, a start marking the client as handed off, and the only folder the page may ask to have opened being the one the launcher's own plan holds the client's log in; it exits 0 on success, 1 when a refusal names its cause or the client cannot be started, and 2 on bad usage.
  */
 
 #include "ClientLocator.h"
@@ -203,24 +203,32 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
             return reply.dump();
         };
 
+        LauncherRequest request = arguments.Request;
+        std::string error;
+        bool const sent = asked.contains("body") && asked["body"].is_object();
+        std::string const refusedAs = steps.State() == LaunchState::Locate ? "locate" : "retry";
+        if (sent && !LauncherChannel::ReadRequest(asked["body"].dump(), request, error))
+            return answered(nlohmann::json::parse(LauncherChannel::DescribeRefusal(error, refusedAs)));
+
         if (path == "/launcher/steps" || path == "/launcher/steps/again")
         {
             if (path == "/launcher/steps/again")
                 steps.Restart();
-            return answered(nlohmann::json::parse(LauncherSteps::Describe(steps.Advance(launcher, arguments.Request, mode, prompt))));
+            steps.Advance(launcher, request, mode, prompt);
+            return answered(nlohmann::json::parse(steps.Describe()));
         }
 
-        LauncherRequest request = arguments.Request;
-        std::string error;
-        if (asked.contains("body") && asked["body"].is_object())
+        if (path == "/launcher/logs/open")
         {
-            if (!LauncherChannel::ReadRequest(asked["body"].dump(), request, error))
-                return answered(nlohmann::json::parse(LauncherChannel::DescribeRefusal(error)));
+            std::optional<std::filesystem::path> const folder = steps.LogFolder();
+            if (folder)
+                LauncherWindow::OpenFolder(*folder);
+            return answered(nlohmann::json::parse(LauncherChannel::DescribeFolder(folder)));
         }
 
         std::optional<LauncherPlan> const plan = launcher.Prepare(request, mode, prompt, error);
         if (!plan)
-            return answered(nlohmann::json::parse(LauncherChannel::DescribeRefusal(error)));
+            return answered(nlohmann::json::parse(LauncherChannel::DescribeRefusal(error, refusedAs)));
 
         if (path == "/launcher/start")
         {
@@ -228,8 +236,9 @@ missing, the run folder cannot be written or the client cannot be started; 2 on 
                 return answered(nlohmann::json::parse(LauncherChannel::DescribeRefusal(error)));
             if (!launcher.Start(*plan, false, [] { return false; }, error))
                 return answered(nlohmann::json::parse(LauncherChannel::DescribeRefusal(error)));
+            steps.Started();
         }
-        return answered(nlohmann::json::parse(LauncherChannel::DescribePlan(*plan)));
+        return answered(nlohmann::json::parse(LauncherChannel::DescribePlan(*plan, LauncherSteps::Name(steps.State()))));
     }
 
     int Run(std::vector<std::string> const& args)

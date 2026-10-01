@@ -1,7 +1,8 @@
 # Project Ambrose by Imjustchico
-# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both.
+# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation.
 import json
 import os
+import re
 import socket
 import sys
 import tempfile
@@ -771,6 +772,50 @@ class FakeClient:
         return f"{x},{y} after {dwell:.2f}s with the window " + ("active" if self.active else "NOT active"), self.active
 
 
+class FakeLauncherClient(FakeClient):
+    def __init__(self, log_path, picture):
+        super().__init__(log_path, picture)
+        self.launcher_handle = 0x5678
+        self.window = (40, 20)
+        self.pid = None
+        self.calls = []
+
+    def launcher_frame(self):
+        self.calls.append("the launcher window was filmed")
+        return frame_of(GREEN, GREEN)
+
+    def find_process(self, timeout=180):
+        self.calls.append("the client process was looked for")
+        return 4242
+
+    def find_window(self, timeout=180):
+        self.calls.append("the client window was looked for")
+        return self.handle
+
+    def to_background(self):
+        self.calls.append("the client went to the back")
+        return "at the bottom"
+
+
+class FakeAutomation:
+    def __init__(self, shown=(), controls=("Settings", "Play"), after=0):
+        self.shown = list(shown)
+        self.controls = controls
+        self.after = after
+        self.read = 0
+        self.pressed = []
+
+    def texts(self, handle):
+        self.read += 1
+        return self.shown if self.read > self.after else ["Looking at your installation"]
+
+    def press(self, handle, control):
+        if control not in self.controls:
+            raise StepFailed(f"the launcher window holds no control named {control!r}")
+        self.pressed.append((handle, control))
+        return f"invoked {control!r} through UI Automation"
+
+
 class FakeServer:
     WHAT = "the login server"
 
@@ -805,8 +850,10 @@ class FakeDatabases:
 
 
 class EngineTests(TemporaryFolder):
-    def build(self, steps, picture=None, answers=("0",), variables=None, expect_failure=False, companion=False):
+    def build(self, steps, picture=None, answers=("0",), variables=None, expect_failure=False, companion=False, launch=None):
         document = {"title": "a scenario for the tests", "steps": steps}
+        if launch:
+            document["launch"] = launch
         if expect_failure:
             document["expect"] = "failure"
         if companion:
@@ -816,7 +863,7 @@ class EngineTests(TemporaryFolder):
         self.server_log = self.write(os.path.join("server", "Login.log"), [])
         self.console = self.write(os.path.join("server", "console.txt"), [])
         self.client_log = self.write(os.path.join("client", "WizardClient.log"), [])
-        self.client = FakeClient(self.client_log, picture if picture is not None else frame_of(RED, BLUE))
+        self.client = (FakeLauncherClient if launch == "window" else FakeClient)(self.client_log, picture if picture is not None else frame_of(RED, BLUE))
         self.server = FakeServer(self.server_log, self.console)
         described = references.References("references.json", REFERENCE_DOCUMENT)
         crops = {"login": screens.solid(10, 10, RED), "charselect": screens.solid(10, 10, GREEN)}
@@ -1267,6 +1314,151 @@ class EngineTests(TemporaryFolder):
         self.assertEqual(running.screenshots, [])
 
 
+class LauncherWindowTests(TemporaryFolder):
+    build = EngineTests.build
+    SHOWN = ["Ready to play", "Your own Wizard101 r806919.Wizard_1_610, started from a folder of its own against 127.0.0.2:12100.",
+             "127.0.0.2:12100", "r806919.Wizard_1_610", "Play"]
+
+    def window(self, steps, automation):
+        running = self.build(steps, launch="window", variables={"host": "127.0.0.2", "port": "12100", "revision": "r806919.Wizard_1_610"})
+        running.automation = automation
+        return running
+
+    def test_the_launcher_window_shows_every_pattern_and_the_matched_text_is_kept_for_the_report(self):
+        automation = FakeAutomation(self.SHOWN, after=1)
+        running = self.window([{"action": "launcher_shows", "name": "the window shows the run", "patterns": ["{revision}", "{host}:{port}"],
+                                "timeout": 5}], automation)
+        running.run()
+        self.assertEqual(automation.read, 2)
+        self.assertIn("r806919.Wizard_1_610", running.steps[0]["result"])
+        self.assertEqual(running.notes[0]["launcher_shows"], ["Your own Wizard101 r806919.Wizard_1_610, started from a folder of its own against 127.0.0.2:12100.",
+                                                              "Your own Wizard101 r806919.Wizard_1_610, started from a folder of its own against 127.0.0.2:12100."])
+        self.assertIn("the launcher window was filmed", self.client.calls)
+        self.assertTrue(running.steps[0]["screen"].get("shot"))
+
+    def test_the_install_is_matched_as_the_literal_path_the_driver_found(self):
+        install = "C:\\Games (x86)\\Wizard101+"
+        shown = ["Install", install]
+        running = self.window([{"action": "launcher_shows", "name": "the settings show the install", "patterns": ["^{install}$"], "timeout": 1}],
+                              FakeAutomation(shown))
+        running.variables["install"] = install
+        running.run()
+        self.assertEqual(running.notes[0]["launcher_shows"], [install])
+        elsewhere = self.window([{"action": "launcher_shows", "name": "the settings show another install", "patterns": ["^{install}$"],
+                                  "timeout": 0.2}], FakeAutomation(["C:\\Games x86\\Wizard101"]))
+        elsewhere.variables["install"] = install
+        with self.assertRaises(StepFailed):
+            elsewhere.run()
+
+    def test_a_pattern_the_launcher_window_never_shows_is_named_with_what_it_did_show(self):
+        running = self.window([{"action": "launcher_shows", "name": "the window shows another server", "patterns": ["{revision}", "10\\.0\\.0\\.1"],
+                                "timeout": 0.2}], FakeAutomation(self.SHOWN))
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("10\\.0\\.0\\.1", str(raised.exception))
+        self.assertNotIn("/r806919", str(raised.exception))
+        self.assertIn("Ready to play", str(raised.exception))
+
+    def test_play_is_pressed_by_its_name_and_the_client_it_starts_is_found_with_its_window(self):
+        automation = FakeAutomation()
+        running = self.window([{"action": "launcher_press", "name": "press Play", "control": "Play", "timeout": 5}], automation)
+        running.run()
+        self.assertEqual(automation.pressed, [(0x5678, "Play")])
+        self.assertEqual(self.client.calls, ["the client process was looked for", "the client window was looked for", "the client went to the back"])
+        self.assertEqual(self.client.pid, 4242)
+        self.assertIn("process 4242", running.steps[0]["result"])
+
+    def test_another_control_is_pressed_without_waiting_for_a_client(self):
+        automation = FakeAutomation()
+        running = self.window([{"action": "launcher_press", "name": "open the settings", "control": "Settings", "timeout": 5}], automation)
+        running.run()
+        self.assertEqual(automation.pressed, [(0x5678, "Settings")])
+        self.assertEqual(self.client.calls, [])
+
+    def test_a_control_the_launcher_window_does_not_hold_fails_naming_it(self):
+        running = self.window([{"action": "launcher_press", "name": "press Quit", "control": "Quit", "timeout": 0.2}], FakeAutomation())
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("'Quit'", str(raised.exception))
+        self.assertEqual(self.client.calls, [])
+
+    def test_a_run_that_opened_no_launcher_window_cannot_read_one(self):
+        running = self.window([{"action": "launcher_shows", "name": "the window", "patterns": ["Play"], "timeout": 1}], FakeAutomation(self.SHOWN))
+        self.client.launcher_handle = None
+        with self.assertRaises(StepFailed) as raised:
+            running.run()
+        self.assertIn("no launcher window", str(raised.exception))
+
+
+class LaunchTests(TemporaryFolder):
+    SHOWS = {"action": "launcher_shows", "name": "the window", "patterns": ["Play"], "timeout": 5}
+
+    def load(self, document, name="scenario.json"):
+        return scenario.load(self.write_json(name, dict({"title": "t", "steps": []}, **document)))
+
+    def test_the_launcher_is_started_as_a_console_unless_the_scenario_asks_for_its_window(self):
+        self.assertEqual(self.load({}).launch, "console")
+        self.assertEqual(self.load({"launch": "window", "steps": [self.SHOWS]}).launch, "window")
+        with self.assertRaises(Refused) as raised:
+            self.load({"launch": "tray"})
+        self.assertIn("console or a window", str(raised.exception))
+
+    def test_the_window_is_refused_with_the_patching_default_and_with_a_companion(self):
+        with self.assertRaises(Refused) as raised:
+            self.load({"launch": "window", "patching": "default"})
+        self.assertIn("patching default", str(raised.exception))
+        with self.assertRaises(Refused) as raised:
+            self.load({"launch": "window", "requires": {"gameserver": True}, "companion": {"wizard": WorldEntryTests.WIZARD}})
+        self.assertIn("one launcher window", str(raised.exception))
+
+    def test_a_step_on_the_launcher_window_needs_a_scenario_that_opens_it(self):
+        for step in (self.SHOWS, {"action": "launcher_press", "name": "press Play", "control": "Play", "timeout": 5}):
+            with self.assertRaises(Refused) as raised:
+                self.load({"steps": [step]})
+            self.assertIn("launch window", str(raised.exception))
+        with self.assertRaises(Refused):
+            self.load({"launch": "window", "steps": [{"action": "restart_client", "name": "again"}]})
+
+    def test_a_launcher_step_is_bounded_and_carries_what_it_needs(self):
+        for step in (dict(self.SHOWS, timeout=0), dict(self.SHOWS, timeout=601), dict(self.SHOWS, patterns=[]), dict(self.SHOWS, patterns=["("]),
+                     {"action": "launcher_press", "name": "press", "control": " ", "timeout": 5}):
+            with self.assertRaises(Refused):
+                self.load({"launch": "window", "steps": [step]})
+
+    def test_the_install_is_escaped_in_a_pattern_and_every_other_variable_is_filled_as_it_is(self):
+        variables = {"install": "C:\\Wizard101 (x86)", "host": "127.0.0.2"}
+        filled = scenario.fill("{install}|{host}", variables, escape=scenario.LITERAL_IN_PATTERNS)
+        self.assertEqual(filled, re.escape("C:\\Wizard101 (x86)") + "|127.0.0.2")
+        self.assertTrue(re.fullmatch(filled.split("|")[0], "C:\\Wizard101 (x86)"))
+        self.assertEqual(scenario.fill("{install}", variables), "C:\\Wizard101 (x86)")
+        with self.assertRaises(Refused):
+            self.load({"steps": [{"action": "wait_server_log", "name": "a", "pattern": "(\\d+)", "timeout": 1, "keep": "install"}]})
+
+    def test_an_included_window_launch_carries_over_to_the_scenario_that_includes_it(self):
+        self.write_json("base.json", {"title": "base", "launch": "window", "steps": [self.SHOWS]})
+        loaded = self.load({"include": "base.json", "steps": [{"action": "launcher_press", "name": "press Play", "control": "Play", "timeout": 5}]},
+                           name="more.json")
+        self.assertEqual(loaded.launch, "window")
+
+    def test_the_shipped_launcher_scenario_opens_the_window_and_presses_play(self):
+        loaded = scenario.load("launcher-window-play.json", search=(paths.SCENARIOS,))
+        self.assertEqual(loaded.launch, "window")
+        self.assertEqual([step["action"] for step in loaded.steps][:2], ["launcher_shows", "launcher_press"])
+        self.assertIn("Online", loaded.steps[0]["patterns"])
+        self.assertEqual([step["control"] for step in loaded.steps if step["action"] == "launcher_press"], ["Settings", "Back", "Play"])
+
+    def test_the_launcher_is_given_its_window_instead_of_waiting_on_the_client(self):
+        def arguments(**keywords):
+            return client.Client("launcher.exe", os.path.join(self.folder, "client"), "127.0.0.2", 12100, (1280, 720), **keywords).arguments()
+
+        windowed = arguments(launch="window")
+        self.assertIn("--window-ui", windowed)
+        self.assertNotIn("--wait", windowed)
+        self.assertEqual(windowed[windowed.index("--window") + 1], "1280x720")
+        self.assertIn("--wait", arguments())
+        self.assertNotIn("--window-ui", arguments())
+
+
 class QuitSafelyTests(TemporaryFolder):
     def build(self, rule=True):
         document = dict(REFERENCE_DOCUMENT)
@@ -1452,8 +1644,11 @@ class RunOrderTests(TemporaryFolder):
             def record(self):
                 return {"remotes": [], "violations": [], "failed": None}
 
+        made = self.made = []
+
         class FakeEngine:
             def __init__(self, *arguments, **keywords):
+                made.append(arguments)
                 self.steps = []
                 self.screenshots = []
                 self.notes = []
@@ -1479,10 +1674,11 @@ class RunOrderTests(TemporaryFolder):
                 "Engine": FakeEngine, "Scratch": FakeScratch, "kill_leftovers": lambda started, known=(): [],
                 "prepare_process": lambda: None, "say": lambda message: None}
 
-    def execute(self, companion=False, **behavior):
+    def execute(self, companion=False, launch=None, **behavior):
         install_root = os.path.join(self.folder, "install")
         self.write(os.path.join("install", "Bin", "revision.dat"), ["r806919"])
-        loaded = scenario.Scenario("test.json", dict({"title": "x", "steps": []}, **({"companion": {"wizard": WorldEntryTests.WIZARD}} if companion else {})))
+        loaded = scenario.Scenario("test.json", dict({"title": "x", "steps": []}, **({"companion": {"wizard": WorldEntryTests.WIZARD}} if companion else {}),
+                                                     **({"launch": launch} if launch else {})))
         described = references.References("references.json", REFERENCE_DOCUMENT)
         options = {"runs": os.path.join(self.folder, "runs"), "host": "127.0.0.2", "port": 12100,
                    "db_host": "127.0.0.1", "db_port": 3307, "db_user": "ambrose", "db_password": "ambrose",
@@ -1513,6 +1709,22 @@ class RunOrderTests(TemporaryFolder):
             "the capture stopped", "the guard stopped", "the databases were dropped"])
         self.assertEqual(code, 0)
         self.assertTrue(running.companion.log.path.endswith(os.path.join("companion", "WizardClient.log")))
+
+    def test_a_launcher_window_run_leaves_the_client_window_to_the_play_its_scenario_presses(self):
+        running, code = self.execute(launch="window")
+        self.assertEqual(self.events, [
+            "the databases were dropped", "the capture started", "the login server started", "the account clientdriver was made",
+            "the client started", "the guard started", "the scenario ran", "the client was closed", "the login server stopped",
+            "the capture stopped", "the guard stopped", "the databases were dropped"])
+        self.assertEqual(code, 0)
+        with open(os.path.join(running.folder, "report.json"), "r", encoding="utf-8") as handle:
+            self.assertEqual(json.load(handle)["launch"], "window")
+
+    def test_the_run_gives_its_scenario_the_install_and_the_window_size_it_found(self):
+        self.execute(launch="window")
+        variables = self.made[0][5]
+        self.assertEqual(variables["install"], os.path.join(self.folder, "install"))
+        self.assertEqual(variables["window"], "40x20")
 
     def test_a_login_server_that_never_reports_itself_ready_is_still_stopped(self):
         running, code = self.execute(server_fails=True)

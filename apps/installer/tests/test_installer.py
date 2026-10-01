@@ -1,5 +1,6 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the installer: that conf copies each installed template once, that running it again leaves an edited .conf alone, that a relative install prefix resolves against the checkout rather than the working directory, and that both the shell and the PowerShell script agree, each skipping where its interpreter is absent.
+# Self-tests for the installer: that conf copies each installed template once, that running it again leaves an edited .conf alone, that a relative install prefix resolves against the checkout rather than the working directory, that compile installs the configuration the release presets build, RelWithDebInfo, rather than the build type's name, and that both the shell and the PowerShell script agree, each skipping where its interpreter is absent.
+import json
 import os
 import shutil
 import subprocess
@@ -41,6 +42,21 @@ def run_powershell(command, prefix, cwd=None):
     environment = dict(os.environ, AMBROSE_INSTALL_PREFIX=prefix)
     return subprocess.run([powershell(), "-NoProfile", "-File", POWERSHELL, command], cwd=cwd or ROOT,
                           env=environment, capture_output=True, text=True)
+
+
+class InstallConfigTests(unittest.TestCase):
+    def test_compile_installs_the_configuration_each_release_preset_builds(self):
+        with open(os.path.join(ROOT, "CMakePresets.json"), encoding="utf-8") as handle:
+            presets = {preset["name"]: preset.get("configuration") for preset in json.load(handle)["buildPresets"]}
+        built = {presets[name] for name in ("windows-release", "linux-gcc-release", "linux-clang-release")}
+        self.assertEqual(built, {"RelWithDebInfo"}, "the release presets no longer agree on one configuration")
+        for script in ("ambrose.sh", "ambrose.ps1"):
+            with open(os.path.join(ROOT, "apps", "installer", script), encoding="utf-8") as handle:
+                text = handle.read()
+            install = [line for line in text.splitlines() if "--install" in line or "InstallConfig =" in line]
+            self.assertTrue(any("RelWithDebInfo" in line for line in install), f"{script} does not install what the release preset builds")
+            self.assertFalse(any("'--config', $BuildType" in line or '--config "$BUILD_TYPE"' in line for line in install),
+                             f"{script} still installs the build type rather than the preset's configuration")
 
 
 class ConfTests(unittest.TestCase):

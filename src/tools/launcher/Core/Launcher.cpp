@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements the launcher's own work: a value its own configuration leaves blank counts as unset, every value is checked before the machine is searched and none may begin with '-', which the client would read as one of its own options, then the install comes from ClientSetup as it does for every tool and its folder is made absolute for the machine described, the client program and the run folder are settled, a run folder inside the install is refused by both its plain and its canonical path, the run folder's files are built, and the argument list is assembled with -L, -P 0, -A, -D and -G and the automatic login and character options; a refusal names its cause and nothing is written or started, a machine that cannot start a Windows program is named before anything is written, the command is shown quoted exactly as the client receives it, and starting either waits on ChildProcess, whose job object ends the client with the launcher, or starts the client detached.
+ * Implements the launcher's own work: a value its own configuration leaves blank counts as unset, every value is checked before the machine is searched and none may begin with '-', which the client would read as one of its own options, then the install comes from ClientSetup as it does for every tool and its folder is made absolute for the machine described, the client program and the run folder are settled, the window size the run folder is written with is kept in the plan, a run folder inside the install is refused by both its plain and its canonical path, the run folder's files are built, and the argument list is assembled with -L, -P 0, -A, -D and -G and the automatic login and character options; a refusal names its cause and nothing is written or started, and a folder that holds no install is named as it was typed, its backslashes left single so a person reads their own path, with only control characters escaped, a machine that cannot start a Windows program is named before anything is written, the command is shown quoted exactly as the client receives it, and starting either waits on ChildProcess, whose job object ends the client with the launcher, or starts the client detached.
  */
 
 #include "Launcher.h"
@@ -19,6 +19,24 @@
 
 namespace
 {
+    std::string AsTyped(std::string_view text, std::size_t maxBytes)
+    {
+        std::string_view const kept = Ambrose::TruncateUtf8(text, maxBytes);
+        std::string shown;
+        shown.reserve(kept.size() + 16);
+        for (char const c : kept)
+        {
+            uint8 const byte = static_cast<uint8>(c);
+            if (byte < 0x20 || byte == 0x7F)
+                shown += fmt::format("\\x{:02X}", byte);
+            else
+                shown += c;
+        }
+        if (kept.size() < text.size())
+            shown += fmt::format("...({} bytes)", text.size());
+        return shown;
+    }
+
     std::string_view Given(std::optional<std::string> const& value, std::string_view fallback)
     {
         return value ? Ambrose::Trim(*value) : fallback;
@@ -215,6 +233,8 @@ std::optional<LauncherPlan> Launcher::Prepare(LauncherRequest const& request, Se
     RunFolderOptions folder;
     if (!ReadWindow(Given(request.Window, DefaultWindow), folder.Width, folder.Height, error))
         return std::nullopt;
+    plan.Width = folder.Width;
+    plan.Height = folder.Height;
     std::string_view const fullscreen = Given(request.Fullscreen, "0");
     std::optional<int> const windowMode = Ambrose::StringTo<int>(fullscreen);
     if (!windowMode || *windowMode < 0 || *windowMode > ClientRunFolder::MaxFullscreen)
@@ -242,7 +262,7 @@ std::optional<LauncherPlan> Launcher::Prepare(LauncherRequest const& request, Se
     if (!setup.Install)
     {
         if (client)
-            error = fmt::format("{} holds no Wizard101 install; name the folder that holds Bin and Data", Ambrose::ForLog(*client, MaxValueBytes));
+            error = fmt::format("{} holds no Wizard101 install; name the folder that holds Bin and Data", AsTyped(*client, MaxValueBytes));
         else if (!setup.Installs.empty())
             error = "no Wizard101 install was chosen; name one with --client";
         else
