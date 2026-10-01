@@ -1,0 +1,499 @@
+{
+  "title": "A game master teleports within the Commons, the others see it, and a point it adds works at once",
+  "include": "parts/common.json",
+  "notes": [
+    "6.06: two wizards enter the Commons as two-wizards.json has them and the main account is a game master. It walks away, types .tele Start",
+    "and snaps to the Start fountain with no loading screen while the companion sees it pop there; .gps prints its place beside the minimap;",
+    "after another walk .tele add keeps the spot, which .tele takes it back to at once, with no reload, before .tele del removes it."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Zone.MobileIdReleaseDelay=60000"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "companion": {
+    "wizard": {
+      "school": 2343174,
+      "zone": "WizardCity/WC_Hub",
+      "zone_display": "The Commons",
+      "locale": "en-US",
+      "first": 2,
+      "middle": 3,
+      "last": 4,
+      "appearance": {
+        "gender": 1,
+        "race": 79806088,
+        "hair_model": 6,
+        "hair_color": 60,
+        "hat_color": 2,
+        "hat_decal": 4,
+        "torso_color": 2,
+        "torso_decal": 4,
+        "feet_color": 2,
+        "feet_decal": 12
+      }
+    }
+  },
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ],
+  "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "hold_key",
+      "name": "the main wizard backs away from the start",
+      "vk": "0x53",
+      "seconds": 1.5
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard alone",
+      "file": "main-alone",
+      "settle": 1
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up (companion)",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen (companion)",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "log in (companion)",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password (companion)",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted (companion)",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30,
+      "client": "companion"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads (companion)",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen (companion)",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90,
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "press play (companion)",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{companion_wizard_guid}",
+        "record": true
+      },
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key (companion)",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{companion_wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons (companion)",
+      "pattern": "put wizard {companion_wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true,
+      "keep": "companion_mobile"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the two wizards are shown to each other",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} and the (\\d+) wizard\\(s\\) already in instance \\d+ were shown to each other",
+      "timeout": 10,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it (companion)",
+      "pattern": "loaded (\\S+), and wizard {companion_wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "hold_key",
+      "name": "the game master walks away from the start",
+      "vk": "0x57",
+      "seconds": 2,
+      "moves": true
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the game master before the teleport",
+      "file": "companion-before-tele",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .tele Start",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .tele Start",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .tele Start",
+      "text": ".tele Start"
+    },
+    {
+      "action": "char",
+      "name": "send .tele Start",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master snaps to the Start fountain, shown to the companion",
+      "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within WizardCity/WC_Hub to \\((\\S+, \\S+, \\S+)\\) facing \\S+, shown to (\\d+) other wizard\\(s\\)",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the game master at the fountain with no loading screen",
+      "file": "main-at-start",
+      "settle": 0.5
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the game master pop to the fountain",
+      "file": "companion-sees-tele",
+      "client": "companion",
+      "settle": 0.5
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .gps",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .gps",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .gps",
+      "text": ".gps"
+    },
+    {
+      "action": "char",
+      "name": "send .gps",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master's .gps runs",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran gps, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the game master reads its coordinates beside the minimap",
+      "file": "main-gps",
+      "settle": 1
+    },
+    {
+      "action": "hold_key",
+      "name": "the game master walks to a new spot",
+      "vk": "0x57",
+      "seconds": 2.5,
+      "moves": true
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .tele add",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .tele add",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .tele add",
+      "text": ".tele add Driver Spot"
+    },
+    {
+      "action": "char",
+      "name": "send .tele add",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master's point is added",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran tele add Driver Spot, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .tele Start again",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .tele Start again",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .tele Start again",
+      "text": ".tele Start"
+    },
+    {
+      "action": "char",
+      "name": "send .tele Start again",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master is back at the fountain",
+      "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within WizardCity/WC_Hub to \\((\\S+, \\S+, \\S+)\\) facing \\S+, shown to (\\d+) other wizard\\(s\\)",
+      "timeout": 20
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .tele Driver Spot",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .tele Driver Spot",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .tele Driver Spot",
+      "text": ".tele \"Driver Spot\""
+    },
+    {
+      "action": "char",
+      "name": "send .tele Driver Spot",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the new point works at once",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran tele Driver Spot, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the game master at its new point",
+      "file": "main-at-new-point",
+      "settle": 0.5
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the game master at the new point",
+      "file": "companion-sees-new-point",
+      "client": "companion",
+      "settle": 0.5
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .tele del",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .tele del",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .tele del",
+      "text": ".tele del \"Driver Spot\""
+    },
+    {
+      "action": "char",
+      "name": "send .tele del",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the point is removed",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran tele del Driver Spot, which worked",
+      "timeout": 20
+    }
+  ]
+}
