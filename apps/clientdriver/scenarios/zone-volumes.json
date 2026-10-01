@@ -1,0 +1,322 @@
+{
+  "title": "A wizard walks into Ravenwood's POI in the Commons, which fires its trigger, after arriving inside a volume fired nothing",
+  "include": "parts/common.json",
+  "notes": [
+    "6.13: the wizard enters the Commons standing inside its home volume, which fires no enter, even as it walks about inside it. As a game master",
+    "it is put just outside Ravenwood's POI sphere four times, facing each quarter turn, and walks forward each time; whichever way leads in,",
+    "the server logs the volume's Enter_Ravenwood POI event and the trigger it fires, Trigger POI Ravenwood."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ],
+  "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard arrives inside the Commons' home volume without firing its enter",
+      "pattern": "wizard {wizard_guid} arrived in WizardCity/WC_Hub inside (\\d+) of its \\d+ volume\\(s\\), firing no enter",
+      "timeout": 10,
+      "from": "start",
+      "reject": "0",
+      "record": true
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard walks about inside the home volume",
+      "vk": "0x53",
+      "seconds": 1,
+      "moves": true
+    },
+    {
+      "action": "forbid_log",
+      "name": "walking inside the volume it arrived in fires no enter",
+      "side": "game",
+      "pattern": "entered volume 36 \\("
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .go xyz facing no turn",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .go xyz facing no turn",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .go xyz facing no turn",
+      "text": ".go xyz -45 722 -30 0"
+    },
+    {
+      "action": "char",
+      "name": "send .go xyz facing no turn",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard stands just outside Ravenwood's POI facing no turn",
+      "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within WizardCity/WC_Hub to \\((\\S+, \\S+, \\S+)\\) facing",
+      "timeout": 20
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard walks forward facing no turn",
+      "vk": "0x57",
+      "seconds": 1.5,
+      "moves": true
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .go xyz facing a quarter turn",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .go xyz facing a quarter turn",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .go xyz facing a quarter turn",
+      "text": ".go xyz -45 722 -30 1.5708"
+    },
+    {
+      "action": "char",
+      "name": "send .go xyz facing a quarter turn",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard stands just outside Ravenwood's POI facing a quarter turn",
+      "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within WizardCity/WC_Hub to \\((\\S+, \\S+, \\S+)\\) facing",
+      "timeout": 20
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard walks forward facing a quarter turn",
+      "vk": "0x57",
+      "seconds": 1.5,
+      "moves": true
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .go xyz facing a half turn",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .go xyz facing a half turn",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .go xyz facing a half turn",
+      "text": ".go xyz -45 722 -30 3.1416"
+    },
+    {
+      "action": "char",
+      "name": "send .go xyz facing a half turn",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard stands just outside Ravenwood's POI facing a half turn",
+      "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within WizardCity/WC_Hub to \\((\\S+, \\S+, \\S+)\\) facing",
+      "timeout": 20
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard walks forward facing a half turn",
+      "vk": "0x57",
+      "seconds": 1.5,
+      "moves": true
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .go xyz facing three quarter turns",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .go xyz facing three quarter turns",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .go xyz facing three quarter turns",
+      "text": ".go xyz -45 722 -30 4.7124"
+    },
+    {
+      "action": "char",
+      "name": "send .go xyz facing three quarter turns",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard stands just outside Ravenwood's POI facing three quarter turns",
+      "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within WizardCity/WC_Hub to \\((\\S+, \\S+, \\S+)\\) facing",
+      "timeout": 20
+    },
+    {
+      "action": "hold_key",
+      "name": "the wizard walks forward facing three quarter turns",
+      "vk": "0x57",
+      "seconds": 1.5,
+      "moves": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "walking into Ravenwood's POI posts its enter event, which fires its trigger",
+      "pattern": "wizard {wizard_guid} entered volume 0 \\(Ravenwood POI\\) in WizardCity/WC_Hub, posting Enter_Ravenwood POI, which fired (.+)$",
+      "timeout": 10,
+      "from": "start",
+      "expect": "Trigger POI Ravenwood",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the wizard inside Ravenwood's POI",
+      "file": "inside-ravenwood-poi",
+      "settle": 1
+    }
+  ]
+}

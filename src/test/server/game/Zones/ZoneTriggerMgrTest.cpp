@@ -40,7 +40,7 @@ namespace
             _open = true;
             Insert(fmt::format("INSERT INTO `zone_template` (`zone_path`, `display_name_key`, `soft_limit`) VALUES ('{}', 'WizardCity_WC_Hub', 50)", Hub));
             Insert(fmt::format("INSERT INTO `zone_volume` (`zone_path`, `volume_index`, `name`, `shape`, `position_x`, `position_y`, `position_z`, `radius`) "
-                "VALUES ('{}', 0, 'Ravenwood POI', 'SPHERE', 100, 200, 0, 50)", Hub));
+                "VALUES ('{}', 0, 'Ravenwood POI', 'SPHERE', 100, 200, 0, 50), ('{}', 2, 'TeleportVol_Unshaped', '', 0, 0, 0, 30)", Hub, Hub));
             Insert(fmt::format("INSERT INTO `zone_trigger` (`zone_path`, `trigger_index`, `name`, `cooldown`) VALUES ('{}', 0, 'Trigger POI Ravenwood', 0)", Hub));
             Insert(fmt::format("INSERT INTO `zone_trigger_event` (`zone_path`, `owner`, `owner_index`, `kind`, `position`, `event_name`) VALUES ('{}', 'volume', 0, 'enter', 0, 'Enter_Ravenwood POI'), "
                 "('{}', 'trigger', 0, 'fire', 0, 'Enter_Ravenwood POI')", Hub, Hub));
@@ -80,8 +80,9 @@ TEST_F(ZoneTriggerMgrDatabaseTest, AnEditedTriggerTakesHoldAtTheReloadAndABadRow
     ASSERT_TRUE(sZoneTriggerMgr.Load(errors)) << (errors.empty() ? std::string() : errors.front());
     std::shared_ptr<ZoneTriggerData const> const data = sZoneTriggerMgr.Find(Hub);
     ASSERT_TRUE(data);
-    ASSERT_EQ(data->Volumes.size(), 1u);
+    ASSERT_EQ(data->Volumes.size(), 2u);
     EXPECT_EQ(data->Volumes.front().Shape, VolumeShape::Sphere);
+    EXPECT_EQ(data->Volumes.back().Shape, VolumeShape::Sphere) << "a volume that leaves its shape out and gives only a radius is a sphere";
     ASSERT_EQ(data->EnterEvents.at(0).size(), 1u);
     EXPECT_EQ(data->EnterEvents.at(0).front(), "Enter_Ravenwood POI");
 
