@@ -104,6 +104,11 @@ class HashFamilyTests(CheckerTestCase):
         self.assertIssue("apps/ci/sample.py", HASH_HEADER + "x = 1  # note\n", "comment", 3)
         self.assertClean("apps/ci/sample.py", HASH_HEADER + 'x = "# not a comment"\ny = """\n# still a string\n"""\n')
 
+    def test_sanitizer_suppressions_take_the_hash_header_and_nothing_else(self):
+        self.assertClean("src/test/sanitizers/tsan.supp", HASH_HEADER + "race:libglib-2.0.so\n")
+        self.assertIssue("src/test/sanitizers/tsan.supp", "race:libglib-2.0.so\n", "header", 1)
+        self.assertIssue("src/test/sanitizers/tsan.supp", HASH_HEADER + "race:libglib-2.0.so\n# why\n", "comment", 4)
+
     def test_shell_with_shebang_header_passes(self):
         self.assertClean("apps/ci/sample.sh", "#!/usr/bin/env bash\n" + HASH_HEADER + 'echo "$#" ${#ARR[@]} "a#b"\n')
 

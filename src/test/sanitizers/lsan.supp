@@ -1,0 +1,14 @@
+# Project Ambrose by Imjustchico
+# LeakSanitizer reports that belong to the desktop stack under WebKitGTK: fontconfig, pango, glib, GTK and WebKitGTK cache fonts, types and rendering state for the life of the process and never free them, which is theirs to report, not a leak of ours.
+leak:libfontconfig.so
+leak:libpangoft2-1.0.so
+leak:libpango-1.0.so
+leak:libpangocairo-1.0.so
+leak:libcairo.so
+leak:libglib-2.0.so
+leak:libgobject-2.0.so
+leak:libgio-2.0.so
+leak:libgtk-3.so
+leak:libgdk-3.so
+leak:libwebkit2gtk-4.1.so
+leak:libjavascriptcoregtk-4.1.so

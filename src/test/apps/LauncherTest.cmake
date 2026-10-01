@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs the built launcher without ever starting a client: it checks the usage text, that bad usage exits 2 and a named settings file that is missing exits 1, that a folder holding no install, patching asked for through the environment and a port of 0 each exit 1 naming the cause, that on a machine holding a synthetic install AMBROSE_SETUP_MODE=off prints the find and the flag to pass while auto uses it and names the missing client program, that an install whose archive holds no defaultconfig.xml is named, that --dry-run then prints the run folder and the whole command and writes nothing, that --window-ui on a machine with no web view, WebView2 pointed at an empty folder on Windows and no display elsewhere, says so once and runs as the console program, that --prepare writes the run folder and prints the command and starts nothing, and refuses --wait, that a run folder inside the install and a value beginning with '-' are refused, and, when AMBROSE_CLIENT_DIR names the user's own install, that --dry-run against it prints -L, -P 0, -A, -D and -G with none of the launcher's own environment variables set; it reports itself skipped when that last check cannot run.
+# Runs the built launcher without ever starting a client: it checks the usage text, that bad usage exits 2 and a named settings file that is missing exits 1, that a folder holding no install, patching asked for through the environment and a port of 0 each exit 1 naming the cause, that on a machine holding a synthetic install AMBROSE_SETUP_MODE=off prints the find and the flag to pass while auto uses it and names the missing client program, that an install whose archive holds no defaultconfig.xml is named, that --dry-run then prints the run folder and the whole command and writes nothing, that --window-ui on a machine with no web view, WebView2 pointed at an empty folder on Windows and elsewhere no display, with GTK held to X11 so a Wayland socket such as WSLg's is not found on its own, says so once and runs as the console program, that --prepare writes the run folder and prints the command and starts nothing, and refuses --wait, that a run folder inside the install and a value beginning with '-' are refused, and, when AMBROSE_CLIENT_DIR names the user's own install, that --dry-run against it prints -L, -P 0, -A, -D and -G with none of the launcher's own environment variables set; it reports itself skipped when that last check cannot run.
 if(NOT APP OR NOT WORKDIR)
     message(FATAL_ERROR "APP and WORKDIR must be set")
 endif()
@@ -85,7 +85,7 @@ if(WIN32)
     file(MAKE_DIRECTORY "${WORKDIR}/no-webview")
     set(noWebView "WEBVIEW2_BROWSER_EXECUTABLE_FOLDER=${WORKDIR}/no-webview")
 else()
-    set(noWebView --unset=DISPLAY --unset=WAYLAND_DISPLAY)
+    set(noWebView --unset=DISPLAY --unset=WAYLAND_DISPLAY --unset=XDG_RUNTIME_DIR GDK_BACKEND=x11)
 endif()
 execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${machineEnv} ${noWebView} "${APP}" --config "${settings}" --window-ui --dry-run --run-dir "${run}"
     RESULT_VARIABLE bareResult OUTPUT_VARIABLE bareOutput ERROR_VARIABLE bareError TIMEOUT 60)

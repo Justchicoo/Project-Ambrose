@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The shell window on a desktop that is not Windows: a GTK window holding a WebKitGTK view whose web context keeps its data and cache in the window's profile, built only where the build found webkit2gtk. The program's own page is served from memory through a scheme of its own, registered as both secure and CORS-enabled so the page gets a real origin, a secure context and working storage. Only a view showing the program's own page has a message handler, and a message is answered only while that page is on the program's own origin. A navigation away from the bound origin and every new window go to the system browser, a window a script opens without a click included, since WebKit would otherwise drop it before the shell could route it, a download is saved only where the save dialog says, and a certificate the view cannot verify is allowed for its host only when its fingerprint equals the pin, after which the page is loaded again. Where the window was left is written while the window is closing, and a probe runs its scripts after the first load finishes and then closes the window.
+ * The shell window on a desktop that is not Windows: a GTK window holding a WebKitGTK view whose web context keeps its data and cache in the window's profile, built only where the build found webkit2gtk. The program's own page is served from memory through a scheme of its own, registered as both secure and CORS-enabled so the page gets a real origin, a secure context and working storage. Only a view showing the program's own page has a message handler, and a message is answered only while that page is on the program's own origin. A navigation away from the bound origin and every new window go to the system browser, a window a script opens without a click included, since WebKit would otherwise drop it before the shell could route it, a download is saved only where the save dialog says, and a certificate the view cannot verify is allowed for its host only when its fingerprint equals the pin, after which the page is loaded again. Where the window was left is written while the window is closing, a page that has not finished loading within the start timeout closes the window and is reported, and a probe runs its scripts after the first load finishes and then closes the window.
  */
 
 #include "ShellWindow.h"
@@ -13,6 +13,7 @@
 #include "ShellRules.h"
 #include "TlsCertificate.h"
 
+#include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
 #include <gtk/gtk.h>
@@ -44,6 +45,9 @@ namespace
         std::size_t ProbeNext = 0;
         std::vector<std::string> ProbeResults;
         guint Deadline = 0;
+        guint StartGuard = 0;
+        bool Loaded = false;
+        std::string Failure;
 
         void Log(std::string const& line) const
         {
@@ -314,9 +318,27 @@ namespace
         return G_SOURCE_REMOVE;
     }
 
+    gboolean StartOutOfTime(gpointer data)
+    {
+        auto* const running = static_cast<Running*>(data);
+        running->StartGuard = 0;
+        if (running->Loaded)
+            return G_SOURCE_REMOVE;
+        running->Failure = fmt::format("the web view did not show its page within {} seconds", running->Options->StartTimeout.count() / 1000);
+        gtk_widget_destroy(running->Window);
+        return G_SOURCE_REMOVE;
+    }
+
     void LoadChanged(WebKitWebView*, WebKitLoadEvent event, gpointer data)
     {
         auto* const running = static_cast<Running*>(data);
+        if (event == WEBKIT_LOAD_FINISHED && !running->Loaded)
+        {
+            running->Loaded = true;
+            if (running->StartGuard != 0)
+                g_source_remove(running->StartGuard);
+            running->StartGuard = 0;
+        }
         if (event != WEBKIT_LOAD_FINISHED || !running->Options->Probe || running->ProbeStarted)
             return;
         running->ProbeStarted = true;
@@ -428,6 +450,8 @@ bool ShellWindow::Show(ShellWindowOptions const& options, std::string& error)
 
     if (options.Probe)
         running.Deadline = g_timeout_add(static_cast<guint>(options.Probe->Timeout.count()), ProbeOutOfTime, &running);
+    if (options.StartTimeout.count() > 0)
+        running.StartGuard = g_timeout_add(static_cast<guint>(options.StartTimeout.count()), StartOutOfTime, &running);
     webkit_web_view_load_uri(view, StartUrl(options).c_str());
 
     gtk_widget_show_all(window);
@@ -435,8 +459,15 @@ bool ShellWindow::Show(ShellWindowOptions const& options, std::string& error)
 
     if (options.Probe && !running.ProbeDone && options.Probe->Done)
         options.Probe->Done(running.ProbeResults);
+    if (running.StartGuard != 0)
+        g_source_remove(running.StartGuard);
     g_object_unref(content);
     g_object_unref(running.Context);
+    if (!running.Failure.empty())
+    {
+        error = running.Failure;
+        return false;
+    }
     return true;
 }
 
