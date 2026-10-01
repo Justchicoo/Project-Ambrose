@@ -13,7 +13,7 @@ This follows CLAUDE.md, doc/MILESTONE-TRACK.md and doc/REVIEWING.md. Those files
 - `docsection doc/ROADMAP.md "Where we are|Decisions needed"` says what has landed and what is blocked.
 - `docsection doc/MILESTONE-TRACK.md "Holds|In flight|Reserved"` says who holds what. Take nothing another session or contributor holds. doc/work/holds.json is the machine-readable form.
 - Read the milestone's own section in its phase file: `docsection doc/roadmap/phase-NN-*.md "^N\.MM |Review notes"`. Check that every milestone on its **Depends on** line is done.
-- Leave no earlier milestone unfinished. `grep -n "^- \[ \]" doc/roadmap/phase-0*.md` lists unticked checks. An unticked check in an earlier milestone comes first, unless it is gated (Dev-gated, Client-gated or Real client) and says why it waits.
+- Leave no earlier milestone unfinished. `grep -n "^- \[ \]" doc/roadmap/phase-0*.md` lists unticked checks. An unticked check in an earlier milestone comes first, unless it is gated (Dev-gated, Client-gated or Real client) and says why it waits, or doc/MILESTONE-TRACK.md reserves it for another session. Since 2026-10-01 the maintainer lets separate areas build past 8.01 in parallel while the session holding the earlier milestones finishes them, so take the next ready milestone in your own area rather than one another session holds.
 
 ## 2. Use the tools, and teach them
 

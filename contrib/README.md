@@ -9,6 +9,10 @@ Work from outside the maintainer's own milestones lands here. doc/CONTRIBUTOR-TR
 - `notes/` what you found out about the game or the server, and how you found it
 - `proposals/` a change you would like made to the phases, as a document for the maintainer
 - `locale/` translations of Ambrose's own text
+- `fixtures/` sample data in the shapes the panel and the servers exchange, hand-written or generated and never captured
+- `schemas/` JSON Schemas for those shapes, and corpora with expected answers a loader or parser is tested against
+
+A track change may also add client driver scenarios in `apps/clientdriver/scenarios/`, world rows as a pending update in `data/sql/updates/pending_db_world/`, fuzz seeds in `data/fuzz/` and guides in `doc/guides/`. `python apps/ci/ci_contrib_paths.py` checks a change against that list.
 
 Contributing with an AI assistant is expected here: `AI-START-HERE.md` is a prompt to paste into yours, and it carries what that assistant needs to know about this repository before it writes anything.
 
