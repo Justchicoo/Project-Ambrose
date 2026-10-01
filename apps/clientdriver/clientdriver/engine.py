@@ -289,6 +289,12 @@ class Engine:
     def act_kill_client(self, step):
         return self.client.close(force=True)
 
+    def act_play(self, step):
+        began = time.monotonic()
+        while self.client.alive():
+            time.sleep(2)
+        return f"played for {round((time.monotonic() - began) / 60)} minute(s) until the client was closed"
+
     def hold(self, keys, seconds):
         if len(keys) == 1:
             self.client.key(keys[0], hold=seconds)

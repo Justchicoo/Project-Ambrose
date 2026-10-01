@@ -925,6 +925,21 @@ class EngineTests(TemporaryFolder):
         self.assertEqual(self.companion.closes, [True])
         self.assertTrue(self.client.living)
 
+    def test_play_holds_the_run_until_the_client_is_closed_and_then_lets_it_end(self):
+        running = self.build([{"action": "play", "name": "the maintainer plays"}])
+        polls = []
+
+        def closed_on_the_third_poll(seconds):
+            polls.append(seconds)
+            if len(polls) == 3:
+                self.client.living = False
+
+        with mock.patch.object(engine.time, "sleep", closed_on_the_third_poll):
+            running.run()
+        self.assertEqual(len(polls), 3)
+        self.assertEqual([step["ok"] for step in running.steps], [True])
+        self.assertIn("until the client was closed", running.steps[0]["result"])
+
     def test_a_step_that_names_the_companion_drives_it_and_the_next_one_drives_the_main_client_again(self):
         running = self.build([
             {"action": "submit_login", "name": "the companion logs in", "password": "other", "client": "companion"},
