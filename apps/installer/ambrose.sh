@@ -52,7 +52,7 @@ compile() {
         build_preset="${PRESET}-$([[ "$BUILD_TYPE" == "Debug" ]] && printf debug || printf release)"
     fi
     cmake --build --preset "$build_preset"
-    cmake --install "$BUILD_DIR" --config "$BUILD_TYPE" --prefix "$PREFIX"
+    cmake --install "$BUILD_DIR" --config "$([[ "$BUILD_TYPE" == "Debug" ]] && printf Debug || printf RelWithDebInfo)" --prefix "$PREFIX"
 }
 
 conf() {

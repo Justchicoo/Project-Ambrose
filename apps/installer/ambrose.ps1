@@ -41,7 +41,8 @@ function Invoke-Compile {
     Invoke-Checked cmake @('--preset', $Preset, "-DCMAKE_INSTALL_PREFIX=$Prefix")
     $BuildPreset = if ($BuildType -eq 'Debug') { 'windows-debug' } else { 'windows-release' }
     Invoke-Checked cmake @('--build', '--preset', $BuildPreset)
-    Invoke-Checked cmake @('--install', $BuildDir, '--config', $BuildType, '--prefix', $Prefix)
+    $InstallConfig = if ($BuildType -eq 'Debug') { 'Debug' } else { 'RelWithDebInfo' }
+    Invoke-Checked cmake @('--install', $BuildDir, '--config', $InstallConfig, '--prefix', $Prefix)
 }
 
 function Invoke-Conf {
