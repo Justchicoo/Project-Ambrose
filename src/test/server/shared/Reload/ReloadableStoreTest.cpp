@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <atomic>
 #include <string>
 #include <thread>
@@ -89,11 +90,11 @@ TEST(ReloadableStoreTest, ReadersRunningAgainstAWriterNeverSeeAGenerationWhosePa
     ReloadableStore<Contents> store(Contents::Of(0));
     std::atomic<bool> stop{ false };
     std::atomic<uint64> torn{ 0 };
-    std::atomic<uint64> reads{ 0 };
+    std::array<std::atomic<uint64>, 4> reads{};
 
     std::vector<std::thread> readers;
-    for (int reader = 0; reader < 4; ++reader)
-        readers.emplace_back([&store, &stop, &torn, &reads]
+    for (std::size_t reader = 0; reader < reads.size(); ++reader)
+        readers.emplace_back([&store, &stop, &torn, &reads, reader]
         {
             while (!stop.load(std::memory_order_relaxed))
             {
@@ -103,19 +104,34 @@ TEST(ReloadableStoreTest, ReadersRunningAgainstAWriterNeverSeeAGenerationWhosePa
                 uint32 const seen = snapshot ? snapshot->Number : 0;
                 if (snapshot && (snapshot->Number != seen || !snapshot->Agrees()))
                     torn.fetch_add(1, std::memory_order_relaxed);
-                reads.fetch_add(1, std::memory_order_relaxed);
+                reads[reader].fetch_add(1, std::memory_order_relaxed);
             }
         });
+    auto const everyReaderReadsAgain = [&reads]
+    {
+        std::array<uint64, 4> seen{};
+        for (std::size_t reader = 0; reader < seen.size(); ++reader)
+            seen[reader] = reads[reader].load(std::memory_order_relaxed);
+        for (std::size_t reader = 0; reader < seen.size(); ++reader)
+            while (reads[reader].load(std::memory_order_relaxed) == seen[reader])
+                std::this_thread::yield();
+    };
 
     for (uint32 generation = 1; generation <= 2000; ++generation)
+    {
+        if (generation % 100 == 1)
+            everyReaderReadsAgain();
         store.Replace(Contents::Of(generation));
+    }
+    everyReaderReadsAgain();
 
     stop.store(true, std::memory_order_relaxed);
     for (std::thread& reader : readers)
         reader.join();
 
     EXPECT_EQ(torn.load(), 0u) << "a reader saw a generation whose parts did not agree with each other";
-    EXPECT_GT(reads.load(), 0u) << "the readers must actually have read something";
+    for (std::size_t reader = 0; reader < reads.size(); ++reader)
+        EXPECT_GT(reads[reader].load(), 0u) << "reader " << reader << " must actually have read something";
     EXPECT_EQ(store.GetGeneration(), 2000u);
     EXPECT_EQ(store.Get()->Number, 2000u);
 }
