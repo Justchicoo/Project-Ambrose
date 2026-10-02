@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the message round-trip suite over every id in the user's own client install (r806919) and prints a real message dump.
+ * Runs the message round-trip suite over every id in the user's own client install, as many as recorded for its revision, and prints a real message dump.
  */
 
 #include "Environment.h"
+#include "InstalledRevision.h"
 #include "LogConfig.h"
 #include "MessageRoundTrip.h"
 
@@ -18,7 +19,7 @@ TEST(MessageRoundTripClientTest, EveryClientMessageRoundTrips)
     ASSERT_TRUE(registry.LoadFromClient(LogConfig::Utf8Path(*directory)));
     MessageCatalogPtr const catalog = registry.GetCatalog();
     ASSERT_NE(catalog, nullptr);
-    ASSERT_EQ(catalog->GetMessages().size(), 1446u);
+    InstalledRevision::Expect(catalog->GetMessages().size(), { { "r806919", 1446u } }, "messages");
 
     std::size_t checked = 0;
     std::size_t withStrings = 0;
@@ -31,7 +32,7 @@ TEST(MessageRoundTripClientTest, EveryClientMessageRoundTrips)
         ++checked;
         withStrings += DynamicMessage(catalog, info).GetEncodedSize() != info.MinSize ? 1 : 0;
     }
-    EXPECT_EQ(checked, 1446u);
+    EXPECT_EQ(checked, catalog->GetMessages().size());
     EXPECT_EQ(withStrings, 0u);
 
     MessageInfo const* const crowns = catalog->Find(12, "MSG_CROWNBALANCE");

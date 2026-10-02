@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks the desktop shell's decisions without a window: the origin read out of a URL with default ports filled in, the program's own origin on this platform, the navigation rule that keeps a view on its bound origin and sends any other web address or any new window to the system browser while refusing other schemes, the host channel gate that admits only the program's own origin and logs each other origin once, and the pin decision that accepts an unverifiable certificate only when its fingerprint equals the pin and names both fingerprints when it does not.
+ * Checks the desktop shell's decisions without a window: the origin read out of a URL with default ports filled in, the program's own origin on this platform, the navigation rule that keeps a view on its bound origin and sends any other web address or any new window to the system browser while refusing other schemes, the host channel gate that admits only the program's own origin and logs each other origin once, the browser switches that turn off the web view's own calls home, and the pin decision that accepts an unverifiable certificate only when its fingerprint equals the pin and names both fingerprints when it does not.
  */
 
 #include "ShellRules.h"
@@ -138,4 +138,18 @@ TEST(ShellRulesTest, AWindowIsBoundToItsOwnPageOrToOneRemotePanel)
     EXPECT_NE(error.find("https"), std::string::npos) << error;
     options.Remote = "ftp://panel.example.org/";
     EXPECT_FALSE(ShellWindow::BoundOrigin(options, error).has_value());
+}
+
+TEST(ShellRulesTest, TheWebViewIsStartedWithItsOwnCallsHomeTurnedOff)
+{
+    std::string const arguments = ShellRules::BrowserArguments();
+    for (char const* wanted : { "--disable-background-networking", "--disable-component-update", "--disable-domain-reliability",
+             "--disable-client-side-phishing-detection", "--disable-sync", "--no-pings", "--no-proxy-server" })
+        EXPECT_NE(arguments.find(wanted), std::string::npos) << wanted;
+
+    std::string::size_type const features = arguments.find("--disable-features=");
+    ASSERT_NE(features, std::string::npos);
+    EXPECT_EQ(arguments.find("--disable-features=", features + 1), std::string::npos) << "Chromium reads only the last one";
+    EXPECT_NE(arguments.find("msSmartScreenProtection", features), std::string::npos);
+    EXPECT_EQ(arguments.find("://"), std::string::npos);
 }

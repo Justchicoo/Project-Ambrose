@@ -1,0 +1,169 @@
+{
+ "title": "Play: a level 25 Fire wizard in the Commons, left to whoever plays it until the client is closed",
+ "include": "parts/common.json",
+ "notes": [
+  "Brings up the login and game servers on scratch databases, logs in and enters the world, then hands the client over.",
+  "The run ends, and tears everything down, when the client window is closed."
+ ],
+ "requires": {
+  "gameserver": true
+ },
+ "game_settings": [
+  "Logger.server=2,Console Server Errors Stream",
+  "Realm.Name=Ambrose Driver",
+  "Logger.network.session=2,Console Server Errors Stream"
+ ],
+ "server_log_allowed": [
+  "character_create_school holds no school, so no wizard can be created until it does",
+  "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+ ],
+ "wizard": {
+  "school": 2343174,
+  "zone": "WizardCity/WC_Hub",
+  "zone_display": "The Commons",
+  "locale": "en-US",
+  "first": 1,
+  "middle": 1,
+  "last": 1,
+  "appearance": {
+   "gender": 1,
+   "race": 79806088,
+   "hair_model": 6,
+   "hair_color": 60,
+   "hat_color": 7,
+   "hat_decal": 4,
+   "torso_color": 4,
+   "torso_decal": 4,
+   "feet_color": 4,
+   "feet_decal": 12
+  },
+  "level": 25,
+  "experience": 73000
+ },
+ "steps": [
+  {
+   "action": "wait_client_log",
+   "name": "the client brings its renderer up",
+   "pattern": "About to initialize graphical client\\.",
+   "timeout": 180
+  },
+  {
+   "action": "wait_screen",
+   "name": "the login window is on the screen",
+   "screens": [
+    "login"
+   ],
+   "timeout": 120
+  },
+  {
+   "action": "submit_login",
+   "name": "log in",
+   "password": "{password}"
+  },
+  {
+   "action": "wait_server_log",
+   "name": "the server decodes the authentication message field by field",
+   "pattern": "sent MSG_USER_AUTHEN_V3: version (W\\.\\d+\\.\\d+\\.\\d+), revision \\S+, data revision \\S+, locale \\S+, machine [0-9A-F]+,",
+   "timeout": 30,
+   "record": true
+  },
+  {
+   "action": "wait_server_log",
+   "name": "the server accepts the password",
+   "pattern": "authenticated as {user} \\(id \\d+\\)",
+   "timeout": 30
+  },
+  {
+   "action": "wait_client_log",
+   "name": "the client is admitted",
+   "pattern": "The LoginServer has admitted the user",
+   "timeout": 30
+  },
+  {
+   "action": "wait_server_log",
+   "name": "the server lists the wizard the run made",
+   "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+   "timeout": 30,
+   "expect": "1",
+   "record": true
+  },
+  {
+   "action": "wait_client_log",
+   "name": "the character selection scene loads",
+   "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+   "timeout": 120
+  },
+  {
+   "action": "wait_screen",
+   "name": "the character selection screen is on the screen",
+   "screens": [
+    "charselect"
+   ],
+   "timeout": 90
+  },
+  {
+   "action": "shot",
+   "name": "the wizard on the character selection screen",
+   "file": "character-selection"
+  },
+  {
+   "action": "click",
+   "name": "press play",
+   "target": "charselect_play",
+   "attempts": 5,
+   "on_screen": "charselect",
+   "until": {
+    "action": "wait_server_log",
+    "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+    "timeout": 20,
+    "expect": "{wizard_guid}",
+    "record": true
+   }
+  },
+  {
+   "action": "wait_game_log",
+   "name": "the game server spends the key",
+   "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+   "timeout": 60,
+   "expect": "{wizard_guid}"
+  },
+  {
+   "action": "wait_game_log",
+   "name": "the game server sends the wizard its object",
+   "pattern": "put wizard \\d+ in (\\S+) instance \\d+ at .* and sent its \\d+-byte object",
+   "timeout": 60,
+   "fail": "cannot enter the world",
+   "expect": "WizardCity/WC_Hub",
+   "record": true
+  },
+  {
+   "action": "wait_game_log",
+   "name": "the object the client is sent begins 68 02 01000000 and decodes whole",
+   "pattern": "MSG_LOGINCOMPLETE Data holds (\\d+ bytes inside its envelope, beginning 68 02 01 00 00 00, and decodes whole with 0 issue)",
+   "timeout": 30,
+   "from": "start",
+   "record": true
+  },
+  {
+   "action": "shot",
+   "name": "the client loading the zone",
+   "file": "loading-the-zone"
+  },
+  {
+   "action": "wait_game_log",
+   "name": "the client loads the zone and the wizard stands in it",
+   "pattern": "loaded (\\S+), and wizard \\d+ stands in the world",
+   "timeout": 300,
+   "expect": "WizardCity/WC_Hub",
+   "record": true
+  },
+  {
+   "action": "shot",
+   "name": "the wizard standing in The Commons"
+  },
+  {
+   "action": "play",
+   "name": "the maintainer plays until the client is closed"
+  }
+ ]
+}

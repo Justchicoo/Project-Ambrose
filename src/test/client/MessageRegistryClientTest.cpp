@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the message registry against the user's own client install (r806919): lookups, declarations of real messages, and their encodings.
+ * Tests the message registry against the user's own client install: its message count recorded for the installed revision, lookups, declarations of real messages, and their encodings, the version string the installed revision's own.
  */
 
 #include "Environment.h"
 #include "Hex.h"
+#include "InstalledRevision.h"
 #include "LogConfig.h"
 #include "MessageRegistry.h"
 
@@ -106,26 +107,29 @@ namespace
 
 TEST_F(MessageRegistryClientTest, LoadsEveryMessageAndFindsSpotChecks)
 {
-    EXPECT_EQ(_registry->GetMessageCount(), 1446u);
-    EXPECT_EQ(_registry->GetWarnings().size(), 3u);
+    InstalledRevision::Expect(_registry->GetMessageCount(), { { "r806919", 1446u } }, "messages");
+    InstalledRevision::Expect(_registry->GetWarnings().size(), { { "r806919", 3u } }, "warnings");
     EXPECT_TRUE(_registry->GetErrors().empty());
 
-    MessageInfoPtr const attach = _registry->Find(5, 7);
-    ASSERT_NE(attach, nullptr);
-    EXPECT_EQ(attach->Definition->Tag, "MSG_ATTACH");
-    EXPECT_EQ(attach->Definition->AccessLevel, std::optional<uint8>(1));
-    ASSERT_NE(_registry->Find(7, 27), nullptr);
-    EXPECT_EQ(_registry->Find(7, 27)->Definition->Tag, "MSG_USER_AUTHEN_V3");
-    ASSERT_NE(_registry->Find(12, 92), nullptr);
-    EXPECT_EQ(_registry->Find(12, 92)->Definition->Tag, "MSG_MINIGAMEREWARDS");
-    EXPECT_EQ(_registry->Find(5, 254), nullptr);
+    if (InstalledRevision::Is("r806919"))
+    {
+        MessageInfoPtr const attach = _registry->Find(5, 7);
+        ASSERT_NE(attach, nullptr);
+        EXPECT_EQ(attach->Definition->Tag, "MSG_ATTACH");
+        EXPECT_EQ(attach->Definition->AccessLevel, std::optional<uint8>(1));
+        ASSERT_NE(_registry->Find(7, 27), nullptr);
+        EXPECT_EQ(_registry->Find(7, 27)->Definition->Tag, "MSG_USER_AUTHEN_V3");
+        ASSERT_NE(_registry->Find(12, 92), nullptr);
+        EXPECT_EQ(_registry->Find(12, 92)->Definition->Tag, "MSG_MINIGAMEREWARDS");
+        EXPECT_EQ(_registry->Find(5, 254), nullptr);
+    }
     EXPECT_EQ(_registry->Find(1, "MSG_PING"), _registry->Find(1, 1));
 
     std::size_t found = 0;
     for (uint32 service = 0; service < 256; ++service)
         for (uint32 order = 0; order < 256; ++order)
             found += _registry->Find(static_cast<uint8>(service), static_cast<uint8>(order)) != nullptr ? 1 : 0;
-    EXPECT_EQ(found, 1446u);
+    EXPECT_EQ(found, _registry->GetMessageCount());
 }
 
 TEST_F(MessageRegistryClientTest, RealMessagesDeclareEncodeAndDecode)
@@ -156,13 +160,13 @@ TEST_F(MessageRegistryClientTest, RealMessagesDeclareEncodeAndDecode)
 
     UserAuthenV3Message authen;
     authen.Rec1 = std::string("\x01\x02\x00\x03", 4);
-    authen.Version = "V_r806919.Wizard_1_610";
+    authen.Version = "V_" + InstalledRevision::Get();
     authen.MachineId = 42;
     authen.IsSteamPatcher = 1;
     authen.ConsoleType = 3;
     ByteBuffer authenBuffer;
     _registry->Encode(authen, authenBuffer);
-    EXPECT_EQ(authenBuffer.GetSize(), (2u + 4) + (2 + 22) + 2 + 2 + 2 + 8 + 2 + 2 + 4 + 1 + 2 + 2 + 2);
+    EXPECT_EQ(authenBuffer.GetSize(), (2u + 4) + (2 + authen.Version.size()) + 2 + 2 + 2 + 8 + 2 + 2 + 4 + 1 + 2 + 2 + 2);
     UserAuthenV3Message decodedAuthen;
     EXPECT_EQ(_registry->Decode(authenBuffer.GetData(), decodedAuthen), MessageDecodeStatus::Ok);
     EXPECT_EQ(decodedAuthen, authen);

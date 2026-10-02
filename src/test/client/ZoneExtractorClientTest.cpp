@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Extracts every zone of the user's own r806919 install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: every zone archive reads without an error and no two zones share a path; the only object list entries left out anywhere are sigils, whose classes the dump does not describe; the Commons comes out as WizardCity/WC_Hub under its own display key with every placed object its data lists but its six sigils, 123 of them the server's to send, and with its start and exit places; Ravenwood holds its objects, 40 of them the server's to send, its places and the templates of its statues and teachers; and with AMBROSE_TEST_DB set the rows fill a new world database that the zone manager loads, the server sending the objects its data marks as the server's own to send, and the Commons' volumes.xml and triggers.xml read through the authored classes that database holds: the Ravenwood POI sphere with its enter and exit events, the trigger that fires on entering it, and TeleportToShoppingDistrict, whose one result is a ResTeleport with no destination, as the client's class has no properties.
+ * Extracts every zone of the user's own install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it, with the counts recorded for the installed revision, r806919's below: every zone archive reads without an error and no two zones share a path; the only object list entries left out anywhere are sigils, whose classes the dump does not describe; the Commons comes out as WizardCity/WC_Hub under its own display key with every placed object its data lists but its six sigils, 123 of them the server's to send, and with its start and exit places; Ravenwood holds its objects, 40 of them the server's to send, its places and the templates of its statues and teachers; and with AMBROSE_TEST_DB set the rows fill a new world database that the zone manager loads, the server sending the objects its data marks as the server's own to send, and the Commons' volumes.xml and triggers.xml read through the authored classes that database holds: the Ravenwood POI sphere with its enter and exit events, the trigger that fires on entering it, and TeleportToShoppingDistrict, whose one result is a ResTeleport with no destination, as the client's class has no properties.
  */
 
 #include "DBUpdater.h"
@@ -9,6 +9,7 @@
 #include "ServerClassScript.h"
 #include "TypeRegistry.h"
 #include "Environment.h"
+#include "InstalledRevision.h"
 #include "LogConfig.h"
 #include "StringHash.h"
 #include "ZoneExtractor.h"
@@ -133,27 +134,30 @@ TEST_F(ZoneExtractorClientTest, TheCommonsHoldsItsObjectsAndPlaces)
 {
     ExtractedZone const& hub = Zone(Commons);
     EXPECT_EQ(hub.DisplayNameKey, "WizardZone_TheCommons");
-    EXPECT_EQ(hub.Objects.size(), 177u);
-    EXPECT_EQ(SkippedWhole(Commons), 6u);
-    EXPECT_EQ(hub.Locations.size(), 31u);
+    InstalledRevision::Expect(hub.Objects.size(), { { "r806919", 177u } }, "Commons objects");
+    InstalledRevision::Expect(SkippedWhole(Commons), { { "r806919", 6u } }, "Commons sigils");
+    InstalledRevision::Expect(hub.Locations.size(), { { "r806919", 31u } }, "Commons places");
     EXPECT_TRUE(HasPlace(hub, "Start"));
     EXPECT_TRUE(HasPlace(hub, "Target location (WC_Hub Street1 Exit)"));
     EXPECT_TRUE(HasPlace(hub, "Target location(WC_Hub Ravenwood)"));
-    EXPECT_EQ(SentByTheServer(hub), 123u);
+    InstalledRevision::Expect(SentByTheServer(hub), { { "r806919", 123u } }, "Commons objects the server sends");
 }
 
 TEST_F(ZoneExtractorClientTest, RavenwoodHoldsItsObjectsPlacesAndTeachers)
 {
     ExtractedZone const& ravenwood = Zone(Ravenwood);
-    EXPECT_EQ(ravenwood.Objects.size(), 93u);
-    EXPECT_EQ(SkippedWhole(Ravenwood), 4u);
-    EXPECT_EQ(ravenwood.Locations.size(), 24u);
+    InstalledRevision::Expect(ravenwood.Objects.size(), { { "r806919", 93u } }, "Ravenwood objects");
+    InstalledRevision::Expect(SkippedWhole(Ravenwood), { { "r806919", 4u } }, "Ravenwood sigils");
+    InstalledRevision::Expect(ravenwood.Locations.size(), { { "r806919", 24u } }, "Ravenwood places");
     std::set<uint64> templates;
     for (ExtractedObject const& object : ravenwood.Objects)
         templates.insert(object.TemplateId);
-    for (uint64 const wanted : { 38232u, 38230u, 81102u, 1451035u, 39088u })
-        EXPECT_TRUE(templates.contains(wanted)) << wanted;
-    EXPECT_EQ(SentByTheServer(ravenwood), 40u);
+    if (InstalledRevision::Is("r806919"))
+    {
+        for (uint64 const wanted : { 38232u, 38230u, 81102u, 1451035u, 39088u })
+            EXPECT_TRUE(templates.contains(wanted)) << wanted;
+    }
+    InstalledRevision::Expect(SentByTheServer(ravenwood), { { "r806919", 40u } }, "Ravenwood objects the server sends");
 }
 
 TEST_F(ZoneExtractorClientTest, TheRowsFillAWorldDatabaseTheZoneManagerLoads)
@@ -193,8 +197,8 @@ TEST_F(ZoneExtractorClientTest, TheRowsFillAWorldDatabaseTheZoneManagerLoads)
     EXPECT_EQ(loaded.Objects, s_extraction->GetObjectCount());
     std::vector<ZoneObjectSpawn> const* const hub = sZoneMgr.GetObjects()->In(Commons);
     ASSERT_NE(hub, nullptr);
-    ASSERT_EQ(hub->size(), 177u);
     ExtractedZone const& extracted = Zone(Commons);
+    ASSERT_EQ(hub->size(), extracted.Objects.size());
     std::size_t sent = 0;
     for (std::size_t index = 0; index < hub->size(); ++index)
     {

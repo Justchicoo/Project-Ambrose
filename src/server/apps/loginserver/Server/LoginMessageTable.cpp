@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Lists every message of the login server's services once: MSG_USER_AUTHEN_V3 and the older authentication messages handled before authentication, MSG_REQUESTCHARACTERLIST, MSG_REQUESTSERVERLIST, MSG_SELECTCHARACTER, MSG_CREATECHARACTER and MSG_LOGINLOGCHARACTERCREATION handled once authenticated, MSG_LOGIN_NOT_AFK handled from connection through character selection, the other LOGIN client requests with the status each will need, the server's replies refused and the ones it sends declared, and the SYSTEM and EXTENDEDBASE rules every app shares.
+ * Lists every message of the login server's services once: MSG_USER_AUTHEN_V3, MSG_USER_VALIDATE and the older authentication messages handled before authentication, MSG_REQUESTCHARACTERLIST, MSG_REQUESTSERVERLIST, MSG_SELECTCHARACTER, MSG_CREATECHARACTER and MSG_LOGINLOGCHARACTERCREATION handled once authenticated, MSG_LOGIN_NOT_AFK handled from connection through character selection, the other LOGIN client requests with the status each will need, the server's replies refused and the ones it sends declared, and the SYSTEM and EXTENDEDBASE rules every app shares.
  */
 
 #include "LoginMessageTable.h"
@@ -18,6 +18,7 @@ namespace
         LoginRules() : MessageHandlerTable<LoginSession>("loginserver", { SystemService, ExtendedBaseService, LoginService })
         {
             Accept<&LoginSession::HandleUserAuthenV3>(SessionStatuses::Connected, MessageProcessing::InPlace, "LoginSession::HandleUserAuthenV3");
+            Accept<&LoginSession::HandleUserValidate>(SessionStatuses::Connected, MessageProcessing::InPlace, "LoginSession::HandleUserValidate");
             Accept<&LoginSession::HandleUserAuthen>(SessionStatuses::Connected, MessageProcessing::InPlace, "LoginSession::HandleUserAuthen");
             Accept<&LoginSession::HandleUserAuthenV2>(SessionStatuses::Connected, MessageProcessing::InPlace, "LoginSession::HandleUserAuthenV2");
             Accept<&LoginSession::HandleWebAuthen>(SessionStatuses::Connected, MessageProcessing::InPlace, "LoginSession::HandleWebAuthen");
@@ -30,7 +31,6 @@ namespace
             Accept<&LoginSession::HandleLoginLogCharacterCreation>(SessionStatuses::Authenticated, MessageProcessing::InPlace, "LoginSession::HandleLoginLogCharacterCreation");
             Accept<&LoginSession::HandleLoginNotAfk>(SessionStatuses::Connected | SessionStatuses::Authenticated | SessionStatuses::CharacterSelected, MessageProcessing::InPlace, "LoginSession::HandleLoginNotAfk");
 
-            Pending(LoginService, "MSG_USER_VALIDATE", SessionStatuses::Connected);
             Pending(LoginService, "MSG_CHANGECHARACTERNAME", SessionStatuses::Authenticated);
             Pending(LoginService, "MSG_SAVECHARACTER", SessionStatuses::Authenticated);
             Pending(LoginService, "MSG_FULFILLPROMOCODE", SessionStatuses::Authenticated);
@@ -50,6 +50,7 @@ namespace
             Refuse(LoginService, "MSG_WEBCHARACTERINFO");
 
             Sends<UserAuthenRsp>();
+            Sends<UserValidateRsp>();
             Sends<DeleteCharacterResponse>();
             Sends<UserAdmitInd>();
             Sends<DisconnectLoginAfk>();

@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Extracts every template of the user's own r806919 install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: all 137423 manifest entries become rows, the 104869 in ObjectData among them, with none left unread; the Ravenwood student 38232 carries its object name, display key, portrait and both its NPC and questing behaviors, the questing one named from its bytes though no class describes it; 39088 is the Golem Tower registrar; the hat 1652259 is a WizItemTemplate under its display key; and building the script twice writes the same rows.
+ * Extracts every template of the user's own install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: every manifest entry becomes a row, every ObjectData entry is read, each as many as recorded for the installed revision, r806919's 137423 and 104869, with none left unread; the Ravenwood student 38232 carries its object name, display key, portrait and both its NPC and questing behaviors, the questing one named from its bytes though no class describes it; 39088 is the Golem Tower registrar; the hat 1652259 is a WizItemTemplate under its display key; and building the script twice writes the same rows.
  */
 
 #include "Environment.h"
+#include "InstalledRevision.h"
 #include "LogConfig.h"
 #include "TemplateExtractor.h"
 #include "TemplateScript.h"
@@ -55,11 +56,11 @@ namespace
 
 TEST_F(TemplateExtractorClientTest, EveryManifestEntryAndEveryObjectDataEntryIsRead)
 {
-    EXPECT_EQ(s_extraction->ManifestEntries, 137423u);
-    EXPECT_EQ(s_extraction->Templates.size(), 137423u);
+    InstalledRevision::Expect(s_extraction->ManifestEntries, { { "r806919", 137423u } }, "manifest entries");
+    EXPECT_EQ(s_extraction->Templates.size(), s_extraction->ManifestEntries);
     EXPECT_EQ(s_extraction->UnreadCount, 0u) << (s_extraction->Unread.empty() ? std::string() : s_extraction->Unread.front());
-    EXPECT_EQ(s_extraction->ObjectDataEntries, 104869u);
-    EXPECT_EQ(s_extraction->ObjectDataRead, 104869u);
+    InstalledRevision::Expect(s_extraction->ObjectDataEntries, { { "r806919", 104869u } }, "ObjectData entries");
+    EXPECT_EQ(s_extraction->ObjectDataRead, s_extraction->ObjectDataEntries);
     EXPECT_GT(s_extraction->GetNpcTemplateCount(), 10000u);
 }
 

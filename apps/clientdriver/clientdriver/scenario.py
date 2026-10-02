@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, a seeded wizard's stat it does not carry or a negative one, more wizards without a first one, a patching mode other than off or default, a companion without a wizard of its own, a step that drives or watches a client the run does not start, a statement meant for any database but the run's own, a watch that films too often or too long, a held key list that is empty or holds more than four keys, a listener without a name, an address, a port or the number of connections it should see, or a wait on a listener the scenario does not name, before anything is started.
+# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, the install the driver found taken literally inside a pattern, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, a seeded wizard's stat it does not carry or a negative one, more wizards without a first one, a patching mode other than off or default, a launch other than the launcher's console or its window, a launcher window opened beside the patching default or a companion, a step that reads or presses the launcher window in a scenario that does not open it or a restart in one that does, a companion without a wizard of its own, a step that drives or watches a client the run does not start, a statement meant for any database but the run's own, a watch that films too often or too long, a held key list that is empty or holds more than four keys, a listener without a name, an address, a port or the number of connections it should see, or a wait on a listener the scenario does not name, before anything is started.
 import json
 import os
 import re
@@ -28,18 +28,24 @@ ACTIONS = {
     "start_game_server": ((), ("timeout",)),
     "wait_game_log": (("pattern", "timeout"), ("from", "fail", "expect", "reject", "record", "keep")),
     "kill_client": ((), ()),
+    "play": ((), ()),
     "restart_client": ((), ("timeout",)),
     "wait_listener": (("listener", "timeout"), ()),
+    "launcher_shows": (("patterns", "timeout"), ()),
+    "launcher_press": (("control", "timeout"), ()),
 }
 COMMON_KEYS = ("action", "name", "client")
 CLIENTS = ("main", "companion")
 CLIENT_ACTIONS = ("wait_client_log", "forbid_log", "wait_screen", "submit_login", "type", "char", "key", "hold_key", "click", "shot",
-                  "kill_client", "restart_client", "wait_listener")
+                  "kill_client", "restart_client", "wait_listener", "play")
 ALLOW_LISTS = ("pending_allowed", "dropped_allowed", "server_log_allowed", "client_log_allowed")
 TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "game_settings", "wizard", "more_wizards", "companion", "variables", "expect", "steps",
-             "patching", "listeners", "patch_config") + ALLOW_LISTS
+             "patching", "launch", "listeners", "patch_config") + ALLOW_LISTS
 COMPANION = ("wizard",)
 PATCHING = ("off", "default")
+LAUNCH = ("console", "window")
+LAUNCHER_ACTIONS = ("launcher_shows", "launcher_press")
+MAX_LAUNCHER_WAIT = 600
 LISTENER_KEYS = ("name", "address", "port", "expect")
 LISTENER_OPTIONAL = ("at_least",)
 PATCH_CONFIG_KEYS = ("host", "port")
@@ -53,11 +59,13 @@ MAX_SETTLE_SECONDS = 30
 WATCH_EVERY = (0.1, 5)
 MAX_WATCH_AFTER = 10
 MAX_HELD_KEYS = 4
-RUN_VARIABLES = ("user", "password", "wizard", "wizard_guid", "companion_user", "companion_password", "companion_wizard", "companion_wizard_guid")
+RUN_VARIABLES = ("user", "password", "wizard", "wizard_guid", "companion_user", "companion_password", "companion_wizard", "companion_wizard_guid",
+                 "install", "window")
+LITERAL_IN_PATTERNS = ("install",)
 KEPT_NAME = re.compile(r"^\w+$")
 
 
-def fill(value, variables):
+def fill(value, variables, escape=()):
     if not isinstance(value, str):
         return value
 
@@ -65,7 +73,7 @@ def fill(value, variables):
         name = found.group(1)
         if name not in variables:
             raise Refused(f"the scenario uses the variable {{{name}}}, which the run does not set")
-        return str(variables[name])
+        return re.escape(str(variables[name])) if name in escape else str(variables[name])
 
     return VARIABLE.sub(replace, value)
 
@@ -103,6 +111,7 @@ class Scenario:
         self.needs_gameserver = bool(requires.get("gameserver", False))
         self.expect_failure = document.get("expect") == "failure"
         self.patching = document.get("patching", "off")
+        self.launch = document.get("launch", "console")
         self.listeners = [dict(listener) for listener in document.get("listeners") or []]
         self.patch_config = dict(document["patch_config"]) if document.get("patch_config") else None
 
@@ -168,6 +177,16 @@ def _check_step(path, index, step):
         raise Refused(f"{where} ({name}) runs one statement on the run's own login, characters or world database")
     if action in ("wait_server_log", "wait_client_log", "wait_screen", "wait_db", "wait_listener") and not isinstance(step["timeout"], (int, float)):
         raise Refused(f"{where} ({name}) needs a timeout in seconds")
+    if action in LAUNCHER_ACTIONS and (isinstance(step["timeout"], bool) or not isinstance(step["timeout"], (int, float))
+                                       or not 0 < step["timeout"] <= MAX_LAUNCHER_WAIT):
+        raise Refused(f"{where} ({name}) may wait more than 0 and at most {MAX_LAUNCHER_WAIT} seconds on the launcher window")
+    if action == "launcher_shows" and (not isinstance(step["patterns"], list) or not step["patterns"]):
+        raise Refused(f"{where} ({name}) needs a list of patterns the launcher window should show")
+    if action == "launcher_shows":
+        for pattern in step["patterns"]:
+            _check_pattern(f"{where} ({name})", "pattern", pattern)
+    if action == "launcher_press" and (not isinstance(step["control"], str) or not step["control"].strip()):
+        raise Refused(f"{where} ({name}) needs the accessible name of the control it presses")
     if action == "wait_screen" and (not isinstance(step["screens"], list) or not step["screens"]):
         raise Refused(f"{where} ({name}) needs a list of screens to wait for")
     if action == "hold_key" and (not isinstance(step["seconds"], (int, float)) or not 0 < step["seconds"] <= MAX_HOLD_SECONDS):
@@ -255,6 +274,8 @@ def _check_document(path, document):
             raise Refused(f"{path} starts a companion but does not require the game server its wizard enters the world on")
     if document.get("patching", "off") not in PATCHING:
         raise Refused(f"{path} asks for patching {document['patching']!r}; a scenario runs the client with patching {' or '.join(PATCHING)}")
+    if document.get("launch", "console") not in LAUNCH:
+        raise Refused(f"{path} asks for launch {document['launch']!r}; a scenario starts the launcher as a {' or a '.join(LAUNCH)}")
     listeners = document.get("listeners")
     if listeners is not None:
         if not isinstance(listeners, list):
@@ -306,6 +327,23 @@ def _check_document(path, document):
         named.append(name)
 
 
+def _check_launch(scenario):
+    if scenario.launch == "window":
+        if scenario.patching == "default":
+            raise Refused(f"{scenario.path} opens the launcher window and follows the client's patching default, but only the launcher's "
+                          "console prepares the command that default is run from")
+        if scenario.companion is not None:
+            raise Refused(f"{scenario.path} opens the launcher window and starts a companion, but a run opens one launcher window")
+    for index, step in enumerate(scenario.steps):
+        action = step["action"]
+        if scenario.launch != "window" and action in LAUNCHER_ACTIONS:
+            raise Refused(f"{scenario.path} step {index + 1} ({step.get('name') or action}) reads or presses the launcher window, "
+                          "but the scenario does not open it with launch window")
+        if scenario.launch == "window" and action == "restart_client":
+            raise Refused(f"{scenario.path} step {index + 1} ({step.get('name') or action}) restarts the client, "
+                          "but a client started from the launcher window is started again only by its Play")
+
+
 def resolve(path, search):
     if os.path.isabs(path) and os.path.isfile(path):
         return path
@@ -334,6 +372,7 @@ def _merge(base, scenario):
     scenario.notes = base.notes + scenario.notes
     scenario.listeners = base.listeners + scenario.listeners
     scenario.patching = scenario.patching if scenario.patching != "off" else base.patching
+    scenario.launch = scenario.launch if scenario.launch != "console" else base.launch
     scenario.patch_config = scenario.patch_config or base.patch_config
     names = [step.get("name") or step["action"] for step in scenario.steps]
     repeated = sorted({name for name in names if names.count(name) > 1})
@@ -360,6 +399,7 @@ def load(path, search=(), seen=()):
     if included:
         base = load(included, search=list(search) + [os.path.dirname(resolved)], seen=seen + (resolved,))
         scenario = _merge(base, scenario)
+    _check_launch(scenario)
     if scenario.companion is None:
         for index, step in enumerate(scenario.steps):
             if step.get("client") == "companion" or step.get("watch") == "companion":

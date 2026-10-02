@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Extracts the character names of the user's own r806919 install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: every locale with CharacterNames has all four human tables, 250 names each in en-US, de, es and fr and fewer in el, it and pl, the seven schools in their order with their string ids, the four disallowed names and one creation option; the first disallowed name formats in English and German and is refused; and with AMBROSE_TEST_DB set the rows fill a new world database that the name manager loads.
+ * Extracts the character names of the user's own install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: every locale with CharacterNames has all four human tables, with the names recorded for the installed revision, r806919's 250 each in en-US, de, es and fr and fewer in el, it and pl, the seven schools in their order with their string ids, the four disallowed names and one creation option; the first disallowed name formats in English and German and is refused; and with AMBROSE_TEST_DB set the rows fill a new world database that the name manager loads.
  */
 
 #include "CharacterNameExtractor.h"
@@ -9,6 +9,7 @@
 #include "DBUpdater.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
+#include "InstalledRevision.h"
 #include "KiwadArchive.h"
 #include "LogConfig.h"
 #include "NameViews.h"
@@ -87,15 +88,15 @@ TEST_F(CharacterNameExtractorClientTest, EveryLocaleHasItsHumanTablesSchoolsAndD
         for (std::string_view const table : { CharacterNameSet::FirstNameMale, CharacterNameSet::FirstNameFemale, CharacterNameSet::MiddleName, CharacterNameSet::LastName })
         {
             ASSERT_TRUE(Find(table, locale)) << table << " " << locale;
-            EXPECT_EQ(Find(table, locale)->Parts.size(), 250u) << table << " " << locale;
+            InstalledRevision::Expect(Find(table, locale)->Parts.size(), { { "r806919", 250u } }, fmt::format("{} {} names", table, locale));
         }
     for (std::string_view const locale : { "el", "it", "pl" })
     {
         ASSERT_TRUE(Find(CharacterNameSet::FirstNameMale, locale));
-        EXPECT_EQ(Find(CharacterNameSet::FirstNameMale, locale)->Parts.size(), 154u) << locale;
-        EXPECT_EQ(Find(CharacterNameSet::FirstNameFemale, locale)->Parts.size(), 144u) << locale;
-        EXPECT_EQ(Find(CharacterNameSet::MiddleName, locale)->Parts.size(), 85u) << locale;
-        EXPECT_EQ(Find(CharacterNameSet::LastName, locale)->Parts.size(), 79u) << locale;
+        InstalledRevision::Expect(Find(CharacterNameSet::FirstNameMale, locale)->Parts.size(), { { "r806919", 154u } }, fmt::format("{} male first names", locale));
+        InstalledRevision::Expect(Find(CharacterNameSet::FirstNameFemale, locale)->Parts.size(), { { "r806919", 144u } }, fmt::format("{} female first names", locale));
+        InstalledRevision::Expect(Find(CharacterNameSet::MiddleName, locale)->Parts.size(), { { "r806919", 85u } }, fmt::format("{} middle names", locale));
+        InstalledRevision::Expect(Find(CharacterNameSet::LastName, locale)->Parts.size(), { { "r806919", 79u } }, fmt::format("{} last names", locale));
     }
     EXPECT_TRUE(Find("FirstName", "en-US"));
     EXPECT_TRUE(Find("FirstName_AdventureParty", "pl"));

@@ -1,5 +1,6 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the installer: that conf copies each installed template once, that running it again leaves an edited .conf alone, that a relative install prefix resolves against the checkout rather than the working directory, and that both the shell and the PowerShell script agree, each skipping where its interpreter is absent.
+# Self-tests for the installer: that conf copies each installed template once, that running it again leaves an edited .conf alone, that a relative install prefix resolves against the checkout rather than the working directory, that compile installs the configuration the release presets build, RelWithDebInfo, rather than the build type's name, that run starts an app from its bin folder, so a supervisor finds the configurations it names relatively, that both the shell and the PowerShell script agree, each skipping where its interpreter is absent, and that the PowerShell deps -Plan lists every install step it would take, or skip for what it found, never runs winget, and fails clearly without winget.
+import json
 import os
 import shutil
 import subprocess
@@ -41,6 +42,38 @@ def run_powershell(command, prefix, cwd=None):
     environment = dict(os.environ, AMBROSE_INSTALL_PREFIX=prefix)
     return subprocess.run([powershell(), "-NoProfile", "-File", POWERSHELL, command], cwd=cwd or ROOT,
                           env=environment, capture_output=True, text=True)
+
+
+class RunTests(unittest.TestCase):
+    @unittest.skipUnless(bash(), "bash is not installed")
+    def test_run_starts_the_app_from_its_bin_folder_so_its_relative_paths_resolve_there(self):
+        with tempfile.TemporaryDirectory() as folder:
+            prefix_with_templates(folder, ("supervisor",))
+            bin_folder = os.path.join(folder, "bin")
+            os.makedirs(bin_folder, exist_ok=True)
+            fake = os.path.join(bin_folder, "supervisor")
+            with open(fake, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write("#!/usr/bin/env bash\nif [ -f supervisor.conf ]; then echo started-in-bin; else echo started-elsewhere; fi\n")
+            os.chmod(fake, 0o755)
+            environment = dict(os.environ, AMBROSE_INSTALL_PREFIX=folder)
+            result = subprocess.run([bash(), SHELL, "run", "supervisor"], cwd=ROOT, env=environment, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("started-in-bin", result.stdout)
+
+
+class InstallConfigTests(unittest.TestCase):
+    def test_compile_installs_the_configuration_each_release_preset_builds(self):
+        with open(os.path.join(ROOT, "CMakePresets.json"), encoding="utf-8") as handle:
+            presets = {preset["name"]: preset.get("configuration") for preset in json.load(handle)["buildPresets"]}
+        built = {presets[name] for name in ("windows-release", "linux-gcc-release", "linux-clang-release")}
+        self.assertEqual(built, {"RelWithDebInfo"}, "the release presets no longer agree on one configuration")
+        for script in ("ambrose.sh", "ambrose.ps1"):
+            with open(os.path.join(ROOT, "apps", "installer", script), encoding="utf-8") as handle:
+                text = handle.read()
+            install = [line for line in text.splitlines() if "--install" in line or "InstallConfig =" in line]
+            self.assertTrue(any("RelWithDebInfo" in line for line in install), f"{script} does not install what the release preset builds")
+            self.assertFalse(any("'--config', $BuildType" in line or '--config "$BUILD_TYPE"' in line for line in install),
+                             f"{script} still installs the build type rather than the preset's configuration")
 
 
 class ConfTests(unittest.TestCase):
@@ -88,6 +121,71 @@ class ConfTests(unittest.TestCase):
             result = run_shell("conf", folder)
             self.assertNotEqual(result.returncode, 0, result.stdout)
             self.assertIn("run compile first", result.stderr)
+
+
+def run_powershell_plan(found, *options, with_winget=True):
+    folder = tempfile.mkdtemp()
+    tools = os.path.join(folder, "tools")
+    os.makedirs(tools)
+    marker = os.path.join(folder, "winget-ran")
+    if with_winget and os.name == "nt":
+        with open(os.path.join(tools, "winget.cmd"), "w", encoding="utf-8", newline="\r\n") as handle:
+            handle.write(f'@echo off\necho ran> "{marker}"\n')
+    elif with_winget:
+        shim = os.path.join(tools, "winget")
+        with open(shim, "w", encoding="utf-8") as handle:
+            handle.write(f'#!/bin/sh\necho ran > "{marker}"\n')
+        os.chmod(shim, 0o755)
+    environment = {key: value for key, value in os.environ.items() if key.upper() != "VCPKG_ROOT"}
+    environment.update(AMBROSE_DEPS_FOUND=found, USERPROFILE=folder,
+                       PATH=tools + os.pathsep + environment.get("PATH", "") if with_winget else tools)
+    result = subprocess.run([powershell(), "-NoProfile", "-File", POWERSHELL, "deps", *options], cwd=ROOT,
+                            env=environment, capture_output=True, text=True)
+    ran = os.path.exists(marker)
+    shutil.rmtree(folder, ignore_errors=True)
+    return result, folder, ran
+
+
+@unittest.skipUnless(powershell(), "PowerShell is not installed")
+class DepsPlanTests(unittest.TestCase):
+    def test_the_plan_lists_every_install_step_when_nothing_is_found(self):
+        result, folder, ran = run_powershell_plan("none", "-Install", "-WithDatabase", "-Plan")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        vcpkg = os.path.join(folder, "vcpkg")
+        for step in ("install: Visual Studio 2022 Build Tools with the C++ workload (winget Microsoft.VisualStudio.2022.BuildTools, --add Microsoft.VisualStudio.Workload.VCTools)",
+                     "install: CMake (winget Kitware.CMake)", "install: Git (winget Git.Git)",
+                     f"install: vcpkg, cloned into {vcpkg}",
+                     f"install: vcpkg, bootstrapped with {os.path.join(vcpkg, 'bootstrap-vcpkg.bat')} -disableMetrics",
+                     "install: MariaDB as the service MariaDB on port 3306 (winget MariaDB.Server, SERVICENAME=MariaDB PORT=3306)", "create: the ambrose account",
+                     "plan only; nothing was installed"):
+            self.assertIn(step, result.stdout)
+        self.assertNotIn("skip:", result.stdout)
+        self.assertFalse(ran, "the plan ran winget")
+
+    def test_the_plan_skips_what_it_finds(self):
+        result, _, ran = run_powershell_plan("vs,cmake,git,vcpkg,mariadb", "--install", "--with-database", "--plan")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for tool in ("Visual Studio 2022 Build Tools", "CMake", "Git", "vcpkg, cloned", "vcpkg, bootstrapped", "MariaDB"):
+            self.assertIn(f"skip: {tool}", result.stdout)
+        self.assertNotIn("install:", result.stdout)
+        self.assertFalse(ran, "the plan ran winget")
+
+    def test_the_plan_never_creates_the_account_without_with_database(self):
+        result, _, _ = run_powershell_plan("none", "-Install", "-Plan")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("MariaDB", result.stdout)
+        self.assertNotIn("create:", result.stdout)
+
+    def test_install_fails_clearly_without_winget(self):
+        result, _, _ = run_powershell_plan("none", "-Install", "-Plan", with_winget=False)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("winget is missing", result.stderr + result.stdout)
+        self.assertNotIn("install:", result.stdout)
+
+    def test_deps_refuses_an_unknown_option(self):
+        result, _, _ = run_powershell_plan("none", "-Bogus")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("deps takes -Install, -WithDatabase and -Plan", result.stderr + result.stdout)
 
 
 if __name__ == "__main__":

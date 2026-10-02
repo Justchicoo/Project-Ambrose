@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests outbound messages over loopback with Ambrose-authored SYSTEM and EXTENDEDBASE definitions: server message frames in short and long form, pings answered within the ping budget, a kick that flushes megabytes of backlog before MSG_FORCE_DISCONNECT and closes even without definitions, kick reasons cut at a character boundary, delayed close stopping input and later sends, the send queue limit, sends refused without definitions, declarations or encodable values, and the disconnect timestamp text.
+ * Tests outbound messages over loopback with Ambrose-authored SYSTEM and EXTENDEDBASE definitions: server message frames in short and long form, pings answered within the ping budget, a kick that flushes megabytes of backlog before MSG_FORCE_DISCONNECT and closes even without definitions, kick reasons cut at a character boundary, delayed close stopping input and later sends, the send queue limit, sends refused without definitions, declarations or encodable values, and the TimeStamp only a ban's disconnect carries: the ban's end in Unix seconds or forever, never with a colon.
  */
 
 #include "BaseMessageFixtures.h"
 #include "ByteBuffer.h"
+#include "DisconnectReason.h"
 #include "FakeSessionClient.h"
 #include "FrameWriter.h"
 #include "Log.h"
@@ -16,6 +17,7 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <mutex>
 #include <regex>
 #include <string>
@@ -178,11 +180,22 @@ namespace
     };
 }
 
-TEST(SystemMessagesTest, TimeStampIsUtcDateAndTime)
+TEST(SystemMessagesTest, ABansEndIsUnixSecondsOrForeverAndNeverHoldsAColon)
 {
-    using namespace std::chrono;
-    system_clock::time_point const time = sys_days{ year{ 2026 } / September / 16 } + hours(7) + minutes(5) + seconds(9) + milliseconds(870);
-    EXPECT_EQ(SystemMessages::FormatTimeStamp(time), "2026-09-16 07:05:09");
+    EXPECT_EQ(SystemMessages::FormatBanEnd(0), "forever") << "an unbandate of 0 never expires";
+    EXPECT_EQ(SystemMessages::FormatBanEnd(1790000000), "1790000000");
+    EXPECT_EQ(SystemMessages::FormatBanEnd(4102444800), "2147483647") << "the client reads the end with a 32-bit strtol, so a later end is held at 2038-01-19";
+    for (uint64 const end : { uint64{ 0 }, uint64{ 1 }, uint64{ 1790000000 }, std::numeric_limits<uint64>::max() })
+    {
+        std::string const text = SystemMessages::FormatBanEnd(end);
+        EXPECT_EQ(text.find(':'), std::string::npos) << text << ": the client's ban parser never returns from a colon";
+        EXPECT_TRUE(std::regex_match(text, std::regex("forever|[0-9]+"))) << text;
+    }
+    EXPECT_TRUE(SystemMessages::CarriesBanEnd(DisconnectReason::Banned));
+    EXPECT_TRUE(SystemMessages::CarriesBanEnd(DisconnectReason::AccountBanned));
+    EXPECT_TRUE(SystemMessages::CarriesBanEnd(DisconnectReason::MachineBanned));
+    for (uint32 const type : { DisconnectReason::Csr, DisconnectReason::Maintenance, DisconnectReason::AisDisconnect, DisconnectReason::User, uint32{ 1 }, uint32{ 4 } })
+        EXPECT_FALSE(SystemMessages::CarriesBanEnd(type)) << type;
 }
 
 TEST_F(OutboundMessagesTest, ServerMessageIsServiceTwoOrderSixWithAWideString)
@@ -285,7 +298,7 @@ TEST_F(OutboundMessagesTest, KickPlayerFlushesTheWholeBacklogBeforeForceDisconne
     ByteBuffer body(message->Body);
     EXPECT_EQ(body.Read<uint32>(), 4u);
     std::string const timeStamp = Dml::ReadStr(body);
-    EXPECT_TRUE(std::regex_match(timeStamp, std::regex("[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}"))) << timeStamp;
+    EXPECT_TRUE(timeStamp.empty()) << "only a ban's disconnect carries a TimeStamp, and type 4 is no ban: " << timeStamp;
     EXPECT_EQ(Dml::ReadStr(body), "Kicked for testing");
     EXPECT_EQ(body.GetRemaining(), 0u);
 
@@ -293,6 +306,39 @@ TEST_F(OutboundMessagesTest, KickPlayerFlushesTheWholeBacklogBeforeForceDisconne
     EXPECT_TRUE(log.Contains("with disconnect type 4: Kicked for testing"));
     _session->KickPlayer(5, "a second kick is ignored");
     EXPECT_FALSE(log.Contains("a second kick is ignored"));
+}
+
+TEST_F(OutboundMessagesTest, ABanKickCarriesTheBansEndAndAnyOtherKickNone)
+{
+    struct Kick
+    {
+        uint32 Type;
+        uint64 UnbanDate;
+        std::string TimeStamp;
+    };
+    for (Kick const& kick : { Kick{ DisconnectReason::AccountBanned, 1790000000, "1790000000" }, Kick{ DisconnectReason::MachineBanned, 0, "forever" },
+             Kick{ DisconnectReason::Banned, 0, "forever" }, Kick{ DisconnectReason::Csr, 1790000000, "" } })
+    {
+        _session.reset();
+        _client.reset();
+        _manager.reset();
+        {
+            std::lock_guard const lock(_mutex);
+            _sessions.clear();
+        }
+        ASSERT_NO_FATAL_FAILURE(Start());
+        _session->KickPlayer(kick.Type, "banned for testing", kick.UnbanDate);
+        std::optional<DmlMessageData> const message = ReadDml(*_client);
+        ASSERT_TRUE(message) << kick.Type;
+        ASSERT_EQ(message->Order, 3);
+        ByteBuffer body(message->Body);
+        EXPECT_EQ(body.Read<uint32>(), kick.Type);
+        std::string const timeStamp = Dml::ReadStr(body);
+        EXPECT_EQ(timeStamp, kick.TimeStamp) << kick.Type;
+        EXPECT_EQ(timeStamp.find(':'), std::string::npos) << timeStamp;
+        EXPECT_EQ(Dml::ReadStr(body), "banned for testing");
+        EXPECT_TRUE(_client->WaitForClose());
+    }
 }
 
 TEST_F(OutboundMessagesTest, KickReasonsAreCutAtACharacterBoundary)

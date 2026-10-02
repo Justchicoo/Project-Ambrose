@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Feeds seeded random mutations of the fuzz corpus's seeds, compact and versionable, with fixed or compact lengths, bare and enveloped, to the decoder, a million in AddressSanitizer builds and a hundred thousand otherwise unless AMBROSE_FUZZ_ITERATIONS says, and checks every one either decodes to an object that re-encodes and decodes back equal or is refused, never reading past its input, making an allocation larger than the limits allow or allocating more in total than the memory budget and inflation limit allow, plus a list that would outgrow the budget refused before it allocates and a huge list count in a 10-byte blob refused before anything is allocated.
+ * Feeds seeded random mutations of the fuzz corpus's seeds, compact and versionable, with fixed or compact lengths, bare and enveloped, to the decoder, a million in AddressSanitizer builds and a hundred thousand otherwise unless AMBROSE_FUZZ_ITERATIONS says, split across eight shards with seeds of their own so a parallel test run spreads them over the machine, and checks every one either decodes to an object that re-encodes and decodes back equal or is refused, never reading past its input, making an allocation larger than the limits allow or allocating more in total than the memory budget and inflation limit allow, plus a list that would outgrow the budget refused before it allocates and a huge list count in a 10-byte blob refused before anything is allocated.
  */
 
 #include "AllocationCounter.h"
@@ -27,6 +27,7 @@ namespace
 #else
     constexpr uint64 DefaultIterations = 100000;
 #endif
+    constexpr uint32 Shards = 8;
 
     class Mutator
     {
@@ -126,10 +127,15 @@ namespace
         std::vector<ObjectFuzzCorpus::Seed> const& _corpus;
         std::vector<uint32> _hashes;
     };
+
+    class DecoderFuzzShardTest : public testing::TestWithParam<uint32>
+    {
+    };
 }
 
-TEST(DecoderFuzzTest, SeededMutationsNeverCrashAndDecodedObjectsRoundTrip)
+TEST_P(DecoderFuzzShardTest, SeededMutationsNeverCrashAndDecodedObjectsRoundTrip)
 {
+    uint32 const shard = GetParam();
     std::string error;
     TypeCatalogPtr const catalog = ObjectFuzzCorpus::LoadCatalog(error);
     ASSERT_TRUE(catalog) << error;
@@ -146,12 +152,13 @@ TEST(DecoderFuzzTest, SeededMutationsNeverCrashAndDecodedObjectsRoundTrip)
 
     std::optional<std::string> const configured = Ambrose::GetEnv("AMBROSE_FUZZ_ITERATIONS");
     std::optional<uint64> const requested = configured ? Ambrose::StringTo<uint64>(*configured) : std::nullopt;
-    uint64 const iterations = requested.value_or(DefaultIterations);
+    uint64 const total = requested.value_or(DefaultIterations);
+    uint64 const iterations = total / Shards + (shard < total % Shards ? 1 : 0);
     SerializerLimits const limits = *ObjectFuzzCorpus::MakeOptions(0).Limits;
     std::size_t const largestCap = std::max({ std::size_t{ limits.MaxContainerCount } * sizeof(PropertyValue), std::size_t{ 65536 } * 2 + 64, limits.MaxInflatedSize }) + 4096;
     std::size_t const totalCap = limits.MaxDecodedBytes * 2 + limits.MaxInflatedSize * 2 + (std::size_t{ 1 } << 18);
 
-    Mutator mutator(0xA5B0A5E5u, corpus, hashes);
+    Mutator mutator(0xA5B0A5E5u + shard, corpus, hashes);
     uint64 accepted = 0;
     std::size_t largest = 0;
     std::size_t largestTotal = 0;
@@ -176,8 +183,10 @@ TEST(DecoderFuzzTest, SeededMutationsNeverCrashAndDecodedObjectsRoundTrip)
         EXPECT_LE(largestTotal, totalCap);
     }
     EXPECT_GT(accepted, iterations / 50);
-    std::cout << "[ FUZZ     ] " << iterations << " mutations, " << accepted << " decoded, largest allocation " << largest << " bytes, most allocated by one decode " << largestTotal << " bytes" << std::endl;
+    std::cout << "[ FUZZ     ] shard " << shard << " of " << Shards << ": " << iterations << " of " << total << " mutations, " << accepted << " decoded, largest allocation " << largest << " bytes, most allocated by one decode " << largestTotal << " bytes" << std::endl;
 }
+
+INSTANTIATE_TEST_SUITE_P(Seeded, DecoderFuzzShardTest, testing::Range(0u, Shards));
 
 TEST(DecoderFuzzTest, ABlobThatWouldOutgrowTheBudgetIsRefusedBeforeItAllocates)
 {

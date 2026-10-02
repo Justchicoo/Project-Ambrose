@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Moves the first run on by one step per ask: the install through the same Prepare the console reaches, the run folder written as Play would write it, and the login server asked once a second, up to thirty times, with a TCP connection that gives up after 700 milliseconds so the window never waits on it.
+ * Moves the first run on by one step per ask: the install through the same Prepare the console reaches, the run folder written as Play would write it, and the login server asked once a second, up to thirty times, with a TCP connection that gives up after 700 milliseconds so the window never waits on it. The launch state is read off the steps in one place, a failed install first since the cure is to name one, then any other failure, then whatever is still to do, and only once every step is done the client's own state, launching for ten seconds after it was handed off and playing after that; the server is online once it answered, offline once a try went unanswered and unknown before it was asked, and everything the window is sent about the steps, the state and the server is written out together so the three can never be read from different moments.
  */
 
 #include "LauncherSteps.h"
@@ -42,6 +42,67 @@ void LauncherSteps::Restart()
     _plan.reset();
     _tries = 0;
     _lastTry = {};
+    _started.reset();
+}
+
+void LauncherSteps::Started()
+{
+    _started = _now();
+}
+
+LaunchState LauncherSteps::State() const
+{
+    if (_steps[0].State == Wrong)
+        return LaunchState::Locate;
+    for (LauncherStep const& step : _steps)
+        if (step.State == Wrong)
+            return LaunchState::Retry;
+    if (_steps[0].State != Done)
+        return LaunchState::Checking;
+    for (LauncherStep const& step : _steps)
+        if (step.State != Done)
+            return LaunchState::SettingUp;
+    if (!_started)
+        return LaunchState::Play;
+    return _now() - *_started < LaunchingFor ? LaunchState::Launching : LaunchState::Playing;
+}
+
+std::string LauncherSteps::ServerStatus() const
+{
+    if (_steps[2].State == Done)
+        return "online";
+    if (_steps[2].State == Wrong || _tries > 0)
+        return "offline";
+    return "unknown";
+}
+
+std::optional<std::filesystem::path> LauncherSteps::LogFolder() const
+{
+    if (!_plan || _steps[1].State != Done)
+        return std::nullopt;
+    return _plan->LogFile.parent_path();
+}
+
+char const* LauncherSteps::Name(LaunchState state)
+{
+    switch (state)
+    {
+        case LaunchState::Locate:
+            return "locate";
+        case LaunchState::Checking:
+            return "checking";
+        case LaunchState::SettingUp:
+            return "setting-up";
+        case LaunchState::Play:
+            return "play";
+        case LaunchState::Launching:
+            return "launching";
+        case LaunchState::Playing:
+            return "playing";
+        case LaunchState::Retry:
+            return "retry";
+    }
+    return "retry";
 }
 
 std::vector<LauncherStep> const& LauncherSteps::Advance(Launcher const& launcher, LauncherRequest const& request, SetupMode mode, SetupPrompt& prompt)
@@ -112,12 +173,14 @@ std::vector<LauncherStep> const& LauncherSteps::Advance(Launcher const& launcher
     return _steps;
 }
 
-std::string LauncherSteps::Describe(std::vector<LauncherStep> const& steps)
+std::string LauncherSteps::Describe() const
 {
     nlohmann::json body;
     body["schema"] = LauncherChannel::SchemaVersion;
+    body["state"] = Name(State());
+    body["server"] = { { "status", ServerStatus() }, { "address", _plan ? fmt::format("{}:{}", _plan->Host, _plan->Port) : std::string() } };
     body["steps"] = nlohmann::json::array();
-    for (LauncherStep const& step : steps)
+    for (LauncherStep const& step : _steps)
         body["steps"].push_back({ { "id", step.Id }, { "label", step.Label }, { "state", step.State }, { "word", step.Word } });
     return body.dump();
 }

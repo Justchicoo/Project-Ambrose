@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps the observers as one shared list replaced on each change, so a network thread takes the list under a shared lock held only for the copy and calls each observer in the order it was added; a socket's opening and closing also keep the count of sessions open across every listener of the process.
+ * Keeps the observers as one shared list replaced on each change, so a network thread takes the list under a shared lock held only for the copy and calls each observer in the order it was added; a socket's opening and closing also keep the count of sessions open across every listener of the process. The list is never destroyed, so an observer that is itself a static, such as the script manager, can take itself off it as the process exits, whichever static was built first.
  */
 
 #include "NetworkHooks.h"
@@ -24,7 +24,7 @@ namespace
 
     Registry& Hooks()
     {
-        static Registry registry;
+        static Registry& registry = *new Registry;
         return registry;
     }
 

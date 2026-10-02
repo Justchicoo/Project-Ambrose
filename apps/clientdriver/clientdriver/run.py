@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# One run end to end: it drops and lets the server rebuild its own databases, starts the capture, the login server and its account, and for a scenario that enters the world loads the zone rows into its world database, starts the game server, which announces its realm to the login server, and seeds the scenario's wizard, then snapshots the install, opens the ports the scenario watches, starts the client through the launcher, or from the command the launcher prepared less its -P 0 for a scenario that follows the client's own patching default, with the install's PatchConfig.xml copied into the run folder and pointed at a local port first when the scenario asks, whichever way the client starts, and guards it from the moment it exists against any connection off this machine, starts a companion client the same way for a scenario that shows two wizards to each other, on an account and with a wizard of its own and under the same guard, runs the scenario, then asks each client to quit or ends it outright when its own log says quitting would reach off the machine, stops everything in the order it started it with the guard watching until last, and writes the report over both servers' logs whether the scenario passed or failed.
+# One run end to end: it drops and lets the server rebuild its own databases, starts the capture, the login server and its account, and for a scenario that enters the world loads the zone rows into its world database, starts the game server, which announces its realm to the login server, and seeds the scenario's wizard, then snapshots the install, opens the ports the scenario watches, starts the client through the launcher, or opens the launcher window and leaves the client to the Play the scenario presses in it, or from the command the launcher prepared less its -P 0 for a scenario that follows the client's own patching default, with the install's PatchConfig.xml copied into the run folder and pointed at a local port first when the scenario asks, whichever way the client starts, and guards it from the moment it exists against any connection off this machine but the ones netguard-allow.json declares, starts a companion client the same way for a scenario that shows two wizards to each other, on an account and with a wizard of its own and under the same guard, runs the scenario, then asks each client to quit or ends it outright when its own log says quitting would reach off the machine, stops everything in the order it started it with the guard watching until last, and writes the report over both servers' logs whether the scenario passed or failed.
 import os
 import re
 import secrets
@@ -12,7 +12,7 @@ from .database import Scratch
 from .engine import Engine
 from .listeners import PortListener
 from .logtail import read_lines
-from .netguard import NetGuard, kill_leftovers
+from .netguard import NetGuard, kill_leftovers, load_allowances
 from .server import GameServer, LoginServer
 
 USER = "clientdriver"
@@ -77,7 +77,8 @@ class Run:
         password = secrets.token_urlsafe(12)
         variables = dict(self.scenario.variables, user=options.get("user") or USER, password=password,
                          wrongpassword=password + "-wrong", host=options["host"], port=str(options["port"]),
-                         revision=self.environment.get("revision") or "", run_id=self.run_id)
+                         revision=self.environment.get("revision") or "", install=self.environment.get("install") or "",
+                         window=f"{self.references.window[0]}x{self.references.window[1]}", run_id=self.run_id)
         databases = Scratch(options["db_host"], options["db_port"], options["db_user"], options["db_password"],
                             options["db_prefix"])
         capture = Capture(self.environment.get("tshark") if options.get("capture", True) and self.scenario.needs_capture else None,
@@ -95,7 +96,8 @@ class Run:
                         os.path.join(self.folder, "client"), options["host"], options["port"],
                         self.references.window, client_dir=options.get("client"), locale=options.get("locale"),
                         install=self.environment.get("install"), revision=self.environment.get("revision"),
-                        patching=self.scenario.patching, patch_config=self.scenario.patch_config, monitor=options.get("monitor"))
+                        patching=self.scenario.patching, patch_config=self.scenario.patch_config, monitor=options.get("monitor"),
+                        launch=self.scenario.launch)
         companion = None
         if self.scenario.companion:
             companion = Client(os.path.join(self.environment["binaries"], paths.program("launcher")),
@@ -111,6 +113,7 @@ class Run:
         engine = self.make_engine(client, server, store, variables, databases, companion)
         engine.game = game
         engine.listeners = {listener.label: listener for listener in listeners}
+        engine.background = options.get("background", True)
         guard = None
         before = {}
         try:
@@ -156,12 +159,14 @@ class Run:
                 self.note(listener.label, listener.open())
             self.cleanups.append(("close the client", lambda: client.close(force=self.force_close)))
             self.note("the client", client.start(timeout=options["client_timeout"]))
-            guard = NetGuard(client.pids, os.path.join(self.folder, "netguard.json"), started=started)
+            guard = NetGuard(client.pids, os.path.join(self.folder, "netguard.json"), started=started, allowances=load_allowances())
             guard.start()
             engine.restart = lambda timeout: self.restart_client(client, guard, timeout, options)
             self.cleanups.append(("decide how the client is stopped", lambda: self.quit_safely(client)))
             if self.scenario.patching == "default":
                 self.note("the client window", "not waited for, because the client follows its own default and the guard may end it first")
+            elif self.scenario.launch == "window":
+                self.note("the client window", "not waited for yet, because the client starts only when the scenario presses Play in the launcher window")
             else:
                 self.note("the client window", f"{client.find_window(timeout=options['client_timeout']):#x} at "
                                                f"{self.references.window[0]}x{self.references.window[1]}")
@@ -208,6 +213,7 @@ class Run:
                 "launcher": {"install": client.install, "revision": client.revision, "run_folder": client.run_folder,
                              "command": client.command, "started_command": client.started_command, "frames_from": client.frame_source},
                 "patching": self.scenario.patching,
+                "launch": self.scenario.launch,
                 "listeners": [listener.record() for listener in listeners],
                 "references": {"path": self.references.path, "key": self.references.key, "folder": options["refs"]},
                 "server_command": " ".join(server.command()),

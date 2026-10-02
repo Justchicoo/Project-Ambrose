@@ -654,12 +654,10 @@ export const ActivityAnswer = v.looseObject({
 
 export const ClientAnswer = v.looseObject({
     schema: v.number(),
-    pinned_revision: v.string(),
     install: v.looseObject({
         found: v.boolean(),
         root: v.optional(v.string(), ""),
         revision: v.optional(v.string(), ""),
-        pinned: v.optional(v.boolean(), false),
         has_program: v.optional(v.boolean(), false),
         described: v.optional(v.string(), ""),
     }),
@@ -674,6 +672,15 @@ export const ClientAnswer = v.looseObject({
         extractor: v.optional(v.string(), ""),
         matches_install: v.optional(v.boolean(), false),
     }),
+    follow: v.optional(
+        v.looseObject({
+            watching: v.boolean(),
+            current: v.optional(v.string(), ""),
+            updating: v.optional(v.string(), ""),
+            last_update: v.optional(v.string(), ""),
+        }),
+        { watching: false, current: "", updating: "", last_update: "" },
+    ),
     messages: v.looseObject({ loaded: v.boolean(), counted: v.number() }),
     saved: v.array(v.looseObject({ key: v.string(), value: v.string() })),
     saved_to: v.string(),

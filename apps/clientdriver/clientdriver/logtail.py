@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Reads a log another process keeps open and appends to, with a cursor that only walks forward, so a wait sees only what arrived after the last match and two logins can wait on the same line; a log that is replaced or truncated is read again from its beginning without losing the lines already read, and a wait reads once more before it decides that nothing is writing any more.
+# Reads a log another process keeps open and appends to, with a cursor that only walks forward, so a wait sees only what arrived after the last match and two logins can wait on the same line, and a start that marks where the writer's latest run began, so a wait from the start reads only what that run wrote; a log that is replaced or truncated is read again from its beginning without losing the lines already read, and a wait reads once more before it decides that nothing is writing any more.
 import os
 import re
 import time
@@ -19,6 +19,7 @@ class LogTail:
         self.partial = b""
         self.lines = []
         self.cursor = 0
+        self.start = 0
         self.identity = None
         self.head = b""
 
@@ -62,6 +63,11 @@ class LogTail:
         self.poll()
         self.cursor = len(self.lines)
         return self.cursor
+
+    def begin(self):
+        self.mark()
+        self.start = self.cursor
+        return self.start
 
     def matching(self, pattern, since=0):
         expression = re.compile(pattern)

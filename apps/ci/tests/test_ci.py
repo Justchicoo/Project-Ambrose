@@ -513,7 +513,7 @@ class VcpkgCacheTests(unittest.TestCase):
 
 class BuildStageTests(unittest.TestCase):
     def arguments(self, stage):
-        return argparse.Namespace(configure_preset="linux-gcc", build_preset="linux-gcc-debug", test_preset=None, warnings_as_errors=True, stage=stage)
+        return argparse.Namespace(configure_preset="linux-gcc", build_preset="linux-gcc-debug", test_preset=None, warnings_as_errors=True, stage=stage, test_jobs=1, exclude_label=[])
 
     def test_each_stage_runs_its_commands(self):
         configure = [["cmake", "--version"], ["cmake", "--preset", "linux-gcc", "-DAMBROSE_WARNINGS_AS_ERRORS=ON"]]
@@ -525,8 +525,64 @@ class BuildStageTests(unittest.TestCase):
     def test_main_runs_the_chosen_stage(self):
         ran = []
         with mock.patch.dict(os.environ, {"VCPKG_ROOT": "vcpkg"}), mock.patch.object(ci_build, "run", side_effect=lambda command, **_: ran.append(command)):
-            self.assertEqual(ci_build.main(["--configure-preset", "linux-gcc", "--build-preset", "linux-gcc-debug", "--stage", "build-test"]), 0)
+            self.assertEqual(ci_build.main(["--configure-preset", "linux-gcc", "--build-preset", "linux-gcc-debug", "--stage", "build-test", "--test-jobs", "1"]), 0)
         self.assertEqual(ran, [["cmake", "--build", "--preset", "linux-gcc-debug"], ["ctest", "--preset", "linux-gcc-debug"]])
+
+    def test_tests_run_on_every_core_unless_told_otherwise(self):
+        ran = []
+        with mock.patch.dict(os.environ, {"VCPKG_ROOT": "vcpkg"}), mock.patch.object(ci_build, "run", side_effect=lambda command, **_: ran.append(command)),                 mock.patch.object(ci_build.os, "cpu_count", return_value=12):
+            self.assertEqual(ci_build.main(["--configure-preset", "linux-gcc", "--build-preset", "linux-gcc-debug", "--stage", "build-test"]), 0)
+        self.assertEqual(ran[-1], ["ctest", "--preset", "linux-gcc-debug", "--parallel", "12"])
+
+    def test_an_excluded_label_is_matched_whole(self):
+        ran = []
+        with mock.patch.dict(os.environ, {"VCPKG_ROOT": "vcpkg"}), mock.patch.object(ci_build, "run", side_effect=lambda command, **_: ran.append(command)):
+            ci_build.main(["--leg", "linux-gcc-asan", "--test-jobs", "1", "--exclude-label", "render", "--exclude-label", "slow"])
+        self.assertEqual(ran[-1], ["ctest", "--preset", "linux-gcc-asan", "--label-exclude", "^(render|slow)$"])
+
+
+class BuildLegTests(unittest.TestCase):
+    def test_a_leg_names_its_presets_and_defaults_the_rest(self):
+        self.assertEqual(ci_build.parse_leg("linux-gcc:linux-gcc-debug"), {"configure": "linux-gcc", "build": "linux-gcc-debug", "test": "linux-gcc-debug"})
+        self.assertEqual(ci_build.parse_leg("linux-gcc-asan"), {"configure": "linux-gcc-asan", "build": "linux-gcc-asan", "test": "linux-gcc-asan"})
+        with self.assertRaises(argparse.ArgumentTypeError):
+            ci_build.parse_leg("linux-gcc::x")
+
+    def test_legs_run_in_turn_past_a_failure_and_end_with_their_times(self):
+        ran = []
+
+        def runner(command, **_):
+            ran.append(command)
+            if command[:3] == ["cmake", "--build", "--preset"] and command[3] == "linux-gcc-debug":
+                raise subprocess.CalledProcessError(2, command)
+
+        with mock.patch.dict(os.environ, {"VCPKG_ROOT": "vcpkg"}), mock.patch.object(ci_build, "run", side_effect=runner),                 mock.patch("sys.stdout", new_callable=io.StringIO) as printed:
+            result = ci_build.main(["--leg", "linux-gcc:linux-gcc-debug", "--leg", "linux-gcc-asan", "--test-jobs", "4"])
+        self.assertEqual(result, 1)
+        self.assertNotIn(["ctest", "--preset", "linux-gcc-debug", "--parallel", "4"], ran)
+        self.assertIn(["ctest", "--preset", "linux-gcc-asan", "--parallel", "4"], ran)
+        self.assertRegex(printed.getvalue(), r"linux-gcc-debug +\d+s +\d+s +\d+s +\d+s  failed with 2")
+        self.assertRegex(printed.getvalue(), r"linux-gcc-asan +\d+s +\d+s +\d+s +\d+s  passed")
+
+    def test_legs_take_no_single_preset_options(self):
+        with mock.patch("sys.stderr", new_callable=io.StringIO), self.assertRaises(SystemExit):
+            ci_build.main(["--leg", "linux-gcc-asan", "--build-preset", "linux-gcc-debug"])
+        with mock.patch("sys.stderr", new_callable=io.StringIO), self.assertRaises(SystemExit):
+            ci_build.main(["--leg", "linux-gcc-asan", "--sync", "/elsewhere"])
+
+    def test_a_sync_refuses_its_own_tree_and_otherwise_keeps_the_build_trees(self):
+        ran = []
+        with mock.patch("sys.stderr", new_callable=io.StringIO):
+            self.assertEqual(ci_build.sync(ci_build.ROOT, "abc123", runner=ran.append), 2)
+        self.assertEqual(ran, [])
+        with tempfile.TemporaryDirectory() as source:
+            self.assertEqual(ci_build.sync(source, "abc123", runner=ran.append), 0)
+        self.assertEqual(ran, [["git", "fetch", "-q", source, "+refs/heads/*:refs/remotes/source/*"], ["git", "checkout", "-q", "--detach", "abc123"],
+                               ["git", "clean", "-qfdx", "-e", "build"]])
+
+    def test_the_synced_run_carries_every_option_but_the_sync(self):
+        self.assertEqual(ci_build.without_sync(["--sync", "/mnt/k/repo", "--commit=abc", "--leg", "linux-gcc-asan", "--test-jobs", "8"]),
+                         ["--leg", "linux-gcc-asan", "--test-jobs", "8"])
 
 
 class TrailerScheduleTests(unittest.TestCase):
@@ -1053,6 +1109,17 @@ class MilestoneTrackTests(unittest.TestCase):
         self.assertEqual(ci_local.command_for("Pending SQL on main", pending, "upstream/main", ""), "python apps/ci/ci_sql.py promote --check")
         self.assertIsNone(ci_local.command_for("Pending SQL on main", pending, "upstream/main", "milestone/3.19-sql"))
         self.assertEqual(ci_local.skipped_because(pending), "CI runs it only on a push to main")
+        card = [command for name, command in found if name == "Progress card"][0]
+        self.assertEqual(ci_local.command_for("Progress card", card, "upstream/main", ""), card)
+        self.assertIsNone(ci_local.command_for("Progress card", card, "upstream/main", "milestone/12.07-chat-moderation"))
+        self.assertEqual(ci_local.skipped_because(card), "CI skips it on a pull request whose author cannot regenerate the card")
+
+    def test_the_local_run_stamps_the_commit_it_covered(self):
+        with tempfile.TemporaryDirectory() as folder:
+            stamp = os.path.join(folder, "checks-passed")
+            head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+            self.assertEqual(ci_local.write_stamp(ROOT, stamp), head)
+            self.assertEqual(io.open(stamp, encoding="utf-8").read(), head)
 
     def test_a_milestone_branch_stays_inside_its_own_phase_file(self):
         other = "doc/roadmap/phase-05-the-zone-comes-alive-for-one-player.md"

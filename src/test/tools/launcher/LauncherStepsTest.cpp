@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks the first run the launcher's window shows: each ask moves at most one step on, the install and the run folder report their own numbers, the server is asked no more than once a second and the steps end with it open, a step that fails names the cause and what to do and stops the steps after it, the server is given up on after thirty tries, asking again starts from the top, and what the window is sent carries each step's id, label, state and word.
+ * Checks the first run the launcher's window shows: each ask moves at most one step on, the install and the run folder report their own numbers, the server is asked no more than once a second and the steps end with it open, a step that fails names the cause and what to do and stops the steps after it, the server is given up on after thirty tries, asking again starts from the top, and what the window is sent carries each step's id, label, state and word together with the launch state and the server's status; the launch state the window's primary button shows is decided here, checking before the install is looked at, locate when none is found, setting up while steps remain, play once all are done, launching for ten seconds after the client is handed off and playing after that, and retry when any later step fails, and the client's log folder is named only once the run folder is written.
  */
 
 #include "ConfigMgr.h"
@@ -130,7 +130,10 @@ TEST(LauncherStepsTest, TheWindowIsSentEachStepsIdLabelStateAndWord)
     Stepping stepping;
     stepping.Harness.AddInstall();
     stepping.Advance();
-    nlohmann::json const sent = nlohmann::json::parse(LauncherSteps::Describe(stepping.Steps.Steps()));
+    nlohmann::json const sent = nlohmann::json::parse(stepping.Steps.Describe());
+    EXPECT_EQ(sent["state"], "setting-up");
+    EXPECT_EQ(sent["server"]["status"], "unknown");
+    EXPECT_EQ(sent["server"]["address"], "127.0.0.1:12000");
     ASSERT_TRUE(sent["steps"].is_array());
     ASSERT_EQ(sent["steps"].size(), 3u);
     EXPECT_EQ(sent["steps"][0]["id"], "install");
@@ -139,4 +142,63 @@ TEST(LauncherStepsTest, TheWindowIsSentEachStepsIdLabelStateAndWord)
     EXPECT_EQ(sent["steps"][1]["state"], "doing");
     EXPECT_EQ(sent["steps"][2]["label"], "Reach the login server");
     EXPECT_TRUE(sent["steps"][2]["word"].is_string());
+}
+
+TEST(LauncherStepsTest, TheLaunchStateFollowsTheStepsAndTheClientHandedOff)
+{
+    Stepping stepping;
+    stepping.Harness.AddInstall();
+    EXPECT_EQ(stepping.Steps.State(), LaunchState::Checking);
+    EXPECT_EQ(stepping.Steps.ServerStatus(), "unknown");
+    EXPECT_FALSE(stepping.Steps.LogFolder()) << "no log folder is named before the run folder is written";
+
+    stepping.Advance();
+    EXPECT_EQ(stepping.Steps.State(), LaunchState::SettingUp);
+    EXPECT_FALSE(stepping.Steps.LogFolder());
+    stepping.Advance();
+    ASSERT_TRUE(stepping.Steps.LogFolder());
+    EXPECT_EQ(ConfigMgr::PathToUtf8(stepping.Steps.LogFolder()->lexically_normal()),
+        ConfigMgr::PathToUtf8(ConfigMgr::PathFromUtf8(LauncherTestData::RunFolder).lexically_normal()))
+        << "the folder the window may open is the one the client writes its log in, and no other";
+    stepping.Advance();
+    EXPECT_EQ(stepping.Steps.State(), LaunchState::SettingUp);
+    EXPECT_EQ(stepping.Steps.ServerStatus(), "offline") << "a try nothing answered says the server is not there yet";
+
+    stepping.Now += std::chrono::seconds(1);
+    stepping.Open = true;
+    stepping.Advance();
+    EXPECT_EQ(stepping.Steps.State(), LaunchState::Play);
+    EXPECT_EQ(stepping.Steps.ServerStatus(), "online");
+
+    stepping.Steps.Started();
+    EXPECT_EQ(stepping.Steps.State(), LaunchState::Launching);
+    stepping.Now += LauncherSteps::LaunchingFor;
+    EXPECT_EQ(stepping.Steps.State(), LaunchState::Playing);
+    EXPECT_EQ(nlohmann::json::parse(stepping.Steps.Describe())["state"], "playing");
+
+    stepping.Steps.Restart();
+    EXPECT_EQ(stepping.Steps.State(), LaunchState::Checking) << "asking again forgets the client that was handed off";
+}
+
+TEST(LauncherStepsTest, NoInstallAsksToLocateOneAndAnyOtherFailureAsksToRetry)
+{
+    Stepping missing;
+    missing.Advance();
+    EXPECT_EQ(missing.Steps.State(), LaunchState::Locate);
+    EXPECT_EQ(nlohmann::json::parse(missing.Steps.Describe())["state"], "locate");
+    EXPECT_EQ(nlohmann::json::parse(missing.Steps.Describe())["server"]["address"], "");
+
+    Stepping unreachable;
+    unreachable.Harness.AddInstall();
+    unreachable.Advance();
+    unreachable.Advance();
+    for (int attempt = 0; attempt < LauncherSteps::ServerTries; ++attempt)
+    {
+        unreachable.Now += std::chrono::seconds(1);
+        unreachable.Advance();
+    }
+    EXPECT_EQ(unreachable.Steps.State(), LaunchState::Retry);
+    EXPECT_EQ(unreachable.Steps.ServerStatus(), "offline");
+    EXPECT_STREQ(LauncherSteps::Name(LaunchState::SettingUp), "setting-up");
+    EXPECT_STREQ(LauncherSteps::Name(LaunchState::Retry), "retry");
 }

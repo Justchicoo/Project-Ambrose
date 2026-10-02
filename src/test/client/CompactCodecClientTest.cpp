@@ -41,7 +41,7 @@ TEST(CompactCodecClientTest, CapturedSamplesDecodeExactlyAndReencodeByteForByte)
     std::optional<std::string> const dump = Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH");
     std::optional<std::string> const samples = Ambrose::GetEnv("AMBROSE_OBJECT_SAMPLES_DIR");
     if (!dump || dump->empty() || !samples || samples->empty())
-        GTEST_SKIP() << "set AMBROSE_TYPE_DUMP_PATH to the r806919 type dump and AMBROSE_OBJECT_SAMPLES_DIR to a folder of captured ClassName_*.bin blobs to run this test";
+        GTEST_SKIP() << "set AMBROSE_TYPE_DUMP_PATH to the type dump and AMBROSE_OBJECT_SAMPLES_DIR to a folder of captured ClassName_*.bin blobs to run this test";
 
     TypeRegistry registry;
     ASSERT_TRUE(registry.LoadFromFile(LogConfig::Utf8Path(*dump)));
@@ -105,7 +105,7 @@ TEST(CompactCodecClientTest, EveryPropertyClassRoundTripsWithItsDefaults)
 {
     std::optional<std::string> const dump = Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH");
     if (!dump || dump->empty())
-        GTEST_SKIP() << "set AMBROSE_TYPE_DUMP_PATH to the r806919 type dump (format v2) from your own client to run this test";
+        GTEST_SKIP() << "set AMBROSE_TYPE_DUMP_PATH to the type dump (format v2) from your own client to run this test";
 
     TypeRegistry registry;
     ASSERT_TRUE(registry.LoadFromFile(LogConfig::Utf8Path(*dump)));

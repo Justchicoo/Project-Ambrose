@@ -47,7 +47,7 @@ namespace
             std::optional<std::string> const client = Ambrose::GetEnv("AMBROSE_CLIENT_DIR");
             std::optional<std::string> const dump = Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH");
             if (!client || client->empty() || !dump || dump->empty())
-                GTEST_SKIP() << "set AMBROSE_CLIENT_DIR to your own r806919 install and AMBROSE_TYPE_DUMP_PATH to its type dump to run this test";
+                GTEST_SKIP() << "set AMBROSE_CLIENT_DIR to your own install and AMBROSE_TYPE_DUMP_PATH to its type dump to run this test";
             ASSERT_TRUE(_registry.LoadFromFile(LogConfig::Utf8Path(*dump))) << (_registry.GetErrors().empty() ? std::string() : _registry.GetErrors().front());
             std::string error;
             _archive = KiwadArchive::Open(LogConfig::Utf8Path(*client) / "Data" / "GameData" / "Root.wad", error);

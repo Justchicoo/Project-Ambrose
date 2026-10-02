@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs every step of CI's checks job on a contributor's own clone, read from .github/workflows/core-build.yml so it can never drift from what CI runs, over the commits the next push would send, with the path check for the branch named: a green run here is a green checks job on the pull request.
+# Runs every step of CI's checks job on a contributor's own clone, read from .github/workflows/core-build.yml so it can never drift from what CI runs, over the commits the next push would send, with the path check for the branch named and without the steps CI leaves out of that pull request: a green run here is a green checks job on the pull request, and --stamp records the commit a green run covered for a pre-push guard to compare against.
 import argparse
 import io
 import os
@@ -38,11 +38,24 @@ def command_for(name, command, base, branch):
         return f'python apps/ci/ci_sql.py check --range "{base}...HEAD"'
     if "ci_sql.py promote" in command:
         return None if branch else command
+    if "progress.py --check" in command:
+        return None if branch else command
     return command
 
 
 def skipped_because(command):
-    return "CI runs it only on a push to main" if "ci_sql.py promote" in command else "give --branch to run it"
+    if "ci_sql.py promote" in command:
+        return "CI runs it only on a push to main"
+    if "progress.py --check" in command:
+        return "CI skips it on a pull request whose author cannot regenerate the card"
+    return "give --branch to run it"
+
+
+def write_stamp(root, path):
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True).stdout.strip()
+    with io.open(path, "w", encoding="utf-8") as stamp:
+        stamp.write(head)
+    return head
 
 
 def main(argv=None):
@@ -50,6 +63,7 @@ def main(argv=None):
     parser.add_argument("--branch", default="", help="the branch the pull request comes from, such as milestone/6.10-server-schemas; the path check runs only when it is given")
     parser.add_argument("--base", default="", help="what the pull request targets; defaults to <the remote for github.com/Justchicoo/Project-Ambrose>/main, fetched first")
     parser.add_argument("--list", action="store_true", help="print the steps and their commands without running them")
+    parser.add_argument("--stamp", default="", help="after a green run, write the commit it covered to this file; a failed run leaves it as it was")
     arguments = parser.parse_args(argv)
     base = arguments.base
     if not base:
@@ -75,6 +89,8 @@ def main(argv=None):
         else:
             print(f"ok    {name}")
     print(f"checks job over {base}..HEAD: " + ("all passed" if not failed else "failed: " + ", ".join(failed)))
+    if arguments.stamp and not failed:
+        print(f"stamped {write_stamp(ROOT, arguments.stamp)} in {arguments.stamp}")
     return 1 if failed else 0
 
 

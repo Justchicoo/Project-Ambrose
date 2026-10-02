@@ -1,8 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks that the window can ask the launcher for nothing the terminal cannot ask for, and gets back the same answer: a message naming the same values the console options name builds the same plan the console builds, right down to the command, so no decision can drift into the window; a message that leaves a field out leaves it for the launcher and its configuration to decide rather than filling it in a second time; a field of the wrong shape is refused by name instead of being coerced; a refusal names its reason, because a window that says only that something failed sends its user to a log file they do not have, and a password is hidden before the window is told anything, since the command is drawn on a screen that can be photographed while the client still has to be started with the real one.
+ * Checks that the window can ask the launcher for nothing the terminal cannot ask for, and gets back the same answer: a message naming the same values the console options name builds the same plan the console builds, right down to the command, so no decision can drift into the window, the window size it shows is the one the client is started at, and the install it names is written as the console writes it; a message that leaves a field out leaves it for the launcher and its configuration to decide rather than filling it in a second time; a field of the wrong shape is refused by name instead of being coerced; a refusal names its reason, because a window that says only that something failed sends its user to a log file they do not have, and a password is hidden before the window is told anything, since the command is drawn on a screen that can be photographed while the client still has to be started with the real one; every plan and refusal carries the launch state it was answered in, and the client's log folder is answered with its path or with why there is none yet, and handed to the system as a file URL in which nothing a folder name holds can change what is opened.
  */
 
+#include "ClientLocator.h"
+#include "ConfigMgr.h"
 #include "LauncherChannel.h"
 #include "LauncherHarness.h"
 
@@ -10,6 +12,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <optional>
 #include <string>
 
 TEST(LauncherChannelTest, AMessageAndTheConsoleOptionsBuildTheSamePlan)
@@ -43,6 +46,8 @@ TEST(LauncherChannelTest, AMessageAndTheConsoleOptionsBuildTheSamePlan)
     EXPECT_EQ(fromWindow->Locale, fromConsole->Locale);
     EXPECT_EQ(fromWindow->RunFolder, fromConsole->RunFolder);
     EXPECT_EQ(fromWindow->Program, fromConsole->Program);
+    EXPECT_EQ(nlohmann::json::parse(LauncherChannel::DescribePlan(*fromWindow))["window"], "1600x900")
+        << "the window shows the size the client is started at, the one it asked for";
 }
 
 TEST(LauncherChannelTest, AFieldTheMessageLeavesOutIsLeftForTheLauncherToDecide)
@@ -94,13 +99,34 @@ TEST(LauncherChannelTest, TheAnswerDescribesWhatWouldHappenOrWhyItWouldNot)
     EXPECT_EQ(described["revision"], LauncherTestData::Revision);
     EXPECT_EQ(described["host"], "127.0.0.1");
     EXPECT_EQ(described["port"], 12000);
+    EXPECT_EQ(described["window"], "1280x720") << "the window shows the size the launcher settled when nothing asked for one";
     EXPECT_FALSE(described["command"].get<std::string>().empty()) << "the window shows what will be run, not a shape only this program reads";
-    EXPECT_FALSE(described["install"].get<std::string>().empty());
+    EXPECT_EQ(described["install"], ClientLocator::PathText(plan->Install.Root))
+        << "the window names the install exactly as the console's install line does, so what one shows the other can be checked against";
     EXPECT_FALSE(described["run_folder"].get<std::string>().empty());
+    EXPECT_EQ(described["state"], "play") << "a plan answered with nothing else said is one the window can play";
+    EXPECT_EQ(nlohmann::json::parse(LauncherChannel::DescribePlan(*plan, "launching"))["state"], "launching");
 
     nlohmann::json const refused = nlohmann::json::parse(LauncherChannel::DescribeRefusal("no install was found"));
     EXPECT_FALSE(refused["ready"]);
     EXPECT_EQ(refused["reason"], "no install was found") << "a refusal carries the reason, so the window can say what to do about it";
+    EXPECT_EQ(refused["state"], "retry");
+    EXPECT_EQ(nlohmann::json::parse(LauncherChannel::DescribeRefusal("no install was found", "locate"))["state"], "locate");
+}
+
+TEST(LauncherChannelTest, TheLogFolderIsTheLaunchersOwnAndItsAddressCannotBeBent)
+{
+    nlohmann::json const opened = nlohmann::json::parse(LauncherChannel::DescribeFolder(ConfigMgr::PathFromUtf8("C:/Users/wiz/AppData/Local/ProjectAmbrose/client/r1")));
+    EXPECT_TRUE(opened["opened"]);
+    EXPECT_EQ(opened["folder"], "C:/Users/wiz/AppData/Local/ProjectAmbrose/client/r1");
+
+    nlohmann::json const none = nlohmann::json::parse(LauncherChannel::DescribeFolder(std::nullopt));
+    EXPECT_FALSE(none["opened"]);
+    EXPECT_FALSE(none["reason"].get<std::string>().empty()) << "a folder that is not there yet says why";
+
+    EXPECT_EQ(LauncherChannel::FolderAddress(ConfigMgr::PathFromUtf8("C:/Users/wiz/Ambrose client/r1")), "file:///C:/Users/wiz/Ambrose%20client/r1");
+    EXPECT_EQ(LauncherChannel::FolderAddress(ConfigMgr::PathFromUtf8("/home/wiz/a#b?c")), "file:///home/wiz/a%23b%3Fc")
+        << "a hash or a question mark in a folder name is part of the name, never a fragment or a query";
 }
 
 TEST(LauncherChannelTest, AnAccountArrivesWholeOrIsRefused)

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the world thread, the order of session and script work, named tick component timing and budgets, and bounded on-demand Chrome trace capture.
+ * Tests the world thread, which clearing the world forgets, the order of session and script work, named tick component timing and budgets, and bounded on-demand Chrome trace capture.
  */
 
 #include "GameSession.h"
@@ -128,6 +128,15 @@ TEST_F(WorldTest, TheWorldThreadIsTheOneThatCalledUpdateAndNoOther)
     other.join();
     EXPECT_FALSE(elsewhere.load()) << "another thread believed it was the world thread";
     EXPECT_EQ(sWorld.GetWorldThreadId(), worldThread);
+}
+
+TEST_F(WorldTest, ClearingTheWorldForgetsItsThread)
+{
+    sWorld.Update(std::chrono::milliseconds(1));
+    ASSERT_TRUE(sWorld.IsWorldThread());
+    sWorld.Clear();
+    EXPECT_FALSE(sWorld.IsWorldThread()) << "a thread given the old world thread's id would run world work inline with no world thread running";
+    EXPECT_EQ(sWorld.GetWorldThreadId(), std::thread::id());
 }
 
 TEST_F(WorldTest, EverySessionIsDrainedBeforeTheScriptsRun)

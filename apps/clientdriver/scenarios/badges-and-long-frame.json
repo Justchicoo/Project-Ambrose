@@ -7,7 +7,8 @@
   "Then a game console announcement of 16000 characters makes one MSG_SERVERMESSAGE frame of about 32000 bytes, over the 0x7780 a short",
   "frame's length can say, so the frame is sent long; the client's log shows whether it read the message.",
   "With the game server's session log at DEBUG, it decodes its own LOGINCOMPLETE Data after encoding it and says what it holds, which 4.11 records.",
-  "The game server also saves the exact LOGINCOMPLETE Data it sends under its folder's logincomplete, which client core reads afterwards against the install's types; the bytes stay local."
+  "The game server also saves the exact LOGINCOMPLETE Data it sends under its folder's logincomplete, which client core reads afterwards against the install's types; the bytes stay local.",
+  "The wizard is level 25 with the experience that level holds; its school badge, Pyromancer, is read from the install's Badges table and shown after the Badges tab and its first filter are chosen."
  ],
  "requires": {
   "gameserver": true
@@ -41,7 +42,9 @@
    "torso_decal": 4,
    "feet_color": 4,
    "feet_decal": 12
-  }
+  },
+  "level": 25,
+  "experience": 73000
  },
  "steps": [
   {
@@ -208,10 +211,11 @@
   },
   {
    "action": "wait_game_log",
-   "name": "the game server sends the badge list",
-   "pattern": "Session \\d+ told its wizard it holds no badges",
+   "name": "the game server sends the wizard its rank badges",
+   "pattern": "Session \\d+ told its wizard it holds (\\d+) badge\\(s\\): (.*)",
    "timeout": 30,
-   "from": "start"
+   "from": "start",
+   "record": true
   },
   {
    "action": "key",
@@ -238,9 +242,21 @@
   },
   {
    "action": "click",
-   "name": "open the Badges page",
+   "name": "open the Badges tab",
    "target": "character_badges",
    "attempts": 3
+  },
+  {
+   "action": "shot",
+   "name": "the badge filters",
+   "file": "badge-filters",
+   "settle": 2
+  },
+  {
+   "action": "click",
+   "name": "open the first badge filter",
+   "target": "badge_filter_first",
+   "attempts": 2
   },
   {
    "action": "shot",

@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads every sigil of the user's own r806919 install through the sigil manager, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: all 25 templates the manifest lists under Sigils/ load, each one's template id the hash of its name, and CombatSigil8Actor places four monsters and four players in eight circles and carries PvE damage and resist limits that are not zero.
+ * Reads every sigil of the user's own install through the sigil manager, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: every template the manifest lists under Sigils/, as many as recorded for the installed revision, r806919's 25, loads, each one's template id the hash of its name, and CombatSigil8Actor places four monsters and four players in eight circles and carries PvE damage and resist limits that are not zero.
  */
 
 #include "Environment.h"
+#include "InstalledRevision.h"
 #include "LogConfig.h"
 #include "ObjectTemplateMgr.h"
 #include "SigilMgr.h"
@@ -60,7 +61,7 @@ namespace
 
 TEST_F(SigilMgrClientTest, EverySigilLoadsKeyedByTheHashOfItsName)
 {
-    EXPECT_EQ(s_sigils->GetSigils()->Size(), 25u);
+    InstalledRevision::Expect(s_sigils->GetSigils()->Size(), { { "r806919", 25u } }, "sigils");
 }
 
 TEST_F(SigilMgrClientTest, CombatSigil8ActorPlacesFourMonstersAndFourPlayersWithPvELimits)

@@ -50,7 +50,7 @@ namespace
     }
 }
 
-TEST(ClientLocatorTest, AnInstallNeedsRootWadAndReadsItsRevisionAndProgram)
+TEST(ClientLocatorTest, AnInstallNeedsRootWadAndReadsItsRevisionAndProgramAndANewerRevisionIsPreferred)
 {
     FakeClientSystem system;
     system.AddInstall("C:/Games/Pinned", "r806919.Wizard_1_610");
@@ -63,18 +63,16 @@ TEST(ClientLocatorTest, AnInstallNeedsRootWadAndReadsItsRevisionAndProgram)
     std::optional<ClientInstall> const pinned = ClientInstall::Inspect(system, "C:/Games/Pinned");
     ASSERT_TRUE(pinned);
     EXPECT_EQ(pinned->Revision, "r806919.Wizard_1_610");
-    EXPECT_TRUE(pinned->IsPinned());
+    EXPECT_EQ(pinned->ProgramPath(), std::filesystem::path("C:/Games/Pinned") / "Bin" / "WizardGraphicalClient.exe");
     EXPECT_TRUE(pinned->HasProgram);
     EXPECT_EQ(pinned->RevisionNumber(), 806919u);
     std::optional<ClientInstall> const spaced = ClientInstall::Inspect(system, "C:/Games/Spaced");
     ASSERT_TRUE(spaced);
     EXPECT_EQ(spaced->Revision, "r806919");
-    EXPECT_TRUE(spaced->IsPinned());
     EXPECT_FALSE(spaced->HasProgram);
     std::optional<ClientInstall> const garbage = ClientInstall::Inspect(system, "C:/Games/Garbage");
     ASSERT_TRUE(garbage);
     EXPECT_EQ(garbage->Revision, "");
-    EXPECT_FALSE(garbage->IsPinned());
     EXPECT_EQ(garbage->RevisionNumber(), 0u);
     EXPECT_NE(garbage->Describe().find("(revision unknown)"), std::string::npos);
     EXPECT_FALSE(ClientInstall::Inspect(system, "C:/Games/NoWad"));
@@ -82,9 +80,8 @@ TEST(ClientLocatorTest, AnInstallNeedsRootWadAndReadsItsRevisionAndProgram)
 
     ClientInstall later;
     later.Revision = "r8069190.Wizard_1_620";
-    EXPECT_FALSE(later.IsPinned());
-    later.Revision = "r806919.Wizard_1_611";
-    EXPECT_TRUE(later.IsPinned());
+    EXPECT_TRUE(later.IsPreferredTo(*pinned));
+    EXPECT_FALSE(pinned->IsPreferredTo(later));
 
     EXPECT_EQ(RevisionNumberOf("r1"), 1u);
     EXPECT_EQ(RevisionNumberOf("r12abc"), 12u);

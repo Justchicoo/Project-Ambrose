@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, hands every state the app passes through to the status observer once and in order with when each began and the data the panel's status event carries, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, waits past its timeout for a start step a stand-in admin API reports until the app is ready and ends one that runs past the time it asked for, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant.
+ * Runs the supervisor over the helper program as its app: it starts it and calls it ready on its ready line, stops it with a shutdown line on its input, hands every state the app passes through to the status observer once and in order with when each began and the data the panel's status event carries, restarts it, counts one crash and starts it again when something else ends it, leaves a start that exits before it is ready alone, ends a start that never reports ready, waits past its timeout for a start step a stand-in admin API reports, or the app prints with its admin API off, until the app is ready, grants a printed step six hours at most, and ends one that runs past the time it asked for, takes a running app back after the supervisor is replaced and refuses the same process id once its start time no longer matches, and answers its routes: the app list carrying the supervisor and every app, the supervisor's own state, power requests refused field by field and by state, the captured output, and a relay that says why an app with its admin API off cannot be reached, with a request judged by the listener it came in on, so the admin token on the supervisor's own listener reaches the relay and power while the panel's check still refuses a caller it does not grant.
  */
 
 #include "AdminAuth.h"
@@ -12,6 +12,7 @@
 #include "LogTestDirectory.h"
 #include "LogTestHarness.h"
 #include "Panel.h"
+#include "StartProgress.h"
 #include "Supervisor.h"
 
 #include <asio.hpp>
@@ -360,10 +361,24 @@ TEST(SupervisorTest, AStartThatEndsBeforeItIsReadyIsRecordedAndNotStartedAgain)
     EXPECT_EQ(crashed.Exits.back().Code, std::optional<int64>(3));
     EXPECT_EQ(crashed.Exits.back().During, AppState::Starting);
     EXPECT_NE(crashed.Message.find("before it was ready"), std::string::npos) << crashed.Message;
+    EXPECT_NE(crashed.Message.find("exit code 3"), std::string::npos) << crashed.Message;
+    EXPECT_NE(crashed.Message.find("nothing works"), std::string::npos) << "the panel shows why it stopped, not only that it did: " << crashed.Message;
     EXPECT_TRUE(rig.Said("nothing works"));
     std::this_thread::sleep_for(2s);
     EXPECT_EQ(rig.App().State, AppState::Crashed);
     EXPECT_EQ(rig.App().Restarts, 0u);
+}
+
+TEST(SupervisorTest, AStartThatEndsBeforeItIsReadyNamesTheFirstErrorItLogged)
+{
+    Rig rig({ "echo", "2026-09-30_19:10:27.884 ERROR [server.loginserver] it has no type dump: TypeDumpPath is not set", "echo",
+        "2026-09-30_19:10:27.886 ERROR [server.loginserver] loginserver failed to start", "exit", "1" });
+    ASSERT_TRUE(rig.Open());
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Crashed; }));
+    std::string const message = rig.App().Message;
+    EXPECT_NE(message.find("exit code 1: it has no type dump: TypeDumpPath is not set"), std::string::npos)
+        << "the first error is the cause and the last only says it failed: " << message;
+    EXPECT_EQ(message.find("[server.loginserver]"), std::string::npos) << "the time, level and category are left out: " << message;
 }
 
 TEST(SupervisorTest, AStartThatNeverReportsReadyIsEndedAtItsTimeout)
@@ -461,6 +476,45 @@ TEST(SupervisorTest, AStartStepThatRunsPastTheTimeItAskedForEndsTheStart)
     ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.StartStage == "extracting zones"; }));
     ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Crashed; }, 20s));
     EXPECT_NE(rig.App().Message.find("extracting zones ran past the time it asked for"), std::string::npos) << rig.App().Message;
+    EXPECT_EQ(rig.App().FailedStarts, 1u);
+}
+
+namespace
+{
+    std::string StepLine(std::string_view stage, std::chrono::seconds allowance)
+    {
+        return "2026-10-01_22:40:00.000 INFO  [server.child_process_helper] " + StartProgress::StepText("child_process_helper", stage, allowance);
+    }
+}
+
+TEST(SupervisorTest, AStartStepLineIsWaitedForWhenTheAdminApiIsOff)
+{
+    Rig rig({ "echo", StepLine("building the type dump for revision r1", 60s), "sleep", "2500", "echo", ReadyLine, "wait-for-stop" }, "App.helper.StartTimeout = 1\n");
+    ASSERT_TRUE(rig.Open());
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.StartStage == "building the type dump for revision r1"; }));
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Running; }, 20s)) << rig.App().Message;
+    EXPECT_EQ(rig.App().FailedStarts, 0u) << "a first start that builds the type dump outlasts a short start timeout: " << rig.App().Message;
+    EXPECT_TRUE(rig.App().StartStage.empty());
+    EXPECT_TRUE(rig.Said("building the type dump for revision r1, which may take up to 60 s more"));
+}
+
+TEST(SupervisorTest, AStartStepLineIsGrantedSixHoursAtMost)
+{
+    Rig rig({ "echo", StepLine("waiting forever", std::chrono::seconds(4000000000LL)), "sleep", "60000" }, "App.helper.StartTimeout = 1\n");
+    ASSERT_TRUE(rig.Open());
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.StartStage == "waiting forever"; }));
+    auto const now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    auto const sixHours = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::hours(6)).count();
+    EXPECT_LE(rig.App().StartUntilEpochMs, now + sixHours) << "an app cannot hold its start open past the ceiling by asking for more";
+    EXPECT_GT(rig.App().StartUntilEpochMs, now + sixHours - 60000);
+}
+
+TEST(SupervisorTest, AStartStepLineThatRunsPastItsTimeEndsTheStart)
+{
+    Rig rig({ "echo", StepLine("extracting the zones", 2s), "sleep", "60000" }, "App.helper.StartTimeout = 1\n");
+    ASSERT_TRUE(rig.Open());
+    ASSERT_TRUE(rig.WaitFor([](AppSnapshot const& app) { return app.State == AppState::Crashed; }, 20s));
+    EXPECT_NE(rig.App().Message.find("extracting the zones ran past the time it asked for"), std::string::npos) << rig.App().Message;
     EXPECT_EQ(rig.App().FailedStarts, 1u);
 }
 
