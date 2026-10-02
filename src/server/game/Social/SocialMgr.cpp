@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Persists friends, requests and ignores, emits the client's buddy messages from its installed definitions, keeps live presence for this realm and filters radial chat through the owner's ignore list.
+ * Loads friends, requests and ignores asynchronously, queues their writes away from the world thread, emits the client's buddy messages from its installed definitions, keeps live presence for this realm and filters radial chat through the owner's ignore list.
  */
 
 #include "SocialMgr.h"
@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -33,14 +34,6 @@ namespace
     constexpr uint8 PlayerStatusLinkDead = 2;
     constexpr uint8 PlayerStatusOnline = 4;
     constexpr uint32 ChatErrorGeneric = 1;
-
-    struct FriendRow
-    {
-        uint64 CharacterId = 0;
-        uint8 BestFriendSymbol = 0;
-        uint64 Date = 0;
-        std::string PackedName;
-    };
 
     struct IgnoreRow
     {
@@ -81,93 +74,52 @@ namespace
         return CharacterDatabase.GetPreparedStatement(id);
     }
 
-    bool LoadFriends(uint64 ownerId, std::vector<FriendRow>& friends)
+    std::map<uint64, SocialFriend> ReadFriends(PreparedQueryResult result)
     {
-        Statement statement = Prepare(CHAR_SEL_SOCIAL_FRIENDS);
-        if (!statement || !CharacterDatabase.IsOpen())
-            return false;
-        statement->SetData(0, ownerId);
-        PreparedQueryResult result;
-        if (!CharacterDatabase.TryQuery(*statement, result))
-            return false;
-        if (!result)
-            return true;
-        if (result->GetRowCount() == 0)
-            return true;
+        std::map<uint64, SocialFriend> friends;
+        if (!result || result->GetRowCount() == 0)
+            return friends;
         PreparedResultSet const& row = *result;
         do
         {
-            friends.push_back({ row[0].Get<uint64>(), row[1].Get<uint8>(), row[2].Get<uint64>(),
-                PackedCharacterName(row[3], row[4], row[5]) });
+            uint64 const characterId = row[0].Get<uint64>();
+            friends.emplace(characterId, SocialFriend{
+                row[1].Get<uint8>(),
+                row[2].Get<uint64>(),
+                PackedCharacterName(row[3], row[4], row[5])
+            });
         } while (result->NextRow());
-        return true;
+        return friends;
     }
 
-    bool LoadIgnores(uint64 ownerId, std::vector<IgnoreRow>& ignores)
+    std::map<uint64, SocialIgnore> ReadIgnores(PreparedQueryResult result)
     {
-        Statement statement = Prepare(CHAR_SEL_SOCIAL_IGNORES);
-        if (!statement || !CharacterDatabase.IsOpen())
-            return false;
-        statement->SetData(0, ownerId);
-        PreparedQueryResult result;
-        if (!CharacterDatabase.TryQuery(*statement, result))
-            return false;
-        if (!result)
-            return true;
-        if (result->GetRowCount() == 0)
-            return true;
+        std::map<uint64, SocialIgnore> ignores;
+        if (!result || result->GetRowCount() == 0)
+            return ignores;
         PreparedResultSet const& row = *result;
         do
         {
-            ignores.push_back({ row[0].Get<uint64>(), row[1].Get<int32>(), PackedCharacterName(row[2], row[3], row[4]) });
+            uint64 const characterId = row[0].Get<uint64>();
+            ignores.emplace(characterId, SocialIgnore{
+                row[1].Get<int32>(),
+                PackedCharacterName(row[2], row[3], row[4])
+            });
         } while (result->NextRow());
-        return true;
+        return ignores;
     }
 
-    bool LoadRequests(uint64 targetId, std::vector<RequestRow>& requests)
+    std::vector<RequestRow> ReadRequests(PreparedQueryResult result)
     {
-        Statement statement = Prepare(CHAR_SEL_SOCIAL_REQUESTS);
-        if (!statement || !CharacterDatabase.IsOpen())
-            return false;
-        statement->SetData(0, targetId);
-        PreparedQueryResult result;
-        if (!CharacterDatabase.TryQuery(*statement, result))
-            return false;
-        if (!result)
-            return true;
-        if (result->GetRowCount() == 0)
-            return true;
+        std::vector<RequestRow> requests;
+        if (!result || result->GetRowCount() == 0)
+            return requests;
         PreparedResultSet const& row = *result;
         do
         {
             requests.push_back({ row[0].Get<uint64>(), PackedCharacterName(row[1], row[2], row[3]), row[4].Get<int32>() });
         } while (result->NextRow());
-        return true;
-    }
-
-    std::optional<uint32> FriendCount(uint64 ownerId)
-    {
-        Statement statement = Prepare(CHAR_SEL_SOCIAL_FRIEND_COUNT);
-        if (!statement || !CharacterDatabase.IsOpen())
-            return std::nullopt;
-        statement->SetData(0, ownerId);
-        PreparedQueryResult result;
-        if (!CharacterDatabase.TryQuery(*statement, result) || !result)
-            return std::nullopt;
-        return (*result)[0].Get<uint32>();
-    }
-
-    std::optional<bool> HasRequest(uint64 requesterId, uint64 targetId)
-    {
-        Statement statement = Prepare(CHAR_SEL_SOCIAL_REQUEST_EXISTS);
-        if (!statement || !CharacterDatabase.IsOpen())
-            return std::nullopt;
-        statement->SetData(0, requesterId);
-        statement->SetData(1, targetId);
-        PreparedQueryResult result;
-        if (!CharacterDatabase.TryQuery(*statement, result))
-            return std::nullopt;
-        return result && result->GetRowCount() != 0;
+        return requests;
     }
 
     std::optional<std::string> EncodeIgnoreList(std::vector<IgnoreRow> const& rows, std::optional<uint64> onlyId)
@@ -222,34 +174,30 @@ namespace
         return std::string(encoded.Bytes.begin(), encoded.Bytes.end());
     }
 
-    CharacterLoad LoadCharacter(uint64 characterId)
-    {
-        return CharacterRepository::Load(characterId);
-    }
 }
 
-bool SocialLists::AddFriend(uint64 characterId, uint64 friendDate)
+bool SocialLists::AddFriend(uint64 characterId, uint64 friendDate, uint8 bestFriendSymbol, std::string packedName)
 {
     if (characterId == 0)
         return false;
-    bool const inserted = _friends.insert(characterId).second;
-    _friendDates[characterId] = friendDate;
+    bool const inserted = !_friends.contains(characterId);
+    _friends[characterId] = { bestFriendSymbol, friendDate, std::move(packedName) };
     return inserted;
 }
 
 bool SocialLists::RemoveFriend(uint64 characterId)
 {
-    _friendDates.erase(characterId);
     return _friends.erase(characterId) != 0;
 }
 
-bool SocialLists::AddIgnore(uint64 characterId)
+bool SocialLists::AddIgnore(uint64 characterId, int32 platformType, std::string packedName)
 {
     if (characterId == 0)
         return false;
     _friends.erase(characterId);
-    _friendDates.erase(characterId);
-    return _ignores.insert(characterId).second;
+    bool const inserted = !_ignores.contains(characterId);
+    _ignores[characterId] = { platformType, std::move(packedName) };
+    return inserted;
 }
 
 bool SocialLists::RemoveIgnore(uint64 characterId)
@@ -269,20 +217,28 @@ bool SocialLists::IsIgnored(uint64 characterId) const
 
 uint64 SocialLists::GetFriendDate(uint64 characterId) const noexcept
 {
-    auto const found = _friendDates.find(characterId);
-    return found == _friendDates.end() ? 0 : found->second;
+    auto const found = _friends.find(characterId);
+    return found == _friends.end() ? 0 : found->second.Date;
 }
 
-void SocialLists::Replace(std::set<uint64> friends, std::set<uint64> ignores, std::map<uint64, uint64> friendDates)
+uint8 SocialLists::GetBestFriendSymbol(uint64 characterId) const noexcept
 {
-    for (uint64 const ignoredId : ignores)
-    {
-        friends.erase(ignoredId);
-        friendDates.erase(ignoredId);
-    }
+    auto const found = _friends.find(characterId);
+    return found == _friends.end() ? 0 : found->second.BestFriendSymbol;
+}
+
+void SocialLists::SetBestFriendSymbol(uint64 characterId, uint8 symbol) noexcept
+{
+    if (auto const found = _friends.find(characterId); found != _friends.end())
+        found->second.BestFriendSymbol = symbol;
+}
+
+void SocialLists::Replace(std::map<uint64, SocialFriend> friends, std::map<uint64, SocialIgnore> ignores)
+{
+    for (auto const& ignore : ignores)
+        friends.erase(ignore.first);
     _friends = std::move(friends);
     _ignores = std::move(ignores);
-    _friendDates = std::move(friendDates);
 }
 
 SocialMgr& SocialMgr::Instance()
@@ -296,30 +252,123 @@ SocialLists& SocialMgr::Lists(uint64 characterId)
     return _lists[characterId];
 }
 
-bool SocialMgr::LoadLists(uint64 characterId)
+void SocialMgr::QueueQuery(GameSession& session, QueryCallback&& query)
+{
+    session._queryCallbacks.AddCallback(std::move(query));
+    session._queryCallbacks.ProcessReadyCallbacks();
+}
+
+void SocialMgr::QueueWorldWork(GameSession& session, std::function<void(GameSession&)> work)
+{
+    std::shared_ptr<GameSession> owner = session.SharedSelf();
+    if (!owner->IsOpen())
+        return;
+    if (!owner->QueueInbound([owner, work = std::move(work)]() mutable
+    {
+        if (owner->IsOpen())
+            work(*owner);
+    }))
+    {
+        if (owner->IsOpen())
+            LOG_ERROR("server.social", "Could not queue database work for session {}", owner->GetSessionId());
+    }
+}
+
+void SocialMgr::LoadLists(GameSession& session, uint64 characterId, std::function<void(bool)> completion)
 {
     if (_loaded.contains(characterId))
-        return true;
-    std::vector<FriendRow> friends;
-    std::vector<IgnoreRow> ignores;
-    if (!LoadFriends(characterId, friends) || !LoadIgnores(characterId, ignores))
     {
-        LOG_ERROR("server.social", "Could not load the friend and ignore lists for wizard {}", characterId);
-        return false;
+        completion(true);
+        return;
     }
-    std::set<uint64> friendIds;
-    std::set<uint64> ignoreIds;
-    std::map<uint64, uint64> friendDates;
-    for (FriendRow const& friendRow : friends)
+    Statement friends = Prepare(CHAR_SEL_SOCIAL_FRIENDS);
+    if (!friends || !CharacterDatabase.IsOpen())
     {
-        friendIds.insert(friendRow.CharacterId);
-        friendDates.emplace(friendRow.CharacterId, friendRow.Date);
+        LOG_ERROR("server.social", "Could not prepare loading the friend list for wizard {}", characterId);
+        completion(false);
+        return;
     }
-    for (IgnoreRow const& ignoreRow : ignores)
-        ignoreIds.insert(ignoreRow.CharacterId);
-    Lists(characterId).Replace(std::move(friendIds), std::move(ignoreIds), std::move(friendDates));
-    _loaded.insert(characterId);
-    return true;
+    friends->SetData(0, characterId);
+    GameSession* const owner = &session;
+    QueueQuery(session, CharacterDatabase.AsyncQuery(std::move(friends), session.MakeCompletionHandler())
+        .WithPreparedCallback([this, owner, characterId, completion = std::move(completion)](PreparedQueryResult result) mutable
+    {
+        std::map<uint64, SocialFriend> friends = ReadFriends(std::move(result));
+        QueueWorldWork(*owner, [this, characterId, friends = std::move(friends), completion = std::move(completion)](GameSession& session) mutable
+        {
+            Statement ignores = Prepare(CHAR_SEL_SOCIAL_IGNORES);
+            if (!ignores || !CharacterDatabase.IsOpen())
+            {
+                LOG_ERROR("server.social", "Could not prepare loading the ignore list for wizard {}", characterId);
+                completion(false);
+                return;
+            }
+            ignores->SetData(0, characterId);
+            GameSession* const owner = &session;
+            QueueQuery(session, CharacterDatabase.AsyncQuery(std::move(ignores), session.MakeCompletionHandler())
+                .WithPreparedCallback([this, owner, characterId, friends = std::move(friends), completion = std::move(completion)](PreparedQueryResult ignoreResult) mutable
+            {
+                std::map<uint64, SocialIgnore> ignores = ReadIgnores(std::move(ignoreResult));
+                QueueWorldWork(*owner, [this, characterId, friends = std::move(friends), ignores = std::move(ignores),
+                    completion = std::move(completion)](GameSession&) mutable
+                {
+                    if (!_loaded.contains(characterId))
+                    {
+                        Lists(characterId).Replace(std::move(friends), std::move(ignores));
+                        _loaded.insert(characterId);
+                    }
+                    completion(true);
+                });
+            }));
+        });
+    }));
+}
+
+void SocialMgr::LoadCharacter(GameSession& session, uint64 characterId, std::function<void(std::optional<CharacterSummary>)> completion)
+{
+    CharacterRepository::Statement statement = CharacterDatabase.IsOpen() ? CharacterRepository::PrepareLoad(characterId) : nullptr;
+    if (!statement)
+    {
+        LOG_ERROR("server.social", "Could not prepare loading wizard {}", characterId);
+        completion(std::nullopt);
+        return;
+    }
+    GameSession* const owner = &session;
+    QueueQuery(session, CharacterDatabase.AsyncQuery(std::move(statement), session.MakeCompletionHandler())
+        .WithPreparedCallback([this, owner, characterId, completion = std::move(completion)](PreparedQueryResult result) mutable
+    {
+        std::vector<CharacterSummary> characters = result ? CharacterRepository::ReadCharacters(*result) : std::vector<CharacterSummary>();
+        std::optional<CharacterSummary> character;
+        if (!characters.empty())
+            character = std::move(characters.front());
+        QueueWorldWork(*owner, [completion = std::move(completion), character = std::move(character)](GameSession&) mutable
+        {
+            completion(std::move(character));
+        });
+    }));
+}
+
+void SocialMgr::CheckRequestExists(GameSession& session, uint64 requesterId, uint64 targetId, std::function<void(bool)> completion)
+{
+    Statement statement = Prepare(CHAR_SEL_SOCIAL_REQUEST_EXISTS);
+    if (!statement || !CharacterDatabase.IsOpen())
+    {
+        LOG_ERROR("server.social", "Could not prepare checking friend request {} -> {}", requesterId, targetId);
+        completion(false);
+        return;
+    }
+    statement->SetData(0, requesterId);
+    statement->SetData(1, targetId);
+    GameSession* const owner = &session;
+    QueueQuery(session, CharacterDatabase.AsyncQuery(std::move(statement), session.MakeCompletionHandler())
+        .WithPreparedCallback([this, owner, requesterId, targetId, completion = std::move(completion)](PreparedQueryResult result) mutable
+    {
+        bool const exists = result && result->GetRowCount() != 0;
+        QueueWorldWork(*owner, [completion = std::move(completion), exists](GameSession&) mutable
+        {
+            completion(exists);
+        });
+    }));
 }
 
 bool SocialMgr::IsIgnored(uint64 ownerId, uint64 speakerId) const noexcept
@@ -345,6 +394,7 @@ void SocialMgr::Clear()
     _lists.clear();
     _online.clear();
     _loaded.clear();
+    _pendingRequests.clear();
 }
 
 void SocialMgr::SendChatError(GameSession& session, uint64 characterId)
@@ -353,7 +403,8 @@ void SocialMgr::SendChatError(GameSession& session, uint64 characterId)
     error.ListOwnerGid = session.GetCharacterId();
     error.CharacterId = characterId;
     error.Error = ChatErrorGeneric;
-    session.SendDmlMessage(error);
+    if (!session.SendDmlMessage(error))
+        LOG_ERROR("server.social", "Could not send CHATERROR to wizard {}", session.GetCharacterId());
 }
 
 void SocialMgr::SendFriendEntry(GameSession& session, uint64 friendId, std::string const& friendPackedName, uint64 friendDate, uint64 friendStatusDate)
@@ -383,11 +434,13 @@ void SocialMgr::SendFriendEntry(GameSession& session, uint64 friendId, std::stri
 void SocialMgr::SendIgnoreList(GameSession& session, bool addOne, uint64 characterId)
 {
     std::vector<IgnoreRow> rows;
-    if (!LoadIgnores(session.GetCharacterId(), rows))
+    if (!_loaded.contains(session.GetCharacterId()))
     {
-        LOG_ERROR("server.social", "Could not load the ignore list for wizard {}", session.GetCharacterId());
+        LOG_ERROR("server.social", "Cannot send the ignore list before it is loaded for wizard {}", session.GetCharacterId());
         return;
     }
+    for (auto const& [ignoredId, ignore] : Lists(session.GetCharacterId()).GetIgnores())
+        rows.push_back({ ignoredId, ignore.PlatformType, ignore.PackedName });
     std::optional<std::string> data = EncodeIgnoreList(rows, addOne ? std::optional<uint64>(characterId) : std::nullopt);
     if (!data)
         return;
@@ -398,54 +451,71 @@ void SocialMgr::SendIgnoreList(GameSession& session, bool addOne, uint64 charact
     session.SendDmlMessage(reply);
 }
 
-void SocialMgr::SendPendingRequests(GameSession& session)
+void SocialMgr::SendPendingRequests(GameSession& session, std::function<void()> completion)
 {
-    std::vector<RequestRow> requests;
-    if (!LoadRequests(session.GetCharacterId(), requests))
+    uint64 const ownerId = session.GetCharacterId();
+    Statement statement = Prepare(CHAR_SEL_SOCIAL_REQUESTS);
+    if (!statement || !CharacterDatabase.IsOpen())
     {
-        LOG_ERROR("server.social", "Could not load incoming friend requests for wizard {}", session.GetCharacterId());
+        LOG_ERROR("server.social", "Could not prepare incoming friend requests for wizard {}", ownerId);
+        completion();
         return;
     }
-    for (RequestRow const& request : requests)
+    statement->SetData(0, ownerId);
+    GameSession* const owner = &session;
+    QueueQuery(session, CharacterDatabase.AsyncQuery(std::move(statement), session.MakeCompletionHandler())
+        .WithPreparedCallback([this, owner, ownerId, completion = std::move(completion)](PreparedQueryResult result) mutable
     {
-        GameMessages::BuddyRequestAdd message;
-        message.ListOwnerGid = request.CharacterId;
-        message.EntryGid = session.GetCharacterId();
-        message.OwnerName = request.PackedName;
-        message.OwnerLevel = static_cast<uint8>(std::clamp(request.Level, 0, static_cast<int32>(std::numeric_limits<uint8>::max())));
-        session.SendDmlMessage(message);
-    }
+        std::vector<RequestRow> requests = ReadRequests(std::move(result));
+        QueueWorldWork(*owner, [this, ownerId, requests = std::move(requests), completion = std::move(completion)](GameSession& session) mutable
+        {
+            for (RequestRow const& request : requests)
+            {
+                _pendingRequests.emplace(request.CharacterId, ownerId);
+                GameMessages::BuddyRequestAdd message;
+                message.ListOwnerGid = request.CharacterId;
+                message.EntryGid = ownerId;
+                message.OwnerName = request.PackedName;
+                message.OwnerLevel = static_cast<uint8>(std::clamp(request.Level, 0, static_cast<int32>(std::numeric_limits<uint8>::max())));
+                session.SendDmlMessage(message);
+            }
+            completion();
+        });
+    }));
 }
 
 void SocialMgr::SendLists(GameSession& session)
 {
     uint64 const ownerId = session.GetCharacterId();
-    if (ownerId == 0 || !LoadLists(ownerId))
+    if (ownerId == 0)
         return;
-    std::vector<FriendRow> friends;
-    if (!LoadFriends(ownerId, friends))
+    LoadLists(session, ownerId, [this, owner = &session, ownerId](bool loaded)
     {
-        LOG_ERROR("server.social", "Could not load the friend list for wizard {}", ownerId);
-        return;
-    }
-    for (FriendRow const& friendRow : friends)
-    {
-        SendFriendEntry(session, friendRow.CharacterId, friendRow.PackedName, friendRow.Date, friendRow.Date);
-        if (friendRow.BestFriendSymbol != 0)
+        if (!loaded || !owner->IsOpen())
+            return;
+        for (auto const& [friendId, friendInfo] : Lists(ownerId).GetFriends())
         {
-            GameMessages::BestFriend bestFriend;
-            bestFriend.ListOwnerGid = ownerId;
-            bestFriend.BuddyId = friendRow.CharacterId;
-            bestFriend.Forwarded = 1;
-            bestFriend.FriendSymbol = friendRow.BestFriendSymbol;
-            session.SendDmlMessage(bestFriend);
+            SendFriendEntry(*owner, friendId, friendInfo.PackedName, friendInfo.Date, friendInfo.Date);
+            if (friendInfo.BestFriendSymbol != 0)
+            {
+                GameMessages::BestFriend bestFriend;
+                bestFriend.ListOwnerGid = ownerId;
+                bestFriend.BuddyId = friendId;
+                bestFriend.Forwarded = 1;
+                bestFriend.FriendSymbol = friendInfo.BestFriendSymbol;
+                owner->SendDmlMessage(bestFriend);
+            }
         }
-    }
-    SendIgnoreList(session);
-    SendPendingRequests(session);
-    GameMessages::BuddyListComplete complete;
-    complete.ListOwnerGid = ownerId;
-    session.SendDmlMessage(complete);
+        SendIgnoreList(*owner);
+        SendPendingRequests(*owner, [owner, ownerId]
+        {
+            if (!owner->IsOpen())
+                return;
+            GameMessages::BuddyListComplete complete;
+            complete.ListOwnerGid = ownerId;
+            owner->SendDmlMessage(complete);
+        });
+    });
 }
 
 void SocialMgr::AddFriendRequest(GameSession& session, GameMessages::BuddyRequestAdd const& message)
@@ -468,11 +538,8 @@ void SocialMgr::AddFriendRequest(GameSession& session, GameMessages::BuddyReques
         }
         statement->SetData(0, ownerId);
         statement->SetData(1, targetId);
-        if (!CharacterDatabase.DirectExecute(*statement))
-        {
-            LOG_ERROR("server.social", "Could not cancel friend request {} -> {}", ownerId, targetId);
-            return;
-        }
+        _pendingRequests.erase({ ownerId, targetId });
+        CharacterDatabase.Execute(std::move(statement));
         if (auto const target = _online.find(targetId); target != _online.end())
             if (std::shared_ptr<GameSession> recipient = target->second.Session.lock())
             {
@@ -484,65 +551,70 @@ void SocialMgr::AddFriendRequest(GameSession& session, GameMessages::BuddyReques
         return;
     }
 
-    if (!LoadLists(ownerId) || !LoadLists(targetId))
+    GameSession* const requester = &session;
+    LoadLists(session, ownerId, [this, requester, ownerId, targetId](bool ownerLoaded)
     {
-        SendChatError(session, targetId);
-        return;
-    }
-    if (Lists(ownerId).IsFriend(targetId) || Lists(targetId).IsFriend(ownerId) || Lists(targetId).IsIgnored(ownerId))
-    {
-        SendChatError(session, targetId);
-        return;
-    }
-
-    CharacterLoad const target = LoadCharacter(targetId);
-    CharacterLoad const owner = LoadCharacter(ownerId);
-    if (target.Result != CharacterOpResult::Ok || !target.Character || target.Character->IsDeleted() ||
-        owner.Result != CharacterOpResult::Ok || !owner.Character || owner.Character->IsDeleted())
-    {
-        LOG_DEBUG("server.social", "Session {} requested friendship with a missing, deleted or unavailable wizard", session.GetSessionId());
-        SendChatError(session, targetId);
-        return;
-    }
-    std::optional<uint32> const count = FriendCount(ownerId);
-    if (!count)
-    {
-        LOG_ERROR("server.social", "Could not count friends for wizard {}", ownerId);
-        SendChatError(session, targetId);
-        return;
-    }
-    if (!CanRequestFriend(*count, sSettings.Get<uint32>("Social.MaxFriends")))
-    {
-        SendChatError(session, targetId);
-        return;
-    }
-
-    Statement statement = Prepare(CHAR_INS_SOCIAL_REQUEST);
-    if (!statement || !CharacterDatabase.IsOpen())
-    {
-        LOG_ERROR("server.social", "Could not persist friend request {} -> {}", ownerId, targetId);
-        SendChatError(session, targetId);
-        return;
-    }
-    statement->SetData(0, ownerId);
-    statement->SetData(1, targetId);
-    statement->SetData(2, static_cast<uint64>(NowEpochSeconds()));
-    if (!CharacterDatabase.DirectExecute(*statement))
-    {
-        LOG_ERROR("server.social", "Could not persist friend request {} -> {}", ownerId, targetId);
-        SendChatError(session, targetId);
-        return;
-    }
-    if (auto const found = _online.find(targetId); found != _online.end())
-        if (std::shared_ptr<GameSession> recipient = found->second.Session.lock())
+        if (!ownerLoaded || !requester->IsOpen())
         {
-            GameMessages::BuddyRequestAdd request;
-            request.ListOwnerGid = ownerId;
-            request.EntryGid = targetId;
-            request.OwnerName = PackedName::ForWizard(owner.Character->CustomName, owner.Character->NameIndices, owner.Character->Appearance.Gender);
-            request.OwnerLevel = static_cast<uint8>(std::clamp(owner.Character->Level, 0, static_cast<int32>(std::numeric_limits<uint8>::max())));
-            recipient->SendDmlMessage(request);
+            SendChatError(*requester, targetId);
+            return;
         }
+        LoadLists(*requester, targetId, [this, requester, ownerId, targetId](bool targetLoaded)
+        {
+            if (!targetLoaded || !requester->IsOpen() || Lists(ownerId).IsFriend(targetId) ||
+                Lists(targetId).IsFriend(ownerId) || Lists(targetId).IsIgnored(ownerId))
+            {
+                SendChatError(*requester, targetId);
+                return;
+            }
+            LoadCharacter(*requester, targetId, [this, requester, ownerId, targetId](std::optional<CharacterSummary> target) mutable
+            {
+                if (!target || target->IsDeleted())
+                {
+                    LOG_DEBUG("server.social", "Session {} requested friendship with a missing, deleted or unavailable wizard", requester->GetSessionId());
+                    SendChatError(*requester, targetId);
+                    return;
+                }
+                LoadCharacter(*requester, ownerId, [this, requester, ownerId, targetId](std::optional<CharacterSummary> owner) mutable
+                {
+                    if (!owner || owner->IsDeleted())
+                    {
+                        LOG_DEBUG("server.social", "Session {} requested friendship with a missing, deleted or unavailable wizard", requester->GetSessionId());
+                        SendChatError(*requester, targetId);
+                        return;
+                    }
+                    if (!CanRequestFriend(static_cast<uint32>(Lists(ownerId).FriendCount()), sSettings.Get<uint32>("Social.MaxFriends")))
+                    {
+                        SendChatError(*requester, targetId);
+                        return;
+                    }
+
+                    Statement statement = Prepare(CHAR_INS_SOCIAL_REQUEST);
+                    if (!statement || !CharacterDatabase.IsOpen())
+                    {
+                        LOG_ERROR("server.social", "Could not prepare friend request {} -> {}", ownerId, targetId);
+                        SendChatError(*requester, targetId);
+                        return;
+                    }
+                    statement->SetData(0, ownerId);
+                    statement->SetData(1, targetId);
+                    statement->SetData(2, static_cast<uint64>(NowEpochSeconds()));
+                    _pendingRequests.emplace(ownerId, targetId);
+                    CharacterDatabase.Execute(std::move(statement));
+                    if (auto const found = _online.find(targetId); found != _online.end())
+                        if (std::shared_ptr<GameSession> recipient = found->second.Session.lock())
+                        {
+                            GameMessages::BuddyRequestAdd request;
+                            request.ListOwnerGid = ownerId;
+                            request.EntryGid = targetId;
+                            request.OwnerName = PackedName::ForWizard(owner->CustomName, owner->NameIndices, owner->Appearance.Gender);
+                            request.OwnerLevel = static_cast<uint8>(std::clamp(owner->Level, 0, static_cast<int32>(std::numeric_limits<uint8>::max())));
+                            recipient->SendDmlMessage(request);
+                        }
+                });
+            });
+        });
+    });
 }
 
 void SocialMgr::AcceptFriendRequest(GameSession& session, GameMessages::BuddyRequestAccept const& message)
@@ -555,93 +627,103 @@ void SocialMgr::AcceptFriendRequest(GameSession& session, GameMessages::BuddyReq
         SendChatError(session, requesterId);
         return;
     }
-    std::optional<bool> const requestExists = HasRequest(requesterId, ownerId);
-    if (!requestExists)
+    GameSession* const owner = &session;
+    LoadLists(session, ownerId, [this, owner, ownerId, requesterId](bool ownerLoaded)
     {
-        LOG_ERROR("server.social", "Could not check incoming friend request {} -> {}", requesterId, ownerId);
-        SendChatError(session, requesterId);
-        return;
-    }
-    if (!CanAcceptFriendRequest(*requestExists))
-    {
-        SendChatError(session, requesterId);
-        return;
-    }
-    std::optional<uint32> const ownerCount = FriendCount(ownerId);
-    std::optional<uint32> const requesterCount = FriendCount(requesterId);
-    if (!ownerCount || !requesterCount)
-    {
-        LOG_ERROR("server.social", "Could not count friends while accepting request {} -> {}", requesterId, ownerId);
-        SendChatError(session, requesterId);
-        return;
-    }
-    uint32 const maximum = sSettings.Get<uint32>("Social.MaxFriends");
-    if (*ownerCount >= maximum || *requesterCount >= maximum)
-    {
-        SendChatError(session, requesterId);
-        return;
-    }
-    if (!LoadLists(ownerId) || !LoadLists(requesterId))
-    {
-        SendChatError(session, requesterId);
-        return;
-    }
-
-    uint64 const now = static_cast<uint64>(NowEpochSeconds());
-    Statement ownerFriend = Prepare(CHAR_INS_SOCIAL_FRIEND);
-    Statement requesterFriend = Prepare(CHAR_INS_SOCIAL_FRIEND);
-    Statement deleteIncoming = Prepare(CHAR_DEL_SOCIAL_REQUEST);
-    Statement deleteOutgoing = Prepare(CHAR_DEL_SOCIAL_REQUEST);
-    if (!ownerFriend || !requesterFriend || !deleteIncoming || !deleteOutgoing || !CharacterDatabase.IsOpen())
-    {
-        LOG_ERROR("server.social", "Could not prepare the transaction accepting friend request {} -> {}", requesterId, ownerId);
-        SendChatError(session, requesterId);
-        return;
-    }
-    ownerFriend->SetData(0, ownerId);
-    ownerFriend->SetData(1, requesterId);
-    ownerFriend->SetData(2, uint8{ 0 });
-    ownerFriend->SetData(3, now);
-    requesterFriend->SetData(0, requesterId);
-    requesterFriend->SetData(1, ownerId);
-    requesterFriend->SetData(2, uint8{ 0 });
-    requesterFriend->SetData(3, now);
-    deleteIncoming->SetData(0, requesterId);
-    deleteIncoming->SetData(1, ownerId);
-    deleteOutgoing->SetData(0, ownerId);
-    deleteOutgoing->SetData(1, requesterId);
-
-    std::shared_ptr<Transaction<CharacterDatabaseConnection>> transaction = CharacterDatabase.BeginTransaction();
-    transaction->Append(std::move(ownerFriend));
-    transaction->Append(std::move(requesterFriend));
-    transaction->Append(std::move(deleteIncoming));
-    transaction->Append(std::move(deleteOutgoing));
-    if (!CharacterDatabase.DirectCommitTransaction(transaction))
-    {
-        LOG_ERROR("server.social", "Could not commit accepted friend request {} -> {}", requesterId, ownerId);
-        SendChatError(session, requesterId);
-        return;
-    }
-    Lists(ownerId).AddFriend(requesterId, now);
-    Lists(requesterId).AddFriend(ownerId, now);
-
-    CharacterLoad const requester = LoadCharacter(requesterId);
-    if (requester.Result == CharacterOpResult::Ok && requester.Character)
-    {
-        std::string const packedName = PackedName::ForWizard(requester.Character->CustomName, requester.Character->NameIndices, requester.Character->Appearance.Gender);
-        SendFriendEntry(session, requesterId, packedName, now, now);
-    }
-    else
-        LOG_ERROR("server.social", "Accepted friend {} -> {} but could not read the requester's name", requesterId, ownerId);
-
-    if (auto const remote = _online.find(requesterId); remote != _online.end())
-        if (std::shared_ptr<GameSession> recipient = remote->second.Session.lock())
+        if (!ownerLoaded || !owner->IsOpen())
         {
-            SendFriendEntry(*recipient, ownerId, session.GetChatName(), now, now);
+            SendChatError(*owner, requesterId);
+            return;
         }
-    SendPresenceToFriends(ownerId, PlayerStatusOnline, session.GetZoneDisplay());
-    if (auto const remote = _online.find(requesterId); remote != _online.end())
-        SendPresenceToFriends(requesterId, remote->second.Status, remote->second.ZoneName);
+        LoadLists(*owner, requesterId, [this, owner, ownerId, requesterId](bool requesterLoaded)
+        {
+            if (!requesterLoaded || !owner->IsOpen())
+            {
+                SendChatError(*owner, requesterId);
+                return;
+            }
+            if (_pendingRequests.contains({ requesterId, ownerId }))
+            {
+                FinishAcceptFriendRequest(*owner, ownerId, requesterId);
+                return;
+            }
+            CheckRequestExists(*owner, requesterId, ownerId, [this, owner, ownerId, requesterId](bool exists)
+            {
+                if (!exists)
+                {
+                    SendChatError(*owner, requesterId);
+                    return;
+                }
+                _pendingRequests.emplace(requesterId, ownerId);
+                FinishAcceptFriendRequest(*owner, ownerId, requesterId);
+            });
+        });
+    });
+}
+
+void SocialMgr::FinishAcceptFriendRequest(GameSession& session, uint64 ownerId, uint64 requesterId)
+{
+    uint32 const maximum = sSettings.Get<uint32>("Social.MaxFriends");
+    if (!CanAcceptFriendRequest(_pendingRequests.contains({ requesterId, ownerId })) ||
+        !Lists(ownerId).CanAddFriend(maximum) || !Lists(requesterId).CanAddFriend(maximum))
+    {
+        SendChatError(session, requesterId);
+        return;
+    }
+
+    GameSession* const owner = &session;
+    LoadCharacter(session, requesterId, [this, owner, ownerId, requesterId](std::optional<CharacterSummary> requester)
+    {
+        if (!requester || requester->IsDeleted())
+        {
+            LOG_ERROR("server.social", "Could not load the requester's name while accepting {} -> {}", requesterId, ownerId);
+            SendChatError(*owner, requesterId);
+            return;
+        }
+        uint64 const now = static_cast<uint64>(NowEpochSeconds());
+        std::string const requesterName = PackedName::ForWizard(requester->CustomName, requester->NameIndices, requester->Appearance.Gender);
+        Statement ownerFriend = Prepare(CHAR_INS_SOCIAL_FRIEND);
+        Statement requesterFriend = Prepare(CHAR_INS_SOCIAL_FRIEND);
+        Statement deleteIncoming = Prepare(CHAR_DEL_SOCIAL_REQUEST);
+        Statement deleteOutgoing = Prepare(CHAR_DEL_SOCIAL_REQUEST);
+        if (!ownerFriend || !requesterFriend || !deleteIncoming || !deleteOutgoing || !CharacterDatabase.IsOpen())
+        {
+            LOG_ERROR("server.social", "Could not prepare the transaction accepting friend request {} -> {}", requesterId, ownerId);
+            SendChatError(*owner, requesterId);
+            return;
+        }
+        ownerFriend->SetData(0, ownerId);
+        ownerFriend->SetData(1, requesterId);
+        ownerFriend->SetData(2, uint8{ 0 });
+        ownerFriend->SetData(3, now);
+        requesterFriend->SetData(0, requesterId);
+        requesterFriend->SetData(1, ownerId);
+        requesterFriend->SetData(2, uint8{ 0 });
+        requesterFriend->SetData(3, now);
+        deleteIncoming->SetData(0, requesterId);
+        deleteIncoming->SetData(1, ownerId);
+        deleteOutgoing->SetData(0, ownerId);
+        deleteOutgoing->SetData(1, requesterId);
+
+        std::shared_ptr<Transaction<CharacterDatabaseConnection>> transaction = CharacterDatabase.BeginTransaction();
+        transaction->Append(std::move(ownerFriend));
+        transaction->Append(std::move(requesterFriend));
+        transaction->Append(std::move(deleteIncoming));
+        transaction->Append(std::move(deleteOutgoing));
+        Lists(ownerId).AddFriend(requesterId, now, 0, requesterName);
+        Lists(requesterId).AddFriend(ownerId, now, 0, owner->GetChatName());
+        _pendingRequests.erase({ requesterId, ownerId });
+        _pendingRequests.erase({ ownerId, requesterId });
+        CharacterDatabase.CommitTransaction(std::move(transaction));
+
+        SendFriendEntry(*owner, requesterId, requesterName, now, now);
+        if (auto const remote = _online.find(requesterId); remote != _online.end())
+            if (std::shared_ptr<GameSession> recipient = remote->second.Session.lock())
+                SendFriendEntry(*recipient, ownerId, owner->GetChatName(), now, now);
+        SendPresenceToFriends(ownerId, PlayerStatusOnline, owner->GetZoneDisplay());
+        if (auto const remote = _online.find(requesterId); remote != _online.end())
+            SendPresenceToFriends(requesterId, remote->second.Status, remote->second.ZoneName);
+    });
 }
 
 void SocialMgr::DenyFriendRequest(GameSession& session, GameMessages::BuddyRequestDeny const& message)
@@ -661,11 +743,8 @@ void SocialMgr::DenyFriendRequest(GameSession& session, GameMessages::BuddyReque
     }
     statement->SetData(0, requesterId);
     statement->SetData(1, ownerId);
-    if (!CharacterDatabase.DirectExecute(*statement))
-    {
-        LOG_ERROR("server.social", "Could not deny friend request {} -> {}", requesterId, ownerId);
-        return;
-    }
+    _pendingRequests.erase({ requesterId, ownerId });
+    CharacterDatabase.Execute(std::move(statement));
     if (auto const requester = _online.find(requesterId); requester != _online.end())
         if (std::shared_ptr<GameSession> recipient = requester->second.Session.lock())
         {
@@ -680,83 +759,85 @@ void SocialMgr::DropFriendRequest(GameSession& session, GameMessages::BuddyReque
 {
     uint64 const ownerId = session.GetCharacterId();
     uint64 const friendId = message.EntryGid;
-    if (message.ListOwnerGid != ownerId || friendId == 0 || friendId == ownerId || !LoadLists(ownerId) || !LoadLists(friendId))
+    if (message.ListOwnerGid != ownerId || friendId == 0 || friendId == ownerId)
     {
         LOG_WARN("server.social", "Session {} sent an invalid friend removal for wizard {}", session.GetSessionId(), friendId);
         return;
     }
-    if (!Lists(ownerId).IsFriend(friendId) && !Lists(friendId).IsFriend(ownerId))
-        return;
-
-    Statement ownerFriend = Prepare(CHAR_DEL_SOCIAL_FRIEND);
-    Statement friendFriend = Prepare(CHAR_DEL_SOCIAL_FRIEND);
-    if (!ownerFriend || !friendFriend || !CharacterDatabase.IsOpen())
+    LoadLists(session, ownerId, [this, owner = &session, ownerId, friendId](bool ownerLoaded)
     {
-        LOG_ERROR("server.social", "Could not prepare removal of friendship {} <-> {}", ownerId, friendId);
-        return;
-    }
-    ownerFriend->SetData(0, ownerId);
-    ownerFriend->SetData(1, friendId);
-    friendFriend->SetData(0, friendId);
-    friendFriend->SetData(1, ownerId);
-    std::shared_ptr<Transaction<CharacterDatabaseConnection>> transaction = CharacterDatabase.BeginTransaction();
-    transaction->Append(std::move(ownerFriend));
-    transaction->Append(std::move(friendFriend));
-    if (!CharacterDatabase.DirectCommitTransaction(transaction))
-    {
-        LOG_ERROR("server.social", "Could not remove friendship {} <-> {}", ownerId, friendId);
-        return;
-    }
-    Lists(ownerId).RemoveFriend(friendId);
-    Lists(friendId).RemoveFriend(ownerId);
-
-    GameMessages::BuddyDrop ownerDrop;
-    ownerDrop.ListOwnerGid = ownerId;
-    ownerDrop.EntryGid = friendId;
-    session.SendDmlMessage(ownerDrop);
-    if (auto const remote = _online.find(friendId); remote != _online.end())
-        if (std::shared_ptr<GameSession> recipient = remote->second.Session.lock())
+        if (!ownerLoaded || !owner->IsOpen())
+            return;
+        LoadLists(*owner, friendId, [this, owner, ownerId, friendId](bool friendLoaded)
         {
-            GameMessages::BuddyDrop remoteDrop;
-            remoteDrop.ListOwnerGid = friendId;
-            remoteDrop.EntryGid = ownerId;
-            recipient->SendDmlMessage(remoteDrop);
-        }
+            if (!friendLoaded || (!Lists(ownerId).IsFriend(friendId) && !Lists(friendId).IsFriend(ownerId)))
+                return;
+            Statement ownerFriend = Prepare(CHAR_DEL_SOCIAL_FRIEND);
+            Statement friendFriend = Prepare(CHAR_DEL_SOCIAL_FRIEND);
+            if (!ownerFriend || !friendFriend || !CharacterDatabase.IsOpen())
+            {
+                LOG_ERROR("server.social", "Could not prepare removal of friendship {} <-> {}", ownerId, friendId);
+                return;
+            }
+            ownerFriend->SetData(0, ownerId);
+            ownerFriend->SetData(1, friendId);
+            friendFriend->SetData(0, friendId);
+            friendFriend->SetData(1, ownerId);
+            std::shared_ptr<Transaction<CharacterDatabaseConnection>> transaction = CharacterDatabase.BeginTransaction();
+            transaction->Append(std::move(ownerFriend));
+            transaction->Append(std::move(friendFriend));
+            Lists(ownerId).RemoveFriend(friendId);
+            Lists(friendId).RemoveFriend(ownerId);
+            CharacterDatabase.CommitTransaction(std::move(transaction));
+
+            GameMessages::BuddyDrop ownerDrop;
+            ownerDrop.ListOwnerGid = ownerId;
+            ownerDrop.EntryGid = friendId;
+            owner->SendDmlMessage(ownerDrop);
+            if (auto const remote = _online.find(friendId); remote != _online.end())
+                if (std::shared_ptr<GameSession> recipient = remote->second.Session.lock())
+                {
+                    GameMessages::BuddyDrop remoteDrop;
+                    remoteDrop.ListOwnerGid = friendId;
+                    remoteDrop.EntryGid = ownerId;
+                    recipient->SendDmlMessage(remoteDrop);
+                }
+        });
+    });
 }
 
 void SocialMgr::SetBestFriend(GameSession& session, GameMessages::BestFriend const& message)
 {
     uint64 const ownerId = session.GetCharacterId();
     uint64 const friendId = message.BuddyId;
-    if (message.ListOwnerGid != ownerId || friendId == 0 || friendId == ownerId || !LoadLists(ownerId) || !Lists(ownerId).IsFriend(friendId))
+    if (message.ListOwnerGid != ownerId || friendId == 0 || friendId == ownerId)
     {
         LOG_WARN("server.social", "Session {} tried to set a best-friend symbol for a wizard outside its friend list", session.GetSessionId());
         return;
     }
-    Statement statement = Prepare(CHAR_UPD_SOCIAL_BEST_FRIEND);
-    if (!statement || !CharacterDatabase.IsOpen())
+    LoadLists(session, ownerId, [this, owner = &session, ownerId, friendId, message](bool loaded)
     {
-        LOG_ERROR("server.social", "Could not set best-friend symbol for friendship {} -> {}", ownerId, friendId);
-        return;
-    }
-    statement->SetData(0, message.FriendSymbol);
-    statement->SetData(1, ownerId);
-    statement->SetData(2, friendId);
-    std::optional<uint64> const changed = CharacterDatabase.DirectExecuteCounted(*statement);
-    if (!changed)
-    {
-        LOG_ERROR("server.social", "Could not set best-friend symbol for friendship {} -> {}", ownerId, friendId);
-        return;
-    }
-    if (*changed == 0)
-        return;
+        if (!loaded || !owner->IsOpen() || !Lists(ownerId).IsFriend(friendId))
+            return;
+        Statement statement = Prepare(CHAR_UPD_SOCIAL_BEST_FRIEND);
+        if (!statement || !CharacterDatabase.IsOpen())
+        {
+            LOG_ERROR("server.social", "Could not prepare best-friend symbol for friendship {} -> {}", ownerId, friendId);
+            return;
+        }
+        statement->SetData(0, message.FriendSymbol);
+        statement->SetData(1, ownerId);
+        statement->SetData(2, friendId);
+        Lists(ownerId).SetBestFriendSymbol(friendId, message.FriendSymbol);
+        CharacterDatabase.Execute(std::move(statement));
 
-    GameMessages::BestFriend reply;
-    reply.ListOwnerGid = ownerId;
-    reply.BuddyId = friendId;
-    reply.Forwarded = 1;
-    reply.FriendSymbol = message.FriendSymbol;
-    session.SendDmlMessage(reply);
+        GameMessages::BestFriend reply;
+        reply.ListOwnerGid = ownerId;
+        reply.BuddyId = friendId;
+        reply.Forwarded = 1;
+        reply.FriendSymbol = message.FriendSymbol;
+        owner->SendDmlMessage(reply);
+    });
 }
 
 void SocialMgr::SendMaximumFriends(GameSession& session, GameMessages::RequestMaxFriends const& message)
@@ -780,100 +861,118 @@ void SocialMgr::AddIgnore(GameSession& session, GameMessages::IgnoreAdd const& m
 {
     uint64 const ownerId = session.GetCharacterId();
     uint64 const ignoredId = message.CharacterGid;
-    if (!IsRequestOwnerForCharacter(message.ListOwnerGid, ownerId) || ignoredId == 0 || ignoredId == ownerId || !LoadLists(ownerId) || !LoadLists(ignoredId))
+    if (!IsRequestOwnerForCharacter(message.ListOwnerGid, ownerId) || ignoredId == 0 || ignoredId == ownerId)
     {
         LOG_WARN("server.social", "Session {} sent an invalid ignore request for wizard {}", session.GetSessionId(), ignoredId);
         SendChatError(session, ignoredId);
         return;
     }
-    CharacterLoad const target = LoadCharacter(ignoredId);
-    if (target.Result != CharacterOpResult::Ok || !target.Character || target.Character->IsDeleted())
+    GameSession* const owner = &session;
+    LoadLists(session, ownerId, [this, owner, ownerId, ignoredId](bool ownerLoaded)
     {
-        SendChatError(session, ignoredId);
-        return;
-    }
-
-    bool const wasFriend = Lists(ownerId).IsFriend(ignoredId) || Lists(ignoredId).IsFriend(ownerId);
-    Statement addIgnore = Prepare(CHAR_INS_SOCIAL_IGNORE);
-    Statement ownerFriend = Prepare(CHAR_DEL_SOCIAL_FRIEND);
-    Statement targetFriend = Prepare(CHAR_DEL_SOCIAL_FRIEND);
-    Statement outgoing = Prepare(CHAR_DEL_SOCIAL_REQUEST);
-    Statement incoming = Prepare(CHAR_DEL_SOCIAL_REQUEST);
-    if (!addIgnore || !ownerFriend || !targetFriend || !outgoing || !incoming || !CharacterDatabase.IsOpen())
-    {
-        LOG_ERROR("server.social", "Could not prepare ignore operation {} -> {}", ownerId, ignoredId);
-        SendChatError(session, ignoredId);
-        return;
-    }
-    addIgnore->SetData(0, ownerId);
-    addIgnore->SetData(1, ignoredId);
-    addIgnore->SetData(2, int32{ 0 });
-    addIgnore->SetData(3, static_cast<uint64>(NowEpochSeconds()));
-    ownerFriend->SetData(0, ownerId);
-    ownerFriend->SetData(1, ignoredId);
-    targetFriend->SetData(0, ignoredId);
-    targetFriend->SetData(1, ownerId);
-    outgoing->SetData(0, ownerId);
-    outgoing->SetData(1, ignoredId);
-    incoming->SetData(0, ignoredId);
-    incoming->SetData(1, ownerId);
-    std::shared_ptr<Transaction<CharacterDatabaseConnection>> transaction = CharacterDatabase.BeginTransaction();
-    transaction->Append(std::move(addIgnore));
-    transaction->Append(std::move(ownerFriend));
-    transaction->Append(std::move(targetFriend));
-    transaction->Append(std::move(outgoing));
-    transaction->Append(std::move(incoming));
-    if (!CharacterDatabase.DirectCommitTransaction(transaction))
-    {
-        LOG_ERROR("server.social", "Could not commit ignore operation {} -> {}", ownerId, ignoredId);
-        SendChatError(session, ignoredId);
-        return;
-    }
-
-    Lists(ownerId).AddIgnore(ignoredId);
-    Lists(ignoredId).RemoveFriend(ownerId);
-    SendIgnoreList(session, true, ignoredId);
-    if (wasFriend)
-    {
-        GameMessages::BuddyDrop ownerDrop;
-        ownerDrop.ListOwnerGid = ownerId;
-        ownerDrop.EntryGid = ignoredId;
-        session.SendDmlMessage(ownerDrop);
-        if (auto const remote = _online.find(ignoredId); remote != _online.end())
-            if (std::shared_ptr<GameSession> recipient = remote->second.Session.lock())
+        if (!ownerLoaded || !owner->IsOpen())
+        {
+            SendChatError(*owner, ignoredId);
+            return;
+        }
+        LoadLists(*owner, ignoredId, [this, owner, ownerId, ignoredId](bool targetLoaded)
+        {
+            if (!targetLoaded || !owner->IsOpen())
             {
-                GameMessages::BuddyDrop remoteDrop;
-                remoteDrop.ListOwnerGid = ignoredId;
-                remoteDrop.EntryGid = ownerId;
-                recipient->SendDmlMessage(remoteDrop);
+                SendChatError(*owner, ignoredId);
+                return;
             }
-    }
+            LoadCharacter(*owner, ignoredId, [this, owner, ownerId, ignoredId](std::optional<CharacterSummary> target)
+            {
+                if (!target || target->IsDeleted())
+                {
+                    SendChatError(*owner, ignoredId);
+                    return;
+                }
+                bool const wasFriend = Lists(ownerId).IsFriend(ignoredId) || Lists(ignoredId).IsFriend(ownerId);
+                Statement addIgnore = Prepare(CHAR_INS_SOCIAL_IGNORE);
+                Statement ownerFriend = Prepare(CHAR_DEL_SOCIAL_FRIEND);
+                Statement targetFriend = Prepare(CHAR_DEL_SOCIAL_FRIEND);
+                Statement outgoing = Prepare(CHAR_DEL_SOCIAL_REQUEST);
+                Statement incoming = Prepare(CHAR_DEL_SOCIAL_REQUEST);
+                if (!addIgnore || !ownerFriend || !targetFriend || !outgoing || !incoming || !CharacterDatabase.IsOpen())
+                {
+                    LOG_ERROR("server.social", "Could not prepare ignore operation {} -> {}", ownerId, ignoredId);
+                    SendChatError(*owner, ignoredId);
+                    return;
+                }
+                addIgnore->SetData(0, ownerId);
+                addIgnore->SetData(1, ignoredId);
+                addIgnore->SetData(2, int32{ 0 });
+                addIgnore->SetData(3, static_cast<uint64>(NowEpochSeconds()));
+                ownerFriend->SetData(0, ownerId);
+                ownerFriend->SetData(1, ignoredId);
+                targetFriend->SetData(0, ignoredId);
+                targetFriend->SetData(1, ownerId);
+                outgoing->SetData(0, ownerId);
+                outgoing->SetData(1, ignoredId);
+                incoming->SetData(0, ignoredId);
+                incoming->SetData(1, ownerId);
+                std::shared_ptr<Transaction<CharacterDatabaseConnection>> transaction = CharacterDatabase.BeginTransaction();
+                transaction->Append(std::move(addIgnore));
+                transaction->Append(std::move(ownerFriend));
+                transaction->Append(std::move(targetFriend));
+                transaction->Append(std::move(outgoing));
+                transaction->Append(std::move(incoming));
+
+                std::string const ignoredName = PackedName::ForWizard(target->CustomName, target->NameIndices, target->Appearance.Gender);
+                Lists(ownerId).AddIgnore(ignoredId, 0, ignoredName);
+                Lists(ownerId).RemoveFriend(ignoredId);
+                Lists(ignoredId).RemoveFriend(ownerId);
+                _pendingRequests.erase({ ownerId, ignoredId });
+                _pendingRequests.erase({ ignoredId, ownerId });
+                CharacterDatabase.CommitTransaction(std::move(transaction));
+                SendIgnoreList(*owner, true, ignoredId);
+                if (wasFriend)
+                {
+                    GameMessages::BuddyDrop ownerDrop;
+                    ownerDrop.ListOwnerGid = ownerId;
+                    ownerDrop.EntryGid = ignoredId;
+                    owner->SendDmlMessage(ownerDrop);
+                    if (auto const remote = _online.find(ignoredId); remote != _online.end())
+                        if (std::shared_ptr<GameSession> recipient = remote->second.Session.lock())
+                        {
+                            GameMessages::BuddyDrop remoteDrop;
+                            remoteDrop.ListOwnerGid = ignoredId;
+                            remoteDrop.EntryGid = ownerId;
+                            recipient->SendDmlMessage(remoteDrop);
+                        }
+                }
+            });
+        });
+    });
 }
 
 void SocialMgr::DropIgnore(GameSession& session, GameMessages::IgnoreDrop const& message)
 {
     uint64 const ownerId = session.GetCharacterId();
     uint64 const ignoredId = message.CharacterGid;
-    if (!IsRequestOwnerForCharacter(message.ListOwnerGid, ownerId) || ignoredId == 0 || !LoadLists(ownerId))
+    if (!IsRequestOwnerForCharacter(message.ListOwnerGid, ownerId) || ignoredId == 0)
     {
         LOG_WARN("server.social", "Session {} sent an invalid ignore removal for wizard {}", session.GetSessionId(), ignoredId);
         return;
     }
-    Statement statement = Prepare(CHAR_DEL_SOCIAL_IGNORE);
-    if (!statement || !CharacterDatabase.IsOpen())
+    LoadLists(session, ownerId, [this, owner = &session, ownerId, ignoredId](bool loaded)
     {
-        LOG_ERROR("server.social", "Could not remove ignored wizard {} from list {}", ignoredId, ownerId);
-        return;
-    }
-    statement->SetData(0, ownerId);
-    statement->SetData(1, ignoredId);
-    if (!CharacterDatabase.DirectExecute(*statement))
-    {
-        LOG_ERROR("server.social", "Could not remove ignored wizard {} from list {}", ignoredId, ownerId);
-        return;
-    }
-    Lists(ownerId).RemoveIgnore(ignoredId);
-    SendIgnoreList(session);
+        if (!loaded || !owner->IsOpen())
+            return;
+        Statement statement = Prepare(CHAR_DEL_SOCIAL_IGNORE);
+        if (!statement || !CharacterDatabase.IsOpen())
+        {
+            LOG_ERROR("server.social", "Could not prepare removal of ignored wizard {} from list {}", ignoredId, ownerId);
+            return;
+        }
+        statement->SetData(0, ownerId);
+        statement->SetData(1, ignoredId);
+        Lists(ownerId).RemoveIgnore(ignoredId);
+        CharacterDatabase.Execute(std::move(statement));
+        SendIgnoreList(*owner);
+    });
 }
 
 void SocialMgr::SendPresenceToFriends(uint64 characterId, uint8 status, std::string const& zoneName)

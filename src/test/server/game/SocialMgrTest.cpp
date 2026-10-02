@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests social list invariants and radial-chat filtering, plus friend acceptance and the live friend cap through real game sessions and an isolated characters database.
+ * Tests social list invariants, friend acceptance and the live friend cap through real game sessions and an isolated characters database, and verifies ignore filtering through the actual world chat relay.
  */
 
 #include "CharacterDatabase.h"
 #include "CharacterRepository.h"
+#include "ChatText.h"
 #include "ConfigMgr.h"
 #include "DBUpdater.h"
 #include "Environment.h"
@@ -13,12 +14,13 @@
 #include "MemorySettingStore.h"
 #include "Settings.h"
 #include "SocialMgr.h"
-#include "SpeechRelay.h"
+#include "World.h"
 
 #include <fmt/format.h>
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -28,6 +30,22 @@
 #include <random>
 #include <string>
 #include <vector>
+
+struct SocialMgrTestAccess
+{
+    static void PrepareWorld(GameSession& session, uint64 characterId, float x)
+    {
+        session.SetCharacterId(characterId);
+        session.SetStatus(SessionStatus::InWorld);
+        session._attached.store(true, std::memory_order_relaxed);
+        session._inWorld.store(true, std::memory_order_relaxed);
+        session._mapId = 1;
+        session._worldGuid = characterId;
+        session._publicObject = { 1 };
+        session._chatName = "Wizard";
+        session._movement.Reset({ x, 0.0f, 0.0f, 0.0f }, 0);
+    }
+};
 
 namespace
 {
@@ -61,10 +79,30 @@ namespace
         return result && result->GetRowCount() != 0;
     }
 
-    template<DeclaredMessage T>
-    std::optional<T> ReadReply(FakeSessionClient& client)
+    std::optional<bool> HasIgnore(uint64 ownerId, uint64 ignoredId)
     {
-        std::optional<DmlMessageData> const reply = ReadNextDml(client);
+        auto statement = CharacterDatabase.GetPreparedStatement(CHAR_SEL_SOCIAL_IGNORES);
+        if (!statement)
+            return std::nullopt;
+        statement->SetData(0, ownerId);
+        PreparedQueryResult result;
+        if (!CharacterDatabase.TryQuery(*statement, result))
+            return std::nullopt;
+        if (!result)
+            return false;
+        PreparedResultSet const& row = *result;
+        do
+        {
+            if (row[0].Get<uint64>() == ignoredId)
+                return true;
+        } while (result->NextRow());
+        return false;
+    }
+
+    template<DeclaredMessage T>
+    std::optional<T> ReadReply(FakeSessionClient& client, std::chrono::milliseconds timeout = std::chrono::seconds(20))
+    {
+        std::optional<DmlMessageData> const reply = ReadNextDml(client, timeout);
         if (!reply || !Is<T>(*reply))
             return std::nullopt;
         T message;
@@ -73,11 +111,37 @@ namespace
         return message;
     }
 
+    template<DeclaredMessage T>
+    std::optional<T> ReadWorldReply(FakeSessionClient& client, std::string& observed, std::chrono::milliseconds timeout = std::chrono::seconds(30))
+    {
+        auto const deadline = std::chrono::steady_clock::now() + timeout;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            sWorld.Update(std::chrono::milliseconds(2));
+            std::optional<DmlMessageData> const data = ReadNextDml(client, std::chrono::milliseconds(10));
+            if (!data)
+                continue;
+            if (!Is<T>(*data))
+            {
+                MessageInfo const* const info = sMessageRegistry.GetCatalog()->Find(data->ServiceId, data->Order);
+                observed += fmt::format("{}:{}, ", data->ServiceId, info ? info->Definition->Tag : std::string("unknown"));
+                continue;
+            }
+            T reply;
+            if (sMessageRegistry.GetCatalog()->Decode(data->Body, reply) == MessageDecodeStatus::Ok)
+                return reply;
+            observed += fmt::format("{}:decode-failed, ", data->ServiceId);
+        }
+        observed = fmt::format("{} bytes received; {}", client.GetReceivedBytes(), observed);
+        return std::nullopt;
+    }
+
     class SocialMgrDatabaseTest : public testing::Test
     {
     protected:
         void SetUp() override
         {
+            sWorld.Clear();
             sSocialMgr.Clear();
             sSettings.Clear();
 
@@ -115,6 +179,7 @@ namespace
 
         void TearDown() override
         {
+            sWorld.Clear();
             sSocialMgr.Clear();
             sSettings.Clear();
             if (_open)
@@ -125,7 +190,9 @@ namespace
             server.Database.clear();
             MySQLConnection connection(server);
             if (connection.Open() == 0)
+            {
                 EXPECT_TRUE(connection.Execute(fmt::format("DROP DATABASE IF EXISTS {}", DBUpdater::QuoteIdentifier(_info.Database))));
+            }
         }
 
         std::shared_ptr<GameSession> Connect(std::unique_ptr<FakeSessionClient>& client, uint64 characterId)
@@ -138,6 +205,8 @@ namespace
             {
                 session->SetCharacterId(characterId);
                 session->SetStatus(SessionStatus::LoggedIn);
+                sWorld.AddSession(session);
+                sWorld.Update(std::chrono::milliseconds(50));
             }
             return session;
         }
@@ -188,35 +257,6 @@ TEST(SocialMgrTest, IncomingRequestsCanOmitTheCurrentWizardAsEntry)
     EXPECT_FALSE(SocialMgr::IsIncomingRequestForCharacter(84, 0, 0));
 }
 
-TEST(SocialMgrTest, IgnoringAFriendRemovesTheFriendshipAndFiltersThePlannedHearers)
-{
-    SocialLists owner;
-    SocialLists other;
-
-    ASSERT_TRUE(owner.AddFriend(RequesterId));
-    ASSERT_TRUE(owner.AddIgnore(RequesterId));
-
-    std::vector<SpeechListener> const listeners{
-        { .Open = true, .MapId = 1, .X = 0.0f, .Y = 0.0f, .Z = 0.0f },
-        { .Open = true, .MapId = 1, .X = 1.0f, .Y = 0.0f, .Z = 0.0f },
-        { .Open = true, .MapId = 1, .X = 2.0f, .Y = 0.0f, .Z = 0.0f }
-    };
-    std::vector<std::size_t> const planned = PlanHearers(listeners, 0, false, 5.0f);
-    ASSERT_EQ(planned, (std::vector<std::size_t>{ 1, 2 }));
-
-    std::vector<std::size_t> delivered;
-    for (std::size_t const hearer : planned)
-    {
-        bool const allowed = hearer == 1 ? owner.ShouldRelayChatFrom(RequesterId) : other.ShouldRelayChatFrom(RequesterId);
-        if (allowed)
-            delivered.push_back(hearer);
-    }
-
-    EXPECT_FALSE(owner.IsFriend(RequesterId));
-    EXPECT_TRUE(owner.IsIgnored(RequesterId));
-    EXPECT_EQ(delivered, (std::vector<std::size_t>{ 2 }));
-}
-
 TEST_F(SocialMgrDatabaseTest, AcceptingAnUnsentRequestSendsOnlyTheSelectedChatError)
 {
     std::optional<bool> const pending = HasRequest(RequesterId, OwnerId);
@@ -226,16 +266,17 @@ TEST_F(SocialMgrDatabaseTest, AcceptingAnUnsentRequestSendsOnlyTheSelectedChatEr
     std::unique_ptr<FakeSessionClient> client;
     std::shared_ptr<GameSession> const session = Connect(client, OwnerId);
     ASSERT_TRUE(session);
+    SocialMgrTestAccess::PrepareWorld(*session, OwnerId, 0.0f);
 
     GameMessages::BuddyRequestAccept request;
     request.ListOwnerGid = RequesterId;
     request.EntryGid = OwnerId;
     Send(*client, request);
-    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 1; }));
-    EXPECT_EQ(session->DrainQueue(), 1u);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() != 0; })) << "the friend-accept message must reach the game-session handler queue";
 
-    std::optional<GameMessages::ChatError> const error = ReadReply<GameMessages::ChatError>(*client);
-    ASSERT_TRUE(error);
+    std::string observed;
+    std::optional<GameMessages::ChatError> const error = ReadWorldReply<GameMessages::ChatError>(*client, observed);
+    ASSERT_TRUE(error) << "no CHATERROR decoded; other DML replies: " << observed;
     EXPECT_EQ(error->ListOwnerGid, OwnerId);
     EXPECT_EQ(error->CharacterId, RequesterId);
     EXPECT_EQ(error->Error, 1u);
@@ -243,6 +284,57 @@ TEST_F(SocialMgrDatabaseTest, AcceptingAnUnsentRequestSendsOnlyTheSelectedChatEr
     std::optional<bool> const stillPending = HasRequest(RequesterId, OwnerId);
     ASSERT_TRUE(stillPending);
     EXPECT_FALSE(*stillPending);
+}
+
+TEST_F(SocialMgrDatabaseTest, IgnoringAFriendFiltersTheActualWorldRelay)
+{
+    ASSERT_TRUE(AddFriendship(OwnerId, RequesterId));
+    ASSERT_TRUE(AddFriendship(RequesterId, OwnerId));
+
+    std::unique_ptr<FakeSessionClient> ownerClient;
+    std::unique_ptr<FakeSessionClient> speakerClient;
+    std::unique_ptr<FakeSessionClient> thirdClient;
+    std::shared_ptr<GameSession> const owner = Connect(ownerClient, OwnerId);
+    std::shared_ptr<GameSession> const speaker = Connect(speakerClient, RequesterId);
+    std::shared_ptr<GameSession> const third = Connect(thirdClient, TargetId);
+    ASSERT_TRUE(owner);
+    ASSERT_TRUE(speaker);
+    ASSERT_TRUE(third);
+
+    SocialMgrTestAccess::PrepareWorld(*owner, OwnerId, 0.0f);
+    SocialMgrTestAccess::PrepareWorld(*speaker, RequesterId, 1.0f);
+    SocialMgrTestAccess::PrepareWorld(*third, TargetId, 2.0f);
+
+    GameMessages::IgnoreAdd ignore;
+    ignore.ListOwnerGid = OwnerId;
+    ignore.CharacterGid = RequesterId;
+    Send(*ownerClient, ignore);
+
+    ASSERT_TRUE(WaitForCondition([&]
+    {
+        owner->DrainQueue();
+        std::optional<bool> const ignored = HasIgnore(OwnerId, RequesterId);
+        return ignored && *ignored;
+    })) << "the ignore operation must reach the characters database after its asynchronous list load";
+    EXPECT_TRUE(sSocialMgr.IsIgnored(OwnerId, RequesterId));
+    EXPECT_FALSE(sSocialMgr.IsFriend(OwnerId, RequesterId));
+
+    for (FakeSessionClient* client : { ownerClient.get(), speakerClient.get() })
+        while (client->ReadFrame(std::chrono::milliseconds(100)))
+        {
+        }
+
+    GameMessages::RequestRadialChat line;
+    line.Message = ChatText::Write(u"ignored speaker");
+    Send(*speakerClient, line);
+    ASSERT_TRUE(WaitForCondition([&] { return speaker->GetQueuedMessageCount() == 1; }));
+    sWorld.Update(std::chrono::milliseconds(50));
+
+    std::optional<DmlMessageData> const ownerLine = ReadNextDml(*ownerClient, std::chrono::milliseconds(200));
+    EXPECT_FALSE(ownerLine && Is<GameMessages::RadialChat>(*ownerLine)) << "the world relay must suppress the ignored speaker for its owner";
+    std::optional<GameMessages::RadialChat> const thirdLine = ReadReply<GameMessages::RadialChat>(*thirdClient);
+    ASSERT_TRUE(thirdLine) << "a third wizard in range still hears the speaker through the world relay";
+    EXPECT_EQ(thirdLine->Message, ChatText::Write(u"ignored speaker"));
 }
 
 TEST_F(SocialMgrDatabaseTest, LoweringTheLiveFriendCapRefusesARequestThroughTheHandler)
@@ -260,16 +352,17 @@ TEST_F(SocialMgrDatabaseTest, LoweringTheLiveFriendCapRefusesARequestThroughTheH
     std::unique_ptr<FakeSessionClient> client;
     std::shared_ptr<GameSession> const session = Connect(client, OwnerId);
     ASSERT_TRUE(session);
+    SocialMgrTestAccess::PrepareWorld(*session, OwnerId, 0.0f);
 
     GameMessages::BuddyRequestAdd request;
     request.ListOwnerGid = OwnerId;
     request.EntryGid = TargetId;
     Send(*client, request);
-    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 1; }));
-    EXPECT_EQ(session->DrainQueue(), 1u);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() != 0; })) << "the friend-request message must reach the game-session handler queue";
 
-    std::optional<GameMessages::ChatError> const error = ReadReply<GameMessages::ChatError>(*client);
-    ASSERT_TRUE(error);
+    std::string observed;
+    std::optional<GameMessages::ChatError> const error = ReadWorldReply<GameMessages::ChatError>(*client, observed);
+    ASSERT_TRUE(error) << "no CHATERROR decoded; other DML replies: " << observed;
     EXPECT_EQ(error->ListOwnerGid, OwnerId);
     EXPECT_EQ(error->CharacterId, TargetId);
     EXPECT_EQ(error->Error, 1u);

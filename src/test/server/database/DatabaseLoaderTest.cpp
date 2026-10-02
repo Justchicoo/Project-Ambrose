@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * With AMBROSE_TEST_DB set, tests transactions, deadlock retries, chained callbacks on the polling thread, holder callbacks, the loader's open and failure paths, and live pool reconfiguration; and without it, that a database's pending update folder is the one under Updates.SourcePath, or under the folder the build came from when it names none.
+ * With AMBROSE_TEST_DB set, tests transactions, deadlock retries, chained callbacks on the polling thread, holder callbacks, the loader's open and failure paths, and live pool reconfiguration; without it, tests the pending-update source path and that callbacks can be added while another thread polls them.
  */
 
 #include "AsyncCallbackProcessor.h"
@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <future>
 #include <mutex>
 #include <stdexcept>
 #include <fstream>
@@ -262,6 +263,36 @@ TEST(DatabaseCallbackTest, ProcessorIsolatesThrowingCallbacksAndChainsRunInOrder
     processor.ProcessReadyCallbacks();
     EXPECT_EQ(processor.GetPendingCount(), 0u);
     EXPECT_EQ(order, (std::vector<int>{ 1, 2 }));
+}
+
+TEST(DatabaseCallbackTest, ProcessorAcceptsCallbacksWhileAnotherThreadPolls)
+{
+    std::promise<QueryResult> first;
+    std::promise<QueryResult> second;
+    std::promise<void> entered;
+    std::promise<void> resume;
+    std::shared_future<void> resumeSignal = resume.get_future().share();
+    std::future<void> enteredSignal = entered.get_future();
+    std::atomic<uint32> called = 0;
+    AsyncCallbackProcessor<QueryCallback> processor;
+    first.set_value(nullptr);
+    processor.AddCallback(QueryCallback(first.get_future()).WithCallback([&](QueryResult)
+    {
+        entered.set_value();
+        resumeSignal.wait();
+    }));
+
+    std::thread polling([&] { processor.ProcessReadyCallbacks(); });
+    enteredSignal.wait();
+    processor.AddCallback(QueryCallback(second.get_future()).WithCallback([&](QueryResult) { called.fetch_add(1, std::memory_order_relaxed); }));
+    processor.ProcessReadyCallbacks();
+    resume.set_value();
+    polling.join();
+
+    EXPECT_EQ(processor.GetPendingCount(), 1u);
+    second.set_value(nullptr);
+    processor.ProcessReadyCallbacks();
+    EXPECT_EQ(called.load(std::memory_order_relaxed), 1u);
 }
 
 TEST(DatabaseTransactionTest, InvalidOrResubmittedTransactionsAreRefused)

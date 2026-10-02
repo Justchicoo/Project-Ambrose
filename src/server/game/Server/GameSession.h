@@ -31,6 +31,7 @@
 #include <vector>
 
 struct ChatSpeaker;
+class SocialMgr;
 
 struct WorldDeparture
 {
@@ -152,7 +153,9 @@ protected:
 
 private:
     friend class World;
+    friend class SocialMgr;
     friend struct GameSessionLifecycleTestAccess;
+    friend struct SocialMgrTestAccess;
 
     std::shared_ptr<GameSession> SharedSelf();
     SQLOperation::CompletionHandler MakeCompletionHandler();
