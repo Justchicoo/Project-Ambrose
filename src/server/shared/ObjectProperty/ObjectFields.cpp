@@ -15,14 +15,16 @@ namespace
     constexpr std::array<std::string_view, 1> PlayerObjectClasses{ "class WizClientObject" };
     constexpr std::array<std::string_view, 1> GameObjectClasses{ "class CoreObject" };
     constexpr std::array<std::string_view, 1> CriticalObjectClasses{ "class CriticalObjectList" };
+    constexpr std::array<std::string_view, 1> IgnoreListClasses{ "class IgnoreEntryDataList" };
     constexpr std::array<std::string_view, 1> SubscriberOnlyItemClasses{ "class SubscriberOnlyItemsList" };
     constexpr std::array<std::string_view, 1> TimedAccessPassClasses{ "class ActiveTimedAccessPassList" };
 
-    constexpr std::array<ObjectField, 9> Fields{ {
+    constexpr std::array<ObjectField, 10> Fields{ {
         { "MSG_BADGES", "BadgeInfo", BadgeInfoClasses, true, false },
         { "MSG_BADGES", "BadgeFilterInfo", BadgeFilterClasses, true, false },
         { "MSG_CHARACTERINFO", "CharacterInfo", CreationClasses, false, false },
         { "MSG_CREATECHARACTER", "CreationInfo", CreationClasses, false, false },
+        { "MSG_IGNORELIST", "ListData", IgnoreListClasses, false, false },
         { "MSG_LOGINCOMPLETE", "Data", PlayerObjectClasses, true, false, true },
         { "MSG_LOGINCOMPLETE", "CriticalObjects", CriticalObjectClasses, false, false },
         { "MSG_NEWOBJECT", "Data", GameObjectClasses, false, false, true },

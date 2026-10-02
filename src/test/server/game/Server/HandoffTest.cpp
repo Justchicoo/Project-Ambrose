@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives the whole handoff over loopback with AMBROSE_TEST_DB set, which is the one thing neither half proves alone: a client signs in to a login server, picks its wizard, is told a gameserver to go to with a key, closes that connection as a real client does, connects to the game server on its own port, handshakes into a session the game server offers of its own, whose id comes from that server's own pool and may repeat the login server's, and sends MSG_ATTACH carrying the key it was given, which the game server dispatches while the session is only Connected. Checks that the key, account and wizard that arrive are the ones the login server issued, that the key is spent so the client is let in, and that the login session is gone rather than waiting on a client that has left, that a session that has attached is never closed for not attaching, and separately that an attach carrying a key nobody issued, or the key issued for this account's wizard with another account's wizard named, is answered with MSG_ATTACHFAILED, nothing after it, and the connection closed behind it.
+ * Drives the whole handoff over loopback with AMBROSE_TEST_DB set, which is the one thing neither half proves alone: a client signs in to a login server, picks its wizard, is told a gameserver to go to with a key, closes that connection as a real client does, connects to the game server on its own port, handshakes into a session the game server offers of its own, whose id comes from that server's own pool and may repeat the login server's, and sends MSG_ATTACH carrying the key it was given, which the game server dispatches while the session is only Connected. Checks that the key, account and wizard that arrive are the ones the login server issued, that the key is spent so the client is let in, and that the login session is gone rather than waiting on a client that has left, that a session that has attached is never closed for not attaching, and separately that an attach carrying a key nobody issued, or the key issued for this account's wizard with another account's wizard named, is answered with MSG_ATTACHFAILED, nothing after it, and the connection closed behind it; applies the pending 12.01 character schema when testing this branch.
  */
 
 #include "AccountMgr.h"
@@ -25,6 +25,9 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -63,6 +66,16 @@ namespace
             _charactersInfo.Database = fmt::format("ambrose_hand_{:08x}_characters", suffix);
             ASSERT_TRUE(DBUpdater::Run(_loginInfo, "login", UpdaterSettings{}));
             ASSERT_TRUE(DBUpdater::Run(_charactersInfo, "characters", UpdaterSettings{}));
+            std::filesystem::path const socialUpdate = DBUpdater::GetBuiltInSourceDirectory() / "data" / "sql" / "updates" / "pending_db_characters" /
+                "rev_1790786233_friends.sql";
+            if (std::filesystem::exists(socialUpdate))
+            {
+                std::ifstream sqlFile(socialUpdate, std::ios::binary);
+                ASSERT_TRUE(sqlFile) << socialUpdate.string();
+                std::string const sql{ std::istreambuf_iterator<char>(sqlFile), std::istreambuf_iterator<char>() };
+                std::string failure;
+                ASSERT_TRUE(DBUpdater::ApplyScript(_charactersInfo, {}, socialUpdate.filename().string(), sql, &failure)) << failure;
+            }
             ASSERT_TRUE(LoginDatabase.SetConnectionInfo(_loginInfo.ToConnectionString(), 1, 1));
             ASSERT_EQ(LoginDatabase.Open(), 0u);
             ASSERT_TRUE(CharacterDatabase.SetConnectionInfo(_charactersInfo.ToConnectionString(), 1, 1));

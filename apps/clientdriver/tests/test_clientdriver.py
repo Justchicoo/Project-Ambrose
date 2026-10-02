@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -706,6 +707,44 @@ class ScreenTests(unittest.TestCase):
             read = screens.load_png(path)
             self.assertEqual(read.size, picture.size)
             self.assertEqual(screens.compare(read, picture)["fraction"], 1.0)
+
+
+class ClientInputTests(unittest.TestCase):
+    def test_mouse_click_allows_a_lagging_client_to_process_window_messages(self):
+        api = mock.Mock()
+        api.GetAsyncKeyState.return_value = 0
+        gui = mock.Mock()
+        con = SimpleNamespace(WM_MOUSEMOVE=0x0200, WM_LBUTTONDOWN=0x0201, WM_LBUTTONUP=0x0202)
+        client_window = client.Client.__new__(client.Client)
+        client_window.handle = 0x1234
+
+        with (mock.patch.dict(sys.modules, {"win32api": api, "win32con": con, "win32gui": gui}),
+              mock.patch.object(client.Client, "activated", return_value=mock.MagicMock()),
+              mock.patch.object(client.Client, "cursor_at", return_value=mock.MagicMock()),
+              mock.patch("clientdriver.client.time.sleep")):
+            client_window.click(30, 40)
+
+        self.assertEqual(gui.SendMessageTimeout.call_count, 3)
+        self.assertTrue(all(call.args[-1] == client.SEND_MESSAGE_TIMEOUT_MS
+                            for call in gui.SendMessageTimeout.call_args_list))
+
+
+    def test_key_events_activate_the_client_window(self):
+        api = mock.Mock()
+        api.GetAsyncKeyState.return_value = 0
+        api.MapVirtualKey.side_effect = lambda virtual_key, _mode: virtual_key
+        gui = mock.Mock()
+        con = SimpleNamespace(VK_RETURN=0x0D, WM_KEYDOWN=0x0100, WM_KEYUP=0x0101)
+        activated = mock.MagicMock()
+        client_window = client.Client.__new__(client.Client)
+        client_window.handle = 0x1234
+        with (mock.patch.dict(sys.modules, {"win32api": api, "win32con": con, "win32gui": gui}),
+              mock.patch.object(client.Client, "activated", return_value=activated) as activate,
+              mock.patch("clientdriver.client.time.sleep")):
+            client_window.keys([0x46], hold=0.01)
+
+        activate.assert_called_once_with()
+        self.assertEqual(gui.PostMessage.call_count, 2)
 
 
 class FakeClient:

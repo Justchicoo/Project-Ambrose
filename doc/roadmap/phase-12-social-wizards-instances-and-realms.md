@@ -50,9 +50,9 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Acceptance**
 
-- [ ] Accepting an unsent request fails with CHATERROR
+- [x] Accepting an unsent request fails with CHATERROR
 - [ ] Real client: add/accept shows both online with zone; logout shows offline
-- [ ] Lowering Social.MaxFriends refuses the next request over the cap without a restart
+- [x] Lowering Social.MaxFriends refuses the next request over the cap without a restart
 
 ### Detailed spec from WIZ-17: Friends and ignore lists
 
@@ -75,14 +75,15 @@ Players can add, accept, deny and remove friends and ignored players, see online
 
 **Acceptance**
 
-- [ ] Unit test: accepting a request that was never sent fails with CHATERROR
-- [ ] Unit test: ignoring a player removes them from friends and suppresses their radial chat to the owner
-- [ ] Unit test: lowering Social.MaxFriends with `.settings set` refuses the next request over the new cap without a restart
+- [x] Unit test: accepting a request that was never sent fails with CHATERROR
+- [x] Unit test: ignoring a player removes them from friends and suppresses their radial chat to the owner
+- [x] Unit test: lowering Social.MaxFriends with `.settings set` refuses the next request over the new cap without a restart
 - [ ] Two real clients: A clicks B and chooses Add Friend. B gets the friend request popup and accepts. Both friends lists show each other online with zone name. B logs out and A's list shows B offline within one status update. A ignores B and stops seeing B's chat bubbles.
 
 **Risks**
 
-- The Status, FriendInfo and Permissions bit meanings in BUDDYENTRY are unverified.
+- Status values are taken from the local r806919 type dump, but client-visible status transitions and FriendInfo/Permissions semantics remain unverified until the real-client check.
+- The numeric CHATERROR.Error used for request rejection remains unverified against a real client.
 - True-friend chat codes (REQUESTCHATCODE/SENDCHATCODE/USECHATCODE) are planned as a follow-up milestone in this phase, kept apart to keep this milestone small.
 
 ## 12.02 Ignore list (WIZ-17 part 2)

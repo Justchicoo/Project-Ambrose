@@ -41,6 +41,16 @@ namespace
             Accept<&GameSession::HandleQuestFinderOption>(entered, MessageProcessing::InPlace, "GameSession::HandleQuestFinderOption");
 
             SessionStatusMask const inWorld = SessionStatuses::InWorld;
+            Accept<&GameSession::HandleBuddyRequestList>(entered, MessageProcessing::Queued, "GameSession::HandleBuddyRequestList");
+            Accept<&GameSession::HandleBuddyRequestAdd>(entered, MessageProcessing::Queued, "GameSession::HandleBuddyRequestAdd");
+            Accept<&GameSession::HandleBuddyRequestAccept>(entered, MessageProcessing::Queued, "GameSession::HandleBuddyRequestAccept");
+            Accept<&GameSession::HandleBuddyRequestDeny>(entered, MessageProcessing::Queued, "GameSession::HandleBuddyRequestDeny");
+            Accept<&GameSession::HandleBuddyRequestDrop>(entered, MessageProcessing::Queued, "GameSession::HandleBuddyRequestDrop");
+            Accept<&GameSession::HandleBestFriend>(entered, MessageProcessing::Queued, "GameSession::HandleBestFriend");
+            Accept<&GameSession::HandleRequestMaxFriends>(entered, MessageProcessing::Queued, "GameSession::HandleRequestMaxFriends");
+            Accept<&GameSession::HandleIgnoreAdd>(entered, MessageProcessing::Queued, "GameSession::HandleIgnoreAdd");
+            Accept<&GameSession::HandleIgnoreDrop>(entered, MessageProcessing::Queued, "GameSession::HandleIgnoreDrop");
+
             Accept<&GameSession::HandlePlayerWizBang>(inWorld, MessageProcessing::Queued, "GameSession::HandlePlayerWizBang");
             Accept<&GameSession::HandleCombatMove>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatMove");
             Accept<&GameSession::HandleCombatDraw>(inWorld, MessageProcessing::InPlace, "GameSession::HandleCombatDraw");
@@ -60,6 +70,12 @@ namespace
             Refuse(GameService, "MSG_RADIALCHAT");
             Refuse(GameService, "MSG_RADIALQUICKCHAT");
             Refuse(GameService, "MSG_RADIALQUICKCHATEXT");
+            Refuse(GameService, "MSG_BUDDYENTRY");
+            Refuse(GameService, "MSG_BUDDYLISTCOMPLETE");
+            Refuse(GameService, "MSG_BUDDYDROP");
+            Refuse(GameService, "MSG_BUDDYSTATUSUPDATE");
+            Refuse(GameService, "MSG_IGNORELIST");
+            Refuse(GameService, "MSG_CHATERROR");
             Refuse(WizardService, "MSG_ADDSPELLTOBOOK");
             Refuse(WizardService, "MSG_REMOVESPELLFROMBOOK");
 
@@ -92,6 +108,18 @@ namespace
             Sends<ZombiePlayer>();
             Sends<DisconnectAfk>();
             Sends<ServerShutdown>();
+            Sends<BuddyEntry>();
+            Sends<BuddyListComplete>();
+            Sends<BuddyRequestAdd>();
+            Sends<BuddyRequestAccept>();
+            Sends<BuddyRequestDeny>();
+            Sends<BuddyRequestDrop>();
+            Sends<BuddyDrop>();
+            Sends<BuddyStatusUpdate>();
+            Sends<BestFriend>();
+            Sends<RequestMaxFriends>();
+            Sends<IgnoreList>();
+            Sends<ChatError>();
 
             SystemMessages::AddRules(*this);
         }

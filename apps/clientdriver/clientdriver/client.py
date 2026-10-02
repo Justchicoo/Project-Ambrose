@@ -23,6 +23,7 @@ NO_WINDOW = 0x08000000
 SW_SHOWNOACTIVATE = 4
 PW_RENDERFULLCONTENT = 2
 SMTO_ABORTIFHUNG = 0x0002
+SEND_MESSAGE_TIMEOUT_MS = 10000
 MK_LBUTTON = 0x0001
 DWMWA_EXTENDED_FRAME_BOUNDS = 9
 MODIFIER_KEYS = (0x10, 0x11, 0x12, 0x5B, 0x5C)
@@ -495,11 +496,12 @@ class Client:
         def parameter(virtual_key):
             return 1 | (win32api.MapVirtualKey(virtual_key, 0) << 16) | (1 << 24 if virtual_key in EXTENDED_KEYS else 0)
 
-        for virtual_key in virtual_keys:
-            win32gui.PostMessage(self.handle, win32con.WM_KEYDOWN, virtual_key, parameter(virtual_key))
-        time.sleep(hold)
-        for virtual_key in reversed(virtual_keys):
-            win32gui.PostMessage(self.handle, win32con.WM_KEYUP, virtual_key, parameter(virtual_key) | (3 << 30))
+        with self.activated():
+            for virtual_key in virtual_keys:
+                win32gui.PostMessage(self.handle, win32con.WM_KEYDOWN, virtual_key, parameter(virtual_key))
+            time.sleep(hold)
+            for virtual_key in reversed(virtual_keys):
+                win32gui.PostMessage(self.handle, win32con.WM_KEYUP, virtual_key, parameter(virtual_key) | (3 << 30))
 
     @contextlib.contextmanager
     def cursor_at(self, x, y):
@@ -538,7 +540,7 @@ class Client:
         position = (y << 16) | (x & 0xFFFF)
 
         def send(message, wparam):
-            win32gui.SendMessageTimeout(self.handle, message, wparam, position, SMTO_ABORTIFHUNG, 3000)
+            win32gui.SendMessageTimeout(self.handle, message, wparam, position, SMTO_ABORTIFHUNG, SEND_MESSAGE_TIMEOUT_MS)
 
         with self.activated() as active, self.cursor_at(x, y):
             send(win32con.WM_MOUSEMOVE, 0)

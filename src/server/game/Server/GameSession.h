@@ -32,6 +32,7 @@
 #include <vector>
 
 struct ChatSpeaker;
+class SocialMgr;
 
 struct WorldDeparture
 {
@@ -72,6 +73,8 @@ public:
 
     std::string GetCharacterName() const;
     void SetCharacterName(std::string name);
+    std::string const& GetZonePath() const noexcept { return _zonePath; }
+    std::string const& GetZoneDisplay() const noexcept { return _zoneDisplay; }
 
     std::size_t DrainQueue(std::size_t limit = MaxQueuedMessages);
     void WorldUpdate(std::chrono::steady_clock::time_point now);
@@ -126,6 +129,16 @@ public:
     void SendBadges();
     void HandlePlayerWizBang(GameMessages::PlayerWizBang& message);
 
+    void HandleBuddyRequestList(GameMessages::BuddyRequestList& message);
+    void HandleBuddyRequestAdd(GameMessages::BuddyRequestAdd& message);
+    void HandleBuddyRequestAccept(GameMessages::BuddyRequestAccept& message);
+    void HandleBuddyRequestDeny(GameMessages::BuddyRequestDeny& message);
+    void HandleBuddyRequestDrop(GameMessages::BuddyRequestDrop& message);
+    void HandleBestFriend(GameMessages::BestFriend& message);
+    void HandleRequestMaxFriends(GameMessages::RequestMaxFriends& message);
+    void HandleIgnoreAdd(GameMessages::IgnoreAdd& message);
+    void HandleIgnoreDrop(GameMessages::IgnoreDrop& message);
+
     void HandleCombatMove(GameMessages::CombatMove& message);
     void HandleCombatDraw(GameMessages::CombatDraw& message);
     void HandleCombatAFK(GameMessages::CombatAFK& message);
@@ -144,7 +157,9 @@ protected:
 
 private:
     friend class World;
+    friend class SocialMgr;
     friend struct GameSessionLifecycleTestAccess;
+    friend struct SocialMgrTestAccess;
 
     std::shared_ptr<GameSession> SharedSelf();
     SQLOperation::CompletionHandler MakeCompletionHandler();
@@ -211,6 +226,7 @@ private:
     uint64 _characterRevision = 0;
     mutable std::mutex _nameMutex;
     std::string _characterName;
+    std::string _zoneDisplay;
 };
 
 #endif
