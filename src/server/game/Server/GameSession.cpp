@@ -1000,7 +1000,6 @@ VisibilityChanges GameSession::UpdateSight(Map const& map, InstanceSight const& 
         if (wizards.contains(id))
             LOG_DEBUG("server.gamesession", "Session {}'s wizard {} lost sight of wizard {}", GetSessionId(), _worldGuid, id);
     }
-    // The r806919 client's MSG_ADDOBJECT handler (0x141708460) does nothing, and MSG_REMOVEOBJECT deletes the object, so one shown again is sent whole again.
     auto const show = [&](uint64 id)
     {
         if (MapObject const* const object = map.FindObject(id))
