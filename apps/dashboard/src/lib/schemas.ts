@@ -652,6 +652,45 @@ export const ActivityAnswer = v.looseObject({
     activity: v.array(ActivityRow),
 });
 
+export const PanelActivitySubject = v.looseObject({
+    kind: v.string(),
+    id: v.optional(v.string(), ""),
+    name: v.optional(v.string(), ""),
+});
+
+export const PanelActivityRow = v.looseObject({
+    id: v.number(),
+    event_id: v.string(),
+    epoch_ms: v.number(),
+    name: v.string(),
+    sentence: v.string(),
+    class: v.optional(v.string(), "security"),
+    actor: v.looseObject({
+        type: v.string(),
+        id: v.nullable(v.string()),
+        name: v.string(),
+    }),
+    api_key_id: v.optional(v.nullable(v.string()), null),
+    scheduled: v.optional(v.boolean(), false),
+    address_shown: v.optional(v.boolean(), false),
+    address: v.optional(v.nullable(v.string()), null),
+    user_agent: v.optional(v.nullable(v.string()), null),
+    node: v.optional(v.nullable(v.string()), null),
+    result: v.picklist(["ok", "denied", "failed", "throttled"]),
+    error: v.optional(v.nullable(v.string()), null),
+    reason: v.optional(v.nullable(v.string()), null),
+    properties: v.optional(v.record(v.string(), v.unknown()), {}),
+    subjects: v.array(PanelActivitySubject),
+});
+
+export const PanelActivityAnswer = v.looseObject({
+    schema: v.number(),
+    rows: v.array(PanelActivityRow),
+    next_cursor: v.nullable(v.string()),
+    sees_addresses: v.boolean(),
+    can_export: v.optional(v.boolean(), false),
+});
+
 export const ClientAnswer = v.looseObject({
     schema: v.number(),
     install: v.looseObject({
@@ -825,6 +864,8 @@ export type TickProfileAnswer = v.InferOutput<typeof TickProfileAnswer>;
 export type TickProfileTraceAnswer = v.InferOutput<typeof TickProfileTraceAnswer>;
 export type ActivityRow = v.InferOutput<typeof ActivityRow>;
 export type ActivityAnswer = v.InferOutput<typeof ActivityAnswer>;
+export type PanelActivityRow = v.InferOutput<typeof PanelActivityRow>;
+export type PanelActivityAnswer = v.InferOutput<typeof PanelActivityAnswer>;
 export type ClientAnswer = v.InferOutput<typeof ClientAnswer>;
 export type FileOperationState = v.InferOutput<typeof FileOperationState>;
 export type FilePolicy = v.InferOutput<typeof FilePolicy>;

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The admin API's route table and front door: a request carries its query both decoded and exactly as it was sent, so a route that decodes a value itself, as the file jail does, decodes it once; every request gets a request id that its answer and any error body carry, keeping one a caller such as the supervisor sent when it has the same form, so one id names the request in both logs, a host that is no IP address, localhost or a name the operator allows is refused so a page elsewhere cannot rebind a name onto this listener, paths outside /api that no route claims go to the panel's files without a token, so a route a scraper expects at a fixed place such as /metrics is still served and still guarded, public routes such as signing in run without one, a route may answer every path under a prefix when no exact route claims it, the longest prefix first, and every other path needs the bearer token or a browser session whose unsafe requests and socket upgrades name this listener's own origin and carry the session's CSRF token, with every answer stamped with the panel's security headers and every error handed to a log. A caller may be asked about a permission beyond its route's, which a token caller the supervisor relays is held to only when the supervisor forwarded it, and a route may charge the listener's rate limit a cost of its own. A route that asks for a permission the listener's catalog does not hold is not served, and is kept among the refused routes so the listener can say which pages it left out rather than losing them unseen. A request says whether its address carried a query at all, even one with no value a route could read, without keeping the query itself. A listener may hold every authenticated caller to an admission rule, such as a requirement to turn on two-factor sign-in, which every route and socket passes after authentication except the routes registered as the way to meet it, and may ask for a fresh check of who the caller is before a permission it allows is used, the check deciding when a change or any use needs one and its answer standing in for the handler's.
+ * The admin API's route table and front door: a request carries its query both decoded and exactly as it was sent, so a route that decodes a value itself, as the file jail does, decodes it once; every request gets a request id that its answer and any error body carry, keeping one a caller such as the supervisor sent when it has the same form, so one id names the request in both logs, a host that is no IP address, localhost or a name the operator allows is refused so a page elsewhere cannot rebind a name onto this listener, paths outside /api that no route claims go to the panel's files without a token, so a route a scraper expects at a fixed place such as /metrics is still served and still guarded, public routes such as signing in run without one, a route may answer every path under a prefix when no exact route claims it, the longest prefix first, and every other path needs the bearer token or a browser session whose unsafe requests and socket upgrades name this listener's own origin and carry the session's CSRF token, with every answer stamped with the panel's security headers and every error handed to a log. A caller may be asked about a permission beyond its route's, which a token caller the supervisor relays is held to only when the supervisor forwarded it, and a route may charge the listener's rate limit a cost of its own. A route that asks for a permission the listener's catalog does not hold is not served, and is kept among the refused routes so the listener can say which pages it left out rather than losing them unseen. A request says whether its address carried a query at all, even one with no value a route could read, without keeping the query itself. A listener may hold every authenticated caller to an admission rule, such as a requirement to turn on two-factor sign-in, which every route and socket passes after authentication except the routes registered as the way to meet it, and may ask for a fresh check of who the caller is before a permission it allows is used, the check deciding when a change or any use needs one and its answer standing in for the handler's. A listener may also be told of every request a route's permission refused, so the refusal can be recorded where the listener keeps its record.
  */
 
 #ifndef AMBROSE_ADMINROUTER_H
@@ -119,6 +119,7 @@ public:
     using ProblemLog = std::function<void(AdminRequest const&, AdminResponse const&)>;
     using Known = std::function<bool(std::string_view permission)>;
     using PermissionResolver = std::function<std::string(AdminRequest const&)>;
+    using RefusalLog = std::function<void(AdminRequest const&, std::string_view permission, PermissionVerdict verdict)>;
 
     static constexpr std::string_view SecurityPolicy =
         "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; "
@@ -143,6 +144,7 @@ public:
     void SetAdmission(Admission admission);
     std::optional<AdminResponse> Admit(AdminRequest const& request) const;
     void SetStepUp(StepUpCheck check);
+    void SetRefusalLog(RefusalLog log);
     std::optional<AdminResponse> StepUp(AdminRequest const& request, std::string_view permission, StepUpWhen when) const;
     void SetPermissionKnown(Known known);
     std::vector<std::string> RouteProblems() const;
@@ -215,6 +217,7 @@ private:
     Throttle _throttle;
     Admission _admission;
     StepUpCheck _stepUp;
+    RefusalLog _refusalLog;
     mutable std::shared_mutex _mutex;
     std::vector<Route> _routes;
     std::vector<std::string> _refused;

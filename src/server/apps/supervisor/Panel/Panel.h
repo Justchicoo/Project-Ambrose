@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The panel's own front door in the supervisor: a second listener with its own Panel options, its own token file, its own store and its own keyring, off unless Panel.Enable is set, holding its operators and their sessions, the single-use links that make the first owner, set a password or open a session from a desktop program, kept only as hashes so they survive a restart, the counts a failed sign-in, a wrong second factor or a wrong link adds to, the cost-weighted limit every costly route is held to and the audit tables every change is recorded in, relayed settings changes, batches, reloads, secret reveals and error report creation among them, the protected path patterns an owner adds to a file root, saved with their audit row, and the supervisor's own live settings with their history, signing an operator with two-factor sign-in in only after a password or a link and a code, holding every route and socket to the two-factor requirement an owner sets while leaving open the routes that meet it, and asking for a fresh check before a danger action, bound to this machine unless a certificate and key are given or the operator opts into plain HTTP, serving the built dashboard at / and the panel's API under /api/panel/, the one event socket every live page runs on at /api/panel/events with the streams it serves and the one-time tickets a script opens it with, issuing local and pairing links through the supervisor's admin API, its console and its command line alike, and reloaded with the rest of the configuration so a bind it would not be allowed to keep, or a two-factor requirement it does not know, is refused while the old one goes on serving.
+ * The panel's own front door in the supervisor: a second listener with its own Panel options, its own token file, its own store and its own keyring, off unless Panel.Enable is set, holding its operators and their sessions, the single-use links that make the first owner, set a password or open a session from a desktop program, kept only as hashes so they survive a restart, the counts a failed sign-in, a wrong second factor or a wrong link adds to, the cost-weighted limit every costly route is held to and the audit tables every change is recorded in, relayed settings changes, batches, reloads, secret reveals, error report creation and every refused permission among them, read back on the activity pages with an address shown only to those allowed to see it, exported, and swept hourly by each event class's retention, in a store held under the size Panel.StoreMaxMegabytes sets, the protected path patterns an owner adds to a file root, saved with their audit row, and the supervisor's own live settings with their history, signing an operator with two-factor sign-in in only after a password or a link and a code, holding every route and socket to the two-factor requirement an owner sets while leaving open the routes that meet it, and asking for a fresh check before a danger action, bound to this machine unless a certificate and key are given or the operator opts into plain HTTP, serving the built dashboard at / and the panel's API under /api/panel/, the one event socket every live page runs on at /api/panel/events with the streams it serves and the one-time tickets a script opens it with, issuing local and pairing links through the supervisor's admin API, its console and its command line alike, and reloaded with the rest of the configuration so a bind it would not be allowed to keep, or a two-factor requirement it does not know, is refused while the old one goes on serving.
  */
 
 #ifndef AMBROSE_PANEL_H
@@ -8,6 +8,7 @@
 
 #include "AdminServer.h"
 #include "ListenerSettings.h"
+#include "PanelActivity.h"
 #include "PanelAudit.h"
 #include "PanelRateLimit.h"
 #include "PanelErrors.h"
@@ -60,6 +61,9 @@ public:
     static constexpr std::string_view ChallengeCookie = "_challenge";
     static constexpr std::size_t MaxChallenges = 1024;
     static constexpr uint32 PasswordCheckCost = 10;
+    static constexpr std::string_view StoreMaxMegabytesKey = "Panel.StoreMaxMegabytes";
+    static constexpr int64 DefaultStoreMaxMegabytes = 1024;
+    static constexpr int64 MaxStoreMaxMegabytes = 1048576;
 
     Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path configFolder = {});
 
@@ -119,6 +123,8 @@ public:
     void AddSocket(AdminSocketRoute route) { _listener.AddSocket(std::move(route)); }
 
     bool Record(AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error);
+    bool Note(AuditEvent const& event);
+    bool SweepActivity(int64 nowEpochMs, PanelActivitySweep& removed, std::string& error);
     bool Record(AuditEvent& event, std::function<bool(AuditEvent& event, std::string& error)> const& change, std::string& error);
     AdminResponse AuditRequest(AdminRequest const& request, std::string_view app, std::string_view action, std::function<AdminResponse()> operation);
     uint8 CommandLevel(AdminRequest const& request);
@@ -158,6 +164,12 @@ private:
     void RegisterSignIn();
     void RegisterTwoFactor();
     void RegisterCommandHistory();
+    void RegisterActivity();
+    AdminResponse ActivityRoute(AdminRequest const& request, std::string_view app, bool own);
+    AdminResponse ActivityExport(AdminRequest const& request);
+    int64 RetentionDays(std::string_view key, int64 fallback);
+    void SweepWhenDue();
+    bool ApplyStoreLimit(ConfigMgr const& config, std::string& error);
     void OfferTheOwnerLink();
     AdminResponse Claim(AdminRequest const& request);
     AdminResponse Probe(AdminRequest const& request);
@@ -194,6 +206,7 @@ private:
     std::optional<AdminResponse> HeldBack(PanelSignInThrottle& throttle, std::string_view username, std::string_view address, std::string_view counted);
     PanelSecondFactor CheckSecondFactor(PanelUser const& user, nlohmann::json const& body, std::string& method, std::string& error);
     void RecordRefused(std::string_view name, PanelUser const& user, AdminRequest const& request, std::string_view reason);
+    void RecordPermissionRefusal(AdminRequest const& request, std::string_view permission, std::string_view app, PermissionVerdict verdict);
 
     Log& _log;
     std::filesystem::path _dataFolder;
@@ -228,6 +241,7 @@ private:
     std::mutex _gatherMutex;
     std::condition_variable _gatherWake;
     bool _gathering = false;
+    int64 _lastSweepEpochMs = 0;
     PanelEventStreams _events;
     PanelEventTickets _tickets;
     std::unique_ptr<PanelEventSocket> _eventSocket;

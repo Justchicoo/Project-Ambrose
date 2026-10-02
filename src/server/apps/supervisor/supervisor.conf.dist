@@ -63,6 +63,7 @@ Panel.TrustedProxies =
 Panel.RateLimitBurst = 120
 Panel.RateLimitPerSecond = 2
 Panel.StoreFile =
+Panel.StoreMaxMegabytes = 1024
 Panel.KeyringFile =
 Panel.TwoFactorRequired = none
 Panel.TwoFactorWindow = 1

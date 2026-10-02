@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Answers every admin API request in one order: a request id, the host check, the panel's files for paths outside /api, public routes, then the bearer token or a browser session with its origin and CSRF checks, the listener's admission rule unless the exact route is one registered for meeting it, the body limit and the route, an exact one before the longest prefix that covers the path, the route's permission and then any fresh check the listener asks for before it is used, and finally the security headers, the request id in the answer and in any error body, and the error log; a permission a relayed token caller was not forwarded is never granted to it, and a cost charged outside a route goes to the same limit.
+ * Answers every admin API request in one order: a request id, the host check, the panel's files for paths outside /api, public routes, then the bearer token or a browser session with its origin and CSRF checks, the listener's admission rule unless the exact route is one registered for meeting it, the body limit and the route, an exact one before the longest prefix that covers the path, the route's permission, a refusal of which is handed to the listener's refusal log, and then any fresh check the listener asks for before it is used, and finally the security headers, the request id in the answer and in any error body, and the error log; a permission a relayed token caller was not forwarded is never granted to it, and a cost charged outside a route goes to the same limit.
  */
 
 #include "AdminRouter.h"
@@ -160,6 +160,12 @@ void AdminRouter::SetStepUp(StepUpCheck check)
 {
     std::unique_lock const lock(_mutex);
     _stepUp = std::move(check);
+}
+
+void AdminRouter::SetRefusalLog(RefusalLog log)
+{
+    std::unique_lock const lock(_mutex);
+    _refusalLog = std::move(log);
 }
 
 std::optional<AdminResponse> AdminRouter::StepUp(AdminRequest const& request, std::string_view permission, StepUpWhen when) const
@@ -702,7 +708,18 @@ AdminResponse AdminRouter::Serve(AdminRequest const& request) const
         permission = resolvePermission(request);
     if (check && !permission.empty())
     {
-        switch (check(request, permission))
+        PermissionVerdict const verdict = check(request, permission);
+        if (verdict != PermissionVerdict::Allowed)
+        {
+            RefusalLog refusalLog;
+            {
+                std::shared_lock const lock(_mutex);
+                refusalLog = _refusalLog;
+            }
+            if (refusalLog)
+                refusalLog(request, permission, verdict);
+        }
+        switch (verdict)
         {
             case PermissionVerdict::Allowed:
                 break;

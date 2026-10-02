@@ -1,9 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * What the panel asks about one app: running a command on it, the supervisor's own routes for power, captured output and the file roots with their listings, reads and protected patterns, and the app's own routes for its status, settings with their changes, resets, batches and their previews, history and reveals, the events it announces, and databases, sent through the supervisor's relay when the supervisor served this panel and straight to the app when the app served it itself, so every page reads the same way whichever is in front of it. A page about something only some apps keep, such as the realm list the login server holds, asks each app once and offers only those that answer, because an app answering that it has no such page is not an app with an empty one; an app run without an admin API has no pages at all and is never offered, while one that is only stopped still is, so its page can say so.
+ * What the panel asks about one app: running a command on it, the supervisor's own routes for power, captured output and the file roots with their listings, reads and protected patterns, and the app's own routes for its status, settings with their changes, resets, batches and their previews, history and reveals, the events it announces, and databases, and the panel's own activity log of what was done to an app, by or to one operator or across the panel with the links that export it, sent through the supervisor's relay when the supervisor served this panel and straight to the app when the app served it itself, so every page reads the same way whichever is in front of it. A page about something only some apps keep, such as the realm list the login server holds, asks each app once and offers only those that answer, because an app answering that it has no such page is not an app with an empty one; an app run without an admin API has no pages at all and is never offered, while one that is only stopped still is, so its page can say so.
  */
 
-import { ApiError, request } from "./api.svelte";
+import { ApiError, request, session } from "./api.svelte";
 import { filesQuery } from "./files";
 import { live } from "./status.svelte";
 import {
@@ -15,6 +15,7 @@ import {
     DatabaseUpdatesAnswer,
     OutputAnswer,
     ActivityAnswer,
+    PanelActivityAnswer,
     ClientAnswer,
     GraphRangeAnswer,
     GraphsAnswer,
@@ -181,6 +182,46 @@ export function realmsOf(app: string, signal?: AbortSignal) {
 
 export function activityOf(app: string, signal?: AbortSignal) {
     return request("GET", pathFor(app, "activity"), ActivityAnswer, undefined, signal);
+}
+
+export type ActivityScope = { kind: "all" } | { kind: "me" } | { kind: "app"; app: string };
+
+export type ActivityFilter = {
+    prefix?: string;
+    user?: string;
+    subject?: string;
+    result?: string;
+    address?: string;
+    from?: number;
+    to?: number;
+    cursor?: string;
+    limit?: number;
+};
+
+export function activityQuery(filter: ActivityFilter): string {
+    const parts: string[] = [];
+    for (const [key, value] of Object.entries(filter)) {
+        if (value === undefined || value === "" || (typeof value === "number" && !Number.isFinite(value))) continue;
+        parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value).trim())}`);
+    }
+    return parts.length === 0 ? "" : `?${parts.join("&")}`;
+}
+
+export function activityPath(scope: ActivityScope): string {
+    if (scope.kind === "me") return "api/panel/me/activity";
+    if (scope.kind === "app") return `api/panel/apps/${encodeURIComponent(scope.app)}/activity`;
+    return "api/panel/activity";
+}
+
+export function panelActivity(scope: ActivityScope, filter: ActivityFilter, signal?: AbortSignal) {
+    return request("GET", `${activityPath(scope)}${activityQuery(filter)}`, PanelActivityAnswer, undefined, signal);
+}
+
+export function activityExportPath(scope: ActivityScope, filter: ActivityFilter, format: "csv" | "json"): string {
+    const scoped: ActivityFilter = { ...filter, cursor: undefined, limit: undefined };
+    if (scope.kind === "app") scoped.subject = `app:${scope.app}`;
+    if (scope.kind === "me" && session.user) scoped.user = String(session.user.id);
+    return `api/panel/activity/export${activityQuery(scoped)}${activityQuery(scoped) === "" ? "?" : "&"}format=${format}`;
 }
 
 export function playersOf(app: string, signal?: AbortSignal) {

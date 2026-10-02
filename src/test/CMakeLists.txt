@@ -33,6 +33,7 @@ target_compile_definitions(unit_tests PRIVATE "AMBROSE_DESIGN_TOKENS_CSS=\"${PRO
 target_compile_definitions(unit_tests PRIVATE "AMBROSE_SETTINGS_DOC=\"${PROJECT_SOURCE_DIR}/doc/config/settings.md\"")
 target_compile_definitions(unit_tests PRIVATE "AMBROSE_PANEL_EVENT_TYPES=\"${PROJECT_SOURCE_DIR}/apps/dashboard/src/lib/protocol.ts\"")
 target_compile_definitions(unit_tests PRIVATE "AMBROSE_PANEL_DOC=\"${PROJECT_SOURCE_DIR}/doc/PANEL.md\"")
+target_compile_definitions(unit_tests PRIVATE "AMBROSE_SUPERVISOR_SOURCE=\"${PROJECT_SOURCE_DIR}/src/server/apps/supervisor\"")
 
 target_include_directories(unit_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/mocks")
 

@@ -39,7 +39,7 @@ namespace
         nlohmann::json subjects = nlohmann::json::array();
         for (AuditSubject const& subject : event.Subjects)
             subjects.push_back({ { "kind", subject.Kind }, { "id", OptionalJson(subject.Id) }, { "name", OptionalJson(subject.Name) } });
-        return {
+        nlohmann::json value{
             { "id", event.DatabaseId },
             { "event_id", event.EventId },
             { "batch_id", OptionalJson(event.BatchId) },
@@ -58,6 +58,9 @@ namespace
             { "subjects", std::move(subjects) },
             { "previous_hash", previousHash }
         };
+        if (!event.ApiKeyId.empty())
+            value["api_key_id"] = event.ApiKeyId;
+        return value;
     }
 
     std::string ChainHash(AuditEvent const& event, std::string_view previousHash)
@@ -102,6 +105,8 @@ namespace
         };
         if (row.IsNull(5))
             value["actor_type"] = nullptr;
+        if (!row.IsNull(16))
+            value["api_key_id"] = row.Text(16);
         return value;
     }
 }
@@ -191,8 +196,8 @@ bool PanelAudit::Write(PanelStore& store, AuditEvent const& event, std::string& 
         return false;
     }
     std::optional<PanelStore::Statement> insert = store.Prepare(
-        "INSERT INTO audit_event (event_id, batch_id, created_epoch_ms, name, actor_type, actor_id, actor_name, address, user_agent, node, result, error, reason, properties, chain_hash)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')", error);
+        "INSERT INTO audit_event (event_id, batch_id, created_epoch_ms, name, actor_type, actor_id, actor_name, address, user_agent, node, result, error, reason, properties, chain_hash, api_key_id)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)", error);
     if (!insert)
         return false;
     std::string const eventId = event.EventId.empty() ? NewEventId() : event.EventId;
@@ -210,6 +215,7 @@ bool PanelAudit::Write(PanelStore& store, AuditEvent const& event, std::string& 
     BindOrNull(*insert, 12, event.Error);
     BindOrNull(*insert, 13, event.Reason);
     insert->Bind(14, event.Properties.empty() ? std::string("{}") : event.Properties);
+    BindOrNull(*insert, 15, event.ApiKeyId);
     if (!insert->Run(error))
     {
         error = fmt::format("the audit row for {} could not be written: {}", event.Name, error);
@@ -321,7 +327,7 @@ bool PanelAudit::EnsureChain(PanelStore& store, std::string& error)
     if (!store.Begin(error))
         return false;
     std::optional<PanelStore::Statement> rows = store.Prepare(
-        "SELECT id, event_id, batch_id, created_epoch_ms, name, actor_type, actor_id, actor_name, address, user_agent, node, result, error, reason, properties, chain_hash "
+        "SELECT id, event_id, batch_id, created_epoch_ms, name, actor_type, actor_id, actor_name, address, user_agent, node, result, error, reason, properties, chain_hash, api_key_id "
         "FROM audit_event ORDER BY id", error);
     if (!rows)
     {

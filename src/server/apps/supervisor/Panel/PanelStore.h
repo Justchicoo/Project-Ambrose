@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The supervisor's own store: one SQLite file in the Ambrose data folder, opened in WAL mode with foreign keys on and a busy timeout, brought up to date at start by the dated files in data/sql/panel, applied in order inside one transaction each and recorded in its own updates table with their hash, and read and written through prepared statements that bind and read by type, so the panel keeps its sessions, its audit rows and later its users before any game database exists.
+ * The supervisor's own store: one SQLite file in the Ambrose data folder, opened in WAL mode with foreign keys on and a busy timeout, brought up to date at start by the dated files in data/sql/panel, applied in order inside one transaction each and recorded in its own updates table with their hash, held under a size limit so a full store refuses writes rather than filling the disk, and read and written through prepared statements that bind and read by type, so the panel keeps its sessions, its audit rows and later its users before any game database exists.
  */
 
 #ifndef AMBROSE_PANELSTORE_H
@@ -73,6 +73,9 @@ public:
     bool Execute(std::string_view sql, std::string& error);
     int64 LastInsertId() const;
     int64 Changed() const;
+    bool SetMaxBytes(uint64 bytes, std::string& error);
+    uint64 GetMaxBytes() const;
+    uint64 GetSizeBytes() const;
 
     bool Begin(std::string& error);
     bool Commit(std::string& error);

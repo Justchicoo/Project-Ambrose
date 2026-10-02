@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Opens the file through SQLite with WAL, foreign keys and a busy timeout, makes the folder it lives in, creates its updates table when the file is new, and applies every dated file it has not recorded: each is split into statements the way an SQL update file is, run inside one transaction so a failure leaves the store as it was, and recorded with the hash of its text with line endings normalized, which a later start compares so a changed file is reported rather than applied again.
+ * Opens the file through SQLite with WAL, foreign keys and a busy timeout, makes the folder it lives in, creates its updates table when the file is new, and applies every dated file it has not recorded: each is split into statements the way an SQL update file is, run inside one transaction so a failure leaves the store as it was, and recorded with the hash of its text with line endings normalized, which a later start compares so a changed file is reported rather than applied again; it also caps its pages at the size the panel is given and reports that cap and its current size.
  */
 
 #include "PanelStore.h"
@@ -12,6 +12,7 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
 #include <chrono>
 #include <map>
 #include <utility>
@@ -203,6 +204,52 @@ int64 PanelStore::LastInsertId() const
 int64 PanelStore::Changed() const
 {
     return sqlite3_changes64(_database);
+}
+
+bool PanelStore::SetMaxBytes(uint64 bytes, std::string& error)
+{
+    error.clear();
+    std::optional<Statement> size = Prepare("PRAGMA page_size", error);
+    if (!size || !size->Step(error))
+    {
+        if (error.empty())
+            error = "the panel store did not say its page size";
+        return false;
+    }
+    int64 const pageSize = std::max<int64>(size->Int64(0), 512);
+    size.reset();
+    uint64 const pages = std::max<uint64>((bytes + static_cast<uint64>(pageSize) - 1) / static_cast<uint64>(pageSize), 1);
+    std::optional<Statement> limit = Prepare(fmt::format("PRAGMA max_page_count = {}", pages), error);
+    if (!limit)
+        return false;
+    limit->Step(error);
+    return error.empty();
+}
+
+uint64 PanelStore::GetMaxBytes() const
+{
+    if (!_database)
+        return 0;
+    sqlite3_stmt* statement = nullptr;
+    uint64 bytes = 0;
+    if (sqlite3_prepare_v2(_database, "SELECT (SELECT max_page_count FROM pragma_max_page_count()) * (SELECT page_size FROM pragma_page_size())", -1, &statement, nullptr) == SQLITE_OK
+        && sqlite3_step(statement) == SQLITE_ROW)
+        bytes = static_cast<uint64>(sqlite3_column_int64(statement, 0));
+    sqlite3_finalize(statement);
+    return bytes;
+}
+
+uint64 PanelStore::GetSizeBytes() const
+{
+    if (!_database)
+        return 0;
+    sqlite3_stmt* statement = nullptr;
+    uint64 bytes = 0;
+    if (sqlite3_prepare_v2(_database, "SELECT (SELECT page_count FROM pragma_page_count()) * (SELECT page_size FROM pragma_page_size())", -1, &statement, nullptr) == SQLITE_OK
+        && sqlite3_step(statement) == SQLITE_ROW)
+        bytes = static_cast<uint64>(sqlite3_column_int64(statement, 0));
+    sqlite3_finalize(statement);
+    return bytes;
 }
 
 bool PanelStore::Begin(std::string& error)

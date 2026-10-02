@@ -1,123 +1,51 @@
-<!-- Project Ambrose by Imjustchico: What has been done to an app and by whom, live from its own record: every command it was sent, newest first, with who sent it, from where, at what level, and whether it ran or was refused and why. A refused attempt is shown like any other, because what somebody tried and was not allowed to do is the half of a record that matters most. A line the record cannot read is counted rather than hidden, so one bad write is visible instead of silently swallowing everything after it. -->
+<!-- Project Ambrose by Imjustchico: Who did what, when and from where: the panel's activity log for everything, for the signed-in operator's own actions, for one operator by id, or for one app, where the app's own command record follows the panel's, each scope offered only to an operator the server would answer for it. -->
 <script lang="ts">
-    import * as Card from "$lib/components/ui/card/index.js";
-    import * as Table from "$lib/components/ui/table/index.js";
     import { Input } from "$lib/components/ui/input/index.js";
-    import { ApiError } from "$lib/api.svelte.js";
-    import { live } from "$lib/status.svelte.js";
-    import { activityOf, candidates } from "$lib/supervision.svelte.js";
-    import type { ActivityAnswer } from "$lib/schemas.js";
-    import SearchIcon from "@lucide/svelte/icons/search";
+    import { Label } from "$lib/components/ui/label/index.js";
+    import { may } from "$lib/permission.svelte.js";
+    import { candidates, type ActivityScope } from "$lib/supervision.svelte.js";
     import PageHeader from "../components/PageHeader.svelte";
-    import StatusBadge from "../components/StatusBadge.svelte";
+    import ActivityLog from "../components/ActivityLog.svelte";
+    import AppCommandRecord from "../components/AppCommandRecord.svelte";
 
-    const choices = $derived(candidates());
-    let chosen = $state("");
-    let answer = $state<ActivityAnswer | null>(null);
-    let failure = $state("");
-    let search = $state("");
+    const apps = $derived(candidates().filter((app) => may("activity.read", app)));
+    const everything = $derived(may("activity.read"));
+    let chosen = $state(may("activity.read") ? "all" : "me");
+    let user = $state("");
 
-    const app = $derived(choices.includes(chosen) ? chosen : (choices[0] ?? ""));
-
-    $effect(() => {
-        const name = app;
-        const beat = live.now;
-        if (name === "") return;
-        void beat;
-        const controller = new AbortController();
-        void (async () => {
-            try {
-                answer = await activityOf(name, controller.signal);
-                failure = "";
-            } catch (problem) {
-                if (controller.signal.aborted) return;
-                answer = null;
-                failure = problem instanceof ApiError ? problem.message : "The record could not be read";
-            }
-        })();
-        return () => controller.abort();
-    });
-
-    const shown = $derived.by(() => {
-        const text = search.trim().toLowerCase();
-        return (answer?.activity ?? []).filter(
-            (row) =>
-                text === "" ||
-                row.command.toLowerCase().includes(text) ||
-                row.who.toLowerCase().includes(text) ||
-                row.address.toLowerCase().includes(text) ||
-                row.reason.toLowerCase().includes(text),
-        );
-    });
+    const choice = $derived(chosen === "all" && !everything ? "me" : chosen);
+    const scope = $derived<ActivityScope>(
+        choice === "all" ? { kind: "all" } : choice === "me" ? { kind: "me" } : { kind: "app", app: choice.slice("app:".length) },
+    );
 </script>
 
-<PageHeader title="Activity" description="Every command this app was sent, and what became of it." />
+<PageHeader title="Activity" description="Who did what, when and from where, refused attempts included." />
 
-{#if failure !== ""}
-    <Card.Root class="mb-4">
-        <Card.Content class="py-4 text-sm text-destructive">{failure}</Card.Content>
-    </Card.Root>
+<div class="mb-4 flex flex-wrap items-end gap-4">
+    <div class="grid gap-1">
+        <Label for="activity-scope">Show</Label>
+        <select id="activity-scope" bind:value={chosen} class="h-9 rounded-md border bg-background px-2 text-sm">
+            {#if everything}
+                <option value="all">Everything</option>
+            {/if}
+            <option value="me">My activity</option>
+            {#each apps as app (app)}
+                <option value={`app:${app}`}>{app}</option>
+            {/each}
+        </select>
+    </div>
+    {#if scope.kind === "all"}
+        <div class="grid gap-1">
+            <Label for="activity-user">Operator id</Label>
+            <Input id="activity-user" class="w-32" inputmode="numeric" bind:value={user} placeholder="Anyone" />
+        </div>
+    {/if}
+</div>
+
+<ActivityLog {scope} user={scope.kind === "all" ? user : ""} />
+
+{#if scope.kind === "app"}
+    <div class="mt-4">
+        <AppCommandRecord app={scope.app} />
+    </div>
 {/if}
-
-<Card.Root>
-    <Card.Header class="flex flex-row items-center justify-between gap-4">
-        <div>
-            <Card.Title>{answer?.written ?? 0} written down</Card.Title>
-            <Card.Description>
-                Newest first.
-                {#if (answer?.unreadable ?? 0) > 0}
-                    {answer?.unreadable} line(s) of the record could not be read.
-                {/if}
-            </Card.Description>
-        </div>
-        <div class="relative w-56">
-            <SearchIcon class="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input bind:value={search} placeholder="Command, who, address or reason" class="pl-8" />
-        </div>
-    </Card.Header>
-    <Card.Content>
-        {#if shown.length === 0}
-            <p class="py-6 text-sm text-muted-foreground">
-                {answer === null
-                    ? "Reading the record."
-                    : !answer.kept
-                      ? "This app keeps no record yet. One is written the first time a command is sent to it."
-                      : search.trim() !== ""
-                        ? "Nothing in the record matches that."
-                        : "Nothing has been sent to this app yet."}
-            </p>
-        {:else}
-            <Table.Root>
-                <Table.Header>
-                    <Table.Row>
-                        <Table.Head>When</Table.Head>
-                        <Table.Head>Command</Table.Head>
-                        <Table.Head>Who</Table.Head>
-                        <Table.Head class="hidden md:table-cell">From</Table.Head>
-                        <Table.Head>Outcome</Table.Head>
-                    </Table.Row>
-                </Table.Header>
-                <Table.Body>
-                    {#each shown as row, index (`${row.epoch_ms}-${index}`)}
-                        <Table.Row>
-                            <Table.Cell class="font-mono text-xs whitespace-nowrap">{row.time}</Table.Cell>
-                            <Table.Cell class="font-mono text-sm">{row.command}</Table.Cell>
-                            <Table.Cell>{row.who}</Table.Cell>
-                            <Table.Cell class="hidden md:table-cell">{row.address}</Table.Cell>
-                            <Table.Cell>
-                                {#if row.ran}
-                                    <StatusBadge tone="healthy">Ran</StatusBadge>
-                                {:else}
-                                    <StatusBadge tone="wrong">Refused</StatusBadge>
-                                    {#if row.reason !== ""}
-                                        <span class="ml-2 text-sm text-muted-foreground">{row.reason}</span>
-                                    {/if}
-                                {/if}
-                            </Table.Cell>
-                        </Table.Row>
-                    {/each}
-                </Table.Body>
-            </Table.Root>
-        {/if}
-    </Card.Content>
-</Card.Root>

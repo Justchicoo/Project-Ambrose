@@ -184,32 +184,8 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
         {
             AMBROSE_LOG(_log, LogLevel::Info, PanelCategory, "{} {} {}{} (request {})", request.Principal.empty() ? std::string("somebody") : request.Principal,
                 verdict == PermissionVerdict::Allowed ? "used" : "was refused", permission, app.empty() ? std::string() : " on " + std::string(app), request.Id);
-            if (verdict == PermissionVerdict::Allowed)
-                return;
-
-            AuditScope scope(request, app.empty() ? "panel:permission.refused" : "app:permission.refused");
-            AuditEvent& event = scope.Event();
-            event.Result = AuditResult::Refused;
-            event.Reason = verdict == PermissionVerdict::OutOfScope
-                ? fmt::format("the caller holds no grant in the {} app scope", app)
-                : fmt::format("the caller does not hold {}", permission);
-            event.Properties = nlohmann::json{
-                { "permission", permission },
-                { "verdict", verdict == PermissionVerdict::OutOfScope ? "out_of_scope" : "forbidden" }
-            }.dump();
-            std::optional<PanelUser> const user = UserOf(request);
-            if (user)
-            {
-                event.Actor = AuditActor::User;
-                event.ActorId = std::to_string(user->Id);
-                event.ActorName = user->Username;
-                event.On("panel_user", std::to_string(user->Id), user->Username);
-            }
-            if (!app.empty())
-                event.On("app", std::string(app), std::string(app));
-            std::string error;
-            if (!Record(event, {}, error))
-                AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A refused permission {} could not be recorded: {}", permission, error);
+            if (verdict != PermissionVerdict::Allowed)
+                RecordPermissionRefusal(request, permission, app, verdict);
         });
     _listener.Routes().SetPermissionCheck([this](AdminRequest const& request, std::string_view permission)
     {
@@ -218,6 +194,13 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     _listener.Routes().SetPermissionKnown([](std::string_view permission) { return PanelPermissions::Holds(permission); });
     _listener.Routes().SetAdmission([this](AdminRequest const& request) { return Admit(request); });
     _listener.Routes().SetStepUp([this](AdminRequest const& request, std::string_view permission, StepUpWhen when) { return StepUpCheck(request, permission, when); });
+    _listener.Routes().SetRefusalLog([this](AdminRequest const& request, std::string_view permission, PermissionVerdict verdict)
+    {
+        PanelPermission const* const held = PanelPermissions::Find(permission);
+        if (held && held->Danger)
+            return;
+        RecordPermissionRefusal(request, permission, PanelAuthorization::AppInPath(request.Path), verdict);
+    });
     _secondFactor.SetLimits(PanelTwoFactorSettings::DefaultFailureLimit, std::chrono::minutes(PanelTwoFactorSettings::DefaultFailureWindowMinutes));
     _settingStore = std::make_shared<PanelSettingStore>(_store, _storeMutex);
     RegisterSignIn();
@@ -229,6 +212,34 @@ Panel::Panel(Log& log, std::filesystem::path dataFolder, std::filesystem::path c
     });
     RegisterTwoFactor();
     RegisterCommandHistory();
+    RegisterActivity();
+}
+
+void Panel::RecordPermissionRefusal(AdminRequest const& request, std::string_view permission, std::string_view app, PermissionVerdict verdict)
+{
+    AuditScope scope(request, app.empty() ? "panel:permission.refused" : "app:permission.refused");
+    AuditEvent& event = scope.Event();
+    event.Result = AuditResult::Refused;
+    event.Reason = verdict == PermissionVerdict::OutOfScope
+        ? fmt::format("the caller holds no grant in the {} app scope", app)
+        : fmt::format("the caller does not hold {}", permission);
+    event.Properties = nlohmann::json{
+        { "permission", permission },
+        { "verdict", verdict == PermissionVerdict::OutOfScope ? "out_of_scope" : "forbidden" }
+    }.dump();
+    std::optional<PanelUser> const user = UserOf(request);
+    if (user)
+    {
+        event.Actor = AuditActor::User;
+        event.ActorId = std::to_string(user->Id);
+        event.ActorName = user->Username;
+        event.On("panel_user", std::to_string(user->Id), user->Username);
+    }
+    if (!app.empty())
+        event.On("app", std::string(app), std::string(app));
+    std::string error;
+    if (!Record(event, {}, error))
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A refused permission {} could not be recorded: {}", permission, error);
 }
 
 void Panel::SetAppSource(PanelEventSocket::AppSource source)
@@ -377,6 +388,8 @@ bool Panel::Start(ConfigMgr const& config, std::string& error)
     ApplyTwoFactorSettings(config, *twoFactor);
     if (!OpenStore(config, error))
         return false;
+    if (!ApplyStoreLimit(config, error))
+        return false;
     if (!OpenKeyring(config, error))
         return false;
     _rateLimit.SetLimits(settings.RateLimitBurst, settings.RateLimitPerSecond);
@@ -438,6 +451,12 @@ bool Panel::Reload(ConfigMgr const& config)
             return false;
         }
     }
+    if (settings.Enable)
+    {
+        std::string error;
+        if (!ApplyStoreLimit(config, error))
+            AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "The panel store's size limit could not be changed, so it stays as it was: {}", error);
+    }
     _rateLimit.SetLimits(settings.RateLimitBurst, settings.RateLimitPerSecond);
     if (!_listener.Reload(settings))
         return false;
@@ -475,7 +494,7 @@ void Panel::StartGathering()
 {
     {
         std::lock_guard const lock(_gatherMutex);
-        if (_gathering || !_errorSource)
+        if (_gathering)
             return;
         _gathering = true;
     }
@@ -489,6 +508,7 @@ void Panel::StartGathering()
                 return;
             lock.unlock();
             GatherErrorsOnce();
+            SweepWhenDue();
             lock.lock();
         }
     });
@@ -990,10 +1010,211 @@ void Panel::RegisterTwoFactor()
 
 void Panel::RegisterCommandHistory()
 {
-    _listener.Routes().AddGuardedPrefix("GET", "/api/panel/apps/", "console.read", [this](AdminRequest const& request)
+    constexpr std::string_view ActivitySuffix = "/activity";
+    _listener.Routes().AddDynamicGuardedPrefix("GET", "/api/panel/apps/", "console.read", [ActivitySuffix](AdminRequest const& request)
     {
-        return CommandHistoryGet(request);
+        return std::string(request.Path.ends_with(ActivitySuffix) ? "activity.read" : "console.read");
+    }, [this, ActivitySuffix](AdminRequest const& request)
+    {
+        if (!request.Path.ends_with(ActivitySuffix))
+            return CommandHistoryGet(request);
+        std::string const app = PanelAuthorization::AppInPath(request.Path);
+        if (app.empty() || request.Path != fmt::format("/api/panel/apps/{}{}", app, ActivitySuffix))
+            return AdminResponse::Problem(404, "not_found", "That activity page does not exist");
+        return ActivityRoute(request, app, false);
     });
+}
+
+void Panel::RegisterActivity()
+{
+    AdminRouter& routes = _listener.Routes();
+    routes.AddGuarded("GET", "/api/panel/activity", "activity.read", [this](AdminRequest const& request) { return ActivityRoute(request, {}, false); });
+    routes.AddOpen("GET", "/api/panel/me/activity", [this](AdminRequest const& request) { return ActivityRoute(request, {}, true); });
+    routes.AddCosting("GET", "/api/panel/activity/export", "activity.export", PanelActivity::ExportCost, [this](AdminRequest const& request) { return ActivityExport(request); });
+}
+
+AdminResponse Panel::ActivityRoute(AdminRequest const& request, std::string_view app, bool own)
+{
+    std::string field;
+    std::string error;
+    std::optional<PanelActivityFilter> filter = PanelActivity::ParseFilter(request, field, error);
+    if (!filter)
+        return AdminResponse::Invalid(error, { { field, error } });
+    std::optional<PanelUser> const user = UserOf(request);
+    std::string const viewer = user ? std::to_string(user->Id) : std::string();
+    if (own)
+    {
+        if (!user)
+            return AdminResponse::Problem(403, "forbidden", "Only a signed-in operator has activity of their own");
+        filter->Involving = viewer;
+    }
+    if (!app.empty())
+    {
+        if (!filter->SubjectKind.empty())
+            return AdminResponse::Invalid("An app's activity page is already filtered to that app", { { "subject", "Leave the subject out on an app's page" } });
+        filter->SubjectKind = "app";
+        filter->SubjectId = std::string(app);
+    }
+    bool const seesEveryAddress = _listener.Routes().Holds(request, "activity.ip.read");
+    if (!filter->Address.empty() && !seesEveryAddress)
+        return AdminResponse::Problem(403, "forbidden", "Filtering by address needs activity.ip.read");
+
+    PanelActivityPage page;
+    {
+        std::lock_guard const lock(_storeMutex);
+        if (!_store.IsOpen())
+            return AdminResponse::Problem(503, "activity_unavailable", "The panel store is not open");
+        if (!PanelActivity::Read(_store, *filter, page, error))
+            return AdminResponse::Problem(503, "activity_unavailable", error);
+    }
+    nlohmann::json rows = nlohmann::json::array();
+    for (AuditEvent const& event : page.Rows)
+        rows.push_back(PanelActivity::RowJson(event, PanelActivity::ShowsAddress(event, viewer, seesEveryAddress)));
+    nlohmann::json const answer{
+        { "schema", 1 },
+        { "rows", std::move(rows) },
+        { "next_cursor", page.NextCursor == 0 ? nlohmann::json(nullptr) : nlohmann::json(std::to_string(page.NextCursor)) },
+        { "sees_addresses", seesEveryAddress },
+        { "can_export", _listener.Routes().Holds(request, "activity.export") }
+    };
+    return AdminResponse::Json(200, answer.dump());
+}
+
+AdminResponse Panel::ActivityExport(AdminRequest const& request)
+{
+    std::string field;
+    std::string error;
+    std::optional<PanelActivityFilter> filter = PanelActivity::ParseFilter(request, field, error);
+    if (!filter)
+        return AdminResponse::Invalid(error, { { field, error } });
+    std::string const format = request.Query("format").empty() ? std::string("csv") : std::string(request.Query("format"));
+    if (format != "csv" && format != "json")
+        return AdminResponse::Invalid("An export is csv or json", { { "format", "Choose csv or json" } });
+    std::optional<PanelUser> const user = UserOf(request);
+    std::string const viewer = user ? std::to_string(user->Id) : std::string();
+    bool const seesEveryAddress = _listener.Routes().Holds(request, "activity.ip.read");
+    if (!filter->Address.empty() && !seesEveryAddress)
+        return AdminResponse::Problem(403, "forbidden", "Filtering by address needs activity.ip.read");
+    filter->Limit = PanelActivity::MaxExportRows;
+
+    PanelActivityPage page;
+    {
+        std::lock_guard const lock(_storeMutex);
+        if (!_store.IsOpen())
+            return AdminResponse::Problem(503, "activity_unavailable", "The panel store is not open");
+        if (!PanelActivity::Read(_store, *filter, page, error))
+            return AdminResponse::Problem(503, "activity_unavailable", error);
+    }
+
+    AuditScope scope(request, "panel:activity.exported");
+    AuditEvent& event = scope.Event();
+    if (user)
+    {
+        event.Actor = AuditActor::User;
+        event.ActorId = viewer;
+        event.ActorName = user->Username;
+        event.On("panel_user", viewer, user->Username);
+    }
+    event.Properties = nlohmann::json{
+        { "format", format },
+        { "rows", page.Rows.size() },
+        { "truncated", page.NextCursor != 0 },
+        { "query", request.RawQuery },
+        { "addresses", seesEveryAddress ? "all" : "own" }
+    }.dump();
+    Note(event);
+
+    auto const showAddress = [&viewer, seesEveryAddress](AuditEvent const& row) { return PanelActivity::ShowsAddress(row, viewer, seesEveryAddress); };
+    AdminResponse response;
+    response.Status = 200;
+    if (format == "csv")
+    {
+        response.ContentType = "text/csv; charset=utf-8";
+        response.Body = PanelActivity::Csv(page.Rows, showAddress);
+    }
+    else
+    {
+        nlohmann::json rows = nlohmann::json::array();
+        for (AuditEvent const& row : page.Rows)
+            rows.push_back(PanelActivity::RowJson(row, showAddress(row)));
+        response.Body = nlohmann::json{ { "schema", 1 }, { "truncated", page.NextCursor != 0 }, { "rows", std::move(rows) } }.dump();
+    }
+    response.Headers.emplace_back("Content-Disposition", fmt::format("attachment; filename=\"ambrose-activity.{}\"", format));
+    if (page.NextCursor != 0)
+        response.Headers.emplace_back("X-Ambrose-Truncated", std::to_string(PanelActivity::MaxExportRows));
+    return response;
+}
+
+bool Panel::Note(AuditEvent const& event)
+{
+    std::string error;
+    if (Record(event, {}, error))
+        return true;
+    AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "{} could not be recorded, and as a read it goes ahead unrecorded: {}", event.Name, error);
+    return false;
+}
+
+int64 Panel::RetentionDays(std::string_view key, int64 fallback)
+{
+    std::optional<int64> const days = Ambrose::StringTo<int64>(_settings.ValueOf(key));
+    return days && *days >= 1 ? *days : fallback;
+}
+
+bool Panel::SweepActivity(int64 nowEpochMs, PanelActivitySweep& removed, std::string& error)
+{
+    int64 const securityDays = RetentionDays("Panel.ActivitySecurityRetentionDays", PanelActivity::DefaultSecurityDays);
+    int64 const highVolumeDays = RetentionDays("Panel.ActivityHighVolumeRetentionDays", PanelActivity::DefaultHighVolumeDays);
+    AuditEvent event;
+    event.Name = "panel:activity.swept";
+    event.Actor = AuditActor::System;
+    return Record(event, [&](AuditEvent& recorded, std::string& failure)
+    {
+        if (!PanelActivity::Sweep(_store, nowEpochMs, securityDays, highVolumeDays, removed, failure))
+            return false;
+        recorded.Properties = nlohmann::json{
+            { "removed", removed.Security + removed.HighVolume },
+            { "security", removed.Security },
+            { "high_volume", removed.HighVolume },
+            { "anchored", removed.Anchored },
+            { "security_days", securityDays },
+            { "high_volume_days", highVolumeDays }
+        }.dump();
+        return true;
+    }, error);
+}
+
+void Panel::SweepWhenDue()
+{
+    int64 const now = PanelStore::NowEpochMs();
+    if (_lastSweepEpochMs != 0 && now - _lastSweepEpochMs < PanelActivity::SweepIntervalMs)
+        return;
+    _lastSweepEpochMs = now;
+    if (!IsStoreOpen())
+        return;
+    PanelActivitySweep removed;
+    std::string error;
+    if (!SweepActivity(now, removed, error))
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "The activity retention sweep failed and removed nothing: {}", error);
+    else if (removed.Security + removed.HighVolume > 0)
+        AMBROSE_LOG(_log, LogLevel::Info, PanelCategory, "The activity retention sweep removed {} security and {} high-volume rows", removed.Security, removed.HighVolume);
+}
+
+bool Panel::ApplyStoreLimit(ConfigMgr const& config, std::string& error)
+{
+    int64 const asked = config.GetOption<int64>(std::string(StoreMaxMegabytesKey), DefaultStoreMaxMegabytes, true);
+    int64 const megabytes = std::clamp<int64>(asked, 1, MaxStoreMaxMegabytes);
+    if (megabytes != asked)
+        AMBROSE_LOG(_log, LogLevel::Warn, PanelCategory, "{} is {}, outside 1 to {}; using {}", StoreMaxMegabytesKey, asked, MaxStoreMaxMegabytes, megabytes);
+    uint64 const bytes = static_cast<uint64>(megabytes) * 1024 * 1024;
+    std::lock_guard const lock(_storeMutex);
+    if (!_store.IsOpen())
+        return true;
+    if (!_store.SetMaxBytes(bytes, error))
+        return false;
+    if (_store.GetSizeBytes() >= bytes)
+        AMBROSE_LOG(_log, LogLevel::Warn, PanelCategory, "The panel store already holds {} bytes, at or past {} = {}, so every change it would record is refused until the limit is raised or the retention sweep frees room",
+            _store.GetSizeBytes(), StoreMaxMegabytesKey, megabytes);
+    return true;
 }
 
 AdminResponse Panel::PanelSettingsGet(AdminRequest const& request)

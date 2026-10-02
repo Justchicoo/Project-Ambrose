@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One recorded action and the things it acted on, written into the panel store's audit tables: an event carries the id a forwarder repeats safely, the batch it belongs to, its name in namespace:path.action form, who did it, from which address and agent, on which node, how it ended and why, and any properties worth keeping, and a scope writes it in the same transaction as the change it describes, so a change that is not recorded is not applied either.
+ * One recorded action and the things it acted on, written into the panel store's audit tables: an event carries the id a forwarder repeats safely, the batch it belongs to, its name in namespace:path.action form, who did it, through which API key, from which address and agent, on which node, how it ended and why, and any properties worth keeping, and a scope writes it in the same transaction as the change it describes, so a change that is not recorded is not applied either.
  */
 
 #ifndef AMBROSE_PANELAUDIT_H
@@ -47,6 +47,7 @@ struct AuditEvent
     AuditActor Actor = AuditActor::System;
     std::string ActorId;
     std::string ActorName;
+    std::string ApiKeyId;
     std::string Address;
     std::string UserAgent;
     std::string Node;
