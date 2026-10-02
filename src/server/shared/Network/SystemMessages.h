@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The SYSTEM and EXTENDEDBASE messages every app sends or answers: pings, server messages shown to the player, and forced disconnects, plus the timestamp text a forced disconnect carries.
+ * The SYSTEM and EXTENDEDBASE messages every app sends or answers: pings, server messages shown to the player, and forced disconnects, plus the TimeStamp text a ban carries, which the client reads only for the Banned, AccountBanned and MachineBanned disconnects and the AccountBanned and MachineBanned login refusals, through a parser that sums whole numbers each with an optional d, h or m and takes forever as a permanent ban, so it is the ban's end in decimal Unix seconds or forever and never holds a colon, on which that parser never returns.
  */
 
 #ifndef AMBROSE_SYSTEMMESSAGES_H
@@ -8,7 +8,6 @@
 
 #include "MessageDeclaration.h"
 
-#include <chrono>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -57,7 +56,11 @@ namespace SystemMessages
         static constexpr auto Fields() { return std::tuple{ DmlField("Type", &ForceDisconnect::Type), DmlField("TimeStamp", &ForceDisconnect::TimeStamp), DmlField("Message", &ForceDisconnect::Message) }; }
     };
 
-    std::string FormatTimeStamp(std::chrono::system_clock::time_point time);
+    inline constexpr std::string_view PermanentBanTimeStamp = "forever";
+    inline constexpr uint64 LatestBanEnd = 2147483647;
+
+    bool CarriesBanEnd(uint32 disconnectType) noexcept;
+    std::string FormatBanEnd(uint64 unbanDate);
 }
 
 #endif

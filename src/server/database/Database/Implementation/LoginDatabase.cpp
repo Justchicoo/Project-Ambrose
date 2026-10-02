@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Registers every login database statement with its name, SQL, and the connections that prepare it: the log sink, accounts, verifiers, security levels, locks, last logins, account, IP and machine bans, the one-query authentication lookup, session keys sealed like verifiers, the one-query validation lookup of an account's bans, lock and session key, extending a session key's expiry and revoking it, verifier resealing that never overwrites a changed password, an account's purchased character slots, the realms a player may be sent to, the row a gameserver adds for itself the first time it runs, which never overwrites one an operator has edited, and the beat each gameserver says it is alive with. It also registers the live settings statements: every persisted value, setting and removing one, writing a change's audit row, reading a key's newest audit rows, and which verifier keys stored verifiers still use.
+ * Registers every login database statement with its name, SQL, and the connections that prepare it: the log sink, accounts, verifiers, security levels, locks, last logins, account, IP and machine bans, the one-query authentication lookup, session keys sealed like verifiers, the one-query validation lookup of an account's bans, lock and session key, extending a session key's expiry and revoking it, verifier resealing that never overwrites a changed password, an account's purchased character slots, the realms a player may be sent to, the row a gameserver adds for itself the first time it runs, which never overwrites one an operator has edited, and the beat each gameserver says it is alive with. It also registers the live settings statements: every persisted value, setting and removing one, writing a change's audit row, reading a key's newest audit rows, and which verifier keys stored verifiers still use. Both lookups give each kind of ban as the end of the longest one in force, 0 when one never ends, or null when there is none.
  */
 
 #include "LoginDatabase.h"
@@ -33,16 +33,16 @@ void LoginDatabaseConnection::DoPrepareStatements()
     PrepareStatement(LOGIN_SEL_MACHINE_BANNED, "LOGIN_SEL_MACHINE_BANNED", "SELECT `bandate`, `unbandate`, `bannedby`, `reason` FROM `machine_banned` WHERE `machine_id` = ?" + banOrder, ConnectionFlags::Both);
 
     PrepareStatement(LOGIN_SEL_AUTHENTICATION, "LOGIN_SEL_AUTHENTICATION", "SELECT a.`id`, a.`username`, a.`verifier`, a.`verifier_key_id`, a.`locked`, "
-        "EXISTS(SELECT 1 FROM `account_banned` b WHERE b.`account_id` = a.`id` AND b.`active` = 1 AND (b.`unbandate` = 0 OR b.`unbandate` > ?)), "
-        "EXISTS(SELECT 1 FROM `ip_banned` i WHERE i.`ip` = ? AND (i.`unbandate` = 0 OR i.`unbandate` > ?)), "
-        "EXISTS(SELECT 1 FROM `machine_banned` m WHERE m.`machine_id` = ? AND (m.`unbandate` = 0 OR m.`unbandate` > ?)) "
+        "(SELECT IF(MIN(b.`unbandate`) = 0, 0, MAX(b.`unbandate`)) FROM `account_banned` b WHERE b.`account_id` = a.`id` AND b.`active` = 1 AND (b.`unbandate` = 0 OR b.`unbandate` > ?)), "
+        "(SELECT IF(MIN(i.`unbandate`) = 0, 0, MAX(i.`unbandate`)) FROM `ip_banned` i WHERE i.`ip` = ? AND (i.`unbandate` = 0 OR i.`unbandate` > ?)), "
+        "(SELECT IF(MIN(m.`unbandate`) = 0, 0, MAX(m.`unbandate`)) FROM `machine_banned` m WHERE m.`machine_id` = ? AND (m.`unbandate` = 0 OR m.`unbandate` > ?)) "
         "FROM (SELECT 1 AS `probe`) AS `p` LEFT JOIN `account` a ON a.`username` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_INS_ACCOUNT_SESSION, "LOGIN_INS_ACCOUNT_SESSION", "INSERT INTO `account_session` (`account_id`, `machine_id`, `session_key`, `session_key_id`, `created`, `renewed`, `expires`) VALUES (?, ?, ?, ?, ?, ?, ?) "
         "ON DUPLICATE KEY UPDATE `machine_id` = ?, `session_key` = ?, `session_key_id` = ?, `created` = ?, `renewed` = ?, `expires` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_VALIDATION, "LOGIN_SEL_VALIDATION", "SELECT a.`id`, a.`username`, a.`locked`, s.`machine_id`, s.`session_key`, s.`session_key_id`, s.`renewed`, "
-        "EXISTS(SELECT 1 FROM `account_banned` b WHERE b.`account_id` = a.`id` AND b.`active` = 1 AND (b.`unbandate` = 0 OR b.`unbandate` > ?)), "
-        "EXISTS(SELECT 1 FROM `ip_banned` i WHERE i.`ip` = ? AND (i.`unbandate` = 0 OR i.`unbandate` > ?)), "
-        "EXISTS(SELECT 1 FROM `machine_banned` m WHERE m.`machine_id` = ? AND (m.`unbandate` = 0 OR m.`unbandate` > ?)) "
+        "(SELECT IF(MIN(b.`unbandate`) = 0, 0, MAX(b.`unbandate`)) FROM `account_banned` b WHERE b.`account_id` = a.`id` AND b.`active` = 1 AND (b.`unbandate` = 0 OR b.`unbandate` > ?)), "
+        "(SELECT IF(MIN(i.`unbandate`) = 0, 0, MAX(i.`unbandate`)) FROM `ip_banned` i WHERE i.`ip` = ? AND (i.`unbandate` = 0 OR i.`unbandate` > ?)), "
+        "(SELECT IF(MIN(m.`unbandate`) = 0, 0, MAX(m.`unbandate`)) FROM `machine_banned` m WHERE m.`machine_id` = ? AND (m.`unbandate` = 0 OR m.`unbandate` > ?)) "
         "FROM (SELECT 1 AS `probe`) AS `p` LEFT JOIN `account` a ON a.`id` = ? LEFT JOIN `account_session` s ON s.`account_id` = a.`id`", ConnectionFlags::Both);
     PrepareStatement(LOGIN_UPD_ACCOUNT_SESSION_RENEWED, "LOGIN_UPD_ACCOUNT_SESSION_RENEWED", "UPDATE `account_session` SET `renewed` = ?, `expires` = ? WHERE `account_id` = ? AND `session_key` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_DEL_ACCOUNT_SESSION, "LOGIN_DEL_ACCOUNT_SESSION", "DELETE FROM `account_session` WHERE `account_id` = ?", ConnectionFlags::Both);
