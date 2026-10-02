@@ -137,6 +137,9 @@ namespace
         made.MobileId = *mobileId;
         made.Critical = IsCritical(*found.Template);
         made.ExemptFromAoi = IsExemptFromAoi(*found.Template);
+        if (made.ExemptFromAoi)
+            LOG_DEBUG("server.zones", "Object {} of zone_object row {} (template {}) at ({}, {}, {}) in {} is exempt from area of interest", *globalId, row.Id, row.TemplateId,
+                row.Position.X, row.Position.Y, row.Position.Z, map.GetZonePath());
         made.Data = std::move(*data);
         map.AddObject(std::move(made));
         changes.Added.push_back(*globalId);
