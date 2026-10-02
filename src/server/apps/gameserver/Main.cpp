@@ -21,6 +21,7 @@
 #include "SigilMgr.h"
 #include "SpellMgr.h"
 #include "ZoneMgr.h"
+#include "ZoneTriggerMgr.h"
 #include "CharacterNameScript.h"
 #include "ClientExtractionScript.h"
 #include "ClientSystem.h"
@@ -52,6 +53,7 @@
 #include "ScriptMgr.h"
 #include "GameMessageTable.h"
 #include "GameSession.h"
+#include "GameTeleMgr.h"
 #include "GameShutdown.h"
 #include "MessageRegistry.h"
 #include "SessionContext.h"
@@ -366,6 +368,11 @@ namespace
                 return false;
             }
             sZoneMgr.RegisterReloadTargets();
+            std::vector<std::string> triggerErrors;
+            if (WorldDatabase.IsOpen() && !sZoneTriggerMgr.Load(triggerErrors))
+                for (std::string const& error : triggerErrors)
+                    LOG_ERROR("server.world", "Zone volumes and triggers: {}", error);
+            sZoneTriggerMgr.RegisterReloadTargets();
             sMapMgr.SetSettingsReader([]
             {
                 MapSettings settings;
@@ -422,7 +429,9 @@ namespace
             sStats.Publish("sessions", [this] { return Ambrose::StatValue(static_cast<int64>(_sockets ? _sockets->GetConnectionCount() : 0)); });
             sStats.Publish("realm_beating", [this] { return Ambrose::StatValue(_heartbeat.Beating()); });
 
-            _heartbeat.Configure(RealmHeartbeatSettings::Load(Config()),
+            RealmHeartbeatSettings const realmSettings = RealmHeartbeatSettings::Load(Config());
+            GameSession::SetTransferEndpoint(realmSettings.Address, realmSettings.Port);
+            _heartbeat.Configure(realmSettings,
                 [](std::string const& realm, uint32 population, int64 heartbeat, bool online)
                 {
                     if (!LoginDatabase.IsOpen())
@@ -863,21 +872,13 @@ namespace
             sCommandMgr.SetPrefix(sSettings.Get<std::string>("GM.CommandPrefix"));
             sCommandMgr.SetLogging(sSettings.Get<bool>("GM.LogCommands"));
             sCommandMgr.Load(sScriptMgr.GetCommands());
-            std::map<std::string, uint8, std::less<>> overrides;
-            if (WorldDatabase.IsOpen())
-            {
-                if (QueryResult rows = WorldDatabase.Query("SELECT command, security_level FROM command_security"))
-                {
-                    do
-                    {
-                        Field const* row = rows->Fetch();
-                        overrides.emplace(row[0].Get<std::string>(), row[1].Get<uint8>());
-                    } while (rows->NextRow());
-                }
-            }
-            if (!overrides.empty())
-                LOG_INFO("server.commands", "{} command(s) have a level from command_security", overrides.size());
-            sCommandMgr.SetOverrides(std::move(overrides));
+            sCommandMgr.LoadSecurity();
+            sCommandMgr.RegisterReloadTargets();
+            std::vector<std::string> teleErrors;
+            if (WorldDatabase.IsOpen() && !sGameTeleMgr.Load(teleErrors))
+                for (std::string const& error : teleErrors)
+                    LOG_ERROR("server.world", "Teleport points: {}", error);
+            sGameTeleMgr.RegisterReloadTargets();
             RegisterCommandConsole();
             LOG_INFO("server.commands", "{} command(s) are ready, typed after {}", sCommandMgr.GetCommandCount(), sCommandMgr.GetPrefix());
         }

@@ -15,6 +15,11 @@ WorldScript::WorldScript(std::string name) : ScriptObject(std::move(name))
     sScriptMgr.Register(this);
 }
 
+ZoneScript::ZoneScript(std::string name, std::string zone) : ScriptObject(std::move(name)), _zone(std::move(zone))
+{
+    sScriptMgr.Register(this);
+}
+
 CommandScript::CommandScript(std::string name) : ScriptObject(std::move(name))
 {
     sScriptMgr.Register(this);
@@ -39,6 +44,11 @@ ScriptMgr::~ScriptMgr()
 void ScriptMgr::Register(WorldScript* script)
 {
     _worldScripts.push_back(script);
+}
+
+void ScriptMgr::Register(ZoneScript* script)
+{
+    _zoneScripts.push_back(script);
 }
 
 void ScriptMgr::Register(CommandScript* script)
@@ -87,6 +97,9 @@ void ScriptMgr::Unload()
     for (WorldScript* script : _worldScripts)
         delete script;
     _worldScripts.clear();
+    for (ZoneScript* script : _zoneScripts)
+        delete script;
+    _zoneScripts.clear();
     for (CommandScript* script : _commandScripts)
         delete script;
     _commandScripts.clear();
@@ -95,7 +108,7 @@ void ScriptMgr::Unload()
 
 std::size_t ScriptMgr::GetScriptCount() const
 {
-    return _worldScripts.size() + _commandScripts.size() + _serverScripts.size();
+    return _worldScripts.size() + _zoneScripts.size() + _commandScripts.size() + _serverScripts.size();
 }
 
 std::vector<std::string> ScriptMgr::GetScriptNames() const
@@ -103,6 +116,8 @@ std::vector<std::string> ScriptMgr::GetScriptNames() const
     std::vector<std::string> names;
     names.reserve(GetScriptCount());
     for (WorldScript const* script : _worldScripts)
+        names.push_back(script->GetName());
+    for (ZoneScript const* script : _zoneScripts)
         names.push_back(script->GetName());
     for (CommandScript const* script : _commandScripts)
         names.push_back(script->GetName());
@@ -149,6 +164,43 @@ void ScriptMgr::OnConfigLoad(bool reload)
 void ScriptMgr::OnWorldUpdate(std::chrono::milliseconds diff)
 {
     ForEach("OnUpdate", [diff](WorldScript* script) { script->OnUpdate(diff); });
+}
+
+template<typename Hook>
+void ScriptMgr::ForZone(std::string_view zone, std::string_view what, Hook hook)
+{
+    for (ZoneScript* script : _zoneScripts)
+    {
+        if (!script->GetZone().empty() && script->GetZone() != zone)
+            continue;
+        try
+        {
+            hook(script);
+        }
+        catch (std::exception const& failure)
+        {
+            LOG_ERROR("server.scripts", "The script {} threw from {}: {}", script->GetName(), what, failure.what());
+        }
+        catch (...)
+        {
+            LOG_ERROR("server.scripts", "The script {} threw from {} for a reason it did not say", script->GetName(), what);
+        }
+    }
+}
+
+void ScriptMgr::OnVolumeEnter(std::string_view zone, uint32 mapId, std::string_view volume, uint64 wizard)
+{
+    ForZone(zone, "OnVolumeEnter", [&](ZoneScript* script) { script->OnVolumeEnter(mapId, volume, wizard); });
+}
+
+void ScriptMgr::OnVolumeExit(std::string_view zone, uint32 mapId, std::string_view volume, uint64 wizard)
+{
+    ForZone(zone, "OnVolumeExit", [&](ZoneScript* script) { script->OnVolumeExit(mapId, volume, wizard); });
+}
+
+void ScriptMgr::OnTriggerFired(std::string_view zone, uint32 mapId, std::string_view trigger, uint64 wizard)
+{
+    ForZone(zone, "OnTriggerFired", [&](ZoneScript* script) { script->OnTriggerFired(mapId, trigger, wizard); });
 }
 
 template<typename Hook>

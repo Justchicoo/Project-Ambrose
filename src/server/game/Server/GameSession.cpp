@@ -12,15 +12,21 @@
 #include "GameMessageTable.h"
 #include "BlobEnvelope.h"
 #include "ConfigMgr.h"
+#include "CryptoRandom.h"
+#include "DisconnectReason.h"
+#include "LocationString.h"
 #include "Log.h"
 #include "MapMgr.h"
 #include "MessageRegistry.h"
+#include "MovementPacking.h"
 #include "ObjectFields.h"
 #include "ObjectSchemaMgr.h"
 #include "ObjectTemplateMgr.h"
 #include "PlayerLevelMgr.h"
 #include "PackedName.h"
 #include "PlayerObjectBuilder.h"
+#include "InstanceSight.h"
+#include "ScriptMgr.h"
 #include "Settings.h"
 #include "SpellMgr.h"
 #include "StringHash.h"
@@ -35,6 +41,8 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <limits>
+#include <map>
 #include <span>
 #include <utility>
 #include <vector>
@@ -43,6 +51,10 @@ namespace
 {
 
     std::atomic<uint32> RealmId{ 0 };
+    std::mutex TransferEndpointMutex;
+    std::string TransferAddress;
+    uint16 TransferPort = 0;
+    constexpr int64 TransferKeyLifetimeSeconds = 120;
 
     int64 NowEpochSeconds()
     {
@@ -63,6 +75,13 @@ void GameSession::SetRealmId(uint32 realmId) noexcept
 uint32 GameSession::GetRealmId() noexcept
 {
     return RealmId.load(std::memory_order_relaxed);
+}
+
+void GameSession::SetTransferEndpoint(std::string address, uint16 port)
+{
+    std::lock_guard const lock(TransferEndpointMutex);
+    TransferAddress = std::move(address);
+    TransferPort = port;
 }
 
 std::shared_ptr<GameSession> GameSession::SharedSelf()
@@ -160,6 +179,7 @@ void GameSession::ProcessCallbacks()
 {
     _countedCallbacks.ProcessReadyCallbacks();
     _queryCallbacks.ProcessReadyCallbacks();
+    _transactionCallbacks.ProcessReadyCallbacks();
 }
 
 SQLOperation::CompletionHandler GameSession::MakeCompletionHandler()
@@ -199,6 +219,7 @@ void GameSession::OnSessionClosed()
         MarkOffline();
     _countedCallbacks.Clear();
     _queryCallbacks.Clear();
+    _transactionCallbacks.Clear();
     SessionBase::OnSessionClosed();
 }
 
@@ -331,6 +352,7 @@ void GameSession::LoadAccount(LoginKeyClaim const& claim)
         }
         AccountInfo const account = AccountMgr::ReadAccountRow(*result);
         SetSecurityLevel(account.SecurityLevel);
+        _accountPermissions = account.Permissions;
         LoadCharacter(claim);
     }));
 }
@@ -517,7 +539,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
     std::shared_ptr<BehaviorClientClasses const> const behaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
     std::shared_ptr<ObjectTemplate const> const playerTemplate = sObjectTemplateMgr.GetPlayer();
-    uint32 const permissions = sSettings.Get<uint32>("LoginComplete.Permissions");
+    uint32 const permissions = AccountMgr::EntryPermissions(_accountPermissions, sSettings.Get<uint32>("LoginComplete.Permissions"));
     PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, entering, *stats, trackers, placement, permissions, problem);
     ObjectField const* const field = ObjectFields::Find("MSG_LOGINCOMPLETE", "Data");
     EncodeResult const data = player && field ? CoreObjectSerializer::EncodeField(*field, *player, *types) : EncodeResult{};
@@ -588,6 +610,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         _relay.Reset(_movement);
         _characterRevision = entering.StateRevision;
     }
+    ArriveInVolumes();
     _stats = std::move(stats);
     if (!resumed)
         _statsRevision = stored ? stored->Revision : 0;
@@ -602,16 +625,16 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     _afkTimerStarted = false;
     SendDmlMessage(complete);
     SendBadges();
-    SendMapObjects(*map);
+    std::size_t const objectsInSight = UpdateSight(*map, InstanceSight(*map, SightRangeOf(*map)), {}).New.size();
     if (!resumed)
         _arrived = true;
     SetStatus(SessionStatus::LoggedIn);
     LOG_DEBUG("server.gamesession", "Session {} sent MSG_LOGINCOMPLETE: zone {}, id {}, dynamic zone {} in process {}, server time {}, realm {}, permissions {:#x}, CSR {}, test server {}, critical objects {}",
         GetSessionId(), complete.ZoneName, complete.ZoneId, complete.DynamicZoneId, complete.DynamicServerProcId, complete.ServerTime, complete.RealmName, complete.Permissions,
         complete.IsCsr, complete.TestServer, complete.CriticalObjects.empty() ? "none" : "a list");
-    LOG_INFO("server.gamesession", "Session {} put wizard {} in {} instance {} at ({}, {}, {}) with mobile id {}, level {} with {} of {} health and {} of {} mana and {} spell(s) in its book, and sent its {}-byte object and the zone's {} object(s)",
+    LOG_INFO("server.gamesession", "Session {} put wizard {} in {} instance {} at ({}, {}, {}) with mobile id {}, level {} with {} of {} health and {} of {} mana and {} spell(s) in its book, and sent its {}-byte object and the {} of the zone's {} object(s) in sight",
         GetSessionId(), character.Guid, entering.Zone, map->GetDynamicZoneId(), placement.X, placement.Y, placement.Z, placement.MobileId, _stats->GetLevel(), _stats->GetHitpoints(),
-        _stats->GetMaxHitpoints(), _stats->GetMana(), _stats->GetMaxMana(), trackers.size(), data.Bytes.size(), map->GetObjects().size());
+        _stats->GetMaxHitpoints(), _stats->GetMana(), _stats->GetMaxMana(), trackers.size(), data.Bytes.size(), objectsInSight, map->GetObjects().size());
 }
 
 void GameSession::ShowPlayer(GameSession const& other)
@@ -702,14 +725,307 @@ void GameSession::ShowMovementOf(GameSession const& mover, MovementUpdate const&
     }
 }
 
-void GameSession::SendMapObjects(Map const& map)
+bool GameSession::TeleportWithinMap(PlayerPosition const& target, std::vector<std::shared_ptr<GameSession>> const& onlookers, std::string& problem)
 {
-    for (MapObject const& object : map.GetObjects())
+    std::optional<int16> const x = MovementPacking::TryPackLocation(target.X);
+    std::optional<int16> const y = MovementPacking::TryPackLocation(target.Y);
+    std::optional<int16> const z = MovementPacking::TryPackLocation(target.Z);
+    if (!x || !y || !z)
     {
-        GameMessages::NewObject message;
-        message.Data.assign(object.Data.begin(), object.Data.end());
-        SendDmlMessage(message);
+        problem = fmt::format("({}, {}, {}) lies outside the {} to {} a position can be sent as", target.X, target.Y, target.Z,
+            MovementPacking::UnpackLocation(std::numeric_limits<int16>::min()), MovementPacking::UnpackLocation(std::numeric_limits<int16>::max()));
+        return false;
     }
+    if (!IsShown())
+    {
+        problem = "the wizard does not stand in a zone";
+        return false;
+    }
+    PackedMove const place{ static_cast<uint16>(*x), static_cast<uint16>(*y), static_cast<uint16>(*z), MovementPacking::PackYaw(target.Yaw) };
+    _movement.Apply(place.X, place.Y, place.Z, place.Direction, _movement.GetZoneCounter());
+    std::size_t shown = 0;
+    for (std::shared_ptr<GameSession> const& viewer : onlookers)
+    {
+        if (!viewer->IsOpen() || viewer->GetMapId() != _mapId || (viewer.get() != this && !viewer->Sees(_worldGuid)))
+            continue;
+        viewer->ShowTeleportOf(*this, place);
+        if (viewer.get() != this)
+            ++shown;
+    }
+    LOG_INFO("server.gamesession", "Session {}'s wizard {} was teleported within {} to ({}, {}, {}) facing {}, shown to {} other wizard(s)", GetSessionId(), _worldGuid,
+        Ambrose::ForLog(_zonePath, 128), _movement.GetPosition().X, _movement.GetPosition().Y, _movement.GetPosition().Z, _movement.GetPosition().Yaw, shown);
+    return true;
+}
+
+void GameSession::ShowTeleportOf(GameSession const& mover, PackedMove const& place)
+{
+    GameMessages::ServerTeleport teleport;
+    teleport.LocationX = place.X;
+    teleport.LocationY = place.Y;
+    teleport.LocationZ = place.Z;
+    teleport.Direction = place.Direction;
+    teleport.MobileId = mover._mobileId;
+    SendDmlMessage(teleport);
+}
+
+bool GameSession::RequestZoneTransfer(ZoneTransfer transfer, std::string& problem)
+{
+    if (!IsShown())
+    {
+        problem = "the wizard does not stand in a zone";
+        return false;
+    }
+    std::string const zone = transfer.Zone;
+    if (!_transfers.Request(std::move(transfer)))
+    {
+        problem = "a transfer is already waiting on this wizard's client";
+        return false;
+    }
+    GameMessages::ZoneTransferRequest request;
+    request.ZoneName = zone;
+    request.SendAck = 1;
+    SendDmlMessage(request);
+    LOG_INFO("server.gamesession", "Session {} asked its client to leave {} for {}", GetSessionId(), Ambrose::ForLog(_zonePath, 128), Ambrose::ForLog(zone, 128));
+    return true;
+}
+
+void GameSession::HandleZoneTransferNack(GameMessages::ZoneTransferNack&)
+{
+    if (_transfers.Nack())
+        LOG_INFO("server.gamesession", "Session {}'s client refused its zone transfer, so the wizard stays in {}", GetSessionId(), Ambrose::ForLog(_zonePath, 128));
+}
+
+void GameSession::HandleRetryTeleport(GameMessages::RetryTeleport&)
+{
+    if (!_lastTransfer)
+        return;
+    SendDmlMessage(*_lastTransfer);
+    LOG_INFO("server.gamesession", "Session {} sent its last MSG_SERVERTRANSFER again, to {}", GetSessionId(), Ambrose::ForLog(_lastTransfer->ZoneName, 128));
+}
+
+void GameSession::HandleZoneTransferAck(GameMessages::ZoneTransferAck&)
+{
+    std::optional<ZoneTransfer> const transfer = _transfers.Ack();
+    if (!transfer)
+        return;
+    std::string const from = _zonePath;
+    int32 key = 0;
+    while (key == 0)
+        key = static_cast<int32>(Ambrose::Crypto::GetRandomUInt32() & 0x7FFFFFFFu);
+    uint64 const characterId = GetCharacterId();
+    uint64 const accountId = GetAccountId();
+    LeaveWorld();
+    CharacterRepository::Statement place = CharacterDatabase.IsOpen() ? CharacterRepository::PrepareSavePlace(characterId, transfer->Zone, transfer->ZoneDisplay, transfer->Place.X,
+        transfer->Place.Y, transfer->Place.Z, transfer->Place.Yaw, ++_characterRevision) : nullptr;
+    std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> insert = LoginDatabase.IsOpen() ? LoginDatabase.GetPreparedStatement(LOGIN_INS_LOGIN_KEY) : nullptr;
+    if (!place || !insert)
+    {
+        _transfers.Finish();
+        KickPlayer(DisconnectReason::User, "The zone transfer could not be written down");
+        return;
+    }
+    int64 const now = NowEpochSeconds();
+    insert->SetData(0, std::to_string(key));
+    insert->SetData(1, accountId);
+    insert->SetData(2, characterId);
+    insert->SetData(3, GetRealmId());
+    insert->SetData(4, uint64{ 0 });
+    insert->SetData(5, static_cast<uint64>(now));
+    insert->SetData(6, static_cast<uint64>(now + TransferKeyLifetimeSeconds));
+
+    GameMessages::ServerTransfer message;
+    {
+        std::lock_guard const lock(TransferEndpointMutex);
+        message.Ip = TransferAddress;
+        message.TcpPort = TransferPort;
+        message.UdpPort = TransferPort;
+        message.FallbackIp = TransferAddress;
+        message.FallbackTcpPort = TransferPort;
+        message.FallbackUdpPort = TransferPort;
+    }
+    message.Key = key;
+    message.UserId = accountId;
+    message.CharId = characterId;
+    message.ZoneName = transfer->Zone;
+    message.Location = LocationString::CoordinatesOf(transfer->Place.X, transfer->Place.Y, transfer->Place.Z, transfer->Place.Yaw).Format();
+    message.FallbackZone = from;
+    message.TransitionId = 1;
+
+    auto characters = CharacterDatabase.BeginTransaction();
+    characters->Append(std::move(place));
+    _transactionCallbacks.AddCallback(CharacterDatabase.AsyncCommitTransaction(std::move(characters), MakeCompletionHandler())
+        .AfterComplete([this, held = std::make_shared<std::unique_ptr<PreparedStatement<LoginDatabaseConnection>>>(std::move(insert)), message, from](bool placed)
+    {
+        if (!IsOpen() || IsKicked())
+            return;
+        if (!placed)
+        {
+            _transfers.Finish();
+            KickPlayer(DisconnectReason::User, "The zone transfer could not be written down");
+            return;
+        }
+        auto login = LoginDatabase.BeginTransaction();
+        login->Append(std::move(*held));
+        _transactionCallbacks.AddCallback(LoginDatabase.AsyncCommitTransaction(std::move(login), MakeCompletionHandler()).AfterComplete([this, message, from](bool keyed)
+        {
+            if (!IsOpen() || IsKicked())
+                return;
+            _transfers.Finish();
+            if (!keyed)
+            {
+                KickPlayer(DisconnectReason::User, "The zone transfer could not be written down");
+                return;
+            }
+            _intentionalDisconnect.store(true, std::memory_order_relaxed);
+            _lastTransfer = message;
+            SendDmlMessage(message);
+            LOG_INFO("server.gamesession", "Session {} sent wizard {} from {} to {} at {} with a single-use transfer key", GetSessionId(), message.CharId,
+                Ambrose::ForLog(from, 128), Ambrose::ForLog(message.ZoneName, 128), message.Location);
+        }));
+    }));
+}
+
+void GameSession::ArriveInVolumes()
+{
+    _volumeData = sZoneTriggerMgr.Find(_zonePath);
+    _volumePresence.assign(_volumeData ? _volumeData->Volumes.size() : 0, VolumePresence{});
+    if (!_mapId)
+        return;
+    PlayerPosition const& at = _movement.GetPosition();
+    std::size_t inside = 0;
+    for (std::size_t index = 0; index < _volumePresence.size(); ++index)
+    {
+        _volumePresence[index].Place(_volumeData->Volumes[index], at.X, at.Y, at.Z);
+        inside += _volumePresence[index].Inside() ? 1 : 0;
+    }
+    std::vector<std::string> const fired = PostZoneEvent(ZoneTriggerMgr::EnterZoneEvent, std::chrono::steady_clock::now());
+    LOG_INFO("server.gamesession", "Session {}'s wizard {} arrived in {} inside {} of its {} volume(s), firing no enter; EnterZone fired {} trigger(s)", GetSessionId(), _worldGuid,
+        Ambrose::ForLog(_zonePath, 128), inside, _volumePresence.size(), fired.size());
+}
+
+std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now)
+{
+    std::vector<std::string> fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now);
+    for (std::string const& trigger : fired)
+        sScriptMgr.OnTriggerFired(_zonePath, *_mapId, trigger, _worldGuid);
+    return fired;
+}
+
+void GameSession::FollowReloadedVolumes()
+{
+    std::shared_ptr<ZoneTriggerData const> current = sZoneTriggerMgr.Find(_zonePath);
+    if (current == _volumeData)
+        return;
+    std::map<uint32, VolumePresence> kept;
+    if (_volumeData)
+        for (std::size_t index = 0; index < _volumePresence.size(); ++index)
+            kept.emplace(_volumeData->Volumes[index].Index, _volumePresence[index]);
+    _volumeData = std::move(current);
+    _volumePresence.assign(_volumeData ? _volumeData->Volumes.size() : 0, VolumePresence{});
+    PlayerPosition const& at = _movement.GetPosition();
+    for (std::size_t index = 0; index < _volumePresence.size(); ++index)
+    {
+        auto const found = kept.find(_volumeData->Volumes[index].Index);
+        if (found != kept.end())
+            _volumePresence[index] = found->second;
+        else
+            _volumePresence[index].Place(_volumeData->Volumes[index], at.X, at.Y, at.Z);
+    }
+}
+
+void GameSession::CheckVolumes()
+{
+    if (!_mapId)
+        return;
+    FollowReloadedVolumes();
+    if (!_volumeData)
+        return;
+    PlayerPosition const& at = _movement.GetPosition();
+    auto const now = std::chrono::steady_clock::now();
+    for (std::size_t index = 0; index < _volumePresence.size(); ++index)
+    {
+        ZoneVolume const& volume = _volumeData->Volumes[index];
+        VolumePresence::Change const change = _volumePresence[index].Update(volume, at.X, at.Y, at.Z);
+        if (change == VolumePresence::Change::None)
+            continue;
+        if (change == VolumePresence::Change::Entered)
+            sScriptMgr.OnVolumeEnter(_zonePath, *_mapId, volume.Name, _worldGuid);
+        else
+            sScriptMgr.OnVolumeExit(_zonePath, *_mapId, volume.Name, _worldGuid);
+        auto const& events = change == VolumePresence::Change::Entered ? _volumeData->EnterEvents : _volumeData->ExitEvents;
+        auto const found = events.find(volume.Index);
+        if (found == events.end())
+            continue;
+        for (std::string const& event : found->second)
+        {
+            std::vector<std::string> const fired = PostZoneEvent(event, now);
+            LOG_INFO("server.gamesession", "Session {}'s wizard {} {} volume {} ({}) in {}, posting {}, which fired {}", GetSessionId(), _worldGuid,
+                change == VolumePresence::Change::Entered ? "entered" : "left", volume.Index, volume.Name, Ambrose::ForLog(_zonePath, 128), event,
+                fired.empty() ? std::string("no trigger") : fmt::format("{}", fmt::join(fired, ", ")));
+        }
+    }
+}
+
+void GameSession::HandlePostZoneEventFromClient(GameMessages::PostZoneEventFromClient& message)
+{
+    if (!_mapId)
+        return;
+    FollowReloadedVolumes();
+    if (!_volumeData || !_volumeData->ClientEvents.contains(message.EventName))
+    {
+        LOG_WARN("server.gamesession", "Session {}'s client posted the event '{}' in {}, which the zone does not let clients post; it is ignored", GetSessionId(),
+            Ambrose::ForLog(message.EventName, 128), Ambrose::ForLog(_zonePath, 128));
+        return;
+    }
+    std::vector<std::string> const fired = PostZoneEvent(message.EventName, std::chrono::steady_clock::now());
+    LOG_INFO("server.gamesession", "Session {}'s client posted {} in {}, which fired {}", GetSessionId(), message.EventName, Ambrose::ForLog(_zonePath, 128),
+        fired.empty() ? std::string("no trigger") : fmt::format("{}", fmt::join(fired, ", ")));
+}
+
+VisibilityRange GameSession::SightRangeOf(Map const& map)
+{
+    std::shared_ptr<ZoneTemplates const> const templates = sZoneMgr.GetTemplates();
+    ZoneTemplate const* const zone = templates ? templates->Find(map.GetZonePath()) : nullptr;
+    return VisibilityRange::Resolve(sSettings.Get<float>("Visibility.Distance"), sSettings.Get<float>("Visibility.Hysteresis"), zone ? zone->FarClip : std::nullopt);
+}
+
+VisibilityChanges GameSession::UpdateSight(Map const& map, InstanceSight const& sight, std::map<uint64, GameSession const*> const& wizards)
+{
+    PlayerPosition const& at = _movement.GetPosition();
+    VisibilityChanges changes = _sight.Update(sight.CandidatesFor(_worldGuid, { at.X, at.Y, at.Z }), sight.GetRange());
+    for (uint64 const id : changes.Removed)
+    {
+        HidePlayer(id);
+        if (wizards.contains(id))
+            LOG_DEBUG("server.gamesession", "Session {}'s wizard {} lost sight of wizard {}", GetSessionId(), _worldGuid, id);
+    }
+    auto const show = [&](uint64 id)
+    {
+        if (MapObject const* const object = map.FindObject(id))
+        {
+            GameMessages::NewObject message;
+            message.Data.assign(object->Data.begin(), object->Data.end());
+            SendDmlMessage(message);
+        }
+        else if (auto const wizard = wizards.find(id); wizard != wizards.end())
+        {
+            ShowPlayer(*wizard->second);
+            PlayerPosition const& there = wizard->second->GetMovement().GetPosition();
+            LOG_DEBUG("server.gamesession", "Session {}'s wizard {} sees wizard {} at ({}, {}, {})", GetSessionId(), _worldGuid, id, there.X, there.Y, there.Z);
+        }
+    };
+    for (uint64 const id : changes.New)
+        show(id);
+    for (uint64 const id : changes.Added)
+        show(id);
+    return changes;
+}
+
+void GameSession::ForgetSight(uint64 id)
+{
+    if (_sight.IsVisible(id))
+        HidePlayer(id);
+    _sight.Forget(id);
 }
 
 void GameSession::SendObjectChanges(MapObjectChanges const& changes)
@@ -717,21 +1033,7 @@ void GameSession::SendObjectChanges(MapObjectChanges const& changes)
     if (!_mapId || *_mapId != changes.DynamicZoneId)
         return;
     for (uint64 const removed : changes.Removed)
-    {
-        GameMessages::RemoveObject message;
-        message.GameObjectId = removed;
-        SendDmlMessage(message);
-    }
-    Map const* const map = sMapMgr.Find(*_mapId);
-    if (!map)
-        return;
-    for (uint64 const added : changes.Added)
-        if (MapObject const* const object = map->FindObject(added))
-        {
-            GameMessages::NewObject message;
-            message.Data.assign(object->Data.begin(), object->Data.end());
-            SendDmlMessage(message);
-        }
+        ForgetSight(removed);
 }
 
 void GameSession::HandleClientZoned(GameMessages::ClientZoned& message)
@@ -845,6 +1147,7 @@ void GameSession::LeaveWorld()
     SetCharacterName(std::string());
     _wizBangId = 0;
     _pendingWizBang.reset();
+    _sight.Clear();
     if (_stats)
     {
         SaveStats();

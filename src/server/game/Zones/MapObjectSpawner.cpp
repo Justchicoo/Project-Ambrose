@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Removes first and adds after, so an edited row's object leaves before its new one arrives and its mobile id goes back to cool rather than being handed straight on. When the classes, tables or templates reload, each object still wanted is built again with the ids it holds and kept only if it comes out byte for byte the same. Each new object is built from its template and encoded with the Public, Transmit and AuthorityTransmit mask, the one the client reads MSG_NEWOBJECT with, so nothing only its owner may see is ever sent; a template whose adjectives include Critical marks its object as one the client waits for before it leaves the loading screen.
+ * Removes first and adds after, so an edited row's object leaves before its new one arrives and its mobile id goes back to cool rather than being handed straight on. When the classes, tables or templates reload, each object still wanted is built again with the ids it holds and kept only if it comes out byte for byte the same. Each new object is built from its template and encoded with the Public, Transmit and AuthorityTransmit mask, the one the client reads MSG_NEWOBJECT with, so nothing only its owner may see is ever sent; a template whose adjectives include Critical marks its object as one the client waits for before it leaves the loading screen, and one with m_exemptFromAOI as one every wizard in the instance is shown wherever it stands.
  */
 
 #include "MapObjectSpawner.h"
@@ -33,6 +33,12 @@ namespace
             std::string const* const text = adjective.GetIf<std::string>();
             return text && *text == MapObjectSpawner::CriticalAdjective;
         });
+    }
+
+    bool IsExemptFromAoi(ObjectTemplate const& objectTemplate)
+    {
+        std::optional<GameObjectTemplateView> const view = GameObjectTemplateView::From(objectTemplate.Object.get());
+        return view && view->IsExemptFromAoi();
     }
 
     void Report(MapObjectChanges& changes, ZoneObjectSpawn const& row, bool missingTemplate, std::string text)
@@ -91,7 +97,7 @@ namespace
             return false;
         std::string problem;
         std::optional<std::vector<uint8>> const data = Encode(*found.Template, Place(map, object.Spawn, object.GlobalId, object.MobileId), sources, problem);
-        return data && *data == object.Data && IsCritical(*found.Template) == object.Critical;
+        return data && *data == object.Data && IsCritical(*found.Template) == object.Critical && IsExemptFromAoi(*found.Template) == object.ExemptFromAoi;
     }
 
     void Spawn(Map& map, ZoneObjectSpawn const& row, MapObjectSources const& sources, Map::Clock::time_point now, std::chrono::milliseconds releaseDelay,
@@ -130,6 +136,10 @@ namespace
         made.PermId = placement.PermId;
         made.MobileId = *mobileId;
         made.Critical = IsCritical(*found.Template);
+        made.ExemptFromAoi = IsExemptFromAoi(*found.Template);
+        if (made.ExemptFromAoi)
+            LOG_DEBUG("server.zones", "Object {} of zone_object row {} (template {}) at ({}, {}, {}) in {} is exempt from area of interest", *globalId, row.Id, row.TemplateId,
+                row.Position.X, row.Position.Y, row.Position.Z, map.GetZonePath());
         made.Data = std::move(*data);
         map.AddObject(std::move(made));
         changes.Added.push_back(*globalId);

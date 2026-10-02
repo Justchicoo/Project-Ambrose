@@ -44,6 +44,15 @@ struct CharacterSpellsLoad
     std::vector<CharacterSpell> Spells;
 };
 
+struct DeletedCharacter
+{
+    uint64 Guid = 0;
+    uint64 Account = 0;
+    uint64 DeletedAt = 0;
+    int32 Level = 0;
+    uint32 School = 0;
+};
+
 struct CharacterList
 {
     CharacterOpResult Result = CharacterOpResult::DatabaseError;
@@ -69,6 +78,8 @@ public:
     static std::optional<uint32> CountByAccount(uint64 account);
     static CharacterOpResult SoftDelete(uint64 guid, uint64 account, uint64 deletedAt);
     static CharacterOpResult Restore(uint64 guid);
+    static std::optional<std::vector<DeletedCharacter>> ListDeleted(uint64 account, uint32 limit);
+    static CharacterOpResult FlagRename(uint64 guid);
     static CharacterOpResult SetOnline(uint64 guid, bool online);
     static std::optional<uint64> GetMaxGuid();
     static CharacterStatsLoad LoadStats(uint64 guid);
@@ -86,6 +97,7 @@ public:
     static Statement PrepareLoadStats(uint64 guid);
     static Statement PrepareSaveStats(uint64 guid, CharacterStats const& stats);
     static Statement PrepareSavePosition(uint64 guid, float x, float y, float z, float orientation, uint64 revision);
+    static Statement PrepareSavePlace(uint64 guid, std::string const& zone, std::string const& zoneDisplay, float x, float y, float z, float orientation, uint64 revision);
     static std::optional<CharacterStats> ReadStats(PreparedResultSet& result);
     static Statement PrepareLoadSpells(uint64 guid);
     static Statement PrepareSaveSpell(uint64 guid, CharacterSpell const& spell);
