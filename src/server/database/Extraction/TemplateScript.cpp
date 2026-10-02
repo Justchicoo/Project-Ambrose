@@ -1,9 +1,25 @@
 /*
  * Project Ambrose by Imjustchico
- * Lays extracted templates out for the world tables in id order, replacing object_template first so its adjectives, behaviors and item rows are only ever written after it, an item template's own fields going to item_template, with NULL for a visual id or object type a template does not have and for the name of a behavior of a class nothing describes. Replacing every table whole makes a second run over the same install write the same rows.
+ * Lays extracted templates out for the world tables in id order, replacing object_template first so its adjectives, behaviors and item rows are only ever written after it, an item template's own fields going to item_template, its requirement lists, each requirement and each equip effect to the tables beside it with each requirement and effect written as a BINd of its own, with NULL for a visual id or object type a template does not have and for the name of a behavior of a class nothing describes. Replacing every table whole makes a second run over the same install write the same rows.
  */
 
 #include "TemplateScript.h"
+#include "BindFile.h"
+#include "PropertyObject.h"
+
+#include <string>
+
+namespace
+{
+    constexpr uint64 EquipList = 0;
+    constexpr uint64 PurchaseList = 1;
+
+    WorldSqlScript::Value Serialized(ItemTemplatePart const& part)
+    {
+        EncodeResult const encoded = BindFile::Write(part.Object.get());
+        return std::string(encoded.Bytes.begin(), encoded.Bytes.end());
+    }
+}
 
 WorldSqlScript TemplateScript::Build(TemplateExtraction const& extraction)
 {
@@ -15,6 +31,9 @@ WorldSqlScript TemplateScript::Build(TemplateExtraction const& extraction)
     std::vector<WorldSqlScript::Row> adjectives;
     std::vector<WorldSqlScript::Row> behaviors;
     std::vector<WorldSqlScript::Row> items;
+    std::vector<WorldSqlScript::Row> requirementLists;
+    std::vector<WorldSqlScript::Row> requirements;
+    std::vector<WorldSqlScript::Row> effects;
     templates.reserve(extraction.Templates.size());
     adjectives.reserve(extraction.GetAdjectiveCount());
     behaviors.reserve(extraction.GetBehaviorCount());
@@ -32,9 +51,27 @@ WorldSqlScript TemplateScript::Build(TemplateExtraction const& extraction)
                 behavior.Name ? WorldSqlScript::Value{ *behavior.Name } : WorldSqlScript::Value{ std::monostate{} } });
         }
         if (ItemTemplateRecord const* const item = found.Item ? &*found.Item : nullptr)
+        {
             items.push_back({ id, item->School, double{ item->BaseCost }, int64{ item->Rank }, int64{ item->ItemLimit }, uint64{ item->ItemSetBonusTemplateId },
                 item->NumPrimaryColors ? WorldSqlScript::Value{ *item->NumPrimaryColors } : WorldSqlScript::Value{ std::monostate{} },
                 item->NumSecondaryColors ? WorldSqlScript::Value{ *item->NumSecondaryColors } : WorldSqlScript::Value{ std::monostate{} } });
+            for (auto const& [list, kind] : { std::pair{ &item->EquipRequirements, EquipList }, std::pair{ &item->PurchaseRequirements, PurchaseList } })
+            {
+                if (!*list)
+                    continue;
+                requirementLists.push_back({ id, kind, uint64{ (*list)->ApplyNot }, (*list)->Operator });
+                for (std::size_t position = 0; position < (*list)->Requirements.size(); ++position)
+                {
+                    ItemTemplatePart const& part = (*list)->Requirements[position];
+                    requirements.push_back({ id, kind, uint64{ position }, uint64{ part.ClassHash }, part.ClassName, Serialized(part) });
+                }
+            }
+            for (std::size_t position = 0; position < item->EquipEffects.size(); ++position)
+            {
+                ItemTemplatePart const& part = item->EquipEffects[position];
+                effects.push_back({ id, uint64{ position }, uint64{ part.ClassHash }, part.ClassName, Serialized(part) });
+            }
+        }
     }
 
     std::vector<std::string_view> const tables = GetTables();
@@ -45,10 +82,14 @@ WorldSqlScript TemplateScript::Build(TemplateExtraction const& extraction)
     script.ReplaceTable(tables[2], { "template_id", "position", "class_hash", "behavior_name" }, behaviors);
     script.ReplaceTable(tables[3], { "template_id", "school", "base_cost", "item_rank", "item_limit", "item_set_bonus_template_id", "num_primary_colors", "num_secondary_colors" },
         items);
+    script.ReplaceTable(tables[4], { "template_id", "list", "apply_not", "operator" }, requirementLists);
+    script.ReplaceTable(tables[5], { "template_id", "list", "position", "class_hash", "class_name", "data" }, requirements);
+    script.ReplaceTable(tables[6], { "template_id", "position", "class_hash", "class_name", "data" }, effects);
     return script;
 }
 
 std::vector<std::string_view> TemplateScript::GetTables()
 {
-    return { "object_template", "object_template_adjective", "object_template_behavior", "item_template" };
+    return { "object_template", "object_template_adjective", "object_template_behavior", "item_template", "item_template_requirement_list",
+        "item_template_requirement", "item_template_effect" };
 }

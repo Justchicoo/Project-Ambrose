@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads an item template through the game object and wizard item template views after checking every class its decode skipped: one inside its behaviors is counted, any other refuses the item. A color count is read by name as whichever integer the dump stores it as, and is absent when the class has no such property.
+ * Reads an item template through the game object and wizard item template views after checking every class its decode skipped: one inside its behaviors is counted, any other refuses the item. Each requirement and equip effect is kept as a copy of the object it decoded to, so the record outlives the decode, and its memory is counted as that object's values. A color count is read by name as whichever integer the dump stores it as, and is absent when the class has no such property.
  */
 
 #include "ItemTemplateRecord.h"
@@ -33,6 +33,37 @@ namespace
         take.template operator()<uint32>();
         take.template operator()<int64>();
         return found;
+    }
+
+    ItemTemplatePart PartOf(PropertyObject const& object)
+    {
+        return ItemTemplatePart{ object.GetClass().Name, object.GetClass().Hash, std::shared_ptr<PropertyObject const>(object.Clone()) };
+    }
+
+    std::vector<ItemTemplatePart> PartsOf(PropertyValue::List const& list)
+    {
+        std::vector<ItemTemplatePart> parts;
+        parts.reserve(list.size());
+        for (PropertyValue const& value : list)
+            if (PropertyObject const* const object = value.AsObject())
+                parts.push_back(PartOf(*object));
+        return parts;
+    }
+
+    std::optional<ItemRequirementList> RequirementsOf(PropertyObject const* object)
+    {
+        std::optional<RequirementListView> const list = RequirementListView::From(object);
+        if (!list)
+            return std::nullopt;
+        return ItemRequirementList{ list->AppliesNot(), list->GetOperator(), PartsOf(list->GetRequirements()) };
+    }
+
+    std::size_t PartMemory(std::vector<ItemTemplatePart> const& parts)
+    {
+        std::size_t bytes = parts.capacity() * sizeof(ItemTemplatePart);
+        for (ItemTemplatePart const& part : parts)
+            bytes += part.ClassName.capacity() + (part.Object ? sizeof(PropertyObject) + part.Object->GetClass().Properties.size() * sizeof(PropertyValue) : 0);
+        return bytes;
     }
 }
 
@@ -83,6 +114,9 @@ std::optional<ItemTemplateRecord> ItemTemplateRecord::Read(PropertyObject const&
     record.ItemSetBonusTemplateId = item->GetItemSetBonusTemplateId();
     record.NumPrimaryColors = IntegerOf(object, "m_numPrimaryColors");
     record.NumSecondaryColors = IntegerOf(object, "m_numSecondaryColors");
+    record.EquipRequirements = RequirementsOf(item->GetEquipRequirements());
+    record.PurchaseRequirements = RequirementsOf(item->GetPurchaseRequirements());
+    record.EquipEffects = PartsOf(item->GetEquipEffects());
     return record;
 }
 
@@ -92,5 +126,8 @@ std::size_t ItemTemplateRecord::GetMemoryUsage() const noexcept
         + Adjectives.capacity() * sizeof(std::string);
     for (std::string const& adjective : Adjectives)
         bytes += adjective.capacity();
-    return bytes;
+    for (std::optional<ItemRequirementList> const* list : { &EquipRequirements, &PurchaseRequirements })
+        if (*list)
+            bytes += PartMemory((*list)->Requirements);
+    return bytes + PartMemory(EquipEffects);
 }
