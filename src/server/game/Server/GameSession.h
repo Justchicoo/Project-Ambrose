@@ -109,6 +109,9 @@ public:
     void SetSecurityLevel(uint8 level) noexcept { _securityLevel.store(level, std::memory_order_relaxed); }
     MovementUpdate TakeMovementUpdate(uint32 idleFlushes);
     void ShowMovementOf(GameSession const& mover, MovementUpdate const& update);
+    bool TeleportWithinMap(PlayerPosition const& target, std::vector<std::shared_ptr<GameSession>> const& onlookers, std::string& problem);
+    void ShowTeleportOf(GameSession const& mover, PackedMove const& place);
+    std::string const& GetZonePath() const noexcept { return _zonePath; }
     void SendObjectChanges(MapObjectChanges const& changes);
     PlayerStats const* GetStats() const noexcept { return _stats ? &*_stats : nullptr; }
     PlayerMovement const& GetMovement() const noexcept { return _movement; }
@@ -183,6 +186,7 @@ private:
     std::atomic<bool> _linkDeadStartPending{ false };
     std::atomic<int64> _socketLostAtNanoseconds{ 0 };
     std::atomic<uint8> _securityLevel{ 0 };
+    std::optional<uint32> _accountPermissions;
     std::chrono::steady_clock::time_point const _connectedAt = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point _afkStarted;
     bool _afkTimerStarted = false;

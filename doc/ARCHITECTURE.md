@@ -79,7 +79,7 @@ Each app lists every client message once in a `MessageHandlerTable`: the message
 
 ### GM commands
 
-Each command group is one file, `scripts/Commands/cs_<group>.cpp`, holding a `CommandScript` with a command table and the default account security level each command requires. A `command_security` table overrides levels live and reloads with the other command data.
+Each command group is one file, `scripts/Commands/cs_<group>.cpp`, holding a `CommandScript` with a command table and the default account security level each command requires. A `command_security` row in the world database overrides one command's level, read at start and again by `.reload command_security`, which keeps the levels it had when the table cannot be read. The account, ban and character groups added in 6.05 act on an account only when the caller in game holds a level above it, and never give a level as high as the caller's own, so no game master raises another to its rank or locks out its peers; the console may do all of it. A ban of an account disconnects its wizards in the world with MSG_FORCE_DISCONNECT's AccountBanned, and the login server refuses its next login from the same rows. An account's own `permissions`, NULL by default, take the place of `LoginComplete.Permissions` for its wizards from their next entry, in MSG_LOGINCOMPLETE and in the name behavior's `m_chatPermissions`.
 
 ### Modules
 
@@ -478,6 +478,7 @@ Settled on 2026-09-25 in milestone 5.03, from the r806919 client's own code.
 - Positions and facings travel the way the client's MoveBehavior packs them (`PackPositionOrientation` at 0x1416a36a0, `UnpackPositionOrientation` at 0x1416a37f0): a coordinate is multiplied by 0.25 and truncated to a signed 16-bit value and read back times 4, and a facing is multiplied by 40, keeping the low byte, and read back times 0.025, so a byte holds a facing in 1/40-radian steps. `MovementPacking` follows it; the rounding and 256-steps-per-turn facing it had before were not the client's.
 - The client stamps every MSG_CLIENTMOVE with its zone counter (`GameClient` + 0x21650), which it sets to 0 when it sends MSG_ATTACH and changes only when MSG_UPDATEZONECOUNTER or a zone transfer gives it a new one, and it sends moves only while its zone is loaded. So a session's counter starts at 0, and a move under any other counter was sent before a transfer and is ignored.
 - `PlayerMovement` keeps where the wizard stands from its moves, and the position is written to its character row when it leaves the world, under the next revision of that row, as Saving settles.
+- A teleport within a zone, added in 6.06, packs the place the same way and sends MSG_SERVERTELEPORT, LocationX, LocationY, LocationZ, Direction and the wizard's MobileID, to the wizard and to every wizard in its zone instance, so its client snaps there with no loading screen and the others see it appear there; the place is kept as if the wizard had moved there, so it is saved like a move. A place a 16-bit value cannot carry, beyond -131072 to 131068 on any axis, is refused before anything is sent. The places are the zone's own locations, such as Start, and the `game_tele` points of the world database, which `.tele add` and `.tele del` change through the world edit journal and `.reload game_tele` reads again, keeping the points it had when a row is bad.
 
 ### Chat and emotes
 
