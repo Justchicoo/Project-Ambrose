@@ -20,11 +20,13 @@
 #include "PlayerSpellbook.h"
 #include "PlayerStats.h"
 #include "SessionBase.h"
+#include "VisibilitySet.h"
 #include "ZoneTransferQueue.h"
 #include "ZoneTriggerMgr.h"
 
 #include <atomic>
 #include <chrono>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -33,6 +35,7 @@
 #include <utility>
 #include <vector>
 
+class InstanceSight;
 struct ChatSpeaker;
 
 struct WorldDeparture
@@ -106,6 +109,10 @@ public:
     bool TakeArrival() noexcept;
     std::optional<WorldDeparture> TakeDeparture() noexcept;
     void ShowPlayer(GameSession const& other);
+    VisibilityChanges UpdateSight(Map const& map, InstanceSight const& sight, std::map<uint64, GameSession const*> const& wizards);
+    bool Sees(uint64 id) const { return _sight.IsVisible(id); }
+    void ForgetSight(uint64 id);
+    static VisibilityRange SightRangeOf(Map const& map);
     void ShowZombiePlayer(GameSession const& other);
     void HidePlayer(uint64 worldGuid);
     void ShowWizBangOf(uint64 worldGuid, uint32 wizBangId);
@@ -164,7 +171,6 @@ private:
     SQLOperation::CompletionHandler MakeCompletionHandler();
     void Diagnose(LoginKeyClaim claim, int64 now);
     void AcceptAttach(LoginKeyClaim const& claim);
-    void SendMapObjects(Map const& map);
     void RefuseAttach(LoginKeyClaim const& claim, LoginKeyVerdict verdict);
     void LoadAccount(LoginKeyClaim const& claim);
     void LoadCharacter(LoginKeyClaim const& claim);
@@ -190,6 +196,7 @@ private:
     ZoneTransferQueue _transfers;
     std::optional<GameMessages::ServerTransfer> _lastTransfer;
     std::shared_ptr<ZoneTriggerData const> _volumeData;
+    VisibilitySet _sight;
     std::vector<VolumePresence> _volumePresence;
     std::atomic<uint64> _accountId{ 0 };
     std::atomic<uint64> _characterId{ 0 };
