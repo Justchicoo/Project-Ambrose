@@ -81,6 +81,21 @@ void ItemTemplateFixtures::Write(std::filesystem::path const& gameData, float ha
     EXPECT_EQ(effect->Set("m_effectName", std::string("MaxHealth")), PropertySetResult::Ok);
     effects.emplace_back(std::move(effect));
     EXPECT_EQ(robeItem->Set("m_equipEffects", std::move(effects)), PropertySetResult::Ok);
+    PropertyObjectPtr requirement = Create(robe == Robe::UnknownRequirement ? UnknownRequirement : "class ReqMagicLevel");
+    if (robe == Robe::UnknownRequirement)
+    {
+        EXPECT_EQ(requirement->Set("m_badgeName", std::string("Ice Elemental")), PropertySetResult::Ok);
+    }
+    else
+    {
+        EXPECT_EQ(requirement->Set("m_level", int32{ 5 }), PropertySetResult::Ok);
+    }
+    PropertyValue::List requirements;
+    requirements.emplace_back(std::move(requirement));
+    PropertyObjectPtr list = Create("class RequirementList");
+    EXPECT_EQ(list->Set("m_operator", int64{ 1 }), PropertySetResult::Ok);
+    EXPECT_EQ(list->Set("m_requirements", std::move(requirements)), PropertySetResult::Ok);
+    EXPECT_EQ(robeItem->Set("m_equipRequirements", std::move(list)), PropertySetResult::Ok);
 
     PropertyObjectPtr npc = Create("class GameObjectTemplate");
     EXPECT_EQ(npc->Set("m_objectName", std::string("WC-RAV-NPC06")), PropertySetResult::Ok);

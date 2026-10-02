@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The typed record of one item template the user's install holds, any template whose class is or derives from WizItemTemplate: its id, class and file, its object name, display key, object type and adjectives as a game object template carries them, and its school, base cost, rank, item limit, set bonus and color counts. A template whose fields hold an object of a class the type dump does not list is refused, naming the class hash and where it sits, while one in its behaviors keeps its place and is counted, as every template's behaviors are.
+ * The typed record of one item template the user's install holds, any template whose class is or derives from WizItemTemplate: its id, class and file, its object name, display key, object type and adjectives as a game object template carries them, and its school, base cost, rank, item limit, set bonus and color counts, and its equip and purchase requirement lists and equip effects, each requirement and effect kept as the object it decoded to with its class. A template whose fields hold an object of a class the type dump does not list is refused, naming the class hash and where it sits, while one in its behaviors keeps its place and is counted, as every template's behaviors are.
  */
 
 #ifndef AMBROSE_ITEMTEMPLATERECORD_H
@@ -9,6 +9,7 @@
 #include "Types.h"
 
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -16,6 +17,20 @@
 
 class PropertyObject;
 struct DecodeIssue;
+
+struct ItemTemplatePart
+{
+    std::string ClassName;
+    uint32 ClassHash = 0;
+    std::shared_ptr<PropertyObject const> Object;
+};
+
+struct ItemRequirementList
+{
+    bool ApplyNot = false;
+    int64 Operator = 0;
+    std::vector<ItemTemplatePart> Requirements;
+};
 
 struct ItemTemplateRecord
 {
@@ -35,6 +50,9 @@ struct ItemTemplateRecord
     uint32 ItemSetBonusTemplateId = 0;
     std::optional<int64> NumPrimaryColors;
     std::optional<int64> NumSecondaryColors;
+    std::optional<ItemRequirementList> EquipRequirements;
+    std::optional<ItemRequirementList> PurchaseRequirements;
+    std::vector<ItemTemplatePart> EquipEffects;
     std::size_t UnknownBehaviors = 0;
 
     static bool IsItem(PropertyObject const& object) noexcept;

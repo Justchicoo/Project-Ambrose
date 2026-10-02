@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the item manager on an install the test builds through a type dump it writes: every template under ObjectData/ whose class is a WizItemTemplate becomes an item record with its names, adjectives, school, cost, rank, limit, set bonus and colors, and no other template does; items are found by id, by object name whatever its case and by either as a command gives it; a behavior of a class the dump lacks is counted, not refused; an edited item applies on reload under a new generation; and a reload that meets an item whose equip effect is of a class the dump lacks keeps the set serving and names the class hash.
+ * Tests the item manager on an install the test builds through a type dump it writes: every template under ObjectData/ whose class is a WizItemTemplate becomes an item record with its names, adjectives, school, cost, rank, limit, set bonus and colors, and no other template does; items are found by id, by object name whatever its case and by either as a command gives it; a behavior of a class the dump lacks is counted, not refused; an edited item applies on reload under a new generation; and a reload that meets an item whose equip effect or requirement is of a class the dump lacks keeps the set serving and names the class hash; an item keeps its requirement list and equip effects.
  */
 
 #include "ItemMgr.h"
@@ -36,7 +36,7 @@ namespace
         void SetUp() override
         {
             for (ViewDefinition const* view : { &TemplateManifestView::Definition, &TemplateLocationView::Definition, &CoreTemplateView::Definition,
-                     &GameObjectTemplateView::Definition, &WizItemTemplateView::Definition })
+                     &GameObjectTemplateView::Definition, &WizItemTemplateView::Definition, &RequirementListView::Definition })
                 _views.Add(*view);
             sReloadMgr.Clear();
             sObjectTemplateMgr.Clear();
@@ -106,6 +106,11 @@ TEST_F(ItemMgrTest, EveryItemTemplateUnderObjectDataBecomesARecordAndNoOtherTemp
     EXPECT_EQ(robe->ItemSetBonusTemplateId, 42u);
     EXPECT_EQ(robe->ItemLimit, 1);
     EXPECT_EQ(robe->UnknownBehaviors, 1u) << "a behavior of a class the dump lacks is counted and the item still loads";
+    ASSERT_TRUE(robe->EquipRequirements.has_value());
+    ASSERT_EQ(robe->EquipRequirements->Requirements.size(), 1u);
+    EXPECT_EQ(robe->EquipRequirements->Requirements.front().ClassName, "class ReqMagicLevel");
+    ASSERT_EQ(robe->EquipEffects.size(), 1u);
+    EXPECT_EQ(robe->EquipEffects.front().ClassName, "class GameEffectInfo");
     EXPECT_EQ(items->CountUnknownBehaviors(), 1u);
     EXPECT_EQ(items->CountByClass().at("class WizItemTemplate"), 2u);
     EXPECT_GT(items->GetMemoryUsage(), 2 * sizeof(ItemTemplateRecord));
@@ -168,4 +173,19 @@ TEST_F(ItemMgrTest, NoInstallMeansNoItemsAndAnError)
     EXPECT_FALSE(none.Load(errors));
     EXPECT_TRUE(Holds(errors, "no Wizard101 install is in use"));
     EXPECT_EQ(none.GetItems()->Size(), 0u);
+}
+
+TEST_F(ItemMgrTest, AReloadThatMeetsAnEquipRequirementOfAClassTheDumpLacksKeepsTheSetServing)
+{
+    sObjectTemplateMgr.RegisterReloadTargets();
+    _items.RegisterReloadTargets();
+    ReloadOutcome const first = sReloadMgr.Reload(ItemMgr::Target);
+    ASSERT_TRUE(first.Ok) << first.Errors.front();
+
+    _fixtures.Write(GameData(), 990.0f, ItemTemplateFixtures::Robe::UnknownRequirement);
+    ASSERT_TRUE(sReloadMgr.Reload(ObjectTemplateMgr::ManifestTarget).Ok);
+    ReloadOutcome const broken = sReloadMgr.Reload(ItemMgr::Target);
+    EXPECT_FALSE(broken.Ok);
+    EXPECT_TRUE(Holds(broken.Errors, fmt::format("class hash {}", StringHash::KiStringHash(ItemTemplateFixtures::UnknownRequirement))));
+    EXPECT_FLOAT_EQ(_items.GetItems()->Find(ItemTemplateFixtures::HatId)->BaseCost, 125.0f);
 }

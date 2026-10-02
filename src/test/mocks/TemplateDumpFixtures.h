@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Builds type dumps and installs for tests of the managers that read templates from an install: the classes a manifest, a template, a spell with its effects and pip rank, a tiered spell with the file naming its group, the spellbook behavior with its spell trackers and a sigil with its circles and combat limits, and a game object and a wizard item template with its requirement list, equip effects and avatar info are made of, with a stat effect class a test can leave out of the dump that reads, written the way the client's own dump describes them, and an install folder whose Root.wad holds TemplateManifest.xml and the files it lists.
+ * Builds type dumps and installs for tests of the managers that read templates from an install: the classes a manifest, a template, a spell with its effects and pip rank, a tiered spell with the file naming its group, the spellbook behavior with its spell trackers and a sigil with its circles and combat limits, and a game object and a wizard item template with its requirement list, equip effects and avatar info are made of, with a stat effect class and a badge requirement class a test can leave out of the dump that reads, written the way the client's own dump describes them, and an install folder whose Root.wad holds TemplateManifest.xml and the files it lists.
  */
 
 #ifndef AMBROSE_TEMPLATEDUMPFIXTURES_H

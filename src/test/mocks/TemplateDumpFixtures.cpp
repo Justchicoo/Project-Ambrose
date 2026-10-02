@@ -198,7 +198,25 @@ namespace TemplateDumpFixtures
     {
         for (char const* name : { "enum ObjectType", "enum RarityType" })
             AddClass(classes, name, Json::array(), Json::object());
-        AddClass(classes, "class RequirementList", Json::array({ "PropertyClass" }), Json::object());
+        AddClass(classes, "enum Requirement::Operator", Json::array(), Json::object());
+        Json requirement = Json::object();
+        requirement["m_applyNOT"] = Property("bool", "m_applyNOT", 0);
+        requirement["m_operator"] = Enum("enum Requirement::Operator", "m_operator", 1, Json{ { "OPERATOR_AND", 0 }, { "OPERATOR_OR", 1 } });
+        AddClass(classes, "class Requirement", Json::array({ "PropertyClass" }), requirement);
+        Json level = requirement;
+        level["m_level"] = Property("int", "m_level", 2);
+        AddClass(classes, "class ReqMagicLevel", Json::array({ "Requirement", "PropertyClass" }), level);
+        if (withStatEffect)
+        {
+            Json badge = requirement;
+            badge["m_badgeName"] = Property("std::string", "m_badgeName", 2);
+            AddClass(classes, "class ReqHasBadge", Json::array({ "Requirement", "PropertyClass" }), badge);
+        }
+        Json list = Json::object();
+        list["m_applyNOT"] = Property("bool", "m_applyNOT", 0);
+        list["m_operator"] = Enum("enum Requirement::Operator", "m_operator", 1, Json{ { "OPERATOR_AND", 0 }, { "OPERATOR_OR", 1 } });
+        list["m_requirements"] = Property("class Requirement*", "m_requirements", 2, "List");
+        AddClass(classes, "class RequirementList", Json::array({ "PropertyClass" }), list);
         Json effect = Json::object();
         effect["m_effectName"] = Property("std::string", "m_effectName", 0);
         AddClass(classes, "class GameEffectInfo", Json::array({ "PropertyClass" }), effect);
