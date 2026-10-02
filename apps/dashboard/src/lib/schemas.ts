@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The shapes the panel accepts from the admin API, checked at the boundary with Valibot: the session, a sign-in that asks for a second factor, the operator's two-factor state, its setup secret, the recovery codes shown once, a step-up check and the refusal that asks for one, the app list with what the supervisor knows about each app, the status, the capabilities, the captured output, a power answer, the settings an app has loaded with their changes, batches, history and events, its databases with their update files, and the supervisor's file roots with their policies, a folder's listing, a window of a file and a root's protected patterns, each loose so a field a newer server adds is kept rather than refused, since these schemas only ever gain fields.
+ * The shapes the panel accepts from the admin API, checked at the boundary with Valibot: the session, a sign-in that asks for a second factor, the operator's two-factor state, its setup secret, the recovery codes shown once, a step-up check and the refusal that asks for one, the app list with what the supervisor knows about each app, the status, the capabilities, the captured output, a power answer with its operation and the panel's own power answer for an app, a realm or the stack, the settings an app has loaded with their changes, batches, history and events, its databases with their update files, and the supervisor's file roots with their policies, a folder's listing, a window of a file and a root's protected patterns, each loose so a field a newer server adds is kept rather than refused, since these schemas only ever gain fields.
  */
 
 import * as v from "valibot";
@@ -129,6 +129,20 @@ export const Supervision = v.looseObject({
     last_exit: v.nullable(AppExit),
     exits: v.array(AppExit),
     message: v.nullable(v.string()),
+    process_state: v.optional(v.string()),
+    disabled: v.optional(v.nullable(v.looseObject({ reason: v.string(), by: v.string(), epoch_ms: v.number() })), null),
+    held: v.optional(
+        v.nullable(
+            v.looseObject({
+                state: v.string(),
+                holder: v.string(),
+                operation: v.string(),
+                since: v.number(),
+                progress: v.nullable(v.string()),
+            }),
+        ),
+        null,
+    ),
 });
 
 export const AppEntry = v.looseObject({
@@ -220,6 +234,17 @@ export const PowerAnswer = v.looseObject({
     action: v.string(),
     seconds: v.number(),
     accepted: v.boolean(),
+    operation: v.optional(v.string()),
+    window: v.optional(v.nullable(v.string()), null),
+});
+
+export const PanelPowerAnswer = v.looseObject({
+    operation: v.string(),
+    target: v.looseObject({ kind: v.string(), name: v.nullable(v.string()) }),
+    action: v.string(),
+    apps: v.array(v.string()),
+    accepted: v.boolean(),
+    window: v.optional(v.nullable(v.string()), null),
 });
 
 export const SettingLock = v.looseObject({
@@ -495,6 +520,7 @@ export type Problem = v.InferOutput<typeof Problem>;
 export type Status = v.InferOutput<typeof Status>;
 export type Capabilities = v.InferOutput<typeof Capabilities>;
 export type Supervision = v.InferOutput<typeof Supervision>;
+export type PanelPowerAnswer = v.InferOutput<typeof PanelPowerAnswer>;
 export type AppExit = v.InferOutput<typeof AppExit>;
 export const ReloadTarget = v.looseObject({
     target: v.string(),

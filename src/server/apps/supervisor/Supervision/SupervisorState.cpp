@@ -38,6 +38,10 @@ std::string SupervisorState::ToJson(std::map<std::string, SavedApp, std::less<>>
         }
         else
             entry["process"] = nullptr;
+        if (app.Disabled)
+            entry["disabled"] = { { "reason", app.Disabled->Reason }, { "by", app.Disabled->By }, { "epoch_ms", app.Disabled->EpochMs } };
+        else
+            entry["disabled"] = nullptr;
         list[name] = std::move(entry);
     }
     nlohmann::json body;
@@ -81,6 +85,9 @@ std::optional<std::map<std::string, SavedApp, std::less<>>> SupervisorState::Fro
             if (identity.Id > 0)
                 app.Process = std::move(identity);
         }
+        auto const disabled = entry.find("disabled");
+        if (disabled != entry.end() && disabled->is_object())
+            app.Disabled = AppDisable{ disabled->value("reason", std::string()), disabled->value("by", std::string()), disabled->value("epoch_ms", int64{ 0 }) };
         apps.emplace(name, std::move(app));
     }
     return apps;

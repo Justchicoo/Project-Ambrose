@@ -176,6 +176,10 @@ namespace
                 "The least free space a volume must keep after any write the panel makes, as a share of the volume; the larger of this and Files.MinFreeBytes holds."),
             Unsigned("Files.ReadMaxBytes", "4194304", "65536", "67108864", "bytes", "Files", Supervisor, Live,
                 "The most of a file one read hands the panel; a file this size or smaller also carries its content hash, and a configuration file larger than this is not shown."),
+            Text("Power.ProtectedHours", "", "512", "Power", Supervisor, Live,
+                "Daily windows written HH:MM-HH:MM and separated by commas when a restart, an update or a migration is refused, a window may run past midnight, and an owner may override one with a reason; empty protects no hours."),
+            Text("Power.ProtectedHoursZone", "UTC", "64", "Power", Supervisor, Live,
+                "The time zone Power.ProtectedHours is read in, named as the time zone database names it, such as UTC or America/New_York."),
             Unsigned("Files.ListMaxEntries", "100000", "1000", "10000000", "entries", "Files", Supervisor, Live,
                 "The most entries a folder listing reads before it stops and says the folder held more."),
         };

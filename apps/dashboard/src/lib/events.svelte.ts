@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The panel's one socket client, on partysocket's reconnecting socket to the panel's own /api/panel/events with nothing in its address: it opens only while a panel session is signed in, says hello with the session's CSRF token before anything else, never queues a message while it is not open, and reconnects after anything but a malformed frame, an ended session or lost access. Every frame is read against the generated protocol and handed to the handler the table holds for its type, so a type the server can send with no handler here is a compile error and a failing contract test. Ready brings the permission snapshot and this run's instance, which throws away the sequences of an earlier run, and then resumes every followed stream after the last sequence it saw, while records it has already seen are skipped. A pong answers the client's own ping every twenty seconds and its absence reconnects, an error settles the request it names or is kept for the page, a dropped frame is kept as a gap for its stream, a status record updates the matching app in the live picture, and 4401 ends the session.
+ * The panel's one socket client, on partysocket's reconnecting socket to the panel's own /api/panel/events with nothing in its address: it opens only while a panel session is signed in, says hello with the session's CSRF token before anything else, never queues a message while it is not open, and reconnects after anything but a malformed frame, an ended session or lost access. Every frame is read against the generated protocol and handed to the handler the table holds for its type, so a type the server can send with no handler here is a compile error and a failing contract test. Ready brings the permission snapshot and this run's instance, which throws away the sequences of an earlier run, and then resumes every followed stream after the last sequence it saw, while records it has already seen are skipped. A pong answers the client's own ping every twenty seconds and its absence reconnects, an error settles the request it names or is kept for the page, a dropped frame is kept as a gap for its stream, a status record updates the matching app in the live picture, a power operation's acceptance, steps and result are kept for the pages that show them, and 4401 ends the session.
  */
 
 import ReconnectingWebSocket, { type CloseEvent } from "partysocket/ws";
@@ -42,6 +42,18 @@ export type Gap = {
     at: number;
 };
 
+export type PowerOperation = {
+    operation: string;
+    action: string;
+    target: { kind: string; name: string | null };
+    apps: string[];
+    steps: { app: string; step: string; outcome: string; message: string }[];
+    outcome: string | null;
+    message: string | null;
+};
+
+export const MaxOperations = 20;
+
 export type Followed = {
     stream: Stream;
     app: string | null;
@@ -79,7 +91,27 @@ export const events = $state({
     gaps: [] as Gap[],
     error: null as EventError | null,
     closedWith: 0,
+    operations: [] as PowerOperation[],
 });
+
+function operationOf(id: string): PowerOperation | undefined {
+    return events.operations.find((entry) => entry.operation === id);
+}
+
+export function runningFor(app: string): PowerOperation | undefined {
+    for (let index = events.operations.length - 1; index >= 0; index -= 1) {
+        const entry = events.operations[index];
+        if (entry.outcome === null && entry.apps.includes(app)) return entry;
+    }
+    return undefined;
+}
+
+export function latestStep(operation: PowerOperation | undefined, app: string): PowerOperation["steps"][number] | undefined {
+    if (!operation) return undefined;
+    for (let index = operation.steps.length - 1; index >= 0; index -= 1)
+        if (operation.steps[index].app === app) return operation.steps[index];
+    return undefined;
+}
 
 type Pending = {
     id: string;
@@ -216,6 +248,30 @@ export const handlers: Handlers = {
         entry.supervision.pid = data.pid;
         entry.supervision.crashes = data.crashes;
         entry.supervision.restart_epoch_ms = data.next_restart;
+    },
+    "power.accepted": (_frame, data) => {
+        if (operationOf(data.operation)) return;
+        events.operations = [
+            ...events.operations,
+            {
+                operation: data.operation,
+                action: data.action,
+                target: data.target,
+                apps: [...data.apps],
+                steps: [],
+                outcome: null,
+                message: null,
+            },
+        ].slice(-MaxOperations);
+    },
+    "power.progress": (_frame, data) => {
+        operationOf(data.operation)?.steps.push({ app: data.app, step: data.step, outcome: data.outcome, message: data.message });
+    },
+    "power.result": (_frame, data) => {
+        const entry = operationOf(data.operation);
+        if (!entry) return;
+        entry.outcome = data.outcome;
+        entry.message = data.message;
     },
     dropped: (frame, data) => {
         const app = frame.scope?.app ?? null;

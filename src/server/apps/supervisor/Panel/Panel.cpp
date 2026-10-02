@@ -1039,6 +1039,12 @@ std::string Panel::NameOf(AdminRequest const& request)
     return request.Principal;
 }
 
+bool Panel::IsOwner(AdminRequest const& request)
+{
+    std::optional<PanelUser> const user = UserOf(request);
+    return user && (user->IsOwner || user->Role == PanelRole::Owner);
+}
+
 void Panel::RecordReveal(AdminRequest const& request, std::string_view app, std::vector<std::string> const& keys)
 {
     if (keys.empty())

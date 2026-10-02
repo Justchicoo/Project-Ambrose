@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The servers page, live from the supervisor: every app with its state and the step a start is on, process, place, build, uptime and crash count, start, stop, restart and kill each with a countdown where one applies and a confirmation for the ones that end a run, and the output the supervisor captured for this run and the one before, which is what an app with its admin API off still shows, drawn as the four columns doc/DESIGN.md settles so a level, a category and a value each read apart from the words around them. Each power control is there only for an operator the server would let use it, hidden by the same permission it checks, so the page never offers what would come back refused. -->
+<!-- Project Ambrose by Imjustchico: The servers page, live from the supervisor: every app with its state and the step a start is on or the step of the power operation running on it, process, place, build, uptime and crash count, start, stop, restart and kill each with a countdown where one applies, a reason, a confirmation for the ones that end a run and, for an owner, an override of the protected hours, a restart of the whole stack, disabling an app with a reason and enabling it again, an app held in a protected state showing that state, who holds it and its progress in place of its controls, and the output the supervisor captured for this run and the one before, which is what an app with its admin API off still shows, drawn as the four columns doc/DESIGN.md settles so a level, a category and a value each read apart from the words around them. Each power control is there only for an operator the server would let use it, hidden by the same permission it checks, so the page never offers what would come back refused. -->
 <script lang="ts">
     import * as Card from "$lib/components/ui/card/index.js";
     import * as Dialog from "$lib/components/ui/dialog/index.js";
@@ -9,12 +9,27 @@
     import { Button } from "$lib/components/ui/button/index.js";
     import { Input } from "$lib/components/ui/input/index.js";
     import { Label } from "$lib/components/ui/label/index.js";
+    import { Switch } from "$lib/components/ui/switch/index.js";
     import { ApiError } from "$lib/api.svelte.js";
     import { formatUptime } from "$lib/format.js";
     import { live } from "$lib/status.svelte.js";
     import LogView from "$lib/components/LogView.svelte";
-    import { may } from "$lib/permission.svelte.js";
-    import { output, power, supervised, supervisorServes, type OutputRun, type PowerAction } from "$lib/supervision.svelte.js";
+    import { isOwner, may } from "$lib/permission.svelte.js";
+    import { latestStep, runningFor } from "$lib/events.svelte.js";
+    import {
+        disableApp,
+        enableApp,
+        heldBy,
+        output,
+        power,
+        powerTarget,
+        stateTone,
+        stateWord,
+        supervised,
+        supervisorServes,
+        type OutputRun,
+        type PowerAction,
+    } from "$lib/supervision.svelte.js";
     import type { AppEntry, OutputAnswer } from "$lib/schemas.js";
     import EllipsisIcon from "@lucide/svelte/icons/ellipsis";
     import PlayIcon from "@lucide/svelte/icons/play";
@@ -25,14 +40,6 @@
     import StatusBadge from "../components/StatusBadge.svelte";
 
     type Tone = "healthy" | "waiting" | "wrong" | "unknown";
-
-    const tones: Record<string, Tone> = {
-        running: "healthy",
-        starting: "waiting",
-        stopping: "waiting",
-        crashed: "wrong",
-        offline: "unknown",
-    };
 
     const words: Record<PowerAction, string> = { start: "Start", stop: "Stop", restart: "Restart", kill: "Kill" };
 
@@ -46,7 +53,14 @@
     let askApp = $state("");
     let askAction = $state<PowerAction>("stop");
     let askSeconds = $state("0");
+    let askReason = $state("");
+    let askOverride = $state(false);
+    let askStack = $state(false);
     let working = $state("");
+    let disabling = $state(false);
+    let disableApp_ = $state("");
+    let disableReason = $state("");
+    const owner = $derived(isOwner());
 
     const app = $derived(apps.find((entry) => entry.name === chosen) ?? apps[0]);
 
@@ -81,8 +95,7 @@
         const supervision = entry.supervision;
         if (!supervision) return { tone: "unknown", word: "Not supervised" };
         if (supervision.state === "crashed" && supervision.restart_epoch_ms) return { tone: "waiting", word: "Starting again" };
-        const word = supervision.state.charAt(0).toUpperCase() + supervision.state.slice(1);
-        return { tone: tones[supervision.state] ?? "unknown", word };
+        return { tone: stateTone(supervision.state), word: stateWord(supervision.state) };
     }
 
     function uptime(entry: AppEntry): string {
@@ -104,13 +117,28 @@
         askApp = name;
         askAction = action;
         askSeconds = "0";
+        askReason = "";
+        askOverride = false;
+        askStack = false;
         asking = true;
     }
 
-    async function send(name: string, action: PowerAction, seconds: number) {
+    function beginStack() {
+        askApp = "the stack";
+        askAction = "restart";
+        askSeconds = "0";
+        askReason = "";
+        askOverride = false;
+        askStack = true;
+        asking = true;
+    }
+
+    async function send(name: string, action: PowerAction, seconds: number, reason = "", override = false, stack = false) {
         working = `${name}:${action}`;
+        const extra = { ...(reason !== "" ? { reason } : {}), ...(override ? { override } : {}) };
         try {
-            await power(name, action, seconds);
+            if (stack) await powerTarget({ kind: "stack", name: null }, action, seconds, extra);
+            else await power(name, action, seconds, extra);
             toast(`${words[action]} ${name}`, {
                 description: seconds > 0 ? `The supervisor stops it after ${seconds} seconds.` : "The supervisor is carrying it out.",
             });
@@ -129,7 +157,36 @@
     function confirm() {
         const seconds = Number.parseInt(askSeconds, 10);
         asking = false;
-        void send(askApp, askAction, Number.isFinite(seconds) && seconds > 0 ? seconds : 0);
+        void send(askApp, askAction, Number.isFinite(seconds) && seconds > 0 ? seconds : 0, askReason.trim(), askOverride, askStack);
+    }
+
+    function beginDisable(name: string) {
+        disableApp_ = name;
+        disableReason = "";
+        disabling = true;
+    }
+
+    async function toggle(name: string, disable: boolean, reason = "") {
+        working = `${name}:${disable ? "disable" : "enable"}`;
+        try {
+            if (disable) await disableApp(name, reason);
+            else await enableApp(name);
+            toast(disable ? `${name} is disabled` : `${name} is enabled`, {
+                description: disable ? "It stops, and nothing starts it until it is enabled." : "It starts the next time it is asked to.",
+            });
+        } catch (failure) {
+            const problem = failure instanceof ApiError ? failure : null;
+            toast.error(`${disable ? "Disabling" : "Enabling"} ${name} was refused`, {
+                description: problem ? problem.message : "The supervisor did not answer",
+            });
+        } finally {
+            working = "";
+        }
+    }
+
+    function confirmDisable() {
+        disabling = false;
+        void toggle(disableApp_, true, disableReason.trim());
     }
 </script>
 
@@ -138,7 +195,13 @@
     description={served
         ? "Every app the supervisor runs on this machine, live."
         : "The app that served this panel. The supervisor runs the others."}
-/>
+>
+    {#snippet actions()}
+        {#if served && apps.length > 1 && apps.every((entry) => may("power.restart", entry.name))}
+            <Button variant="outline" disabled={working !== ""} onclick={beginStack}><RotateCcwIcon />Restart the stack</Button>
+        {/if}
+    {/snippet}
+</PageHeader>
 
 {#if !served}
     <Card.Root class="shadow-xs">
@@ -168,8 +231,15 @@
                 {#each apps as entry (entry.name)}
                     {@const shown = appearance(entry)}
                     {@const supervision = entry.supervision}
+                    {@const held = heldBy(supervision)}
+                    {@const operation = runningFor(entry.name)}
+                    {@const step = latestStep(operation, entry.name)}
                     {@const alive =
-                        supervision?.state === "running" || supervision?.state === "starting" || supervision?.state === "stopping"}
+                        supervision?.process_state !== undefined
+                            ? supervision.process_state === "running" ||
+                              supervision.process_state === "starting" ||
+                              supervision.process_state === "stopping"
+                            : supervision?.state === "running" || supervision?.state === "starting" || supervision?.state === "stopping"}
                     <Table.Row class={entry.name === app?.name ? "bg-muted/40" : ""}>
                         <Table.Cell class="pl-6">
                             <button class="text-left" onclick={() => (chosen = entry.name)}>
@@ -186,7 +256,15 @@
                                 >
                                     Now {supervision.start.stage}
                                 </div>{/if}
-                            {#if supervision?.message}<div class="mt-1 max-w-64 text-xs text-muted-foreground">
+                            {#if held}<div class="mt-1 max-w-64 text-xs text-muted-foreground">
+                                    For {held.holder}{held.progress ? `: ${held.progress}` : ""}
+                                </div>{:else if supervision?.disabled}<div class="mt-1 max-w-64 text-xs text-muted-foreground">
+                                    Disabled by {supervision.disabled.by}: {supervision.disabled.reason}
+                                </div>{:else if operation}<div class="mt-1 max-w-64 text-xs text-muted-foreground">
+                                    {words[operation.action as PowerAction] ?? operation.action} in progress{step
+                                        ? `: ${step.message}`
+                                        : ""}
+                                </div>{:else if supervision?.message}<div class="mt-1 max-w-64 text-xs text-muted-foreground">
                                     {supervision.message}
                                 </div>{/if}
                         </Table.Cell>
@@ -198,7 +276,18 @@
                         <Table.Cell class="hidden tabular-nums lg:table-cell">{supervision?.crashes ?? 0}</Table.Cell>
                         <Table.Cell class="pr-6">
                             <div class="flex items-center justify-end gap-2">
-                                {#if alive}
+                                {#if held}
+                                    <span class="text-xs text-muted-foreground">{stateWord(held.state)}, so power waits</span>
+                                {:else if supervision?.disabled}
+                                    {#if may("power.disable", entry.name)}
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={working !== ""}
+                                            onclick={() => void toggle(entry.name, false)}><PlayIcon />Enable</Button
+                                        >
+                                    {/if}
+                                {:else if alive}
                                     {#if may("power.restart", entry.name)}
                                         <Button
                                             size="sm"
@@ -235,9 +324,14 @@
                                     </DropdownMenu.Trigger>
                                     <DropdownMenu.Content align="end">
                                         <DropdownMenu.Item onclick={() => (chosen = entry.name)}>Show its output</DropdownMenu.Item>
-                                        <DropdownMenu.Item disabled={!alive} onclick={() => begin(entry.name, "kill")}
-                                            >Kill its process tree</DropdownMenu.Item
-                                        >
+                                        {#if !held}
+                                            <DropdownMenu.Item disabled={!alive} onclick={() => begin(entry.name, "kill")}
+                                                >Kill its process tree</DropdownMenu.Item
+                                            >
+                                        {/if}
+                                        {#if !held && !supervision?.disabled && may("power.disable", entry.name)}
+                                            <DropdownMenu.Item onclick={() => beginDisable(entry.name)}>Disable it</DropdownMenu.Item>
+                                        {/if}
                                     </DropdownMenu.Content>
                                 </DropdownMenu.Root>
                             </div>
@@ -321,9 +415,43 @@
                 </p>
             </div>
         {/if}
+        <div class="space-y-2">
+            <Label for="power-reason">Reason</Label>
+            <Input id="power-reason" maxlength={500} placeholder="Kept with the operation in the activity log" bind:value={askReason} />
+        </div>
+        {#if askAction === "restart" && owner}
+            <div class="flex items-center gap-3">
+                <Switch id="power-override" bind:checked={askOverride} />
+                <Label for="power-override" class="font-normal">Override the protected hours, which needs a reason</Label>
+            </div>
+        {/if}
         <Dialog.Footer>
             <Button variant="outline" onclick={() => (asking = false)}>Leave it</Button>
-            <Button variant={askAction === "kill" ? "destructive" : "default"} onclick={confirm}>{words[askAction]} it</Button>
+            <Button
+                variant={askAction === "kill" ? "destructive" : "default"}
+                disabled={askOverride && askReason.trim() === ""}
+                onclick={confirm}>{words[askAction]} it</Button
+            >
+        </Dialog.Footer>
+    </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={disabling}>
+    <Dialog.Content>
+        <Dialog.Header>
+            <Dialog.Title>Disable {disableApp_}?</Dialog.Title>
+            <Dialog.Description>
+                The supervisor stops it, and nothing starts it, not a person, a schedule or the supervisor's own restart, until it is
+                enabled again.
+            </Dialog.Description>
+        </Dialog.Header>
+        <div class="space-y-2">
+            <Label for="disable-reason">Reason</Label>
+            <Input id="disable-reason" maxlength={500} placeholder="Shown to everyone who sees the app" bind:value={disableReason} />
+        </div>
+        <Dialog.Footer>
+            <Button variant="outline" onclick={() => (disabling = false)}>Leave it</Button>
+            <Button variant="destructive" disabled={disableReason.trim() === ""} onclick={confirmDisable}>Disable it</Button>
         </Dialog.Footer>
     </Dialog.Content>
 </Dialog.Root>

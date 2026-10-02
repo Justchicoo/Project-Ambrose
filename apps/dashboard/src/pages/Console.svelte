@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The remote console shows app output and audited command results; recalled commands come from per-user, per-app history, and the UI displays only the server-redacted command description. Confirmation and running-state checks remain server-enforced. -->
+<!-- Project Ambrose by Imjustchico: The remote console shows app output and audited command results; recalled commands come from per-user, per-app history, and the UI displays only the server-redacted command description. While a restore, update, setup or move holds the app its state and progress replace the power controls and only an owner may type. Confirmation and running-state checks remain server-enforced. -->
 <script lang="ts">
     import * as Card from "$lib/components/ui/card/index.js";
     import * as Select from "$lib/components/ui/select/index.js";
@@ -20,24 +20,25 @@
     import { ApiError } from "$lib/api.svelte.js";
     import { formatUptime } from "$lib/format.js";
     import { live } from "$lib/status.svelte.js";
-    import { may } from "$lib/permission.svelte.js";
-    import { commandHistory, output as capturedOutput, runCommand, supervised } from "$lib/supervision.svelte.js";
+    import { isOwner, may } from "$lib/permission.svelte.js";
+    import {
+        commandHistory,
+        output as capturedOutput,
+        heldBy,
+        runCommand,
+        stateTone,
+        stateWord,
+        supervised,
+    } from "$lib/supervision.svelte.js";
     import type { AppEntry } from "$lib/schemas.js";
 
     type Line = { kind: "command" | "reply" | "status" | "refused" | "said" | "wrote"; text: string };
     type Tone = "healthy" | "waiting" | "wrong" | "unknown";
 
-    const tones: Record<string, Tone> = {
-        running: "healthy",
-        starting: "waiting",
-        stopping: "waiting",
-        crashed: "wrong",
-        offline: "unknown",
-    };
-
     const entries = $derived(supervised());
     const entry = $derived(entries.find((one) => one.name === focus.app) ?? entries[0]);
-    const mayType = $derived(may("console.write", entry?.name));
+    const held = $derived(heldBy(entry?.supervision));
+    const mayType = $derived(may("console.write", entry?.name) && (!held || isOwner()));
     const mayStart = $derived(may("power.start", entry?.name));
     const mayRestart = $derived(may("power.restart", entry?.name));
     const mayStop = $derived(may("power.stop", entry?.name));
@@ -46,10 +47,7 @@
         const supervision = one?.supervision;
         if (!supervision) return { tone: "unknown", word: "Not supervised" };
         if (supervision.state === "crashed" && supervision.restart_epoch_ms) return { tone: "waiting", word: "Starting again" };
-        return {
-            tone: tones[supervision.state] ?? "unknown",
-            word: supervision.state.charAt(0).toUpperCase() + supervision.state.slice(1),
-        };
+        return { tone: stateTone(supervision.state), word: stateWord(supervision.state) };
     }
 
     const app = $derived({
@@ -246,7 +244,13 @@
                 {#each entries as one (one.name)}<Select.Item value={one.name} label={one.name} />{/each}
             </Select.Content>
         </Select.Root>
-        {#if !app.running}
+        {#if held}
+            <span class="text-sm text-muted-foreground"
+                >{stateWord(held.state)} for {held.holder}{held.progress ? `: ${held.progress}` : ""}, so power waits</span
+            >
+        {:else if entry?.supervision?.state === "disabled"}
+            <span class="text-sm text-muted-foreground">Disabled, so it stays off until it is enabled on the Servers page</span>
+        {:else if !app.running}
             {#if mayStart}<Button onclick={() => requestPower("start", app.name)}><PlayIcon />Start</Button>{/if}
         {:else}
             {#if mayRestart}<Button variant="outline" onclick={() => requestPower("restart", app.name)}><RotateCcwIcon />Restart</Button

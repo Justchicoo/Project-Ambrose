@@ -32,6 +32,8 @@ function supervision(name: string, state: string, extra: Partial<Supervision> = 
         last_exit: null,
         exits: [],
         message: null,
+        disabled: null,
+        held: null,
         ...extra,
     };
 }

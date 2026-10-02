@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What the panel asks about one app: running a command on it, the supervisor's own routes for power, captured output and the file roots with their listings, reads and protected patterns, and the app's own routes for its status, settings with their changes, resets, batches and their previews, history and reveals, the events it announces, and databases, sent through the supervisor's relay when the supervisor served this panel and straight to the app when the app served it itself, so every page reads the same way whichever is in front of it. A page about something only some apps keep, such as the realm list the login server holds, asks each app once and offers only those that answer, because an app answering that it has no such page is not an app with an empty one; an app run without an admin API has no pages at all and is never offered, while one that is only stopped still is, so its page can say so.
+ * What the panel asks about one app: running a command on it, the supervisor's own routes for power with a reason and an owner's override of the protected hours, disabling and enabling, the panel's power for a realm or the whole stack, the words and tones every state reads as and the protected state that holds an app, captured output and the file roots with their listings, reads and protected patterns, and the app's own routes for its status, settings with their changes, resets, batches and their previews, history and reveals, the events it announces, and databases, sent through the supervisor's relay when the supervisor served this panel and straight to the app when the app served it itself, so every page reads the same way whichever is in front of it. A page about something only some apps keep, such as the realm list the login server holds, asks each app once and offers only those that answer, because an app answering that it has no such page is not an app with an empty one; an app run without an admin API has no pages at all and is never offered, while one that is only stopped still is, so its page can say so.
  */
 
 import { ApiError, request } from "./api.svelte";
@@ -22,6 +22,8 @@ import {
     PlayersAnswer,
     RealmsAnswer,
     PowerAnswer,
+    PanelPowerAnswer,
+    Supervision,
     ReloadAnswer,
     ReloadRunAnswer,
     SettingsAnswer,
@@ -91,8 +93,69 @@ export function pathFor(app: string, path: string): string {
     return app === servedBy() ? `api/${path}` : `api/apps/${app}/api/${path}`;
 }
 
-export function power(app: string, action: PowerAction, seconds = 0) {
-    return request("POST", `api/apps/${app}/power`, PowerAnswer, { action, seconds });
+export type PowerExtra = { reason?: string; override?: boolean };
+
+export type PowerTarget = { kind: "app" | "realm" | "stack"; name: string | null };
+
+export const protectedStates = ["setup", "updating", "restoring", "moving"] as const;
+
+const stateWords: Record<string, string> = {
+    offline: "Offline",
+    starting: "Starting",
+    running: "Running",
+    stopping: "Stopping",
+    crashed: "Crashed",
+    backoff: "Waiting to restart",
+    crash_loop: "Crash loop",
+    disabled: "Disabled",
+    setup: "Setting up",
+    updating: "Updating",
+    restoring: "Restoring",
+    moving: "Moving",
+};
+
+const stateTones: Record<string, "healthy" | "waiting" | "wrong" | "unknown"> = {
+    running: "healthy",
+    starting: "waiting",
+    stopping: "waiting",
+    backoff: "waiting",
+    setup: "waiting",
+    updating: "waiting",
+    restoring: "waiting",
+    moving: "waiting",
+    crashed: "wrong",
+    crash_loop: "wrong",
+    offline: "unknown",
+    disabled: "unknown",
+};
+
+export function stateWord(state: string): string {
+    return stateWords[state] ?? state.charAt(0).toUpperCase() + state.slice(1);
+}
+
+export function stateTone(state: string): "healthy" | "waiting" | "wrong" | "unknown" {
+    return stateTones[state] ?? "unknown";
+}
+
+export function heldBy(supervision: Supervision | null | undefined) {
+    if (!supervision?.held) return null;
+    return (protectedStates as readonly string[]).includes(supervision.held.state) ? supervision.held : null;
+}
+
+export function power(app: string, action: PowerAction, seconds = 0, extra: PowerExtra = {}) {
+    return request("POST", `api/apps/${app}/power`, PowerAnswer, { action, seconds, ...extra });
+}
+
+export function powerTarget(target: PowerTarget, action: PowerAction, seconds = 0, extra: PowerExtra = {}) {
+    return request("POST", "api/panel/power", PanelPowerAnswer, { target, action, seconds, ...extra });
+}
+
+export function disableApp(app: string, reason: string) {
+    return request("POST", `api/apps/${app}/disable`, Supervision, { reason });
+}
+
+export function enableApp(app: string) {
+    return request("POST", `api/apps/${app}/enable`, Supervision, {});
 }
 
 export function output(app: string, run: OutputRun, signal?: AbortSignal) {

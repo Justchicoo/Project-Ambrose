@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One app the supervisor runs: a controller thread of its own starts it with its config, its output going to the supervisor's files and its input a pipe, calls it ready when its admin API reports it running or, with the admin API off, when it prints its ready line, waits for as long as a start step the app reports, through that API or a start-step line, asked for, stops it by asking its admin API to shut down with the countdown, else by a shutdown line on its input, else by Ctrl+Break or SIGTERM to its group, interrupts it halfway through its stop timeout and ends its whole tree when the timeout passes, restarts it a second after it exits unexpectedly from running, records every exit with its code, saves its desired state and process identity whenever they change, and takes back the process an earlier supervisor started while that identity still matches. Every change of state passes through one place that stamps when the state began, and each change, or a change of its process, crash count or restart time within a state, reaches the status observer once and in order, from the controller thread and never under the app's own lock.
+ * One app the supervisor runs: a controller thread of its own starts it with its config, its output going to the supervisor's files and its input a pipe, calls it ready when its admin API reports it running or, with the admin API off, when it prints its ready line, waits for as long as a start step the app reports, through that API or a start-step line, asked for, stops it by asking its admin API to shut down with the countdown, else by a shutdown line on its input, else by Ctrl+Break or SIGTERM to its group, interrupts it halfway through its stop timeout and ends its whole tree when the timeout passes, restarts it a second after it exits unexpectedly from running, records every exit with its code, saves its desired state and process identity whenever they change, and takes back the process an earlier supervisor started while that identity still matches. Every change of state passes through one place that stamps when the state began, and each change, or a change of its process, crash count or restart time within a state, reaches the status observer once and in order, from the controller thread and never under the app's own lock. A disabled app stays down with who disabled it and why, saved with its state, until it is enabled, and a hold puts it in a protected state such as restoring with its holder and progress; the state it reports is the hold first, then disabled while it is down, then its process state, and a power action it would refuse is refused here with the code and sentence the panel shows.
  */
 
 #ifndef AMBROSE_MANAGEDAPP_H
@@ -34,7 +34,14 @@ enum class AppState : uint8
     Starting,
     Running,
     Stopping,
-    Crashed
+    Crashed,
+    Backoff,
+    CrashLoop,
+    Disabled,
+    Setup,
+    Updating,
+    Restoring,
+    Moving
 };
 
 enum class PowerAction : uint8
@@ -62,6 +69,15 @@ struct AppExit
     bool Requested = false;
     AppState During = AppState::Running;
     int64 UptimeMs = 0;
+};
+
+struct AppHold
+{
+    AppState State = AppState::Restoring;
+    std::string Holder;
+    std::string OperationId;
+    int64 SinceEpochMs = 0;
+    std::string Progress;
 };
 
 struct AppIdentity
@@ -102,6 +118,9 @@ struct AppSnapshot
     std::vector<AppExit> Exits;
     std::string Message;
     AppIdentity Identity;
+    std::string ConfiguredRealm;
+    std::optional<AppDisable> Disabled;
+    std::optional<AppHold> Held;
 };
 
 struct PowerResult
@@ -138,12 +157,21 @@ public:
     void SetStatusObserver(AppStatusObserver observer);
 
     PowerResult Power(PowerAction action, uint32 countdownSeconds);
+    PowerResult Check(PowerAction action) const;
+    PowerResult Disable(AppDisable disable);
+    PowerResult Enable();
+    void Hold(std::optional<AppHold> hold);
+    void HoldProgress(std::string progress);
     AppSnapshot Snapshot() const;
     std::vector<OutputLine> Output(OutputRun run, uint64 after) const;
     std::optional<AdminClient> GetAdminClient() const;
     AppDefinition const& GetDefinition() const noexcept { return _definition; }
 
     static std::string_view StateName(AppState state) noexcept;
+    static AppState Reported(AppSnapshot const& snapshot) noexcept;
+    static int64 ReportedSince(AppSnapshot const& snapshot) noexcept;
+    static bool IsProtected(AppState state) noexcept;
+    static std::string RealmOf(AppSnapshot const& snapshot);
     static std::string_view StopMethodName(StopMethod method) noexcept;
     static std::string_view ActionName(PowerAction action) noexcept;
     static std::optional<PowerAction> ParseAction(std::string_view text) noexcept;
@@ -156,11 +184,14 @@ private:
     {
         PowerAction Action = PowerAction::Start;
         uint32 Countdown = 0;
+        bool Refresh = false;
     };
 
     struct StatusMark
     {
         AppState State = AppState::Offline;
+        AppState Reported = AppState::Offline;
+        int64 ReportedSince = 0;
         std::optional<int64> ProcessId = {};
         uint32 Crashes = 0;
         int64 RestartEpochMs = 0;
@@ -169,6 +200,7 @@ private:
         bool operator==(StatusMark const&) const = default;
     };
 
+    PowerResult Refusal(PowerAction action) const;
     void Run();
     void EnterState(AppState state);
     void DeliverStatus();

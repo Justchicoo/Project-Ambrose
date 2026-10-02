@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The supervisor's saved state: each app's desired state and the identity and start time of the process it started, written whenever either changes to a file only this user can read, through a temporary file renamed over the old one so a crash never leaves half a file, and read back at start so running apps are adopted and apps meant to run are started.
+ * The supervisor's saved state: each app's desired state, whether it is disabled with the reason, who disabled it and when, and the identity and start time of the process it started, written whenever either changes to a file only this user can read, through a temporary file renamed over the old one so a crash never leaves half a file, and read back at start so running apps are adopted and apps meant to run are started.
  */
 
 #ifndef AMBROSE_SUPERVISORSTATE_H
@@ -16,11 +16,21 @@
 #include <string>
 #include <string_view>
 
+struct AppDisable
+{
+    std::string Reason;
+    std::string By;
+    int64 EpochMs = 0;
+
+    bool operator==(AppDisable const&) const = default;
+};
+
 struct SavedApp
 {
     bool WantRunning = false;
     std::optional<ChildProcessIdentity> Process;
     int64 StartedEpochMs = 0;
+    std::optional<AppDisable> Disabled;
 };
 
 class SupervisorState

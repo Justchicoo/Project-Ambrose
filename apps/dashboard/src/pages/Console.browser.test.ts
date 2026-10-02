@@ -48,6 +48,8 @@ function supervision(name: string): Supervision {
         last_exit: null,
         exits: [],
         message: null,
+        disabled: null,
+        held: null,
     };
 }
 

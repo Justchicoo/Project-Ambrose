@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps the apps behind a shared lock that only starting and stopping the supervisor takes alone, so a request always finds a whole list; the saved state and each app's output live under the data folder unless Supervisor.StateFile or Supervisor.OutputDir says otherwise; a power request names its action and, for a stop or restart, a countdown, and anything else in it is refused field by field; a relayed request keeps its method, path, query, body and request id, a settings request also names its caller and the rights they hold that the route can use, a settings batch pays its cost on the panel's limit first, and each relayed settings or reload answer is handed on to be recorded; and is let through only for a method and path whose permission the relay knows, the same one the app's own route asks for, so a caller who could not reach a route on the app cannot reach it through the supervisor and a path the relay does not know is answered as absent, each judged by the listener the request came in on, since the admin token on the supervisor's own API and a panel user's session on the panel are different callers; sessions stay the supervisor's own and are never relayed, and an app that is not running or has its admin API off is answered 503 with the reason. Each app is given the forwarder to the status observer before it starts watching, so the first state it enters is handed on too. A permission that is allowed is followed by the listener's own fresh-check rule before it is used, and a read that asks to reveal secrets by a caller who may see them, or a change naming a setting the declarations mark restricted by a caller who may change those, asks for a check every time, a dry run excepted since it changes nothing.
+ * Keeps the apps behind a shared lock that only starting and stopping the supervisor takes alone, so a request always finds a whole list; the saved state and each app's output live under the data folder unless Supervisor.StateFile or Supervisor.OutputDir says otherwise; a power request names its action and, for a stop or restart, a countdown, and anything else in it is refused field by field; a relayed request keeps its method, path, query, body and request id, a settings request also names its caller and the rights they hold that the route can use, a settings batch pays its cost on the panel's limit first, and each relayed settings or reload answer is handed on to be recorded; and is let through only for a method and path whose permission the relay knows, the same one the app's own route asks for, so a caller who could not reach a route on the app cannot reach it through the supervisor and a path the relay does not know is answered as absent, each judged by the listener the request came in on, since the admin token on the supervisor's own API and a panel user's session on the panel are different callers; sessions stay the supervisor's own and are never relayed, and an app that is not running or has its admin API off is answered 503 with the reason. Each app is given the forwarder to the status observer before it starts watching, so the first state it enters is handed on too. A permission that is allowed is followed by the listener's own fresh-check rule before it is used, and a read that asks to reveal secrets by a caller who may see them, or a change naming a setting the declarations mark restricted by a caller who may change those, asks for a check every time, a dry run excepted since it changes nothing. A power request may also carry a reason and an override, an override needs a reason and an owner, and the panel's power route checks the action's permission for every app its target reaches before any of them is touched; the protected hours are read again whenever they are set, and an app's status reports its protected or disabled state ahead of its process state with who holds or disabled it.
  */
 
 #include "Supervisor.h"
@@ -83,7 +83,9 @@ namespace
         body["name"] = snapshot.Name;
         body["program"] = ConfigMgr::PathToUtf8(snapshot.Program);
         body["config"] = ConfigMgr::PathToUtf8(snapshot.Config);
-        body["state"] = std::string(ManagedApp::StateName(snapshot.State));
+        body["state"] = std::string(ManagedApp::StateName(ManagedApp::Reported(snapshot)));
+        body["process_state"] = std::string(ManagedApp::StateName(snapshot.State));
+        body["since"] = OptionalNumber(ManagedApp::ReportedSince(snapshot));
         body["watching"] = snapshot.Watching;
         body["desired"] = snapshot.WantRunning ? "running" : "stopped";
         body["pid"] = snapshot.ProcessId ? nlohmann::json(*snapshot.ProcessId) : nlohmann::json(nullptr);
@@ -114,6 +116,16 @@ namespace
         body["last_exit"] = snapshot.Exits.empty() ? nlohmann::json(nullptr) : ExitJson(snapshot.Exits.back());
         body["exits"] = std::move(exits);
         body["message"] = TextOrNull(snapshot.Message);
+        body["realm"] = TextOrNull(ManagedApp::RealmOf(snapshot));
+        if (snapshot.Disabled)
+            body["disabled"] = { { "reason", snapshot.Disabled->Reason }, { "by", snapshot.Disabled->By }, { "epoch_ms", snapshot.Disabled->EpochMs } };
+        else
+            body["disabled"] = nullptr;
+        if (snapshot.Held)
+            body["held"] = { { "state", std::string(ManagedApp::StateName(snapshot.Held->State)) }, { "holder", snapshot.Held->Holder }, { "operation", snapshot.Held->OperationId },
+                { "since", snapshot.Held->SinceEpochMs }, { "progress", TextOrNull(snapshot.Held->Progress) } };
+        else
+            body["held"] = nullptr;
         return body;
     }
 
@@ -130,6 +142,10 @@ namespace
         }
         if (tail == "/api/command")
             return "app:console.command";
+        if (tail == "/disable")
+            return "app:power.disable";
+        if (tail == "/enable")
+            return "app:power.enable";
         if (tail == "/api/shutdown")
             return "app:power.stop";
         return "app:api.change";
@@ -190,11 +206,30 @@ bool Supervisor::Start(ConfigMgr const& config, SupervisorSettings const& settin
         apps.push_back(std::make_unique<ManagedApp>(std::move(definition), *state, settings.OutputFolder, settings.MaxOutputBytes, settings.DataFolder, _sendBreak, _log));
         apps.back()->SetStatusObserver([this](AppSnapshot const& snapshot) { ForwardStatus(snapshot); });
     }
+    std::vector<ManagedApp*> members;
+    for (std::unique_ptr<ManagedApp> const& app : apps)
+        members.push_back(app.get());
+    auto operations = std::make_unique<PowerOperations>(std::move(members));
+    operations->SetObservers(_powerHooks.Observers);
+    {
+        std::lock_guard<std::mutex> const hours(_hoursMutex);
+        if (_clock)
+            operations->SetClock(_clock);
+    }
     {
         std::unique_lock<std::shared_mutex> const lock(_mutex);
         _state = std::move(state);
         _apps = std::move(apps);
+        _operations = std::move(operations);
     }
+    std::string windows;
+    std::string zone;
+    {
+        std::lock_guard<std::mutex> const hours(_hoursMutex);
+        windows = _hoursWindows;
+        zone = _hoursZone;
+    }
+    SetProtectedHours(windows, zone);
     if (!watch)
         return true;
     std::shared_lock<std::shared_mutex> const lock(_mutex);
@@ -206,6 +241,8 @@ bool Supervisor::Start(ConfigMgr const& config, SupervisorSettings const& settin
 void Supervisor::Shutdown()
 {
     std::shared_lock<std::shared_mutex> const lock(_mutex);
+    if (_operations)
+        _operations->Shutdown();
     for (std::unique_ptr<ManagedApp> const& app : _apps)
         app->Shutdown();
 }
@@ -220,11 +257,101 @@ ManagedApp* Supervisor::Find(std::string_view name) const
 
 PowerResult Supervisor::Power(std::string_view name, PowerAction action, uint32 countdownSeconds)
 {
+    PowerAsk ask;
+    ask.Target = PowerTarget{ PowerTargetKind::App, std::string(name) };
+    ask.Action = action;
+    ask.Seconds = countdownSeconds;
+    ask.By = "console";
+    PowerBegun const begun = Begin(std::move(ask));
+    return { begun.Accepted, begun.Status, begun.Code, begun.Message };
+}
+
+PowerBegun Supervisor::Begin(PowerAsk ask)
+{
+    std::shared_lock<std::shared_mutex> const lock(_mutex);
+    if (!_operations)
+        return { false, 503, "not_watching", "The supervisor is not watching any app" };
+    return _operations->Begin(std::move(ask));
+}
+
+std::shared_ptr<OperationLease> Supervisor::Hold(std::string_view name, AppState state, std::string by, PowerBegun& refusal)
+{
+    std::shared_lock<std::shared_mutex> const lock(_mutex);
+    if (!_operations)
+    {
+        refusal = { false, 503, "not_watching", "The supervisor is not watching any app" };
+        return nullptr;
+    }
+    return _operations->Hold(name, state, std::move(by), refusal);
+}
+
+PowerResult Supervisor::Disable(std::string_view name, AppDisable disable)
+{
     std::shared_lock<std::shared_mutex> const lock(_mutex);
     ManagedApp* const app = Find(name);
     if (!app)
         return { false, 404, "unknown_app", fmt::format("The supervisor runs no app named {}", name) };
-    return app->Power(action, countdownSeconds);
+    if (_operations)
+        if (std::optional<OperationHolder> const holder = _operations->HolderOf(name))
+            return { false, 409, "locked", fmt::format("{} cannot be disabled while it is held by {}", name, PowerOperations::DescribeHolder(*holder)) };
+    return app->Disable(std::move(disable));
+}
+
+PowerResult Supervisor::Enable(std::string_view name)
+{
+    std::shared_lock<std::shared_mutex> const lock(_mutex);
+    ManagedApp* const app = Find(name);
+    if (!app)
+        return { false, 404, "unknown_app", fmt::format("The supervisor runs no app named {}", name) };
+    return app->Enable();
+}
+
+void Supervisor::SetPowerHooks(SupervisorPowerHooks hooks)
+{
+    std::shared_lock<std::shared_mutex> const lock(_mutex);
+    _powerHooks = std::move(hooks);
+    if (_operations)
+        _operations->SetObservers(_powerHooks.Observers);
+}
+
+void Supervisor::SetProtectedHours(std::string_view windows, std::string_view zone)
+{
+    std::string problem;
+    std::optional<ProtectedHours> hours = ProtectedHours::Parse(windows, zone, problem);
+    {
+        std::lock_guard<std::mutex> const lock(_hoursMutex);
+        _hoursWindows = std::string(windows);
+        _hoursZone = std::string(zone);
+    }
+    std::shared_lock<std::shared_mutex> const lock(_mutex);
+    if (!_operations)
+        return;
+    if (!hours)
+        AMBROSE_LOG(_log, LogLevel::Warn, "server.supervisor", "Restarts are refused until the protected hours can be read: {}", problem);
+    _operations->SetProtectedHours(std::move(hours), std::move(problem));
+}
+
+void Supervisor::SetClock(std::function<std::chrono::system_clock::time_point()> clock)
+{
+    {
+        std::lock_guard<std::mutex> const lock(_hoursMutex);
+        _clock = clock;
+    }
+    std::shared_lock<std::shared_mutex> const lock(_mutex);
+    if (_operations)
+        _operations->SetClock(std::move(clock));
+}
+
+AdminResponse Supervisor::Refusal(PowerBegun const& begun)
+{
+    nlohmann::json body;
+    body["error"] = begun.Code;
+    body["message"] = begun.Message;
+    if (begun.Holder)
+        body["holder"] = { { "operation", begun.Holder->Id }, { "action", begun.Holder->Action }, { "by", begun.Holder->By }, { "started_epoch_ms", begun.Holder->StartedEpochMs } };
+    if (!begun.Window.empty())
+        body["window"] = begun.Window;
+    return AdminResponse::Json(begun.Status, body.dump());
 }
 
 std::vector<AppSnapshot> Supervisor::Snapshots() const
@@ -334,6 +461,8 @@ void Supervisor::Register(AdminRouter& router, std::function<AdminStatusSnapshot
         }
         if (tail == "/output/current" || tail == "/output/previous")
             return std::string("console.read");
+        if (tail == "/disable" || tail == "/enable")
+            return std::string("power.disable");
         if (std::optional<std::string_view> const required = PermissionFor(Ambrose::ToUpper(request.Method), tail))
             return std::string(*required);
         return std::string("status.read");
@@ -487,6 +616,12 @@ AdminResponse Supervisor::AnswerCore(AdminRequest const& request, AdminRouter co
             return only("POST");
         return PowerRoute(*app, request, router);
     }
+    if (tail == "/disable" || tail == "/enable")
+    {
+        if (method != "POST")
+            return only("POST");
+        return DisableRoute(*app, request, router, tail == "/disable");
+    }
     if (tail == "/output/current" || tail == "/output/previous")
     {
         if (std::optional<AdminResponse> refused = Refuse(request, "console.read", router))
@@ -537,13 +672,61 @@ std::string Supervisor::StatusData(AppSnapshot const& snapshot)
     bool const alive = snapshot.State == AppState::Starting || snapshot.State == AppState::Running || snapshot.State == AppState::Stopping;
     nlohmann::json data;
     data["app"] = snapshot.Name;
-    data["state"] = std::string(ManagedApp::StateName(snapshot.State));
-    data["since"] = snapshot.StateSinceEpochMs;
+    data["state"] = std::string(ManagedApp::StateName(ManagedApp::Reported(snapshot)));
+    data["since"] = ManagedApp::ReportedSince(snapshot);
     data["pid"] = snapshot.ProcessId ? nlohmann::json(*snapshot.ProcessId) : nlohmann::json(nullptr);
     data["exit_code"] = !alive && !snapshot.Exits.empty() && snapshot.Exits.back().Code ? nlohmann::json(*snapshot.Exits.back().Code) : nlohmann::json(nullptr);
     data["crashes"] = snapshot.Crashes;
     data["next_restart"] = OptionalNumber(snapshot.RestartEpochMs);
     return data.dump();
+}
+
+namespace
+{
+    nlohmann::json OperationJson(PowerReport const& report)
+    {
+        nlohmann::json data;
+        data["operation"] = report.Operation;
+        data["request"] = TextOrNull(report.Ask.RequestId);
+        data["target"] = { { "kind", std::string(PowerOperations::TargetKindName(report.Ask.Target.Kind)) }, { "name", TextOrNull(report.Ask.Target.Name) } };
+        data["action"] = std::string(ManagedApp::ActionName(report.Ask.Action));
+        data["apps"] = report.Apps;
+        return data;
+    }
+}
+
+std::string Supervisor::PowerAcceptedData(PowerReport const& report)
+{
+    nlohmann::json data = OperationJson(report);
+    data["seconds"] = report.Ask.Seconds;
+    data["reason"] = TextOrNull(report.Ask.Reason);
+    data["by"] = report.Ask.By;
+    data["window"] = TextOrNull(report.OverriddenWindow);
+    return data.dump();
+}
+
+std::string Supervisor::PowerProgressData(PowerStep const& step)
+{
+    nlohmann::json data;
+    data["operation"] = step.Operation;
+    data["app"] = step.App;
+    data["step"] = step.Step;
+    data["outcome"] = step.Outcome;
+    data["message"] = step.Message;
+    return data.dump();
+}
+
+std::string Supervisor::PowerResultData(PowerReport const& report)
+{
+    nlohmann::json data = OperationJson(report);
+    data["outcome"] = report.Succeeded ? "succeeded" : "failed";
+    data["message"] = report.Message;
+    return data.dump();
+}
+
+std::string Supervisor::PowerEventApp(PowerReport const& report)
+{
+    return report.Ask.Target.Kind == PowerTargetKind::App ? report.Ask.Target.Name : std::string();
 }
 
 std::vector<std::pair<std::string, std::string>> Supervisor::ForwardedHeaders(AdminRequest const& request, AdminRouter const& router, std::string_view method, std::string_view tail,
@@ -584,52 +767,206 @@ std::string Supervisor::QueryString(AdminRequest const& request)
     return query;
 }
 
+std::optional<AdminResponse> Supervisor::ReadAsk(AdminRequest const& request, nlohmann::json const& body, std::vector<std::pair<std::string, std::string>>& fields, PowerAsk& ask, bool target)
+{
+    for (auto const& [key, value] : body.items())
+        if (key != "action" && key != "seconds" && key != "reason" && key != "override" && (!target || key != "target"))
+            fields.emplace_back(key, target ? "A power request takes only target, action, seconds, reason and override" : "A power request takes only action, seconds, reason and override");
+    bool known = false;
+    if (auto const named = body.find("action"); named != body.end() && named->is_string())
+        if (std::optional<PowerAction> const parsed = ManagedApp::ParseAction(named->get<std::string>()))
+        {
+            ask.Action = *parsed;
+            known = true;
+        }
+    if (!known)
+        fields.emplace_back("action", "Name start, stop, restart or kill");
+    if (auto const countdown = body.find("seconds"); countdown != body.end())
+    {
+        if (!countdown->is_number_integer() || countdown->get<int64>() < 0 || countdown->get<int64>() > ManagedApp::MaxCountdownSeconds)
+            fields.emplace_back("seconds", fmt::format("Give the countdown in whole seconds from 0 to {}", ManagedApp::MaxCountdownSeconds));
+        else if (known && ask.Action != PowerAction::Stop && ask.Action != PowerAction::Restart && countdown->get<int64>() != 0)
+            fields.emplace_back("seconds", "Only a stop or a restart counts down");
+        else
+            ask.Seconds = static_cast<uint32>(countdown->get<int64>());
+    }
+    if (auto const reason = body.find("reason"); reason != body.end())
+    {
+        if (!reason->is_string() || reason->get_ref<std::string const&>().size() > MaxReasonBytes)
+            fields.emplace_back("reason", fmt::format("Give the reason as text of at most {} bytes", MaxReasonBytes));
+        else
+            ask.Reason = std::string(Ambrose::Trim(reason->get_ref<std::string const&>()));
+    }
+    if (auto const overriding = body.find("override"); overriding != body.end())
+    {
+        if (!overriding->is_boolean())
+            fields.emplace_back("override", "Give override as true or false");
+        else
+            ask.Override = overriding->get<bool>();
+    }
+    if (ask.Override && ask.Reason.empty())
+        fields.emplace_back("reason", "An override of the protected hours needs a reason");
+    if (target)
+    {
+        auto const named = body.find("target");
+        std::optional<PowerTargetKind> kind;
+        if (named != body.end() && named->is_object())
+        {
+            for (auto const& [key, value] : named->items())
+                if (key != "kind" && key != "name")
+                    fields.emplace_back("target." + key, "A target takes only kind and name");
+            if (auto const field = named->find("kind"); field != named->end() && field->is_string())
+                kind = PowerOperations::ParseTargetKind(field->get<std::string>());
+            if (kind)
+                ask.Target.Kind = *kind;
+            if (auto const field = named->find("name"); field != named->end() && field->is_string())
+                ask.Target.Name = field->get<std::string>();
+        }
+        if (!kind)
+            fields.emplace_back("target", "Name a target of kind app, realm or stack");
+        else if (*kind != PowerTargetKind::Stack && ask.Target.Name.empty())
+            fields.emplace_back("target.name", "Name the app or the realm");
+        else if (*kind == PowerTargetKind::Stack && !ask.Target.Name.empty())
+            fields.emplace_back("target.name", "The stack takes no name");
+    }
+    ask.By = _hooks.NameOf ? _hooks.NameOf(request) : request.Principal;
+    ask.ActorId = request.Principal;
+    ask.RequestId = request.Id;
+    if (ask.Override && fields.empty() && request.Principal != "token" && !(_powerHooks.IsOwner && _powerHooks.IsOwner(request)))
+        return AdminResponse::Problem(403, "owner_only", "Only an owner may override the protected hours");
+    return std::nullopt;
+}
+
 AdminResponse Supervisor::PowerRoute(ManagedApp& app, AdminRequest const& request, AdminRouter const& router)
 {
     nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
     if (!body.is_object())
         return AdminResponse::Invalid("A power request takes a JSON object", { { "action", "Name start, stop, restart or kill" } });
     std::vector<std::pair<std::string, std::string>> fields;
-    for (auto const& [key, value] : body.items())
-        if (key != "action" && key != "seconds")
-            fields.emplace_back(key, "A power request takes only action and seconds");
-    PowerAction action = PowerAction::Start;
-    bool known = false;
-    if (auto const named = body.find("action"); named != body.end() && named->is_string())
-    {
-        if (std::optional<PowerAction> const parsed = ManagedApp::ParseAction(named->get<std::string>()))
-        {
-            action = *parsed;
-            known = true;
-        }
-    }
-    if (!known)
-        fields.emplace_back("action", "Name start, stop, restart or kill");
-    uint32 seconds = 0;
-    auto const countdown = body.find("seconds");
-    if (countdown != body.end())
-    {
-        if (!countdown->is_number_integer() || countdown->get<int64>() < 0 || countdown->get<int64>() > ManagedApp::MaxCountdownSeconds)
-            fields.emplace_back("seconds", fmt::format("Give the countdown in whole seconds from 0 to {}", ManagedApp::MaxCountdownSeconds));
-        else if (known && action != PowerAction::Stop && action != PowerAction::Restart && countdown->get<int64>() != 0)
-            fields.emplace_back("seconds", "Only a stop or a restart counts down");
-        else
-            seconds = static_cast<uint32>(countdown->get<int64>());
-    }
+    PowerAsk ask;
+    ask.Target = PowerTarget{ PowerTargetKind::App, app.GetDefinition().Name };
+    std::optional<AdminResponse> owner = ReadAsk(request, body, fields, ask, false);
     if (!fields.empty())
         return AdminResponse::Invalid("The power request has problems", std::move(fields));
-    if (std::optional<AdminResponse> refused = Refuse(request, std::string("power.") + std::string(ManagedApp::ActionName(action)), router))
+    if (std::optional<AdminResponse> refused = Refuse(request, std::string("power.") + std::string(ManagedApp::ActionName(ask.Action)), router))
         return std::move(*refused);
-    PowerResult const result = app.Power(action, seconds);
-    if (!result.Accepted)
-        return AdminResponse::Problem(result.Status, result.Code, result.Message);
-    AMBROSE_LOG(_log, LogLevel::Info, "server.supervisor", "The admin API asked to {} {}{} (request {})", ManagedApp::ActionName(action), app.GetDefinition().Name,
-        seconds == 0 ? std::string() : fmt::format(" after {} s", seconds), request.Id);
+    if (owner)
+        return std::move(*owner);
+    PowerAction const action = ask.Action;
+    uint32 const seconds = ask.Seconds;
+    PowerBegun const begun = _operations->Begin(std::move(ask));
+    if (!begun.Accepted)
+        return Refusal(begun);
+    AMBROSE_LOG(_log, LogLevel::Info, "server.supervisor", "The admin API asked to {} {}{} as {} (request {})", ManagedApp::ActionName(action), app.GetDefinition().Name,
+        seconds == 0 ? std::string() : fmt::format(" after {} s", seconds), begun.Operation, request.Id);
     nlohmann::json answer;
     answer["app"] = app.GetDefinition().Name;
     answer["action"] = std::string(ManagedApp::ActionName(action));
     answer["seconds"] = seconds;
     answer["accepted"] = true;
+    answer["operation"] = begun.Operation;
+    answer["window"] = TextOrNull(begun.Window);
+    return AdminResponse::Json(202, answer.dump());
+}
+
+AdminResponse Supervisor::DisableRoute(ManagedApp& app, AdminRequest const& request, AdminRouter const& router, bool disable)
+{
+    if (std::optional<AdminResponse> refused = Refuse(request, "power.disable", router))
+        return std::move(*refused);
+    std::string const& name = app.GetDefinition().Name;
+    if (!disable)
+    {
+        PowerResult const result = app.Enable();
+        if (!result.Accepted)
+            return AdminResponse::Problem(result.Status, result.Code, result.Message);
+        AMBROSE_LOG(_log, LogLevel::Info, "server.supervisor", "{} enabled {} (request {})", _hooks.NameOf ? _hooks.NameOf(request) : request.Principal, name, request.Id);
+        return AdminResponse::Json(200, SnapshotJson(app.Snapshot()).dump());
+    }
+    nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
+    std::vector<std::pair<std::string, std::string>> fields;
+    std::string reason;
+    if (!body.is_object())
+        fields.emplace_back("reason", "Say why the app is disabled");
+    else
+    {
+        for (auto const& [key, value] : body.items())
+            if (key != "reason")
+                fields.emplace_back(key, "Disabling an app takes only a reason");
+        auto const given = body.find("reason");
+        if (given != body.end() && given->is_string())
+            reason = std::string(Ambrose::Trim(given->get_ref<std::string const&>()));
+        if (reason.empty() || reason.size() > MaxReasonBytes)
+            fields.emplace_back("reason", fmt::format("Say why the app is disabled, in at most {} bytes", MaxReasonBytes));
+    }
+    if (!fields.empty())
+        return AdminResponse::Invalid("The disable request has problems", std::move(fields));
+    if (_operations)
+        if (std::optional<OperationHolder> const holder = _operations->HolderOf(name))
+            return AdminResponse::Problem(409, "locked", fmt::format("{} cannot be disabled while it is held by {}", name, PowerOperations::DescribeHolder(*holder)));
+    std::string const by = _hooks.NameOf ? _hooks.NameOf(request) : request.Principal;
+    int64 const now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    PowerResult const result = app.Disable(AppDisable{ reason, by, now });
+    if (!result.Accepted)
+        return AdminResponse::Problem(result.Status, result.Code, result.Message);
+    AMBROSE_LOG(_log, LogLevel::Info, "server.supervisor", "{} disabled {}: {} (request {})", by, name, reason, request.Id);
+    return AdminResponse::Json(200, SnapshotJson(app.Snapshot()).dump());
+}
+
+void Supervisor::RegisterPanelPower(AdminRouter& router)
+{
+    router.AddOpen("POST", "/api/panel/power", [this, &router](AdminRequest const& request)
+    {
+        nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
+        std::string action = "app:power.refused";
+        if (body.is_object())
+            if (auto const named = body.find("action"); named != body.end() && named->is_string())
+                if (std::optional<PowerAction> const parsed = ManagedApp::ParseAction(named->get<std::string>()))
+                    action = "app:power." + std::string(ManagedApp::ActionName(*parsed));
+        return Audited(request, {}, action, [this, &request, &router] { return PanelPowerRoute(request, router); });
+    });
+}
+
+AdminResponse Supervisor::PanelPowerRoute(AdminRequest const& request, AdminRouter const& router)
+{
+    nlohmann::json const body = nlohmann::json::parse(request.Body, nullptr, false);
+    if (!body.is_object())
+        return AdminResponse::Invalid("A power request takes a JSON object", { { "target", "Name a target of kind app, realm or stack" } });
+    std::vector<std::pair<std::string, std::string>> fields;
+    PowerAsk ask;
+    std::optional<AdminResponse> owner = ReadAsk(request, body, fields, ask, true);
+    if (!fields.empty())
+        return AdminResponse::Invalid("The power request has problems", std::move(fields));
+    std::shared_lock<std::shared_mutex> const lock(_mutex);
+    if (!_operations)
+        return AdminResponse::Problem(503, "not_watching", "The supervisor is not watching any app");
+    PowerBegun missing;
+    std::vector<std::string> const members = _operations->Members(ask.Target, missing);
+    std::string const permission = std::string("power.") + std::string(ManagedApp::ActionName(ask.Action));
+    for (std::string const& name : members)
+    {
+        AdminRequest scoped = request;
+        scoped.Path = fmt::format("/api/apps/{}/power", name);
+        if (std::optional<AdminResponse> refused = Refuse(scoped, permission, router))
+            return std::move(*refused);
+    }
+    if (members.empty())
+        return Refusal(missing);
+    if (owner)
+        return std::move(*owner);
+    PowerTarget const target = ask.Target;
+    PowerAction const action = ask.Action;
+    PowerBegun const begun = _operations->Begin(std::move(ask));
+    if (!begun.Accepted)
+        return Refusal(begun);
+    AMBROSE_LOG(_log, LogLevel::Info, "server.supervisor", "The panel asked to {} {} {} as {} (request {})", ManagedApp::ActionName(action), PowerOperations::TargetKindName(target.Kind),
+        target.Name, begun.Operation, request.Id);
+    nlohmann::json answer;
+    answer["operation"] = begun.Operation;
+    answer["target"] = { { "kind", std::string(PowerOperations::TargetKindName(target.Kind)) }, { "name", TextOrNull(target.Name) } };
+    answer["action"] = std::string(ManagedApp::ActionName(action));
+    answer["apps"] = begun.Apps;
+    answer["accepted"] = true;
+    answer["window"] = TextOrNull(begun.Window);
     return AdminResponse::Json(202, answer.dump());
 }
 

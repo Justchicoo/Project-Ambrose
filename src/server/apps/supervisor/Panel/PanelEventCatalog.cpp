@@ -121,6 +121,8 @@ namespace
 
     std::vector<PanelEventType> BuildTypes()
     {
+        std::vector<std::string_view> const actions{ "start", "stop", "restart", "kill" };
+        Shape const targetShape = ObjectOf({ Field("kind", TextShape({ "app", "realm", "stack" })), Field("name", NullableOf(TextShape())) });
         std::vector<std::string_view> const states{ "offline", "starting", "running", "stopping", "crashed", "backoff", "crash_loop", "disabled", "setup", "updating", "restoring", "moving" };
         return {
             Takes("hello", "", PanelEventGate::SignedIn, "", true, ObjectOf({ Field("version", WholeShape()), Maybe("csrf", TextShape()), Maybe("ticket", TextShape()) })),
@@ -159,9 +161,33 @@ namespace
                 Field("last", WholeShape()),
             })),
             Later("command.result", "", PanelEventGate::Sender, ""),
-            Later("power.accepted", "status", PanelEventGate::PermissionAndSender, "status.read"),
-            Later("power.progress", "status", PanelEventGate::PermissionAndSender, "status.read"),
-            Later("power.result", "status", PanelEventGate::PermissionAndSender, "status.read"),
+            Sends("power.accepted", "status", PanelEventGate::PermissionAndSender, "status.read", true, ObjectOf({
+                Field("operation", TextShape()),
+                Field("request", NullableOf(TextShape())),
+                Field("target", targetShape),
+                Field("action", TextShape(actions)),
+                Field("apps", ListOf(TextShape())),
+                Field("seconds", WholeShape()),
+                Field("reason", NullableOf(TextShape())),
+                Field("by", TextShape()),
+                Field("window", NullableOf(TextShape())),
+            })),
+            Sends("power.progress", "status", PanelEventGate::PermissionAndSender, "status.read", true, ObjectOf({
+                Field("operation", TextShape()),
+                Field("app", TextShape()),
+                Field("step", TextShape(actions)),
+                Field("outcome", TextShape({ "begun", "done", "skipped", "failed" })),
+                Field("message", TextShape()),
+            })),
+            Sends("power.result", "status", PanelEventGate::PermissionAndSender, "status.read", true, ObjectOf({
+                Field("operation", TextShape()),
+                Field("request", NullableOf(TextShape())),
+                Field("target", targetShape),
+                Field("action", TextShape(actions)),
+                Field("apps", ListOf(TextShape())),
+                Field("outcome", TextShape({ "succeeded", "failed" })),
+                Field("message", TextShape()),
+            })),
             Later("players", "players", PanelEventGate::Permission, "players.read"),
             Later("setup.output", "setup", PanelEventGate::Permission, "clientdata.read"),
             Later("setup.state", "setup", PanelEventGate::Permission, "clientdata.read"),

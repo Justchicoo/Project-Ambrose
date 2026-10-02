@@ -177,7 +177,7 @@ The catalog is one C++ table of groups, keys, descriptions, a structured danger 
 |---|---|---|
 | status | `status.read` (implicit for any member of a scope) | all |
 | console | `console.read`, `console.write`, `console.raw` (danger, owner-only by default: write to an app's standard input when its admin API is down) | app, realm, node, panel |
-| power | `power.start`, `power.stop`, `power.restart`, `power.kill` (danger: can lose unsaved character state) | app, realm, node, panel |
+| power | `power.start`, `power.stop`, `power.restart`, `power.kill` (danger: can lose unsaved character state), `power.disable` (disable and enable an app) | app, realm, node, panel |
 | launch | `launch.read`, `launch.edit` | app, node, panel |
 | network | `network.read`, `network.edit` (port allocations and listen addresses) | app, node, panel |
 | settings | `settings.read`, `settings.edit`, `settings.edit.restricted` (danger), `settings.secrets.read` (danger) | app, realm, cluster, panel |
@@ -452,6 +452,18 @@ Power actions (17.27) target one app, one realm (its gameservers), or the whole 
 - A graceful stop tries, in order: the admin API's shutdown with a countdown, `POST /api/shutdown` with `seconds` from 0 to 86400, which `cancel` withdraws, and which on the login server sends the 2.15 shutdown notice within `Login.ShutdownGrace` and on the gameserver saves characters and drains; `shutdown` on standard input when the admin API is unreachable; Ctrl+Break to the child's process group on Windows or SIGTERM on POSIX; and, after a per-app stop timeout above the app's own grace, ending the process tree through its job object or process group.
 - A restart offers now or with a countdown (17.59). Its confirmation shows the effect on players from the status API: players in world on that realm, sessions at character select, active patch downloads.
 - When a live setting or reload would make a restart unnecessary, the page says so, using the restart-required list from 17.10.
+
+### Power requests
+
+What 17.27 built:
+
+- `POST /api/apps/{name}/power` takes `{action, seconds, reason, override}`, and the panel's `POST /api/panel/power` also takes `target`: `{kind: "app", name}`, `{kind: "realm", name}` for that realm's gameservers, or `{kind: "stack"}`. Any other field is refused. The panel route checks `power.<action>` for every app the target reaches, scoped to that app, before any of them is touched, and the request is audited as `app:power.<action>`.
+- Accepted answers are 202 with `operation` (`op-` and 16 hex digits), the apps it covers and the window it overrode, if any. Refusals are JSON with `error`, `message`, and `holder` (`operation`, `action`, `by`, `started_epoch_ms`) when a lock or a hold is the reason: `locked` and `protected` (409), `disabled` (409, start and restart only), `protected_hours` (409, with `window`), `unknown_app`, `unknown_realm` and `empty_stack` (404), `owner_only` (403) and `stopping` (503). An app target also gets the app's own refusals, such as `already_running`.
+- A stack or realm stops gameservers first and starts the loginserver and the other apps before gameservers; a start stops at the first app that fails, and an app already in the asked state is reported as skipped. A restart of several apps stops them all, then starts them all.
+- `power.accepted`, `power.progress` (each app's step: `begun`, `done`, `skipped` or `failed`) and `power.result` (`succeeded` or `failed` with the reason) go out on the status stream, and the result is recorded as `app:power.result` with the reason and any overridden window.
+- Protected hours are the live settings `Power.ProtectedHours`, comma-separated `HH:MM-HH:MM` windows that may run past midnight, and `Power.ProtectedHoursZone`, an IANA zone defaulting to UTC. A restart inside a window is refused naming it. An owner passes with `override: true` and a reason; a scheduled restart never does. A window setting that cannot be read refuses restarts until it is fixed, unless an owner overrides.
+- `POST /api/apps/{name}/disable` with `{reason}` and `POST /api/apps/{name}/enable` need `power.disable` and are audited as `app:power.disable` and `app:power.enable`. Disabling stops the app and saves who disabled it, when and why with its state, so it survives a supervisor restart; crashes never restart it, and a start or restart is refused naming the reason until it is enabled. The supervisor console has `disable <app> <reason>` and `enable <app>`.
+- Each app's supervision carries `state` (the hold first, then `disabled` while it is down, then its process state), `process_state`, `since`, `realm`, `disabled` (`reason`, `by`, `epoch_ms`) and `held` (`state`, `holder`, `operation`, `since`, `progress`). Operations that hold an app (restore, update, setup, move) take the same lock through a lease that clears the hold when it ends. While an app is held the Servers and Console pages show its state, holder and progress in place of the power controls, and only an owner can type in its console.
 
 ### Crashes
 

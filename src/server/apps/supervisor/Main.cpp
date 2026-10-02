@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; with --panel-link or --panel-pair it only asks the supervisor already running for a sign-in link through its admin API and prints it; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel, the supervisor routes and the file roots on its admin API and the panel's listener alike, keeps its own live settings in the panel store when that is open and in config alone when it is not, hands a change of the minimum free space to the space guard, rebuilds the file roots on a configuration change, a reload of file_roots or a change of an owner's protected patterns, records relayed settings and reload answers, refused file paths and its own secret reveals in the panel's audit log, runs every relayed change inside a panel audit record while the panel store is open, as it runs them unrecorded by a panel that is off, and caps a relayed command at the level the caller's grants allow, the admin token keeping the top level, publishes every state an app passes through on the panel's status stream at that app's scope and gives the panel's event socket its list of apps, reloads the panel's own listener and its two-factor rules when a Panel option changes, offers apps, start, stop, restart and kill on its console with the panel's operators beside them, including the way back in for an operator who lost their authenticator and their recovery codes and the local and pairing links a desktop program signs in with, serves those links on its admin API behind its token, and leaves the apps running when it stops so the next start takes them back.
+ * Supervisor entry point: with --console-break and a process group it only sends Ctrl+Break to that group's console and exits, which is how it interrupts an app on Windows without leaving its own console; with --panel-link or --panel-pair it only asks the supervisor already running for a sign-in link through its admin API and prints it; otherwise it runs as an app of its own that starts, takes back and watches the apps Supervisor.Apps names, only checking their definitions and its saved state under --check so a check leaves no app running, serves the panel, the supervisor routes and the file roots on its admin API and the panel's listener alike, keeps its own live settings in the panel store when that is open and in config alone when it is not, hands a change of the minimum free space to the space guard, rebuilds the file roots on a configuration change, a reload of file_roots or a change of an owner's protected patterns, records relayed settings and reload answers, refused file paths and its own secret reveals in the panel's audit log, runs every relayed change inside a panel audit record while the panel store is open, as it runs them unrecorded by a panel that is off, and caps a relayed command at the level the caller's grants allow, the admin token keeping the top level, publishes every state an app passes through on the panel's status stream at that app's scope and gives the panel's event socket its list of apps, reloads the panel's own listener and its two-factor rules when a Panel option changes, offers apps, start, stop, restart and kill on its console with the panel's operators beside them, including the way back in for an operator who lost their authenticator and their recovery codes and the local and pairing links a desktop program signs in with, serves those links on its admin API behind its token, disables and enables an app with a reason, publishes every power operation's acceptance, steps and result on the status stream and records its result in the audit log, applies the protected hours whenever their settings change, and leaves the apps running when it stops so the next start takes them back.
  */
 
 #include "AdminCapabilities.h"
@@ -19,6 +19,7 @@
 #include "Log.h"
 #include "AppOptions.h"
 #include "Panel.h"
+#include "PanelAudit.h"
 #include "PanelCommands.h"
 #include "PanelLinkClient.h"
 #include "PublishedSampler.h"
@@ -197,6 +198,16 @@ namespace
             {
                 _panel.Events().Publish("status", "status", snapshot.Name, Supervisor::StatusData(snapshot), snapshot.Name);
             });
+            _supervisor.SetPowerHooks({ [this](AdminRequest const& request) { return _panel.IsOwner(request); },
+                { [this](PowerReport const& report)
+                    { _panel.Events().Publish("status", "power.accepted", Supervisor::PowerEventApp(report), Supervisor::PowerAcceptedData(report)); },
+                  [this](PowerStep const& step)
+                    { _panel.Events().Publish("status", "power.progress", step.App, Supervisor::PowerProgressData(step)); },
+                  [this](PowerReport const& report)
+                    {
+                        _panel.Events().Publish("status", "power.result", Supervisor::PowerEventApp(report), Supervisor::PowerResultData(report));
+                        RecordPowerResult(report);
+                    } } });
             _panel.SetAppSource([this]
             {
                 std::vector<std::string> names;
@@ -245,6 +256,7 @@ namespace
                 return _panel.CommandActorName(request);
             });
             _supervisor.Register(_panel.Routes(), [this] { return BuildStatus(); });
+            _supervisor.RegisterPanelPower(_panel.Routes());
             _files.Register(_panel.Routes());
             _panel.SetErrorSource([this]
             {
@@ -263,10 +275,13 @@ namespace
             else if (!StartSettings(_panel.LiveSettingStore()))
                 LOG_WARN("server.settings", "The supervisor's live settings resolve from its config alone until the panel store's settings can be read");
             _files.Tune();
+            ApplyProtectedHours();
             _settingsSubscription = sSettings.Subscribe([this](SettingChange const& change)
             {
                 if (change.Key.starts_with("Files.MinFree"))
                     _files.Tune();
+                if (change.Key.starts_with("Power.ProtectedHours"))
+                    ApplyProtectedHours();
             });
             std::vector<std::string> rootErrors;
             if (!RebuildRoots(rootErrors))
@@ -400,6 +415,34 @@ namespace
             return true;
         }
 
+        void ApplyProtectedHours()
+        {
+            _supervisor.SetProtectedHours(sSettings.Get<std::string>("Power.ProtectedHours"), sSettings.Get<std::string>("Power.ProtectedHoursZone"));
+        }
+
+        void RecordPowerResult(PowerReport const& report)
+        {
+            if (!_panel.IsStoreOpen())
+                return;
+            AuditEvent event;
+            event.EventId = PanelAudit::NewEventId();
+            event.Name = "app:power.result";
+            event.Actor = report.Ask.Origin == PowerOrigin::Schedule ? AuditActor::Schedule : report.Ask.ActorId == "token" ? AuditActor::Token : AuditActor::User;
+            event.ActorId = report.Ask.ActorId;
+            event.ActorName = report.Ask.By;
+            event.Result = report.Succeeded ? AuditResult::Succeeded : AuditResult::Failed;
+            if (!report.Succeeded)
+                event.Error = report.Message;
+            event.Reason = report.Ask.Reason;
+            event.Properties = Supervisor::PowerAcceptedData(report);
+            for (std::string const& app : report.Apps)
+                event.On("app", app, app);
+            std::string error;
+            AuditEvent const& recorded = event;
+            if (!_panel.Record(recorded, {}, error))
+                LOG_ERROR("server.supervisor", "The result of power operation {} could not be recorded: {}", report.Operation, error);
+        }
+
         void RegisterCommands()
         {
             PanelCommands::Register(Commands(), _panel);
@@ -412,7 +455,7 @@ namespace
                     if (apps.empty())
                         reply("The supervisor runs no app");
                     for (AppSnapshot const& app : apps)
-                        reply(fmt::format("{:<14}{:<10}{:<12}crashes {}{}", app.Name, ManagedApp::StateName(app.State), app.ProcessId ? fmt::format("process {}", *app.ProcessId) : std::string("-"), app.Crashes,
+                        reply(fmt::format("{:<14}{:<10}{:<12}crashes {}{}", app.Name, ManagedApp::StateName(ManagedApp::Reported(app)), app.ProcessId ? fmt::format("process {}", *app.ProcessId) : std::string("-"), app.Crashes,
                             app.Message.empty() ? std::string() : fmt::format("  {}", app.Message)));
                     return true;
                 } });
@@ -420,6 +463,26 @@ namespace
             RegisterPower("stop", "<app> [seconds]", "stop an app gracefully, now or after a countdown", PowerAction::Stop, true);
             RegisterPower("restart", "<app> [seconds]", "restart an app gracefully, now or after a countdown", PowerAction::Restart, true);
             RegisterPower("kill", "<app>", "end an app's whole process tree at once", PowerAction::Kill, false);
+            Commands().Register({ "disable", "<app> <reason>", "stop an app and refuse every start until it is enabled", false,
+                [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
+                {
+                    if (arguments.size() < 2)
+                        return false;
+                    std::string reason;
+                    for (std::size_t index = 1; index < arguments.size(); ++index)
+                        reason += (index == 1 ? "" : " ") + arguments[index];
+                    int64 const now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                    reply(_supervisor.Disable(arguments[0], AppDisable{ reason, "console", now }).Message);
+                    return true;
+                } });
+            Commands().Register({ "enable", "<app>", "let a disabled app start again", false,
+                [this](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
+                {
+                    if (arguments.size() != 1)
+                        return false;
+                    reply(_supervisor.Enable(arguments[0]).Message);
+                    return true;
+                } });
         }
 
         void RegisterPower(std::string name, std::string usage, std::string help, PowerAction action, bool countdown)

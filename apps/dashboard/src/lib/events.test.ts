@@ -149,6 +149,8 @@ function supervisedApp(): AppEntry {
             last_exit: null,
             exits: [],
             message: null,
+            disabled: null,
+            held: null,
         },
     };
 }

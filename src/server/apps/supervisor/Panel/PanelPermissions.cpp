@@ -29,6 +29,7 @@ namespace
             { "power", "power.stop", "Stop an app", false, false, false },
             { "power", "power.restart", "Restart an app", false, false, false },
             { "power", "power.kill", "End an app at once, which can lose unsaved character state", Danger, false, false },
+            { "power", "power.disable", "Disable an app so nothing starts it until it is enabled, and enable it again", false, false, false },
 
             { "launch", "launch.read", "See how an app is launched", false, false, false },
             { "launch", "launch.edit", "Change how an app is launched", false, false, false },

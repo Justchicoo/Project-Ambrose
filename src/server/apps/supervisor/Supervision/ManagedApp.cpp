@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs one app's controller: commands queue under a lock and run on the controller thread, which every tenth of a second reads the app's new output, notices its exit, looks for readiness while it starts and ends a start that runs past its timeout and past the time any step the app reported asked for, naming that step, escalates a stop that has not finished, and starts it again once a restart falls due; the app's admin API is found from the app's own config and token exactly as the app finds them, an adopted app with its admin API off counts as running at once because nothing else could say so, a process it would not take back is said so at the top of the run that replaces it, and a start that never became ready is recorded and not tried again until someone starts it. Every state is entered at the end of the locked section that set everything else about it, so the copy queued for the status observer is whole, and the queue is handed over after each step the controller takes, outside the app's lock, in the order the changes happened; Power only queues a command, so every change comes from the controller thread. A start that ends before it is ready says why in its message: the exit code and the first error line the app printed in that run, or its last line on standard error, so the panel shows the cause rather than only that it stopped.
+ * Runs one app's controller: commands queue under a lock and run on the controller thread, which every tenth of a second reads the app's new output, notices its exit, looks for readiness while it starts and ends a start that runs past its timeout and past the time any step the app reported asked for, naming that step, escalates a stop that has not finished, and starts it again once a restart falls due; the app's admin API is found from the app's own config and token exactly as the app finds them, an adopted app with its admin API off counts as running at once because nothing else could say so, a process it would not take back is said so at the top of the run that replaces it, and a start that never became ready is recorded and not tried again until someone starts it. Every state is entered at the end of the locked section that set everything else about it, so the copy queued for the status observer is whole, and the queue is handed over after each step the controller takes, outside the app's lock, in the order the changes happened; Power only queues a command, so every change comes from the controller thread. A start that ends before it is ready says why in its message: the exit code and the first error line the app printed in that run, or its last line on standard error, so the panel shows the cause rather than only that it stopped. A power action is refused first while a hold protects the app, naming the holder, then a start or restart while it is disabled, naming who disabled it and why; disabling queues a stop, a crash never restarts a disabled app, and enabling or a change of hold re-enters the current state so the reported state reaches the observer and the saved state at once.
  */
 
 #include "ManagedApp.h"
@@ -92,8 +92,47 @@ std::string_view ManagedApp::StateName(AppState state) noexcept
         case AppState::Running: return "running";
         case AppState::Stopping: return "stopping";
         case AppState::Crashed: return "crashed";
+        case AppState::Backoff: return "backoff";
+        case AppState::CrashLoop: return "crash_loop";
+        case AppState::Disabled: return "disabled";
+        case AppState::Setup: return "setup";
+        case AppState::Updating: return "updating";
+        case AppState::Restoring: return "restoring";
+        case AppState::Moving: return "moving";
     }
     return "offline";
+}
+
+bool ManagedApp::IsProtected(AppState state) noexcept
+{
+    return state == AppState::Setup || state == AppState::Updating || state == AppState::Restoring || state == AppState::Moving;
+}
+
+AppState ManagedApp::Reported(AppSnapshot const& snapshot) noexcept
+{
+    if (snapshot.Held)
+        return snapshot.Held->State;
+    if (snapshot.Disabled && (snapshot.State == AppState::Offline || snapshot.State == AppState::Crashed))
+        return AppState::Disabled;
+    return snapshot.State;
+}
+
+std::string ManagedApp::RealmOf(AppSnapshot const& snapshot)
+{
+    if (!snapshot.Identity.Realm.empty())
+        return snapshot.Identity.Realm;
+    if (snapshot.ConfiguredRealm.empty() && snapshot.ProgramName == "gameserver")
+        return "Ambrose";
+    return snapshot.ConfiguredRealm;
+}
+
+int64 ManagedApp::ReportedSince(AppSnapshot const& snapshot) noexcept
+{
+    if (snapshot.Held)
+        return snapshot.Held->SinceEpochMs;
+    if (Reported(snapshot) == AppState::Disabled)
+        return std::max(snapshot.Disabled->EpochMs, snapshot.StateSinceEpochMs);
+    return snapshot.StateSinceEpochMs;
 }
 
 std::string_view ManagedApp::StopMethodName(StopMethod method) noexcept
@@ -178,6 +217,7 @@ void ManagedApp::Save()
         std::lock_guard<std::mutex> const lock(_mutex);
         saved.WantRunning = _view.WantRunning;
         saved.StartedEpochMs = _view.StartedEpochMs;
+        saved.Disabled = _view.Disabled;
     }
     if (_process)
         saved.Process = _process.GetIdentity();
@@ -222,7 +262,7 @@ void ManagedApp::EnterState(AppState state)
     if (changed)
         _view.StateSinceEpochMs = NowEpochMs();
     _view.State = state;
-    StatusMark const mark{ state, _view.ProcessId, _view.Crashes, _view.RestartEpochMs, _view.Exits.size() };
+    StatusMark const mark{ state, Reported(_view), ReportedSince(_view), _view.ProcessId, _view.Crashes, _view.RestartEpochMs, _view.Exits.size() };
     if (!changed && _statusMark && *_statusMark == mark)
         return;
     _statusMark = mark;
@@ -282,7 +322,16 @@ void ManagedApp::Run()
 void ManagedApp::Begin()
 {
     std::optional<SavedApp> const saved = _state.Get(_definition.Name);
-    SetWantRunning(saved ? saved->WantRunning : _definition.Autostart);
+    std::string realm;
+    ConfigMgr config;
+    if (config.LoadInitial(_definition.Config).Succeeded())
+        realm = std::string(Ambrose::Trim(config.GetOption<std::string>("Realm.Name", "", true)));
+    {
+        std::lock_guard<std::mutex> const lock(_mutex);
+        _view.Disabled = saved ? saved->Disabled : std::nullopt;
+        _view.ConfiguredRealm = std::move(realm);
+    }
+    SetWantRunning(saved && saved->Disabled ? false : saved ? saved->WantRunning : _definition.Autostart);
     if (saved && saved->Process)
     {
         std::string error;
@@ -429,6 +478,15 @@ void ManagedApp::Launch()
 
 void ManagedApp::Handle(Command const& command)
 {
+    if (command.Refresh)
+    {
+        {
+            std::lock_guard<std::mutex> const lock(_mutex);
+            EnterState(_view.State);
+        }
+        Save();
+        return;
+    }
     bool const running = static_cast<bool>(_process);
     switch (command.Action)
     {
@@ -806,7 +864,7 @@ void ManagedApp::Step()
     if (_restartPending && Clock::now() >= _restartAt)
     {
         _restartPending = false;
-        if (!WantsRunning())
+        if (!WantsRunning() || Snapshot().Disabled)
             return;
         {
             std::lock_guard<std::mutex> const lock(_mutex);
@@ -817,12 +875,15 @@ void ManagedApp::Step()
     }
 }
 
-PowerResult ManagedApp::Power(PowerAction action, uint32 countdownSeconds)
+PowerResult ManagedApp::Refusal(PowerAction action) const
 {
-    std::lock_guard<std::mutex> const lock(_mutex);
     if (!_view.Watching)
         return { false, 503, "not_watching", fmt::format("The supervisor is not watching {}", _definition.Name) };
     bool const alive = _view.State == AppState::Starting || _view.State == AppState::Running || _view.State == AppState::Stopping;
+    if (_view.Held)
+        return { false, 409, "protected", fmt::format("{} is {} for {}, so it cannot {} until that ends", _definition.Name, StateName(_view.Held->State), _view.Held->Holder, ActionName(action)) };
+    if (_view.Disabled && (action == PowerAction::Start || action == PowerAction::Restart))
+        return { false, 409, "disabled", fmt::format("{} is disabled by {}: {}; enable it before it can start", _definition.Name, _view.Disabled->By, _view.Disabled->Reason) };
     if (action == PowerAction::Start && alive)
         return { false, 409, "already_running", fmt::format("{} is already {}", _definition.Name, StateName(_view.State)) };
     if (action == PowerAction::Stop && _view.State == AppState::Stopping)
@@ -831,9 +892,66 @@ PowerResult ManagedApp::Power(PowerAction action, uint32 countdownSeconds)
         return { false, 409, "already_stopped", fmt::format("{} is already {}", _definition.Name, StateName(_view.State)) };
     if (action == PowerAction::Kill && !alive)
         return { false, 409, "not_running", fmt::format("{} is not running", _definition.Name) };
+    return { true, 202, {}, {} };
+}
+
+PowerResult ManagedApp::Check(PowerAction action) const
+{
+    std::lock_guard<std::mutex> const lock(_mutex);
+    return Refusal(action);
+}
+
+PowerResult ManagedApp::Power(PowerAction action, uint32 countdownSeconds)
+{
+    std::lock_guard<std::mutex> const lock(_mutex);
+    if (PowerResult refused = Refusal(action); !refused.Accepted)
+        return refused;
     _commands.push_back(Command{ action, countdownSeconds });
     _wake.notify_all();
     return { true, 202, {}, fmt::format("{} {}: accepted", ActionName(action), _definition.Name) };
+}
+
+PowerResult ManagedApp::Disable(AppDisable disable)
+{
+    std::lock_guard<std::mutex> const lock(_mutex);
+    if (!_view.Watching)
+        return { false, 503, "not_watching", fmt::format("The supervisor is not watching {}", _definition.Name) };
+    if (_view.Held)
+        return { false, 409, "protected", fmt::format("{} is {} for {}, so it cannot be disabled until that ends", _definition.Name, StateName(_view.Held->State), _view.Held->Holder) };
+    if (_view.Disabled)
+        return { false, 409, "already_disabled", fmt::format("{} is already disabled by {}: {}", _definition.Name, _view.Disabled->By, _view.Disabled->Reason) };
+    _view.Disabled = std::move(disable);
+    _commands.push_back(Command{ PowerAction::Stop, 0, false });
+    _wake.notify_all();
+    return { true, 200, {}, fmt::format("{} is disabled", _definition.Name) };
+}
+
+PowerResult ManagedApp::Enable()
+{
+    std::lock_guard<std::mutex> const lock(_mutex);
+    if (!_view.Watching)
+        return { false, 503, "not_watching", fmt::format("The supervisor is not watching {}", _definition.Name) };
+    if (!_view.Disabled)
+        return { false, 409, "not_disabled", fmt::format("{} is not disabled", _definition.Name) };
+    _view.Disabled.reset();
+    _commands.push_back(Command{ PowerAction::Start, 0, true });
+    _wake.notify_all();
+    return { true, 200, {}, fmt::format("{} is enabled and starts when it is asked to", _definition.Name) };
+}
+
+void ManagedApp::Hold(std::optional<AppHold> hold)
+{
+    std::lock_guard<std::mutex> const lock(_mutex);
+    _view.Held = std::move(hold);
+    _commands.push_back(Command{ PowerAction::Start, 0, true });
+    _wake.notify_all();
+}
+
+void ManagedApp::HoldProgress(std::string progress)
+{
+    std::lock_guard<std::mutex> const lock(_mutex);
+    if (_view.Held)
+        _view.Held->Progress = std::move(progress);
 }
 
 AppSnapshot ManagedApp::Snapshot() const
