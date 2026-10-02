@@ -1,0 +1,28 @@
+{
+  "corpus": "c81-sql-duality",
+  "item": "C-81",
+  "obtained": "Every case file was run against a fresh database on mysql:8.0 (8.0.46) and mariadb:11 (11.8.9-MariaDB-ubu2404) containers on 2026-10-02, and each naming case was produced by running `python apps/ci/ci_sql.py --root <throwaway git tree> promote` on the same date.",
+  "servers": {
+    "mysql": { "image": "mysql:8.0", "version": "8.0.46" },
+    "mariadb": { "image": "mariadb:11", "version": "11.8.9-MariaDB-ubu2404" }
+  },
+  "cases": [
+    { "file": "cases/clean-create-table.sql", "kind": "clean", "mysql": { "verdict": "ok" }, "mariadb": { "verdict": "ok" } },
+    { "file": "cases/clean-insert-select.sql", "kind": "clean", "mysql": { "verdict": "ok" }, "mariadb": { "verdict": "ok" } },
+    { "file": "cases/clean-drop-table.sql", "kind": "clean", "mysql": { "verdict": "ok" }, "mariadb": { "verdict": "ok" } },
+    { "file": "cases/clean-utf8mb4-table.sql", "kind": "clean", "mysql": { "verdict": "ok" }, "mariadb": { "verdict": "ok" } },
+    { "file": "cases/syntax-error.sql", "kind": "syntax_error", "mysql": { "verdict": "error", "code": 1064 }, "mariadb": { "verdict": "error", "code": 1064 } },
+    { "file": "cases/mariadb-add-column-if-not-exists.sql", "kind": "mariadb_only", "mysql": { "verdict": "error", "code": 1064 }, "mariadb": { "verdict": "ok" } },
+    { "file": "cases/mariadb-drop-column-if-exists.sql", "kind": "mariadb_only", "mysql": { "verdict": "error", "code": 1064 }, "mariadb": { "verdict": "ok" } },
+    { "file": "cases/create-index-if-not-exists.sql", "kind": "mariadb_only", "mysql": { "verdict": "error", "code": 1064 }, "mariadb": { "verdict": "ok" } },
+    { "file": "cases/mysql-invisible-index.sql", "kind": "mysql_only", "mysql": { "verdict": "ok" }, "mariadb": { "verdict": "error", "code": 1064 } }
+  ],
+  "naming": [
+    { "pending": "rev_1759300000_doorways.sql", "existing": [], "date": "2026-10-02", "promoted": "2026_10_02_00.sql" },
+    { "pending": "rev_1759300001_more.sql", "existing": ["2026_10_02_00.sql"], "date": "2026-10-02", "promoted": "2026_10_02_01.sql" }
+  ],
+  "notes": [
+    "create-index-if-not-exists.sql was expected to pass on both servers from the contributor guidance, but MySQL 8.0.46 refuses CREATE INDEX IF NOT EXISTS with error 1064.",
+    "The utf8mb4_0900_ai_ci collation was tried as a MySQL-only case and removed because MariaDB 11.8.9 accepts it."
+  ]
+}
