@@ -194,6 +194,55 @@ namespace TemplateDumpFixtures
         AddClass(classes, "class CombatSigilTemplate", Json::array({ "SigilTemplate", "CoreTemplate", "PropertyClass" }), combat);
     }
 
+    void AddItemClasses(Json& classes, bool withStatEffect)
+    {
+        for (char const* name : { "enum ObjectType", "enum RarityType" })
+            AddClass(classes, name, Json::array(), Json::object());
+        AddClass(classes, "class RequirementList", Json::array({ "PropertyClass" }), Json::object());
+        Json effect = Json::object();
+        effect["m_effectName"] = Property("std::string", "m_effectName", 0);
+        AddClass(classes, "class GameEffectInfo", Json::array({ "PropertyClass" }), effect);
+        if (withStatEffect)
+        {
+            Json stat = effect;
+            stat["m_statBonus"] = Property("int", "m_statBonus", 1);
+            AddClass(classes, "class StatisticEffectInfo", Json::array({ "GameEffectInfo", "PropertyClass" }), stat);
+        }
+        AddClass(classes, "class AvatarItemInfoBase", Json::array({ "PropertyClass" }), Json::object());
+        Json object = Json::object();
+        object["m_behaviors"] = Property("class BehaviorTemplate*", "m_behaviors", 0, "List");
+        object["m_objectName"] = Property("std::string", "m_objectName", 1);
+        object["m_templateID"] = Property("unsigned int", "m_templateID", 2);
+        object["m_visualID"] = Property("unsigned int", "m_visualID", 3);
+        object["m_adjectiveList"] = Property("std::string", "m_adjectiveList", 4, "List");
+        object["m_exemptFromAOI"] = Property("bool", "m_exemptFromAOI", 5);
+        object["m_displayName"] = Property("std::string", "m_displayName", 6);
+        object["m_description"] = Property("std::string", "m_description", 7);
+        object["m_nObjectType"] = Enum("enum ObjectType", "m_nObjectType", 8, Json{ { "OBJECT_TYPE_UNKNOWN", 0 }, { "OBJECT_TYPE_NPC", 2 }, { "OBJECT_TYPE_HAT", 3 } });
+        object["m_sIcon"] = Property("std::string", "m_sIcon", 9);
+        AddClass(classes, "class GameObjectTemplate", Json::array({ "CoreTemplate", "PropertyClass" }), object);
+        Json item = object;
+        item["m_equipRequirements"] = Property("class RequirementList*", "m_equipRequirements", 10);
+        item["m_purchaseRequirements"] = Property("class RequirementList*", "m_purchaseRequirements", 11);
+        item["m_equipEffects"] = Property("class GameEffectInfo*", "m_equipEffects", 12, "List");
+        item["m_baseCost"] = Property("float", "m_baseCost", 13);
+        item["m_creditsCost"] = Property("float", "m_creditsCost", 14);
+        item["m_avatarInfo"] = Property("class AvatarItemInfoBase*", "m_avatarInfo", 15);
+        item["m_avatarFlags"] = Property("std::string", "m_avatarFlags", 16, "List");
+        item["m_itemLimit"] = Property("int", "m_itemLimit", 17);
+        item["m_holidayFlag"] = Property("std::string", "m_holidayFlag", 18);
+        item["m_itemSetBonusTemplateID"] = Property("unsigned int", "m_itemSetBonusTemplateID", 19);
+        item["m_school"] = Property("std::string", "m_school", 20);
+        item["m_arenaPointCost"] = Property("int", "m_arenaPointCost", 21);
+        item["m_pvpCurrencyCost"] = Property("int", "m_pvpCurrencyCost", 22);
+        item["m_pvpTourneyCurrencyCost"] = Property("int", "m_pvpTourneyCurrencyCost", 23);
+        item["m_rank"] = Property("int", "m_rank", 24);
+        item["m_rarity"] = Enum("enum RarityType", "m_rarity", 25, Json{ { "RT_COMMON", 0 }, { "RT_RARE", 2 } });
+        item["m_numPrimaryColors"] = Property("unsigned char", "m_numPrimaryColors", 26);
+        item["m_numSecondaryColors"] = Property("unsigned char", "m_numSecondaryColors", 27);
+        AddClass(classes, "class WizItemTemplate", Json::array({ "GameObjectTemplate", "CoreTemplate", "PropertyClass" }), item);
+    }
+
     std::string Dump(Json const& classes)
     {
         return Json{ { "version", 2 }, { "classes", classes } }.dump();
