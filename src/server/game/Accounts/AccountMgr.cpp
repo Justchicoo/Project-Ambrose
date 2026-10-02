@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Validates names and passwords, stores base64 SHA-512 verifiers sealed with the active key, maps unique-name races to 'already exists', revokes the account's session key when its password changes and when it is banned, in the same transaction as the ban, and reads accounts and active bans through synchronous login database statements that report a closed database as an error.
+ * Validates names and passwords, stores base64 SHA-512 verifiers sealed with the active key, maps unique-name races to 'already exists', sets or clears an account's own permission bits, deletes an account that is not online with its bans and session key, revokes the account's session key when its password changes and when it is banned, in the same transaction as the ban, and reads accounts and active bans through synchronous login database statements that report a closed database as an error.
  */
 
 #include "AccountMgr.h"
@@ -10,6 +10,7 @@
 #include "Log.h"
 #include "Utf.h"
 
+#include <asio/ip/address.hpp>
 #include <fmt/format.h>
 
 namespace
@@ -33,6 +34,8 @@ namespace
         account.LastLogin = row[11].Get<uint64>();
         account.LastIp = row[12].Get<std::string>();
         account.LastMachineId = row[13].Get<uint64>();
+        if (!row[14].IsNull())
+            account.Permissions = row[14].Get<uint32>();
         return account;
     }
 }
@@ -189,6 +192,107 @@ AccountOpResult AccountMgr::ChangePassword(uint64 accountId, std::string_view pa
         return AccountOpResult::DatabaseError;
     revoke->SetData(0, accountId);
     return LoginDatabase.DirectExecute(*revoke) ? AccountOpResult::Ok : AccountOpResult::DatabaseError;
+}
+
+AccountOpResult AccountMgr::SetPermissions(uint64 accountId, std::optional<uint32> permissions)
+{
+    AccountLookup const lookup = GetAccountById(accountId);
+    if (lookup.Result != AccountOpResult::Ok)
+        return lookup.Result;
+    if (!lookup.Account)
+        return AccountOpResult::NameNotExist;
+    LoginStatement statement = LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_PERMISSIONS);
+    if (!statement)
+        return AccountOpResult::DatabaseError;
+    if (permissions)
+        statement->SetData(0, *permissions);
+    else
+        statement->SetData(0, nullptr);
+    statement->SetData(1, accountId);
+    if (!LoginDatabase.DirectExecute(*statement))
+        return AccountOpResult::DatabaseError;
+    LOG_INFO("accounts", "Account {} (id {}) now has {}", lookup.Account->Username, accountId,
+        permissions ? fmt::format("its own permissions {:#x}", *permissions) : std::string("no permissions of its own, so LoginComplete.Permissions applies"));
+    return AccountOpResult::Ok;
+}
+
+AccountOpResult AccountMgr::DeleteAccount(uint64 accountId)
+{
+    AccountLookup const lookup = GetAccountById(accountId);
+    if (lookup.Result != AccountOpResult::Ok)
+        return lookup.Result;
+    if (!lookup.Account)
+        return AccountOpResult::NameNotExist;
+    LoginStatement statement = LoginDatabase.GetPreparedStatement(LOGIN_DEL_ACCOUNT);
+    if (!statement)
+        return AccountOpResult::DatabaseError;
+    statement->SetData(0, accountId);
+    if (!LoginDatabase.DirectExecute(*statement) || GetAccountById(accountId).Account)
+        return AccountOpResult::DatabaseError;
+    LOG_INFO("accounts", "Deleted account {} (id {}) with its bans and session key", lookup.Account->Username, accountId);
+    return AccountOpResult::Ok;
+}
+
+AccountOpResult AccountMgr::BanAddress(std::string_view address, std::chrono::seconds duration, std::string_view bannedBy, std::string_view reason)
+{
+    std::error_code invalid;
+    asio::ip::address const parsed = asio::ip::make_address(std::string(address), invalid);
+    if (invalid)
+        return AccountOpResult::AddressInvalid;
+    return AddBan(LOGIN_INS_IP_BANNED, parsed.to_string(), duration, bannedBy, reason);
+}
+
+AccountOpResult AccountMgr::UnbanAddress(std::string_view address)
+{
+    std::error_code invalid;
+    asio::ip::address const parsed = asio::ip::make_address(std::string(address), invalid);
+    if (invalid)
+        return AccountOpResult::AddressInvalid;
+    return EndBan(LOGIN_UPD_IP_NOT_BANNED, parsed.to_string());
+}
+
+AccountOpResult AccountMgr::BanMachine(uint64 machineId, std::chrono::seconds duration, std::string_view bannedBy, std::string_view reason)
+{
+    return AddBan(LOGIN_INS_MACHINE_BANNED, machineId, duration, bannedBy, reason);
+}
+
+AccountOpResult AccountMgr::UnbanMachine(uint64 machineId)
+{
+    return EndBan(LOGIN_UPD_MACHINE_NOT_BANNED, machineId);
+}
+
+template<class Key>
+AccountOpResult AccountMgr::AddBan(LoginDatabaseStatements index, Key const& key, std::chrono::seconds duration, std::string_view bannedBy, std::string_view reason)
+{
+    if (duration.count() < 0 || duration > MaxBanDuration)
+        return AccountOpResult::BadDuration;
+    if (bannedBy.size() > MaxBannedByLength || reason.size() > MaxReasonLength)
+        return AccountOpResult::ReasonTooLong;
+    if (!Ambrose::AccountText::IsStorable(bannedBy) || !Ambrose::AccountText::IsStorable(reason))
+        return AccountOpResult::ReasonInvalid;
+    LoginStatement statement = LoginDatabase.GetPreparedStatement(index);
+    if (!statement)
+        return AccountOpResult::DatabaseError;
+    uint64 const now = Now();
+    statement->SetData(0, key);
+    statement->SetData(1, now);
+    statement->SetData(2, duration.count() == 0 ? uint64{ 0 } : now + static_cast<uint64>(duration.count()));
+    statement->SetData(3, bannedBy);
+    statement->SetData(4, reason);
+    return LoginDatabase.DirectExecute(*statement) ? AccountOpResult::Ok : AccountOpResult::DatabaseError;
+}
+
+template<class Key>
+AccountOpResult AccountMgr::EndBan(LoginDatabaseStatements index, Key const& key)
+{
+    LoginStatement statement = LoginDatabase.GetPreparedStatement(index);
+    if (!statement)
+        return AccountOpResult::DatabaseError;
+    uint64 const now = Now();
+    statement->SetData(0, now);
+    statement->SetData(1, key);
+    statement->SetData(2, now);
+    return LoginDatabase.DirectExecute(*statement) ? AccountOpResult::Ok : AccountOpResult::DatabaseError;
 }
 
 AccountOpResult AccountMgr::SetSecurityLevel(uint64 accountId, uint8 level)
@@ -397,6 +501,7 @@ std::string_view AccountMgr::Describe(AccountOpResult result) noexcept
         case AccountOpResult::ReasonInvalid: return "the ban reason must be valid UTF-8 without control characters";
         case AccountOpResult::ReadBackFailed: return "the account was created but could not be read back; check the login database";
         case AccountOpResult::BadDuration: return "a ban lasts from one second to 100 years, or is permanent";
+        case AccountOpResult::AddressInvalid: return "that is not an IPv4 or IPv6 address";
         case AccountOpResult::DatabaseError: return "the login database failed or is not open; see the sql log";
     }
     return "unknown result";

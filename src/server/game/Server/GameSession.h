@@ -20,6 +20,8 @@
 #include "PlayerSpellbook.h"
 #include "PlayerStats.h"
 #include "SessionBase.h"
+#include "ZoneTransferQueue.h"
+#include "ZoneTriggerMgr.h"
 
 #include <atomic>
 #include <chrono>
@@ -56,6 +58,7 @@ public:
 
     static void SetRealmId(uint32 realmId) noexcept;
     static uint32 GetRealmId() noexcept;
+    static void SetTransferEndpoint(std::string address, uint16 port);
 
     uint64 GetAccountId() const noexcept { return _accountId.load(std::memory_order_relaxed); }
     void SetAccountId(uint64 accountId) noexcept { _accountId.store(accountId, std::memory_order_relaxed); }
@@ -88,6 +91,14 @@ public:
     void HandleQueryLogout(GameMessages::QueryLogout& message);
     void HandleClientDisconnect(GameMessages::ClientDisconnect& message);
     void HandleNotAfk(GameMessages::NotAfk& message);
+    void HandleZoneTransferAck(GameMessages::ZoneTransferAck& message);
+    void HandleZoneTransferNack(GameMessages::ZoneTransferNack& message);
+    void HandleRetryTeleport(GameMessages::RetryTeleport& message);
+    bool RequestZoneTransfer(ZoneTransfer transfer, std::string& problem);
+    bool IsTransferring() const noexcept { return _transfers.Busy(); }
+    void HandlePostZoneEventFromClient(GameMessages::PostZoneEventFromClient& message);
+    void ArriveInVolumes();
+    void CheckVolumes();
     void LeaveWorld();
     std::optional<uint32> GetMapId() const noexcept { return _mapId; }
     uint64 GetWorldGuid() const noexcept { return _worldGuid; }
@@ -109,6 +120,9 @@ public:
     void SetSecurityLevel(uint8 level) noexcept { _securityLevel.store(level, std::memory_order_relaxed); }
     MovementUpdate TakeMovementUpdate(uint32 idleFlushes);
     void ShowMovementOf(GameSession const& mover, MovementUpdate const& update);
+    bool TeleportWithinMap(PlayerPosition const& target, std::vector<std::shared_ptr<GameSession>> const& onlookers, std::string& problem);
+    void ShowTeleportOf(GameSession const& mover, PackedMove const& place);
+    std::string const& GetZonePath() const noexcept { return _zonePath; }
     void SendObjectChanges(MapObjectChanges const& changes);
     PlayerStats const* GetStats() const noexcept { return _stats ? &*_stats : nullptr; }
     PlayerMovement const& GetMovement() const noexcept { return _movement; }
@@ -167,9 +181,16 @@ private:
     void MarkOffline();
     void TransferWorldStateTo(GameSession& replacement);
     bool TakeCommandLine(std::string_view packed);
+    std::vector<std::string> PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now);
+    void FollowReloadedVolumes();
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
     AsyncCallbackProcessor<QueryCallback> _queryCallbacks;
+    AsyncCallbackProcessor<TransactionCallback> _transactionCallbacks;
+    ZoneTransferQueue _transfers;
+    std::optional<GameMessages::ServerTransfer> _lastTransfer;
+    std::shared_ptr<ZoneTriggerData const> _volumeData;
+    std::vector<VolumePresence> _volumePresence;
     std::atomic<uint64> _accountId{ 0 };
     std::atomic<uint64> _characterId{ 0 };
     std::atomic<uint64> _unhandled{ 0 };
@@ -183,6 +204,7 @@ private:
     std::atomic<bool> _linkDeadStartPending{ false };
     std::atomic<int64> _socketLostAtNanoseconds{ 0 };
     std::atomic<uint8> _securityLevel{ 0 };
+    std::optional<uint32> _accountPermissions;
     std::chrono::steady_clock::time_point const _connectedAt = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point _afkStarted;
     bool _afkTimerStarted = false;
