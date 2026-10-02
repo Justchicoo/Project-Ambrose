@@ -5,6 +5,7 @@
 
 #include "TemplateExtractor.h"
 #include "BindFile.h"
+#include "ItemTemplateRecord.h"
 #include "ConfigMgr.h"
 #include "KiwadArchive.h"
 #include "ObjectViews.h"
@@ -88,6 +89,11 @@ std::size_t TemplateExtraction::GetNpcTemplateCount() const noexcept
     }));
 }
 
+std::size_t TemplateExtraction::GetItemCount() const noexcept
+{
+    return static_cast<std::size_t>(std::count_if(Templates.begin(), Templates.end(), [](ExtractedTemplate const& found) { return found.Item.has_value(); }));
+}
+
 ExtractedTemplate const* TemplateExtraction::Find(uint32 templateId) const noexcept
 {
     auto const found = std::lower_bound(Templates.begin(), Templates.end(), templateId, [](ExtractedTemplate const& row, uint32 id) { return row.TemplateId < id; });
@@ -162,6 +168,13 @@ bool TemplateExtractor::ReadTemplate(TypeCatalogPtr const& catalog, uint32 templ
         else
             behavior.Name = std::string();
         row.Behaviors.push_back(std::move(behavior));
+    }
+    if (ItemTemplateRecord::IsItem(object))
+    {
+        std::string error;
+        row.Item = ItemTemplateRecord::Read(object, templateId, location.Path, read.Decoded.Issues, error);
+        if (!row.Item)
+            extraction.AddError(fmt::format("{} in {}: {}", templateId, location.Archive, error));
     }
     extraction.Templates.push_back(std::move(row));
     return true;
