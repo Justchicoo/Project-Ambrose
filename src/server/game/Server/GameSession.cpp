@@ -995,7 +995,11 @@ VisibilityChanges GameSession::UpdateSight(Map const& map, InstanceSight const& 
     PlayerPosition const& at = _movement.GetPosition();
     VisibilityChanges changes = _sight.Update(sight.CandidatesFor(_worldGuid, { at.X, at.Y, at.Z }), sight.GetRange());
     for (uint64 const id : changes.Removed)
+    {
         HidePlayer(id);
+        if (wizards.contains(id))
+            LOG_DEBUG("server.gamesession", "Session {}'s wizard {} lost sight of wizard {}", GetSessionId(), _worldGuid, id);
+    }
     // The r806919 client's MSG_ADDOBJECT handler (0x141708460) does nothing, and MSG_REMOVEOBJECT deletes the object, so one shown again is sent whole again.
     auto const show = [&](uint64 id)
     {
@@ -1006,7 +1010,11 @@ VisibilityChanges GameSession::UpdateSight(Map const& map, InstanceSight const& 
             SendDmlMessage(message);
         }
         else if (auto const wizard = wizards.find(id); wizard != wizards.end())
+        {
             ShowPlayer(*wizard->second);
+            PlayerPosition const& there = wizard->second->GetMovement().GetPosition();
+            LOG_DEBUG("server.gamesession", "Session {}'s wizard {} sees wizard {} at ({}, {}, {})", GetSessionId(), _worldGuid, id, there.X, there.Y, there.Z);
+        }
     };
     for (uint64 const id : changes.New)
         show(id);
