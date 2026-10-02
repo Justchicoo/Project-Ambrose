@@ -329,7 +329,7 @@ Every equippable and backpack item in the user's client is available to the serv
 
 - src/tools/extractor/ItemExtractor: Root.wad ObjectData/**.xml where the root class is WizItemTemplate (76,679 files) -> world.item_template (m_templateID, m_objectName, m_displayName, m_nObjectType, m_adjectiveList, m_school, m_baseCost, m_rank, m_itemLimit, m_itemSetBonusTemplateID, m_numPrimaryColors, m_numSecondaryColors), child tables for equip requirements and equip effects (serialized GameEffectInfo, typed columns where the class is known), and the behaviors blob
 - ItemSetBonusTemplate (42 files) -> world.item_set_bonus
-- src/server/game/Items/ItemMgr (sItemMgr) on a 4.15 reloadable store: `.reload item_template` builds and validates the templates off to the side and swaps them, and a failure keeps the old store and reports every error
+- src/server/game/Items/ItemMgr (sItemMgr) on a 4.15 reloadable store: `.reload item_template` builds and validates the templates off to the side and swaps them, and a failure keeps the old store and reports every error. It reads the item templates from the install at run time, as Item templates in doc/ARCHITECTURE.md settles, and item_template holds each item's own fields beside its object_template row for the relational lookups of vendors, loot and the panel
 - src/test/tools/ItemExtractorTest.cpp
 
 **Data sources**
