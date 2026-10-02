@@ -123,8 +123,6 @@ void GameSession::QueueEmote(std::string_view name, uint8 excludeOriginator, std
 void GameSession::HandleRequestRadialChat(GameMessages::RequestRadialChat& message)
 {
     _hideNextChatEmote = false;
-    if (RejectMutedSpeech())
-        return;
     switch (ChatMgr::Judge(message.Message, sCommandMgr.GetPrefix()))
     {
         case TypedLine::Unreadable:
@@ -140,8 +138,16 @@ void GameSession::HandleRequestRadialChat(GameMessages::RequestRadialChat& messa
         case TypedLine::Shown:
             break;
     }
-    if (RejectClosedChat())
+    if (RejectMutedSpeech())
+    {
+        _hideNextChatEmote = true;
         return;
+    }
+    if (RejectClosedChat())
+    {
+        _hideNextChatEmote = true;
+        return;
+    }
     if (!CanSpeak("a chat line"))
         return;
     Speech speech;
@@ -179,9 +185,15 @@ void GameSession::HandleRequestRadialQuickChat(GameMessages::RequestRadialQuickC
 {
     _hideNextChatEmote = false;
     if (RejectMutedSpeech())
+    {
+        _hideNextChatEmote = true;
         return;
+    }
     if (RejectClosedChat())
+    {
+        _hideNextChatEmote = true;
         return;
+    }
     if (!CanSpeak("a quick chat phrase"))
         return;
     if (!sQuickChatMgr.GetPhrases()->Find(message.MessageId))
@@ -200,9 +212,15 @@ void GameSession::HandleRequestRadialQuickChatExt(GameMessages::RequestRadialQui
 {
     _hideNextChatEmote = false;
     if (RejectMutedSpeech())
+    {
+        _hideNextChatEmote = true;
         return;
+    }
     if (RejectClosedChat())
+    {
+        _hideNextChatEmote = true;
         return;
+    }
     if (!CanSpeak("an extended quick chat phrase"))
         return;
     if (!ChatMgr::IsExtendedPhrase(message.Message))
@@ -219,13 +237,13 @@ void GameSession::HandleRequestRadialQuickChatExt(GameMessages::RequestRadialQui
 
 void GameSession::HandleCoreEmote(GameMessages::CoreEmote& message)
 {
-    if (RejectMutedSpeech())
-        return;
     if (_hideNextChatEmote && message.Name == ChatMgr::TalkingEmote)
     {
         _hideNextChatEmote = false;
         return;
     }
+    if (RejectMutedSpeech())
+        return;
     if (CanSpeak("an emote"))
         QueueEmote(message.Name, message.ExcludeOriginator, "an emote");
 }

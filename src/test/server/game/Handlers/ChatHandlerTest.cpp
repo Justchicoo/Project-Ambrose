@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives the chat a client sends through a real game session over loopback: a typed line, a quick chat phrase, an extended phrase and an emote from a wizard that has its object are each taken and queued for the world thread rather than counted as messages the server does not handle, and shown to nobody while the wizard does not yet stand shown in an instance; a line starting with the command prefix from a game master's account runs the command, whose reply comes back as one MSG_SERVERMESSAGE, a line too long for one split across several, before the wizard stands anywhere; and a client that has not attached is not listened to at all; and a server script refusing one message holds back exactly that one, reaching the session as though never sent, with no edit to the core.
+ * Drives client chat through a real game session over loopback: speech and emotes queue for the world thread and remain hidden until the wizard stands in an instance; game-master commands run before mute rejection; a rejected typed line hides its paired talking emote with one notice; closed chat suppresses its paired emote; and refused messages do not count as unhandled.
  */
 
 #include "AccountMgr.h"
@@ -139,6 +139,83 @@ TEST_F(ChatHandlerTest, AMutedChatRequestIsDroppedAndTheClientIsNotified)
     EXPECT_TRUE(session->TakeSpeech().empty());
     EXPECT_EQ(session->GetUnhandledMessageCount(), 0u);
     EXPECT_EQ(session->GetStrikes(), 0u);
+}
+
+TEST_F(ChatHandlerTest, AMutedGameMastersCommandRunsBeforeSpeechIsRejected)
+{
+    sCommandMgr.Clear();
+    sCommandMgr.Load({ { .Name = "ping", .SecurityLevel = SEC_GAMEMASTER, .Help = "answer", .Run = [](CommandCaller& caller, std::vector<std::string> const&)
+    {
+        caller.Reply("pong");
+        return true;
+    } } });
+
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Connect(client, true);
+    ASSERT_TRUE(session);
+    session->SetSecurityLevel(SEC_GAMEMASTER);
+    session->ApplyMute(AccountMgr::Now() + 60);
+    ASSERT_TRUE(ReadReply<GameMessages::Mute>(*client));
+
+    GameMessages::RequestRadialChat line;
+    line.Message = ChatText::Write(u".ping");
+    Send(*client, line);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 1; }));
+    EXPECT_EQ(session->DrainQueue(), 1u);
+
+    std::optional<SystemMessages::ServerMessage> const reply = ReadReply<SystemMessages::ServerMessage>(*client);
+    ASSERT_TRUE(reply) << "the next message is the command reply, not a mute notice";
+    EXPECT_EQ(reply->Message, u"pong");
+    EXPECT_TRUE(session->TakeSpeech().empty());
+
+    sCommandMgr.Clear();
+}
+
+TEST_F(ChatHandlerTest, ARejectedMutedLineHidesItsTalkingEmoteAndSendsOneNotice)
+{
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Connect(client, true);
+    ASSERT_TRUE(session);
+    session->ApplyMute(AccountMgr::Now() + 60);
+    ASSERT_TRUE(ReadReply<GameMessages::Mute>(*client));
+
+    GameMessages::RequestRadialChat line;
+    line.Message = ChatText::Write(u"hello");
+    Send(*client, line);
+    GameMessages::CoreEmote emote;
+    emote.Name = "Chat";
+    emote.ExcludeOriginator = 1;
+    Send(*client, emote);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 2; }));
+    EXPECT_EQ(session->DrainQueue(), 2u);
+
+    ASSERT_TRUE(ReadReply<GameMessages::Mute>(*client));
+    EXPECT_FALSE(ReadNextDml(*client, std::chrono::milliseconds(100))) << "the paired emote sends no second notice";
+    EXPECT_TRUE(session->TakeSpeech().empty()) << "neither speech nor its talking emote is queued";
+}
+
+TEST_F(ChatHandlerTest, ClosedTypedChatHidesItsTalkingEmote)
+{
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Connect(client, true);
+    ASSERT_TRUE(session);
+    session->SetChatMode(2);
+
+    GameMessages::RequestRadialChat line;
+    line.Message = ChatText::Write(u"hello");
+    Send(*client, line);
+    GameMessages::CoreEmote emote;
+    emote.Name = "Chat";
+    emote.ExcludeOriginator = 1;
+    Send(*client, emote);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 2; }));
+    EXPECT_EQ(session->DrainQueue(), 2u);
+
+    std::optional<SystemMessages::ServerMessage> const notice = ReadReply<SystemMessages::ServerMessage>(*client);
+    ASSERT_TRUE(notice);
+    EXPECT_EQ(notice->Message, u"Chat is disabled for this account.");
+    EXPECT_FALSE(ReadNextDml(*client, std::chrono::milliseconds(100))) << "the paired emote sends no second notice";
+    EXPECT_TRUE(session->TakeSpeech().empty());
 }
 
 TEST_F(ChatHandlerTest, ClearingMuteSendsOnlyAClientSafeNotice)
