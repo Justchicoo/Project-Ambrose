@@ -43,7 +43,6 @@ bool ZoneTriggerMgr::Load(std::vector<std::string>& errors)
             ZoneVolume volume{ row[1].Get<uint32>(), row[2].Get<std::string>(), ZoneVolume::ShapeOf(row[3].Get<std::string>()), row[4].Get<float>(), row[5].Get<float>(),
                 row[6].Get<float>(), row[7].Get<float>(), row[8].Get<float>(), row[9].Get<float>(), row[10].Get<float>() };
             std::string const zone = row[0].Get<std::string>();
-            // 6054 of the install's volumes leave m_shape out; every one gives only a radius, so it is the sphere the field defaults to.
             if (row[3].Get<std::string>().empty() && volume.Radius > 0.0f && volume.Length == 0.0f && volume.Width == 0.0f && volume.Depth == 0.0f)
                 volume.Shape = VolumeShape::Sphere;
             bool const sized = volume.Shape == VolumeShape::Box ? volume.Width > 0.0f && volume.Depth > 0.0f && volume.Length > 0.0f
