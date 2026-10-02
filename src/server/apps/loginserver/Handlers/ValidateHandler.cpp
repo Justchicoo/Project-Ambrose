@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Validates MSG_USER_VALIDATE, which a client sends to come back to character select without its password: reserves the attempt against the address's lockout, reads the account, its bans, lock and session key in one asynchronous query, refuses a key issued to another machine, one renewed longer ago than Login.SessionKeyLifetime as it stands now, and a PassKey3 not made from that key and this connection's offer, kicks any earlier session holding the account, renews the key and the last login in one transaction, then sends MSG_USER_VALIDATE_RSP with Error=0 and MSG_USER_ADMIT_IND; every refusal sends only MSG_USER_VALIDATE_RSP with the error and closes.
+ * Validates MSG_USER_VALIDATE, which a client sends to come back to character select without its password: reserves the attempt against the address's lockout, reads the account, its bans, lock and session key in one asynchronous query, refuses a key issued to another machine, one renewed longer ago than Login.SessionKeyLifetime as it stands now, and a PassKey3 not made from that key and this connection's offer, kicks any earlier session holding the account, renews the key and the last login in one transaction, then sends MSG_USER_VALIDATE_RSP with Error=0 and MSG_USER_ADMIT_IND; every refusal sends only MSG_USER_VALIDATE_RSP with the error and closes. A ban or lock refusal carries the ban's end as TimeStamp, in Unix seconds or forever.
  */
 
 #include "AccountMgr.h"
@@ -10,6 +10,7 @@
 #include "LoginSession.h"
 #include "PassKey3.h"
 #include "StringUtil.h"
+#include "SystemMessages.h"
 
 #include <fmt/format.h>
 
@@ -118,14 +119,14 @@ void LoginSession::ContinueValidation(std::shared_ptr<ValidateAttempt> const& at
     }
 
     PreparedResultSet const& row = *result;
-    if (row[9].Get<bool>())
+    if (!row[9].IsNull())
     {
-        FailValidation(attempt.get(), AuthResult::MachineBanned, fmt::format("machine {:016X} is banned", attempt->MachineId), false);
+        FailValidation(attempt.get(), AuthResult::MachineBanned, fmt::format("machine {:016X} is banned", attempt->MachineId), false, row[9].Get<uint64>());
         return;
     }
-    if (row[8].Get<bool>())
+    if (!row[8].IsNull())
     {
-        FailValidation(attempt.get(), AuthResult::MachineBanned, "the address is banned", false);
+        FailValidation(attempt.get(), AuthResult::MachineBanned, "the address is banned", false, row[8].Get<uint64>());
         return;
     }
     if (row[0].IsNull())
@@ -166,10 +167,10 @@ void LoginSession::ContinueValidation(std::shared_ptr<ValidateAttempt> const& at
         FailValidation(attempt.get(), AuthResult::ValidateFailed, "its PassKey3 was not made from the account's session key and this connection's offer", true);
         return;
     }
-    bool const accountBanned = row[7].Get<bool>();
+    bool const accountBanned = !row[7].IsNull();
     if (accountBanned || row[2].Get<bool>())
     {
-        FailValidation(attempt.get(), AuthResult::AccountBanned, accountBanned ? "the account is banned" : "the account is locked", false);
+        FailValidation(attempt.get(), AuthResult::AccountBanned, accountBanned ? "the account is banned" : "the account is locked", false, accountBanned ? row[7].Get<uint64>() : 0);
         return;
     }
 
@@ -259,7 +260,7 @@ void LoginSession::CompleteValidation(std::shared_ptr<ValidateAttempt> const& at
         GetSessionId(), attempt->AddressText, attempt->Username, attempt->AccountId, attempt->MachineId);
 }
 
-void LoginSession::FailValidation(ValidateAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess)
+void LoginSession::FailValidation(ValidateAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, uint64 unbanDate)
 {
     _authenticating = false;
     if (attempt && !attempt->Finished)
@@ -282,5 +283,7 @@ void LoginSession::FailValidation(ValidateAttempt* attempt, AuthResult result, s
     LoginMessages::UserValidateRsp response;
     response.Error = result;
     response.Reason = std::string(AuthResults::GetName(result));
+    if (SystemMessages::CarriesBanEnd(static_cast<uint32>(result)))
+        response.TimeStamp = SystemMessages::FormatBanEnd(unbanDate);
     SendDmlMessageDelayedClose(response);
 }

@@ -1109,6 +1109,10 @@ class MilestoneTrackTests(unittest.TestCase):
         self.assertEqual(ci_local.command_for("Pending SQL on main", pending, "upstream/main", ""), "python apps/ci/ci_sql.py promote --check")
         self.assertIsNone(ci_local.command_for("Pending SQL on main", pending, "upstream/main", "milestone/3.19-sql"))
         self.assertEqual(ci_local.skipped_because(pending), "CI runs it only on a push to main")
+        card = [command for name, command in found if name == "Progress card"][0]
+        self.assertEqual(ci_local.command_for("Progress card", card, "upstream/main", ""), card)
+        self.assertIsNone(ci_local.command_for("Progress card", card, "upstream/main", "milestone/12.07-chat-moderation"))
+        self.assertEqual(ci_local.skipped_because(card), "CI skips it on a pull request whose author cannot regenerate the card")
 
     def test_the_local_run_stamps_the_commit_it_covered(self):
         with tempfile.TemporaryDirectory() as folder:
