@@ -140,6 +140,16 @@ namespace
                 return true;
         return false;
     }
+
+    std::vector<std::u16string> AddedEntries(std::unordered_set<std::u16string> const& current, std::unordered_set<std::u16string> const& previous)
+    {
+        std::vector<std::u16string> added;
+        for (std::u16string const& entry : current)
+            if (!previous.contains(entry))
+                added.push_back(entry);
+        std::sort(added.begin(), added.end());
+        return added;
+    }
 }
 
 std::shared_ptr<ChatFilterLists const> ChatFilterLists::Read(KiwadArchive const& root, std::vector<std::string>& errors)
@@ -232,6 +242,16 @@ ChatFilterResult ChatFilterLists::Inspect(std::u16string_view message) const
     return ChatFilterResult::Clear;
 }
 
+std::vector<std::u16string> ChatFilterLists::AddedBlacklistEntries(ChatFilterLists const& previous) const
+{
+    return AddedEntries(_blacklist, previous._blacklist);
+}
+
+std::vector<std::u16string> ChatFilterLists::AddedWhitelistEntries(ChatFilterLists const& previous) const
+{
+    return AddedEntries(_whitelist, previous._whitelist);
+}
+
 ChatFilterMgr& ChatFilterMgr::Instance()
 {
     static ChatFilterMgr instance;
@@ -244,9 +264,20 @@ void ChatFilterMgr::SetInstall(std::filesystem::path root)
     _install = std::move(root);
 }
 
-void ChatFilterMgr::RegisterReloadTarget()
+void ChatFilterMgr::RegisterReloadTarget(ChatFilterAdditionNotifier notifyAdditions)
 {
-    sReloadMgr.Register(std::string(Target), [this](std::vector<std::string>& errors) { return Load(errors); });
+    sReloadMgr.Register(std::string(Target), [this, notifyAdditions = std::move(notifyAdditions)](std::vector<std::string>& errors)
+    {
+        std::shared_ptr<ChatFilterLists const> const previous = _lists.Get();
+        if (!Load(errors))
+            return false;
+        if (notifyAdditions)
+        {
+            std::shared_ptr<ChatFilterLists const> const current = _lists.Get();
+            notifyAdditions(current->AddedBlacklistEntries(*previous), current->AddedWhitelistEntries(*previous));
+        }
+        return true;
+    });
 }
 
 bool ChatFilterMgr::Load(std::vector<std::string>& errors)

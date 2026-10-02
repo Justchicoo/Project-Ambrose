@@ -1,15 +1,19 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests UTF-16 chat-filter lists read from synthetic Root.wad files: blacklist and whitelist decisions, replacement characters, malformed input, and reloads that preserve the serving generation when one required file is missing.
+ * Tests UTF-16 chat-filter lists read from synthetic Root.wad files: blacklist and whitelist decisions, replacement characters, malformed input, atomic reloads, and runtime notifications for newly added words.
  */
 
 #include "ChatFilter.h"
 
+#include "GameMessages.h"
+#include "GameSession.h"
+#include "GameTestHarness.h"
 #include "KiwadArchive.h"
 #include "KiwadBuilder.h"
 #include "LogTestDirectory.h"
 #include "ReloadMgr.h"
 #include "Utf.h"
+#include "World.h"
 
 #include <gtest/gtest.h>
 
@@ -17,6 +21,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -38,6 +43,12 @@ namespace
         std::u16string Blacklist;
         std::u16string Exceptions;
         std::u16string Replacements;
+    };
+
+    struct RemoveWorldSession
+    {
+        std::shared_ptr<GameSession> Session;
+        ~RemoveWorldSession() { sWorld.RemoveSession(Session.get()); }
     };
 
     class ChatFilterTest : public testing::Test
@@ -87,6 +98,18 @@ namespace
         LogTestDirectory _directory;
         ChatFilterMgr _filter;
     };
+}
+
+template<DeclaredMessage T>
+std::optional<T> ReadReply(FakeSessionClient& client)
+{
+    std::optional<DmlMessageData> const reply = ReadNextDml(client);
+    if (!reply || !GameTesting::Is<T>(*reply))
+        return std::nullopt;
+    T message;
+    if (sMessageRegistry.GetCatalog()->Decode(reply->Body, message) != MessageDecodeStatus::Ok)
+        return std::nullopt;
+    return message;
 }
 
 TEST_F(ChatFilterTest, FindsBlacklistedWordsAndLetsWhitelistEntriesPass)
@@ -153,4 +176,46 @@ TEST_F(ChatFilterTest, FailedReloadKeepsOldListsAndValidReloadSwapsTheWholeSnaps
     ASSERT_TRUE(succeeded.Ok) << succeeded.Errors.front();
     EXPECT_EQ(_filter.GetLists()->Inspect(u"oldword"), ChatFilterResult::Clear);
     EXPECT_EQ(_filter.GetLists()->Inspect(u"newword"), ChatFilterResult::Blacklisted);
+}
+
+TEST_F(ChatFilterTest, SuccessfulReloadSendsAddedWordsToConnectedWizards)
+{
+    _filter.RegisterReloadTarget([](std::vector<std::u16string> const& blacklist, std::vector<std::u16string> const& whitelist)
+    {
+        sWorld.SendChatFilterAdditions(blacklist, whitelist);
+    });
+    Write({ u"oldwhite\n", {}, u"oldblack\n", {}, {} });
+    ReloadOutcome const initial = sReloadMgr.Reload(ChatFilterMgr::Target);
+    ASSERT_TRUE(initial.Ok) << initial.Errors.front();
+
+    GameTesting::GameDefinitions definitions;
+    GameTesting::GameListener server;
+    uint16 sessionId = 0;
+    std::unique_ptr<FakeSessionClient> client = server.Connect(sessionId);
+    std::shared_ptr<GameSession> session;
+    ASSERT_TRUE(WaitForCondition([&]
+    {
+        session = server.Find(sessionId);
+        return session != nullptr;
+    }));
+    ASSERT_TRUE(session);
+    session->SetCharacterId(7002);
+    session->SetStatus(SessionStatus::LoggedIn);
+    sWorld.AddSession(session);
+    RemoveWorldSession removeSession{ session };
+
+    Write({ u"oldwhite\nnewwhite\n", {}, u"oldblack\nnewblack\n", {}, {} });
+    ReloadOutcome const changed = sReloadMgr.Reload(ChatFilterMgr::Target);
+    ASSERT_TRUE(changed.Ok) << changed.Errors.front();
+
+    std::optional<GameMessages::ChatFilterBlack> const black = ReadReply<GameMessages::ChatFilterBlack>(*client);
+    ASSERT_TRUE(black);
+    EXPECT_EQ(black->GlobalId, session->GetCharacterId());
+    EXPECT_EQ(black->Blacklist, "newblack");
+
+    std::optional<GameMessages::ChatFilterWhite> const white = ReadReply<GameMessages::ChatFilterWhite>(*client);
+    ASSERT_TRUE(white);
+    EXPECT_EQ(white->GlobalId, session->GetCharacterId());
+    EXPECT_EQ(white->Whitelist, "newwhite");
+    EXPECT_FALSE(ReadNextDml(*client, std::chrono::milliseconds(100))) << "unchanged entries are not resent";
 }

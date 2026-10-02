@@ -553,7 +553,10 @@ namespace
 
         bool LoadChatFilter(ClientSetupResult const& setup)
         {
-            sChatFilterMgr.RegisterReloadTarget();
+            sChatFilterMgr.RegisterReloadTarget([](std::vector<std::u16string> const& blacklist, std::vector<std::u16string> const& whitelist)
+            {
+                sWorld.SendChatFilterAdditions(blacklist, whitelist);
+            });
             if (!setup.Install)
             {
                 sChatFilterMgr.Clear();
