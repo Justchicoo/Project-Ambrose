@@ -285,6 +285,16 @@ Namespaces: `auth` (sign-in, lockout, second factor, recovery code, sign-out, se
 - Nodes buffer events locally while the panel link is down and forward them in batches, deduplicated by `event_uuid`. High-volume file events may be merged per actor, subject and minute.
 - Each audit row stores a SHA-256 hash of its contents and the previous row's hash. The supervisor backfills the chain for existing rows when it opens the store; a separate verification command remains planned.
 
+### Routes and retention (17.25)
+
+- `GET /api/panel/activity` needs `activity.read` at panel scope, `GET /api/panel/apps/<app>/activity` needs it on that app (a grant there is enough), and `GET /api/panel/me/activity` answers any signed-in operator with the rows they acted in or were the subject of. Each takes `prefix`, `actor` and `user` (operator ids, `user` matching actor or subject), `subject` as `kind:id`, `result` (`ok`, `denied`, `failed`, `throttled`), `from` and `to` in epoch milliseconds, `address`, `limit` up to 100 and the `cursor` the previous page returned. Filtering by address needs `activity.ip.read`, since the filter would otherwise answer where somebody signed in from.
+- A row carries its event name, the catalog's sentence, its class, the actor with any API key id and whether a schedule acted, the result, reason, error, properties and subjects. Its address and user agent are shown only to the operator who acted and to holders of `activity.ip.read`.
+- `GET /api/panel/activity/export?format=csv|json` needs `activity.export`, costs 30 against the rate limit, takes the same filters, writes at most 10000 rows and is recorded as `panel:activity.exported`. A CSV field beginning with `=`, `+`, `-`, `@`, a tab or a carriage return is written with a leading apostrophe inside its quotes, so a spreadsheet shows it as text.
+- Every refusal of a route's permission is recorded, `app:permission.refused` on an app and `panel:permission.refused` elsewhere, and a read that is recorded, such as an export, goes ahead with an error line when its row cannot be written.
+- The catalog in `PanelActivityCatalog.cpp` gives every event name a sentence and a class: high volume (console commands, refused file paths, throttled requests) or security (everything else). `PanelActivityCatalogTest` reads the supervisor's source and fails when a name it writes has no sentence.
+- `Panel.ActivitySecurityRetentionDays` (365) and `Panel.ActivityHighVolumeRetentionDays` (90) are live panel settings. The sweep runs hourly, removes each class's rows past its window in one transaction with its own `panel:activity.swept` row, and first copies into `audit_pruned` the chain hash of each removed row whose next row stays, so the chain can be followed across the gap.
+- `Panel.StoreMaxMegabytes` (1024) caps the store. A store at its cap refuses every write, so a change whose row cannot be written is refused rather than applied unrecorded.
+
 ### From Pterodactyl
 
 - **Keeps:** actor and many subjects per event; the log-with-the-change transaction; batches; namespaced event names rendered through a translation catalog with escaped values; address visibility limited to the actor and admins; a details view; pruning by age; nodes batching activity to the panel.
