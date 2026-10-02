@@ -54,7 +54,7 @@ The supervisor keeps one SQLite file in WAL mode in the Ambrose data folder. It 
 
 - panel users, roles, grants, invites, sessions, API keys, recovery codes and security keys;
 - the single-use sign-in links in `panel_link` (17.180): the owner claim, password, local and pairing links, each kept only as the SHA-256 of its token with an id taken from that hash, its kind, operator, issuer, the address a pairing names, and when it was made, runs out and was used, so a link printed before a restart still works after it and a copy of the store opens nothing;
-- the audit log;
+- the audit log, its chained hashes and the durable collector outbox;
 - schedules, tasks and run history;
 - backup records, storage targets, upload state and restore jobs;
 - nodes, locations, port allocations and app placements;
@@ -68,6 +68,14 @@ The store is included in backups as the `panel` component (see Backups and resto
 ### Live behavior
 
 The panel follows the Live reload and live settings rule. Every panel option, such as session lifetimes, sign-in thresholds, retention, alert repeat limits, trusted proxies and SMTP settings, is a typed setting with a default and bounds, changed from the panel, audited, applied from the next operation, and locked by a higher layer with that layer named. The layer order is the settled one under Configuration in doc/ARCHITECTURE.md: `<app>.conf.dist`, `conf.d/*.conf.dist`, `<app>.conf`, `conf.d/*.conf`, persisted live settings, `AMBROSE_` environment variables, then command-line overrides. The panel invents no layer of its own, and the keys the supervisor passes to an app on its command line are that last layer. Structures such as the role table, file roots, node list and port pool are rebuilt off to the side and swapped atomically, keeping the old structure and reporting every error when a rebuild fails. The supervisor restarts only for a binary upgrade.
+
+### Audit integrity and forwarding
+
+Each audit event hashes its stored fields, ordered subjects and previous hash. The chain head is updated with the event in the same SQLite transaction; verification checks every row and the head, so changed rows, gaps and deletion of the final row are reported. The Activity page and `panel audit verify` show the result. Verification is budgeted at five seconds for 10,000 rows on the panel host.
+
+The chain and its head live on the same machine. They detect partial edits and deletions, but cannot prove integrity against someone who can rewrite the whole store. Off-machine forwarding is optional and disabled unless both `Panel.AuditCollectorUrl` and `Panel.AuditCollectorToken` are set. The URL must be HTTPS and its certificate chain and hostname must verify against the system trust roots; the token is sent only over that verified connection. These options are read at startup, so a restart applies changes.
+
+When enabled, each event and its hash are added to `panel_audit_outbox` in the same transaction as the audit row. The supervisor POSTs batches as `{"events":[<event>, ...]}` to the configured URL, keeping the row fields, event id, previous hash and chain hash. A 2xx response acknowledges the whole batch; every other outcome retains it and retries in order with exponential backoff up to five minutes. A collector must append the batch durably before returning 2xx and deduplicate retries by `event_id`, since a lost response can cause a batch to be sent again. The Activity page shows the number waiting. The event copy includes audit metadata such as operator names and addresses, so the configured collector must be controlled by the operator and protected as sensitive data. With forwarding off, no outbox copy is created and no audit data leaves the machine.
 
 ### From Pterodactyl
 

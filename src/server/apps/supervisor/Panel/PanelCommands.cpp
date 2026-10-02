@@ -63,6 +63,24 @@ void PanelCommands::Register(ConsoleCommandTable& commands, Panel& panel)
                     user.TwoFactor ? " (two-factor)" : "", user.SignedInEpochMs ? WhenText(*user.SignedInEpochMs) : std::string("never")));
             return true;
         } });
+    commands.Register({ "panel audit verify", "", "verify the panel's audit chain and report the first broken row", false,
+        [&panel](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
+        {
+            if (!arguments.empty())
+                return false;
+            AuditChainVerification verification;
+            std::string error;
+            if (!panel.VerifyAuditChain(verification, error))
+            {
+                reply(fmt::format("The audit chain could not be verified: {}", error));
+                return true;
+            }
+            if (verification.Valid)
+                reply(fmt::format("The audit chain is valid; {} row(s) checked", verification.RowsChecked));
+            else
+                reply(fmt::format("The audit chain is broken at row {}: {}", verification.FirstInvalidId, verification.Problem));
+            return true;
+        } });
     commands.Register({ "panel user reset-two-factor", "<name>", "turn off an operator's two-factor sign-in and end their sessions, for one who lost their authenticator and codes", false,
         [&panel](std::vector<std::string> const& arguments, ConsoleCommandTable::Reply const& reply)
         {
