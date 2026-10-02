@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Takes what a wizard's client asks the wizards around it to see, once the wizard stands shown in an instance: a typed line whose text reads as the client packs it, unless it is a command, which is never shown to anyone: an account above player level runs it through CommandMgr with its replies gathered into as few MSG_SERVERMESSAGE as their length allows, each of which its client adds to its chat window and shows once as a notice, and hides the talking emote its client plays with every line, and a player's is shown as an ordinary line or refused with a reply as GM.PlayerCommandsAsChat says, a quick chat phrase the install's QuickChat.xml holds, an extended phrase as the client wrote it once the client's own parser would read it, and an emote whose animation the install's animation list holds, played through an EmoteStateOverrideInfo naming that animation, which is encoded once for everyone who sees it, each listener first told the speaker's object is back in Unremarkable, since its client plays an emote only as the object enters Emoting. Each is kept until the world's next tick, a wizard keeping only so many between ticks, and then shown to each listener as the message its client plays it from, naming the speaker by its packed name and global id and showing a line under the speaker's own chat level.
+ * Takes what a wizard's client asks the wizards around it to see, once the wizard stands shown in an instance: typed chat is read in the client's packed format, commands are kept private, and muted requests are refused. The speaker's permissions set the chat level so each receiving client applies its own chat filter. Game-master commands run through CommandMgr with replies sent as server notices, quick chat must exist in the install, extended phrases must pass the client's own parser, and emotes must name a known animation. Accepted speech waits for the world's next tick and is shown to each listener with the speaker's packed name, global id and chat level.
  */
 
 #include "AnimationListMgr.h"
@@ -79,6 +79,14 @@ bool GameSession::CanSpeak(std::string_view what) const
     return false;
 }
 
+bool GameSession::RejectClosedChat()
+{
+    if (_chatMode < 2)
+        return false;
+    SendServerMessage(u"Chat is disabled for this account.");
+    return true;
+}
+
 void GameSession::QueueSpeech(Speech speech, std::string_view what)
 {
     if (_speech.size() >= ChatMgr::MaxQueuedSpeech)
@@ -130,6 +138,16 @@ void GameSession::HandleRequestRadialChat(GameMessages::RequestRadialChat& messa
         case TypedLine::Shown:
             break;
     }
+    if (RejectMutedSpeech())
+    {
+        _hideNextChatEmote = true;
+        return;
+    }
+    if (RejectClosedChat())
+    {
+        _hideNextChatEmote = true;
+        return;
+    }
     if (!CanSpeak("a chat line"))
         return;
     Speech speech;
@@ -166,6 +184,16 @@ bool GameSession::TakeCommandLine(std::string_view packed)
 void GameSession::HandleRequestRadialQuickChat(GameMessages::RequestRadialQuickChat& message)
 {
     _hideNextChatEmote = false;
+    if (RejectMutedSpeech())
+    {
+        _hideNextChatEmote = true;
+        return;
+    }
+    if (RejectClosedChat())
+    {
+        _hideNextChatEmote = true;
+        return;
+    }
     if (!CanSpeak("a quick chat phrase"))
         return;
     if (!sQuickChatMgr.GetPhrases()->Find(message.MessageId))
@@ -183,6 +211,16 @@ void GameSession::HandleRequestRadialQuickChat(GameMessages::RequestRadialQuickC
 void GameSession::HandleRequestRadialQuickChatExt(GameMessages::RequestRadialQuickChatExt& message)
 {
     _hideNextChatEmote = false;
+    if (RejectMutedSpeech())
+    {
+        _hideNextChatEmote = true;
+        return;
+    }
+    if (RejectClosedChat())
+    {
+        _hideNextChatEmote = true;
+        return;
+    }
     if (!CanSpeak("an extended quick chat phrase"))
         return;
     if (!ChatMgr::IsExtendedPhrase(message.Message))
@@ -204,6 +242,8 @@ void GameSession::HandleCoreEmote(GameMessages::CoreEmote& message)
         _hideNextChatEmote = false;
         return;
     }
+    if (RejectMutedSpeech())
+        return;
     if (CanSpeak("an emote"))
         QueueEmote(message.Name, message.ExcludeOriginator, "an emote");
 }

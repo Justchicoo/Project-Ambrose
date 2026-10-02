@@ -39,6 +39,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Oversized.** 12.23 MoveBehavior/Physics observation plus speed validation across services 15/16 (S). Under-sized.
 - **Correction.** 12.19/12.20 group MSG_CURRENTREALM with GAME realm messages, but it lives in GameMessages2.xml (svc 55). 12.03's MSG_REQUESTRADIALFRIENDQUICKCHATEXT is in WizardMessages2 (53). The names are valid, but these service placements are unacknowledged.
 - **Handed on from 6.03.** 12.14 takes the radial menu's emotes, read from the r806919 client in 6.03. The client plays the emote on its own wizard and sends two messages: MSG_CORE_PIIRADIALMENUEMOTE, with `EmoteAnimationName` and `ExcludeOriginator` 1, and MSG_REQUESTPIIRADIALMENUPLAYEMOTE, with the animation and the `EmoteText` line it wrote. Other clients play the animation from the Emoting state that 6.03 sends for MSG_CORE_EMOTE, and show the line from MSG_PIIRADIALMENUPLAYEMOTE (`SourceName`, `SourceID`, `EmoteAnimationName`, `EmoteText`). The line is client-written text, so the server shows it only after checking it against the emote the wizard owns. EmotesRadialMenuBehavior keeps the menu's three custom pages as blobs. Each blob opens with 0x0FACECE8 and a version below 4, and its slots name either an owned emote by global id or, with a zero id, a menu chat phrase. In 6.03's runs, the Emotes entry of the quick chat menu did not open the wheel for a wizard of ours, which sent nothing when it was pressed; find out why here.
+- **Found on 12.07.** Sending GAME `MSG_NOTMUTED` to an r806919 client opens `GUI_MuteFailedMsg` / `GUI_MuteFailedTitle` with “The player was not muted, but was reported.” / “You can not mute that player.” The probe was observed in client-driver run `20261001-232925`; keep normal unmute on the client-safe server message “You have been unmuted.” and do not send `MSG_NOTMUTED` for it.
 
 ## 12.01 Friends (WIZ-17 part 1)
 
@@ -291,10 +292,10 @@ Players can set privacy toggles (friend requests, teleports, trade, hatch, party
 
 **Acceptance**
 
-- [ ] Blacklisted word flagged; whitelisted phrase passes
-- [ ] Muted REQUESTRADIALCHAT dropped with notice
-- [ ] Real client: '.mute <name> 5m' works
-- [ ] `.reload chatfilter` keeps the old lists on a failed load
+- [x] Blacklisted word flagged; whitelisted phrase passes [ChatFilterTest.FindsBlacklistedWordsAndLetsWhitelistEntriesPass]
+- [x] Muted REQUESTRADIALCHAT dropped with notice [ChatHandlerTest.AMutedChatRequestIsDroppedAndTheClientIsNotified]
+- [x] Real client: '.mute <name> 5m' works [clientdriver.chat-moderation run 20261001-155327: mute notice, suppressed chat, filtered recipient, and expiry verified]
+- [x] `.reload chatfilter` keeps the old lists on a failed load [ChatFilterTest.FailedReloadKeepsOldListsAndValidReloadSwapsTheWholeSnapshot]
 
 ### Detailed spec from WIZ-21: Chat moderation: filter, permissions and mute
 
@@ -320,10 +321,11 @@ Accounts get open or filtered chat, filtered words are handled the way the clien
 
 **Acceptance**
 
-- [ ] Unit test: a blacklisted word from a fixture list is flagged and a whitelisted phrase passes
-- [ ] Unit test: a muted account's REQUESTRADIALCHAT is dropped with a notice
-- [ ] Unit test: `.reload chatfilter` with a missing list file keeps the old lists and reports the error; with valid files a newly blacklisted word is flagged without a restart
-- [ ] Real client: after '.mute <name> 5m', the muted player gets the mute notice and nobody sees their chat until it expires. A filtered-chat account sees another player's off-whitelist message as filtered text.
+- [x] Unit test: a blacklisted word from a fixture list is flagged and a whitelisted phrase passes [ChatFilterTest.FindsBlacklistedWordsAndLetsWhitelistEntriesPass]
+- [x] Unit test: a muted account's REQUESTRADIALCHAT is dropped with a notice [ChatHandlerTest.AMutedChatRequestIsDroppedAndTheClientIsNotified]
+- [x] Unit test: `.reload chatfilter` with a missing list file keeps the old lists and reports the error; with valid files a newly blacklisted word is flagged without a restart [ChatFilterTest.FailedReloadKeepsOldListsAndValidReloadSwapsTheWholeSnapshot]
+- [x] Successful reload additions reach connected clients in CHATFILTERBLACK/CHATFILTERWHITE and take effect for the recipient wizard's GlobalID [ChatFilterTest.SuccessfulReloadSendsAddedWordsToConnectedWizards; client-driver probe `20261001-235518`: the filtered wizard's client obscured the runtime blacklist word and displayed the runtime-whitelisted phrase unchanged]
+- [x] Real client: after '.mute <name> 5m', the muted player gets the mute notice and nobody sees their chat until it expires. A filtered-chat account sees another player's off-whitelist message as filtered text. [clientdriver.chat-moderation run 20261001-155327: timed mute suppressed chat through expiry and the filtered recipient saw the uncommon off-whitelist word obscured]
 
 **Risks**
 

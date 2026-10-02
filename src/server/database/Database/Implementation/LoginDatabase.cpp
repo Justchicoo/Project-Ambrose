@@ -23,6 +23,12 @@ void LoginDatabaseConnection::DoPrepareStatements()
     PrepareStatement(LOGIN_UPD_ACCOUNT_NOT_BANNED, "LOGIN_UPD_ACCOUNT_NOT_BANNED", "UPDATE `account_banned` SET `active` = 0 WHERE `account_id` = ? AND `active` = 1", ConnectionFlags::Both);
     std::string const banOrder = " AND (`unbandate` = 0 OR `unbandate` > ?) ORDER BY (`unbandate` = 0) DESC, `unbandate` DESC LIMIT 1";
     PrepareStatement(LOGIN_SEL_ACCOUNT_BANNED, "LOGIN_SEL_ACCOUNT_BANNED", "SELECT `bandate`, `unbandate`, `bannedby`, `reason` FROM `account_banned` WHERE `account_id` = ? AND `active` = 1" + banOrder, ConnectionFlags::Both);
+    PrepareStatement(LOGIN_SEL_ACCOUNT_BY_ID_WITH_MUTE, "LOGIN_SEL_ACCOUNT_BY_ID_WITH_MUTE",
+        "SELECT a.`id`, a.`username`, a.`verifier`, a.`verifier_key_id`, a.`email`, a.`security_level`, a.`chat_mode`, a.`locked`, a.`purchased_slots`, a.`online`, a.`joindate`, a.`last_login`, a.`last_ip`, a.`last_machine_id`, m.`until`, m.`reason`, m.`by` "
+        "FROM `account` a LEFT JOIN `account_muted` m ON m.`account_id` = a.`id` AND m.`until` > ? WHERE a.`id` = ?", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_REP_ACCOUNT_MUTED, "LOGIN_REP_ACCOUNT_MUTED", "INSERT INTO `account_muted` (`account_id`, `until`, `reason`, `by`) VALUES (?, ?, ?, ?) "
+        "ON DUPLICATE KEY UPDATE `until` = VALUES(`until`), `reason` = VALUES(`reason`), `by` = VALUES(`by`)", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_DEL_ACCOUNT_MUTED, "LOGIN_DEL_ACCOUNT_MUTED", "DELETE FROM `account_muted` WHERE `account_id` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_IP_BANNED, "LOGIN_SEL_IP_BANNED", "SELECT `bandate`, `unbandate`, `bannedby`, `reason` FROM `ip_banned` WHERE `ip` = ?" + banOrder, ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_MACHINE_BANNED, "LOGIN_SEL_MACHINE_BANNED", "SELECT `bandate`, `unbandate`, `bannedby`, `reason` FROM `machine_banned` WHERE `machine_id` = ?" + banOrder, ConnectionFlags::Both);
 

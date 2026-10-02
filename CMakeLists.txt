@@ -54,7 +54,7 @@ find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
 if(BUILD_TESTING)
-    enable_testing()
+    include(CTest)
     add_subdirectory(apps/codestyle)
     add_subdirectory(apps/ci)
     add_subdirectory(apps/designtokens)

@@ -18,6 +18,14 @@ TEST(ChatMgrTest, ALineShowsUnderTheChatLevelTheSpeakersPermissionsGiveIt)
     EXPECT_EQ(ChatMgr::FilterFor(0x20), 0);
 }
 
+TEST(ChatMgrTest, AccountChatModeLimitsThePermissionsInThePlayerObject)
+{
+    EXPECT_EQ(ChatMgr::PermissionsForMode(47, 0), 47) << "open chat leaves the configured permissions unchanged";
+    EXPECT_EQ(ChatMgr::PermissionsForMode(47, 1), 0x23) << "filtered chat keeps menu chat but removes open chat";
+    EXPECT_EQ(ChatMgr::PermissionsForMode(47, 2), 0x20) << "closed chat clears only chat permissions";
+    EXPECT_EQ(ChatMgr::PermissionsForMode(47, 3), 0x20) << "an invalid stored mode fails closed";
+}
+
 TEST(ChatMgrTest, ALineThatStartsWithTheCommandPrefixIsACommand)
 {
     EXPECT_TRUE(ChatMgr::IsCommand(u".help", "."));

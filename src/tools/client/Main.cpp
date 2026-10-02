@@ -43,6 +43,7 @@
 #include "TypeDumpLoader.h"
 #include "TypeRegistry.h"
 #include "TypeRegistryBinary.h"
+#include "Utf.h"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -694,8 +695,37 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
         return status;
     }
 
-    std::optional<std::string> AsText(std::span<uint8 const> data)
+    std::optional<std::string> AsText(std::span<uint8 const> data, bool allowUtf16 = false)
     {
+        if (allowUtf16)
+        {
+            bool const hasLittleEndianBom = data.size() >= 2 && data[0] == 0xFF && data[1] == 0xFE;
+            std::size_t zeroBytes = 0;
+            for (uint8 const byte : data)
+                zeroBytes += byte == 0;
+            if (hasLittleEndianBom || (data.size() >= 2 && data.size() % 2 == 0 && zeroBytes >= data.size() / 4))
+            {
+                std::optional<std::u16string> wide = Utf::Utf16LEBytesToString(data, Utf::InvalidPolicy::Reject);
+                if (!wide)
+                    return std::nullopt;
+                if (!wide->empty() && wide->front() == u'\uFEFF')
+                    wide->erase(wide->begin());
+                std::optional<std::string> text = Utf::Utf16ToUtf8(*wide, Utf::InvalidPolicy::Reject);
+                if (text)
+                {
+                    bool valid = true;
+                    for (unsigned char byte : *text)
+                        if (byte == 0 || (byte < 0x20 && byte != '\t' && byte != '\n' && byte != '\r'))
+                        {
+                            valid = false;
+                            break;
+                        }
+                    if (valid)
+                        return text;
+                }
+            }
+        }
+
         std::string text;
         text.reserve(data.size());
         for (uint8 const byte : data)
@@ -2091,7 +2121,8 @@ Exit status: 0 when every question was answered, 1 when one was not, 2 on bad us
                     continue;
                 }
             }
-            if (std::optional<std::string> const text = AsText(read.Data))
+            bool const isTextFile = std::filesystem::path(name).extension() == ".txt";
+            if (std::optional<std::string> const text = AsText(read.Data, isTextFile))
                 std::cout << *text << (text->empty() || text->back() == '\n' ? "" : "\n");
             else
             {
