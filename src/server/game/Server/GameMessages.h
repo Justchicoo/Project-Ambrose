@@ -274,6 +274,24 @@ namespace GameMessages
         }
     };
 
+    struct ServerTeleport
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_SERVERTELEPORT";
+
+        uint16 LocationX = 0;
+        uint16 LocationY = 0;
+        uint16 LocationZ = 0;
+        uint8 Direction = 0;
+        uint16 MobileId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("LocationX", &ServerTeleport::LocationX), DmlField("LocationY", &ServerTeleport::LocationY),
+                DmlField("LocationZ", &ServerTeleport::LocationZ), DmlField("Direction", &ServerTeleport::Direction), DmlField("MobileID", &ServerTeleport::MobileId) };
+        }
+    };
+
     struct EnterState
     {
         static constexpr uint8 ServiceId = GameService;

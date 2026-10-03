@@ -4,6 +4,7 @@
  */
 
 #include "DBUpdater.h"
+#include "TestDatabaseUpdates.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
 #include "InstalledRevision.h"
@@ -176,7 +177,7 @@ TEST_F(LevelExtractorClientTest, TheRowsFillAWorldDatabaseTheManagerLoads)
         }
     } const cleanup{ *server, world.Database };
 
-    ASSERT_TRUE(DBUpdater::Run(world, "world", UpdaterSettings{}));
+    ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(world));
     std::string error;
     ASSERT_TRUE(LevelScript::Build(*s_extraction).Apply(world, error)) << error;
     ASSERT_TRUE(WorldDatabase.SetConnectionInfo(world.ToConnectionString(), 1, 1));

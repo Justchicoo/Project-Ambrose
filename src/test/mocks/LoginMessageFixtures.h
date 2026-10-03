@@ -71,6 +71,7 @@ namespace LoginMessageFixtures
 <MSG_REQUESTRADIALQUICKCHATEXT><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">205</_MsgOrder><Message TYPE="STR"></Message></RECORD></MSG_REQUESTRADIALQUICKCHATEXT>
 <MSG_SERVERMOVE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">218</_MsgOrder><LocationX TYPE="USHRT"></LocationX><LocationY TYPE="USHRT"></LocationY><LocationZ TYPE="USHRT"></LocationZ><Direction TYPE="UBYT"></Direction><MobileID TYPE="USHRT"></MobileID></RECORD></MSG_SERVERMOVE>
 <MSG_SERVERSHUTDOWN><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">219</_MsgOrder><Message TYPE="UINT"></Message></RECORD></MSG_SERVERSHUTDOWN>
+<MSG_SERVERTELEPORT><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">220</_MsgOrder><LocationX TYPE="USHRT"></LocationX><LocationY TYPE="USHRT"></LocationY><LocationZ TYPE="USHRT"></LocationZ><Direction TYPE="UBYT"></Direction><MobileID TYPE="USHRT"></MobileID></RECORD></MSG_SERVERTELEPORT>
 <MSG_WIZBANG><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">247</_MsgOrder><GameObjectID TYPE="GID"></GameObjectID><WizBangID TYPE="UINT"></WizBangID></RECORD></MSG_WIZBANG>
 <MSG_ZOMBIE_PLAYER><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">248</_MsgOrder><GlobalID TYPE="GID"></GlobalID><Remaining TYPE="FLT"></Remaining></RECORD></MSG_ZOMBIE_PLAYER>
 </FixtureGameMessages>

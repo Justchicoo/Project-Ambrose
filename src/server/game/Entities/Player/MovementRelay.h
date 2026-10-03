@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What other players are told of one wizard's movement at each flush: changed packed moves and movement states, the idle transition when moves stop arriving, and the standing state when its socket becomes link-dead.
+ * What other players are told of one wizard's movement at each flush: changed packed moves and teleports, movement states, the idle transition when moves stop arriving, and the standing state when its socket becomes link-dead.
  */
 
 #ifndef AMBROSE_MOVEMENTRELAY_H
@@ -14,9 +14,10 @@
 struct MovementUpdate
 {
     std::optional<PackedMove> Move;
+    std::optional<PackedMove> Teleport;
     std::optional<int8> State;
 
-    bool Empty() const noexcept { return !Move && !State; }
+    bool Empty() const noexcept { return !Move && !Teleport && !State; }
 };
 
 class MovementRelay

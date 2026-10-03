@@ -8,6 +8,7 @@
 #include "CharacterNameMgr.h"
 #include "BindFile.h"
 #include "DBUpdater.h"
+#include "TestDatabaseUpdates.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
 #include "KiwadArchive.h"
@@ -368,7 +369,7 @@ TEST_F(CharacterNameExtractorTest, TheScriptAppliesToAWorldDatabaseAndLoadsInThe
     EXPECT_NE(error.find("nothing was changed"), std::string::npos) << error;
     EXPECT_NE(error.find("run dbimport to create the world tables first"), std::string::npos) << error;
 
-    ASSERT_TRUE(DBUpdater::Run(world, "world", UpdaterSettings{}));
+    ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(world));
     for (int round = 0; round < 2; ++round)
     {
         ASSERT_TRUE(script.Apply(world, error)) << error;

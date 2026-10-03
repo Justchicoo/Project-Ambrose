@@ -515,6 +515,241 @@
       "name": "the game master reads the kick command",
       "file": "main-help-kick",
       "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to add a teleport point",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash before the teleport point command",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "save the main wizard's current position as a named point",
+      "text": ".tele add Local Point"
+    },
+    {
+      "action": "char",
+      "name": "save the named point",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the named teleport point is saved live",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran tele add Local Point, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to teleport to Start",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash before the Start command",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "teleport the main wizard to Start",
+      "text": ".tele Start"
+    },
+    {
+      "action": "char",
+      "name": "send the Start teleport",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the GM teleports to Start in the same zone",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran tele Start, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard arrives at Start without a loading screen",
+      "file": "teleport-start",
+      "settle": 1
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the same-zone teleport",
+      "file": "companion-sees-teleport",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to check the teleported position",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash before gps",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "check the main wizard's position",
+      "text": ".gps"
+    },
+    {
+      "action": "char",
+      "name": "send gps",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "gps runs for the game master",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran gps, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "gps reports the current zone and position",
+      "file": "teleport-gps",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "open the in-game map to compare the reported position",
+      "vk": "0x4D"
+    },
+    {
+      "action": "shot",
+      "name": "the in-game map shows the wizard at the gps location",
+      "file": "teleport-gps-map",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "close the in-game map",
+      "vk": "0x4D"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to return to the live-added point",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash before the named point command",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "use the newly added point without reloading",
+      "text": ".tele Local Point"
+    },
+    {
+      "action": "char",
+      "name": "send the named point teleport",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the live-added point is usable immediately",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran tele Local Point, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to remove the GM teleport point",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash before the remove command",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "remove the named GM teleport point",
+      "text": ".tele del Local Point"
+    },
+    {
+      "action": "char",
+      "name": "send the remove command",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the named point is removed from the live list",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran tele del Local Point, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to try an out-of-range coordinate",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash before the out-of-range command",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "try an un-packable coordinate",
+      "text": ".go xyz 200000 0 0"
+    },
+    {
+      "action": "char",
+      "name": "send the out-of-range coordinate",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the server refuses the out-of-range coordinate",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran go xyz 200000 0 0, which was not used correctly",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "key",
+      "name": "open the companion chat line to try the GM teleport",
+      "vk": "0xBF",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash before the player's teleport text",
+      "code": 8,
+      "client": "companion"
+    },
+    {
+      "action": "type",
+      "name": "try the GM teleport as a player",
+      "text": ".tele Start",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "send the player's teleport text",
+      "code": 13,
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the player cannot run the GM teleport command",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} sent a chat line, shown to (\\d+) other wizard",
+      "timeout": 20,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the game master sees the player's ordinary chat line",
+      "file": "player-cannot-teleport",
+      "settle": 1
     }
   ],
   "pending_allowed": [
@@ -535,6 +770,8 @@
     "MSG_REQUESTTSMARKEDASUNTRAINED",
     "MSG_REQUESTTUTORIALTIPLOG",
     "MSG_RIDERSLIST",
+    "MSG_REQUESTACTIVEMAPQUESTS",
+    "MSG_MAPREQUIREMENTS",
     "MSG_SplashEnabled",
     "MSG_TOURNAMENTLOOTROLLINFO"
   ]

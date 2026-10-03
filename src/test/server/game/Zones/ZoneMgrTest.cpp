@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests what the zone stores promise. Without a database: a place asked for by name is the place that comes back, facing the way its data says, a name the zone does not hold falls back to its Start rather than to nothing, a zone with no Start and no such name says so instead of guessing, a path no template holds is a typed refusal rather than an empty answer, and what an operator is shown about a zone names its counts. With AMBROSE_TEST_DB set, against a real world database: the three tables load into the stores with an object's class, orientation vector and loading type as its row gives them, a location whose zone no template holds fails the build with that row named and leaves the rows already serving exactly where they were, an object with a loading type the client does not have fails the build the same way, and editing a row and reloading that target alone returns the new coordinates with nothing restarted.
+ * Tests what the zone stores promise. Without a database: a place asked for by name is the place that comes back, facing the way its data says, a name the zone does not hold falls back to its Start rather than to nothing, a zone with no Start and no such name says so instead of guessing, a path no template holds is a typed refusal rather than an empty answer, and custom GM teleport points stay distinct by zone. With AMBROSE_TEST_DB set, against a real world database: the zone tables and GM teleport points load into the stores, invalid locations or objects leave the rows already serving exactly where they were, and reloading a target alone swaps in its new data without restarting.
  */
 
 #include "DBUpdater.h"
+#include "TestDatabaseUpdates.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
 #include "ReloadMgr.h"
@@ -117,6 +118,25 @@ TEST(ZoneMgrTest, TheStoresCountWhatTheyHold)
     EXPECT_EQ(locations.In("Krokotopia/KT_Hub"), nullptr);
 }
 
+TEST(ZoneMgrTest, GameTeleportsAreNamedWithinTheirZoneAndCanBeAddedAndRemoved)
+{
+    GameTeleports teleports;
+    ASSERT_TRUE(teleports.Add(Hub, GameTelePoint{ "Fountain", 4.0f, 8.0f, 12.0f, 0.5f }));
+    ASSERT_TRUE(teleports.Add(Ravenwood, GameTelePoint{ "Fountain", 20.0f, 24.0f, 28.0f, 1.0f }));
+    EXPECT_FALSE(teleports.Add(Hub, GameTelePoint{ "Fountain", 0.0f, 0.0f, 0.0f, 0.0f }));
+    ASSERT_NE(teleports.Find(Hub, "Fountain"), nullptr);
+    EXPECT_FLOAT_EQ(teleports.Find(Hub, "Fountain")->X, 4.0f);
+    ASSERT_NE(teleports.Find(Ravenwood, "Fountain"), nullptr);
+    EXPECT_FLOAT_EQ(teleports.Find(Ravenwood, "Fountain")->X, 20.0f);
+    EXPECT_EQ(teleports.Count(), 2u);
+
+    EXPECT_TRUE(teleports.Remove(Hub, "Fountain"));
+    EXPECT_FALSE(teleports.Remove(Hub, "Fountain"));
+    EXPECT_EQ(teleports.Find(Hub, "Fountain"), nullptr);
+    EXPECT_NE(teleports.Find(Ravenwood, "Fountain"), nullptr);
+    EXPECT_EQ(teleports.Count(), 1u);
+}
+
 namespace
 {
     class ZoneMgrDatabaseTest : public testing::Test
@@ -131,7 +151,7 @@ namespace
             ASSERT_TRUE(info);
             _worldInfo = *info;
             _worldInfo.Database = fmt::format("ambrose_zone_{:08x}", std::random_device()());
-            ASSERT_TRUE(DBUpdater::Run(_worldInfo, "world", UpdaterSettings{}));
+            ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(_worldInfo));
             ASSERT_TRUE(WorldDatabase.SetConnectionInfo(_worldInfo.ToConnectionString(), 1, 1));
             ASSERT_EQ(WorldDatabase.Open(), 0u);
             _open = true;
@@ -171,13 +191,14 @@ namespace
     };
 }
 
-TEST_F(ZoneMgrDatabaseTest, TheThreeTablesLoadIntoTheirStores)
+TEST_F(ZoneMgrDatabaseTest, TheZoneAndTeleportTablesLoadIntoTheirStores)
 {
     ZoneLoadResult const loaded = sZoneMgr.LoadAll();
     ASSERT_TRUE(loaded.Loaded) << (loaded.Errors.empty() ? std::string() : loaded.Errors.front());
     EXPECT_EQ(loaded.Zones, 1u);
     EXPECT_EQ(loaded.Locations, 1u);
     EXPECT_EQ(loaded.Objects, 1u);
+    EXPECT_EQ(loaded.GameTeles, 0u);
 
     ZonePlace const start = sZoneMgr.FindPlace(Hub, "Start");
     ASSERT_TRUE(start.Found());
@@ -207,6 +228,34 @@ TEST_F(ZoneMgrDatabaseTest, TheThreeTablesLoadIntoTheirStores)
     EXPECT_NE(described->find("1 placed object(s)"), std::string::npos) << *described;
     EXPECT_NE(described->find("WizardCity_WC_Hub"), std::string::npos) << *described;
     EXPECT_FALSE(sZoneMgr.Describe("Krokotopia/KT_Hub").has_value());
+}
+
+TEST_F(ZoneMgrDatabaseTest, AGameTeleReloadSwapsTheNamedPointAndKeepsTheServingListOnFailure)
+{
+    ASSERT_TRUE(sZoneMgr.LoadAll().Loaded);
+    Insert(fmt::format("INSERT INTO `game_tele` (`zone_path`, `name`, `position_x`, `position_y`, `position_z`, `direction`) VALUES ('{}', 'Fountain', 4, 8, 12, 0.5)", Hub));
+    EXPECT_FALSE(sZoneMgr.FindGameTele(Hub, "Fountain")) << "a row is not live before its reload target runs";
+
+    ReloadOutcome const first = sReloadMgr.Reload(ZoneMgr::GameTeleTarget);
+    ASSERT_TRUE(first.Ok) << (first.Errors.empty() ? std::string() : first.Errors.front());
+    std::optional<GameTelePoint> const loaded = sZoneMgr.FindGameTele(Hub, "Fountain");
+    ASSERT_TRUE(loaded);
+    EXPECT_FLOAT_EQ(loaded->X, 4.0f);
+
+    ASSERT_TRUE(WorldDatabase.DirectExecute(fmt::format("UPDATE `game_tele` SET `position_x` = 99 WHERE `zone_path` = '{}' AND `name` = 'Fountain'", Hub)));
+    EXPECT_FLOAT_EQ(sZoneMgr.FindGameTele(Hub, "Fountain")->X, 4.0f) << "the current snapshot remains live until reload";
+    ReloadOutcome const updated = sReloadMgr.Reload(ZoneMgr::GameTeleTarget);
+    ASSERT_TRUE(updated.Ok) << (updated.Errors.empty() ? std::string() : updated.Errors.front());
+    EXPECT_FLOAT_EQ(sZoneMgr.FindGameTele(Hub, "Fountain")->X, 99.0f);
+
+    ASSERT_TRUE(WorldDatabase.DirectExecute("SET FOREIGN_KEY_CHECKS = 0"));
+    Insert("INSERT INTO `game_tele` (`zone_path`, `name`, `position_x`, `position_y`, `position_z`, `direction`) VALUES ('Nowhere/Unknown', 'Broken', 1, 2, 3, 0)");
+    ReloadOutcome const rejected = sReloadMgr.Reload(ZoneMgr::GameTeleTarget);
+    EXPECT_FALSE(rejected.Ok);
+    ASSERT_FALSE(rejected.Errors.empty());
+    EXPECT_NE(rejected.Errors.front().find("Nowhere/Unknown"), std::string::npos);
+    EXPECT_FLOAT_EQ(sZoneMgr.FindGameTele(Hub, "Fountain")->X, 99.0f) << "a failed build leaves the serving generation in place";
+    EXPECT_TRUE(WorldDatabase.DirectExecute("SET FOREIGN_KEY_CHECKS = 1"));
 }
 
 TEST_F(ZoneMgrDatabaseTest, ARowNamingAZoneNoTemplateHoldsFailsTheBuildAndKeepsWhatWasServing)

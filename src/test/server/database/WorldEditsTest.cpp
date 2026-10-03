@@ -4,6 +4,7 @@
  */
 
 #include "DBUpdater.h"
+#include "TestDatabaseUpdates.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
 #include "LogTestDirectory.h"
@@ -41,7 +42,7 @@ namespace
             _live.Database = fmt::format("ambrose_edits_live_{:08x}", tag);
             _fresh = *info;
             _fresh.Database = fmt::format("ambrose_edits_fresh_{:08x}", tag);
-            ASSERT_TRUE(DBUpdater::Run(_live, "world", UpdaterSettings{}));
+            ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(_live));
             ASSERT_TRUE(WorldDatabase.SetConnectionInfo(_live.ToConnectionString(), 1, 1));
             ASSERT_EQ(WorldDatabase.Open(), 0u);
             _open = true;

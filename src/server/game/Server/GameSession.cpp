@@ -678,11 +678,15 @@ MovementUpdate GameSession::TakeMovementUpdate(uint32 idleFlushes)
 {
     if (!_mapId || _publicObject.empty())
         return {};
-    return _relay.Take(_movement, idleFlushes);
+    MovementUpdate update = _relay.Take(_movement, idleFlushes);
+    update.Teleport = std::exchange(_pendingTeleport, std::nullopt);
+    return update;
 }
 
 void GameSession::ShowMovementOf(GameSession const& mover, MovementUpdate const& update)
 {
+    if (update.Teleport)
+        ShowTeleportOf(mover, *update.Teleport);
     if (update.Move)
     {
         GameMessages::ServerMove move;
@@ -700,6 +704,30 @@ void GameSession::ShowMovementOf(GameSession const& mover, MovementUpdate const&
         state.NewState = *update.State;
         SendDmlMessage(state);
     }
+}
+
+void GameSession::ShowTeleportOf(GameSession const& mover, PackedMove const& teleport)
+{
+    GameMessages::ServerTeleport message;
+    message.LocationX = teleport.X;
+    message.LocationY = teleport.Y;
+    message.LocationZ = teleport.Z;
+    message.Direction = teleport.Direction;
+    message.MobileId = mover._mobileId;
+    SendDmlMessage(message);
+}
+
+bool GameSession::TeleportWithinMap(PlayerPosition const& destination)
+{
+    if (!IsOpen() || !IsShown())
+        return false;
+    std::optional<PackedMove> const packed = _movement.Teleport(destination);
+    if (!packed)
+        return false;
+    _relay.Reset(_movement);
+    _pendingTeleport = *packed;
+    ShowTeleportOf(*this, *packed);
+    return true;
 }
 
 void GameSession::SendMapObjects(Map const& map)
@@ -845,6 +873,7 @@ void GameSession::LeaveWorld()
     SetCharacterName(std::string());
     _wizBangId = 0;
     _pendingWizBang.reset();
+    _pendingTeleport.reset();
     if (_stats)
     {
         SaveStats();

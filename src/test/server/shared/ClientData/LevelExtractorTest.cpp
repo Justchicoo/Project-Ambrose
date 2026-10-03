@@ -5,6 +5,7 @@
 
 #include "BindFile.h"
 #include "DBUpdater.h"
+#include "TestDatabaseUpdates.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
 #include "KiwadArchive.h"
@@ -448,7 +449,7 @@ TEST_F(LevelExtractorTest, TheScriptAppliesToAWorldDatabaseAndLoadsInTheManager)
     LevelExtraction const extraction = Extract();
     ASSERT_TRUE(extraction.Ok()) << Report(extraction);
     WorldSqlScript const script = LevelScript::Build(extraction);
-    ASSERT_TRUE(DBUpdater::Run(world, "world", UpdaterSettings{}));
+    ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(world));
     std::string error;
     for (int round = 0; round < 2; ++round)
     {

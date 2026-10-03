@@ -4,6 +4,7 @@
  */
 
 #include "DBUpdater.h"
+#include "TestDatabaseUpdates.h"
 #include "DatabaseEnv.h"
 #include "KiwadArchive.h"
 #include "ServerClassScript.h"
@@ -184,7 +185,7 @@ TEST_F(ZoneExtractorClientTest, TheRowsFillAWorldDatabaseTheZoneManagerLoads)
         }
     } const cleanup{ *server, world.Database };
 
-    ASSERT_TRUE(DBUpdater::Run(world, "world", UpdaterSettings{}));
+    ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(world));
     std::string error;
     ASSERT_TRUE(ZoneScript::Build(*s_extraction).Apply(world, error)) << error;
     ASSERT_TRUE(WorldDatabase.SetConnectionInfo(world.ToConnectionString(), 1, 1));
@@ -238,7 +239,7 @@ TEST(ZoneExtractorClientTriggerTest, TheCommonsVolumesAndTriggersReadThroughTheA
                 connection.Execute(fmt::format("DROP DATABASE IF EXISTS {}", DBUpdater::QuoteIdentifier(Name)));
         }
     } const cleanup{ *server, world.Database };
-    ASSERT_TRUE(DBUpdater::Run(world, "world", UpdaterSettings{}));
+    ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(world));
     ASSERT_TRUE(WorldDatabase.SetConnectionInfo(world.ToConnectionString(), 1, 1));
     ASSERT_EQ(WorldDatabase.Open(), 0u);
     TypeDumpLoader::RawDump authored;

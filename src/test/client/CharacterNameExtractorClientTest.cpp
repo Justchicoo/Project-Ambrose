@@ -7,6 +7,7 @@
 #include "CharacterNameScript.h"
 #include "CharacterNameMgr.h"
 #include "DBUpdater.h"
+#include "TestDatabaseUpdates.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
 #include "InstalledRevision.h"
@@ -142,7 +143,7 @@ TEST_F(CharacterNameExtractorClientTest, TheRowsFillAWorldDatabaseTheManagerLoad
         }
     } const cleanup{ *info };
 
-    ASSERT_TRUE(DBUpdater::Run(*info, "world", UpdaterSettings{}));
+    ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(*info));
     std::string error;
     ASSERT_TRUE(CharacterNameScript::Build(*s_extraction).Apply(*info, error)) << error;
     ASSERT_TRUE(WorldDatabase.SetConnectionInfo(info->ToConnectionString(), 1, 1));

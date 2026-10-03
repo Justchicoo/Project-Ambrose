@@ -1555,7 +1555,7 @@ class ScreenSpotTests(unittest.TestCase):
 
 
 class RunOrderTests(TemporaryFolder):
-    def parts(self, server_fails=False, window_fails=False):
+    def parts(self, server_fails=False, window_fails=False, pending=False):
         events = self.events = []
         logs = self.folder
 
@@ -1577,12 +1577,15 @@ class RunOrderTests(TemporaryFolder):
         class FakeLoginServer:
             def __init__(self, *arguments, **keywords):
                 self.log = LogTail(os.path.join(logs, "server", "Login.log"))
+                self.settings = list(keywords.get("settings", []))
 
             def command(self):
                 return ["loginserver.exe"]
 
             def start(self, timeout=None):
                 events.append("the login server started")
+                if "Updates.AllowPending=1" in self.settings:
+                    events.append("pending world updates were enabled")
                 if server_fails:
                     raise StepFailed("the login server never said it was ready")
                 return "ready"
@@ -1593,6 +1596,24 @@ class RunOrderTests(TemporaryFolder):
 
             def stop(self):
                 events.append("the login server stopped")
+                return "stopped"
+
+        class FakeGameServer:
+            def __init__(self, *arguments, **keywords):
+                self.log = LogTail(os.path.join(logs, "game", "Server.log"))
+                self.settings = list(keywords.get("settings", []))
+
+            def command(self):
+                return ["gameserver.exe"]
+
+            def start(self, timeout=None):
+                events.append("the game server started")
+                if "Updates.AllowPending=1" in self.settings:
+                    events.append("game server pending world updates were enabled")
+                return "ready"
+
+            def stop(self):
+                events.append("the game server stopped")
                 return "stopped"
 
         class FakeRunClient(FakeClient):
@@ -1660,32 +1681,53 @@ class RunOrderTests(TemporaryFolder):
         class FakeScratch:
             def __init__(self, *arguments):
                 self.address = "127.0.0.1:3307"
-                self.names = {"login": "ambrose_driver_run_login"}
+                self.names = {"login": "ambrose_driver_run_login", "characters": "ambrose_driver_run_characters",
+                              "world": "ambrose_driver_run_world"}
 
             def drop(self):
                 events.append("the databases were dropped")
                 return "dropped"
 
+            def prepare_pending_world_updates(self, binaries, folder):
+                if pending:
+                    events.append("the pending world database was prepared")
+                    return "registered pending_db_world"
+                return None
+
             def existing(self):
                 return []
 
+            def apply_sql(self, kind, path):
+                return f"applied {kind} rows"
+
+            def seed_character(self, user, wizard):
+                return 1, "Test Wizard"
+
         return {"Capture": FakeCapture, "LoginServer": FakeLoginServer, "Client": FakeRunClient, "NetGuard": FakeGuard,
-                "Engine": FakeEngine, "Scratch": FakeScratch, "kill_leftovers": lambda started, known=(): [],
+                "Engine": FakeEngine, "GameServer": FakeGameServer, "Scratch": FakeScratch, "kill_leftovers": lambda started, known=(): [],
                 "prepare_process": lambda: None, "say": lambda message: None}
 
-    def execute(self, companion=False, launch=None, **behavior):
+    def execute(self, companion=False, launch=None, world=False, **behavior):
         install_root = os.path.join(self.folder, "install")
         self.write(os.path.join("install", "Bin", "revision.dat"), ["r806919"])
-        loaded = scenario.Scenario("test.json", dict({"title": "x", "steps": []}, **({"companion": {"wizard": WorldEntryTests.WIZARD}} if companion else {}),
-                                                     **({"launch": launch} if launch else {})))
+        details = {"title": "x", "steps": []}
+        if companion:
+            details["companion"] = {"wizard": WorldEntryTests.WIZARD}
+        if world:
+            details["requires"] = {"gameserver": True}
+            details["wizard"] = WorldEntryTests.WIZARD
+        if launch:
+            details["launch"] = launch
+        loaded = scenario.Scenario("test.json", details)
         described = references.References("references.json", REFERENCE_DOCUMENT)
-        options = {"runs": os.path.join(self.folder, "runs"), "host": "127.0.0.2", "port": 12100,
+        options = {"runs": os.path.join(self.folder, "runs"), "host": "127.0.0.2", "port": 12100, "game_port": 12433,
                    "db_host": "127.0.0.1", "db_port": 3307, "db_user": "ambrose", "db_password": "ambrose",
                    "db_prefix": "ambrose_driver_run", "refs": os.path.join(self.folder, "refs"),
                    "server_timeout": 1, "client_timeout": 1, "capture": True, "background": True}
         environment = {"binaries": self.folder, "server_defaults": "loginserver.conf.dist", "install": install_root,
                        "revision": "r806919.Wizard_1_610", "tshark": "tshark.exe"}
-        with mock.patch.multiple(run, **self.parts(**behavior)):
+        with mock.patch.multiple(run, **self.parts(**behavior)), \
+                mock.patch.object(run.zones, "ensure", return_value=("zones.sql", "cached zone rows")):
             running = run.Run(options, loaded, described, environment)
             return running, running.execute()
 
@@ -1697,6 +1739,18 @@ class RunOrderTests(TemporaryFolder):
             "the scenario ran", "the client was closed", "the login server stopped", "the capture stopped",
             "the guard stopped", "the databases were dropped"])
         self.assertEqual(code, 0)
+
+    def test_pending_world_updates_are_prepared_before_the_login_server_starts(self):
+            _running, code = self.execute(pending=True)
+            self.assertLess(self.events.index("the pending world database was prepared"), self.events.index("the login server started"))
+            self.assertIn("pending world updates were enabled", self.events)
+            self.assertEqual(code, 0)
+
+    def test_pending_world_updates_are_enabled_for_the_game_server(self):
+            _running, code = self.execute(pending=True, world=True)
+            self.assertLess(self.events.index("the pending world database was prepared"), self.events.index("the game server started"))
+            self.assertIn("game server pending world updates were enabled", self.events)
+            self.assertEqual(code, 0)
 
     def test_a_companion_starts_after_the_main_client_under_the_same_guard_and_stops_before_it(self):
         running, code = self.execute(companion=True)
@@ -2107,7 +2161,7 @@ class InstallTests(TemporaryFolder):
         self.assertEqual(install.snapshot(os.path.join(self.folder, "nowhere")), {})
 
 
-class DatabaseTests(unittest.TestCase):
+class DatabaseTests(TemporaryFolder):
     def test_only_the_driver_s_own_databases_are_allowed(self):
         self.assertEqual(database.checked_name("ambrose_driver_run_login"), "ambrose_driver_run_login")
         for refused in ("ambrose_login", "ambrose_characters", "ambrose_test", "mysql", "ambrose_driver_"):
@@ -2123,6 +2177,58 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(scratch.info("login"), "127.0.0.1;3307;ambrose;ambrose;ambrose_driver_run_login")
         self.assertEqual(scratch.info("characters"), "127.0.0.1;3307;ambrose;ambrose;ambrose_driver_run_characters")
         self.assertEqual(scratch.address, "127.0.0.1:3307")
+
+    def test_pending_world_updates_initialize_only_the_run_s_world_database(self):
+        pending = os.path.join(self.folder, "data", "sql", "updates", "pending_db_world")
+        binaries = os.path.join(self.folder, "bin")
+        run_folder = os.path.join(self.folder, "run")
+        os.makedirs(pending)
+        os.makedirs(binaries)
+        os.makedirs(run_folder)
+        with open(os.path.join(pending, "one.sql"), "w", encoding="utf-8") as handle:
+            handle.write("SELECT 1;\n")
+        for name in (paths.program("unit_tests"),):
+            with open(os.path.join(binaries, name), "w", encoding="utf-8"):
+                pass
+        scratch = database.Scratch("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose_driver_run")
+        finished = mock.Mock(returncode=0, stdout=b"", stderr=b"")
+        with mock.patch.object(database.paths, "REPOSITORY", self.folder), \
+                mock.patch.object(database.subprocess, "run", return_value=finished) as invoke, \
+                mock.patch.dict(database.os.environ, {"AMBROSE_TEST_DB": "wrong"}, clear=False):
+            result = scratch.prepare_pending_world_updates(binaries, run_folder)
+        self.assertIn("applied released and pending world updates", result)
+        command = invoke.call_args.args[0]
+        self.assertEqual(command[-1], "--gtest_filter=TestDatabaseSetup.DISABLED_ApplyWorldUpdates")
+        self.assertEqual(invoke.call_args.kwargs["cwd"], run_folder)
+        self.assertEqual(invoke.call_args.kwargs["env"]["AMBROSE_TEST_DB"],
+                         "127.0.0.1;3307;ambrose;ambrose;ambrose_driver_run_world")
+
+    def test_pending_world_database_setup_is_skipped_when_there_are_no_pending_updates(self):
+        scratch = database.Scratch("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose_driver_run")
+        with mock.patch.object(database.paths, "REPOSITORY", self.folder), \
+                mock.patch.object(database.subprocess, "run") as invoke:
+            self.assertIsNone(scratch.prepare_pending_world_updates(self.folder, self.folder))
+        invoke.assert_not_called()
+
+    def test_pending_world_database_setup_reports_dbimport_output_without_exposing_the_password(self):
+        pending = os.path.join(self.folder, "data", "sql", "updates", "pending_db_world")
+        binaries = os.path.join(self.folder, "bin")
+        os.makedirs(pending)
+        os.makedirs(binaries)
+        with open(os.path.join(pending, "one.sql"), "w", encoding="utf-8") as handle:
+            handle.write("SELECT 1;\n")
+        for name in (paths.program("unit_tests"),):
+            with open(os.path.join(binaries, name), "w", encoding="utf-8"):
+                pass
+        scratch = database.Scratch("127.0.0.1", 3307, "ambrose", "secret", "ambrose_driver_run")
+        finished = mock.Mock(returncode=1, stdout=b"could not start", stderr=b"password=secret")
+        with mock.patch.object(database.paths, "REPOSITORY", self.folder), \
+                mock.patch.object(database.subprocess, "run", return_value=finished):
+            with self.assertRaises(StepFailed) as raised:
+                scratch.prepare_pending_world_updates(binaries, self.folder)
+        self.assertIn("could not start", str(raised.exception))
+        self.assertIn("<redacted>", str(raised.exception))
+        self.assertNotIn("secret", str(raised.exception))
 
     def test_a_prefix_that_is_not_the_driver_s_own_is_refused(self):
         with self.assertRaises(Refused):

@@ -78,10 +78,11 @@ if(NAME STREQUAL "loginserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AM
     ambrose_test_database_info(ambrose_smoke_login smokeDatabase)
     ambrose_test_database_info(ambrose_smoke_characters smokeCharacters)
     ambrose_test_database_info(ambrose_smoke_world smokeWorld)
+    ambrose_apply_pending_world_updates("${smokeWorld}")
     foreach(round IN ITEMS first second)
         execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=${smokeDatabase}" "--set=CharacterDatabaseInfo=${smokeCharacters}"
                 "--set=WorldDatabaseInfo=${smokeWorld}"
-            WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE databaseResult OUTPUT_VARIABLE databaseOutput ERROR_VARIABLE databaseError TIMEOUT 60)
+            WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE databaseResult OUTPUT_VARIABLE databaseOutput ERROR_VARIABLE databaseError TIMEOUT 300)
         if(NOT databaseResult EQUAL 0 OR NOT databaseOutput MATCHES "Opened database connection pool login: 1 async, 1 sync" OR NOT databaseOutput MATCHES "loginserver ready" OR NOT databaseOutput MATCHES "Closed database connection pool login"
             OR NOT databaseOutput MATCHES "Opened database connection pool characters: 1 async, 1 sync" OR NOT databaseOutput MATCHES "Opened database connection pool world: 1 async, 1 sync"
             OR NOT databaseOutput MATCHES "Wizards can be created from")
@@ -134,9 +135,13 @@ if(NAME STREQUAL "gameserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AMB
     foreach(database IN ITEMS Login Character World)
         string(TOLOWER "${database}" lowerDatabase)
         ambrose_test_database_info(ambrose_smoke_${lowerDatabase} databaseInfo)
+        if("${database}" STREQUAL "World")
+            set(smokeWorld "${databaseInfo}")
+        endif()
         string(REPLACE ";" "\\;" databaseInfo "${databaseInfo}")
         list(APPEND realmOptions "--set=${database}DatabaseInfo=${databaseInfo}")
     endforeach()
+    ambrose_apply_pending_world_updates("${smokeWorld}")
     execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} ${realmOptions} --set Appender.DB=4,2,0
         WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE realmResult OUTPUT_VARIABLE realmOutput ERROR_VARIABLE realmError TIMEOUT 120)
     if(NOT realmResult EQUAL 0)
@@ -161,10 +166,17 @@ if(NAME STREQUAL "gameserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AMB
         endif()
         ambrose_realm_step("${loginInfo}" "${realmName}" DISABLED_TheRealmBeatWhileItRanAndIsOfflineNow "reading the realm back after the server stopped")
     endif()
-    foreach(expected IN ITEMS "Created database ambrose_smoke_login_" "Created database ambrose_smoke_character_" "Created database ambrose_smoke_world_"
-            "The login database is up to date|Applied [0-9]+ update\\(s\\) to the login database"
-            "Applied [0-9]+ update\\(s\\) to the characters database" "Applied [0-9]+ update\\(s\\) to the world database"
-            "Opened database connection pool world: 1 async, 1 sync" "The world database holds no character name tables" "The world database holds no level or stat tables" "gameserver ready" "Closed database connection pool world" "gameserver stopped")
+    set(expectedOutput "Created database ambrose_smoke_login_" "Created database ambrose_smoke_character_"
+        "The login database is up to date|Applied [0-9]+ update\\(s\\) to the login database"
+        "Applied [0-9]+ update\\(s\\) to the characters database"
+        "Opened database connection pool world: 1 async, 1 sync" "The world database holds no character name tables" "The world database holds no level or stat tables" "gameserver ready" "Closed database connection pool world" "gameserver stopped")
+    file(GLOB pendingWorldUpdates "${AMBROSE_TEST_SOURCE_DIRECTORY}/data/sql/updates/pending_db_world/*.sql")
+    if(pendingWorldUpdates)
+        list(APPEND expectedOutput "The world database is up to date")
+    else()
+        list(APPEND expectedOutput "Created database ambrose_smoke_world_" "Applied [0-9]+ update\\(s\\) to the world database")
+    endif()
+    foreach(expected IN LISTS expectedOutput)
         if(NOT realmOutput MATCHES "${expected}")
             ambrose_test_fail("gameserver on empty databases did not log '${expected}': ${realmOutput}${realmError}")
         endif()

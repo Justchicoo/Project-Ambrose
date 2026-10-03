@@ -5,6 +5,7 @@
 
 #include "BindFile.h"
 #include "DBUpdater.h"
+#include "TestDatabaseUpdates.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
 #include "KiwadBuilder.h"
@@ -414,7 +415,7 @@ TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtr
     ZoneExtraction const extraction = ReadHub();
     ASSERT_TRUE(extraction.Ok()) << Report(extraction);
     WorldSqlScript const script = ZoneScript::Build(extraction);
-    ASSERT_TRUE(DBUpdater::Run(world, "world", UpdaterSettings{}));
+    ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(world));
     std::string error;
     for (int round = 0; round < 2; ++round)
     {
