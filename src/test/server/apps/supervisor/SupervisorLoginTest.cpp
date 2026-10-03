@@ -14,6 +14,7 @@
 #include "MySQLConnection.h"
 #include "ScopeExit.h"
 #include "Supervisor.h"
+#include "TestDatabaseUpdates.h"
 
 #include <asio/io_context.hpp>
 #include <asio/ip/tcp.hpp>
@@ -351,6 +352,7 @@ TEST(SupervisorLoginClientTest, RestartingTheGameServerLeavesTheLoginServersSess
         DropDatabase(*world);
     });
 
+    ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(*world));
     SupervisedLoginServer server(*login, *characters, true, world);
     ASSERT_TRUE(server.WaitFor(AppState::Running, 300s)) << server.App().Message;
     ASSERT_TRUE(server.WaitFor(AppState::Running, 300s, "gameserver")) << server.App("gameserver").Message;
@@ -392,6 +394,7 @@ TEST(SupervisorLoginClientTest, AGameServerEndedFromOutsideIsOneCrashAndStartsAg
         DropDatabase(*world);
     });
 
+    ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(*world));
     SupervisedLoginServer server(*login, *characters, true, world);
     ASSERT_TRUE(server.WaitFor(AppState::Running, 300s, "gameserver")) << server.App("gameserver").Message;
     std::optional<int64> const before = server.App("gameserver").ProcessId;

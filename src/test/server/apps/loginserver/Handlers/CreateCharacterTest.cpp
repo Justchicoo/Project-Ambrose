@@ -11,6 +11,7 @@
 #include "CharacterTypeFixtures.h"
 #include "ClientKey.h"
 #include "DBUpdater.h"
+#include "TestDatabaseUpdates.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
 #include "LoginMgr.h"
@@ -62,7 +63,7 @@ namespace
             _worldInfo.Database = fmt::format("ambrose_make_{:08x}_world", suffix);
             ASSERT_TRUE(DBUpdater::Run(_loginInfo, "login", UpdaterSettings{}));
             ASSERT_TRUE(DBUpdater::Run(_charactersInfo, "characters", UpdaterSettings{}));
-            ASSERT_TRUE(DBUpdater::Run(_worldInfo, "world", UpdaterSettings{}));
+            ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(_worldInfo));
             ASSERT_TRUE(LoginDatabase.SetConnectionInfo(_loginInfo.ToConnectionString(), 1, 1));
             ASSERT_EQ(LoginDatabase.Open(), 0u);
             ASSERT_TRUE(CharacterDatabase.SetConnectionInfo(_charactersInfo.ToConnectionString(), 1, 1));

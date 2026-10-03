@@ -4,6 +4,7 @@
  */
 
 #include "DBUpdater.h"
+#include "TestDatabaseUpdates.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
 #include "PlayerLevelMgr.h"
@@ -43,7 +44,7 @@ namespace
             ASSERT_TRUE(info);
             _info = *info;
             _info.Database = fmt::format("ambrose_world_levels_{:08x}", std::random_device()());
-            ASSERT_TRUE(DBUpdater::Run(_info, "world", UpdaterSettings{}));
+            ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(_info));
             ASSERT_TRUE(WorldDatabase.SetConnectionInfo(_info.ToConnectionString(), 1, 1));
             ASSERT_EQ(WorldDatabase.Open(), 0u);
             _open = true;

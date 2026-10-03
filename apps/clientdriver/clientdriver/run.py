@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# One run end to end: it drops and lets the server rebuild its own databases, starts the capture, the login server and its account, and for a scenario that enters the world loads the zone rows into its world database, starts the game server, which announces its realm to the login server, and seeds the scenario's wizard, then snapshots the install, opens the ports the scenario watches, starts the client through the launcher, or opens the launcher window and leaves the client to the Play the scenario presses in it, or from the command the launcher prepared less its -P 0 for a scenario that follows the client's own patching default, with the install's PatchConfig.xml copied into the run folder and pointed at a local port first when the scenario asks, whichever way the client starts, and guards it from the moment it exists against any connection off this machine but the ones netguard-allow.json declares, starts a companion client the same way for a scenario that shows two wizards to each other, on an account and with a wizard of its own and under the same guard, runs the scenario, then asks each client to quit or ends it outright when its own log says quitting would reach off the machine, stops everything in the order it started it with the guard watching until last, and writes the report over both servers' logs whether the scenario passed or failed.
+# One run end to end: it owns scratch databases and ports, prepares pending world updates with the existing test helper only when present, starts the servers and guarded client, runs the scenario, cleans up, and records evidence.
 import os
 import re
 import secrets
@@ -115,14 +115,19 @@ class Run:
         engine.listeners = {listener.label: listener for listener in listeners}
         engine.background = options.get("background", True)
         guard = None
-        before = {}
+        before = install.snapshot(self.environment.get("install"))
         try:
             self.note("the scratch databases", f"{databases.address} will hold {', '.join(sorted(databases.names.values()))}")
             self.note("dropped anything left from an earlier run", databases.drop())
+            self.note("the install", f"{len(before)} file(s) under {self.environment.get('install')}")
+            pending_updates = databases.prepare_pending_world_updates(self.environment["binaries"], self.folder)
+            if pending_updates:
+                server.settings.append("Updates.AllowPending=1")
+                if game is not None:
+                    game.settings.append("Updates.AllowPending=1")
+                self.note("the world's pending updates", pending_updates)
             self.cleanups.append(("stop the capture", capture.stop))
             self.note("the capture", capture.start())
-            before = install.snapshot(self.environment.get("install"))
-            self.note("the install", f"{len(before)} file(s) under {self.environment.get('install')}")
             self.cleanups.append(("stop the login server", server.stop))
             self.note("the login server", server.start(timeout=options["server_timeout"]))
             self.note("the account", server.ensure_account(variables["user"], password))

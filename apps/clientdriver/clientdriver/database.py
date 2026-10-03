@@ -1,5 +1,6 @@
 # Project Ambrose by Imjustchico
-# The scratch databases a run owns: it touches only names starting with ambrose_driver_, lets the server's own updater create them, loads the zone rows the game server stands wizards in, seeds the wizard a scenario enters the world with, its level, experience and any stats it carries, and reads its name back from the name tables the game server extracted, copies another database's wizard with its stats when that database has them, reads a value for an assertion, and drops them when the run ends.
+# The scratch databases a run owns: it touches only names starting with ambrose_driver_, lets the server's own updater create them, reuses the pending-world test setup when present, loads the zone rows the game server stands wizards in, seeds the wizard a scenario enters the world with, its level, experience and any stats it carries, and reads its name back from the name tables the game server extracted, copies another database's wizard with its stats when that database has them, reads a value for an assertion, and drops them when the run ends.
+import os
 import socket
 import subprocess
 import time
@@ -12,6 +13,7 @@ APPEARANCE = ("behavior_template_name_id", "gender", "race", "head_hands_model",
               "feet_color", "feet_decal", "skin_decal2", "extended_hair_color", "extended_skin_decal", "after_combat_dance",
               "after_combat_victory_dance", "new_player_options", "new_player_options2")
 
+from . import paths
 from .errors import Refused, StepFailed
 
 PREFIX = "ambrose_driver_"
@@ -89,6 +91,34 @@ class Scratch:
         finally:
             connection.close()
         return "dropped " + ", ".join(sorted(self.names.values()))
+
+    def prepare_pending_world_updates(self, binaries, folder):
+        pending_folder = os.path.join(paths.REPOSITORY, "data", "sql", "updates", "pending_db_world")
+        if not os.path.isdir(pending_folder) or not any(name.endswith(".sql") for name in os.listdir(pending_folder)):
+            return None
+        unit_tests = os.path.join(binaries, paths.program("unit_tests"))
+        if not os.path.isfile(unit_tests):
+            raise StepFailed(f"{unit_tests} is missing; build unit_tests before running with pending world updates")
+        command = [unit_tests, "--gtest_also_run_disabled_tests", "--gtest_filter=TestDatabaseSetup.DISABLED_ApplyWorldUpdates"]
+        environment = os.environ.copy()
+        environment["AMBROSE_TEST_DB"] = self.info("world")
+        try:
+            finished = subprocess.run(command, cwd=folder, env=environment, capture_output=True, timeout=300, creationflags=NO_WINDOW)
+        except (OSError, subprocess.SubprocessError) as error:
+            detail = str(error).replace(self.info("world"), "<world database>")
+            if self.password:
+                detail = detail.replace(self.password, "<redacted>")
+            raise StepFailed(f"the pending-world database helper could not run: {detail}")
+        if finished.returncode != 0:
+            output = (finished.stderr or b"") + b"\n" + (finished.stdout or b"")
+            detail = output.decode("utf-8", "replace").strip()
+            detail = detail.replace(self.info("world"), "<world database>")
+            if self.password:
+                detail = detail.replace(self.password, "<redacted>")
+            lines = detail.splitlines()
+            detail = "\n".join(line[-500:] for line in lines[-10:])
+            raise StepFailed(f"the pending-world database helper failed: {detail or finished.returncode}")
+        return "applied released and pending world updates through the existing test database helper"
 
     def apply_sql(self, kind, path, batch=2000):
         connection = self._connect(self.names[kind])

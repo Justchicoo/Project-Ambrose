@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Whoever is running a command, so a command is written once and does not care whether it came from a console or from a chat line in game: it says what level the caller holds, whether it is a console, who it is for the log, and takes the lines the command replies with, which a console prints and a session will send to its client once 4.05 gives the game server its messages.
+ * Whoever is running a command, so a command is written once and does not care whether it came from a console or from a chat line in game: it says what level the caller holds, whether it is a console, who it is for the log, gives an in-game command its session when it needs the current wizard, and takes the lines the command replies with, which a console prints and a session sends to its client.
  */
 
 #ifndef AMBROSE_COMMANDCALLER_H
@@ -13,6 +13,8 @@
 #include <string_view>
 #include <vector>
 
+class GameSession;
+
 class CommandCaller
 {
 public:
@@ -21,6 +23,7 @@ public:
     virtual uint8 GetSecurityLevel() const = 0;
     virtual bool IsConsole() const = 0;
     virtual std::string GetName() const = 0;
+    virtual GameSession* GetGameSession() const { return nullptr; }
     virtual void Reply(std::string_view line) = 0;
 };
 

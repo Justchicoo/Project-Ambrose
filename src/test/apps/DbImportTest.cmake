@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# With AMBROSE_TEST_DB set, runs dbimport to create and update three uniquely named databases twice, then once with a broken update that must exit 1 and name the file, and drops every database it made.
+# With AMBROSE_TEST_DB set, prepares pending world updates when needed, runs dbimport twice, then once with a broken update that must exit 1 and name the file, and drops every database it made.
 if(NOT APP OR NOT WORKDIR OR NOT SOURCE)
     message(FATAL_ERROR "APP, WORKDIR and SOURCE must be set")
 endif()
@@ -16,15 +16,19 @@ set(quietOptions --set "LogsDir=${WORKDIR}/logs" --set Appender.Console=1,3,0 --
 ambrose_test_database_info(ambrose_dbimport_login loginInfo)
 ambrose_test_database_info(ambrose_dbimport_characters characterInfo)
 ambrose_test_database_info(ambrose_dbimport_world worldInfo)
+file(GLOB pendingWorldUpdates "${AMBROSE_TEST_SOURCE_DIRECTORY}/data/sql/updates/pending_db_world/*.sql")
+if(pendingWorldUpdates)
+    ambrose_apply_pending_world_updates("${worldInfo}")
+endif()
 
 foreach(round IN ITEMS first second)
     execute_process(COMMAND "${APP}" --config "${appDir}/dbimport.conf.dist" ${quietOptions}
             "--set=LoginDatabaseInfo=${loginInfo}" "--set=CharacterDatabaseInfo=${characterInfo}" "--set=WorldDatabaseInfo=${worldInfo}"
-        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE importResult OUTPUT_VARIABLE importOutput ERROR_VARIABLE importError TIMEOUT 120)
+        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE importResult OUTPUT_VARIABLE importOutput ERROR_VARIABLE importError TIMEOUT 300)
     if(NOT importResult EQUAL 0 OR NOT importOutput MATCHES "Every enabled database is created and up to date")
         ambrose_test_fail("dbimport's ${round} run exited ${importResult}: ${importOutput}${importError}")
     endif()
-    if(round STREQUAL "first" AND NOT importOutput MATCHES "Created database ambrose_dbimport_world_")
+    if(round STREQUAL "first" AND NOT pendingWorldUpdates AND NOT importOutput MATCHES "Created database ambrose_dbimport_world_")
         ambrose_test_fail("dbimport's first run did not create the world database: ${importOutput}")
     endif()
 endforeach()

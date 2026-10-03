@@ -42,6 +42,17 @@ struct ZoneLocation
     float Yaw = 0.0f;
 };
 
+struct GameTelePoint
+{
+    std::string Name;
+    float X = 0.0f;
+    float Y = 0.0f;
+    float Z = 0.0f;
+    float Yaw = 0.0f;
+
+    bool operator==(GameTelePoint const&) const = default;
+};
+
 enum class ZoneObjectLoading : uint8
 {
     StaticClientServer = 0,
@@ -132,12 +143,28 @@ private:
     std::map<std::string, std::vector<ZoneObjectSpawn>, std::less<>> _byZone;
 };
 
+class GameTeleports
+{
+public:
+    GameTeleports() = default;
+    explicit GameTeleports(std::map<std::string, std::vector<GameTelePoint>, std::less<>> byZone);
+
+    GameTelePoint const* Find(std::string_view zone, std::string_view name) const;
+    bool Add(std::string_view zone, GameTelePoint point);
+    bool Remove(std::string_view zone, std::string_view name);
+    std::size_t Count() const noexcept;
+
+private:
+    std::map<std::string, std::vector<GameTelePoint>, std::less<>> _byZone;
+};
+
 struct ZoneLoadResult
 {
     bool Loaded = false;
     std::size_t Zones = 0;
     std::size_t Locations = 0;
     std::size_t Objects = 0;
+    std::size_t GameTeles = 0;
     std::chrono::milliseconds Took{ 0 };
     std::vector<std::string> Errors;
 };
@@ -148,7 +175,9 @@ public:
     static constexpr std::string_view TemplateTarget = "zone_template";
     static constexpr std::string_view LocationTarget = "zone_location";
     static constexpr std::string_view ObjectTarget = "zone_object";
+    static constexpr std::string_view GameTeleTarget = "game_tele";
     static constexpr std::size_t MaxReportedErrors = 20;
+    static constexpr std::size_t MaxGameTeleNameLength = 128;
 
     static ZoneMgr& Instance();
 
@@ -161,19 +190,25 @@ public:
     bool LoadTemplates(std::vector<std::string>& errors);
     bool LoadLocations(std::vector<std::string>& errors);
     bool LoadObjects(std::vector<std::string>& errors);
+    bool LoadGameTeles(std::vector<std::string>& errors);
 
     std::shared_ptr<ZoneTemplates const> GetTemplates() const { return _templates.Get(); }
     std::shared_ptr<ZoneLocations const> GetLocations() const { return _locations.Get(); }
     std::shared_ptr<ZoneObjects const> GetObjects() const { return _objects.Get(); }
+    std::shared_ptr<GameTeleports const> GetGameTeles() const { return _gameTeles.Get(); }
     uint64 GetObjectGeneration() const noexcept { return _objects.GetGeneration(); }
 
     ZonePlace FindPlace(std::string_view zone, std::string_view name) const;
+    std::optional<GameTelePoint> FindGameTele(std::string_view zone, std::string_view name) const;
+    bool AddGameTele(std::string_view zone, GameTelePoint point);
+    bool RemoveGameTele(std::string_view zone, std::string_view name);
     std::optional<std::string> Describe(std::string_view zone) const;
     void Clear();
 
     static ZoneTemplates ReadTemplates(PreparedResultSet* result, std::vector<std::string>& errors);
     static ZoneLocations ReadLocations(PreparedResultSet* result, ZoneTemplates const& templates, std::vector<std::string>& errors);
     static ZoneObjects ReadObjects(PreparedResultSet* result, ZoneTemplates const& templates, std::vector<std::string>& errors);
+    static GameTeleports ReadGameTeles(PreparedResultSet* result, ZoneTemplates const& templates, std::vector<std::string>& errors);
     static std::string_view GetLookupName(ZoneLookup lookup) noexcept;
 
 private:
@@ -182,6 +217,7 @@ private:
     ReloadableStore<ZoneTemplates> _templates;
     ReloadableStore<ZoneLocations> _locations;
     ReloadableStore<ZoneObjects> _objects;
+    ReloadableStore<GameTeleports> _gameTeles;
 };
 
 #define sZoneMgr ZoneMgr::Instance()

@@ -288,10 +288,10 @@ Operators can manage accounts, bans, security levels and deleted characters from
 
 **Acceptance**
 
-- [ ] '.tele Start' snaps without loading; B sees it
-- [ ] '.gps' matches minimap
-- [ ] Out-of-range '.go xyz' refused; players cannot '.tele'
-- [ ] A point from '.tele add' works at once without a reload
+- [x] '.tele Start' snaps without loading; B sees it [Client-driver run 20261003-054436: screenshots 39-40 show the main wizard at Start and the companion seeing the new position]
+- [x] '.gps' matches minimap [Client-driver run 20261003-054436: screenshot 42 prints WizardCity/WC_Hub at x=0, y=48, z=-28, yaw=5.1; screenshot 44 shows the matching position on the Commons map]
+- [x] Out-of-range '.go xyz' refused; players cannot '.tele' [PlayerMovementTest.ARejectedTeleportLeavesThePositionAndPendingWriteUntouched verifies an un-packable destination is rejected; client-driver run 20261003-054436, screenshot 51, shows the refusal; screenshot 54 shows a player's command treated as chat]
+- [x] A point from '.tele add' works at once without a reload [Client-driver run 20261003-054436: screenshots 35 and 47 show the live point being added and used]
 
 ### Detailed spec from WLD-12: Same-zone teleport and GM teleport commands
 
@@ -316,11 +316,11 @@ A GM can instantly move themselves or another player to a named location or coor
 
 **Acceptance**
 
-- [ ] Real client: '.tele Start' in WC_Hub snaps the wizard to the Start fountain with no loading screen, and B sees A pop to the new spot
-- [ ] Real client: '.gps' prints coordinates matching the minimap position
-- [ ] Unit: '.go xyz' outside the packable range is refused with a message
-- [ ] A player-level account cannot run '.tele'
-- [ ] Real client: a point added with '.tele add' works immediately without a reload or restart
+- [x] Real client: '.tele Start' in WC_Hub snaps the wizard to the Start fountain with no loading screen, and B sees A pop to the new spot [Client-driver run 20261003-054436: screenshots 39-40]
+- [x] Real client: '.gps' prints coordinates matching the minimap position [Client-driver run 20261003-054436: screenshot 42 prints WizardCity/WC_Hub at x=0, y=48, z=-28, yaw=5.1; screenshot 44 shows the same position on the Commons map]
+- [x] Unit: '.go xyz' outside the packable range is refused with a message [PlayerMovementTest.ARejectedTeleportLeavesThePositionAndPendingWriteUntouched verifies an un-packable destination is rejected; client-driver run 20261003-054436, screenshot 51, verifies the command's refusal message]
+- [x] A player-level account cannot run '.tele' [Client-driver run 20261003-054436: screenshot 54 shows the player's command as ordinary chat]
+- [x] Real client: a point added with '.tele add' works immediately without a reload or restart [Client-driver run 20261003-054436: screenshots 35 and 47]
 
 **Risks**
 

@@ -5,6 +5,7 @@
 
 #include "CharacterDatabase.h"
 #include "DBUpdater.h"
+#include "TestDatabaseUpdates.h"
 #include "Environment.h"
 #include "Log.h"
 #include "LogTestConfig.h"
@@ -367,7 +368,7 @@ TEST(PreparedStatementTest, DatabaseConnectionsPrepareTheirStatements)
     });
     ASSERT_TRUE(DBUpdater::Run(loginInfo, "login", UpdaterSettings{}));
     ASSERT_TRUE(DBUpdater::Run(charactersInfo, "characters", UpdaterSettings{}));
-    ASSERT_TRUE(DBUpdater::Run(worldInfo, "world", UpdaterSettings{}));
+    ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(worldInfo));
     LoginDatabaseConnection login(loginInfo);
     CharacterDatabaseConnection characters(charactersInfo);
     WorldDatabaseConnection world(worldInfo);

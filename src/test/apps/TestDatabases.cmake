@@ -1,5 +1,6 @@
 # Project Ambrose by Imjustchico
-# Shared by the app test scripts: builds uniquely named AMBROSE_TEST_DB connection strings, remembers each database, and drops them through unit_tests before passing or failing.
+# Shared by the app test scripts: builds uniquely named AMBROSE_TEST_DB connection strings, opts pending world updates in through unit_tests, remembers each database, and drops them before passing or failing.
+set(AMBROSE_TEST_SOURCE_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/../../..")
 set(AMBROSE_CREATED_TEST_DATABASES)
 string(RANDOM LENGTH 8 ALPHABET "0123456789abcdef" AMBROSE_TEST_DATABASE_SUFFIX)
 
@@ -17,6 +18,25 @@ function(ambrose_test_database_info prefix out)
     list(APPEND created "${name}")
     set(AMBROSE_CREATED_TEST_DATABASES ${created} PARENT_SCOPE)
     set(${out} "${joined}" PARENT_SCOPE)
+endfunction()
+
+function(ambrose_apply_pending_world_updates info)
+    file(GLOB pendingWorldUpdates "${AMBROSE_TEST_SOURCE_DIRECTORY}/data/sql/updates/pending_db_world/*.sql")
+    if(NOT pendingWorldUpdates)
+        return()
+    endif()
+    if(NOT UNIT_TESTS OR NOT EXISTS "${UNIT_TESTS}")
+        message(FATAL_ERROR "UNIT_TESTS is not set, so pending world updates cannot be applied")
+    endif()
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env "AMBROSE_TEST_DB=${info}" "${UNIT_TESTS}" --gtest_also_run_disabled_tests
+            --gtest_filter=TestDatabaseSetup.DISABLED_ApplyWorldUpdates
+        RESULT_VARIABLE applyResult OUTPUT_VARIABLE applyOutput ERROR_VARIABLE applyError TIMEOUT 600)
+    if(NOT applyResult EQUAL 0)
+        message(FATAL_ERROR "could not prepare the world's pending updates (${applyResult}): ${applyOutput}${applyError}")
+    endif()
+    if(NOT applyOutput MATCHES "1 test")
+        message(FATAL_ERROR "the pending world update setup did not run: ${applyOutput}${applyError}")
+    endif()
 endfunction()
 
 function(ambrose_drop_test_databases)

@@ -110,6 +110,7 @@ execute_process(COMMAND "${DBIMPORT}" --config "${dbimportDir}/dbimport.conf.dis
 if(NOT importResult EQUAL 0)
     ambrose_test_fail("dbimport could not create the extractor's world database (${importResult}): ${importOutput}${importError}")
 endif()
+ambrose_apply_pending_world_updates("${worldInfo}")
 foreach(round IN ITEMS first second)
     execute_process(COMMAND "${APP}" --world-db "${worldInfo}" names levels RESULT_VARIABLE writeResult OUTPUT_VARIABLE writeOutput ERROR_VARIABLE writeError TIMEOUT 600)
     if(NOT writeResult EQUAL 0 OR NOT writeOutput MATCHES "replaced the world tables in" OR NOT writeOutput MATCHES "character_create_school: 7 rows" OR NOT writeOutput MATCHES "player_level_stats: 1267 rows")

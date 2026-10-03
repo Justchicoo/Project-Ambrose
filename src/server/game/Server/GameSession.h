@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook and stats stay with the world thread and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it.
+ * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook and stats stay with the world thread, GM teleports update its packed position for itself and viewers, and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it.
  */
 
 #ifndef AMBROSE_GAMESESSION_H
@@ -90,8 +90,10 @@ public:
     void HandleNotAfk(GameMessages::NotAfk& message);
     void LeaveWorld();
     std::optional<uint32> GetMapId() const noexcept { return _mapId; }
+    std::string const& GetZonePath() const noexcept { return _zonePath; }
     uint64 GetWorldGuid() const noexcept { return _worldGuid; }
     bool IsShown() const noexcept { return _mapId.has_value() && !_publicObject.empty(); }
+    bool TeleportWithinMap(PlayerPosition const& destination);
     bool TakeArrival() noexcept;
     std::optional<WorldDeparture> TakeDeparture() noexcept;
     void ShowPlayer(GameSession const& other);
@@ -101,6 +103,7 @@ public:
     std::optional<uint32> TakeWizBangChange() noexcept { return std::exchange(_pendingWizBang, std::nullopt); }
     std::optional<uint8> TakeJump() noexcept;
     void ShowStateOf(uint64 worldGuid, uint32 state);
+    void ShowTeleportOf(GameSession const& mover, PackedMove const& teleport);
     std::vector<Speech> TakeSpeech();
     void HearSpeech(ChatSpeaker const& speaker, Speech const& speech);
     std::string const& GetChatName() const noexcept { return _chatName; }
@@ -199,6 +202,7 @@ private:
     std::optional<PlayerSpellbook> _spellbook;
     PlayerMovement _movement;
     MovementRelay _relay;
+    std::optional<PackedMove> _pendingTeleport;
     std::vector<uint8> _publicObject;
     bool _arrived = false;
     std::optional<WorldDeparture> _departure;

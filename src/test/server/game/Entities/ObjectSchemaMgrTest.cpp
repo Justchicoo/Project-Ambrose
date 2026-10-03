@@ -5,6 +5,7 @@
 
 #include "BindFile.h"
 #include "DBUpdater.h"
+#include "TestDatabaseUpdates.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
 #include "ObjectSchemaMgr.h"
@@ -77,7 +78,7 @@ namespace
             ASSERT_TRUE(info);
             _worldInfo = *info;
             _worldInfo.Database = fmt::format("ambrose_schema_{:08x}", std::random_device()());
-            ASSERT_TRUE(DBUpdater::Run(_worldInfo, "world", UpdaterSettings{}));
+            ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(_worldInfo));
             ASSERT_TRUE(WorldDatabase.SetConnectionInfo(_worldInfo.ToConnectionString(), 1, 1));
             ASSERT_EQ(WorldDatabase.Open(), 0u);
             _open = true;

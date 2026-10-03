@@ -1,16 +1,27 @@
 /*
  * Project Ambrose by Imjustchico
- * A disabled test the app smoke scripts run by name to drop the databases they created, listed in AMBROSE_DROP_DATABASES, refusing any name outside their prefixes.
+ * Disabled tests the app smoke scripts run by name to prepare pending world updates and drop the databases they created, refusing any name outside their prefixes.
  */
 
 #include "DBUpdater.h"
 #include "Environment.h"
 #include "MySQLConnection.h"
 #include "StringUtil.h"
+#include "TestDatabaseUpdates.h"
 
 #include <fmt/format.h>
 
 #include <gtest/gtest.h>
+
+TEST(TestDatabaseSetup, DISABLED_ApplyWorldUpdates)
+{
+    std::optional<std::string> const text = Ambrose::GetEnv("AMBROSE_TEST_DB");
+    if (!text || text->empty())
+        GTEST_SKIP() << "AMBROSE_TEST_DB is not set";
+    std::optional<MySQLConnectionInfo> const info = MySQLConnectionInfo::Parse(*text);
+    ASSERT_TRUE(info);
+    ASSERT_TRUE(AmbroseTestDatabase::RunWorldUpdates(*info));
+}
 
 TEST(TestDatabaseCleanup, DISABLED_DropNamedDatabases)
 {

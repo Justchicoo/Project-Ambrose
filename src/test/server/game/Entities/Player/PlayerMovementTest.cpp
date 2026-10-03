@@ -59,3 +59,31 @@ TEST(PlayerMovementTest, AThousandMovesLeaveOneWriteThatIsTakenOnce)
     EXPECT_EQ(movement.GetMoveState(), 0);
     EXPECT_FALSE(movement.TakeWrite());
 }
+
+TEST(PlayerMovementTest, ATeleportUsesClientPackingAndBecomesTheOnePendingPositionWrite)
+{
+    PlayerMovement movement;
+    movement.Reset({ 0.0f, 0.0f, 0.0f, 0.0f }, 3);
+
+    std::optional<PackedMove> const packed = movement.Teleport({ -7.5f, 9.9f, 15.9f, 0.5f });
+    ASSERT_TRUE(packed);
+    EXPECT_EQ(*packed, (PackedMove{ static_cast<uint16>(-1), 2, 3, 20 }));
+    EXPECT_EQ(movement.GetPosition(), (PlayerPosition{ -4.0f, 8.0f, 12.0f, 0.5f }));
+    EXPECT_EQ(movement.GetZoneCounter(), 3);
+    EXPECT_EQ(movement.GetMoves(), 0u);
+    EXPECT_TRUE(movement.HasMoved());
+    EXPECT_EQ(movement.TakeWrite(), (std::optional<PlayerPosition>(PlayerPosition{ -4.0f, 8.0f, 12.0f, 0.5f })));
+    EXPECT_FALSE(movement.TakeWrite());
+}
+
+TEST(PlayerMovementTest, ARejectedTeleportLeavesThePositionAndPendingWriteUntouched)
+{
+    PlayerMovement movement;
+    PlayerPosition const start{ 12.0f, -4.0f, 8.0f, 1.5f };
+    movement.Reset(start, 0);
+
+    EXPECT_FALSE(movement.Teleport({ 131072.0f, 0.0f, 0.0f, 1.0f }));
+    EXPECT_EQ(movement.GetPosition(), start);
+    EXPECT_FALSE(movement.HasMoved());
+    EXPECT_FALSE(movement.TakeWrite());
+}

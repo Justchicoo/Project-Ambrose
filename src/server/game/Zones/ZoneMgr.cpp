@@ -11,7 +11,9 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <utility>
 
 namespace
@@ -118,6 +120,53 @@ std::size_t ZoneObjects::Count() const noexcept
 std::size_t ZoneObjects::ZoneCount() const noexcept
 {
     return _byZone.size();
+}
+
+GameTeleports::GameTeleports(std::map<std::string, std::vector<GameTelePoint>, std::less<>> byZone) : _byZone(std::move(byZone))
+{
+}
+
+GameTelePoint const* GameTeleports::Find(std::string_view zone, std::string_view name) const
+{
+    auto const found = _byZone.find(zone);
+    if (found == _byZone.end())
+        return nullptr;
+    for (GameTelePoint const& point : found->second)
+        if (point.Name == name)
+            return &point;
+    return nullptr;
+}
+
+bool GameTeleports::Add(std::string_view zone, GameTelePoint point)
+{
+    std::vector<GameTelePoint>& points = _byZone[std::string(zone)];
+    if (point.Name.empty() || Find(zone, point.Name))
+        return false;
+    points.push_back(std::move(point));
+    return true;
+}
+
+bool GameTeleports::Remove(std::string_view zone, std::string_view name)
+{
+    auto found = _byZone.find(zone);
+    if (found == _byZone.end())
+        return false;
+    std::vector<GameTelePoint>& points = found->second;
+    auto const point = std::find_if(points.begin(), points.end(), [name](GameTelePoint const& candidate) { return candidate.Name == name; });
+    if (point == points.end())
+        return false;
+    points.erase(point);
+    if (points.empty())
+        _byZone.erase(found);
+    return true;
+}
+
+std::size_t GameTeleports::Count() const noexcept
+{
+    std::size_t total = 0;
+    for (auto const& [zone, points] : _byZone)
+        total += points.size();
+    return total;
 }
 
 ZoneMgr& ZoneMgr::Instance()
@@ -231,6 +280,48 @@ ZoneObjects ZoneMgr::ReadObjects(PreparedResultSet* result, ZoneTemplates const&
     return ZoneObjects(std::move(byZone));
 }
 
+GameTeleports ZoneMgr::ReadGameTeles(PreparedResultSet* result, ZoneTemplates const& templates, std::vector<std::string>& errors)
+{
+    std::map<std::string, std::vector<GameTelePoint>, std::less<>> byZone;
+    if (!result)
+        return GameTeleports(std::move(byZone));
+    do
+    {
+        Field const* const row = result->Fetch();
+        std::string const zone = row[0].Get<std::string>();
+        std::string const name = row[1].Get<std::string>();
+        if (!templates.Has(zone))
+        {
+            Report(errors, fmt::format("game_tele row {} names zone {}, which zone_template does not hold", name, zone));
+            continue;
+        }
+        if (name.empty() || name.size() > MaxGameTeleNameLength)
+        {
+            Report(errors, fmt::format("game_tele row in {} has a name that is empty or longer than {} bytes", zone, MaxGameTeleNameLength));
+            continue;
+        }
+        GameTelePoint point;
+        point.Name = name;
+        point.X = row[2].Get<float>();
+        point.Y = row[3].Get<float>();
+        point.Z = row[4].Get<float>();
+        point.Yaw = row[5].Get<float>();
+        if (!std::isfinite(point.X) || !std::isfinite(point.Y) || !std::isfinite(point.Z) || !std::isfinite(point.Yaw))
+        {
+            Report(errors, fmt::format("game_tele row {} in {} has a non-finite coordinate or direction", name, zone));
+            continue;
+        }
+        std::vector<GameTelePoint>& points = byZone[zone];
+        if (std::any_of(points.begin(), points.end(), [&point](GameTelePoint const& existing) { return existing.Name == point.Name; }))
+        {
+            Report(errors, fmt::format("game_tele holds {} in {} twice", name, zone));
+            continue;
+        }
+        points.push_back(std::move(point));
+    } while (result->NextRow());
+    return GameTeleports(std::move(byZone));
+}
+
 bool ZoneMgr::LoadTemplates(std::vector<std::string>& errors)
 {
     auto const statement = WorldDatabase.IsOpen() ? WorldDatabase.GetPreparedStatement(WORLD_SEL_ZONE_TEMPLATES) : nullptr;
@@ -288,12 +379,33 @@ bool ZoneMgr::LoadObjects(std::vector<std::string>& errors)
     return true;
 }
 
+bool ZoneMgr::LoadGameTeles(std::vector<std::string>& errors)
+{
+    auto const statement = WorldDatabase.IsOpen() ? WorldDatabase.GetPreparedStatement(WORLD_SEL_GAME_TELES) : nullptr;
+    if (!statement)
+    {
+        errors.emplace_back("the world database is not open, so GM teleport points cannot be read");
+        return false;
+    }
+    std::vector<std::string> found;
+    GameTeleports teleports = ReadGameTeles(WorldDatabase.Query(*statement).get(), *GetTemplates(), found);
+    if (!found.empty())
+    {
+        errors.insert(errors.end(), found.begin(), found.end());
+        return false;
+    }
+    _gameTeles.Replace(std::move(teleports));
+    return true;
+}
+
 void ZoneMgr::RegisterReloadTargets()
 {
     sReloadMgr.Register(std::string(TemplateTarget), [this](std::vector<std::string>& errors) { return LoadTemplates(errors); });
     sReloadMgr.Register(std::string(LocationTarget), [this](std::vector<std::string>& errors) { return LoadLocations(errors); },
         { std::string(TemplateTarget) });
     sReloadMgr.Register(std::string(ObjectTarget), [this](std::vector<std::string>& errors) { return LoadObjects(errors); },
+        { std::string(TemplateTarget) });
+    sReloadMgr.Register(std::string(GameTeleTarget), [this](std::vector<std::string>& errors) { return LoadGameTeles(errors); },
         { std::string(TemplateTarget) });
 }
 
@@ -304,14 +416,16 @@ ZoneLoadResult ZoneMgr::LoadAll()
     bool const templates = LoadTemplates(outcome.Errors);
     bool const locations = templates && LoadLocations(outcome.Errors);
     bool const objects = templates && LoadObjects(outcome.Errors);
+    bool const gameTeles = templates && LoadGameTeles(outcome.Errors);
     outcome.Took = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started);
-    outcome.Loaded = templates && locations && objects;
+    outcome.Loaded = templates && locations && objects && gameTeles;
     outcome.Zones = GetTemplates()->Count();
     outcome.Locations = GetLocations()->Count();
     outcome.Objects = GetObjects()->Count();
+    outcome.GameTeles = GetGameTeles()->Count();
     if (outcome.Loaded)
-        LOG_INFO(ZoneLog, "Loaded {} zone(s), {} named place(s) and {} placed object(s) in {} ms", outcome.Zones, outcome.Locations,
-            outcome.Objects, outcome.Took.count());
+        LOG_INFO(ZoneLog, "Loaded {} zone(s), {} named place(s), {} placed object(s) and {} GM teleport point(s) in {} ms", outcome.Zones, outcome.Locations,
+            outcome.Objects, outcome.GameTeles, outcome.Took.count());
     else
         for (std::string const& problem : outcome.Errors)
             LOG_ERROR(ZoneLog, "Zones: {}", problem);
@@ -328,6 +442,34 @@ ZonePlace ZoneMgr::FindPlace(std::string_view zone, std::string_view name) const
         return place;
     }
     return GetLocations()->Find(zone, name.empty() ? ZoneLocations::StartName : name);
+}
+
+std::optional<GameTelePoint> ZoneMgr::FindGameTele(std::string_view zone, std::string_view name) const
+{
+    std::shared_ptr<GameTeleports const> const teleports = GetGameTeles();
+    GameTelePoint const* const point = teleports->Find(zone, name);
+    return point == nullptr ? std::nullopt : std::optional<GameTelePoint>(*point);
+}
+
+bool ZoneMgr::AddGameTele(std::string_view zone, GameTelePoint point)
+{
+    if (point.Name.empty() || point.Name.size() > MaxGameTeleNameLength || !std::isfinite(point.X) || !std::isfinite(point.Y) ||
+        !std::isfinite(point.Z) || !std::isfinite(point.Yaw) || !GetTemplates()->Has(zone))
+        return false;
+    GameTeleports teleports = *GetGameTeles();
+    if (!teleports.Add(zone, std::move(point)))
+        return false;
+    _gameTeles.Replace(std::move(teleports));
+    return true;
+}
+
+bool ZoneMgr::RemoveGameTele(std::string_view zone, std::string_view name)
+{
+    GameTeleports teleports = *GetGameTeles();
+    if (!teleports.Remove(zone, name))
+        return false;
+    _gameTeles.Replace(std::move(teleports));
+    return true;
 }
 
 std::optional<std::string> ZoneMgr::Describe(std::string_view zone) const
@@ -350,6 +492,7 @@ void ZoneMgr::Clear()
     _templates.Replace(ZoneTemplates{});
     _locations.Replace(ZoneLocations{});
     _objects.Replace(ZoneObjects{});
+    _gameTeles.Replace(GameTeleports{});
 }
 
 std::string_view ZoneMgr::GetLookupName(ZoneLookup lookup) noexcept
