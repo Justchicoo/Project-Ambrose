@@ -98,7 +98,8 @@
             {:else}
                 Collector forwarding is off.
             {/if}
-            Verification budget: {chain?.budget_ms ?? 5_000} ms for 10,000 rows. This local chain detects changes and deletions, but cannot prove integrity against someone able to rewrite the whole store.
+            Verification budget: {chain?.budget_ms ?? 5_000} ms for 10,000 rows. This local chain detects changes and deletions, but cannot prove
+            integrity against someone able to rewrite the whole store.
         </Card.Content>
     </Card.Root>
 {/if}
