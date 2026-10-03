@@ -2187,7 +2187,7 @@ class DatabaseTests(TemporaryFolder):
         os.makedirs(run_folder)
         with open(os.path.join(pending, "one.sql"), "w", encoding="utf-8") as handle:
             handle.write("SELECT 1;\n")
-        for name in ("unit_tests.exe",):
+        for name in (paths.program("unit_tests"),):
             with open(os.path.join(binaries, name), "w", encoding="utf-8"):
                 pass
         scratch = database.Scratch("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose_driver_run")
@@ -2217,7 +2217,7 @@ class DatabaseTests(TemporaryFolder):
         os.makedirs(binaries)
         with open(os.path.join(pending, "one.sql"), "w", encoding="utf-8") as handle:
             handle.write("SELECT 1;\n")
-        for name in ("unit_tests.exe",):
+        for name in (paths.program("unit_tests"),):
             with open(os.path.join(binaries, name), "w", encoding="utf-8"):
                 pass
         scratch = database.Scratch("127.0.0.1", 3307, "ambrose", "secret", "ambrose_driver_run")
