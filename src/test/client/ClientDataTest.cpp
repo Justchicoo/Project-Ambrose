@@ -103,7 +103,7 @@ TEST_F(ClientDataTest, EveryGameDataWadParsesWithinBounds)
         caseCollisions += archive->GetCaseCollisionCount();
         duplicates += archive->GetDuplicateNameCount();
     }
-    InstalledRevision::Expect(wads, { { "r806919", 3589u } }, "archives");
+    InstalledRevision::Expect(wads, { { "r806919", 3599u } }, "archives");
     EXPECT_EQ(duplicates, 0u);
     InstalledRevision::Expect(caseCollisions, { { "r806919", 188u } }, "case collisions");
 }
