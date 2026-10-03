@@ -14,69 +14,44 @@
 #include <nlohmann/json.hpp>
 
 #include <array>
+#include <chrono>
 #include <optional>
 #include <string_view>
 #include <utility>
 
 namespace
 {
-    nlohmann::json OptionalJson(std::string const& value)
-    {
-        return value.empty() ? nlohmann::json(nullptr) : nlohmann::json(value);
-    }
-
     std::string HashHex(SHA256::Digest const& digest)
     {
-        std::string text;
-        text.reserve(digest.size() * 2);
-        for (uint8 const byte : digest)
-            text += fmt::format("{:02x}", byte);
+        constexpr char Hex[] = "0123456789abcdef";
+        std::string text(digest.size() * 2, '\0');
+        for (std::size_t index = 0; index < digest.size(); ++index)
+        {
+            text[index * 2] = Hex[digest[index] >> 4];
+            text[index * 2 + 1] = Hex[digest[index] & 0x0f];
+        }
         return text;
     }
 
-    nlohmann::json EventJson(AuditEvent const& event, std::string_view previousHash)
+    struct ChainTip
     {
-        nlohmann::json subjects = nlohmann::json::array();
-        for (AuditSubject const& subject : event.Subjects)
-            subjects.push_back({ { "kind", subject.Kind }, { "id", OptionalJson(subject.Id) }, { "name", OptionalJson(subject.Name) } });
-        return {
-            { "id", event.DatabaseId },
-            { "event_id", event.EventId },
-            { "batch_id", OptionalJson(event.BatchId) },
-            { "created_epoch_ms", event.CreatedEpochMs },
-            { "name", event.Name },
-            { "actor_type", PanelAudit::ToString(event.Actor) },
-            { "actor_id", OptionalJson(event.ActorId) },
-            { "actor_name", OptionalJson(event.ActorName) },
-            { "address", OptionalJson(event.Address) },
-            { "user_agent", OptionalJson(event.UserAgent) },
-            { "node", OptionalJson(event.Node) },
-            { "result", PanelAudit::ToString(event.Result) },
-            { "error", OptionalJson(event.Error) },
-            { "reason", OptionalJson(event.Reason) },
-            { "properties", event.Properties.empty() ? std::string("{}") : event.Properties },
-            { "subjects", std::move(subjects) },
-            { "previous_hash", previousHash }
-        };
-    }
+        int64 Id = 0;
+        std::string Hash;
+    };
 
-    std::string ChainHash(AuditEvent const& event, std::string_view previousHash)
+    std::optional<ChainTip> StoredTip(PanelStore& store, std::string& error)
     {
-        return HashHex(SHA256::GetDigestOf(EventJson(event, previousHash).dump()));
-    }
-
-    std::optional<std::string> LatestHash(PanelStore& store, std::string& error)
-    {
-        std::optional<PanelStore::Statement> latest = store.Prepare("SELECT chain_hash FROM audit_event ORDER BY id DESC LIMIT 1", error);
-        if (!latest)
+        std::optional<PanelStore::Statement> head = store.Prepare("SELECT last_event_id, last_hash FROM audit_chain_head WHERE id = 1", error);
+        if (!head)
             return std::nullopt;
-        if (!latest->Step(error))
+        if (!head->Step(error))
         {
             if (!error.empty())
                 return std::nullopt;
-            return std::string();
+            error = "the audit chain head is missing";
+            return std::nullopt;
         }
-        return latest->Text(0);
+        return ChainTip{ head->Int64(0), head->Text(1) };
     }
 
     nlohmann::json StoredEventJson(PanelStore::Statement const& row, std::string_view previousHash, nlohmann::json subjects)
@@ -103,6 +78,176 @@ namespace
         if (row.IsNull(5))
             value["actor_type"] = nullptr;
         return value;
+    }
+
+    void MarkInvalid(AuditChainVerification& verification, int64 id, std::string problem)
+    {
+        if (verification.Valid)
+        {
+            verification.Valid = false;
+            verification.FirstInvalidId = id;
+            verification.Problem = std::move(problem);
+        }
+    }
+
+    bool VerifyRows(PanelStore& store, AuditChainVerification& verification, int64& lastId, std::string& lastHash,
+        std::string& error, bool allowUnhashedTail = false, ChainTip* verifiedPrefix = nullptr)
+    {
+        verification = {};
+        lastId = 0;
+        lastHash.clear();
+        bool unhashedTail = false;
+        if (verifiedPrefix)
+            *verifiedPrefix = {};
+        std::optional<PanelStore::Statement> rows = store.Prepare(
+            "SELECT id, event_id, batch_id, created_epoch_ms, name, actor_type, actor_id, actor_name, address, user_agent, node, result, error, reason, properties, chain_hash "
+            "FROM audit_event ORDER BY id", error);
+        if (!rows)
+            return false;
+        std::optional<PanelStore::Statement> subjects = store.Prepare(
+            "SELECT kind, subject_id, name FROM audit_subject WHERE event = ? ORDER BY position", error);
+        if (!subjects)
+            return false;
+
+        while (rows->Step(error))
+        {
+            int64 const id = rows->Int64(0);
+            ++verification.RowsChecked;
+            if (id != lastId + 1)
+                MarkInvalid(verification, lastId + 1, fmt::format("audit row {} is missing", lastId + 1));
+
+            subjects->Reset();
+            subjects->Bind(1, id);
+            nlohmann::json subjectValues = nlohmann::json::array();
+            while (subjects->Step(error))
+            {
+                nlohmann::json subject{
+                    { "kind", subjects->Text(0) },
+                    { "id", subjects->Text(1) },
+                    { "name", subjects->Text(2) }
+                };
+                if (subjects->IsNull(1))
+                    subject["id"] = nullptr;
+                if (subjects->IsNull(2))
+                    subject["name"] = nullptr;
+                subjectValues.push_back(std::move(subject));
+            }
+            if (!error.empty())
+                return false;
+
+            nlohmann::json const rowValue = StoredEventJson(*rows, lastHash, std::move(subjectValues));
+            std::string const expected = HashHex(SHA256::GetDigestOf(rowValue.dump()));
+            std::string const savedHash = rows->Text(15);
+            if (savedHash.empty() && allowUnhashedTail)
+                unhashedTail = true;
+            else if (unhashedTail)
+                MarkInvalid(verification, id, fmt::format("audit row {} is hashed after an unhashed row", id));
+            else if (savedHash != expected)
+                MarkInvalid(verification, id, fmt::format("audit row {} does not match its contents or previous row", id));
+            else if (verifiedPrefix)
+                *verifiedPrefix = { id, expected };
+            lastId = id;
+            lastHash = std::move(expected);
+        }
+        return error.empty();
+    }
+
+    bool SetChainTip(PanelStore& store, int64 id, std::string_view hash, std::string& error)
+    {
+        std::optional<PanelStore::Statement> update = store.Prepare(
+            "UPDATE audit_chain_head SET last_event_id = ?, last_hash = ? WHERE id = 1", error);
+        if (!update)
+            return false;
+        update->Bind(1, id);
+        update->Bind(2, hash);
+        if (!update->Run(error))
+            return false;
+        if (store.Changed() != 1)
+        {
+            error = "the audit chain head is missing";
+            return false;
+        }
+        return true;
+    }
+
+    bool FinalizePending(PanelStore& store, int64 afterId, std::string previousHash, std::string& error, bool queueForCollector)
+    {
+        std::optional<PanelStore::Statement> rows = store.Prepare(
+            "SELECT id, event_id, batch_id, created_epoch_ms, name, actor_type, actor_id, actor_name, address, user_agent, node, result, error, reason, properties, chain_hash "
+            "FROM audit_event WHERE id > ? ORDER BY id", error);
+        if (!rows)
+            return false;
+        rows->Bind(1, afterId);
+        std::optional<PanelStore::Statement> subjects = store.Prepare(
+            "SELECT kind, subject_id, name FROM audit_subject WHERE event = ? ORDER BY position", error);
+        if (!subjects)
+            return false;
+        std::optional<PanelStore::Statement> update = store.Prepare("UPDATE audit_event SET chain_hash = ? WHERE id = ?", error);
+        if (!update)
+            return false;
+        std::optional<PanelStore::Statement> enqueue;
+        if (queueForCollector)
+        {
+            enqueue = store.Prepare("INSERT INTO panel_audit_outbox (event_id, payload) VALUES (?, ?)", error);
+            if (!enqueue)
+                return false;
+        }
+
+        int64 lastId = afterId;
+        while (rows->Step(error))
+        {
+            int64 const id = rows->Int64(0);
+            if (!rows->Text(15).empty())
+            {
+                error = fmt::format("audit row {} already has a hash after the previous chain tip", id);
+                return false;
+            }
+            if (id != lastId + 1)
+            {
+                error = fmt::format("audit row {} is missing before the next chained row", lastId + 1);
+                return false;
+            }
+            subjects->Reset();
+            subjects->Bind(1, id);
+            nlohmann::json subjectValues = nlohmann::json::array();
+            while (subjects->Step(error))
+            {
+                nlohmann::json subject{
+                    { "kind", subjects->Text(0) },
+                    { "id", subjects->Text(1) },
+                    { "name", subjects->Text(2) }
+                };
+                if (subjects->IsNull(1))
+                    subject["id"] = nullptr;
+                if (subjects->IsNull(2))
+                    subject["name"] = nullptr;
+                subjectValues.push_back(std::move(subject));
+            }
+            if (!error.empty())
+                return false;
+
+            nlohmann::json value = StoredEventJson(*rows, previousHash, std::move(subjectValues));
+            std::string const hash = HashHex(SHA256::GetDigestOf(value.dump()));
+            update->Reset();
+            update->Bind(1, hash);
+            update->Bind(2, id);
+            if (!update->Run(error))
+                return false;
+            if (enqueue)
+            {
+                value["chain_hash"] = hash;
+                enqueue->Reset();
+                enqueue->Bind(1, rows->Text(1));
+                enqueue->Bind(2, value.dump());
+                if (!enqueue->Run(error))
+                    return false;
+            }
+            previousHash = hash;
+            lastId = id;
+        }
+        if (!error.empty())
+            return false;
+        return SetChainTip(store, lastId, previousHash, error);
     }
 }
 
@@ -241,28 +386,35 @@ bool PanelAudit::Write(PanelStore& store, AuditEvent const& event, std::string& 
     return true;
 }
 
-bool PanelAudit::Record(PanelStore& store, AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error)
+bool PanelAudit::Record(PanelStore& store, AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error, bool queueForCollector)
 {
     AuditEvent copy = event;
     return Record(store, copy, [&change](AuditEvent&, std::string& failure)
     {
         return !change || change(failure);
-    }, error);
+    }, error, queueForCollector);
 }
 
-bool PanelAudit::Record(PanelStore& store, AuditEvent& event, std::function<bool(AuditEvent& event, std::string& error)> const& change, std::string& error)
+bool PanelAudit::Record(PanelStore& store, AuditEvent& event, std::function<bool(AuditEvent& event, std::string& error)> const& change, std::string& error, bool queueForCollector)
 {
-    if (event.EventId.empty())
-        event.EventId = NewEventId();
-    event.CreatedEpochMs = PanelStore::NowEpochMs();
+    error.clear();
     if (!store.Begin(error))
         return false;
-    std::optional<std::string> const previous = LatestHash(store, error);
-    if (!previous)
+    AuditChainVerification verification;
+    if (!VerifyChain(store, verification, error))
     {
         store.Rollback();
         return false;
     }
+    if (!verification.Valid)
+    {
+        error = fmt::format("the audit chain is broken at row {}: {}", verification.FirstInvalidId, verification.Problem);
+        store.Rollback();
+        return false;
+    }
+    if (event.EventId.empty())
+        event.EventId = NewEventId();
+    event.CreatedEpochMs = PanelStore::NowEpochMs();
     if (!Write(store, event, error))
     {
         store.Rollback();
@@ -291,7 +443,7 @@ bool PanelAudit::Record(PanelStore& store, AuditEvent& event, std::function<bool
         return false;
     }
     std::optional<PanelStore::Statement> finalize = store.Prepare(
-        "UPDATE audit_event SET result = ?, error = ?, reason = ?, properties = ?, chain_hash = ? WHERE id = ?", error);
+        "UPDATE audit_event SET result = ?, error = ?, reason = ?, properties = ? WHERE id = ?", error);
     if (!finalize)
     {
         store.Rollback();
@@ -301,9 +453,8 @@ bool PanelAudit::Record(PanelStore& store, AuditEvent& event, std::function<bool
     BindOrNull(*finalize, 2, event.Error);
     BindOrNull(*finalize, 3, event.Reason);
     finalize->Bind(4, event.Properties.empty() ? std::string("{}") : event.Properties);
-    finalize->Bind(5, ChainHash(event, *previous));
-    finalize->Bind(6, event.DatabaseId);
-    if (!finalize->Run(error))
+    finalize->Bind(5, event.DatabaseId);
+    if (!finalize->Run(error) || !Finalize(store, error, queueForCollector))
     {
         store.Rollback();
         return false;
@@ -316,84 +467,107 @@ bool PanelAudit::Record(PanelStore& store, AuditEvent& event, std::function<bool
     return true;
 }
 
+bool PanelAudit::Finalize(PanelStore& store, std::string& error, bool queueForCollector)
+{
+    error.clear();
+    std::optional<ChainTip> const tip = StoredTip(store, error);
+    if (!tip)
+        return false;
+    return FinalizePending(store, tip->Id, tip->Hash, error, queueForCollector);
+}
+
 bool PanelAudit::EnsureChain(PanelStore& store, std::string& error)
 {
+    error.clear();
     if (!store.Begin(error))
         return false;
-    std::optional<PanelStore::Statement> rows = store.Prepare(
-        "SELECT id, event_id, batch_id, created_epoch_ms, name, actor_type, actor_id, actor_name, address, user_agent, node, result, error, reason, properties, chain_hash "
-        "FROM audit_event ORDER BY id", error);
-    if (!rows)
+    std::optional<ChainTip> headTip = StoredTip(store, error);
+    if (!headTip)
     {
         store.Rollback();
         return false;
     }
-
-    std::string previousHash;
-    while (rows->Step(error))
+    if (headTip->Id == 0)
     {
-        int64 const id = rows->Int64(0);
-        std::string const savedHash = rows->Text(15);
-        if (!savedHash.empty())
-        {
-            previousHash = savedHash;
-            continue;
-        }
-
-        std::optional<PanelStore::Statement> subjects = store.Prepare(
-            "SELECT kind, subject_id, name FROM audit_subject WHERE event = ? ORDER BY position", error);
-        if (!subjects)
+        AuditChainVerification verification;
+        int64 lastId = 0;
+        std::string lastHash;
+        ChainTip verifiedPrefix;
+        if (!VerifyRows(store, verification, lastId, lastHash, error, true, &verifiedPrefix))
         {
             store.Rollback();
             return false;
         }
-        subjects->Bind(1, id);
-        nlohmann::json subjectValues = nlohmann::json::array();
-        while (subjects->Step(error))
+        if (!verification.Valid)
         {
-            nlohmann::json subject{
-                { "kind", subjects->Text(0) },
-                { "id", subjects->Text(1) },
-                { "name", subjects->Text(2) }
-            };
-            if (subjects->IsNull(1))
-                subject["id"] = nullptr;
-            if (subjects->IsNull(2))
-                subject["name"] = nullptr;
-            subjectValues.push_back(std::move(subject));
-        }
-        if (!error.empty())
-        {
+            error = fmt::format("the audit chain is broken at row {}: {}", verification.FirstInvalidId, verification.Problem);
             store.Rollback();
             return false;
         }
-        nlohmann::json const rowValue = StoredEventJson(*rows, previousHash, std::move(subjectValues));
-        std::string const hash = HashHex(SHA256::GetDigestOf(rowValue.dump()));
-        std::optional<PanelStore::Statement> update = store.Prepare("UPDATE audit_event SET chain_hash = ? WHERE id = ?", error);
-        if (!update)
+        if (verification.Valid && headTip->Hash.empty())
         {
-            store.Rollback();
-            return false;
+            if (!FinalizePending(store, verifiedPrefix.Id, std::move(verifiedPrefix.Hash), error, false))
+            {
+                store.Rollback();
+                return false;
+            }
         }
-        update->Bind(1, hash);
-        update->Bind(2, id);
-        if (!update->Run(error))
-        {
-            store.Rollback();
-            return false;
-        }
-        previousHash = hash;
     }
-    if (!error.empty())
+    else
     {
-        store.Rollback();
-        return false;
+        AuditChainVerification verification;
+        int64 lastId = 0;
+        std::string lastHash;
+        if (!VerifyRows(store, verification, lastId, lastHash, error))
+        {
+            store.Rollback();
+            return false;
+        }
+        if (verification.Valid && (headTip->Id != lastId || headTip->Hash != lastHash))
+        {
+            store.Rollback();
+            error = "the audit chain head does not match the verified rows";
+            return false;
+        }
     }
     if (!store.Commit(error))
     {
         store.Rollback();
         return false;
     }
+    return true;
+}
+
+bool PanelAudit::VerifyChain(PanelStore& store, AuditChainVerification& verification, std::string& error)
+{
+    error.clear();
+    auto const started = std::chrono::steady_clock::now();
+    int64 lastId = 0;
+    std::string lastHash;
+    if (!VerifyRows(store, verification, lastId, lastHash, error))
+        return false;
+
+    std::optional<PanelStore::Statement> head = store.Prepare("SELECT last_event_id, last_hash FROM audit_chain_head WHERE id = 1", error);
+    if (!head)
+        return false;
+    if (!head->Step(error))
+    {
+        if (!error.empty())
+            return false;
+        MarkInvalid(verification, lastId == 0 ? 1 : lastId, "the audit chain head is missing");
+        verification.ElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
+        return true;
+    }
+    int64 const expectedId = head->Int64(0);
+    std::string const expectedHash = head->Text(1);
+    if (expectedId != lastId)
+    {
+        int64 const missing = expectedId > lastId ? lastId + 1 : expectedId;
+        MarkInvalid(verification, missing, fmt::format("the audit chain head expects row {} but the last stored row is {}", expectedId, lastId));
+    }
+    else if (expectedHash != lastHash)
+        MarkInvalid(verification, lastId == 0 ? 1 : lastId, "the audit chain head does not match the last row");
+    verification.ElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
     return true;
 }
 
@@ -405,4 +579,14 @@ int64 PanelAudit::Count(PanelStore& store, std::string_view name)
         return -1;
     rows->Bind(1, name);
     return rows->Step(error) ? rows->Int64(0) : -1;
+}
+
+int64 PanelAudit::PendingCount(PanelStore& store, std::string& error)
+{
+    error.clear();
+    std::optional<PanelStore::Statement> rows = store.Prepare(
+        "SELECT COUNT(*) FROM panel_audit_outbox WHERE delivered_epoch_ms IS NULL", error);
+    if (!rows || !rows->Step(error))
+        return -1;
+    return rows->Int64(0);
 }

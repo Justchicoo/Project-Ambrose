@@ -9,6 +9,7 @@
 #include "AdminServer.h"
 #include "ListenerSettings.h"
 #include "PanelAudit.h"
+#include "PanelAuditForwarder.h"
 #include "PanelRateLimit.h"
 #include "PanelErrors.h"
 #include "PanelFileRules.h"
@@ -120,6 +121,7 @@ public:
 
     bool Record(AuditEvent const& event, std::function<bool(std::string& error)> const& change, std::string& error);
     bool Record(AuditEvent& event, std::function<bool(AuditEvent& event, std::string& error)> const& change, std::string& error);
+    bool VerifyAuditChain(AuditChainVerification& verification, std::string& error);
     AdminResponse AuditRequest(AdminRequest const& request, std::string_view app, std::string_view action, std::function<AdminResponse()> operation);
     uint8 CommandLevel(AdminRequest const& request);
     std::string CommandActorName(AdminRequest const& request);
@@ -219,6 +221,8 @@ private:
     PanelTwoFactorSettings _twoFactorSettings;
     PanelRateLimit _rateLimit;
     std::mutex _storeMutex;
+    PanelAuditForwarder _auditForwarder;
+    bool _auditForwarding = false;
     std::shared_ptr<PanelSettingStore> _settingStore;
     void StartGathering();
     void StopGathering();

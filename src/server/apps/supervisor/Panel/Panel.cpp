@@ -393,8 +393,21 @@ bool Panel::Start(ConfigMgr const& config, std::string& error)
     }
     for (std::string const& refused : _listener.Routes().RefusedRoutes())
         AMBROSE_LOG(_log, LogLevel::Warn, PanelCategory, "The panel leaves out {}", refused);
-    if (!_listener.Start(settings, error))
+    std::string const auditCollectorUrl = config.GetOption<std::string>("Panel.AuditCollectorUrl", "", true);
+    std::string const auditCollectorToken = config.GetOption<std::string>("Panel.AuditCollectorToken", "", true);
+    if (!_auditForwarder.Start(_store, _storeMutex, auditCollectorUrl, auditCollectorToken,
+        [this](std::string_view problem)
+        {
+            AMBROSE_LOG(_log, LogLevel::Warn, PanelCategory, "Audit collector forwarding will retry: {}", problem);
+        }, error))
         return false;
+    _auditForwarding = !auditCollectorUrl.empty();
+    if (!_listener.Start(settings, error))
+    {
+        _auditForwarder.Stop();
+        _auditForwarding = false;
+        return false;
+    }
     _events.Start();
     _eventSocket->Start();
     OfferTheOwnerLink();
@@ -452,6 +465,8 @@ void Panel::Stop()
     StopGathering();
     _eventSocket->Stop();
     _listener.Stop();
+    _auditForwarder.Stop();
+    _auditForwarding = false;
     _events.Stop();
     _tickets.Clear();
     _rateLimit.Clear();
@@ -575,7 +590,24 @@ bool Panel::Record(AuditEvent const& event, std::function<bool(std::string& erro
         error = "the panel store is not open, so nothing can be recorded and nothing is changed";
         return false;
     }
-    return PanelAudit::Record(_store, event, change, error);
+    bool const recorded = PanelAudit::Record(_store, event, change, error, _auditForwarding);
+    if (recorded && _auditForwarding)
+        _auditForwarder.Wake();
+    return recorded;
+}
+
+bool Panel::VerifyAuditChain(AuditChainVerification& verification, std::string& error)
+{
+    std::lock_guard const lock(_storeMutex);
+    if (!_store.IsOpen())
+    {
+        error = "the panel store is not open";
+        return false;
+    }
+    if (!PanelAudit::VerifyChain(_store, verification, error))
+        return false;
+    verification.PendingEvents = PanelAudit::PendingCount(_store, error);
+    return verification.PendingEvents >= 0;
 }
 
 bool Panel::Record(AuditEvent& event, std::function<bool(AuditEvent& event, std::string& error)> const& change, std::string& error)
@@ -586,7 +618,10 @@ bool Panel::Record(AuditEvent& event, std::function<bool(AuditEvent& event, std:
         error = "the panel store is not open, so nothing can be recorded and nothing is changed";
         return false;
     }
-    return PanelAudit::Record(_store, event, change, error);
+    bool const recorded = PanelAudit::Record(_store, event, change, error, _auditForwarding);
+    if (recorded && _auditForwarding)
+        _auditForwarder.Wake();
+    return recorded;
 }
 
 AdminResponse Panel::AuditRequest(AdminRequest const& request, std::string_view app, std::string_view action, std::function<AdminResponse()> operation)
@@ -801,6 +836,25 @@ void Panel::RegisterSignIn()
     routes.AddOpen("GET", "/api/panel/permissions", [](AdminRequest const&) { return AdminResponse::Json(200, PanelPermissions::CatalogJson()); });
     routes.AddGuarded("GET", "/api/panel/settings", "panel.settings", [this](AdminRequest const& request) { return PanelSettingsGet(request); });
     routes.AddGuarded("PATCH", "/api/panel/settings", "panel.settings", [this](AdminRequest const& request) { return PanelSettingsUpdate(request); });
+    routes.AddGuarded("GET", "/api/panel/audit/verify", "activity.read", [this](AdminRequest const&)
+    {
+        AuditChainVerification verification;
+        std::string error;
+        if (!VerifyAuditChain(verification, error))
+            return AdminResponse::Problem(503, "audit_unavailable", error);
+        nlohmann::json const answer{
+            { "schema", 1 },
+            { "valid", verification.Valid },
+            { "rows_checked", verification.RowsChecked },
+            { "elapsed_ms", verification.ElapsedMs },
+            { "budget_ms", PanelAudit::VerificationBudgetMs },
+            { "pending_events", verification.PendingEvents },
+            { "collector_enabled", _auditForwarding },
+            { "first_invalid_id", verification.FirstInvalidId == 0 ? nlohmann::json(nullptr) : nlohmann::json(verification.FirstInvalidId) },
+            { "problem", verification.Problem }
+        };
+        return AdminResponse::Json(200, answer.dump());
+    });
     routes.AddGuarded("GET", "/api/panel/errors", "errors.read", [this](AdminRequest const&)
     {
         std::string error;
@@ -1994,6 +2048,7 @@ void Panel::OfferTheOwnerLink()
 
 bool Panel::Transact(std::function<bool(std::string& error)> const& change, std::string& error)
 {
+    error.clear();
     std::lock_guard const lock(_storeMutex);
     if (!_store.IsOpen())
     {
@@ -2002,7 +2057,24 @@ bool Panel::Transact(std::function<bool(std::string& error)> const& change, std:
     }
     if (!_store.Begin(error))
         return false;
+    AuditChainVerification verification;
+    if (!PanelAudit::VerifyChain(_store, verification, error))
+    {
+        _store.Rollback();
+        return false;
+    }
+    if (!verification.Valid)
+    {
+        error = fmt::format("the audit chain is broken at row {}: {}", verification.FirstInvalidId, verification.Problem);
+        _store.Rollback();
+        return false;
+    }
     if (!change(error))
+    {
+        _store.Rollback();
+        return false;
+    }
+    if (!PanelAudit::Finalize(_store, error, _auditForwarding))
     {
         _store.Rollback();
         return false;
@@ -2012,6 +2084,8 @@ bool Panel::Transact(std::function<bool(std::string& error)> const& change, std:
         _store.Rollback();
         return false;
     }
+    if (_auditForwarding)
+        _auditForwarder.Wake();
     return true;
 }
 

@@ -2453,11 +2453,11 @@ Changed on 2026-09-27: the player inspector is the 17.175 wizard page grown, and
 
 **Acceptance**
 
-- [ ] Changing one audit row makes verify report that row and every row after it
-- [ ] Deleting a row is reported the same way
-- [ ] A row that cannot be chained is not written, because the hash and the row commit together
-- [ ] With the collector unreachable the queue holds rows and drains when it returns, and the page says how many wait
-- [ ] Verifying a large audit store completes inside its stated budget
+- [x] Changing one audit row makes verify report that row and every row after it [PanelAuditTest.DetectsChangedRowsAndReportsTheFirstOne]
+- [x] Deleting a row is reported the same way [PanelAuditTest.DetectsDeletionOfTheLastRow; PanelAuditTest.DetectsDeletionInsideTheChainAtTheFirstGap]
+- [x] A row that cannot be chained is not written, because the hash and the row commit together [PanelAuditTest.DoesNotCommitAChangeWhenTheAuditCannotBeCompleted]
+- [x] With the collector unreachable the queue holds rows and drains when it returns, and the page says how many wait [PanelAuditTest.KeepsEventsWhileCollectorIsUnavailableAndDrainsAfterRecovery; dashboard production build]
+- [x] Verifying a large audit store completes inside its stated budget [PanelAuditTest.VerifiesTenThousandRowsWithinTheFiveSecondBudget]
 
 ## 17.94 Uptime history and incident timeline
 

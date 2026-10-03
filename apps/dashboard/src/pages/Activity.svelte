@@ -1,12 +1,12 @@
-<!-- Project Ambrose by Imjustchico: What has been done to an app and by whom, live from its own record: every command it was sent, newest first, with who sent it, from where, at what level, and whether it ran or was refused and why. A refused attempt is shown like any other, because what somebody tried and was not allowed to do is the half of a record that matters most. A line the record cannot read is counted rather than hidden, so one bad write is visible instead of silently swallowing everything after it. -->
+<!-- Project Ambrose by Imjustchico: What has been done to an app and by whom, live from its own record, with a panel audit-chain integrity check when the supervisor serves this page. -->
 <script lang="ts">
     import * as Card from "$lib/components/ui/card/index.js";
     import * as Table from "$lib/components/ui/table/index.js";
     import { Input } from "$lib/components/ui/input/index.js";
     import { ApiError } from "$lib/api.svelte.js";
     import { live } from "$lib/status.svelte.js";
-    import { activityOf, candidates } from "$lib/supervision.svelte.js";
-    import type { ActivityAnswer } from "$lib/schemas.js";
+    import { activityOf, auditChain, candidates, servedBy, supervisorServes } from "$lib/supervision.svelte.js";
+    import type { ActivityAnswer, AuditChainAnswer } from "$lib/schemas.js";
     import SearchIcon from "@lucide/svelte/icons/search";
     import PageHeader from "../components/PageHeader.svelte";
     import StatusBadge from "../components/StatusBadge.svelte";
@@ -14,10 +14,13 @@
     const choices = $derived(candidates());
     let chosen = $state("");
     let answer = $state<ActivityAnswer | null>(null);
+    let chain = $state<AuditChainAnswer | null>(null);
+    let chainFailure = $state("");
     let failure = $state("");
     let search = $state("");
 
     const app = $derived(choices.includes(chosen) ? chosen : (choices[0] ?? ""));
+    const showingSupervisor = $derived(app === servedBy() && supervisorServes());
 
     $effect(() => {
         const name = app;
@@ -49,9 +52,57 @@
                 row.reason.toLowerCase().includes(text),
         );
     });
+
+    $effect(() => {
+        if (!showingSupervisor) {
+            chain = null;
+            chainFailure = "";
+            return;
+        }
+        const controller = new AbortController();
+        void (async () => {
+            try {
+                chain = await auditChain(controller.signal);
+                chainFailure = "";
+            } catch (problem) {
+                if (controller.signal.aborted) return;
+                chain = null;
+                chainFailure = problem instanceof ApiError ? problem.message : "The audit chain could not be verified";
+            }
+        })();
+        return () => controller.abort();
+    });
 </script>
 
 <PageHeader title="Activity" description="Every command this app was sent, and what became of it." />
+
+{#if showingSupervisor}
+    <Card.Root class="mb-4">
+        <Card.Header>
+            <Card.Title>Panel audit chain</Card.Title>
+            <Card.Description>
+                {#if chainFailure !== ""}
+                    {chainFailure}
+                {:else if chain === null}
+                    Verifying the audit chain…
+                {:else if chain.valid}
+                    Valid; {chain.rows_checked} row(s) checked in {chain.elapsed_ms} ms.
+                {:else}
+                    Broken at row {chain.first_invalid_id ?? "unknown"}: {chain.problem}
+                {/if}
+            </Card.Description>
+        </Card.Header>
+        <Card.Content class="pt-0 text-sm text-muted-foreground">
+            {#if chain?.collector_enabled}
+                {chain.pending_events} audit event(s) are waiting for the off-machine collector.
+            {:else}
+                Collector forwarding is off.
+            {/if}
+            Verification budget: {chain?.budget_ms ?? 5_000} ms for 10,000 rows. This local chain detects changes and deletions, but cannot prove
+            integrity against someone able to rewrite the whole store.
+        </Card.Content>
+    </Card.Root>
+{/if}
 
 {#if failure !== ""}
     <Card.Root class="mb-4">
