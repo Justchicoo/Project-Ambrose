@@ -10,6 +10,7 @@
 #include "LogTestConfig.h"
 #include "LoginDatabase.h"
 #include "MySQLConnection.h"
+#include "PendingCharacterUpdates.h"
 #include "PreparedStatement.h"
 #include "QueryResult.h"
 #include "ScopeExit.h"
@@ -367,6 +368,8 @@ TEST(PreparedStatementTest, DatabaseConnectionsPrepareTheirStatements)
     });
     ASSERT_TRUE(DBUpdater::Run(loginInfo, "login", UpdaterSettings{}));
     ASSERT_TRUE(DBUpdater::Run(charactersInfo, "characters", UpdaterSettings{}));
+    std::string failure;
+    ASSERT_TRUE(AmbroseTestDatabaseUpdates::ApplyPendingFriendsUpdate(charactersInfo, failure)) << failure;
     ASSERT_TRUE(DBUpdater::Run(worldInfo, "world", UpdaterSettings{}));
     LoginDatabaseConnection login(loginInfo);
     CharacterDatabaseConnection characters(charactersInfo);

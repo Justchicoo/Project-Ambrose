@@ -15,6 +15,7 @@
 #include "GameTestHarness.h"
 #include "LoginMessageTable.h"
 #include "LoginMgr.h"
+#include "PendingCharacterUpdates.h"
 #include "LoginTestHarness.h"
 #include "RealmList.h"
 #include "Rec1.h"
@@ -26,8 +27,6 @@
 
 #include <chrono>
 #include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -66,16 +65,8 @@ namespace
             _charactersInfo.Database = fmt::format("ambrose_hand_{:08x}_characters", suffix);
             ASSERT_TRUE(DBUpdater::Run(_loginInfo, "login", UpdaterSettings{}));
             ASSERT_TRUE(DBUpdater::Run(_charactersInfo, "characters", UpdaterSettings{}));
-            std::filesystem::path const socialUpdate = DBUpdater::GetBuiltInSourceDirectory() / "data" / "sql" / "updates" / "pending_db_characters" /
-                "rev_1790786233_friends.sql";
-            if (std::filesystem::exists(socialUpdate))
-            {
-                std::ifstream sqlFile(socialUpdate, std::ios::binary);
-                ASSERT_TRUE(sqlFile) << socialUpdate.string();
-                std::string const sql{ std::istreambuf_iterator<char>(sqlFile), std::istreambuf_iterator<char>() };
-                std::string failure;
-                ASSERT_TRUE(DBUpdater::ApplyScript(_charactersInfo, {}, socialUpdate.filename().string(), sql, &failure)) << failure;
-            }
+            std::string failure;
+            ASSERT_TRUE(AmbroseTestDatabaseUpdates::ApplyPendingFriendsUpdate(_charactersInfo, failure)) << failure;
             ASSERT_TRUE(LoginDatabase.SetConnectionInfo(_loginInfo.ToConnectionString(), 1, 1));
             ASSERT_EQ(LoginDatabase.Open(), 0u);
             ASSERT_TRUE(CharacterDatabase.SetConnectionInfo(_charactersInfo.ToConnectionString(), 1, 1));

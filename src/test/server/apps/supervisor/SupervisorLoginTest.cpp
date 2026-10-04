@@ -152,7 +152,7 @@ namespace
             std::filesystem::path const appConfig = _directory.Write("loginserver.conf", fmt::format(
                 "BindIP = 127.0.0.1\nLoginServerPort = {}\nClientDir = \"{}\"\nTypeDumpPath = \"{}\"\nSetup.Mode = off\nConsole.Colors = 0\n"
                 "Admin.Enable = 1\nAdmin.BindIP = 127.0.0.1\nAdmin.Port = {}\nAdmin.Token = {}\n"
-                "LoginDatabaseInfo = \"{}\"\nCharacterDatabaseInfo = \"{}\"\nWorldDatabaseInfo = \"\"\nUpdates.EnableDatabases = 3\nUpdates.AutoSetup = 1\n"
+                "LoginDatabaseInfo = \"{}\"\nCharacterDatabaseInfo = \"{}\"\nWorldDatabaseInfo = \"\"\nUpdates.EnableDatabases = 3\nUpdates.AllowPending = 1\nUpdates.AutoSetup = 1\n"
                 "Login.ShutdownGrace = 10\n",
                 Clients, Slashes(ConfigMgr::PathFromUtf8(client)), Slashes(ConfigMgr::PathFromUtf8(dump)), Admin, Token,
                 login.ToConnectionString(), characters.ToConnectionString()));
@@ -167,7 +167,7 @@ namespace
                 std::filesystem::path const realmConfig = _directory.Write("gameserver.conf", fmt::format(
                     "BindIP = 127.0.0.1\nWorldServerPort = {}\nRealmID = 1\nClientDir = \"{}\"\nTypeDumpPath = \"{}\"\nSetup.Mode = off\nConsole.Colors = 0\n"
                     "Admin.Enable = 1\nAdmin.BindIP = 127.0.0.1\nAdmin.Port = {}\nAdmin.Token = {}\n"
-                    "LoginDatabaseInfo = \"{}\"\nCharacterDatabaseInfo = \"{}\"\nWorldDatabaseInfo = \"{}\"\nUpdates.EnableDatabases = 7\nUpdates.AutoSetup = 1\n",
+                    "LoginDatabaseInfo = \"{}\"\nCharacterDatabaseInfo = \"{}\"\nWorldDatabaseInfo = \"{}\"\nUpdates.EnableDatabases = 7\nUpdates.AllowPending = 1\nUpdates.AutoSetup = 1\n",
                     FreePort(), Slashes(ConfigMgr::PathFromUtf8(client)), Slashes(ConfigMgr::PathFromUtf8(dump)), FreePort(), Token,
                     login.ToConnectionString(), characters.ToConnectionString(), world->ToConnectionString()));
                 apps += " gameserver";

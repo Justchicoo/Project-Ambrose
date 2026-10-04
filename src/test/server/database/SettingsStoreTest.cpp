@@ -10,6 +10,7 @@
 #include "Environment.h"
 #include "LogTestDirectory.h"
 #include "MySQLConnection.h"
+#include "PendingCharacterUpdates.h"
 #include "Settings.h"
 
 #include <fmt/format.h>
@@ -43,6 +44,8 @@ namespace
             _login.Database = fmt::format("ambrose_settings_login_{:08x}", tag);
             ASSERT_TRUE(DBUpdater::Run(_characters, "characters", UpdaterSettings{}));
             ASSERT_TRUE(DBUpdater::Run(_login, "login", UpdaterSettings{}));
+            std::string failure;
+            ASSERT_TRUE(AmbroseTestDatabaseUpdates::ApplyPendingFriendsUpdate(_characters, failure)) << failure;
             ASSERT_TRUE(CharacterDatabase.SetConnectionInfo(_characters.ToConnectionString(), 1, 1));
             ASSERT_EQ(CharacterDatabase.Open(), 0u);
             ASSERT_TRUE(LoginDatabase.SetConnectionInfo(_login.ToConnectionString(), 1, 1));

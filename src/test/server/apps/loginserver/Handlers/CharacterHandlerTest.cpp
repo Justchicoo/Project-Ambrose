@@ -14,6 +14,7 @@
 #include "LoginScreenInfoBuilder.h"
 #include "LoginTestHarness.h"
 #include "ObjectFields.h"
+#include "PendingCharacterUpdates.h"
 #include "Rec1.h"
 #include "TypedView.h"
 
@@ -61,6 +62,8 @@ namespace
             _charactersInfo.Database = fmt::format("ambrose_list_{:08x}_characters", suffix);
             ASSERT_TRUE(DBUpdater::Run(_loginInfo, "login", UpdaterSettings{}));
             ASSERT_TRUE(DBUpdater::Run(_charactersInfo, "characters", UpdaterSettings{}));
+            std::string failure;
+            ASSERT_TRUE(AmbroseTestDatabaseUpdates::ApplyPendingFriendsUpdate(_charactersInfo, failure)) << failure;
             ASSERT_TRUE(LoginDatabase.SetConnectionInfo(_loginInfo.ToConnectionString(), 1, 1));
             ASSERT_EQ(LoginDatabase.Open(), 0u);
             ASSERT_TRUE(CharacterDatabase.SetConnectionInfo(_charactersInfo.ToConnectionString(), 1, 1));

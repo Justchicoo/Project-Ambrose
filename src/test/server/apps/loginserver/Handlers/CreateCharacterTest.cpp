@@ -17,6 +17,7 @@
 #include "LoginTestHarness.h"
 #include "ObjectFields.h"
 #include "ObjectSerializer.h"
+#include "PendingCharacterUpdates.h"
 #include "PropertyObject.h"
 #include "Rec1.h"
 #include "TypeRegistry.h"
@@ -62,6 +63,8 @@ namespace
             _worldInfo.Database = fmt::format("ambrose_make_{:08x}_world", suffix);
             ASSERT_TRUE(DBUpdater::Run(_loginInfo, "login", UpdaterSettings{}));
             ASSERT_TRUE(DBUpdater::Run(_charactersInfo, "characters", UpdaterSettings{}));
+            std::string failure;
+            ASSERT_TRUE(AmbroseTestDatabaseUpdates::ApplyPendingFriendsUpdate(_charactersInfo, failure)) << failure;
             ASSERT_TRUE(DBUpdater::Run(_worldInfo, "world", UpdaterSettings{}));
             ASSERT_TRUE(LoginDatabase.SetConnectionInfo(_loginInfo.ToConnectionString(), 1, 1));
             ASSERT_EQ(LoginDatabase.Open(), 0u);

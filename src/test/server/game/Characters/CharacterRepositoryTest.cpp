@@ -7,6 +7,7 @@
 #include "DBUpdater.h"
 #include "Environment.h"
 #include "GuidGenerator.h"
+#include "PendingCharacterUpdates.h"
 
 #include <fmt/format.h>
 
@@ -138,6 +139,8 @@ namespace
             info->Database = fmt::format("ambrose_characters_{:08x}", std::random_device()());
             _info = *info;
             ASSERT_TRUE(DBUpdater::Run(_info, "characters", UpdaterSettings{}));
+            std::string failure;
+            ASSERT_TRUE(AmbroseTestDatabaseUpdates::ApplyPendingFriendsUpdate(_info, failure)) << failure;
             ASSERT_TRUE(CharacterDatabase.SetConnectionInfo(_info.ToConnectionString(), 1, 1));
             ASSERT_EQ(CharacterDatabase.Open(), 0u);
             _open = true;

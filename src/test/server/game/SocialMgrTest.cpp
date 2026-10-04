@@ -12,6 +12,7 @@
 #include "GameTestHarness.h"
 #include "LogTestDirectory.h"
 #include "MemorySettingStore.h"
+#include "PendingCharacterUpdates.h"
 #include "Settings.h"
 #include "SocialMgr.h"
 #include "World.h"
@@ -23,7 +24,6 @@
 #include <atomic>
 #include <chrono>
 #include <filesystem>
-#include <fstream>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -153,13 +153,8 @@ namespace
             info->Database = fmt::format("ambrose_social_{:08x}", std::random_device()());
             _info = *info;
             ASSERT_TRUE(DBUpdater::Run(_info, "characters", UpdaterSettings{}));
-            std::filesystem::path const sqlPath = DBUpdater::GetBuiltInSourceDirectory() / "data" / "sql" / "updates" / "pending_db_characters" /
-                "rev_1790786233_friends.sql";
-            std::ifstream sqlFile(sqlPath, std::ios::binary);
-            ASSERT_TRUE(sqlFile) << sqlPath.string();
-            std::string const sql{ std::istreambuf_iterator<char>(sqlFile), std::istreambuf_iterator<char>() };
             std::string failure;
-            ASSERT_TRUE(DBUpdater::ApplyScript(_info, {}, sqlPath.filename().string(), sql, &failure)) << failure;
+            ASSERT_TRUE(AmbroseTestDatabaseUpdates::ApplyPendingFriendsUpdate(_info, failure)) << failure;
             CharacterDatabase.Close();
             ASSERT_TRUE(CharacterDatabase.SetConnectionInfo(_info.ToConnectionString(), 1, 1));
             ASSERT_EQ(CharacterDatabase.Open(), 0u);
