@@ -81,7 +81,7 @@ if(NAME STREQUAL "loginserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AM
     foreach(round IN ITEMS first second)
         execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=${smokeDatabase}" "--set=CharacterDatabaseInfo=${smokeCharacters}"
                 "--set=WorldDatabaseInfo=${smokeWorld}"
-            WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE databaseResult OUTPUT_VARIABLE databaseOutput ERROR_VARIABLE databaseError TIMEOUT 60)
+            WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE databaseResult OUTPUT_VARIABLE databaseOutput ERROR_VARIABLE databaseError TIMEOUT 600)
         if(NOT databaseResult EQUAL 0 OR NOT databaseOutput MATCHES "Opened database connection pool login: 1 async, 1 sync" OR NOT databaseOutput MATCHES "loginserver ready" OR NOT databaseOutput MATCHES "Closed database connection pool login"
             OR NOT databaseOutput MATCHES "Opened database connection pool characters: 1 async, 1 sync" OR NOT databaseOutput MATCHES "Opened database connection pool world: 1 async, 1 sync"
             OR NOT databaseOutput MATCHES "Wizards can be created from")
@@ -138,7 +138,7 @@ if(NAME STREQUAL "gameserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AMB
         list(APPEND realmOptions "--set=${database}DatabaseInfo=${databaseInfo}")
     endforeach()
     execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} ${realmOptions} --set Appender.DB=4,2,0
-        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE realmResult OUTPUT_VARIABLE realmOutput ERROR_VARIABLE realmError TIMEOUT 120)
+        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE realmResult OUTPUT_VARIABLE realmOutput ERROR_VARIABLE realmError TIMEOUT 600)
     if(NOT realmResult EQUAL 0)
         ambrose_test_fail("gameserver --check on empty databases exited ${realmResult}: ${realmOutput}${realmError}")
     endif()

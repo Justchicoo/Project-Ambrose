@@ -13,6 +13,7 @@ if(TARGET supervisor)
 endif()
 add_test(NAME ShellSmoke
     COMMAND "${CMAKE_COMMAND}" "-DSMOKE=$<TARGET_FILE:shell_smoke>" "-DSUPERVISOR=${shell_smoke_supervisor}"
+        "-DBINARY_DIR=$<TARGET_FILE_DIR:shell_smoke>"
         "-DDLLS=$<$<BOOL:${WIN32}>:$<JOIN:$<TARGET_RUNTIME_DLLS:shell_smoke>,|>>" "-DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/shell-smoke"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/ShellSmokeTest.cmake")
 set_tests_properties(ShellSmoke PROPERTIES SKIP_REGULAR_EXPRESSION "shell smoke skipped" TIMEOUT 600 RUN_SERIAL TRUE LABELS render)
