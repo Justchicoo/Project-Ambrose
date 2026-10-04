@@ -21,6 +21,7 @@
 #include "PlayerLevelMgr.h"
 #include "PackedName.h"
 #include "PlayerObjectBuilder.h"
+#include "ScriptMgr.h"
 #include "Settings.h"
 #include "SpellMgr.h"
 #include "StringHash.h"
@@ -103,6 +104,8 @@ void GameSession::WorldUpdate(std::chrono::steady_clock::time_point now)
         return;
     if (IsAttached() && _inWorld.load(std::memory_order_relaxed) && GetStatus() == SessionStatus::InWorld)
     {
+        if (_player && _player->RefillPotion(now, std::chrono::seconds(sSettings.Get<uint32>("Potion.RefillInterval"))))
+            SendPotionUpdate();
         if (!_afkTimerStarted)
         {
             _afkStarted = now;
@@ -422,6 +425,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     uint16 mobileId = 0;
     bool resumed = false;
     std::optional<PlayerStats> resumedStats;
+    std::optional<Player> resumedPlayer;
     std::optional<PlayerSpellbook> resumedSpellbook;
     PlayerMovement movement;
     MovementRelay relay;
@@ -446,7 +450,11 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
             entering.PositionY = current.Y;
             entering.PositionZ = current.Z;
             entering.Orientation = current.Yaw;
-            resumedStats = previous->_stats;
+            if (previous->_player)
+            {
+                resumedPlayer = previous->_player;
+                resumedStats = previous->_player->GetStats();
+            }
             resumedSpellbook = previous->_spellbook;
             movement = previous->_movement;
             relay = previous->_relay;
@@ -588,7 +596,10 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         _relay.Reset(_movement);
         _characterRevision = entering.StateRevision;
     }
-    _stats = std::move(stats);
+    if (resumedPlayer)
+        _player = std::move(resumedPlayer);
+    else
+        _player.emplace(std::move(*stats));
     if (!resumed)
         _statsRevision = stored ? stored->Revision : 0;
     _spellbook = std::move(spellbook);
@@ -610,8 +621,8 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         GetSessionId(), complete.ZoneName, complete.ZoneId, complete.DynamicZoneId, complete.DynamicServerProcId, complete.ServerTime, complete.RealmName, complete.Permissions,
         complete.IsCsr, complete.TestServer, complete.CriticalObjects.empty() ? "none" : "a list");
     LOG_INFO("server.gamesession", "Session {} put wizard {} in {} instance {} at ({}, {}, {}) with mobile id {}, level {} with {} of {} health and {} of {} mana and {} spell(s) in its book, and sent its {}-byte object and the zone's {} object(s)",
-        GetSessionId(), character.Guid, entering.Zone, map->GetDynamicZoneId(), placement.X, placement.Y, placement.Z, placement.MobileId, _stats->GetLevel(), _stats->GetHitpoints(),
-        _stats->GetMaxHitpoints(), _stats->GetMana(), _stats->GetMaxMana(), trackers.size(), data.Bytes.size(), map->GetObjects().size());
+        GetSessionId(), character.Guid, entering.Zone, map->GetDynamicZoneId(), placement.X, placement.Y, placement.Z, placement.MobileId, _player->GetStats().GetLevel(), _player->GetStats().GetHitpoints(),
+        _player->GetStats().GetMaxHitpoints(), _player->GetStats().GetMana(), _player->GetStats().GetMaxMana(), trackers.size(), data.Bytes.size(), map->GetObjects().size());
 }
 
 void GameSession::ShowPlayer(GameSession const& other)
@@ -753,6 +764,158 @@ void GameSession::HandleClientZoned(GameMessages::ClientZoned& message)
     LOG_INFO("server.gamesession", "Session {} loaded {}, and wizard {} stands in the world", GetSessionId(), _zonePath, _worldGuid);
 }
 
+bool GameSession::SetHealth(int32 value)
+{
+    if (!_player)
+        return false;
+    int32 const oldValue = _player->GetStats().GetHitpoints();
+    if (!_player->SetHealth(value))
+        return false;
+    int32 const newValue = _player->GetStats().GetHitpoints();
+    SendHealthUpdate(1);
+    sScriptMgr.OnHealthChanged(*_player, oldValue, newValue);
+    return true;
+}
+
+bool GameSession::SetMana(int32 value)
+{
+    if (!_player || !_player->SetMana(value))
+        return false;
+    SendManaUpdate(1);
+    return true;
+}
+
+bool GameSession::SetGold(int64 value)
+{
+    if (!_player)
+        return false;
+    int32 const oldValue = _player->GetStats().GetGold();
+    if (!_player->SetGold(value))
+        return false;
+    int32 const newValue = _player->GetStats().GetGold();
+    SendGoldUpdate();
+    sScriptMgr.OnGoldChanged(*_player, oldValue, newValue);
+    return true;
+}
+
+int64 GameSession::ModifyGold(int64 amount)
+{
+    if (!_player)
+        return amount;
+    int32 const oldValue = _player->GetStats().GetGold();
+    int64 const overflow = _player->ModifyGold(amount);
+    int32 const newValue = _player->GetStats().GetGold();
+    if (oldValue != newValue)
+    {
+        SendGoldUpdate();
+        sScriptMgr.OnGoldChanged(*_player, oldValue, newValue);
+    }
+    return overflow;
+}
+
+bool GameSession::SetPotionCapacity(uint32 capacity)
+{
+    if (!_player || !_player->SetPotionCapacity(capacity))
+        return false;
+    SendPotionUpdate();
+    return true;
+}
+
+bool GameSession::SetPowerPip(float value)
+{
+    if (!_player || !_player->SetPowerPip(value))
+        return false;
+    GameMessages::UpdatePowerPip message;
+    message.PowerPip = _player->GetStats().GetPowerPip();
+    SendDmlMessage(message);
+    return true;
+}
+
+bool GameSession::SetShadowPipRating(float value)
+{
+    if (!_player || !_player->SetShadowPipRating(value))
+        return false;
+    GameMessages::UpdateShadowPipRating message;
+    message.ShadowPipRating = _player->GetStats().GetShadowPipRating();
+    SendDmlMessage(message);
+    return true;
+}
+
+void GameSession::SendElixirStateChange(uint64 parentId, uint8 effectEnabled)
+{
+    if (!_player)
+        return;
+    GameMessages::ElixirStateChange message;
+    message.ParentId = parentId;
+    message.EffectEnabled = effectEnabled;
+    SendDmlMessage(message);
+}
+
+void GameSession::SendHealthUpdate(uint8 displayDiff)
+{
+    if (!_player)
+        return;
+    GameMessages::UpdateHealth message;
+    message.CharacterId = _worldGuid;
+    message.NewHealth = _player->GetStats().GetHitpoints();
+    message.NewHealthMax = _player->GetStats().GetMaxHitpoints();
+    message.DisplayDiff = displayDiff;
+    SendDmlMessage(message);
+}
+
+void GameSession::SendManaUpdate(uint8 displayDiff)
+{
+    if (!_player)
+        return;
+    GameMessages::UpdateMana message;
+    message.Mana = _player->GetStats().GetMana();
+    message.MaxMana = _player->GetStats().GetMaxMana();
+    message.DisplayDiff = displayDiff;
+    SendDmlMessage(message);
+}
+
+void GameSession::SendGoldUpdate()
+{
+    if (!_player)
+        return;
+    GameMessages::UpdateGold message;
+    message.Gold = _player->GetStats().GetGold();
+    message.MaxGold = _player->GetStats().GetBase().Gold;
+    SendDmlMessage(message);
+}
+
+void GameSession::SendPotionUpdate()
+{
+    if (!_player)
+        return;
+    GameMessages::UpdatePotions message;
+    message.PotionMax = _player->GetStats().GetPotionMax();
+    message.PotionCharge = _player->GetStats().GetPotionCharge();
+    SendDmlMessage(message);
+}
+
+void GameSession::HandleUsePotion(GameMessages::UsePotion&)
+{
+    if (!_player)
+        return;
+    int32 const oldHealth = _player->GetStats().GetHitpoints();
+    int32 const oldMana = _player->GetStats().GetMana();
+    double const restoreFraction = sSettings.Get<float>("Potion.RestoreFraction");
+    std::chrono::seconds const refillInterval(sSettings.Get<uint32>("Potion.RefillInterval"));
+    if (!_player->UsePotion(restoreFraction, std::chrono::steady_clock::now(), refillInterval))
+    {
+        LOG_DEBUG("server.gamesession", "Session {}'s wizard {} asked to use a potion without a full charge; its vitals and potion charges stay unchanged", GetSessionId(), _worldGuid);
+        return;
+    }
+    int32 const newHealth = _player->GetStats().GetHitpoints();
+    int32 const newMana = _player->GetStats().GetMana();
+    SendPotionUpdate();
+    SendHealthUpdate(newHealth != oldHealth ? 1 : 0);
+    SendManaUpdate(newMana != oldMana ? 1 : 0);
+    if (newHealth != oldHealth)
+        sScriptMgr.OnHealthChanged(*_player, oldHealth, newHealth);
+}
+
 std::string GameSession::GetCharacterName() const
 {
     std::lock_guard const lock(_nameMutex);
@@ -767,9 +930,9 @@ void GameSession::SetCharacterName(std::string name)
 
 void GameSession::SaveStats()
 {
-    if (!_stats || !CharacterDatabase.IsOpen())
+    if (!_player || !CharacterDatabase.IsOpen())
         return;
-    CharacterStats stored = _stats->ToStored();
+    CharacterStats stored = _player->GetStats().ToStored();
     stored.Revision = ++_statsRevision;
     if (!CharacterRepository::IsValidStats(stored))
     {
@@ -777,7 +940,10 @@ void GameSession::SaveStats()
         return;
     }
     if (CharacterRepository::Statement statement = CharacterRepository::PrepareSaveStats(_worldGuid, stored))
+    {
         CharacterDatabase.Execute(std::move(statement));
+        _player->ClearDirtyStats();
+    }
 }
 
 SpellbookChange GameSession::LearnSpell(uint32 spellId)
@@ -845,10 +1011,10 @@ void GameSession::LeaveWorld()
     SetCharacterName(std::string());
     _wizBangId = 0;
     _pendingWizBang.reset();
-    if (_stats)
+    if (_player)
     {
         SaveStats();
-        _stats.reset();
+        _player.reset();
     }
     _spellbook.reset();
     if (std::optional<PlayerPosition> const moved = _movement.TakeWrite())
@@ -886,7 +1052,7 @@ void GameSession::TransferWorldStateTo(GameSession& replacement)
     _linkDeadNotified = false;
     _mapId.reset();
     _publicObject.clear();
-    _stats.reset();
+    _player.reset();
     _spellbook.reset();
     _worldGuid = 0;
     _zonePath.clear();

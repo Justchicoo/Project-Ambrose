@@ -39,10 +39,10 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Acceptance**
 
-- [ ] ModifyGold clamps at pouch
-- [ ] USEPOTION with 0 charges changes nothing
-- [ ] Changing Potion.RestoreFraction applies to the next potion without a restart
-- [ ] Real client: '.character gold 500' updates live; heal animates; potion restores and empties by one
+- [x] ModifyGold clamps at pouch [PlayerStatsTest.GoldModificationClampsAtThePouchAndReportsTheOverflow passed]
+- [x] USEPOTION with 0 charges changes nothing [PlayerStatsTest.UsingAPotionWithNoChargesChangesNothing passed]
+- [x] Changing Potion.RestoreFraction applies to the next potion without a restart [PlayerStatsTest.EachPotionUsesTheCurrentRestoreFraction passed; client run 20261003-190527 changed 0.1 to 0.2 while running]
+- [x] Real client: '.character gold 500' updates live; heal animates; potion restores and empties by one [client run 20261003-190527: 14-backpack-live-gold.png, 25-healed.png, 21-potion-first-use.png and 22-potion-live-setting.png]
 
 ### Detailed spec from WIZ-6: Live vitals, gold and potions
 
@@ -69,10 +69,10 @@ Health, mana, gold, power-pip and potion changes on the server show up immediate
 
 **Acceptance**
 
-- [ ] Unit test: ModifyGold above m_baseGoldPouch clamps and reports the overflow
-- [ ] Unit test: USEPOTION with 0 charges changes nothing
-- [ ] Unit test: after Potion.RestoreFraction changes, the next potion restores the new fraction without a restart
-- [ ] Real client: '.character gold 500' makes the backpack gold counter update without relogging. Damaging then '.character heal' makes the health globe animate up (DisplayDiff=1 floats the number). Clicking a filled potion restores health and mana, and the potion bottle empties by one.
+- [x] Unit test: ModifyGold above m_baseGoldPouch clamps and reports the overflow [PlayerStatsTest.GoldModificationClampsAtThePouchAndReportsTheOverflow passed]
+- [x] Unit test: USEPOTION with 0 charges changes nothing [PlayerStatsTest.UsingAPotionWithNoChargesChangesNothing passed]
+- [x] Unit test: after Potion.RestoreFraction changes, the next potion restores the new fraction without a restart [PlayerStatsTest.EachPotionUsesTheCurrentRestoreFraction passed; client run 20261003-190527 changed 0.1 to 0.2 while running]
+- [x] Real client: '.character gold 500' makes the backpack gold counter update without relogging. Damaging then '.character heal' makes the health globe animate up (DisplayDiff=1 floats the number). Clicking a filled potion restores health and mana, and the potion bottle empties by one. [client run 20261003-190527: 14-backpack-live-gold.png, 25-healed.png, 21-potion-first-use.png and 22-potion-live-setting.png]
 
 **Risks**
 

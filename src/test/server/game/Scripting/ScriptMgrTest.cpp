@@ -1,8 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the hook framework every later domain hangs off: a script registers itself by being constructed, the loader CMake wrote brings in the scripts that are merely present in the source tree, every hook reaches every script in the order they registered, a module under modules/ arrives by the same loader with no edit to anything in the core, a script that throws from a hook is reported and the scripts after it still run, and unloading frees them and leaves the manager empty.
+ * Tests the hook framework every later domain hangs off: scripts register by construction, world and player hooks reach them in order, the loader brings in scripts and modules, thrown hooks do not stop later scripts, and unloading leaves the manager empty.
  */
 
+#include "Player.h"
 #include "ScriptLoader.h"
 #include "ScriptMgr.h"
 
@@ -34,6 +35,22 @@ namespace
         ThrowingScript() : WorldScript("throwing") {}
 
         void OnUpdate(std::chrono::milliseconds) override { throw std::runtime_error("this script is broken"); }
+    };
+
+    class CountingPlayerScript : public PlayerScript
+    {
+    public:
+        CountingPlayerScript() : PlayerScript("player_changes") {}
+
+        void OnGoldChanged(Player&, int32 oldValue, int32 newValue) override
+        {
+            Calls.push_back("gold:" + std::to_string(oldValue) + ":" + std::to_string(newValue));
+        }
+
+        void OnHealthChanged(Player&, int32 oldValue, int32 newValue) override
+        {
+            Calls.push_back("health:" + std::to_string(oldValue) + ":" + std::to_string(newValue));
+        }
     };
 
     class ScriptMgrTest : public testing::Test
@@ -95,6 +112,20 @@ TEST_F(ScriptMgrTest, AScriptThatThrowsDoesNotStopTheOnesAfterIt)
 
     EXPECT_EQ(Calls, (std::vector<std::string>{ "before:update:10", "after:update:10" }));
     EXPECT_EQ(sScriptMgr.GetScriptCount(), 3u);
+}
+
+TEST_F(ScriptMgrTest, PlayerChangesReachEveryPlayerScript)
+{
+    new CountingPlayerScript();
+    new CountingPlayerScript();
+    Player player(PlayerStats{});
+
+    sScriptMgr.OnGoldChanged(player, 10, 20);
+    sScriptMgr.OnHealthChanged(player, 30, 40);
+
+    EXPECT_EQ(Calls, (std::vector<std::string>{
+        "gold:10:20", "gold:10:20", "health:30:40", "health:30:40",
+    }));
 }
 
 TEST_F(ScriptMgrTest, UnloadingFreesEveryScriptAndLeavesNothingBehind)

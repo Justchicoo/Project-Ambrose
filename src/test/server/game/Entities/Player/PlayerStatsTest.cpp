@@ -1,16 +1,20 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests a wizard's stats: a new Fire wizard at level 1 gets its row's base health, mana and training points at full health and mana, one without a stats row at a higher level has earned every level's training points, stored values apply within their maximums and save back with a full health or mana as full, a level above the cap reads the cap's row, a wizard whose school has no rows or whose level is negative is refused with the reason, and the WizGameStats and ClientMagicSchoolBehavior the stats fill carry every value and read back unchanged through the transmit form.
+ * Tests a wizard's stats and live player state: database values and client objects, pouch-clamped gold modifications, potion use and refill timing, changed potion restore fractions, and rejected use at zero charges.
  */
 
 #include "CharacterTypeFixtures.h"
 #include "ObjectSerializer.h"
+#include "Player.h"
 #include "PlayerStats.h"
 #include "PlayerStatsFixtures.h"
 #include "TypeRegistry.h"
 
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <cmath>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -218,4 +222,112 @@ TEST_F(PlayerStatsTest, TheGameStatsAndSchoolBehaviorCarryEveryValueAndReadBackT
             EXPECT_TRUE(*sent == *read) << property.Name << " did not read back";
         }
     }
+}
+
+TEST_F(PlayerStatsTest, GoldModificationClampsAtThePouchAndReportsTheOverflow)
+{
+    _character.Level = 5;
+    std::optional<PlayerStats> stats = Create();
+    ASSERT_TRUE(stats);
+    Player player(std::move(*stats));
+    EXPECT_TRUE(player.SetGold(299990));
+    EXPECT_EQ(player.ModifyGold(50), 40);
+    EXPECT_EQ(player.GetStats().GetGold(), 300000);
+    EXPECT_EQ(player.ModifyGold(std::numeric_limits<int64>::max()), std::numeric_limits<int64>::max());
+
+    EXPECT_TRUE(player.SetGold(10));
+    EXPECT_EQ(player.ModifyGold(std::numeric_limits<int64>::min()), std::numeric_limits<int64>::min() + 10);
+    EXPECT_EQ(player.GetStats().GetGold(), 0);
+    EXPECT_TRUE(player.HasDirtyStats());
+}
+
+TEST_F(PlayerStatsTest, EveryLiveStatMutationMarksCharacterStatsDirty)
+{
+    std::optional<PlayerStats> stats = Create();
+    ASSERT_TRUE(stats);
+    Player player(std::move(*stats));
+
+    EXPECT_TRUE(player.SetHealth(player.GetStats().GetMaxHitpoints() - 1));
+    EXPECT_TRUE(player.HasDirtyStats());
+    player.ClearDirtyStats();
+
+    EXPECT_TRUE(player.SetMana(player.GetStats().GetMaxMana() - 1));
+    EXPECT_TRUE(player.HasDirtyStats());
+    player.ClearDirtyStats();
+
+    EXPECT_TRUE(player.SetGold(1));
+    EXPECT_TRUE(player.HasDirtyStats());
+    player.ClearDirtyStats();
+
+    EXPECT_TRUE(player.SetPotions(1.0f, 2.0f));
+    EXPECT_TRUE(player.HasDirtyStats());
+    player.ClearDirtyStats();
+
+    EXPECT_TRUE(player.SetPowerPip(player.GetStats().GetPowerPip() + 1.0f));
+    EXPECT_TRUE(player.HasDirtyStats());
+    player.ClearDirtyStats();
+
+    EXPECT_TRUE(player.SetShadowPipRating(player.GetStats().GetShadowPipRating() + 1.0f));
+    EXPECT_TRUE(player.HasDirtyStats());
+}
+
+TEST_F(PlayerStatsTest, UsingAPotionWithNoChargesChangesNothing)
+{
+    std::optional<PlayerStats> stats = Create();
+    ASSERT_TRUE(stats);
+    int32 const health = stats->GetHitpoints();
+    int32 const mana = stats->GetMana();
+    Player player(std::move(*stats));
+
+    EXPECT_FALSE(player.UsePotion(1.0, Player::Clock::time_point{}, std::chrono::seconds(30)));
+    EXPECT_EQ(player.GetStats().GetHitpoints(), health);
+    EXPECT_EQ(player.GetStats().GetMana(), mana);
+    EXPECT_FLOAT_EQ(player.GetStats().GetPotionCharge(), 0.0f);
+    EXPECT_FALSE(player.HasDirtyStats());
+}
+
+TEST_F(PlayerStatsTest, EachPotionUsesTheCurrentRestoreFraction)
+{
+    CharacterStats stored;
+    stored.PotionCharge = 2.0f;
+    stored.PotionMax = 2.0f;
+    std::optional<PlayerStats> stats = Create(stored);
+    ASSERT_TRUE(stats);
+    int32 const maxHealth = stats->GetMaxHitpoints();
+    int32 const maxMana = stats->GetMaxMana();
+    Player player(std::move(*stats));
+    Player::Clock::time_point const now{};
+
+    EXPECT_TRUE(player.SetHealth(0));
+    EXPECT_TRUE(player.SetMana(0));
+    EXPECT_TRUE(player.UsePotion(0.25, now, std::chrono::seconds(30)));
+    EXPECT_EQ(player.GetStats().GetHitpoints(), std::lround(static_cast<double>(maxHealth) * 0.25));
+    EXPECT_EQ(player.GetStats().GetMana(), std::lround(static_cast<double>(maxMana) * 0.25));
+    EXPECT_TRUE(player.HasDirtyStats());
+
+    EXPECT_TRUE(player.SetHealth(0));
+    EXPECT_TRUE(player.SetMana(0));
+    EXPECT_TRUE(player.UsePotion(0.5, now + std::chrono::seconds(1), std::chrono::seconds(30)));
+    EXPECT_EQ(player.GetStats().GetHitpoints(), std::lround(static_cast<double>(maxHealth) * 0.5));
+    EXPECT_EQ(player.GetStats().GetMana(), std::lround(static_cast<double>(maxMana) * 0.5));
+    EXPECT_FLOAT_EQ(player.GetStats().GetPotionCharge(), 0.0f);
+}
+
+TEST_F(PlayerStatsTest, RefillIntervalChangesApplyAfterTheCurrentRefill)
+{
+    CharacterStats stored;
+    stored.PotionCharge = 1.0f;
+    stored.PotionMax = 3.0f;
+    std::optional<PlayerStats> stats = Create(stored);
+    ASSERT_TRUE(stats);
+    Player player(std::move(*stats));
+    Player::Clock::time_point const now{};
+
+    ASSERT_TRUE(player.UsePotion(0.0, now, std::chrono::seconds(30)));
+    EXPECT_FALSE(player.RefillPotion(now + std::chrono::seconds(29), std::chrono::seconds(5)));
+    EXPECT_TRUE(player.RefillPotion(now + std::chrono::seconds(30), std::chrono::seconds(5)));
+    EXPECT_FALSE(player.RefillPotion(now + std::chrono::seconds(34), std::chrono::seconds(5)));
+    EXPECT_TRUE(player.RefillPotion(now + std::chrono::seconds(35), std::chrono::seconds(5)));
+    EXPECT_FLOAT_EQ(player.GetStats().GetPotionCharge(), 2.0f);
+    EXPECT_TRUE(player.HasDirtyStats());
 }

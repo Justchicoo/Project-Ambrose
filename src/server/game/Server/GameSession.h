@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook and stats stay with the world thread and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it.
+ * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook and live player stats stay with the world thread, stat changes update the HUD and character persistence, and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it.
  */
 
 #ifndef AMBROSE_GAMESESSION_H
@@ -17,6 +17,7 @@
 #include "MapObjectSpawner.h"
 #include "MovementRelay.h"
 #include "PlayerMovement.h"
+#include "Player.h"
 #include "PlayerSpellbook.h"
 #include "PlayerStats.h"
 #include "SessionBase.h"
@@ -110,7 +111,16 @@ public:
     MovementUpdate TakeMovementUpdate(uint32 idleFlushes);
     void ShowMovementOf(GameSession const& mover, MovementUpdate const& update);
     void SendObjectChanges(MapObjectChanges const& changes);
-    PlayerStats const* GetStats() const noexcept { return _stats ? &*_stats : nullptr; }
+    PlayerStats const* GetStats() const noexcept { return _player ? &_player->GetStats() : nullptr; }
+    Player* GetPlayer() noexcept { return _player ? &*_player : nullptr; }
+    bool SetHealth(int32 value);
+    bool SetMana(int32 value);
+    bool SetGold(int64 value);
+    int64 ModifyGold(int64 amount);
+    bool SetPotionCapacity(uint32 capacity);
+    bool SetPowerPip(float value);
+    bool SetShadowPipRating(float value);
+    void SendElixirStateChange(uint64 parentId, uint8 effectEnabled);
     PlayerMovement const& GetMovement() const noexcept { return _movement; }
     PlayerSpellbook const* GetSpellbook() const noexcept { return _spellbook ? &*_spellbook : nullptr; }
     SpellbookChange LearnSpell(uint32 spellId);
@@ -123,6 +133,7 @@ public:
     void HandleLogClientResolution(GameMessages::LogClientResolution& message);
     void HandleLogPatchClientPatchTime(GameMessages::LogPatchClientPatchTime& message);
     void HandleQuestFinderOption(GameMessages::QuestFinderOption& message);
+    void HandleUsePotion(GameMessages::UsePotion& message);
     void SendBadges();
     void HandlePlayerWizBang(GameMessages::PlayerWizBang& message);
 
@@ -160,6 +171,10 @@ private:
     void SaveStats();
     void SaveSpell(CharacterSpell const& spell);
     void SavePosition(PlayerPosition const& position);
+    void SendHealthUpdate(uint8 displayDiff);
+    void SendManaUpdate(uint8 displayDiff);
+    void SendGoldUpdate();
+    void SendPotionUpdate();
     void RefuseEntry(LoginKeyClaim const& claim, std::string const& reason);
     bool CanSpeak(std::string_view what) const;
     void QueueSpeech(Speech speech, std::string_view what);
@@ -194,7 +209,7 @@ private:
     uint64 _worldGuid = 0;
     uint32 _wizBangId = 0;
     std::optional<uint32> _pendingWizBang;
-    std::optional<PlayerStats> _stats;
+    std::optional<Player> _player;
     uint64 _statsRevision = 0;
     std::optional<PlayerSpellbook> _spellbook;
     PlayerMovement _movement;
