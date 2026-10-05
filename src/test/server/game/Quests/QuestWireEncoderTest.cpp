@@ -76,9 +76,13 @@ TEST(QuestWireEncoderTest, ClientFacingQuestBlobsRoundTripWithExpectedClassesAnd
         EXPECT_EQ(type->Hash, hash) << name;
     }
 
-    QuestMadlibs::Block const bountyMadlib = QuestMadlibs::BuildGoal(
-        Quests::GoalTemplate{ .Name = "bounty", .LocationName = "Ravenwood", .TallyCounter = Quests::TallyCounterTemplate{ .Descriptor = "BOUNTY_TOTAL" } },
-        3, 5);
+    Quests::GoalTemplate bounty;
+    bounty.Name = "bounty";
+    bounty.LocationName = "Ravenwood";
+    Quests::TallyCounterTemplate tally;
+    tally.Descriptor = "BOUNTY_TOTAL";
+    bounty.TallyCounter = tally;
+    QuestMadlibs::Block const bountyMadlib = QuestMadlibs::BuildGoal(bounty, 3, 5);
     ASSERT_EQ(bountyMadlib.BlockToken, "GOAL");
     ASSERT_EQ(bountyMadlib.Arguments.size(), 6u);
     EXPECT_EQ(bountyMadlib.Arguments[0].Token, "NAME");
@@ -89,11 +93,18 @@ TEST(QuestWireEncoderTest, ClientFacingQuestBlobsRoundTripWithExpectedClassesAnd
     EXPECT_EQ(bountyMadlib.Arguments[5].Token, "TOTAL");
     EXPECT_EQ(std::get<int32>(bountyMadlib.Arguments[5].Value), 5);
 
-    QuestMadlibs::Block const questMadlib = QuestMadlibs::BuildQuest({ .Name = "quest", .Level = 4 });
+    Quests::QuestTemplate quest;
+    quest.Name = "quest";
+    quest.Level = 4;
+    QuestMadlibs::Block const questMadlib = QuestMadlibs::BuildQuest(quest);
     EXPECT_EQ(questMadlib.BlockToken, "QUEST");
     EXPECT_EQ(questMadlib.Arguments.size(), 2u);
     EXPECT_EQ(std::get<int32>(questMadlib.Arguments[1].Value), 4);
-    QuestMadlibs::Block const npcMadlib = QuestMadlibs::BuildNpc({ .Name = "NPC", .FirstName = "First", .LastName = "Last" });
+    QuestMadlibs::NpcFields npc;
+    npc.Name = "NPC";
+    npc.FirstName = "First";
+    npc.LastName = "Last";
+    QuestMadlibs::Block const npcMadlib = QuestMadlibs::BuildNpc(npc);
     EXPECT_EQ(npcMadlib.BlockToken, "NPC");
     EXPECT_EQ(npcMadlib.Arguments.size(), 6u);
 
@@ -161,7 +172,9 @@ TEST(QuestWireEncoderTest, ClientFacingQuestBlobsRoundTripWithExpectedClassesAnd
 
     QuestWireEncoder::ServiceMementoBase memento;
     memento.Options = { prep, goal, interactable };
-    memento.PersonaMadlibs = QuestMadlibs::BuildNpc({ .Name = "NPCFormats_Name" });
+    QuestMadlibs::NpcFields persona;
+    persona.Name = "NPCFormats_Name";
+    memento.PersonaMadlibs = QuestMadlibs::BuildNpc(persona);
     memento.NpcNameKey = "NPCFormats_Name";
     memento.NpcTextKey = "GUI_NPCInteractText";
     memento.NpcIcon = "portrait";
