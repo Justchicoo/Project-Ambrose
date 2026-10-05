@@ -149,6 +149,15 @@ std::optional<CustomEmoteStore> CustomEmoteStore::Read(std::filesystem::path con
     return Build(std::move(animations), errors);
 }
 
+std::vector<std::string> CustomEmoteStore::AnimationNames() const
+{
+    std::vector<std::string> names;
+    names.reserve(_animations.size());
+    for (auto const& animation : _animations)
+        names.push_back(animation.first);
+    return names;
+}
+
 bool CustomEmoteStore::OwnsAnimation(std::string_view animation, std::array<uint32, RankCount> const& ownership) const noexcept
 {
     auto const found = _animations.find(animation);

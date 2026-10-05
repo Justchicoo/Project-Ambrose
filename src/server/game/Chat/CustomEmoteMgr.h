@@ -40,6 +40,7 @@ public:
     static std::optional<CustomEmoteStore> Read(std::filesystem::path const& gameData, TypeCatalogPtr const& catalog, TemplateManifest const& manifest,
         std::vector<std::string>& errors, std::size_t& threads);
 
+    std::vector<std::string> AnimationNames() const;
     bool OwnsAnimation(std::string_view animation, std::array<uint32, RankCount> const& ownership) const noexcept;
     std::vector<uint32> OwnedTemplateIds(std::array<uint32, RankCount> const& ownership) const;
     std::size_t Size() const noexcept { return _animations.size(); }

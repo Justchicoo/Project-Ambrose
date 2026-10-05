@@ -39,7 +39,11 @@ void GameSession::HandleRequestPiiRadialMenuPlayEmote(GameMessages::RequestPiiRa
         return;
     }
     if (!sAnimationListMgr.GetList()->Contains(message.EmoteAnimationName))
+    {
+        LOG_DEBUG("server.gamesession", "Session {} sent a custom emote naming the animation {}, which the install's animation list does not hold; nobody is shown it",
+            GetSessionId(), message.EmoteAnimationName);
         return;
+    }
     if (!ChatMgr::IsCustomEmoteText(message.EmoteText, sCommandMgr.GetPrefix()))
     {
         LOG_DEBUG("server.gamesession", "Session {} sent a custom emote with empty, unreadable or command text; nobody is shown it", GetSessionId());

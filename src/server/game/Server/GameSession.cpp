@@ -514,13 +514,6 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     std::shared_ptr<ObjectTemplate const> const playerTemplate = sObjectTemplateMgr.GetPlayer();
     uint32 const permissions = sSettings.Get<uint32>("LoginComplete.Permissions");
     std::shared_ptr<CustomEmoteStore const> const customEmotes = sCustomEmoteMgr.GetEmotes();
-    if (!customEmotes)
-    {
-        if (!resumed)
-            LeaveWorld();
-        RefuseEntry(claim, "the custom-emote catalog is not loaded");
-        return;
-    }
     std::vector<uint32> const emoteTemplateIds = customEmotes->OwnedTemplateIds(stats->GetPurchasedCustomEmotes());
     PropertyObjectPtr const player =
         PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, entering, *stats, trackers, emoteTemplateIds, placement, permissions, problem);

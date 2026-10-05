@@ -194,7 +194,7 @@ TEST_F(ObjectSchemaMgrTest, TheUpdatesCreateTheTablesWithTheRowsThatProveThePlay
     QueryResult const behaviors = WorldDatabase.Query("SELECT COUNT(*), SUM(`class_name` IS NULL) FROM `behavior_client_class`");
     ASSERT_TRUE(behaviors);
     EXPECT_EQ(behaviors->Fetch()[0].Get<uint64>(), 130u) << "one row for every behavior PlayerObject.xml names and every one the templates placed in zones name";
-    EXPECT_EQ(behaviors->Fetch()[1].Get<uint64>(), 44u) << "the seven slots an accepted player object leaves empty, ten a zone object's template names that the client builds nothing the dump describes for, "
+    EXPECT_EQ(behaviors->Fetch()[1].Get<uint64>(), 43u) << "the six slots an accepted player object leaves empty, ten a zone object's template names that the client builds nothing the dump describes for, "
                                                            "and twenty-seven names the client program holds no string of";
     QueryResult const trainer = WorldDatabase.Query("SELECT `class_name` IS NULL FROM `behavior_client_class` WHERE `behavior_name` = 'WizTrainingBehavior'");
     ASSERT_TRUE(trainer);
