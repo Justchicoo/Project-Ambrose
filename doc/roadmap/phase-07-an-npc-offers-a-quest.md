@@ -89,9 +89,9 @@ A tool fills world.object_template from the user's ObjectData, so the server kno
 
 **Acceptance**
 
-- [ ] Blobs decode back identically; class hashes match the dump (ActorDialog 0x39e3afab)
-- [ ] Every STR blob has the SerializerBinary header
-- [ ] 3-of-5 bounty GOAL block has COUNT=3, TOTAL=5, TALLYTEXT
+- [x] Blobs decode back identically; class hashes match the dump (ActorDialog 0x39e3afab) (`QuestWireEncoderTest.ClientFacingQuestBlobsRoundTripWithExpectedClassesAndEnvelope` passed on Windows Debug and Linux GCC Debug against the local r806919 type dump)
+- [x] Every STR blob has the SerializerBinary header (`QuestWireEncoderTest.ClientFacingQuestBlobsRoundTripWithExpectedClassesAndEnvelope` passed on Windows Debug and Linux GCC Debug against the local r806919 type dump)
+- [x] 3-of-5 bounty GOAL block has COUNT=3, TOTAL=5, TALLYTEXT (`QuestWireEncoderTest.ClientFacingQuestBlobsRoundTripWithExpectedClassesAndEnvelope` passed on Windows Debug and Linux GCC Debug against the local r806919 type dump)
 
 ### Detailed spec from QST-2: Quest, dialog and madlib content model with client blob encoders
 
@@ -111,9 +111,9 @@ The server holds quests, goals, dialogs and NPC menus as its own C++ types and c
 
 **Acceptance**
 
-- [ ] Round-trip test: each encoded blob decodes with the OBJ codec back to identical field values, and its class hashes match the dump (ServiceMementoBase, PrepEntry, GoalEntryFull, MadlibBlock, ActorDialog 0x39e3afab).
-- [ ] Wrapper test: every blob placed in a message STR field has the SerializerBinary header (bit31 set = raw length, else zlib with uncompressed size). A missing header makes the client crash, per the a local packet capture tool README.
-- [ ] Madlib test: a GOAL block for a 3-of-5 bounty carries COUNT=3, TOTAL=5 and a TALLYTEXT key.
+- [x] Round-trip test: each encoded blob decodes with the OBJ codec back to identical field values, and its class hashes match the dump (ServiceMementoBase, PrepEntry, GoalEntryFull, MadlibBlock, ActorDialog 0x39e3afab). (`QuestWireEncoderTest.ClientFacingQuestBlobsRoundTripWithExpectedClassesAndEnvelope` passed on Windows Debug and Linux GCC Debug against the local r806919 type dump.)
+- [x] Wrapper test: every blob placed in a message STR field has the SerializerBinary header (bit31 set = raw length, else zlib with uncompressed size). A missing header makes the client crash, per the a local packet capture tool README. (`QuestWireEncoderTest.ClientFacingQuestBlobsRoundTripWithExpectedClassesAndEnvelope` passed on Windows Debug and Linux GCC Debug against the local r806919 type dump.)
+- [x] Madlib test: a GOAL block for a 3-of-5 bounty carries COUNT=3, TOTAL=5 and a TALLYTEXT key. (`QuestWireEncoderTest.ClientFacingQuestBlobsRoundTripWithExpectedClassesAndEnvelope` passed on Windows Debug and Linux GCC Debug against the local r806919 type dump.)
 
 **Risks**
 
