@@ -2,7 +2,7 @@
 
 # Contributor track
 
-The phases in doc/ROADMAP.md are built in order by the maintainer's own agents, one milestone at a time. A named set of them is open to outside help on the second track, doc/MILESTONE-TRACK.md, and everything else there is reserved, because two people building the same milestone lose track of each other.
+Every milestone of the phases in doc/ROADMAP.md is open to anyone on the second track, doc/MILESTONE-TRACK.md, in any order and without asking.
 
 This track is the other door, and the safe one. This track holds work that helps the project finish sooner and cannot collide with a milestone: it adds files in folders no milestone builds in, it needs no change to a phase file, and it can be reviewed on its own.
 
