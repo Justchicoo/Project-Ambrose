@@ -1,12 +1,13 @@
 {
-  "title": "A game master's commands in chat, and a player's",
+  "title": "A game master's spell info and commands in chat, and a player's",
   "include": "parts/common.json",
   "notes": [
     "The main account is made a game master on the login server's console before it logs in, and two wizards enter the Commons",
-    "as two-wizards.json has them. The main wizard types .help, which the game server runs and answers with MSG_SERVERMESSAGE lines",
-    "its chat window shows, while the companion, a player, sees no bubble. The companion's own .help is said as an ordinary line,",
-    "then refused once GM.PlayerCommandsAsChat is turned off on the game server's console. With GM.LogCommands off, .help server",
-    "still answers but is not logged, and once it is back on the next command, .help kick, is logged again."
+    "as two-wizards.json has them. The main wizard types .spell info Fire Cat and the screenshot records its reply in chat, then",
+    "types .help, which the game server runs and answers with MSG_SERVERMESSAGE lines its chat window shows, while the companion,",
+    "a player, sees no bubble. The companion's own .help is said as an ordinary line, then refused once GM.PlayerCommandsAsChat",
+    "is turned off on the game server's console. With GM.LogCommands off, .help server still answers but is not logged, and once",
+    "it is back on the next command, .help kick, is logged again."
   ],
   "requires": {
     "gameserver": true
@@ -153,6 +154,39 @@
       "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
       "timeout": 300,
       "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .spell info Fire Cat",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .spell info",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .spell info Fire Cat",
+      "text": ".spell info Fire Cat"
+    },
+    {
+      "action": "char",
+      "name": "send .spell info Fire Cat",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server runs spell info for the game master",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran spell info Fire Cat, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the game master reads Fire Cat's spell details",
+      "file": "main-spell-info-fire-cat",
+      "settle": 1
     },
     {
       "action": "hold_key",
