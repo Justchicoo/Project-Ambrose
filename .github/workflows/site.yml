@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Publishes the work board to GitHub Pages: it reads the roadmap, the tracks, the holds and a snapshot of the open pull requests and claims, then deploys the page and the state file a contributor's assistant reads, refreshing whenever a claim opens or closes, whenever the plan changes, and at least once a day.
+# Publishes the work board to GitHub Pages: it reads the roadmap, the tracks and a snapshot of the open pull requests and claims, then deploys the page and the state file a contributor's assistant reads, refreshing whenever a claim opens or closes, whenever the plan changes, and at least once a day.
 name: site
 
 on:

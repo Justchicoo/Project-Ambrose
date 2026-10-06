@@ -151,11 +151,22 @@ class OpeningsTests(unittest.TestCase):
         self.assertTrue(payload["embeds"][0]["fields"])
 
     def test_it_counts_one_milestone_in_the_singular(self):
-        for count, expected in ((0, "0 milestones from the roadmap are open"), (1, "1 milestone from the roadmap is open"), (2, "2 milestones from the roadmap are open")):
+        for count, expected in ((0, "0 milestones from the roadmap are ready"), (1, "1 milestone from the roadmap is ready"), (2, "2 milestones from the roadmap are ready")):
             with self.subTest(count=count):
-                rows = [{"ids": [f"1.{one}"], "title": "One", "size": "S", "needs": "A build"} for one in range(count)]
-                with mock.patch.object(openings, "table", return_value=rows):
+                rows = [{"id": f"1.{one:02d}", "title": "One", "size": "S", "phase": 1, "checks_total": 3, "checks_done": 1, "unlocks": 0} for one in range(count)]
+                with mock.patch.object(openings, "opened", return_value=rows):
                     self.assertIn(expected, openings.embed(ROOT)["embeds"][0]["description"])
+
+    def test_it_says_every_milestone_is_open_and_lists_only_ready_ones(self):
+        payload = openings.embed(ROOT)
+        self.assertIn("Every milestone on the roadmap is open to anyone", payload["embeds"][0]["description"])
+        self.assertNotIn("reserved", json.dumps(payload).lower())
+        ready_ids = {row["id"] for row in openings.ready.state(ROOT)[0]}
+        listed = [field["name"].split()[0] for field in payload["embeds"][0]["fields"]]
+        self.assertTrue(listed)
+        self.assertTrue(set(listed) <= ready_ids)
+        unlocks = [row["unlocks"] for row in openings.opened(ROOT)]
+        self.assertEqual(unlocks, sorted(unlocks, reverse=True))
 
 
 if __name__ == "__main__":
