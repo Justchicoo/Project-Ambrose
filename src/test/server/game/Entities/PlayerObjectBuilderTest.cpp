@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the object a wizard stands in the world as, on classes the test lays out the way the client's are: it opens with the core type and template type the player template's class gives, a core type that builds WizClientObject, and the player's template id, carries the wizard's id, place, facing and mobile id, holds one behavior for each the template names in the template's order with an empty slot where the client takes one or the template itself leaves one, fills the look and name from the stored wizard and the account's permissions into the name behavior, the school behavior and stats from its stats and the spellbook with a tracker for each spell it knows in the order it learned them, and reads back equal through the CoreObject form; a behavior nothing maps, a template never read, a template class no row gives a core type and a core type that builds another class are refused rather than guessed.
+ * Tests the object a wizard stands in the world as, on classes the test lays out the way the client's are: it opens with the core type and template type the player template's class gives, a core type that builds WizClientObject, and the player's template id, carries the wizard's id, place, facing and mobile id, holds one behavior for each the template names in the template's order with an empty slot where the client takes one or the template itself leaves one, fills the look and name from the stored wizard and the account's permissions into the name behavior, the school behavior and stats from its stats and the spellbook with a tracker for each spell it knows in the order it learned them, gives the effect behavior an empty container rather than none, and reads back equal through the CoreObject form; a behavior nothing maps, a template never read, a template class no row gives a core type and a core type that builds another class are refused rather than guessed.
  */
 
 #include "CharacterTypeFixtures.h"
 #include "CoreObjectSerializer.h"
+#include "GameEffectFixtures.h"
 #include "ObjectSchemaMgr.h"
 #include "PlayerObjectBuilder.h"
 #include "PlayerStatsFixtures.h"
@@ -74,6 +75,7 @@ namespace
             { "m_spellIDList", Property("class SharedPointer<class SpellIDTracker>", "m_spellIDList", 1, Spellbook, "List") } });
         AddClass(classes, "TestMobileBehavior", Json::array({ "BehaviorInstance", "PropertyClass" }), {
             { "m_behaviorTemplateNameID", Property("unsigned int", "m_behaviorTemplateNameID", 0, Local) } });
+        GameEffectFixtures::AddClasses(classes);
         AddClass(classes, "class CoreTemplate", Json::array({ "PropertyClass" }), {});
         AddClass(classes, "class WizGameObjectTemplate", Json::array({ "CoreTemplate", "PropertyClass" }), {});
 
@@ -98,7 +100,8 @@ namespace
                 { "PathMovementBehavior", std::nullopt, 0 },
                 { "WizPlayerNameBehavior", "class ClientWizPlayerNameBehavior", 0 },
                 { "BasicMagicSchoolBehavior", "class ClientMagicSchoolBehavior", 0 },
-                { "BasicSpellbookBehavior", "class ClientSpellbookBehavior", 0 } }, *_catalog, errors);
+                { "BasicSpellbookBehavior", "class ClientSpellbookBehavior", 0 },
+                { "BasicEffectsBehavior", "class BaseGameEffectBehavior", 0 } }, *_catalog, errors);
             ASSERT_TRUE(_behaviors) << (errors.empty() ? std::string() : errors.front());
             _template.TemplateId = 1;
             _template.File = "ObjectData/PlayerObject.xml";
@@ -240,6 +243,29 @@ TEST_F(PlayerObjectBuilderTest, TheObjectReadsBackEqualThroughTheCoreObjectForm)
     ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
     EXPECT_EQ(decoded.BytesRead, encoded.Bytes.size());
     EXPECT_EQ(encoded.Bytes, CoreObjectSerializer::Encode(*decoded.Object, *_types).Bytes) << "what is read back writes the same bytes again";
+}
+
+TEST_F(PlayerObjectBuilderTest, TheEffectBehaviorCarriesAnEmptyContainerRatherThanNone)
+{
+    std::string problem;
+    ObjectTemplate withEffects = _template;
+    withEffects.Behaviors.emplace_back("BasicEffectsBehavior");
+    PropertyObjectPtr const player = PlayerObjectBuilder::Build(_catalog, *_types, *_behaviors, withEffects, _character, *_stats, _spells, _placement, Permissions, problem);
+    ASSERT_TRUE(player) << problem;
+    PropertyValue::List const& behaviors = *player->Get("m_inactiveBehaviors")->GetList();
+    ASSERT_EQ(behaviors.size(), 7u);
+    ASSERT_NE(behaviors[6].AsObject(), nullptr);
+    PropertyObject const* const container = behaviors[6].AsObject()->Get("m_gameEffects")->AsObject();
+    ASSERT_NE(container, nullptr) << "the client's MSG_AddEffect handler adds into this container without a null check";
+    EXPECT_TRUE(container->Get("m_publicEffects")->GetList()->empty());
+
+    EncodeResult const encoded = CoreObjectSerializer::Encode(*player, *_types);
+    ASSERT_TRUE(encoded.Ok()) << encoded.Detail;
+    DecodeResult const decoded = CoreObjectSerializer::Decode(_catalog, encoded.Bytes, *_types);
+    ASSERT_TRUE(decoded.Ok()) << decoded.Detail;
+    PropertyObject const* const read = decoded.Object->Get("m_inactiveBehaviors")->GetList()->at(6).AsObject();
+    ASSERT_NE(read, nullptr);
+    EXPECT_NE(read->Get("m_gameEffects")->AsObject(), nullptr) << "the container travels to the client";
 }
 
 TEST_F(PlayerObjectBuilderTest, ABehaviorNothingMapsAndATemplateNeverReadAreRefused)

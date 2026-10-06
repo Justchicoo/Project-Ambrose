@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Makes the player object from the catalog's own classes and defaults and sets only what the stored wizard decides: a behavior the template names that behavior_client_class does not know refuses the build rather than being guessed or dropped, because the client reads the behaviors by position and one missing slot shifts every later one, and a slot the template itself leaves empty stays empty; the name behavior's m_chatPermissions is the account's permissions, the same the session hands the client in MSG_LOGINCOMPLETE, because the client draws no chat mark beside a name whose low four bits are all set, the filtered balloon beside one that holds menu chat and its display without all four, and the word balloon beside any other, so leaving it at 0 drew the word balloon beside every wizard; the school behavior and the stats come from the wizard's stats, with its level as the highest on the account, the spellbook holds a SpellIDTracker for each spell the wizard knows, which the client's spellbook reads when the object arrives, and every other field keeps the class's default.
+ * Makes the player object from the catalog's own classes and defaults and sets only what the stored wizard decides: a behavior the template names that behavior_client_class does not know refuses the build rather than being guessed or dropped, because the client reads the behaviors by position and one missing slot shifts every later one, and a slot the template itself leaves empty stays empty; the name behavior's m_chatPermissions is the account's permissions, the same the session hands the client in MSG_LOGINCOMPLETE, because the client draws no chat mark beside a name whose low four bits are all set, the filtered balloon beside one that holds menu chat and its display without all four, and the word balloon beside any other, so leaving it at 0 drew the word balloon beside every wizard; the school behavior and the stats come from the wizard's stats, with its level as the highest on the account, the spellbook holds a SpellIDTracker for each spell the wizard knows, which the client's spellbook reads when the object arrives, any behavior deriving from BaseGameEffectBehavior carries an empty GameEffectContainer, because the client's MSG_AddEffect handler adds into that container without a null check and each effect the wizard carries follows the object as its own MSG_ADDEFFECT, and every other field keeps the class's default.
  */
 
 #include "PlayerObjectBuilder.h"
 #include "AvatarAppearance.h"
+#include "GameEffectHolder.h"
 #include "PropertyFiller.h"
 #include "Utf.h"
 
@@ -45,6 +46,8 @@ namespace
     bool FillBehavior(PropertyObject& behavior, CharacterSummary const& character, PlayerStats const& stats, std::vector<SpellTracker> const& spells, uint32 permissions,
         std::string& problem)
     {
+        if (behavior.IsA(GameEffectHolder::BehaviorClass))
+            return GameEffectHolder::FillBehavior(behavior, problem);
         std::string_view const name = behavior.GetClass().Name;
         if (name == "class WizardCharacterBehavior")
             return AvatarAppearance::Write(behavior, character.Appearance, problem);
