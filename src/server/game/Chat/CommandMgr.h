@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The one place a command is looked up and judged: the tables every CommandScript offers are gathered into one tree, a line is split into words, or a console hands over the words it has split, and they are walked down that tree to the deepest command that matches, what is left over is the arguments, and the level the caller holds is checked against the level the command carries, which a command_security row may have raised or lowered. A line may carry the prefix a client types before a command, which GM.CommandPrefix names, and it is taken off before the words are read, so the same table answers a console that types no prefix and a chat line that does. A caller who does not hold the level is told there is no such command, never that there is one they may not run, so the table gives nothing away. Every command that runs is written to the log with who ran it and how it ended, unless GM.LogCommands says otherwise, and a command whose arguments are secret is logged without them.
+ * The one place a command is looked up and judged: the tables every CommandScript offers are gathered into one tree, a line is split into words, or a console hands over the words it has split, and they are walked down that tree to the deepest command that matches, what is left over is the arguments, and the level the caller holds is checked against the level the command carries, which a command_security row may have raised or lowered, read from the world database at start and again by `.reload command_security`, keeping the levels it had when the table cannot be read. A line may carry the prefix a client types before a command, which GM.CommandPrefix names, and it is taken off before the words are read, so the same table answers a console that types no prefix and a chat line that does. A caller who does not hold the level is told there is no such command, never that there is one they may not run, so the table gives nothing away. Every command that runs is written to the log with who ran it and how it ended, unless GM.LogCommands says otherwise, and a command whose arguments are secret is logged without them.
  */
 
 #ifndef AMBROSE_COMMANDMGR_H
@@ -46,6 +46,8 @@ public:
 
     void Load(std::vector<ChatCommand> commands);
     void SetOverrides(std::map<std::string, uint8, std::less<>> overrides);
+    bool LoadSecurity();
+    void RegisterReloadTargets();
     void SetPrefix(std::string prefix);
     std::string GetPrefix() const;
     void SetLogging(bool logging);
@@ -63,6 +65,7 @@ public:
     static std::vector<std::string> Split(std::string_view line);
 
     static constexpr std::string_view DefaultPrefix = ".";
+    static constexpr std::string_view SecurityTarget = "command_security";
 
 private:
     CommandMgr() = default;
