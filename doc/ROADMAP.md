@@ -2,7 +2,7 @@
 
 # Roadmap
 
-Work through the phases in order. Each phase ends with something visible in the real client, and each milestone is small enough to implement and verify in one focused stretch. A milestone is done when every acceptance check in its phase file passes.
+The phases are listed in the order they build on each other, and every milestone in every phase is open to anyone, in any order and without asking: doc/MILESTONE-TRACK.md says how to start one. Each phase ends with something visible in the real client, and each milestone is small enough to implement and verify in one focused stretch. A milestone is done when every acceptance check in its phase file passes.
 
 **Evidence names nothing personal.** Settled on 2026-09-22 at the maintainer's direction. A ticked acceptance check quotes what proved it, and this repository is public, so the quote uses a neutral stand-in wherever a real account, address, token, path or machine name would otherwise appear: `<account>` for a game or panel account, `<address>` for an address that is not loopback, and so on. What matters in the evidence is the behaviour the line shows, never whose account showed it. The same goes for sample data in the panel and for anything pasted into a doc. The forbidden file scan keeps out keys, stores, logs and token files, which is where such things usually leak from; this rule covers the ones a person types by hand.
 
@@ -67,9 +67,9 @@ Total: 469 milestones.
 
 ## Decisions needed
 
-These block specific milestones. The maintainer decides each one, then this list and doc/ARCHITECTURE.md are updated.
+These block specific milestones. Whoever reaches one settles it with the option it recommends, at the maintainer's standing direction, and moves it under Resolved with doc/ARCHITECTURE.md updated in the same change.
 
-None are open. A new one is listed here with the milestones it blocks until the maintainer settles it.
+None are open. A new one is listed here with the milestones it blocks and the option it recommends.
 
 
 ### Resolved
@@ -126,7 +126,7 @@ Settled on 2026-09-13 and recorded under Decisions in doc/ARCHITECTURE.md: runti
 - No way to test in hosted CI: the builds, type registry, extractors and real-client tests all need the user's install and dump, so regressions may only surface on the maintainer's machine.
 - ObjectProperty edge cases: the per-field envelope policy, DirtyEncode semantics, Matrix3x3 width, and CoreObject block/type pairs other than 104/2 are unverified. Getting any of them wrong crashes the client rather than failing gracefully.
 - Settings the client mirrors or simulates, such as combat constants, MSG_SETST values, and fields fixed at LOGINCOMPLETE, can desync if changed live. Each such setting must either push the change to connected clients or apply from the next duel or session, and its documentation must say which.
-- Scope: about 300 milestones, with phases 13-15 (pets, housing, PvP) holding the most poorly documented systems. Every phase stays planned. Keep the phase gates honest and take later phases in order once phase 10's playable loop exists, apart from the parallel tracks of phases 16 and 17.
+- Scope: about 300 milestones, with phases 13-15 (pets, housing, PvP) holding the most poorly documented systems. Every phase stays planned. Keep the phase gates honest: a phase is done only when its Done when line shows in the real client, whatever order its milestones were built in.
 
 ## Review findings not tied to one phase
 

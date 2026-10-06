@@ -1,4 +1,4 @@
-<!-- Project Ambrose by Imjustchico: The prompt an outside contributor pastes into their own AI assistant to build one of the roadmap milestones that are open to outside help, with everything that assistant needs to know about this repository and the standard the work is held to. -->
+<!-- Project Ambrose by Imjustchico: The prompt an outside contributor pastes into their own AI assistant to build any one of the roadmap milestones, all of them open to anyone, with everything that assistant needs to know about this repository and the standard the work is held to. -->
 
 # Start here, with your AI, to build a milestone
 
@@ -13,8 +13,8 @@ Read this whole prompt before you answer. Then ask me the questions at the end, 
 
 ## Read these before you plan anything
 
-- **https://justchicoo.github.io/Project-Ambrose/state.json first, before anything else.** It is the project's live state, generated from the roadmap and the open pull requests, and it carries every milestone with a `status` of `landed`, `building`, `held`, `open`, `waiting` or `reserved`, plus what each needs, what it unlocks, who holds it and a `how_to_use` list of the rules. Fetch it, and take only a milestone whose status is `open`. If mine is anything else, stop and tell me what it says: CI refuses a branch for a held milestone outright, and one somebody else is building would duplicate their work. The board a person reads is https://justchicoo.github.io/Project-Ambrose/ .
-- `doc/MILESTONE-TRACK.md` - the rulebook behind that state: how one is claimed, what finishing means, what a milestone branch may change, and how holds work. Since 2026-09-27 every milestone whose dependencies are built is open, in every phase including the panel, except the few a hold names because the maintainer's own sessions are building them right now, and those whose remaining checks need the maintainer's own client.
+- **https://justchicoo.github.io/Project-Ambrose/state.json first, before anything else.** It is the project's live state, generated from the roadmap and the open pull requests, and it carries every milestone with a `status` of `landed`, `building`, `open` or `waiting`, plus what each waits on, what it unlocks, who is building it and a `how_to_use` list of the rules. Fetch it. Every milestone is open to me, in any phase and any order, and nobody has to be asked. If mine says `building`, somebody already has a pull request for it, so tell me whose, and before we start we say on that pull request what we will do, so the two combine rather than build the same thing twice. If it says `waiting`, tell me what it waits on: we build that too in the same pull request, or take the dependency first. The board a person reads is https://justchicoo.github.io/Project-Ambrose/ .
+- `doc/MILESTONE-TRACK.md` - the rulebook behind that state: how one is started, what finishing means, what a milestone branch may change, and the Started table of milestones that already have work landed, with what is left. Since 2026-10-06 every milestone is open to anyone, the maintainer's own sessions and outside contributors alike, with nothing held or reserved.
 - The phase file of my milestone, `doc/roadmap/phase-NN-*.md`, whole. Not only my milestone's section: the phase's **Review notes** at the top name faults the roadmap's own critic found, and the ones that name my milestone are mine to resolve.
 - `doc/ARCHITECTURE.md` - the layering, the folder each subsystem belongs to, the file-header form per file type, the SQL update convention, and the settled Decisions. It is long; read the parts my milestone lands in.
 - `CONTRIBUTING.md` and `doc/REVIEWING.md`. The second is the maintainer's own rulebook for judging this work, so it tells us exactly what will be checked and how.
@@ -67,8 +67,8 @@ The name of the test that runs it, or the tool run and what it printed, or the s
 
 ## The first hour, in order
 
-1. Read the board's `state.json` and pick a milestone whose status is `open`. Tell me its id, its size and what it needs from me.
-2. `git fetch upstream`, branch from `upstream/main` with the name the table below gives, and **open the draft pull request straight away**, with the plan in its description rather than an empty body. That reserves the milestone within minutes and, more importantly, puts the approach where a reviewer can see it before a week of work rests on it. One milestone here was rebuilt from scratch after review because nobody saw the design until it was finished.
+1. Read the board's `state.json` and pick a milestone, any one: `open` ones have every dependency built, `waiting` ones need theirs built too, and `building` ones already have somebody's pull request. Tell me its id, its size, its status and what it needs from me.
+2. `git fetch upstream`, branch from `upstream/main` with the name the table below gives, and **open the draft pull request straight away**, with the plan in its description rather than an empty body. That shows everyone within minutes that the milestone is being built and, more importantly, puts the approach where a reviewer can see it before a week of work rests on it. One milestone here was rebuilt from scratch after review because nobody saw the design until it was finished.
 3. Read the milestone's whole section in its phase file, then the phase's review notes, then whatever `doc/TOOLS.md` and `src/tools` already have for the format it touches.
 4. Write the plan out for me: each acceptance check, what will earn it, and which I cannot earn on this machine. That list is the pull request description at the end, so writing it now costs nothing.
 5. Install whatever the setup section's first step lists that I lack, then build, so a broken toolchain surfaces before the work, not after it: `cmake --preset windows-msvc-x64` then `cmake --build --preset windows-debug` and `ctest --preset windows-debug`.
@@ -107,7 +107,7 @@ A milestone's deliverables name the folder. Where they and this disagree, follow
 
 ## Setting the whole thing up on my machine
 
-Walk me through this once, step by step, waiting for what I actually see at each one. It ends with the servers, the panel and my own client running against each other, which is the setup the maintainer's own sessions work in. **Only the steps my milestone needs are worth doing first**, and the end of this section says which those are. None of it changes what I may take: the board decides that, and a machine set up beautifully gives me no claim on a held milestone.
+Walk me through this once, step by step, waiting for what I actually see at each one. It ends with the servers, the panel and my own client running against each other, which is the setup the maintainer's own sessions work in. **Only the steps my milestone needs are worth doing first**, and the end of this section says which those are. None of it changes what I may take: every milestone is open to me, whatever my machine can run.
 
 **1. The installs, once.** Everything here is free, so when something is missing, install it; never work around it or call a check gated because a tool is absent. On Windows 11, from a terminal:
 
@@ -315,7 +315,7 @@ ctest --preset windows-debug -j 8 --output-on-failure
 git status --porcelain
 ```
 
-That first line is the board again: my milestone should still say `building` with my name on it. If it now says `held`, the maintainer's own sessions have taken that area since I started, and I should stop and ask in the Discord rather than push into it.
+That first line is the board again: my milestone should say `building` with my name on it. If another pull request now builds it too, say on that one what mine does, so the two combine rather than collide.
 
 Three dots, and the remote branch my pull request targets, never a local `main`, because a stale or moved-on `main` makes that check flag files I never touched. `upstream` is whichever of my remotes is github.com/Justchicoo/Project-Ambrose; a clone of my own fork has none until I add it with `git remote add upstream https://github.com/Justchicoo/Project-Ambrose.git`. `git status` must be clean: an extracted file, a dump or a generated database file left in the tree is the thing rule 2 exists to stop, and several milestones generate exactly those.
 
@@ -333,7 +333,7 @@ Three more checks that no script makes for me:
 
 Then write the description, replacing the template's prompts rather than leaving them. It needs, in order: the milestone id and title; what the change adds; the platform I built on and the line `ctest` ended with, pasted; which acceptance boxes this ticks and what proves each; which boxes stay empty and why; and any place the work departs from the milestone's deliverables, with the reason. A reviewer reads that before the code, and every question it leaves open is a round trip.
 
-## One milestone per branch, claimed before it is built
+## One milestone per branch, shown before it is built
 
 ```
 git fetch upstream
@@ -353,9 +353,9 @@ Always from `upstream/main`, never from another branch that has an open pull req
 
 The id is exactly as the board writes it, with its leading zero where it has one, so `4.04` and not `4.4`. The branch name is the one that matters: `apps/ci/ci_contrib_paths.py` reads it, and it is the only reason CI accepts a change under `src/`, so a branch named anything else fails every source file at once with a wall of refusals. The board reads it too, which is how the claim appears without anybody being told. The title is for people.
 
-**Open the pull request as a draft on the first day, before the work is done.** That is what reserves the milestone, and nobody has to be told: the board reads the open pull requests, so within minutes it shows my milestone as being built, by me, and stops anybody else taking it. Building for a week in silence risks somebody else landing it first. Title it `<id> <what you are building>`.
+**Open the pull request as a draft on the first day, before the work is done.** That is how everyone sees the milestone is being built, and nobody has to be told or asked: the board reads the open pull requests, so within minutes it shows my milestone as being built, by me. Building for a week in silence risks somebody else landing it first. Title it `<id> <what you are building>`.
 
-A claim is not forever. Fourteen days with no push and the board puts the milestone back on the open list, with whatever I pushed left in place, so somebody else can carry it. A push is all it takes to keep it.
+Fourteen days with no push and the board stops showing it as being built, with whatever I pushed left in place, so somebody else can carry it on. A push is all it takes to keep it showing.
 
 Check before opening it: `git log --oneline upstream/main..HEAD` shows only this milestone's commits, and `git diff --name-only upstream/main...HEAD` only its files.
 
@@ -363,19 +363,19 @@ After a merge the branch holds nothing git can apply again, because pull request
 
 ## Keep me honest
 
-If I tell you something I only remember or assume, mark it unproven rather than writing it as a fact. If a test fails, tell me what actually happened rather than adjusting the test until it passes, and never weaken or skip an existing test to get a green run: that is the one change nobody here will merge. If the milestone turns out to need something that does not exist yet, say so and we tell the maintainer rather than building it too. Questions go to the project's Discord, https://discord.gg/Dx6ACDUj6N, or into the pull request itself.
+If I tell you something I only remember or assume, mark it unproven rather than writing it as a fact. If a test fails, tell me what actually happened rather than adjusting the test until it passes, and never weaken or skip an existing test to get a green run: that is the one change nobody here will merge. If the milestone turns out to need something that does not exist yet, we build that too in the same pull request and say so in the description. Questions go to the project's Discord, https://discord.gg/Dx6ACDUj6N, or into the pull request itself.
 
 ## Now ask me
 
-1. Which milestone id am I taking, and is it in doc/MILESTONE-TRACK.md's "Open now" table?
+1. Which milestone id am I taking, and what does the board's `state.json` say about it right now?
 2. What do I have already: Windows or Linux, a working build, a MySQL or MariaDB, my own client installation, a type dump? Anything missing that my milestone needs, walk me through the matching step of the setup section before we plan the work, and skip the steps it does not need.
 3. If I am unsure which to take, recommend one that fits what I have, and say which of its acceptance checks I will not be able to run.
 ````
 
 ## After you paste it
 
-Answer its questions, then read `doc/MILESTONE-TRACK.md` yourself before it starts. Two things there decide whether the evening is wasted: the milestone has to be in the "Open now" table, and the branch has to be named `milestone/<id>-<short-name>`, because that name is the only reason CI lets the change touch `src/`.
+Answer its questions, then read `doc/MILESTONE-TRACK.md` yourself before it starts. Every milestone is open to you, in any order and without asking. One thing there decides whether the evening is wasted: the branch has to be named `milestone/<id>-<short-name>`, because that name is the only reason CI lets the change touch `src/`.
 
-Open the pull request as a draft on the first day. It is what holds the milestone for you.
+Open the pull request as a draft on the first day. It is how everyone sees you are building it, and if the board says somebody else's pull request already builds yours, say so on theirs before you start.
 
-If what you want to build is not on the roadmap at all, or the milestone you want is reserved, ask in the Discord rather than sending it: https://discord.gg/Dx6ACDUj6N. The other door, contrib/AI-START-HERE.md, is open for tools, findings, guides, fixtures and proposals, and nothing there can collide with a milestone.
+If what you want to build is not on the roadmap at all, ask in the Discord rather than sending it: https://discord.gg/Dx6ACDUj6N. The other door, contrib/AI-START-HERE.md, is open for tools, findings, guides, fixtures and proposals, and nothing there can collide with a milestone.

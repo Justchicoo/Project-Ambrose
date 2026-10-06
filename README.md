@@ -111,13 +111,13 @@ Hosted CI builds the Linux GCC leg on every push to `main` that touches the code
 
 There are two doors, and every pull request through either is verified by running it, not by reading it.
 
-The **contributor track** has its own folders and cannot collide with a milestone in flight: findings, tools, schemas, fixtures, guides and proposals. The **milestone track** is the roadmap itself, a named set of milestones open to outside help, with the source tree and the acceptance checks that come with them. Everything not named there is reserved, because the maintainer's own agents are building it.
+The **contributor track** has its own folders and cannot collide with a milestone in flight: findings, tools, schemas, fixtures, guides and proposals. The **milestone track** is the roadmap itself: every milestone is open to anyone, in any order and without asking, with the source tree and the acceptance checks that come with them.
 
 | | |
 |---|---|
 | **58 open items** | [doc/CONTRIBUTOR-TRACK.md](doc/CONTRIBUTOR-TRACK.md) - findings about the game, scenarios that turn a real-client check into one command, and tools, fixtures, guides and proposals, each with what it needs and how it is proven |
 | **Start in one paste** | [contrib/AI-START-HERE.md](contrib/AI-START-HERE.md) - a prompt for any AI assistant, with everything it needs to work here without guessing |
-| **What is free to take** | [The work board](https://justchicoo.github.io/Project-Ambrose/) - generated from the roadmap and the open pull requests: what is being built right now, by whom, and which milestones anyone can take. Its [state.json](https://justchicoo.github.io/Project-Ambrose/state.json) is the same thing for your AI |
+| **What is free to take** | [The work board](https://justchicoo.github.io/Project-Ambrose/) - generated from the roadmap and the open pull requests: what is being built right now, by whom, and which milestones are ready to start, though every one is open to anyone. Its [state.json](https://justchicoo.github.io/Project-Ambrose/state.json) is the same thing for your AI |
 | **Build a milestone** | [doc/MILESTONE-TRACK.md](doc/MILESTONE-TRACK.md) - the rules behind the board, and [contrib/AI-MILESTONES-HERE.md](contrib/AI-MILESTONES-HERE.md), the prompt that goes with them |
 | **The shape of a finding** | [contrib/findings/README.md](contrib/findings/README.md) - one claim about how the game behaves, written so it can be proven or refuted |
 | **House rules** | [CONTRIBUTING.md](CONTRIBUTING.md) - AI-written changes are expected, not merely allowed |

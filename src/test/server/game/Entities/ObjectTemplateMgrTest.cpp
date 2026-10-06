@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
+#include <array>
 #include <atomic>
 #include <filesystem>
 #include <fstream>
@@ -489,9 +490,10 @@ TEST_F(ObjectTemplateMgrTest, LookupsFromSeveralThreadsThroughReloadsEachGetATem
     std::atomic<bool> stop{ false };
     std::atomic<uint64> served{ 0 };
     std::atomic<uint64> unexplained{ 0 };
+    std::array<std::atomic<uint64>, 4> lookups{};
     std::vector<std::thread> readers;
-    for (uint32 reader = 0; reader < 4; ++reader)
-        readers.emplace_back([this, reader, &stop, &served, &unexplained]
+    for (uint32 reader = 0; reader < lookups.size(); ++reader)
+        readers.emplace_back([this, reader, &stop, &served, &unexplained, &lookups]
         {
             uint32 const ids[] = { 1, 7, 11, 99 };
             for (uint32 turn = reader; !stop.load(); ++turn)
@@ -501,16 +503,28 @@ TEST_F(ObjectTemplateMgrTest, LookupsFromSeveralThreadsThroughReloadsEachGetATem
                     served.fetch_add(1);
                 else if (lookup.Error.empty())
                     unexplained.fetch_add(1);
+                lookups[reader].fetch_add(1);
             }
         });
+    auto const everyReaderLooksUpAgain = [&lookups]
+    {
+        std::array<uint64, 4> seen{};
+        for (std::size_t reader = 0; reader < seen.size(); ++reader)
+            seen[reader] = lookups[reader].load();
+        for (std::size_t reader = 0; reader < seen.size(); ++reader)
+            while (lookups[reader].load() == seen[reader])
+                std::this_thread::yield();
+    };
     std::size_t failedReloads = 0;
     for (uint32 round = 0; round < 20; ++round)
     {
+        everyReaderLooksUpAgain();
         std::vector<std::string> errors;
         if (!_store.LoadManifest(errors))
             ++failedReloads;
         _store.SetBudget(round % 2 == 0 ? 1 : ObjectTemplateMgr::DefaultBudget);
     }
+    everyReaderLooksUpAgain();
     stop = true;
     for (std::thread& reader : readers)
         reader.join();
