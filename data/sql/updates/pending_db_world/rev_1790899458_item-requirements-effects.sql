@@ -1,5 +1,5 @@
 -- Project Ambrose by Imjustchico
--- Adds the tables beside item_template that the extractor's templates command fills from the user's own install: item_template_requirement_list, an item's equip (list 0) and purchase (list 1) requirement lists with whether each applies NOT and its operator; item_template_requirement, each requirement of a list in order; and item_template_effect, each equip effect in order; each requirement and effect by its class hash and name, with a column for each field the server reads where its class has it (a requirement's value, comparison, school, quantity, item and adjective; an effect's name, stat lookup, pips, spell and speed) and NULL elsewhere, and written whole as a BINd of its own. No row is committed: every one comes from the install at run time.
+-- Adds the tables beside item_template that the extractor's templates command fills from the user's own install: item_template_requirement_list, an item's equip (list 0) and purchase (list 1) requirement lists with whether each applies NOT and its operator; item_template_requirement, each requirement of a list in order; and item_template_effect, each equip effect in order; each requirement and effect by its class hash and name, with a column for each field the server reads where its class has it (a requirement's value, comparison, school, quantity, item and adjective; an effect's name, stat lookup, pips, spell, speed and combat trigger) and NULL elsewhere, and written whole as a BINd of its own. No row is committed: every one comes from the install at run time.
 CREATE TABLE IF NOT EXISTS `item_template_requirement_list` (
     `template_id` INT UNSIGNED NOT NULL,
     `list` TINYINT UNSIGNED NOT NULL,
@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS `item_template_effect` (
     `spell_name` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
     `num_spells` INT NULL,
     `speed_multiplier` INT NULL,
+    `trigger_name` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
     `data` BLOB NOT NULL,
     PRIMARY KEY (`template_id`, `position`),
     KEY `idx_item_template_effect_class` (`class_name`),

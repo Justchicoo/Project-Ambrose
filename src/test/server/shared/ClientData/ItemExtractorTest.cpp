@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the template extractor's item rows over an install the test writes through a type dump it declares: a synthetic WizItemTemplate becomes one object_template row and one item_template row with its school, cost, rank, limit, set bonus and colors, its requirement list, requirement and equip effect rows beside it with each written whole beside the typed columns its class fills, a template that is no item gives no item row, an item set bonus template gives one item_set_bonus row and a row for each bonus it grants, a behavior of a class the reader's dump lacks keeps the item, and an item whose equip requirement or effect is of a class the reader's dump lacks fails the extraction, naming the class hash, rather than being skipped.
+ * Tests the template extractor's item rows over an install the test writes through a type dump it declares: a synthetic WizItemTemplate becomes one object_template row and one item_template row with its school, cost, rank, limit, set bonus and colors, its requirement list, requirement and equip effect rows beside it with each written whole beside the typed columns its class fills, a template that is no item gives no item row, an item set bonus template gives one item_set_bonus row, a row for each tier and one for each effect a tier grants, a behavior of a class the reader's dump lacks keeps the item, and an item whose equip requirement or effect is of a class the reader's dump lacks fails the extraction, naming the class hash, rather than being skipped.
  */
 
 #include "ItemTemplateFixtures.h"
@@ -87,7 +87,7 @@ TEST_F(ItemExtractorTest, ASyntheticWizItemTemplateMapsToOneItemTemplateRow)
 
     WorldSqlScript const script = TemplateScript::Build(extraction);
     std::vector<std::string> const& statements = script.GetStatements();
-    ASSERT_EQ(statements.size(), 18u);
+    ASSERT_EQ(statements.size(), 21u);
     EXPECT_EQ(statements[6], "DELETE FROM `item_template`");
     EXPECT_NE(statements[7].find(fmt::format("({}, {}, 125, 1, 0, 0, 2, 1)", ItemTemplateFixtures::HatId, WorldSqlScript::Literal(std::string("Fire")))), std::string::npos)
         << statements[7];
@@ -98,15 +98,19 @@ TEST_F(ItemExtractorTest, ASyntheticWizItemTemplateMapsToOneItemTemplateRow)
         ItemTemplateFixtures::RobeId));
     EXPECT_NE(statements[11].find(fmt::format("({}, 0, 0, {}, {}, 5, 3, {}, NULL, NULL, NULL, X'", ItemTemplateFixtures::RobeId, StringHash::KiStringHash("class ReqMagicLevel"),
         WorldSqlScript::Literal(std::string("class ReqMagicLevel")), WorldSqlScript::Literal(std::string("Ice")))), std::string::npos) << statements[11];
-    EXPECT_NE(statements[13].find(fmt::format("({}, 0, {}, {}, {}, NULL, NULL, NULL, NULL, NULL, NULL, X'", ItemTemplateFixtures::RobeId,
+    EXPECT_NE(statements[13].find(fmt::format("({}, 0, {}, {}, {}, NULL, NULL, NULL, NULL, NULL, NULL, NULL, X'", ItemTemplateFixtures::RobeId,
         StringHash::KiStringHash("class GameEffectInfo"), WorldSqlScript::Literal(std::string("class GameEffectInfo")), WorldSqlScript::Literal(std::string("MaxHealth")))),
         std::string::npos) << statements[13];
-    EXPECT_EQ(statements[15], fmt::format("INSERT INTO `item_set_bonus` (`template_id`, `no_stacking`, `bonus_count`) VALUES ({}, 1, 2)", ItemTemplateFixtures::SetBonusId));
-    EXPECT_NE(statements[17].find(fmt::format("({}, 1, {}, {}, X'", ItemTemplateFixtures::SetBonusId, StringHash::KiStringHash("class ItemSetBonusData"),
-        WorldSqlScript::Literal(std::string("class ItemSetBonusData")))), std::string::npos) << statements[17];
+    EXPECT_EQ(statements[15], fmt::format("INSERT INTO `item_set_bonus` (`template_id`, `no_stacking`, `tier_count`) VALUES ({}, 1, 2)", ItemTemplateFixtures::SetBonusId));
+    EXPECT_EQ(statements[17], fmt::format("INSERT INTO `item_set_bonus_tier` (`template_id`, `tier`, `num_items_to_equip`, `description_key`, `apply_not`, `operator`) "
+        "VALUES ({0}, 0, 2, '', NULL, NULL), ({0}, 1, 3, '', NULL, NULL)", ItemTemplateFixtures::SetBonusId));
+    EXPECT_EQ(statements[18], "DELETE FROM `item_set_bonus_requirement`") << "no tier has a requirement list";
+    EXPECT_NE(statements[20].find(fmt::format("({}, 1, 1, {}, {}, {}, NULL, NULL, NULL, NULL, NULL, NULL, NULL, X'", ItemTemplateFixtures::SetBonusId,
+        StringHash::KiStringHash("class GameEffectInfo"), WorldSqlScript::Literal(std::string("class GameEffectInfo")), WorldSqlScript::Literal(std::string("CanonicalIceAccuracy")))),
+        std::string::npos) << statements[20];
 }
 
-TEST_F(ItemExtractorTest, AnItemSetBonusTemplateBecomesOneSetRowWithEachBonusItGrants)
+TEST_F(ItemExtractorTest, AnItemSetBonusTemplateBecomesOneSetRowWithItsTiersAndTheirEffects)
 {
     _fixtures.Write(GameData());
     TemplateExtraction const extraction = TemplateExtractor::Extract(GameData(), _reader.GetCatalog());
@@ -119,10 +123,12 @@ TEST_F(ItemExtractorTest, AnItemSetBonusTemplateBecomesOneSetRowWithEachBonusItG
     EXPECT_EQ(set->SetBonus->ObjectName, "ItemSet-Ice-02");
     EXPECT_EQ(set->SetBonus->DisplayKey, "ItemSets_00000042");
     EXPECT_EQ(set->SetBonus->NoStacking, true);
-    ASSERT_EQ(set->SetBonus->Bonuses.size(), 2u);
-    EXPECT_EQ(set->SetBonus->Bonuses.back().ClassName, "class ItemSetBonusData");
-    ASSERT_NE(set->SetBonus->Bonuses.back().Object->Get("m_numItemsToEquip"), nullptr);
-    EXPECT_EQ(*set->SetBonus->Bonuses.back().Object->Get("m_numItemsToEquip")->GetIf<int32>(), 3);
+    ASSERT_EQ(set->SetBonus->Tiers.size(), 2u);
+    ItemSetBonusTier const& three = set->SetBonus->Tiers.back();
+    EXPECT_EQ(three.NumItemsToEquip, 3);
+    EXPECT_FALSE(three.Requirements.has_value());
+    ASSERT_EQ(three.Effects.size(), 2u);
+    EXPECT_EQ(three.Effects.front().EffectName, "CanonicalIceAccuracy");
 }
 
 TEST_F(ItemExtractorTest, AnEquipRequirementOfAClassTheDumpLacksFailsTheExtractionAndNamesTheClass)

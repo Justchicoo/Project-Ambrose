@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads an item template through the game object and wizard item template views after checking every class its decode skipped: one inside its behaviors is counted, any other refuses the item. Each requirement and equip effect is kept as a copy of the object it decoded to, so the record outlives the decode, and its memory is counted as that object's values; the fields the item tables give columns to, an effect's name, stat lookup, pips, spell and speed and a requirement's value, comparison, school, quantity, item and adjective, are read from it by name wherever its class has them. An item set bonus template is checked the same way and read by name, each bonus it grants kept as a copy of its object. A color count, like every such field, is read by name as whichever integer the dump stores it as, and is absent when the class has no such property.
+ * Reads an item template through the game object and wizard item template views after checking every class its decode skipped: one inside its behaviors is counted, any other refuses the item. Each requirement and equip effect is kept as a copy of the object it decoded to, so the record outlives the decode, and its memory is counted as that object's values; the fields the item tables give columns to, an effect's name, stat lookup, pips, spell and speed and a requirement's value, comparison, school, quantity, item and adjective, are read from it by name wherever its class has them. An item set bonus template is checked the same way and read by name, each tier with its item count, description key, requirement list and the equip effects it grants, each kept as a copy of its object. A color count, like every such field, is read by name as whichever integer the dump stores it as, and is absent when the class has no such property.
  */
 
 #include "ItemTemplateRecord.h"
@@ -67,6 +67,7 @@ namespace
         part.PowerPipsGiven = IntegerOf(object, "m_powerPipsGiven");
         part.SpellName = TextOf(object, "m_spellName");
         part.NumSpells = IntegerOf(object, "m_numSpells");
+        part.TriggerName = TextOf(object, "m_triggerName");
         part.SpeedMultiplier = IntegerOf(object, "m_speedMultiplier");
         part.NumericValue = RealOf(object, "m_numericValue");
         part.OperatorType = IntegerOf(object, "m_operatorType");
@@ -196,8 +197,24 @@ std::optional<ItemSetBonusRecord> ItemSetBonusRecord::Read(PropertyObject const&
     if (PropertyValue const* const stacking = object.Get("m_noStacking"))
         if (bool const* const value = stacking->GetIf<bool>())
             record.NoStacking = *value;
-    if (PropertyValue const* const bonuses = object.Get("m_itemSetBonusDataList"))
-        if (PropertyValue::List const* const list = bonuses->GetIf<PropertyValue::List>())
-            record.Bonuses = PartsOf(*list);
+    PropertyValue const* const tiers = object.Get("m_itemSetBonusDataList");
+    PropertyValue::List const* const list = tiers ? tiers->GetIf<PropertyValue::List>() : nullptr;
+    if (!list)
+        return record;
+    for (PropertyValue const& value : *list)
+    {
+        PropertyObject const* const data = value.AsObject();
+        if (!data)
+            continue;
+        ItemSetBonusTier tier;
+        tier.NumItemsToEquip = static_cast<int32>(IntegerOf(*data, "m_numItemsToEquip").value_or(0));
+        tier.Description = TextOf(*data, "m_description").value_or(std::string());
+        if (PropertyValue const* const requirements = data->Get("m_equipEffectsGrantedRequirements"))
+            tier.Requirements = RequirementsOf(requirements->AsObject());
+        if (PropertyValue const* const effects = data->Get("m_equipEffectsGranted"))
+            if (PropertyValue::List const* const granted = effects->GetIf<PropertyValue::List>())
+                tier.Effects = PartsOf(*granted);
+        record.Tiers.push_back(std::move(tier));
+    }
     return record;
 }

@@ -110,6 +110,14 @@ void ItemTemplateFixtures::Write(std::filesystem::path const& gameData, float ha
     {
         PropertyObjectPtr bonus = Create("class ItemSetBonusData");
         EXPECT_EQ(bonus->Set("m_numItemsToEquip", int32{ items }), PropertySetResult::Ok);
+        PropertyValue::List granted;
+        for (int32 effects = 0; effects < items - 1; ++effects)
+        {
+            PropertyObjectPtr accuracy = Create("class GameEffectInfo");
+            EXPECT_EQ(accuracy->Set("m_effectName", std::string("CanonicalIceAccuracy")), PropertySetResult::Ok);
+            granted.emplace_back(std::move(accuracy));
+        }
+        EXPECT_EQ(bonus->Set("m_equipEffectsGranted", std::move(granted)), PropertySetResult::Ok);
         bonuses.emplace_back(std::move(bonus));
     }
     EXPECT_EQ(set->Set("m_itemSetBonusDataList", std::move(bonuses)), PropertySetResult::Ok);

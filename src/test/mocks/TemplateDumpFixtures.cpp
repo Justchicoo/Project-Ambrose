@@ -263,6 +263,9 @@ namespace TemplateDumpFixtures
         AddClass(classes, "class WizItemTemplate", Json::array({ "GameObjectTemplate", "CoreTemplate", "PropertyClass" }), item);
         Json bonus = Json::object();
         bonus["m_numItemsToEquip"] = Property("int", "m_numItemsToEquip", 0);
+        bonus["m_description"] = Property("std::string", "m_description", 1);
+        bonus["m_equipEffectsGrantedRequirements"] = Property("class RequirementList*", "m_equipEffectsGrantedRequirements", 2);
+        bonus["m_equipEffectsGranted"] = Property("class GameEffectInfo*", "m_equipEffectsGranted", 3, "List");
         AddClass(classes, "class ItemSetBonusData", Json::array({ "PropertyClass" }), bonus);
         Json set = Json::object();
         set["m_behaviors"] = Property("class BehaviorTemplate*", "m_behaviors", 0, "List");
@@ -270,7 +273,7 @@ namespace TemplateDumpFixtures
         set["m_templateID"] = Property("unsigned int", "m_templateID", 2);
         set["m_displayName"] = Property("std::string", "m_displayName", 3);
         set["m_noStacking"] = Property("bool", "m_noStacking", 4);
-        set["m_itemSetBonusDataList"] = Property("class ItemSetBonusData*", "m_itemSetBonusDataList", 5, "List");
+        set["m_itemSetBonusDataList"] = Property("class ItemSetBonusData", "m_itemSetBonusDataList", 5, "List");
         AddClass(classes, "class ItemSetBonusTemplate", Json::array({ "CoreTemplate", "PropertyClass" }), set);
     }
 

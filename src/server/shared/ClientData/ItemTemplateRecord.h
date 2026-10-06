@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The typed record of one item template the user's install holds, any template whose class is or derives from WizItemTemplate: its id, class and file, its object name, display key, object type and adjectives as a game object template carries them, and its school, base cost, rank, item limit, set bonus and color counts, and its equip and purchase requirement lists and equip effects, each requirement and effect kept as the object it decoded to with its class and the fields the item tables give columns to wherever its class has them. A template whose fields hold an object of a class the type dump does not list is refused, naming the class hash and where it sits, while one in its behaviors keeps its place and is counted, as every template's behaviors are; and the record of an item set bonus template, its names, whether it stacks and each bonus it grants kept as the object it decoded to, refused the same way.
+ * The typed record of one item template the user's install holds, any template whose class is or derives from WizItemTemplate: its id, class and file, its object name, display key, object type and adjectives as a game object template carries them, and its school, base cost, rank, item limit, set bonus and color counts, and its equip and purchase requirement lists and equip effects, each requirement and effect kept as the object it decoded to with its class and the fields the item tables give columns to wherever its class has them. A template whose fields hold an object of a class the type dump does not list is refused, naming the class hash and where it sits, while one in its behaviors keeps its place and is counted, as every template's behaviors are; and the record of an item set bonus template, its names, whether it stacks and each tier of bonuses with how many of the set's items it needs, its description key, its requirements and the equip effects it grants, kept as the objects they decoded to, refused the same way.
  */
 
 #ifndef AMBROSE_ITEMTEMPLATERECORD_H
@@ -29,6 +29,7 @@ struct ItemTemplatePart
     std::optional<int64> PowerPipsGiven;
     std::optional<std::string> SpellName;
     std::optional<int64> NumSpells;
+    std::optional<std::string> TriggerName;
     std::optional<int64> SpeedMultiplier;
     std::optional<double> NumericValue;
     std::optional<int64> OperatorType;
@@ -74,6 +75,14 @@ struct ItemTemplateRecord
     std::size_t GetMemoryUsage() const noexcept;
 };
 
+struct ItemSetBonusTier
+{
+    int32 NumItemsToEquip = 0;
+    std::string Description;
+    std::optional<ItemRequirementList> Requirements;
+    std::vector<ItemTemplatePart> Effects;
+};
+
 struct ItemSetBonusRecord
 {
     static constexpr std::string_view SetBonusClass = "class ItemSetBonusTemplate";
@@ -83,7 +92,7 @@ struct ItemSetBonusRecord
     std::string ObjectName;
     std::string DisplayKey;
     std::optional<bool> NoStacking;
-    std::vector<ItemTemplatePart> Bonuses;
+    std::vector<ItemSetBonusTier> Tiers;
     std::size_t UnknownBehaviors = 0;
 
     static bool IsSetBonus(PropertyObject const& object) noexcept;
