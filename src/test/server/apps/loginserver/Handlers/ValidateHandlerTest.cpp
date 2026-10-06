@@ -106,7 +106,8 @@ namespace
             std::optional<LoginMessages::UserValidateRsp> const response = ReadMessage<LoginMessages::UserValidateRsp>(client);
             ASSERT_TRUE(response) << scenario;
             EXPECT_EQ(response->Error, expected) << scenario;
-            EXPECT_EQ(response->Reason, AuthResults::GetName(expected)) << scenario;
+            bool const ban = expected == AuthResult::AccountBanned || expected == AuthResult::MachineBanned;
+            EXPECT_EQ(response->Reason, ban ? std::string() : std::string(AuthResults::GetName(expected))) << scenario << ": the client shows GUI_<Reason> beside a ban's dated line";
             EXPECT_EQ(response->UserId, 0u) << scenario;
             EXPECT_TRUE(client.Socket->WaitForClose()) << scenario;
             EXPECT_FALSE(sLoginMgr.FindAccountSession(_accountId)) << scenario;

@@ -36,6 +36,7 @@ namespace
         uint8 GetSecurityLevel() const override { return _level; }
         bool IsConsole() const override { return false; }
         std::string GetName() const override { return fmt::format("account {} with wizard {}", _session.GetAccountId(), _session.GetCharacterId()); }
+        uint64 GetCharacterId() const override { return _session.GetCharacterId(); }
 
         void Reply(std::string_view line) override
         {
