@@ -14,6 +14,7 @@
 
 std::optional<int32> GameEffectHolder::Add(PropertyObjectPtr effect, std::string& problem)
 {
+    problem.clear();
     if (!effect)
     {
         problem = "no effect was given";
