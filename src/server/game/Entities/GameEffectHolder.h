@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The game effects one object in the world carries: each is a GameEffectBase object, given an internal id unique on that object when it is added, the lowest id no effect on it holds, so an id is free again once its effect is taken away, because the client finds the effect to take away by that id alone; and the GameEffectContainer the object's effect behavior is sent with, empty and never null, since the client adds an effect into that container without looking whether it is there and every effect the object carries follows it as its own MSG_ADDEFFECT.
+ * The game effects one object in the world carries: each is a GameEffectBase object, given an internal id unique on that object when it is added, the lowest id no effect on it holds, so an id is free again once its effect is taken away, because the client finds the effect to take away by that id alone; and the GameEffectContainer the object's effect behavior is sent with, empty and never null, so the client starts from the same empty list the server holds and every effect the object carries follows it as its own MSG_ADDEFFECT.
  */
 
 #ifndef AMBROSE_GAMEEFFECTHOLDER_H

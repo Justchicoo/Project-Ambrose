@@ -103,7 +103,7 @@ TEST(GameEffectHolderTest, TheBehaviorCarriesAContainerThatIsNeverNull)
     ASSERT_TRUE(catalog);
     PropertyObjectPtr const behavior = PropertyObject::Create(catalog, "class BaseGameEffectBehavior");
     ASSERT_TRUE(behavior);
-    EXPECT_TRUE(behavior->Get("m_gameEffects")->IsNullObject()) << "the class's default leaves it null, which the client's MSG_AddEffect handler would write through";
+    EXPECT_TRUE(behavior->Get("m_gameEffects")->IsNullObject()) << "the class's default leaves it null";
     std::string problem;
     ASSERT_TRUE(GameEffectHolder::FillBehavior(*behavior, problem)) << problem;
     PropertyObject const* const container = behavior->Get("m_gameEffects")->AsObject();

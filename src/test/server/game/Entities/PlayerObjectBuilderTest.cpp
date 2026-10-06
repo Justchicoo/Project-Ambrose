@@ -256,7 +256,7 @@ TEST_F(PlayerObjectBuilderTest, TheEffectBehaviorCarriesAnEmptyContainerRatherTh
     ASSERT_EQ(behaviors.size(), 7u);
     ASSERT_NE(behaviors[6].AsObject(), nullptr);
     PropertyObject const* const container = behaviors[6].AsObject()->Get("m_gameEffects")->AsObject();
-    ASSERT_NE(container, nullptr) << "the client's MSG_AddEffect handler adds into this container without a null check";
+    ASSERT_NE(container, nullptr) << "the client starts from the same empty list the server holds";
     EXPECT_TRUE(container->Get("m_publicEffects")->GetList()->empty());
 
     EncodeResult const encoded = CoreObjectSerializer::Encode(*player, *_types);
