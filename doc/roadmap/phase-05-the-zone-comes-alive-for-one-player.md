@@ -348,7 +348,7 @@ A new contributor goes from clone to running servers with one script on Windows 
 
 - [ ] On a clean Ubuntu VM and a clean Windows machine, following doc/INSTALL.md with the installer yields running loginserver, gameserver and patchserver that log 'ready'
 - [x] Running `conf` twice never overwrites an edited .conf (`apps/installer/tests/test_installer.py`, which builds a prefix of templates, runs conf, edits a .conf and runs conf again, against both scripts)
-- [x] Real client: n/a (5.08 only installs and starts the servers; its first visible client behavior arrives with NET/LOG)
+- [x] Real client: n/a (5.08 only installs and starts the servers; its first visible client behavior arrives with NET/LOG) [installer deliverables are dependency setup, build, configuration, database import and server startup]
 
 **Progress**
 
