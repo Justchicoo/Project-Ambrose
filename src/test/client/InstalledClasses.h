@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Lets a client test read the install through the classes it holds that the type dump does not describe: the class file schemaprobe builds once per revision in the Ambrose data folder for the install AMBROSE_CLIENT_DIR names, read when it is current for the dump AMBROSE_TYPE_DUMP_PATH names, and otherwise an error saying how to build it.
+ * Lets a client test read the install through the classes it holds that the type dump does not describe: the class file schemaprobe builds once per revision in the Ambrose data folder for the install AMBROSE_CLIENT_DIR names, read when it is current for the dump AMBROSE_TYPE_DUMP_PATH names whichever authored classes it was built on, and otherwise an error saying how to build it.
  */
 
 #ifndef AMBROSE_INSTALLEDCLASSES_H
@@ -39,7 +39,7 @@ namespace InstalledClasses
             return false;
         }
         std::optional<std::filesystem::path> const path = ServerClassCache::PathFor(ClientLocator::GetDataFolder(system), install->Revision);
-        if (!path || !ServerClassCache::IsCurrent(*path, LogConfig::Utf8Path(*dump)))
+        if (!path || !ServerClassCache::IsCurrent(*path, LogConfig::Utf8Path(*dump), ServerClassCache::ReadBuiltOn(*path).value_or(std::string())))
         {
             error = fmt::format("no current class file for {}; run the extractor's classes command, or start the game server once, to build it", install->Describe());
             return false;
