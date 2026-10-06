@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the template extractor's item rows over an install the test writes through a type dump it declares: a synthetic WizItemTemplate becomes one object_template row and one item_template row with its school, cost, rank, limit, set bonus and colors, its requirement list, requirement and equip effect rows beside it with each written whole, a template that is no item gives no item row, a behavior of a class the reader's dump lacks keeps the item, and an item whose equip requirement or effect is of a class the reader's dump lacks fails the extraction, naming the class hash, rather than being skipped.
+ * Tests the template extractor's item rows over an install the test writes through a type dump it declares: a synthetic WizItemTemplate becomes one object_template row and one item_template row with its school, cost, rank, limit, set bonus and colors, its requirement list, requirement and equip effect rows beside it with each written whole beside the typed columns its class fills, a template that is no item gives no item row, a behavior of a class the reader's dump lacks keeps the item, and an item whose equip requirement or effect is of a class the reader's dump lacks fails the extraction, naming the class hash, rather than being skipped.
  */
 
 #include "ItemTemplateFixtures.h"
@@ -74,11 +74,14 @@ TEST_F(ItemExtractorTest, ASyntheticWizItemTemplateMapsToOneItemTemplateRow)
     ASSERT_EQ(robe->Item->EquipRequirements->Requirements.size(), 1u);
     ItemTemplatePart const& level = robe->Item->EquipRequirements->Requirements.front();
     EXPECT_EQ(level.ClassName, "class ReqMagicLevel");
-    ASSERT_NE(level.Object->Get("m_level"), nullptr);
-    EXPECT_EQ(*level.Object->Get("m_level")->GetIf<int32>(), 5);
+    EXPECT_EQ(level.NumericValue, 5.0);
+    EXPECT_EQ(level.OperatorType, 3);
+    EXPECT_EQ(level.MagicSchool, "Ice");
+    EXPECT_FALSE(level.Quantity.has_value()) << "a field its class lacks stays empty";
     EXPECT_FALSE(robe->Item->PurchaseRequirements.has_value());
     ASSERT_EQ(robe->Item->EquipEffects.size(), 1u);
     EXPECT_EQ(robe->Item->EquipEffects.front().ClassName, "class GameEffectInfo");
+    EXPECT_EQ(robe->Item->EquipEffects.front().EffectName, "MaxHealth");
     EXPECT_FALSE(hat->Item->EquipRequirements.has_value()) << "an item with no requirement list has none";
     EXPECT_TRUE(hat->Item->EquipEffects.empty());
 
@@ -93,10 +96,11 @@ TEST_F(ItemExtractorTest, ASyntheticWizItemTemplateMapsToOneItemTemplateRow)
     EXPECT_EQ(statements[7].find(fmt::format("({},", ItemTemplateFixtures::NpcId)), std::string::npos) << statements[7];
     EXPECT_EQ(statements[9], fmt::format("INSERT INTO `item_template_requirement_list` (`template_id`, `list`, `apply_not`, `operator`) VALUES ({}, 0, 0, 1)",
         ItemTemplateFixtures::RobeId));
-    EXPECT_NE(statements[11].find(fmt::format("({}, 0, 0, {}, {}, X'", ItemTemplateFixtures::RobeId, StringHash::KiStringHash("class ReqMagicLevel"),
-        WorldSqlScript::Literal(std::string("class ReqMagicLevel")))), std::string::npos) << statements[11];
-    EXPECT_NE(statements[13].find(fmt::format("({}, 0, {}, {}, X'", ItemTemplateFixtures::RobeId, StringHash::KiStringHash("class GameEffectInfo"),
-        WorldSqlScript::Literal(std::string("class GameEffectInfo")))), std::string::npos) << statements[13];
+    EXPECT_NE(statements[11].find(fmt::format("({}, 0, 0, {}, {}, 5, 3, {}, NULL, NULL, NULL, X'", ItemTemplateFixtures::RobeId, StringHash::KiStringHash("class ReqMagicLevel"),
+        WorldSqlScript::Literal(std::string("class ReqMagicLevel")), WorldSqlScript::Literal(std::string("Ice")))), std::string::npos) << statements[11];
+    EXPECT_NE(statements[13].find(fmt::format("({}, 0, {}, {}, {}, NULL, NULL, NULL, NULL, NULL, NULL, X'", ItemTemplateFixtures::RobeId,
+        StringHash::KiStringHash("class GameEffectInfo"), WorldSqlScript::Literal(std::string("class GameEffectInfo")), WorldSqlScript::Literal(std::string("MaxHealth")))),
+        std::string::npos) << statements[13];
 }
 
 TEST_F(ItemExtractorTest, AnEquipRequirementOfAClassTheDumpLacksFailsTheExtractionAndNamesTheClass)

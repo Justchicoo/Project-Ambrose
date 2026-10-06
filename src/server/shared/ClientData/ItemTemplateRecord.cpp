@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads an item template through the game object and wizard item template views after checking every class its decode skipped: one inside its behaviors is counted, any other refuses the item. Each requirement and equip effect is kept as a copy of the object it decoded to, so the record outlives the decode, and its memory is counted as that object's values. A color count is read by name as whichever integer the dump stores it as, and is absent when the class has no such property.
+ * Reads an item template through the game object and wizard item template views after checking every class its decode skipped: one inside its behaviors is counted, any other refuses the item. Each requirement and equip effect is kept as a copy of the object it decoded to, so the record outlives the decode, and its memory is counted as that object's values; the fields the item tables give columns to, an effect's name, stat lookup, pips, spell and speed and a requirement's value, comparison, school, quantity, item and adjective, are read from it by name wherever its class has them. A color count, like every such field, is read by name as whichever integer the dump stores it as, and is absent when the class has no such property.
  */
 
 #include "ItemTemplateRecord.h"
@@ -32,12 +32,51 @@ namespace
         take.template operator()<int32>();
         take.template operator()<uint32>();
         take.template operator()<int64>();
+        take.template operator()<uint64>();
         return found;
+    }
+
+    std::optional<double> RealOf(PropertyObject const& object, std::string_view name)
+    {
+        PropertyValue const* const value = object.Get(name);
+        if (!value)
+            return std::nullopt;
+        if (float const* const stored = value->GetIf<float>())
+            return double{ *stored };
+        if (double const* const stored = value->GetIf<double>())
+            return *stored;
+        return std::nullopt;
+    }
+
+    std::optional<std::string> TextOf(PropertyObject const& object, std::string_view name)
+    {
+        PropertyValue const* const value = object.Get(name);
+        std::string const* const text = value ? value->GetIf<std::string>() : nullptr;
+        return text ? std::optional<std::string>(*text) : std::nullopt;
     }
 
     ItemTemplatePart PartOf(PropertyObject const& object)
     {
-        return ItemTemplatePart{ object.GetClass().Name, object.GetClass().Hash, std::shared_ptr<PropertyObject const>(object.Clone()) };
+        ItemTemplatePart part;
+        part.ClassName = object.GetClass().Name;
+        part.ClassHash = object.GetClass().Hash;
+        part.Object = std::shared_ptr<PropertyObject const>(object.Clone());
+        part.EffectName = TextOf(object, "m_effectName");
+        part.LookupIndex = IntegerOf(object, "m_lookupIndex");
+        part.PipsGiven = IntegerOf(object, "m_pipsGiven");
+        part.PowerPipsGiven = IntegerOf(object, "m_powerPipsGiven");
+        part.SpellName = TextOf(object, "m_spellName");
+        part.NumSpells = IntegerOf(object, "m_numSpells");
+        part.SpeedMultiplier = IntegerOf(object, "m_speedMultiplier");
+        part.NumericValue = RealOf(object, "m_numericValue");
+        part.OperatorType = IntegerOf(object, "m_operatorType");
+        part.MagicSchool = TextOf(object, "m_magicSchool");
+        if (!part.MagicSchool)
+            part.MagicSchool = TextOf(object, "m_magicSchoolName");
+        part.Quantity = IntegerOf(object, "m_quantity");
+        part.ItemTemplateId = IntegerOf(object, "m_templateID");
+        part.Adjective = TextOf(object, "m_adjective");
+        return part;
     }
 
     std::vector<ItemTemplatePart> PartsOf(PropertyValue::List const& list)

@@ -88,7 +88,9 @@ void ItemTemplateFixtures::Write(std::filesystem::path const& gameData, float ha
     }
     else
     {
-        EXPECT_EQ(requirement->Set("m_level", int32{ 5 }), PropertySetResult::Ok);
+        EXPECT_EQ(requirement->Set("m_numericValue", float{ 5 }), PropertySetResult::Ok);
+        EXPECT_EQ(requirement->Set("m_operatorType", int32{ 3 }), PropertySetResult::Ok);
+        EXPECT_EQ(requirement->Set("m_magicSchool", std::string("Ice")), PropertySetResult::Ok);
     }
     PropertyValue::List requirements;
     requirements.emplace_back(std::move(requirement));

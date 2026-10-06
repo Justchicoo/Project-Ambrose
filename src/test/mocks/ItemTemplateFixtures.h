@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * An install for the item template tests: a writer's type dump holding a stat effect class and a shop behavior class the reader's dump leaves out, and a Root.wad whose manifest lists a hat, a robe with a behavior of a class the reader lacks, an equip requirement of level 5 and a max health equip effect, an NPC that is no item and a spell outside ObjectData, written again with an edited hat or with a robe whose equip effect or requirement is of a class the reader lacks.
+ * An install for the item template tests: a writer's type dump holding a stat effect class and a shop behavior class the reader's dump leaves out, and a Root.wad whose manifest lists a hat, a robe with a behavior of a class the reader lacks, an equip requirement of Ice magic level 5 or more and a max health equip effect, an NPC that is no item and a spell outside ObjectData, written again with an edited hat or with a robe whose equip effect or requirement is of a class the reader lacks.
  */
 
 #ifndef AMBROSE_ITEMTEMPLATEFIXTURES_H

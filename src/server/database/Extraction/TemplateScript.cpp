@@ -7,12 +7,26 @@
 #include "BindFile.h"
 #include "PropertyObject.h"
 
+#include <optional>
 #include <string>
+#include <type_traits>
+#include <variant>
 
 namespace
 {
     constexpr uint64 EquipList = 0;
     constexpr uint64 PurchaseList = 1;
+
+    template<typename T>
+    WorldSqlScript::Value Optional(std::optional<T> const& value)
+    {
+        if (!value)
+            return std::monostate{};
+        if constexpr (std::is_same_v<T, std::string> || std::is_same_v<T, double>)
+            return *value;
+        else
+            return int64{ *value };
+    }
 
     WorldSqlScript::Value Serialized(ItemTemplatePart const& part)
     {
@@ -63,13 +77,15 @@ WorldSqlScript TemplateScript::Build(TemplateExtraction const& extraction)
                 for (std::size_t position = 0; position < (*list)->Requirements.size(); ++position)
                 {
                     ItemTemplatePart const& part = (*list)->Requirements[position];
-                    requirements.push_back({ id, kind, uint64{ position }, uint64{ part.ClassHash }, part.ClassName, Serialized(part) });
+                    requirements.push_back({ id, kind, uint64{ position }, uint64{ part.ClassHash }, part.ClassName, Optional(part.NumericValue), Optional(part.OperatorType),
+                        Optional(part.MagicSchool), Optional(part.Quantity), Optional(part.ItemTemplateId), Optional(part.Adjective), Serialized(part) });
                 }
             }
             for (std::size_t position = 0; position < item->EquipEffects.size(); ++position)
             {
                 ItemTemplatePart const& part = item->EquipEffects[position];
-                effects.push_back({ id, uint64{ position }, uint64{ part.ClassHash }, part.ClassName, Serialized(part) });
+                effects.push_back({ id, uint64{ position }, uint64{ part.ClassHash }, part.ClassName, Optional(part.EffectName), Optional(part.LookupIndex),
+                    Optional(part.PipsGiven), Optional(part.PowerPipsGiven), Optional(part.SpellName), Optional(part.NumSpells), Optional(part.SpeedMultiplier), Serialized(part) });
             }
         }
     }
@@ -83,8 +99,10 @@ WorldSqlScript TemplateScript::Build(TemplateExtraction const& extraction)
     script.ReplaceTable(tables[3], { "template_id", "school", "base_cost", "item_rank", "item_limit", "item_set_bonus_template_id", "num_primary_colors", "num_secondary_colors" },
         items);
     script.ReplaceTable(tables[4], { "template_id", "list", "apply_not", "operator" }, requirementLists);
-    script.ReplaceTable(tables[5], { "template_id", "list", "position", "class_hash", "class_name", "data" }, requirements);
-    script.ReplaceTable(tables[6], { "template_id", "position", "class_hash", "class_name", "data" }, effects);
+    script.ReplaceTable(tables[5], { "template_id", "list", "position", "class_hash", "class_name", "numeric_value", "operator_type", "magic_school", "quantity", "item_template_id",
+        "adjective", "data" }, requirements);
+    script.ReplaceTable(tables[6], { "template_id", "position", "class_hash", "class_name", "effect_name", "lookup_index", "pips_given", "power_pips_given", "spell_name",
+        "num_spells", "speed_multiplier", "data" }, effects);
     return script;
 }
 

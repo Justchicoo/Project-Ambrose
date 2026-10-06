@@ -204,7 +204,9 @@ namespace TemplateDumpFixtures
         requirement["m_operator"] = Enum("enum Requirement::Operator", "m_operator", 1, Json{ { "OPERATOR_AND", 0 }, { "OPERATOR_OR", 1 } });
         AddClass(classes, "class Requirement", Json::array({ "PropertyClass" }), requirement);
         Json level = requirement;
-        level["m_level"] = Property("int", "m_level", 2);
+        level["m_numericValue"] = Property("float", "m_numericValue", 2);
+        level["m_operatorType"] = Property("int", "m_operatorType", 3);
+        level["m_magicSchool"] = Property("std::string", "m_magicSchool", 4);
         AddClass(classes, "class ReqMagicLevel", Json::array({ "Requirement", "PropertyClass" }), level);
         if (withStatEffect)
         {
