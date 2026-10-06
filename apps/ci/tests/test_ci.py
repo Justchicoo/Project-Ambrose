@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the forbidden file scan, including the key, store, log and token material it keeps out, the contributor track path check, the commit trailer check, the build stages, the vcpkg cache key, the usage count, and the build leg selection against fakes, a real git repository and a fake Actions API, and the milestone track, where a branch named for a milestone is allowed the source tree and the track's open list is held to the milestones that are really ready.
+# Self-tests for the forbidden file scan, including the key, store, log and token material it keeps out, the contributor track path check, the commit trailer check, the build stages, the vcpkg cache key, the usage count, and the build leg selection against fakes, a real git repository and a fake Actions API, and the milestone track, where a branch named for any milestone is allowed the source tree, nothing is held or reserved, and the track's Started rows name real milestones.
 import argparse
 import datetime
 import json
@@ -1209,46 +1209,29 @@ class MilestoneTrackTests(unittest.TestCase):
         self.assertEqual([entry[0] for entry in refused], [other])
         self.assertEqual(ci_contrib_paths.check_milestone([other], "5.01"), [])
 
-    def test_a_branch_for_a_milestone_the_maintainer_holds_is_refused(self):
-        kept = [{"scope": "phase:17", "who": "the panel session", "what": "the panel"},
-                {"scope": "milestone:4.02", "who": "the panel session", "what": "CommandMgr"}]
-        self.assertEqual(ci_contrib_paths.held_by("17.09", kept)["who"], "the panel session")
-        self.assertEqual(ci_contrib_paths.held_by("4.02", kept)["who"], "the panel session")
-        self.assertIsNone(ci_contrib_paths.held_by("4.04", kept))
-        self.assertIsNone(ci_contrib_paths.held_by("1.06", []))
+    def test_a_branch_for_any_milestone_is_let_through(self):
+        everything = ready_report.milestones(ROOT)
+        ready, blocked = ready_report.state(ROOT)
+        sample = [row["id"] for row in ready[:5] + blocked[:5]] + ["6.05", "17.24", "17.165", "3.28"]
+        for identifier in sample:
+            self.assertIn(identifier, everything)
+            self.assertEqual(ci_contrib_paths.main(["--root", ROOT, "--paths", "src/x.cpp", "--branch", f"milestone/{identifier}-any"]), 0, identifier)
 
-    def test_a_phase_hold_that_spares_a_milestone_lets_its_branch_through(self):
-        kept = [{"scope": "phase:17", "who": "the panel session", "except": ["17.10"]}]
-        self.assertIsNone(ci_contrib_paths.held_by("17.10", kept))
-        self.assertEqual(ci_contrib_paths.held_by("17.11", kept)["who"], "the panel session")
-        held = [{"scope": "phase:17", "who": "the panel session", "except": ["17.10"]},
-                {"scope": "milestone:17.10", "who": "somebody else"}]
-        self.assertEqual(ci_contrib_paths.held_by("17.10", held)["who"], "somebody else")
-        self.assertIsNone(ci_contrib_paths.held_by("17.10", [{"scope": "phase:17", "who": "me", "except": ["17.10"]}]))
-        self.assertIsNotNone(ci_contrib_paths.held_by("17.10", [{"scope": "phase:17", "who": "me", "except": "17.10"}]))
+    def test_a_holds_file_put_back_holds_nothing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            os.makedirs(os.path.join(folder, "doc", "work"))
+            with io.open(os.path.join(folder, "doc", "work", "holds.json"), "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(json.dumps({"holds": [{"scope": "milestone:4.04", "who": "a session"}, {"scope": "phase:17", "who": "a session"}]}))
+            for branch in ("milestone/4.04-world-wire-math", "milestone/17.10-metrics"):
+                self.assertEqual(ci_contrib_paths.main(["--root", folder, "--paths", "src/x.cpp", "--branch", branch]), 0, branch)
+        self.assertFalse(os.path.exists(os.path.join(ROOT, "doc", "work", "holds.json")))
 
-    def test_a_milestone_branch_cannot_edit_the_file_that_holds_it(self):
+    def test_a_milestone_branch_cannot_edit_the_file_that_grants_it(self):
         self.assertIn("doc/work/", ci_contrib_paths.RESERVED_PREFIXES)
-        refused = ci_contrib_paths.check_milestone(["doc/work/holds.json"], "17.35")
-        self.assertEqual([path for path, _reason in refused], ["doc/work/holds.json"])
+        refused = ci_contrib_paths.check_milestone(["doc/work/grants.json"], "17.35")
+        self.assertEqual([path for path, _reason in refused], ["doc/work/grants.json"])
         self.assertEqual(ci_contrib_paths.main(
-            ["--root", ROOT, "--paths", "doc/work/holds.json", "--branch", "milestone/17.35-panel-settings"]), 1)
-
-    def test_the_real_holds_stop_the_real_branches(self):
-        kept = ci_contrib_paths.holds(ROOT)
-        self.assertTrue(kept)
-        held = next(hold["scope"].split(":", 1)[1] for hold in kept if hold["scope"].startswith("milestone:"))
-        self.assertEqual(ci_contrib_paths.main(["--root", ROOT, "--paths", "src/x.cpp", "--branch", f"milestone/{held}-held"]), 1)
-        self.assertEqual(ci_contrib_paths.main(["--root", ROOT, "--paths", "src/x.cpp", "--branch", "milestone/4.04-world-wire-math"]), 0)
-
-    def test_the_checker_and_the_board_read_the_same_holds(self):
-        from_checker = ci_contrib_paths.holds(ROOT)
-        from_board = board.holds(ROOT)
-        self.assertEqual(len(from_checker), len(from_board))
-        for milestone in ("17.09", "17.18", "4.02", "4.04", "1.06", "3.23"):
-            checker = ci_contrib_paths.held_by(milestone, from_checker)
-            board_side = board.hold_for(milestone, from_board)
-            self.assertEqual(bool(checker), bool(board_side), milestone)
+            ["--root", ROOT, "--paths", "doc/work/grants.json", "--branch", "milestone/17.35-panel-settings"]), 1)
 
     def test_the_source_tree_needs_the_branch_name_to_be_allowed(self):
         source = ["src/server/game/Movement/MovementPacking.cpp"]
@@ -1263,51 +1246,34 @@ class MilestoneTrackTests(unittest.TestCase):
             self.assertIn("`" + held + "`", track, held)
             self.assertIn("`" + held + "`", prompt, held)
 
-    def test_the_track_opens_only_milestones_that_exist_and_are_ready(self):
-        ready, _blocked = ready_report.state(ROOT)
-        everything = ready_report.milestones(ROOT)
-        opened = [row["id"] for row in ready if row["status"] == "open"]
-        if not opened:
-            reserved = self.listed("Reserved")
-            for row in ready:
-                if row["status"] == "reserved" and not row["done"]:
-                    self.assertIn(row["id"], reserved,
-                                  "nothing is open and " + row["id"] + " is ready and reserved without a reason in the table")
-        for identifier in re.findall(r"^\| ([\d., ]+) \|", self.section("Open now"), re.M):
-            for one in re.findall(r"\d+\.\d+", identifier):
-                self.assertIn(one, everything, one + " is opened by the track but is not a milestone")
-                self.assertTrue(one in opened or everything[one]["done"],
-                                one + " is opened by the track but its dependencies are not built")
-
-    def test_an_empty_open_list_is_allowed_only_when_every_ready_milestone_is_accounted_for(self):
-        ready, _blocked = ready_report.state(ROOT)
-        reserved = self.listed("Reserved")
-        unexplained = [row["id"] for row in ready
-                       if row["status"] == "reserved" and not row["done"] and row["id"] not in reserved]
-        opened = [row["id"] for row in ready if row["status"] == "open"]
-        self.assertTrue(opened or not unexplained,
-                        "nothing is open and these are ready with no reason given: " + ", ".join(sorted(unexplained)))
-
-    def test_a_milestone_is_not_open_and_reserved_at_once(self):
-        tables = {name: self.listed(name) for name in ("Open now", "Reserved", "In flight", "Landed")}
-        for name, other in (("Open now", "Reserved"), ("Open now", "In flight"), ("Reserved", "In flight")):
-            both = sorted(tables[name] & tables[other])
-            self.assertEqual(both, [], ", ".join(both) + " is listed under " + name + " and " + other)
-
-    def test_a_milestone_the_track_does_not_name_is_reserved(self):
-        ready, _blocked = ready_report.state(ROOT)
-        everything = ready_report.milestones(ROOT)
-        opened = {row["id"] for row in ready if row["status"] == "open"}
-        named = self.listed("Open now")
-        self.assertEqual(opened, {one for one in named if not everything[one]["done"]})
+    def test_every_ready_milestone_is_open_and_every_other_one_waiting(self):
+        ready, blocked = ready_report.state(ROOT)
+        self.assertTrue(ready)
         for row in ready:
-            self.assertIn(row["status"], ("open", "reserved", "claimed", "landed"), row["id"])
+            self.assertEqual((row["status"], row["missing"]), ("open", []), row["id"])
+        for row in blocked:
+            self.assertEqual(row["status"], "waiting", row["id"])
+            self.assertTrue(row["missing"], row["id"])
+
+    def test_the_track_reserves_nothing(self):
+        track = self.track()
+        for gone in ("## Open now", "## Reserved", "## Holds", "## In flight", "## Only the milestones named below"):
+            self.assertNotIn(gone, track)
+        self.assertIn("Every milestone is open to anyone", track)
+
+    def test_every_started_row_names_a_real_milestone_that_has_not_landed_in_the_track(self):
+        everything = ready_report.milestones(ROOT)
+        started = board.track_rows(ROOT, everything)
+        self.assertEqual(set(started), self.listed("Started"))
+        self.assertEqual(sorted(set(started) & self.listed("Landed")), [])
+        for identifier, row in started.items():
+            self.assertTrue(row["by"].strip() and row["left"].strip(), identifier)
 
     def test_a_reason_that_mentions_another_milestone_is_not_read_as_listing_it(self):
         table = "| 1.21 | a thing | S | a build | ready now that 3.02 and 4.08 have landed |"
         row = re.match(r"^\| *([\d. ,]+?) *\|", table)
         self.assertEqual(set(re.findall(r"\d+\.\d+", row.group(1))), {"1.21"})
-        for name in ("Open now", "Reserved", "In flight", "Landed"):
+        for name in ("Started", "Landed"):
             for identifier in self.listed(name):
                 self.assertRegex(self.section(name), r"(?m)^\| *[\d. ,]*" + re.escape(identifier),
                                  identifier + " is counted in " + name + " but is not in a first column there")
