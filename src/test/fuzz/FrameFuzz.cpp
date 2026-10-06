@@ -3,6 +3,7 @@
  * Exercises fragmented frame reassembly with arbitrary network bytes.
  */
 
+#include "AllocationCeiling.h"
 #include "FrameReassembler.h"
 #include "FrameWriter.h"
 
@@ -45,6 +46,7 @@ namespace
 
 extern "C" int LLVMFuzzerInitialize(int* argc, char*** argv)
 {
+    AllocationCeiling::Install();
     for (int index = 1; index < *argc; ++index)
     {
         std::string_view const argument = (*argv)[index];
@@ -59,6 +61,7 @@ extern "C" int LLVMFuzzerInitialize(int* argc, char*** argv)
 
 extern "C" int LLVMFuzzerTestOneInput(uint8_t const* data, std::size_t size)
 {
+    AllocationCeiling::Scope const ceiling;
     FrameLimits limits;
     FrameReassembler reassembler(limits);
     constexpr std::size_t FragmentSize = 1024;
