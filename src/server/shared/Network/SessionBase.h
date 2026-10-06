@@ -76,7 +76,7 @@ public:
     template<DeclaredMessage T>
     bool SendDmlMessageDelayedClose(T const& message);
     bool SendServerMessage(std::u16string text, bool modal = false);
-    void KickPlayer(uint32 type, std::string_view reason);
+    void KickPlayer(uint32 type, std::string_view reason, uint64 unbanDate = 0);
     void HandlePing(SystemMessages::Ping& message);
 
 protected:

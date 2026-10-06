@@ -63,12 +63,12 @@ private:
 
     void ContinueAuthentication(std::shared_ptr<AuthAttempt> const& attempt, PreparedQueryResult result);
     void CompleteAuthentication(std::shared_ptr<AuthAttempt> const& attempt, bool committed);
-    void FailAuthentication(AuthAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, bool close = false);
+    void FailAuthentication(AuthAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, bool close = false, uint64 unbanDate = 0);
     void AbortAuthentication(AuthAttempt* attempt, std::exception const& failure);
     void RefuseUnsupportedAuthentication(std::string_view tag);
     void ContinueValidation(std::shared_ptr<ValidateAttempt> const& attempt, PreparedQueryResult result);
     void CompleteValidation(std::shared_ptr<ValidateAttempt> const& attempt, bool committed);
-    void FailValidation(ValidateAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess);
+    void FailValidation(ValidateAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, uint64 unbanDate = 0);
     void StartCharacterList();
     void SelectCharacter(uint64 charId, std::string const& realmName, PreparedQueryResult result);
     void FailCharacterSelect(uint64 charId, std::string_view detail);

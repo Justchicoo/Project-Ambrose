@@ -24,7 +24,7 @@
 The experiment is simple: see how far AI-driven development can take a complete game server. Humans set direction and review; AI agents write the code. Nothing here is copied from another emulator, and nothing extracted from the game client is ever committed.
 
 > [!NOTE]
-> **Pre-alpha.** A real Wizard101 client, started by Ambrose's own launcher, signs in, picks a wizard and enters the world: it stands in the Commons with the zone's objects and NPCs around it, walks, sees other players and chats with them, and logs out where it stood. Quests, combat and changing zones come next, and each server shows itself live in its own web panel.
+> **Pre-alpha.** Press Play in Ambrose's own launcher and a real Wizard101 client signs in, creates, picks or deletes a wizard and enters the world: it stands in the Commons with the zone's objects and NPCs around it, walks, sees other players and chats with them, quits back to character select, and logs out where it stood. Teleports and changing zones are being finished, quests, gear and combat are being built alongside them, and each server shows itself live in its own web panel.
 
 ## Where the project is
 
@@ -40,28 +40,31 @@ The card is generated from the roadmap itself by `apps/progress/progress.py`, so
 
 | Working | Not yet |
 |---|---|
-| Session handshake against a retail client, signing in, a wrong password and a retry | Going back to character select from the world |
-| The character list, picking one, and the handoff to the game server with the key it was issued | Teleports, doors and moving between zones |
-| Entering the world: a wizard stands in its zone with every object and NPC the zone's data places there | Quests and NPC dialog |
-| Walking, with where the wizard stands kept and restored at the next login | Combat, spells in play, the backpack and gear |
-| The wizard's level, experience, health, mana and gold from the database, shown on the client's HUD and character page | Character creation end to end |
-| Other players in the same zone, say chat, quick chat and emotes | Pets, housing, crafting and minigames |
-| GM commands typed in chat, checked against the account's security level | Serving patches to a client |
-| Logging out, link-dead and AFK handling, and a server shutdown that warns players and brings each wizard back where it stood | The panel's pages beyond those listed here, and roles |
-| Ambrose's own launcher starting your own client | |
+| Session handshake against a retail client, signing in, a wrong password and a retry | Teleports, doors and moving between zones |
+| The character list, creating a wizard through the client's own screens, deleting one, and the school badge on its Badges page | Quests and NPC dialog |
+| Picking a wizard and the handoff to the game server with the key it was issued, and quitting from the world back to character select without the password | Combat, the backpack and gear |
+| Entering the world: a wizard stands in its zone with every object and NPC the zone's data places there | Pets, housing, crafting and minigames |
+| Walking, with where the wizard stands kept and restored at the next login | Serving patches to a client |
+| The wizard's level, experience, health, mana and gold from the database, shown on the client's HUD and character page | The installer's first full run on a clean Windows machine; it already takes a clean Ubuntu from a checkout to running servers |
+| Other players in the same zone, say chat, quick chat and emotes | The panel's game data pages, hosting and backups, and two-factor sign-in |
+| GM commands typed in chat, checked against the account's security level | |
+| Logging out, link-dead and AFK handling, and a server shutdown that warns players and brings each wizard back where it stood | |
+| Ambrose's own launcher: a window with a Play button that starts your own client, and the console launcher beside it | |
 | The game layer's core: a world tick, scripts and modules that join the build by existing, command handling with security levels, and settings and data that reload live | |
-| Reading your own installation: type extraction, archives, the object format byte for byte, every zone's templates, locations and object placements, and the level and school tables | |
-| The admin API and a live log stream with secrets hidden, a supervisor that runs the servers and takes back the ones still running, and the panel's overview, realms, activity and accounts | |
-| Errors an app raises, grouped by where they came from, downloadable as a report | |
+| Reading your own installation: type extraction, a binary type cache that loads in a tenth of a second, archives, the object format byte for byte, every zone's templates, locations, objects, volumes and triggers, every object template, and the level and school tables | |
+| Following whatever client revision your install has, KingsIsle's latest included: a running server notices an update, extracts it in the background and swaps it in live | |
+| The admin API and a live log stream with secrets hidden, a supervisor that runs the servers and takes back the ones still running, sign-in links for a desktop program, and the panel's sign-in with roles and permissions, overview, servers, logs, console, configuration and live reload, database, resource graphs and error reports | |
 
 [doc/ROADMAP.md](doc/ROADMAP.md)'s **Where we are** says exactly which milestones are done, and the [work board](https://justchicoo.github.io/Project-Ambrose/) says what is being built right now and by whom. The plan runs in **17 phases**, each milestone ending in something visible in the real client or the panel.
 
-Outside contributors have finished five of those milestones, four of them in a single day on 2026-09-23, and have seven more part built. What the board shows is generated from the roadmap and the open pull requests every time either changes, so it says what is true rather than what was true.
+121 of the 469 milestones are finished. Phases 1 and 2 are complete, phases 3 to 5 are down to their last few milestones, and phase 6 is under way, with quests, a wizard's gear and combat starting alongside it. Outside contributors have landed work on seventeen milestones and have four more part built. What the board shows is generated from the roadmap and the open pull requests every time either changes, so it says what is true rather than what was true.
 
 ## Building
 
 > [!TIP]
 > You need CMake 3.25+, vcpkg with `VCPKG_ROOT` pointing at it, and a C++20 compiler: Visual Studio 2022+ on Windows or GCC 13+ on Linux. vcpkg installs every library on the first configure, which takes a while exactly once.
+>
+> Or let the installer take a fresh checkout to running servers one step at a time, dependencies, database and all: `apps/installer/ambrose.sh` on Ubuntu 24.04 and `apps/installer/ambrose.ps1` on Windows 11, walked through in [doc/INSTALL.md](doc/INSTALL.md).
 
 <details open>
 <summary><b>Windows</b></summary>
@@ -98,7 +101,9 @@ Run the unit tests with the test preset matching your build, for example `ctest 
 
 On Linux, `linux-gcc-asan` builds and tests with AddressSanitizer and UndefinedBehaviorSanitizer, `linux-clang-tsan` does the same with ThreadSanitizer, and `linux-clang-fuzz` builds the libFuzzer targets for decoders of untrusted data and runs each from its seed corpus. Each needs the matching compiler installed, and ThreadSanitizer may need `sudo sysctl vm.mmap_rnd_bits=28` on newer kernels.
 
-Hosted CI builds the Windows leg on Sundays and Wednesdays, the sanitizer legs on Sundays, and the GCC, Clang and fuzz legs on the first Sunday of each month, each only when code changed since its last build. Any leg can also be built on demand; see Continuous integration in [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md).
+`python apps/ci/ci_build.py` runs the same legs CI does, with the tests spread over every core and the compiler cached across clones when ccache is installed.
+
+Hosted CI builds the Linux GCC leg on every push to `main` that touches the code and on every milestone branch, the Windows leg on Sundays and Wednesdays, the sanitizer legs on Sundays, and the Clang and fuzz legs on the first Sunday of each month, each scheduled leg only when code changed since its last build. Any leg can also be built on demand; see Continuous integration in [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md).
 
 </details>
 
