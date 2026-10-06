@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds libFuzzer targets for frame and message decoding when AMBROSE_BUILD_FUZZERS is on, and runs their seeded ten-minute fuzz passes under CTest with the label fuzz.
+# Builds libFuzzer targets for frame and message decoding when AMBROSE_BUILD_FUZZERS is on, runs their seeded ten-minute fuzz passes under CTest with the label fuzz, and proves their allocation ceiling trips one byte above the frame limit.
 add_executable(objectproperty_fuzzer
     "${CMAKE_CURRENT_SOURCE_DIR}/ObjectPropertyFuzzer.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mocks/ObjectFuzzCorpus.cpp")
@@ -33,3 +33,18 @@ foreach(target IN ITEMS frame_fuzzer message_decode_fuzzer)
         COMMAND ${target} "${corpus}" -max_total_time=600 -max_len=4194304 -print_final_stats=1)
     set_tests_properties("${target}.TenMinuteRun" PROPERTIES LABELS fuzz TIMEOUT 1200)
 endforeach()
+
+foreach(probe IN ITEMS at above)
+    set(target "allocation_ceiling_${probe}_probe")
+    add_executable(${target} "${CMAKE_CURRENT_SOURCE_DIR}/AllocationCeilingProbe.cpp")
+    if(probe STREQUAL "at")
+        target_compile_definitions(${target} PRIVATE AMBROSE_PROBE_SIZE=FrameLimits::DefaultMaxFrameSize)
+    else()
+        target_compile_definitions(${target} PRIVATE "AMBROSE_PROBE_SIZE=(FrameLimits::DefaultMaxFrameSize + 1)")
+    endif()
+    target_link_libraries(${target} PRIVATE ambrose-compile-options shared)
+    target_link_options(${target} PRIVATE -fsanitize=fuzzer)
+    add_test(NAME "AllocationCeiling.${probe}Limit" COMMAND ${target} -runs=1)
+    set_tests_properties("AllocationCeiling.${probe}Limit" PROPERTIES LABELS fuzz TIMEOUT 120)
+endforeach()
+set_tests_properties("AllocationCeiling.aboveLimit" PROPERTIES PASS_REGULAR_EXPRESSION "deadly signal")
