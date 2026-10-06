@@ -31,7 +31,9 @@ namespace
         PropertyObjectPtr effect = PropertyObject::Create(catalog, "class NamedEffect");
         EXPECT_TRUE(effect);
         if (effect)
+        {
             EXPECT_EQ(effect->Set("m_effectNameID", nameId), PropertySetResult::Ok);
+        }
         return effect;
     }
 
