@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs every step of CI's checks job on a contributor's own clone, read from .github/workflows/core-build.yml so it can never drift from what CI runs, over the commits the next push would send, with the path check for the branch named: a green run here is a green checks job on the pull request, and --stamp records the commit a green run covered for a pre-push guard to compare against.
+# Runs every step of CI's checks job on a contributor's own clone, read from .github/workflows/core-build.yml so it can never drift from what CI runs, over the commits the next push would send, with the path check for the branch named and without the steps CI leaves out of that pull request: a green run here is a green checks job on the pull request, and --stamp records the commit a green run covered for a pre-push guard to compare against.
 import argparse
 import io
 import os
@@ -38,11 +38,17 @@ def command_for(name, command, base, branch):
         return f'python apps/ci/ci_sql.py check --range "{base}...HEAD"'
     if "ci_sql.py promote" in command:
         return None if branch else command
+    if "progress.py --check" in command:
+        return None if branch else command
     return command
 
 
 def skipped_because(command):
-    return "CI runs it only on a push to main" if "ci_sql.py promote" in command else "give --branch to run it"
+    if "ci_sql.py promote" in command:
+        return "CI runs it only on a push to main"
+    if "progress.py --check" in command:
+        return "CI skips it on a pull request whose author cannot regenerate the card"
+    return "give --branch to run it"
 
 
 def write_stamp(root, path):

@@ -1,18 +1,21 @@
 /*
  * Project Ambrose by Imjustchico
- * Formats the UTC time a forced disconnect carries as year-month-day hour:minute:second.
+ * Says which forced disconnects carry a ban's end and writes that end as the client's ban parser reads it: decimal Unix seconds no later than the client's 32-bit reading of them holds, or forever for a ban with no end.
  */
 
 #include "SystemMessages.h"
+#include "DisconnectReason.h"
 
 #include <fmt/format.h>
 
-std::string SystemMessages::FormatTimeStamp(std::chrono::system_clock::time_point time)
+#include <algorithm>
+
+bool SystemMessages::CarriesBanEnd(uint32 disconnectType) noexcept
 {
-    std::chrono::sys_seconds const seconds = std::chrono::floor<std::chrono::seconds>(time);
-    std::chrono::sys_days const day = std::chrono::floor<std::chrono::days>(seconds);
-    std::chrono::year_month_day const date(day);
-    std::chrono::hh_mm_ss<std::chrono::seconds> const clock(seconds - day);
-    return fmt::format("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", static_cast<int>(date.year()), static_cast<unsigned>(date.month()), static_cast<unsigned>(date.day()),
-        clock.hours().count(), clock.minutes().count(), clock.seconds().count());
+    return disconnectType == DisconnectReason::Banned || disconnectType == DisconnectReason::AccountBanned || disconnectType == DisconnectReason::MachineBanned;
+}
+
+std::string SystemMessages::FormatBanEnd(uint64 unbanDate)
+{
+    return unbanDate == 0 ? std::string(PermanentBanTimeStamp) : fmt::format("{}", std::min<uint64>(unbanDate, LatestBanEnd));
 }
