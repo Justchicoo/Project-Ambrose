@@ -1,0 +1,16 @@
+{
+  "name": "@ambrose/panelui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Project Ambrose by Imjustchico: the panel program's own screens, its list of panels, built from the shared design system and compiled into the program.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ambrose/ui": "*"
+  }
+}

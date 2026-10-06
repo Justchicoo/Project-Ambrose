@@ -7,11 +7,11 @@ import os
 import re
 import sys
 
-SOURCE_ROOTS = ("packages/ui/src", "apps/dashboard/src", "apps/launcherui/src")
+SOURCE_ROOTS = ("packages/ui/src", "apps/dashboard/src", "apps/launcherui/src", "apps/panelui/src")
 COMPONENT_ROOT = "packages/ui/src"
 GENERATED = ("packages/ui/src/tokens/tokens.css", "packages/ui/src/tokens/variables.css", "packages/ui/src/tokens/tokens.ts", "packages/ui/src/icons/icons.ts")
 SKIP_FOLDERS = ("packages/ui/src/fonts", "packages/ui/src/canary")
-BUNDLES = ("apps/dashboard/dist", "apps/launcherui/dist")
+BUNDLES = ("apps/dashboard/dist", "apps/launcherui/dist", "apps/panelui/dist")
 ALLOW_FILE = "apps/ci/ci_frontend_allow.json"
 COLLECTIONS_FILE = "packages/ui/collections.json"
 COLLECTION_STATES = ("loading", "empty", "no-results", "error")

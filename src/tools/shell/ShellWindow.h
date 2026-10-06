@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One window holding the operating system's own web view, which the launcher and the panel program both open. It shows either the program's own page, compiled into it and served from memory on the program's own secure origin with the host channel answering that origin alone, or a remote panel bound to one origin, with web messages off, every other origin and every new window sent to the system browser, downloads saved only through a dialog, and a certificate the web view cannot verify accepted only by its pin. Web view data lives in a profile of its own under the program's data folder, and where the window was left is remembered in a file there. A window whose page has not finished loading within its start timeout is closed and reported as not having come up, so a program falls back rather than waiting on a web view that never draws. The width and height a program asks for are the page's own area inside the frame, on Windows by adding the frame and title bar around them and under GTK because a window's default size is already its content's, so a page drawn for that size gets all of it. A probe runs scripts in the page and closes the window, which is how the smoke test drives it off screen.
+ * One window holding the operating system's own web view, which the launcher and the panel program both open. It shows either the program's own page, compiled into it and served from memory on the program's own secure origin with the host channel answering that origin alone, or a remote panel bound to one origin, with web messages off, every other origin and every new window sent to the system browser, downloads saved only through a dialog, and a certificate the web view cannot verify accepted only by its pin. Web view data lives in a profile of its own under the program's data folder, and where the window was left is remembered in a file there. A window whose page has not finished loading within its start timeout is closed and reported as not having come up, so a program falls back rather than waiting on a web view that never draws. The width and height a program asks for are the page's own area inside the frame, on Windows by adding the frame and title bar around them and under GTK because a window's default size is already its content's, so a page drawn for that size gets all of it. A message a remote panel's page manages to post is never handed to the program; the window reports it through RemoteMessage, which under GTK never fires because no handler is registered there. A probe runs scripts in the page and closes the window, which is how the smoke test drives it off screen.
  */
 
 #ifndef AMBROSE_SHELLWINDOW_H
@@ -43,6 +43,7 @@ struct ShellWindowOptions
     std::function<void(std::string const& url)> OpenExternal;
     std::function<std::filesystem::path(std::filesystem::path const& suggested)> SaveAs;
     std::function<void(std::string const& line)> Log;
+    std::function<void(std::string const& source)> RemoteMessage;
     bool OffScreen = false;
     std::optional<ShellProbe> Probe;
     std::chrono::milliseconds StartTimeout{ 30000 };
@@ -54,6 +55,7 @@ public:
     ShellWindow() = delete;
 
     static bool Available();
+    static std::string RuntimeVersion();
     static bool Show(ShellWindowOptions const& options, std::string& error);
     static void OpenInSystemBrowser(std::string const& url);
 

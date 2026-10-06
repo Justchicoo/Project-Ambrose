@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The shell window on Windows: a plain window holding a WebView2 whose user data folder is the window's profile, so nothing is written beside the executable, started with the switches ShellRules gives and with reputation checks off so the web view itself calls nowhere. The program's own page is answered from memory for every request to its https origin through a web resource handler, and a message from the page is admitted only from that origin, handed to the program and answered on the view's own thread, because WebView2 is a single-threaded apartment. A view bound to a remote panel has web messages turned off and no handler. A navigation away from the bound origin and every new window go to the system browser, a document request to any other origin is answered empty in the view so nothing reaches that origin from it, and the program's own page, which carries a content policy keeping it on its own origin, has every request elsewhere refused in the view and named once, a download is saved only where the save dialog says, and a certificate the view cannot verify is allowed only when its fingerprint equals the pin. A page that has not finished its first navigation within the start timeout closes the window and is reported, so the program can fall back. The size a program asks for is the page's own area, so a window opened for the first time is made larger by exactly its frame and title bar, and where the window was left, frame and all, is read before it opens and written when it closes, the message loop runs only while the window exists and posts no quit, so the next window this thread opens does not end at once, and a probe runs its scripts after the first page settles and then closes the window.
+ * The shell window on Windows: a plain window holding a WebView2 whose user data folder is the window's profile, so nothing is written beside the executable, started with the switches ShellRules gives and with reputation checks off so the web view itself calls nowhere. The program's own page is answered from memory for every request to its https origin through a web resource handler, and a message from the page is admitted only from that origin, handed to the program and answered on the view's own thread, because WebView2 is a single-threaded apartment. A view bound to a remote panel has web messages turned off, and a message that still arrives from its page is dropped, logged and reported to the program, never answered, because this runtime keeps window.chrome.webview even with web messages off. A navigation away from the bound origin and every new window go to the system browser, a document request to any other origin is answered empty in the view so nothing reaches that origin from it, and the program's own page, which carries a content policy keeping it on its own origin, has every request elsewhere refused in the view and named once, a download is saved only where the save dialog says, and a certificate the view cannot verify is allowed only when its fingerprint equals the pin. A page that has not finished its first navigation within the start timeout closes the window and is reported, so the program can fall back. The size a program asks for is the page's own area, so a window opened for the first time is made larger by exactly its frame and title bar, and where the window was left, frame and all, is read before it opens and written when it closes, the message loop runs only while the window exists and posts no quit, so the next window this thread opens does not end at once, and a probe runs its scripts after the first page settles and then closes the window.
  */
 
 #include "ShellWindow.h"
@@ -375,6 +375,22 @@ namespace
                                              .Get(),
                 &token);
         }
+        else
+        {
+            view->add_WebMessageReceived(Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+                                             [&running](ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT
+                                             {
+                                                 LPWSTR source = nullptr;
+                                                 args->get_Source(&source);
+                                                 std::string const from = Take(source);
+                                                 running.Log(fmt::format("a message from {} was dropped, because a remote panel's page has no host channel", from));
+                                                 if (running.Options->RemoteMessage)
+                                                     running.Options->RemoteMessage(from);
+                                                 return S_OK;
+                                             })
+                                             .Get(),
+                &token);
+        }
 
         view->add_NavigationStarting(Callback<ICoreWebView2NavigationStartingEventHandler>(
                                          [&running](ICoreWebView2*, ICoreWebView2NavigationStartingEventArgs* args) -> HRESULT
@@ -488,6 +504,14 @@ bool ShellWindow::Available()
     if (version)
         CoTaskMemFree(version);
     return has;
+}
+
+std::string ShellWindow::RuntimeVersion()
+{
+    LPWSTR version = nullptr;
+    if (FAILED(GetAvailableCoreWebView2BrowserVersionString(nullptr, &version)) || version == nullptr)
+        return std::string();
+    return "WebView2 " + Take(version);
 }
 
 void ShellWindow::OpenInSystemBrowser(std::string const& url)

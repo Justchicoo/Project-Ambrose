@@ -49,9 +49,17 @@ Starts the user's own client against an Ambrose login server, on any machine tha
 
 Its tests run as `unit_tests --gtest_filter=Shell*:EmbeddedPage*:LauncherPlace*`, and as the `ShellSmoke` CTest, which copies `shell_smoke` into a folder the user may not write, opens the launcher's page from memory off screen there and checks the folder is unchanged, then drives real windows against loopback listeners and two certificates `supervisor --panel-self-signed` writes. It reports itself skipped where no web view exists, and carries the CTest label `render`.
 
-### panel (planned in 17.181)
+### panel (built in 17.181)
 
-`panel` in src/tools/panel, over a `panel-core` library that links the shell, is the panel program. It lists the panels it knows, this computer found without being added and others paired, pinned or reached through SSH, and opens each in a window of its own loaded from that panel's own address, so it carries no copy of the dashboard. Its own screens are built from `apps/panelui`. It hosts a game on this computer (17.24), sits in the tray (17.182), installs from 17.183's packages and updates itself through 17.184.
+`panel` in src/tools/panel, over a `panel-core` library that links the shell, is the panel program. It lists the panels it knows, This computer found without being added and others paired or pinned, and opens each in a window of its own loaded from that panel's own address, so it carries no copy of the dashboard. Its own screens are built from `apps/panelui` and compiled in. `panel --help` and `--version` answer, and doc/config/panel.md lists its one option.
+
+- **The list** lives in `panels.sqlite3` under `PanelApp` in the Ambrose data folder: a name, an address, how its certificate is trusted (loopback, publicly trusted, pinned to a SHA-256 fingerprint, or plain HTTP the operator opted into), the username last used and when it was last opened. It has no column for a password, and forgetting an entry deletes its web view profile.
+- **Adding a panel**: from a 17.180 pairing line, which carries the address and the pin; from an address a public authority vouches for; or from an address with a self-signed certificate, whose fingerprint is shown grouped for comparing and pinned only once confirmed. Plain HTTP beyond this computer needs the entry's opt-in.
+- **Opening a panel** runs a `panel --window` process of the program's own, handed the panel's name, first address and pin on its input, so a one-time link never sits on a command line. This computer opens through a fresh local link, a paired panel through its pairing link once, and every other panel through its own sign-in page. A pinned panel whose certificate changed is refused before anything is sent to it.
+- **The probe** reads each panel's public `GET /api/panel/session` through libcurl over OpenSSL, checking a pin inside the TLS handshake, and names each entry answering, unreachable, certificate changed or not an Ambrose panel. It runs only while the list is shown.
+- **With no web view**, a chosen panel opens in the default browser, This computer through its local link, and the program says once why.
+
+Its tests run as `unit_tests --gtest_filter=Panel*`: `PanelCoreTest` and `PanelHostTest` over the list, the addresses, the pairing parser, the probe states and the channel against fakes, and `PanelProbeTlsTest` against a loopback listener serving two self-signed certificates in turn. The screens' logic runs in the `panelui` vitest project. It hosts a game on this computer (17.24), sits in the tray (17.182), installs from 17.183's packages and updates itself through 17.184.
 
 ### clientdriver (built in 3.24)
 

@@ -35,6 +35,8 @@
     "apps/dashboard/**/*.svelte",
     "apps/launcherui/**/*.ts",
     "apps/launcherui/**/*.svelte",
+    "apps/panelui/**/*.ts",
+    "apps/panelui/**/*.svelte",
     "*.ts",
     "*.js"
   ],

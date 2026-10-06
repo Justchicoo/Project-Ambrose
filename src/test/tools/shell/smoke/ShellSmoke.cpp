@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The desktop shell's smoke program, run by the ShellSmoke test with real web view windows kept off screen. available says whether this machine has a web view; own opens the launcher's page from memory and reports its origin, whether it is a secure context, whether local storage keeps a value, that it loaded nothing from any other origin, and that a request it makes to a loopback listener is refused and never arrives; remote serves a page from two loopback listeners, opens a view bound to the first, has the page post to the host channel, set a cookie, navigate to another origin and open a new window, then opens a view bound to the second listener and deletes the first profile, and checks that no answer came, both requests went to the system browser without either reaching the other listener, the view stayed put, the second profile saw no cookie and the deleted one left no file; pin serves the first certificate it is given over TLS on loopback and expects a view pinned to it to load, then writes the second over the same files, as --panel-self-signed rewrites them, reloads, and expects a view with the same pin, and one with none, to be refused with the fingerprints named. It prints what it saw and exits 0 when every check holds, 1 when one fails and 3 when this machine has no web view.
+ * The desktop shell's smoke program, run by the ShellSmoke test with real web view windows kept off screen. available says whether this machine has a web view; own opens the launcher's page from memory, answering as a launcher with a plan, and reports that its own screen shows its heading, Play and the server, its origin, whether it is a secure context, whether local storage keeps a value, that it loaded nothing from any other origin, and that a request it makes to a loopback listener is refused and never arrives; remote serves a page from two loopback listeners, opens a view bound to the first, has the page post to the host channel, set a cookie, navigate to another origin and open a new window, then opens a view bound to the second listener and deletes the first profile, and checks that no answer came, both requests went to the system browser without either reaching the other listener, the view stayed put, the second profile saw no cookie and the deleted one left no file; pin serves the first certificate it is given over TLS on loopback and expects a view pinned to it to load, then writes the second over the same files, as --panel-self-signed rewrites them, reloads, and expects a view with the same pin, and one with none, to be refused with the fingerprints named. It prints what it saw and exits 0 when every check holds, 1 when one fails and 3 when this machine has no web view.
  */
 
 #include "AdminServer.h"
@@ -128,13 +128,25 @@ namespace
 
         Seen seen;
         std::string error;
-        ShellWindowOptions options = LauncherWindow::Options(data, std::filesystem::path(), nullptr);
+        ShellWindowOptions options = LauncherWindow::Options(data, std::filesystem::path(), [](std::string const& message)
+        {
+            nlohmann::json const asked = nlohmann::json::parse(message, nullptr, false);
+            nlohmann::json reply{ { "id", asked.value("id", 0) }, { "ok", true }, { "status", 200 } };
+            if (asked.value("path", std::string()).starts_with("/launcher/steps"))
+                reply["body"] = { { "schema", 1 }, { "steps", nlohmann::json::array() } };
+            else
+                reply["body"] = { { "schema", 1 }, { "ready", true }, { "install", "C:/Games/Wizard101" }, { "revision", "r806919.Wizard_1_610" },
+                    { "program", "WizardGraphicalClient.exe" }, { "run_folder", "run" }, { "log_file", "run/client.log" }, { "host", "127.0.0.1" },
+                    { "port", 12000 }, { "locale", "en-US" }, { "arguments", nlohmann::json::array() }, { "command", "WizardGraphicalClient.exe" } };
+            return reply.dump();
+        });
         std::vector<std::string> const results = RunWindow(options,
             {
                 "JSON.stringify({ secure: window.isSecureContext, origin: location.origin, storage: (() => { try { localStorage.setItem('ambrose-smoke', 'kept'); return localStorage.getItem('ambrose-smoke') === 'kept'; } catch (e) { return false; } })() })",
                 "JSON.stringify(performance.getEntriesByType('resource').map((entry) => entry.name).filter((name) => !name.startsWith(location.origin)))",
                 "window.reach = 'pending'; fetch('" + target + "').then(() => { window.reach = 'reached'; }, () => { window.reach = 'refused'; }); 'asked'",
                 "window.reach",
+                "JSON.stringify({ heading: (document.querySelector('h1') || {}).textContent || '', play: [...document.querySelectorAll('button')].some((button) => button.textContent.trim() === 'Play'), server: document.body.innerText.includes('127.0.0.1:12000') })",
             },
             seen, error);
         nlohmann::json const report = nlohmann::json::parse(Text(results, 0), nullptr, false);
@@ -144,6 +156,9 @@ namespace
         ok = Check(report.is_object() && report.value("secure", false), "the page is a secure context") && ok;
         ok = Check(report.is_object() && report.value("storage", false), "the page can write local storage") && ok;
         ok = Check(loaded.is_array() && loaded.empty(), "the page loaded nothing from any origin but its own") && ok;
+        nlohmann::json const shown = nlohmann::json::parse(Text(results, 4), nullptr, false);
+        ok = Check(shown.is_object() && shown.value("heading", "").find("Ready to play") != std::string::npos && shown.value("play", false) && shown.value("server", false),
+                 "the launcher's own screen shows: its heading, its Play button and the server it joins") && ok;
         ok = Check(Text(results, 3) == "refused" && reached == 0, "a request the page makes to the network is refused and reaches nothing") && ok;
         int named = 0;
         for (std::string const& line : seen.Lines)

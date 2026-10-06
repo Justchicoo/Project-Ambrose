@@ -1,0 +1,3 @@
+# Project Ambrose by Imjustchico
+# Every panel program option with its default; copy this file to panel.conf beside the program and edit that. doc/config/panel.md explains each one.
+ThisComputer.AdminPort = 12020

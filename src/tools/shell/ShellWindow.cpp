@@ -54,6 +54,11 @@ bool ShellWindow::Available()
     return false;
 }
 
+std::string ShellWindow::RuntimeVersion()
+{
+    return std::string();
+}
+
 bool ShellWindow::Show(ShellWindowOptions const&, std::string& error)
 {
     error = "this build has no window of its own, because no web view was found when it was built";

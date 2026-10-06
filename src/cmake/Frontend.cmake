@@ -2,7 +2,7 @@
 # Builds the panel and the launcher window's page when FRONTEND is on, and says plainly what it left out when it is off, so a machine with no Node still builds the servers.
 function(ambrose_frontend)
     if(NOT FRONTEND)
-        message(STATUS "FRONTEND is off: the panel (apps/dashboard) and the launcher window's page (apps/launcherui) are not built.")
+        message(STATUS "FRONTEND is off: the panel (apps/dashboard), the launcher window's page (apps/launcherui) and the panel program's screens (apps/panelui) are not built.")
         message(STATUS "FRONTEND is off: the servers build and run without them, and the supervisor serves a placeholder page.")
         message(STATUS "FRONTEND is off: build them with -DFRONTEND=ON on a machine with Node 24 and npm 11.")
         return()

@@ -1,0 +1,17 @@
+# Project Ambrose by Imjustchico
+# Runs panel_smoke against the built supervisor in a work folder of its own, reporting itself skipped when this machine has no web view.
+if(NOT SMOKE OR NOT SUPERVISOR OR NOT WORKDIR)
+    message(FATAL_ERROR "SMOKE, SUPERVISOR and WORKDIR must be set")
+endif()
+file(REMOVE_RECURSE "${WORKDIR}")
+file(MAKE_DIRECTORY "${WORKDIR}")
+execute_process(COMMAND "${SMOKE}" available RESULT_VARIABLE availableResult OUTPUT_VARIABLE availableOutput ERROR_QUIET TIMEOUT 60)
+if(availableOutput MATCHES "panel smoke skipped")
+    message(STATUS "panel smoke skipped: this machine has no web view")
+    return()
+endif()
+execute_process(COMMAND "${SMOKE}" "${SUPERVISOR}" "${WORKDIR}" RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 420)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "panel_smoke exited ${result}:\n${output}${error}")
+endif()
+message(STATUS "panel_smoke:\n${output}")

@@ -364,6 +364,11 @@ bool ShellWindow::Available()
     return gtk_init_check(nullptr, nullptr) == TRUE;
 }
 
+std::string ShellWindow::RuntimeVersion()
+{
+    return fmt::format("WebKitGTK {}.{}.{}", webkit_get_major_version(), webkit_get_minor_version(), webkit_get_micro_version());
+}
+
 void ShellWindow::OpenInSystemBrowser(std::string const& url)
 {
     g_app_info_launch_default_for_uri(url.c_str(), nullptr, nullptr);

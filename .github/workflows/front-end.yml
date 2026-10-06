@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Type-checks, lints, formats and tests the shared design system and both surfaces on Linux only, path-filtered to the front-end folders and the lockfile, with the accessibility gate and its canary, and with the screenshots and the end-to-end run kept off this path.
+# Type-checks, lints, formats and tests the shared design system and its surfaces, the panel, the launcher window and the panel program's screens, on Linux only, path-filtered to the front-end folders and the lockfile, with the accessibility gate and its canary, and with the screenshots and the end-to-end run kept off this path.
 name: front-end
 
 on:
@@ -9,6 +9,7 @@ on:
       - "packages/**"
       - "apps/dashboard/**"
       - "apps/launcherui/**"
+      - "apps/panelui/**"
       - "apps/designtokens/**"
       - "design/**"
       - "package.json"
@@ -25,6 +26,7 @@ on:
       - "packages/**"
       - "apps/dashboard/**"
       - "apps/launcherui/**"
+      - "apps/panelui/**"
       - "apps/designtokens/**"
       - "design/**"
       - "package.json"

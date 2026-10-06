@@ -6,6 +6,13 @@
     "asio",
     "botan",
     "crow",
+    {
+      "name": "curl",
+      "default-features": false,
+      "features": [
+        "openssl"
+      ]
+    },
     "fmt",
     "ftxui",
     "libmariadb",
