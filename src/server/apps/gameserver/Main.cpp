@@ -29,7 +29,7 @@
 #include "LevelScript.h"
 #include "MapObjectSpawner.h"
 #include "ZoneExtractor.h"
-#include "ZoneScript.h"
+#include "ZoneSqlScript.h"
 #include "ServerClassCache.h"
 #include "ServerClassScript.h"
 #include "StringUtil.h"
@@ -850,7 +850,7 @@ namespace
             }
             std::optional<MySQLConnectionInfo> const world = MySQLConnectionInfo::Parse(Config().GetOption<std::string>("WorldDatabaseInfo", "", true), &error);
             StartProgress::Report("writing the zones to the world database", WriteAllowance);
-            if (!world || !Recorded(ZoneScript::Build(*extraction), setup, ClientExtractionScript::Zones).Apply(*world, error))
+            if (!world || !Recorded(ZoneSqlScript::Build(*extraction), setup, ClientExtractionScript::Zones).Apply(*world, error))
             {
                 LOG_ERROR("server.gameserver", "Cannot write the zones to the world database: {}", error);
                 return false;

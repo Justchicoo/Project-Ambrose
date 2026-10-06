@@ -23,7 +23,7 @@
 #include "TemplateScript.h"
 #include "TypedView.h"
 #include "ZoneExtractor.h"
-#include "ZoneScript.h"
+#include "ZoneSqlScript.h"
 #include "ZoneViews.h"
 
 #include <fmt/format.h>
@@ -458,7 +458,7 @@ database fails, 2 on bad usage.
             else if (command == "templates")
                 Collect<TemplateScript>(TemplateExtractor::Extract(rootWad.parent_path(), registry.GetCatalog()), extracted);
             else
-                Collect<ZoneScript>(ZoneExtractor::Extract(rootWad.parent_path(), registry.GetCatalog()), extracted);
+                Collect<ZoneSqlScript>(ZoneExtractor::Extract(rootWad.parent_path(), registry.GetCatalog()), extracted);
         }
         if (extracted.ErrorCount != 0)
         {
