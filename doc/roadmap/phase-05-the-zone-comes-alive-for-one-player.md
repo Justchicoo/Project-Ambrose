@@ -348,11 +348,11 @@ A new contributor goes from clone to running servers with one script on Windows 
 
 - [ ] On a clean Ubuntu VM and a clean Windows machine, following doc/INSTALL.md with the installer yields running loginserver, gameserver and patchserver that log 'ready'
 - [x] Running `conf` twice never overwrites an edited .conf (`apps/installer/tests/test_installer.py`, which builds a prefix of templates, runs conf, edits a .conf and runs conf again, against both scripts)
-- [ ] Real client: n/a (first visible behavior arrives with NET/LOG)
+- [x] Real client: n/a (5.08 only installs and starts the servers; its first visible client behavior arrives with NET/LOG)
 
 **Progress**
 
-- The Ubuntu half was shown on 2026-10-01: `apps/installer/tests/clean_ubuntu.sh` runs the INSTALL.md steps in a fresh ubuntu:24.04 container against the user's own install, read-only, and against r806919 it reached 'loginserver ready', 'patchserver ready' and 'gameserver ready'. The run is not in the tree. Getting there fixed two things: the installers installed `--config Release` while the release presets build RelWithDebInfo (709eed2b), and `deps --install` now takes patchelf from apt so vcpkg never downloads it. Against r801440 the login server had no type dump, because typeextract cannot derive that revision's layout; that is the derived-offsets check of 3.28. Both checks above stay open until the clean Windows machine, a Windows 11 VM, reaches 'ready' as well.
+- The Ubuntu half was shown on 2026-10-01: `apps/installer/tests/clean_ubuntu.sh` runs the INSTALL.md steps in a fresh ubuntu:24.04 container against the user's own install, read-only, and against r806919 it reached 'loginserver ready', 'patchserver ready' and 'gameserver ready'. The run is not in the tree. Getting there fixed two things: the installers installed `--config Release` while the release presets build RelWithDebInfo (709eed2b), and `deps --install` now takes patchelf from apt so vcpkg never downloads it. Against r801440 the login server had no type dump, because typeextract cannot derive that revision's layout; that is the derived-offsets check of 3.28. The two clean-machine checks stay open until a clean Windows 11 machine reaches 'ready' as well.
 
 **Risks**
 
