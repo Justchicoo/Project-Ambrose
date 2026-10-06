@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 119,
+    "done": 121,
     "total": 469,
-    "percent": 25.4
+    "percent": 25.8
   },
   "checks": {
-    "done": 952,
+    "done": 962,
     "total": 2866,
-    "percent": 33.2
+    "percent": 33.6
   },
   "contributor_track": {
     "merged": 92,
@@ -34,9 +34,9 @@
     {
       "phase": 3,
       "title": "Create list and delete a wizard",
-      "milestones_done": 25,
+      "milestones_done": 26,
       "milestones_total": 28,
-      "checks_done": 167,
+      "checks_done": 168,
       "checks_total": 178
     },
     {
@@ -50,9 +50,9 @@
     {
       "phase": 5,
       "title": "The zone comes alive for one player",
-      "milestones_done": 6,
+      "milestones_done": 7,
       "milestones_total": 8,
-      "checks_done": 45,
+      "checks_done": 54,
       "checks_total": 57
     },
     {

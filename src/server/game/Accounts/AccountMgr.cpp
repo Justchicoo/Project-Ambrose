@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Validates names and passwords, stores base64 SHA-512 verifiers sealed with the active key, maps unique-name races to 'already exists', replaces bans in one transaction, and reads accounts and active bans through synchronous login database statements that report a closed database as an error.
+ * Validates names and passwords, stores base64 SHA-512 verifiers sealed with the active key, maps unique-name races to 'already exists', revokes the account's session key when its password changes and when it is banned, in the same transaction as the ban, and reads accounts and active bans through synchronous login database statements that report a closed database as an error.
  */
 
 #include "AccountMgr.h"
@@ -181,9 +181,14 @@ AccountOpResult AccountMgr::ChangePassword(uint64 accountId, std::string_view pa
     if (!lookup.Account)
         return AccountOpResult::NameNotExist;
     AccountOpResult const result = StoreVerifier(accountId, lookup.Account->Username, password);
-    if (result == AccountOpResult::Ok)
-        LOG_INFO("accounts", "Changed the password of account {} (id {})", lookup.Account->Username, accountId);
-    return result;
+    if (result != AccountOpResult::Ok)
+        return result;
+    LOG_INFO("accounts", "Changed the password of account {} (id {})", lookup.Account->Username, accountId);
+    LoginStatement revoke = LoginDatabase.GetPreparedStatement(LOGIN_DEL_ACCOUNT_SESSION);
+    if (!revoke)
+        return AccountOpResult::DatabaseError;
+    revoke->SetData(0, accountId);
+    return LoginDatabase.DirectExecute(*revoke) ? AccountOpResult::Ok : AccountOpResult::DatabaseError;
 }
 
 AccountOpResult AccountMgr::SetSecurityLevel(uint64 accountId, uint8 level)
@@ -239,7 +244,8 @@ AccountOpResult AccountMgr::Ban(uint64 accountId, std::chrono::seconds duration,
         return AccountOpResult::NameNotExist;
     LoginStatement lift = LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_NOT_BANNED);
     LoginStatement insert = LoginDatabase.GetPreparedStatement(LOGIN_INS_ACCOUNT_BANNED);
-    if (!lift || !insert)
+    LoginStatement revoke = LoginDatabase.GetPreparedStatement(LOGIN_DEL_ACCOUNT_SESSION);
+    if (!lift || !insert || !revoke)
         return AccountOpResult::DatabaseError;
     uint64 const now = Now();
     uint64 const unbanDate = duration.count() == 0 ? 0 : now + static_cast<uint64>(duration.count());
@@ -255,6 +261,8 @@ AccountOpResult AccountMgr::Ban(uint64 accountId, std::chrono::seconds duration,
     std::shared_ptr<Transaction<LoginDatabaseConnection>> const transaction = LoginDatabase.BeginTransaction();
     transaction->Append(std::move(lift));
     transaction->Append(std::move(insert));
+    revoke->SetData(0, accountId);
+    transaction->Append(std::move(revoke));
     if (!LoginDatabase.DirectCommitTransaction(transaction))
         return AccountOpResult::DatabaseError;
     if (unbanDate == 0)

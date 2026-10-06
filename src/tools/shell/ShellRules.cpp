@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the scheme, host and port out of a URL with the default ports filled in, and answers each window decision from them: a view stays only on its own origin and hands any other web address, or any new window, to the system browser while refusing every other scheme; a certificate is accepted only on an exact fingerprint match; and the host channel admits only the program's own origin, naming each stranger once.
+ * Reads the scheme, host and port out of a URL with the default ports filled in, and answers each window decision from them: a view stays only on its own origin and hands any other web address, or any new window, to the system browser while refusing every other scheme; a certificate is accepted only on an exact fingerprint match; and the host channel admits only the program's own origin, naming each stranger once. The web view's browser switches turn off its own background calls, component updates, reports, pings, sync, proxy discovery and SmartScreen, all features in one --disable-features because Chromium reads only the last.
  */
 
 #include "ShellRules.h"
@@ -122,6 +122,12 @@ ShellNavigation ShellRules::Navigate(ShellOrigin const& bound, std::string_view 
     if (!newWindow && *target == bound)
         return ShellNavigation::Stay;
     return WebScheme(target->Scheme) ? ShellNavigation::SystemBrowser : ShellNavigation::Refuse;
+}
+
+std::string ShellRules::BrowserArguments()
+{
+    return "--disable-background-networking --disable-component-update --disable-domain-reliability --disable-client-side-phishing-detection "
+           "--disable-sync --no-pings --no-proxy-server --disable-features=msSmartScreenProtection,AutofillServerCommunication,OptimizationHints";
 }
 
 std::string ShellRules::NormalFingerprint(std::string_view fingerprint)

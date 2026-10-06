@@ -109,6 +109,7 @@ run_app() {
         loginserver|gameserver|patchserver|supervisor) ;;
         *) fail "run expects loginserver, gameserver, patchserver or supervisor" ;;
     esac
+    cd "$BIN_DIR"
     exec "$BIN_DIR/$1" --config "$BIN_DIR/$1.conf"
 }
 

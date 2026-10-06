@@ -1,0 +1,12 @@
+[
+    {
+        "host": "substrate.office.com",
+        "port": 443,
+        "process": "msedgewebview2.exe",
+        "browser_process_only": true,
+        "under": "launcher.exe",
+        "since": "2026-10-01",
+        "reason": "the WebView2 runtime's own browser process calls Microsoft's substrate.office.com about five seconds after the launcher's window opens; it is runtime behaviour, not Ambrose traffic, and the owner approved letting only this through on 2026-10-01",
+        "evidence": "driver runs 20261001-114753 and 20261001-115059 were ended by the guard on it; tshark read substrate.office.com as the TLS server name; a Chromium net-log of the same run holds only launcher.ambrose and a wpad lookup, so the call is outside Chromium's network stack and no browser switch, proxy or host-resolver rule reaches it; turning off implicit sign-in, every Substrate, account and sign-in feature found in the runtime, a fresh profile and the compat relaunch did not stop it"
+    }
+]

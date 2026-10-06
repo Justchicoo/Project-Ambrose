@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The login server's session: routes every client message through the login message table, authenticates MSG_USER_AUTHEN_V3 against the login database without blocking its network thread, holds the account it claimed and admitted, deletes one of its wizards for MSG_DELETECHARACTER, lists the account's characters from the login and characters databases the same way, coalescing a request made meanwhile into one more list, creates a wizard the same way again and answers only that it did or did not, drops the client once it idles past the AFK timeout before choosing a character, and tells it when the login server shuts down.
+ * The login server's session: routes every client message through the login message table, authenticates MSG_USER_AUTHEN_V3 and validates MSG_USER_VALIDATE's PassKey3 against the login database without blocking its network thread, holds the account it claimed and admitted, deletes one of its wizards for MSG_DELETECHARACTER, lists the account's characters from the login and characters databases the same way, coalescing a request made meanwhile into one more list, creates a wizard the same way again and answers only that it did or did not, drops the client once it idles past the AFK timeout before choosing a character, and tells it when the login server shuts down.
  */
 
 #ifndef AMBROSE_LOGINSESSION_H
@@ -39,6 +39,7 @@ public:
     void Update() override;
 
     void HandleUserAuthenV3(LoginMessages::UserAuthenV3& message);
+    void HandleUserValidate(LoginMessages::UserValidate& message);
     void HandleUserAuthen(LoginMessages::UserAuthen& message);
     void HandleUserAuthenV2(LoginMessages::UserAuthenV2& message);
     void HandleWebAuthen(LoginMessages::WebAuthen& message);
@@ -58,12 +59,16 @@ protected:
 
 private:
     struct AuthAttempt;
+    struct ValidateAttempt;
 
     void ContinueAuthentication(std::shared_ptr<AuthAttempt> const& attempt, PreparedQueryResult result);
     void CompleteAuthentication(std::shared_ptr<AuthAttempt> const& attempt, bool committed);
-    void FailAuthentication(AuthAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, bool close = false);
+    void FailAuthentication(AuthAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, bool close = false, uint64 unbanDate = 0);
     void AbortAuthentication(AuthAttempt* attempt, std::exception const& failure);
     void RefuseUnsupportedAuthentication(std::string_view tag);
+    void ContinueValidation(std::shared_ptr<ValidateAttempt> const& attempt, PreparedQueryResult result);
+    void CompleteValidation(std::shared_ptr<ValidateAttempt> const& attempt, bool committed);
+    void FailValidation(ValidateAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, uint64 unbanDate = 0);
     void StartCharacterList();
     void SelectCharacter(uint64 charId, std::string const& realmName, PreparedQueryResult result);
     void FailCharacterSelect(uint64 charId, std::string_view detail);

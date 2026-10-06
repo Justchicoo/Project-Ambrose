@@ -1,18 +1,17 @@
 /*
  * Project Ambrose by Imjustchico
- * Authenticates MSG_USER_AUTHEN_V3: reserves the attempt against the address's lockout, decrypts Rec1 with the session's offer, checks the session id, revision, machine and address bans, account, ClientKey1, and account bans and locks from one asynchronous query, kicks any earlier session holding the account, stores a hashed session key with the last login and a resealed verifier in one transaction, then admits the client or answers with the error, closing after too many failures, and refuses the older authentication messages.
+ * Authenticates MSG_USER_AUTHEN_V3: reserves the attempt against the address's lockout, decrypts Rec1 with the session's offer, checks the session id, revision, machine and address bans, account, ClientKey1, and account bans and locks from one asynchronous query, kicks any earlier session holding the account, stores the session key sealed like a verifier with the last login and a resealed verifier in one transaction, then admits the client or answers with the error, closing after too many failures, and refuses the older authentication messages. A ban or lock refusal carries the ban's end as TimeStamp, in Unix seconds or forever.
  */
 
 #include "AccountMgr.h"
-#include "Base64.h"
 #include "ClientKey.h"
 #include "DatabaseEnv.h"
 #include "Log.h"
 #include "LoginMgr.h"
 #include "LoginSession.h"
 #include "Rec1.h"
-#include "SHA256.h"
 #include "StringUtil.h"
+#include "SystemMessages.h"
 
 #include <fmt/format.h>
 
@@ -23,11 +22,13 @@ namespace
 {
     constexpr char const* AuthLog = "server.loginserver";
 
-    LoginMessages::UserAuthenRsp Failure(AuthResult result)
+    LoginMessages::UserAuthenRsp Failure(AuthResult result, uint64 unbanDate = 0)
     {
         LoginMessages::UserAuthenRsp response;
         response.Error = result;
         response.Reason = std::string(AuthResults::GetName(result));
+        if (SystemMessages::CarriesBanEnd(static_cast<uint32>(result)))
+            response.TimeStamp = SystemMessages::FormatBanEnd(unbanDate);
         return response;
     }
 
@@ -35,11 +36,6 @@ namespace
     {
         static std::string const verifier = ClientKey::HashPassword("Project Ambrose has no account by this name");
         return verifier;
-    }
-
-    std::string HashSessionKey(std::string_view sessionKey)
-    {
-        return Base64::Encode(SHA256::GetDigestOf(sessionKey));
     }
 }
 
@@ -164,16 +160,14 @@ void LoginSession::ContinueAuthentication(std::shared_ptr<AuthAttempt> const& at
     }
 
     PreparedResultSet const& row = *result;
-    bool const machineBanned = row[7].Get<bool>();
-    bool const addressBanned = row[6].Get<bool>();
-    if (machineBanned)
+    if (!row[7].IsNull())
     {
-        FailAuthentication(attempt.get(), AuthResult::MachineBanned, fmt::format("machine {:016X} is banned", attempt->MachineId), false);
+        FailAuthentication(attempt.get(), AuthResult::MachineBanned, fmt::format("machine {:016X} is banned", attempt->MachineId), false, false, row[7].Get<uint64>());
         return;
     }
-    if (addressBanned)
+    if (!row[6].IsNull())
     {
-        FailAuthentication(attempt.get(), AuthResult::MachineBanned, "the address is banned", false);
+        FailAuthentication(attempt.get(), AuthResult::MachineBanned, "the address is banned", false, false, row[6].Get<uint64>());
         return;
     }
     if (row[0].IsNull())
@@ -189,7 +183,7 @@ void LoginSession::ContinueAuthentication(std::shared_ptr<AuthAttempt> const& at
     account.StoredVerifier = row[2].Get<std::string>();
     account.VerifierKeyId = row[3].Get<uint8>();
     account.Locked = row[4].Get<bool>();
-    bool const accountBanned = row[5].Get<bool>();
+    bool const accountBanned = !row[5].IsNull();
     attempt->AccountId = account.Id;
     attempt->Username = account.Username;
 
@@ -206,7 +200,7 @@ void LoginSession::ContinueAuthentication(std::shared_ptr<AuthAttempt> const& at
     }
     if (accountBanned || account.Locked)
     {
-        FailAuthentication(attempt.get(), AuthResult::AccountBanned, accountBanned ? "the account is banned" : "the account is locked", false);
+        FailAuthentication(attempt.get(), AuthResult::AccountBanned, accountBanned ? "the account is banned" : "the account is locked", false, false, accountBanned ? row[5].Get<uint64>() : 0);
         return;
     }
 
@@ -233,19 +227,24 @@ void LoginSession::ContinueAuthentication(std::shared_ptr<AuthAttempt> const& at
         return;
     }
     attempt->SessionKey = ClientKey::GenerateSessionKey(attempt->Salt);
-    std::string const keyHash = HashSessionKey(attempt->SessionKey);
+    std::shared_ptr<AccountSettings const> const accountSettings = sAccountMgr.GetSettings();
+    VerifierKeyRing::SealedVerifier const sealedKey = accountSettings->Keys.SealSessionKey(attempt->SessionKey, account.Id);
     uint64 const now = AccountMgr::Now();
     uint64 const expires = now + static_cast<uint64>(attempt->Settings->SessionKeyLifetime.count());
     auto transaction = LoginDatabase.BeginTransaction();
     session->SetData(0, account.Id);
     session->SetData(1, attempt->MachineId);
-    session->SetData(2, keyHash);
-    session->SetData(3, now);
-    session->SetData(4, expires);
-    session->SetData(5, attempt->MachineId);
-    session->SetData(6, keyHash);
-    session->SetData(7, now);
-    session->SetData(8, expires);
+    session->SetData(2, sealedKey.Stored);
+    session->SetData(3, sealedKey.KeyId);
+    session->SetData(4, now);
+    session->SetData(5, now);
+    session->SetData(6, expires);
+    session->SetData(7, attempt->MachineId);
+    session->SetData(8, sealedKey.Stored);
+    session->SetData(9, sealedKey.KeyId);
+    session->SetData(10, now);
+    session->SetData(11, now);
+    session->SetData(12, expires);
     transaction->Append(std::move(session));
     lastLogin->SetData(0, now);
     lastLogin->SetData(1, attempt->AddressText);
@@ -253,7 +252,6 @@ void LoginSession::ContinueAuthentication(std::shared_ptr<AuthAttempt> const& at
     lastLogin->SetData(3, account.Id);
     transaction->Append(std::move(lastLogin));
 
-    std::shared_ptr<AccountSettings const> const accountSettings = sAccountMgr.GetSettings();
     if (account.VerifierKeyId != accountSettings->Keys.GetActiveKeyId())
     {
         if (auto reseal = LoginDatabase.GetPreparedStatement(LOGIN_UPD_VERIFIER_RESEAL))
@@ -322,7 +320,7 @@ void LoginSession::CompleteAuthentication(std::shared_ptr<AuthAttempt> const& at
         GetSessionId(), attempt->AddressText, attempt->Username, attempt->AccountId, attempt->MachineId);
 }
 
-void LoginSession::FailAuthentication(AuthAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, bool close)
+void LoginSession::FailAuthentication(AuthAttempt* attempt, AuthResult result, std::string_view detail, bool countsAsGuess, bool close, uint64 unbanDate)
 {
     _authenticating = false;
     bool closing = close;
@@ -352,9 +350,9 @@ void LoginSession::FailAuthentication(AuthAttempt* attempt, AuthResult result, s
     else
         LOG_DEBUG(AuthLog, "Session {} from {} failed to authenticate as {}: {}; sent MSG_USER_AUTHEN_RSP Error={}{}", GetSessionId(), address, name, detail, AuthResults::GetName(result), closing ? " and closed the session" : "");
     if (closing)
-        SendDmlMessageDelayedClose(Failure(result));
+        SendDmlMessageDelayedClose(Failure(result, unbanDate));
     else
-        SendDmlMessage(Failure(result));
+        SendDmlMessage(Failure(result, unbanDate));
 }
 
 void LoginSession::AbortAuthentication(AuthAttempt* attempt, std::exception const& failure)

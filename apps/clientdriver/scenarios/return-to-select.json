@@ -1,0 +1,154 @@
+{
+  "title": "Quit to character select from the world without a password, and play again from where the wizard stood",
+  "include": "enter-world.json",
+  "notes": [
+    "5.06: after the Ravenwood entry of enter-world.json the run walks the wizard and chooses Quit from the in-world menu.",
+    "The game server writes where the wizard stood and marks it offline; the client goes back to the login server and",
+    "sends MSG_USER_VALIDATE with a PassKey3 made from the session key its first login was given and this connection's",
+    "offer, which the login server checks against the key it keeps and answers with MSG_USER_VALIDATE_RSP Error=0 and",
+    "MSG_USER_ADMIT_IND, so the character list follows with no password typed. The run checks the wizard is offline in",
+    "the characters database and gone from realm_online_character, presses Play again and passes only if the game",
+    "server puts the wizard back at the very place it wrote.",
+    "The logout is intentional, so the game server saves the wizard and marks it offline the moment its client closes, never holding it link-dead; the save must come within 15 seconds of Quit."
+  ],
+  "steps": [
+    {
+      "action": "hold_key",
+      "name": "walk the wizard forward",
+      "vk": "0x57",
+      "seconds": 2,
+      "moves": true
+    },
+    {
+      "action": "key",
+      "name": "open the in-world menu",
+      "vk": "0x1B"
+    },
+    {
+      "action": "shot",
+      "name": "the in-world menu",
+      "file": "in-world-menu",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "choose Quit from the menu",
+      "target": "game_menu_quit"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server writes where the wizard stood as it leaves",
+      "pattern": "saved wizard {wizard_guid} at \\((\\S+, \\S+, \\S+)\\)",
+      "timeout": 15,
+      "keep": "saved_place",
+      "record": true
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the client comes back to the login server with MSG_USER_VALIDATE",
+      "pattern": "sent MSG_USER_VALIDATE: user (\\d+), machine [0-9A-F]+, locale \\S+, patch client .*, (\\d+)-byte PassKey3",
+      "timeout": 120,
+      "record": true
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the login server validates the PassKey3",
+      "pattern": "validated as {user} \\(id \\d+\\) on machine [0-9A-F]+: sent MSG_USER_VALIDATE_RSP Error=0 and MSG_USER_ADMIT_IND Status=1",
+      "fail": "failed to validate as",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted again",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server lists the wizard again",
+      "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is back with no password asked",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "shot",
+      "name": "the wizard on the character selection screen again",
+      "file": "character-selection-again"
+    },
+    {
+      "action": "wait_db",
+      "name": "the wizard is offline",
+      "database": "characters",
+      "query": "SELECT `online` FROM `characters` WHERE `guid` = {wizard_guid}",
+      "expect": "0",
+      "timeout": 30
+    },
+    {
+      "action": "wait_db",
+      "name": "the wizard's zone is saved",
+      "database": "characters",
+      "query": "SELECT `zone` FROM `characters` WHERE `guid` = {wizard_guid}",
+      "expect": "WizardCity/WC_Ravenwood",
+      "timeout": 30
+    },
+    {
+      "action": "wait_db",
+      "name": "the wizard is no longer listed online in any realm",
+      "database": "login",
+      "query": "SELECT COUNT(*) FROM `realm_online_character` WHERE `character_guid` = {wizard_guid}",
+      "expect": "0",
+      "timeout": 30
+    },
+    {
+      "action": "click",
+      "name": "press play again",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard back where it stood",
+      "pattern": "put wizard {wizard_guid} in \\S+ instance \\d+ at \\((\\S+, \\S+, \\S+)\\)",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "expect": "{saved_place}",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads Ravenwood again",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Ravenwood",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the wizard standing in Ravenwood again",
+      "file": "standing-again",
+      "settle": 3
+    }
+  ],
+  "pending_allowed": [
+    "MSG_REQUESTPRIVACYOPTIONS",
+    "MSG_REQUESTSHOWPVPOPTION"
+  ]
+}

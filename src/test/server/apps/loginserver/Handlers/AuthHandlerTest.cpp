@@ -1,10 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives MSG_USER_AUTHEN_V3 over loopback against a real LoginSession: a closed login database times out, and with AMBROSE_TEST_DB set valid credentials are admitted with a stored session key hash, a wrong session id, wrong ClientKey1, oversized or malformed Rec1, unknown account, banned machine, banned address, locked or banned account and disallowed revision each get their error and store no session, account bans stay hidden behind a wrong password, the attempt limit is read live and locks the address out, overlapping requests strike and a client that leaves mid-login leaves no claim or reservation behind, duplicate logins kick each earlier session or are rejected, verifiers are sealed again with the active key at login, and the older authentication messages are refused until the session closes.
+ * Drives MSG_USER_AUTHEN_V3 over loopback against a real LoginSession: a closed login database times out, and with AMBROSE_TEST_DB set valid credentials are admitted with the session key stored, sealed with the active key when there is one and bound to its account, a wrong session id, wrong ClientKey1, oversized or malformed Rec1, unknown account, banned machine, banned address, locked or banned account and disallowed revision each get their error and store no session, a ban or lock carrying its end in Unix seconds or forever and nothing else any TimeStamp, account bans stay hidden behind a wrong password, the attempt limit is read live and locks the address out, overlapping requests strike and a client that leaves mid-login leaves no claim or reservation behind, duplicate logins kick each earlier session or are rejected, verifiers are sealed again with the active key at login, and the older authentication messages are refused until the session closes.
  */
 
 #include "AccountMgr.h"
-#include "Base64.h"
 #include "ClientKey.h"
 #include "ConfigMgr.h"
 #include "DBUpdater.h"
@@ -16,7 +15,7 @@
 #include "LoginTestHarness.h"
 #include "LoginSession.h"
 #include "Rec1.h"
-#include "SHA256.h"
+#include "StringUtil.h"
 
 #include <fmt/format.h>
 
@@ -50,11 +49,6 @@ namespace
     void SendAuthen(LoginClient& client, std::string_view plain, std::string revision = "r0.Test", uint64 machine = Machine)
     {
         Send(client, Authen(client, plain, std::move(revision), machine));
-    }
-
-    std::string HashSessionKey(std::string_view sessionKey)
-    {
-        return Base64::Encode(SHA256::GetDigestOf(sessionKey));
     }
 
     class AuthHandlerDatabaseTest : public testing::Test
@@ -104,7 +98,12 @@ namespace
         void ExpectFailure(LoginClient& client, AuthResult expected, std::string_view scenario)
         {
             std::optional<LoginMessages::UserAuthenRsp> const response = ReadMessage<LoginMessages::UserAuthenRsp>(client);
+            _timeStamp.clear();
             ASSERT_TRUE(response) << scenario;
+            _timeStamp = response->TimeStamp;
+            EXPECT_EQ(_timeStamp.find(':'), std::string::npos) << scenario << ": the client's ban parser never returns from a colon";
+            if (expected != AuthResult::AccountBanned && expected != AuthResult::MachineBanned)
+                EXPECT_TRUE(_timeStamp.empty()) << scenario << " is no ban, so it carries no TimeStamp";
             EXPECT_EQ(response->Error, expected) << scenario;
             EXPECT_EQ(response->Reason, AuthResults::GetName(expected)) << scenario;
             EXPECT_EQ(response->UserId, 0u) << scenario;
@@ -133,6 +132,7 @@ namespace
         }
 
         MySQLConnectionInfo _info;
+        std::string _timeStamp;
         bool _open = false;
         uint64 _accountId = 0;
         std::unique_ptr<LoginServerHarness> _server;
@@ -160,12 +160,14 @@ TEST_F(AuthHandlerDatabaseTest, ValidCredentialsAreAdmittedWithAStoredSessionKey
     std::string const sessionKey = ExpectAdmitted(client);
     EXPECT_EQ(sessionKey.size(), 44u);
 
-    QueryResult const row = LoginDatabase.Query(fmt::format("SELECT `session_key_hash`, `machine_id`, `expires` - `created` FROM `account_session` WHERE `account_id` = {}", _accountId));
+    QueryResult const row = LoginDatabase.Query(fmt::format("SELECT `session_key`, `session_key_id`, `machine_id`, `expires` - `created`, `renewed` - `created` FROM `account_session` "
+        "WHERE `account_id` = {}", _accountId));
     ASSERT_TRUE(row);
-    EXPECT_EQ((*row)[0].Get<std::string>(), HashSessionKey(sessionKey));
-    EXPECT_NE((*row)[0].Get<std::string>(), sessionKey);
-    EXPECT_EQ((*row)[1].Get<uint64>(), Machine);
-    EXPECT_EQ((*row)[2].Get<uint64>(), 30u * 3600);
+    EXPECT_EQ((*row)[0].Get<std::string>(), sessionKey);
+    EXPECT_EQ((*row)[1].Get<uint8>(), 0u);
+    EXPECT_EQ((*row)[2].Get<uint64>(), Machine);
+    EXPECT_EQ((*row)[3].Get<uint64>(), 30u * 3600);
+    EXPECT_EQ((*row)[4].Get<uint64>(), 0u);
 
     AccountLookup const account = sAccountMgr.GetAccountById(_accountId);
     ASSERT_TRUE(account.Account);
@@ -210,6 +212,7 @@ TEST_F(AuthHandlerDatabaseTest, EachFailureGetsItsErrorAndStoresNoSession)
     ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format("INSERT INTO `machine_banned` VALUES ({}, {}, 0, 'test', 'test')", Machine, now)));
     SendAuthen(client, Credentials(client, "Wizard", "hunter22"));
     ExpectFailure(client, AuthResult::MachineBanned, "banned machine");
+    EXPECT_EQ(_timeStamp, "forever") << "a machine ban whose unbandate is 0 never ends";
     SendAuthen(client, Credentials(client, "Wizard", "hunter22"), "r0.Test", Machine + 1);
     std::string const admittedElsewhere = "machine ban only covers its machine";
 
@@ -224,6 +227,7 @@ TEST_F(AuthHandlerDatabaseTest, EachFailureGetsItsErrorAndStoresNoSession)
     ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format("INSERT INTO `ip_banned` VALUES ('127.0.0.1', {}, {}, 'test', 'test')", now, now + 3600)));
     SendAuthen(client, Credentials(client, "Wizard", "hunter22"), "r0.Test", Machine + 1);
     ExpectFailure(client, AuthResult::MachineBanned, "banned address");
+    EXPECT_EQ(_timeStamp, fmt::format("{}", now + 3600)) << "an address ban carries its end in Unix seconds";
     ASSERT_TRUE(LoginDatabase.DirectExecute("UPDATE `ip_banned` SET `unbandate` = 1"));
 
     ASSERT_EQ(sAccountMgr.SetLocked(_accountId, true), AccountOpResult::Ok);
@@ -231,11 +235,16 @@ TEST_F(AuthHandlerDatabaseTest, EachFailureGetsItsErrorAndStoresNoSession)
     ExpectFailure(client, AuthResult::AuthenFailed, "locked account with a wrong password");
     SendAuthen(client, Credentials(client, "Wizard", "hunter22"), "r0.Test", Machine + 1);
     ExpectFailure(client, AuthResult::AccountBanned, "locked account");
+    EXPECT_EQ(_timeStamp, "forever") << "a lock has no end";
     ASSERT_EQ(sAccountMgr.SetLocked(_accountId, false), AccountOpResult::Ok);
 
     ASSERT_EQ(sAccountMgr.Ban(_accountId, std::chrono::hours(1), "test", "testing"), AccountOpResult::Ok);
     SendAuthen(client, Credentials(client, "Wizard", "hunter22"), "r0.Test", Machine + 1);
     ExpectFailure(client, AuthResult::AccountBanned, "banned account");
+    std::optional<uint64> const bannedUntil = Ambrose::StringTo<uint64>(_timeStamp);
+    ASSERT_TRUE(bannedUntil) << _timeStamp;
+    EXPECT_GE(*bannedUntil, now + 3600) << "an hour's ban ends an hour after it was set";
+    EXPECT_LE(*bannedUntil, AccountMgr::Now() + 3600);
     ASSERT_EQ(sAccountMgr.Unban(_accountId), AccountOpResult::Ok);
 
     SendAuthen(client, Credentials(client, "Wizard", "hunter22"), "r0.Test", Machine + 1);
@@ -297,9 +306,9 @@ TEST_F(AuthHandlerDatabaseTest, DuplicateLoginsKickTheEarlierSessionOrAreRejecte
     ASSERT_TRUE(holder);
     EXPECT_EQ(holder->GetSessionId(), second.Salt.SessionId);
     EXPECT_EQ(sLoginMgr.GetAccountSessionCount(), 1u);
-    QueryResult const row = LoginDatabase.Query(fmt::format("SELECT `session_key_hash` FROM `account_session` WHERE `account_id` = {}", _accountId));
+    QueryResult const row = LoginDatabase.Query(fmt::format("SELECT `session_key` FROM `account_session` WHERE `account_id` = {}", _accountId));
     ASSERT_TRUE(row);
-    EXPECT_EQ((*row)[0].Get<std::string>(), HashSessionKey(secondKey));
+    EXPECT_EQ((*row)[0].Get<std::string>(), secondKey);
 
     LoginSettings settings;
     settings.DuplicateLogins = DuplicateLoginPolicy::Reject;
@@ -354,7 +363,7 @@ TEST_F(AuthHandlerDatabaseTest, OverlappingRequestsStrikeAndALeavingClientLeaves
     EXPECT_EQ(sLoginMgr.GetAccountSessionCount(), 1u);
 }
 
-TEST_F(AuthHandlerDatabaseTest, VerifiersAreSealedAgainWithTheActiveKeyAtLogin)
+TEST_F(AuthHandlerDatabaseTest, VerifiersAreSealedAgainWithTheActiveKeyAtLoginAndTheSessionKeyIsSealedToo)
 {
     std::string const key = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
     std::string error;
@@ -367,7 +376,14 @@ TEST_F(AuthHandlerDatabaseTest, VerifiersAreSealedAgainWithTheActiveKeyAtLogin)
 
     LoginClient client = _server->Connect();
     SendAuthen(client, Credentials(client, "Wizard", "hunter22"));
-    ExpectAdmitted(client);
+    std::string const sessionKey = ExpectAdmitted(client);
+    QueryResult const session = LoginDatabase.Query(fmt::format("SELECT `session_key`, `session_key_id` FROM `account_session` WHERE `account_id` = {}", _accountId));
+    ASSERT_TRUE(session);
+    EXPECT_NE((*session)[0].Get<std::string>(), sessionKey);
+    EXPECT_EQ((*session)[1].Get<uint8>(), 1u);
+    EXPECT_EQ(sAccountMgr.GetSettings()->Keys.OpenSessionKey((*session)[0].Get<std::string>(), 1, _accountId), sessionKey);
+    EXPECT_FALSE(sAccountMgr.GetSettings()->Keys.OpenSessionKey((*session)[0].Get<std::string>(), 1, _accountId + 1));
+    EXPECT_FALSE(sAccountMgr.GetSettings()->Keys.Open((*session)[0].Get<std::string>(), 1, "Wizard"));
     AccountLookup const sealed = sAccountMgr.GetAccountById(_accountId);
     ASSERT_TRUE(sealed.Account);
     EXPECT_EQ(sealed.Account->VerifierKeyId, 1u);

@@ -2,12 +2,6 @@
   "schema": 1,
   "holds": [
     {
-      "scope": "milestone:3.26",
-      "who": "the maintainer's panel session",
-      "what": "the launcher window, which the panel's own installable program shares",
-      "since": "2026-09-27"
-    },
-    {
       "scope": "milestone:17.24",
       "who": "the maintainer's panel session",
       "what": "the panel as its own installable program",
@@ -32,22 +26,16 @@
       "since": "2026-09-27"
     },
     {
-      "scope": "milestone:17.180",
-      "who": "the maintainer's panel session",
-      "what": "sign-in links for the panel program",
-      "since": "2026-09-27"
-    },
-    {
       "scope": "milestone:3.28",
-      "who": "the maintainer's track session",
+      "who": "the maintainer's server session",
       "what": "a type dump from any client, taken over to finish every milestone before 8.01",
-      "since": "2026-09-30"
+      "since": "2026-10-01"
     },
     {
       "scope": "milestone:6.17",
-      "who": "the maintainer's track session",
+      "who": "the maintainer's server session",
       "what": "the network hardening fuzz runs, taken over to finish every milestone before 8.01",
-      "since": "2026-09-30"
+      "since": "2026-10-01"
     },
     {
       "scope": "milestone:5.08",
@@ -56,9 +44,9 @@
       "since": "2026-09-30"
     },
     {
-      "scope": "milestone:5.06",
+      "scope": "milestone:6.05",
       "who": "the maintainer's world session",
-      "what": "return to character select with MSG_USER_VALIDATE, finishing every milestone before 8.01",
+      "what": "GM account, ban and character commands, finishing every milestone before 8.01",
       "since": "2026-10-01"
     }
   ]

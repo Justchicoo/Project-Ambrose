@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Builds a run's report from the two logs and what the run measured: every message the server did not handle, every warning on either side, and the checks that decide whether the run is clean, each of which fails when what it judges was never measured, among them that every port a scenario watches saw exactly the connections it expects, or at least that many where it says so, then renders it as Markdown beside its JSON.
+# Builds a run's report from the two logs and what the run measured: every message the server did not handle, every warning on either side, and the checks that decide whether the run is clean, each of which fails when what it judges was never measured, among them that every port a scenario watches saw exactly the connections it expects, or at least that many where it says so, then renders it as Markdown beside its JSON. A connection the guard let through by netguard-allow.json passes the off-machine check and is named in it with its reason.
 import json
 import os
 import re
@@ -103,9 +103,12 @@ def checks(facts, gathered):
         guard = facts.get("netguard")
         violations = (guard or {}).get("violations") or []
         remotes = (guard or {}).get("remotes") or []
+        allowed = (guard or {}).get("allowed") or []
         blind = (guard or {}).get("failed") if guard else "nothing watched the client's connections during this run"
         add("the client contacted only this machine", bool(guard) and not violations and not blind,
-            f"{len(remotes)} address(es) contacted, all of them local" if guard and not violations and not blind
+            f"{len(remotes) - len(allowed)} address(es) contacted, all of them local"
+            + "".join(f", and {item['remote']} let through as {item['host']} by netguard-allow.json ({item['reason']})" for item in allowed)
+            if guard and not violations and not blind
             else json.dumps(violations) if violations else str(blind))
     watched = facts.get("listeners") or []
     if watched:
