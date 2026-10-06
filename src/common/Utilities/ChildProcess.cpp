@@ -2009,7 +2009,19 @@ namespace
             return nullptr;
         }
         auto state = std::make_unique<ChildProcessHandle::State>();
-        std::optional<ChildProcessIdentity> identity = DescribeProcess(id);
+        std::optional<ChildProcessIdentity> identity;
+#ifdef __linux__
+        auto const identityDeadline = std::chrono::steady_clock::now() + ChildProcess::PollInterval;
+        do
+        {
+            identity = DescribeProcess(id);
+            if (identity)
+                break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        } while (std::chrono::steady_clock::now() < identityDeadline);
+#else
+        identity = DescribeProcess(id);
+#endif
         if (!identity)
         {
             identity = ChildProcessIdentity{};
