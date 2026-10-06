@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads every item template of the user's own install through the item manager, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: every template under ObjectData/ decodes and every item among them loads with no requirement or effect of a class the dump lacks, as many WizItemTemplates as recorded for the installed revision, r806919's 76679, printed with the other item classes, the memory they take and how long they took; and the hat 1652259 is an item under the display key Items_00028316.
+ * Reads every item template of the user's own install through the item manager, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it, with the classes the install holds beside the dump as the game server reads them: every template under ObjectData/ decodes and every item among them loads with no requirement or effect of a class neither describes, as many WizItemTemplates as recorded for the installed revision, r806919's 76679, printed with the other item classes, the memory they take and how long they took; and the hat 1652259 is an item under the display key Items_00028316.
  */
 
 #include "Environment.h"
+#include "InstalledClasses.h"
 #include "InstalledRevision.h"
 #include "ItemMgr.h"
 #include "LogConfig.h"
@@ -19,6 +20,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace
@@ -32,9 +34,14 @@ namespace
             std::optional<std::string> const dump = Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH");
             if (!client || client->empty() || !dump || dump->empty())
                 return;
+            TypeDumpLoader::RawDump classes;
+            std::string source;
+            std::string error;
+            ASSERT_TRUE(InstalledClasses::Read(classes, source, error)) << error;
+            std::vector<std::string> errors;
+            ASSERT_TRUE(sTypeRegistry.SetSupplement(std::move(classes), source, errors)) << (errors.empty() ? std::string() : errors.front());
             ASSERT_TRUE(sTypeRegistry.LoadFromFile(LogConfig::Utf8Path(*dump)));
             sObjectTemplateMgr.SetInstall(LogConfig::Utf8Path(*client));
-            std::vector<std::string> errors;
             ASSERT_TRUE(sObjectTemplateMgr.LoadManifest(errors)) << errors.front();
             s_items = std::make_unique<ItemMgr>();
             s_items->SetInstall(LogConfig::Utf8Path(*client));
@@ -48,6 +55,8 @@ namespace
         {
             s_items.reset();
             sObjectTemplateMgr.Clear();
+            std::vector<std::string> errors;
+            sTypeRegistry.ClearSupplement(errors);
             sTypeRegistry.Clear();
         }
 
