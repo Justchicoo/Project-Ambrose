@@ -103,7 +103,9 @@ namespace
             _timeStamp = response->TimeStamp;
             EXPECT_EQ(_timeStamp.find(':'), std::string::npos) << scenario << ": the client's ban parser never returns from a colon";
             if (expected != AuthResult::AccountBanned && expected != AuthResult::MachineBanned)
+            {
                 EXPECT_TRUE(_timeStamp.empty()) << scenario << " is no ban, so it carries no TimeStamp";
+            }
             EXPECT_EQ(response->Error, expected) << scenario;
             EXPECT_EQ(response->Reason, AuthResults::GetName(expected)) << scenario;
             EXPECT_EQ(response->UserId, 0u) << scenario;
