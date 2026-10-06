@@ -317,9 +317,9 @@ A wizard owns a persistent set of known spells that show up in the in-game spell
 
 **Acceptance**
 
-- [ ] Synthetic fixture maps to one row
-- [ ] ~76,679 rows on the install; load time and memory logged
-- [ ] `.reload item_template` applies an edited row live; a failing reload keeps the old store
+- [x] Synthetic fixture maps to one row [ItemExtractorTest: the synthetic hat maps to the row (1652259, 'Fire', 125, 1, 0, 0, 2, 1)]
+- [x] ~76,679 rows on the install; load time and memory logged [ItemMgrClientTest on r806919: WizItemTemplate 76679 of "80164 item templates, 851 behaviors of classes nothing describes, 62.2 MiB, read in 94925 ms" (Debug)]
+- [x] `.reload item_template` applies an edited row live; a failing reload keeps the old store [ItemMgrTest: an edited cost applies on reload under a new generation; an unknown equip effect fails the reload and keeps the old set]
 
 ### Detailed spec from WIZ-10: Item template extractor
 
@@ -346,9 +346,9 @@ Every equippable and backpack item in the user's client is available to the serv
 **Acceptance**
 
 - [ ] Unit test: a synthetic WizItemTemplate BINd fixture maps to one item_template row with its requirements and effects
-- [ ] On the user's install: item_template has around 76,679 rows and every requirement or effect class is present in the type registry (unknown hashes fail the import, never skipped silently)
-- [ ] sItemMgr load time and memory are logged at gameserver startup
-- [ ] `.reload item_template` applies an edited row without a restart, and a reload that meets an unknown class hash keeps the old store and reports it
+- [x] On the user's install: item_template has around 76,679 rows and every requirement or effect class is present in the type registry (unknown hashes fail the import, never skipped silently) [ItemMgrClientTest and TemplateExtractorClientTest pass on r806919 with the install's class file; without it the 8 items holding ReqMonsterMagicLevel or ReqHasItems fail and are named]
+- [x] sItemMgr load time and memory are logged at gameserver startup [ItemMgr::Load, called by the game server's LoadItems, logs counts by class, MiB, ms and threads]
+- [x] `.reload item_template` applies an edited row without a restart, and a reload that meets an unknown class hash keeps the old store and reports it [ItemMgrTest reload tests]
 
 **Risks**
 
