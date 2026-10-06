@@ -6,7 +6,9 @@ import time
 
 LOCALES = ("de", "el", "en-US", "es", "fr", "it", "pl", "pt-BR")
 STATS = {"overflow_xp": "overflow_xp", "secondary_school": "secondary_school_id", "training_points": "training_points", "gold": "gold", "health": "health", "mana": "mana",
-         "potion_charge": "potion_charge", "potion_max": "potion_max", "arena_points": "arena_points", "level_locked": "level_locked"}
+         "potion_charge": "potion_charge", "potion_max": "potion_max", "arena_points": "arena_points", "level_locked": "level_locked",
+         "purchased_custom_emotes_1": "purchased_custom_emotes_1", "purchased_custom_emotes_2": "purchased_custom_emotes_2",
+         "purchased_custom_emotes_3": "purchased_custom_emotes_3"}
 APPEARANCE = ("behavior_template_name_id", "gender", "race", "head_hands_model", "hair_model", "hat_model", "torso_model", "feet_model",
               "wand_model", "skin_color", "skin_decal", "hair_color", "hat_color", "hat_decal", "torso_color", "torso_decal", "torso_decal2",
               "feet_color", "feet_decal", "skin_decal2", "extended_hair_color", "extended_skin_decal", "after_combat_dance",
