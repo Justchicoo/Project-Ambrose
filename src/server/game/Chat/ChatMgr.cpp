@@ -29,6 +29,11 @@ bool ChatMgr::IsCommand(std::u16string_view text, std::string_view prefix)
     return wide && !wide->empty() && text.starts_with(*wide);
 }
 
+bool ChatMgr::IsCustomEmoteText(std::u16string_view text, std::string_view prefix)
+{
+    return !text.empty() && Utf::Utf16ToUtf8(text, Utf::InvalidPolicy::Reject).has_value() && !IsCommand(text, prefix);
+}
+
 TypedLine ChatMgr::Judge(std::string_view message, std::string_view prefix)
 {
     std::optional<std::u16string> const text = ChatText::Read(message);

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, chat, and outbound instance updates.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, chat, outbound instance updates, and the custom emotes a wizard owns.
  */
 
 #include "GameSession.h"
@@ -603,6 +603,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     SendDmlMessage(complete);
     SendBadges();
     SendMapObjects(*map);
+    SendCustomEmotes();
     if (!resumed)
         _arrived = true;
     SetStatus(SessionStatus::LoggedIn);
@@ -708,6 +709,20 @@ void GameSession::SendMapObjects(Map const& map)
     {
         GameMessages::NewObject message;
         message.Data.assign(object.Data.begin(), object.Data.end());
+        SendDmlMessage(message);
+    }
+}
+
+void GameSession::SendCustomEmotes()
+{
+    std::array<uint32, 3> const& emotes = _stats->GetPurchasedCustomEmotes();
+    std::array<uint32, 3> const& teleportEffects = _stats->GetPurchasedCustomTeleportEffects();
+    for (uint8 rank = 0; rank < emotes.size(); ++rank)
+    {
+        GameMessages::UpdateCustomEmotes message;
+        message.CustomEmotes = emotes[rank];
+        message.CustomTeleportEffects = teleportEffects[rank];
+        message.Rank = rank;
         SendDmlMessage(message);
     }
 }

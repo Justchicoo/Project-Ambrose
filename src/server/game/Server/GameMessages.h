@@ -137,6 +137,22 @@ namespace GameMessages
         }
     };
 
+    struct UpdateCustomEmotes
+    {
+        static constexpr uint8 ServiceId = Wizard2Service;
+        static constexpr std::string_view Tag = "MSG_UPDATECUSTOMEMOTES";
+
+        uint32 CustomEmotes = 0;
+        uint32 CustomTeleportEffects = 0;
+        uint8 Rank = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("CustomEmotes", &UpdateCustomEmotes::CustomEmotes), DmlField("CustomTeleportEffects", &UpdateCustomEmotes::CustomTeleportEffects),
+                DmlField("Rank", &UpdateCustomEmotes::Rank) };
+        }
+    };
+
     struct ClientMove
     {
         static constexpr uint8 ServiceId = GameService;
@@ -734,6 +750,53 @@ namespace GameMessages
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("Name", &CoreEmote::Name), DmlField("ExcludeOriginator", &CoreEmote::ExcludeOriginator), DmlField("PhraseID", &CoreEmote::PhraseId) };
+        }
+    };
+
+    struct CorePiiRadialMenuEmote
+    {
+        static constexpr uint8 ServiceId = Wizard3Service;
+        static constexpr std::string_view Tag = "MSG_CORE_PIIRADIALMENUEMOTE";
+
+        std::string EmoteAnimationName;
+        uint8 ExcludeOriginator = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("EmoteAnimationName", &CorePiiRadialMenuEmote::EmoteAnimationName),
+                DmlField("ExcludeOriginator", &CorePiiRadialMenuEmote::ExcludeOriginator) };
+        }
+    };
+
+    struct RequestPiiRadialMenuPlayEmote
+    {
+        static constexpr uint8 ServiceId = Wizard3Service;
+        static constexpr std::string_view Tag = "MSG_REQUESTPIIRADIALMENUPLAYEMOTE";
+
+        std::string EmoteAnimationName;
+        std::u16string EmoteText;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("EmoteAnimationName", &RequestPiiRadialMenuPlayEmote::EmoteAnimationName),
+                DmlField("EmoteText", &RequestPiiRadialMenuPlayEmote::EmoteText) };
+        }
+    };
+
+    struct PiiRadialMenuPlayEmote
+    {
+        static constexpr uint8 ServiceId = Wizard3Service;
+        static constexpr std::string_view Tag = "MSG_PIIRADIALMENUPLAYEMOTE";
+
+        std::string SourceName;
+        uint64 SourceId = 0;
+        std::string EmoteAnimationName;
+        std::u16string EmoteText;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("SourceName", &PiiRadialMenuPlayEmote::SourceName), DmlField("SourceID", &PiiRadialMenuPlayEmote::SourceId),
+                DmlField("EmoteAnimationName", &PiiRadialMenuPlayEmote::EmoteAnimationName), DmlField("EmoteText", &PiiRadialMenuPlayEmote::EmoteText) };
         }
     };
 }

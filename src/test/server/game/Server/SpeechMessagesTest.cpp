@@ -78,6 +78,16 @@ TEST(SpeechMessagesTest, EachMessageNamesTheSpeakerAndCarriesWhatItDid)
     EXPECT_EQ(ext.Message, extended.Payload);
     EXPECT_EQ(ext.Filter, ChatMgr::OpenChatFilter);
 
+    Speech custom;
+    custom.Kind = SpeechKind::CustomEmote;
+    custom.Animation = "Dance";
+    custom.WidePayload = u"hello there";
+    GameMessages::PiiRadialMenuPlayEmote const customMessage = SpeechMessages::CustomEmote(speaker, custom);
+    EXPECT_EQ(customMessage.SourceName, speaker.Name);
+    EXPECT_EQ(customMessage.SourceId, speaker.Guid);
+    EXPECT_EQ(customMessage.EmoteAnimationName, "Dance");
+    EXPECT_EQ(customMessage.EmoteText, custom.WidePayload);
+
     Speech emote;
     emote.Kind = SpeechKind::Emote;
     emote.Payload = "override";

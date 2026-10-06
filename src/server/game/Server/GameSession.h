@@ -85,6 +85,8 @@ public:
     void HandleRequestRadialQuickChat(GameMessages::RequestRadialQuickChat& message);
     void HandleRequestRadialQuickChatExt(GameMessages::RequestRadialQuickChatExt& message);
     void HandleCoreEmote(GameMessages::CoreEmote& message);
+    void HandleCorePiiRadialMenuEmote(GameMessages::CorePiiRadialMenuEmote& message);
+    void HandleRequestPiiRadialMenuPlayEmote(GameMessages::RequestPiiRadialMenuPlayEmote& message);
     void HandleQueryLogout(GameMessages::QueryLogout& message);
     void HandleClientDisconnect(GameMessages::ClientDisconnect& message);
     void HandleNotAfk(GameMessages::NotAfk& message);
@@ -103,6 +105,7 @@ public:
     void ShowStateOf(uint64 worldGuid, uint32 state);
     std::vector<Speech> TakeSpeech();
     void HearSpeech(ChatSpeaker const& speaker, Speech const& speech);
+    void HearCustomEmote(ChatSpeaker const& speaker, Speech const& speech);
     std::string const& GetChatName() const noexcept { return _chatName; }
     uint8 GetChatFilter() const noexcept { return _chatFilter; }
     uint8 GetSecurityLevel() const noexcept { return _securityLevel.load(std::memory_order_relaxed); }
@@ -151,6 +154,7 @@ private:
     void Diagnose(LoginKeyClaim claim, int64 now);
     void AcceptAttach(LoginKeyClaim const& claim);
     void SendMapObjects(Map const& map);
+    void SendCustomEmotes();
     void RefuseAttach(LoginKeyClaim const& claim, LoginKeyVerdict verdict);
     void LoadAccount(LoginKeyClaim const& claim);
     void LoadCharacter(LoginKeyClaim const& claim);
