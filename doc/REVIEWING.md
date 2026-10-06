@@ -2,7 +2,7 @@
 
 # Reviewing contributor pull requests
 
-This is the maintainer's side of both tracks, doc/CONTRIBUTOR-TRACK.md and doc/MILESTONE-TRACK.md. It says how a pull request is judged, in what order, what has gone wrong before, and how landed work is committed. **Read it whole before reviewing anything**, including after a lost context, and when it changes, change it here rather than in a review comment. The board at https://justchicoo.github.io/Project-Ambrose/ says what is claimed and held while a review is under way.
+This is the maintainer's side of both tracks, doc/CONTRIBUTOR-TRACK.md and doc/MILESTONE-TRACK.md. It says how a pull request is judged, in what order, what has gone wrong before, and how landed work is committed. **Read it whole before reviewing anything**, including after a lost context, and when it changes, change it here rather than in a review comment. The board at https://justchicoo.github.io/Project-Ambrose/ says what is being built while a review is under way.
 
 ## The rules that do not bend
 
@@ -91,6 +91,7 @@ Each was found by a contributor doing the right thing, which is the only way thi
 - The trailer check demanded an AI attribution trailer on a commit a bot wrote, which Dependabot's first grouped update failed within a minute. A bot-authored commit names its tool in the author field, so it is exempt by author, never by anything the message claims.
 - The progress card check failed every milestone pull request that ticked a check. The card is generated from the phase files, so ticking a box makes it stale, and `doc/progress/` is a reserved path the contributor is refused if they try to regenerate it: the rules asked for the tick and then failed them for it, with nothing they could do. The step now runs everywhere except a pull request from a fork, carrying `contrib`, or on a `milestone/` branch, which is exactly the set of authors who cannot rebuild it, and the card is still checked on every push to main. Found on 16.02, the first such pull request to reach the step.
 - `apps/ci/ci_local.py` ran the progress card check on a milestone branch, where CI leaves it out, so a contributor who ticked a check and ran the checks job locally as told saw it fail with nothing they could do about it. It now skips that step whenever `--branch` is given. Found on 12.07 (#57).
+- contrib/AI-MILESTONES-HERE.md told contributors that both servers accept `CREATE INDEX IF NOT EXISTS`. MySQL 8.0.46 refuses it with 1064. C-81 (#68) wrote a case to that rule and ran it, which is how it was found, and the prompt now lists it with the MariaDB-only forms.
 
 When a check fails a contributor for doing the right thing, fix the check the same sitting and say so in the message. A checker that punishes correct work teaches people to work around it.
 
@@ -116,7 +117,7 @@ None of this replaces a review. It removes the steps that were only ever bookkee
 - After a squash merge the branch holds nothing; the next pull request from it is empty.
 - A sound pull request that conflicts with main cannot be merged on GitHub, and a fix cannot go to the fork. Run `git merge --squash prN` onto main, resolve the conflict, and commit with `--author` set to the contributor's numeric noreply address and the maintainer as committer. Then push, and close the pull request naming the commit. #103 landed this way as 1e425be.
 - `mergeable` reads `UNKNOWN` for a minute after a burst of merges; wait and retry rather than reaching for `--admin`.
-- A migration written against MariaDB can be rejected by the MySQL the Linux leg runs: `ADD COLUMN IF NOT EXISTS` is MariaDB only. Read any `data/sql` change for syntax only one server takes, and remember that editing an applied migration changes its hash, which reapplies it or refuses startup depending on `Updates.Redundancy`.
+- A migration written against MariaDB can be rejected by the MySQL the Linux leg runs: `ADD COLUMN IF NOT EXISTS`, `DROP COLUMN IF EXISTS` and `CREATE INDEX IF NOT EXISTS` are MariaDB only, as C-81's corpus in contrib/fixtures/c81-sql-duality/ shows with both servers' answers. Read any `data/sql` change for syntax only one server takes, and remember that editing an applied migration changes its hash, which reapplies it or refuses startup depending on `Updates.Redundancy`.
 
 ## What the batch of sixty-three taught
 
