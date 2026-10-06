@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads an item template through the game object and wizard item template views after checking every class its decode skipped: one inside its behaviors is counted, any other refuses the item. Each requirement and equip effect is kept as a copy of the object it decoded to, so the record outlives the decode, and its memory is counted as that object's values; the fields the item tables give columns to, an effect's name, stat lookup, pips, spell and speed and a requirement's value, comparison, school, quantity, item and adjective, are read from it by name wherever its class has them. A color count, like every such field, is read by name as whichever integer the dump stores it as, and is absent when the class has no such property.
+ * Reads an item template through the game object and wizard item template views after checking every class its decode skipped: one inside its behaviors is counted, any other refuses the item. Each requirement and equip effect is kept as a copy of the object it decoded to, so the record outlives the decode, and its memory is counted as that object's values; the fields the item tables give columns to, an effect's name, stat lookup, pips, spell and speed and a requirement's value, comparison, school, quantity, item and adjective, are read from it by name wherever its class has them. An item set bonus template is checked the same way and read by name, each bonus it grants kept as a copy of its object. A color count, like every such field, is read by name as whichever integer the dump stores it as, and is absent when the class has no such property.
  */
 
 #include "ItemTemplateRecord.h"
@@ -104,6 +104,24 @@ namespace
             bytes += part.ClassName.capacity() + (part.Object ? sizeof(PropertyObject) + part.Object->GetClass().Properties.size() * sizeof(PropertyValue) : 0);
         return bytes;
     }
+
+    bool CountIssues(PropertyObject const& object, std::string_view file, std::vector<DecodeIssue> const& issues, std::size_t& unknownBehaviors, std::string& error)
+    {
+        std::string const behaviors = fmt::format("{}.m_behaviors[", object.GetClass().Name);
+        for (DecodeIssue const& issue : issues)
+        {
+            if (issue.Kind != DecodeIssueKind::UnknownClass)
+                continue;
+            if (issue.Path.starts_with(behaviors))
+            {
+                ++unknownBehaviors;
+                continue;
+            }
+            error = fmt::format("{} holds an object of class hash {} at {}, which the type dump does not list", file, issue.Hash, issue.Path);
+            return false;
+        }
+        return true;
+    }
 }
 
 bool ItemTemplateRecord::IsItem(PropertyObject const& object) noexcept
@@ -123,19 +141,8 @@ std::optional<ItemTemplateRecord> ItemTemplateRecord::Read(PropertyObject const&
     }
 
     ItemTemplateRecord record;
-    std::string const behaviors = fmt::format("{}.m_behaviors[", object.GetClass().Name);
-    for (DecodeIssue const& issue : issues)
-    {
-        if (issue.Kind != DecodeIssueKind::UnknownClass)
-            continue;
-        if (issue.Path.starts_with(behaviors))
-        {
-            ++record.UnknownBehaviors;
-            continue;
-        }
-        error = fmt::format("{} holds an object of class hash {} at {}, which the type dump does not list", file, issue.Hash, issue.Path);
+    if (!CountIssues(object, file, issues, record.UnknownBehaviors, error))
         return std::nullopt;
-    }
 
     record.TemplateId = templateId;
     record.ClassName = object.GetClass().Name;
@@ -169,4 +176,28 @@ std::size_t ItemTemplateRecord::GetMemoryUsage() const noexcept
         if (*list)
             bytes += PartMemory((*list)->Requirements);
     return bytes + PartMemory(EquipEffects);
+}
+
+bool ItemSetBonusRecord::IsSetBonus(PropertyObject const& object) noexcept
+{
+    return object.IsA(SetBonusClass);
+}
+
+std::optional<ItemSetBonusRecord> ItemSetBonusRecord::Read(PropertyObject const& object, uint32 templateId, std::string file, std::vector<DecodeIssue> const& issues,
+    std::string& error)
+{
+    ItemSetBonusRecord record;
+    if (!CountIssues(object, file, issues, record.UnknownBehaviors, error))
+        return std::nullopt;
+    record.TemplateId = templateId;
+    record.File = std::move(file);
+    record.ObjectName = TextOf(object, "m_objectName").value_or(std::string());
+    record.DisplayKey = TextOf(object, "m_displayName").value_or(std::string());
+    if (PropertyValue const* const stacking = object.Get("m_noStacking"))
+        if (bool const* const value = stacking->GetIf<bool>())
+            record.NoStacking = *value;
+    if (PropertyValue const* const bonuses = object.Get("m_itemSetBonusDataList"))
+        if (PropertyValue::List const* const list = bonuses->GetIf<PropertyValue::List>())
+            record.Bonuses = PartsOf(*list);
+    return record;
 }

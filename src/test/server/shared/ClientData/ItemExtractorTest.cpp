@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the template extractor's item rows over an install the test writes through a type dump it declares: a synthetic WizItemTemplate becomes one object_template row and one item_template row with its school, cost, rank, limit, set bonus and colors, its requirement list, requirement and equip effect rows beside it with each written whole beside the typed columns its class fills, a template that is no item gives no item row, a behavior of a class the reader's dump lacks keeps the item, and an item whose equip requirement or effect is of a class the reader's dump lacks fails the extraction, naming the class hash, rather than being skipped.
+ * Tests the template extractor's item rows over an install the test writes through a type dump it declares: a synthetic WizItemTemplate becomes one object_template row and one item_template row with its school, cost, rank, limit, set bonus and colors, its requirement list, requirement and equip effect rows beside it with each written whole beside the typed columns its class fills, a template that is no item gives no item row, an item set bonus template gives one item_set_bonus row and a row for each bonus it grants, a behavior of a class the reader's dump lacks keeps the item, and an item whose equip requirement or effect is of a class the reader's dump lacks fails the extraction, naming the class hash, rather than being skipped.
  */
 
 #include "ItemTemplateFixtures.h"
@@ -87,7 +87,7 @@ TEST_F(ItemExtractorTest, ASyntheticWizItemTemplateMapsToOneItemTemplateRow)
 
     WorldSqlScript const script = TemplateScript::Build(extraction);
     std::vector<std::string> const& statements = script.GetStatements();
-    ASSERT_EQ(statements.size(), 14u);
+    ASSERT_EQ(statements.size(), 18u);
     EXPECT_EQ(statements[6], "DELETE FROM `item_template`");
     EXPECT_NE(statements[7].find(fmt::format("({}, {}, 125, 1, 0, 0, 2, 1)", ItemTemplateFixtures::HatId, WorldSqlScript::Literal(std::string("Fire")))), std::string::npos)
         << statements[7];
@@ -101,6 +101,28 @@ TEST_F(ItemExtractorTest, ASyntheticWizItemTemplateMapsToOneItemTemplateRow)
     EXPECT_NE(statements[13].find(fmt::format("({}, 0, {}, {}, {}, NULL, NULL, NULL, NULL, NULL, NULL, X'", ItemTemplateFixtures::RobeId,
         StringHash::KiStringHash("class GameEffectInfo"), WorldSqlScript::Literal(std::string("class GameEffectInfo")), WorldSqlScript::Literal(std::string("MaxHealth")))),
         std::string::npos) << statements[13];
+    EXPECT_EQ(statements[15], fmt::format("INSERT INTO `item_set_bonus` (`template_id`, `no_stacking`, `bonus_count`) VALUES ({}, 1, 2)", ItemTemplateFixtures::SetBonusId));
+    EXPECT_NE(statements[17].find(fmt::format("({}, 1, {}, {}, X'", ItemTemplateFixtures::SetBonusId, StringHash::KiStringHash("class ItemSetBonusData"),
+        WorldSqlScript::Literal(std::string("class ItemSetBonusData")))), std::string::npos) << statements[17];
+}
+
+TEST_F(ItemExtractorTest, AnItemSetBonusTemplateBecomesOneSetRowWithEachBonusItGrants)
+{
+    _fixtures.Write(GameData());
+    TemplateExtraction const extraction = TemplateExtractor::Extract(GameData(), _reader.GetCatalog());
+    ASSERT_TRUE(extraction.Ok()) << extraction.Errors.front();
+    EXPECT_EQ(extraction.GetSetBonusCount(), 1u);
+    ExtractedTemplate const* const set = extraction.Find(ItemTemplateFixtures::SetBonusId);
+    ASSERT_NE(set, nullptr);
+    EXPECT_FALSE(set->Item.has_value()) << "a set bonus is no item";
+    ASSERT_TRUE(set->SetBonus.has_value());
+    EXPECT_EQ(set->SetBonus->ObjectName, "ItemSet-Ice-02");
+    EXPECT_EQ(set->SetBonus->DisplayKey, "ItemSets_00000042");
+    EXPECT_EQ(set->SetBonus->NoStacking, true);
+    ASSERT_EQ(set->SetBonus->Bonuses.size(), 2u);
+    EXPECT_EQ(set->SetBonus->Bonuses.back().ClassName, "class ItemSetBonusData");
+    ASSERT_NE(set->SetBonus->Bonuses.back().Object->Get("m_numItemsToEquip"), nullptr);
+    EXPECT_EQ(*set->SetBonus->Bonuses.back().Object->Get("m_numItemsToEquip")->GetIf<int32>(), 3);
 }
 
 TEST_F(ItemExtractorTest, AnEquipRequirementOfAClassTheDumpLacksFailsTheExtractionAndNamesTheClass)

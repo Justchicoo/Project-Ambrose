@@ -101,12 +101,24 @@ void ItemTemplateFixtures::Write(std::filesystem::path const& gameData, float ha
 
     PropertyObjectPtr npc = Create("class GameObjectTemplate");
     EXPECT_EQ(npc->Set("m_objectName", std::string("WC-RAV-NPC06")), PropertySetResult::Ok);
+    PropertyObjectPtr set = Create("class ItemSetBonusTemplate");
+    EXPECT_EQ(set->Set("m_objectName", std::string("ItemSet-Ice-02")), PropertySetResult::Ok);
+    EXPECT_EQ(set->Set("m_displayName", std::string("ItemSets_00000042")), PropertySetResult::Ok);
+    EXPECT_EQ(set->Set("m_noStacking", true), PropertySetResult::Ok);
+    PropertyValue::List bonuses;
+    for (int32 const items : { 2, 3 })
+    {
+        PropertyObjectPtr bonus = Create("class ItemSetBonusData");
+        EXPECT_EQ(bonus->Set("m_numItemsToEquip", int32{ items }), PropertySetResult::Ok);
+        bonuses.emplace_back(std::move(bonus));
+    }
+    EXPECT_EQ(set->Set("m_itemSetBonusDataList", std::move(bonuses)), PropertySetResult::Ok);
     PropertyObjectPtr spell = Create("class SpellTemplate");
     EXPECT_EQ(spell->Set("m_name", std::string("Not An Item")), PropertySetResult::Ok);
 
     Files const files{ { "ObjectData/Items/Hats/WC-Hat-Fire-01.xml", WriteBind(hat) }, { "ObjectData/Items/Robes/WC-Robe-Ice-02.xml", WriteBind(robeItem) },
-        { "ObjectData/WC/WC-RAV-NPC06.xml", WriteBind(npc) }, { "Spells/Not An Item.xml", WriteBind(spell) } };
+        { "ObjectData/WC/WC-RAV-NPC06.xml", WriteBind(npc) }, { "ObjectData/ItemSets/ItemSet-Ice-02.xml", WriteBind(set) }, { "Spells/Not An Item.xml", WriteBind(spell) } };
     Locations const locations{ { HatId, "ObjectData/Items/Hats/WC-Hat-Fire-01.xml" }, { RobeId, "ObjectData/Items/Robes/WC-Robe-Ice-02.xml" },
-        { NpcId, "ObjectData/WC/WC-RAV-NPC06.xml" }, { SpellId, "Spells/Not An Item.xml" } };
+        { NpcId, "ObjectData/WC/WC-RAV-NPC06.xml" }, { SetBonusId, "ObjectData/ItemSets/ItemSet-Ice-02.xml" }, { SpellId, "Spells/Not An Item.xml" } };
     TemplateDumpFixtures::WriteRoot(gameData, _writer.GetCatalog(), locations, files);
 }

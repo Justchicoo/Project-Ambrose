@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Lays extracted templates out for the world tables in id order, replacing object_template first so its adjectives, behaviors and item rows are only ever written after it, an item template's own fields going to item_template, its requirement lists, each requirement and each equip effect to the tables beside it with each requirement and effect written as a BINd of its own, with NULL for a visual id or object type a template does not have and for the name of a behavior of a class nothing describes. Replacing every table whole makes a second run over the same install write the same rows.
+ * Lays extracted templates out for the world tables in id order, replacing object_template first so its adjectives, behaviors and item rows are only ever written after it, an item template's own fields going to item_template, its requirement lists, each requirement and each equip effect to the tables beside it with each requirement and effect written as a BINd of its own beside typed columns for the fields its class has, and an item set bonus template's stacking and each bonus it grants, written whole, to item_set_bonus and item_set_bonus_data, with NULL for a visual id or object type a template does not have and for the name of a behavior of a class nothing describes. Replacing every table whole makes a second run over the same install write the same rows.
  */
 
 #include "TemplateScript.h"
@@ -48,6 +48,8 @@ WorldSqlScript TemplateScript::Build(TemplateExtraction const& extraction)
     std::vector<WorldSqlScript::Row> requirementLists;
     std::vector<WorldSqlScript::Row> requirements;
     std::vector<WorldSqlScript::Row> effects;
+    std::vector<WorldSqlScript::Row> setBonuses;
+    std::vector<WorldSqlScript::Row> setBonusData;
     templates.reserve(extraction.Templates.size());
     adjectives.reserve(extraction.GetAdjectiveCount());
     behaviors.reserve(extraction.GetBehaviorCount());
@@ -88,6 +90,16 @@ WorldSqlScript TemplateScript::Build(TemplateExtraction const& extraction)
                     Optional(part.PipsGiven), Optional(part.PowerPipsGiven), Optional(part.SpellName), Optional(part.NumSpells), Optional(part.SpeedMultiplier), Serialized(part) });
             }
         }
+        if (ItemSetBonusRecord const* const set = found.SetBonus ? &*found.SetBonus : nullptr)
+        {
+            setBonuses.push_back({ id, set->NoStacking ? WorldSqlScript::Value{ uint64{ *set->NoStacking } } : WorldSqlScript::Value{ std::monostate{} },
+                uint64{ set->Bonuses.size() } });
+            for (std::size_t position = 0; position < set->Bonuses.size(); ++position)
+            {
+                ItemTemplatePart const& part = set->Bonuses[position];
+                setBonusData.push_back({ id, uint64{ position }, uint64{ part.ClassHash }, part.ClassName, Serialized(part) });
+            }
+        }
     }
 
     std::vector<std::string_view> const tables = GetTables();
@@ -103,11 +115,13 @@ WorldSqlScript TemplateScript::Build(TemplateExtraction const& extraction)
         "adjective", "data" }, requirements);
     script.ReplaceTable(tables[6], { "template_id", "position", "class_hash", "class_name", "effect_name", "lookup_index", "pips_given", "power_pips_given", "spell_name",
         "num_spells", "speed_multiplier", "data" }, effects);
+    script.ReplaceTable(tables[7], { "template_id", "no_stacking", "bonus_count" }, setBonuses);
+    script.ReplaceTable(tables[8], { "template_id", "position", "class_hash", "class_name", "data" }, setBonusData);
     return script;
 }
 
 std::vector<std::string_view> TemplateScript::GetTables()
 {
     return { "object_template", "object_template_adjective", "object_template_behavior", "item_template", "item_template_requirement_list",
-        "item_template_requirement", "item_template_effect" };
+        "item_template_requirement", "item_template_effect", "item_set_bonus", "item_set_bonus_data" };
 }

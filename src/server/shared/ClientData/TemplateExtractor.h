@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Extracts every template TemplateManifest.xml lists from the user's own install into rows the world database keeps: its class, object name, display and description keys, visual id, icon, object type, loot table, where it lives, its adjectives and its behaviors in the order the template lists them, and for an item template its item fields. A behavior of a class nothing describes keeps its place and the class hash the file gives it, and an entry that does not decode, or is not a CoreTemplate, is counted and named up to a cap without stopping the rest; only a manifest that cannot be read, or an item template holding an object of a class the type dump does not list outside its behaviors, is an error.
+ * Extracts every template TemplateManifest.xml lists from the user's own install into rows the world database keeps: its class, object name, display and description keys, visual id, icon, object type, loot table, where it lives, its adjectives and its behaviors in the order the template lists them, and for an item template its item fields, and for an item set bonus template the bonuses it grants. A behavior of a class nothing describes keeps its place and the class hash the file gives it, and an entry that does not decode, or is not a CoreTemplate, is counted and named up to a cap without stopping the rest; only a manifest that cannot be read, or an item or item set bonus template holding an object of a class the type dump does not list outside its behaviors, is an error.
  */
 
 #ifndef AMBROSE_TEMPLATEEXTRACTOR_H
@@ -45,6 +45,7 @@ struct ExtractedTemplate
     std::vector<std::string> Adjectives;
     std::vector<ExtractedBehavior> Behaviors;
     std::optional<ItemTemplateRecord> Item;
+    std::optional<ItemSetBonusRecord> SetBonus;
 };
 
 struct TemplateExtraction
@@ -71,6 +72,7 @@ struct TemplateExtraction
     std::size_t GetUnknownBehaviorCount() const noexcept;
     std::size_t GetNpcTemplateCount() const noexcept;
     std::size_t GetItemCount() const noexcept;
+    std::size_t GetSetBonusCount() const noexcept;
     ExtractedTemplate const* Find(uint32 templateId) const noexcept;
 };
 

@@ -241,7 +241,7 @@ TEST_F(TemplateExtractorTest, TheScriptReplacesTheTablesWhole)
     ASSERT_TRUE(extraction.Ok());
     WorldSqlScript const script = TemplateScript::Build(extraction);
     std::vector<std::string> const& statements = script.GetStatements();
-    ASSERT_EQ(statements.size(), 10u);
+    ASSERT_EQ(statements.size(), 12u);
     EXPECT_EQ(statements[0], "DELETE FROM `object_template`");
     EXPECT_EQ(statements[2], "DELETE FROM `object_template_adjective`");
     EXPECT_EQ(statements[4], "DELETE FROM `object_template_behavior`");
@@ -251,7 +251,9 @@ TEST_F(TemplateExtractorTest, TheScriptReplacesTheTablesWhole)
     EXPECT_EQ(statements[7], "DELETE FROM `item_template_requirement_list`");
     EXPECT_EQ(statements[8], "DELETE FROM `item_template_requirement`");
     EXPECT_EQ(statements[9], "DELETE FROM `item_template_effect`");
+    EXPECT_EQ(statements[10], "DELETE FROM `item_set_bonus`");
+    EXPECT_EQ(statements[11], "DELETE FROM `item_set_bonus_data`");
     EXPECT_EQ(TemplateScript::Build(extraction).ToText(), script.ToText()) << "the same install writes the same rows";
     EXPECT_EQ(TemplateScript::GetTables(), (std::vector<std::string_view>{ "object_template", "object_template_adjective", "object_template_behavior", "item_template",
-        "item_template_requirement_list", "item_template_requirement", "item_template_effect" }));
+        "item_template_requirement_list", "item_template_requirement", "item_template_effect", "item_set_bonus", "item_set_bonus_data" }));
 }

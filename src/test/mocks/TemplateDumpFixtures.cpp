@@ -261,6 +261,17 @@ namespace TemplateDumpFixtures
         item["m_numPrimaryColors"] = Property("unsigned char", "m_numPrimaryColors", 26);
         item["m_numSecondaryColors"] = Property("unsigned char", "m_numSecondaryColors", 27);
         AddClass(classes, "class WizItemTemplate", Json::array({ "GameObjectTemplate", "CoreTemplate", "PropertyClass" }), item);
+        Json bonus = Json::object();
+        bonus["m_numItemsToEquip"] = Property("int", "m_numItemsToEquip", 0);
+        AddClass(classes, "class ItemSetBonusData", Json::array({ "PropertyClass" }), bonus);
+        Json set = Json::object();
+        set["m_behaviors"] = Property("class BehaviorTemplate*", "m_behaviors", 0, "List");
+        set["m_objectName"] = Property("std::string", "m_objectName", 1);
+        set["m_templateID"] = Property("unsigned int", "m_templateID", 2);
+        set["m_displayName"] = Property("std::string", "m_displayName", 3);
+        set["m_noStacking"] = Property("bool", "m_noStacking", 4);
+        set["m_itemSetBonusDataList"] = Property("class ItemSetBonusData*", "m_itemSetBonusDataList", 5, "List");
+        AddClass(classes, "class ItemSetBonusTemplate", Json::array({ "CoreTemplate", "PropertyClass" }), set);
     }
 
     std::string Dump(Json const& classes)

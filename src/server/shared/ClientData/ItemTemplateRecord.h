@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The typed record of one item template the user's install holds, any template whose class is or derives from WizItemTemplate: its id, class and file, its object name, display key, object type and adjectives as a game object template carries them, and its school, base cost, rank, item limit, set bonus and color counts, and its equip and purchase requirement lists and equip effects, each requirement and effect kept as the object it decoded to with its class and the fields the item tables give columns to wherever its class has them. A template whose fields hold an object of a class the type dump does not list is refused, naming the class hash and where it sits, while one in its behaviors keeps its place and is counted, as every template's behaviors are.
+ * The typed record of one item template the user's install holds, any template whose class is or derives from WizItemTemplate: its id, class and file, its object name, display key, object type and adjectives as a game object template carries them, and its school, base cost, rank, item limit, set bonus and color counts, and its equip and purchase requirement lists and equip effects, each requirement and effect kept as the object it decoded to with its class and the fields the item tables give columns to wherever its class has them. A template whose fields hold an object of a class the type dump does not list is refused, naming the class hash and where it sits, while one in its behaviors keeps its place and is counted, as every template's behaviors are; and the record of an item set bonus template, its names, whether it stacks and each bonus it grants kept as the object it decoded to, refused the same way.
  */
 
 #ifndef AMBROSE_ITEMTEMPLATERECORD_H
@@ -72,6 +72,22 @@ struct ItemTemplateRecord
     static std::optional<ItemTemplateRecord> Read(PropertyObject const& object, uint32 templateId, std::string file, std::vector<DecodeIssue> const& issues, std::string& error);
 
     std::size_t GetMemoryUsage() const noexcept;
+};
+
+struct ItemSetBonusRecord
+{
+    static constexpr std::string_view SetBonusClass = "class ItemSetBonusTemplate";
+
+    uint32 TemplateId = 0;
+    std::string File;
+    std::string ObjectName;
+    std::string DisplayKey;
+    std::optional<bool> NoStacking;
+    std::vector<ItemTemplatePart> Bonuses;
+    std::size_t UnknownBehaviors = 0;
+
+    static bool IsSetBonus(PropertyObject const& object) noexcept;
+    static std::optional<ItemSetBonusRecord> Read(PropertyObject const& object, uint32 templateId, std::string file, std::vector<DecodeIssue> const& issues, std::string& error);
 };
 
 #endif
