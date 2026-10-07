@@ -57,6 +57,24 @@ public:
     static void SetRealmId(uint32 realmId) noexcept;
     static uint32 GetRealmId() noexcept;
 
+    template<DeclaredMessage T>
+    bool SendDmlMessage(T const& message)
+    {
+        if constexpr (T::Tag == GameMessages::DownloadPackage::Tag || T::Tag == GameMessages::DownloadPackageElement::Tag || T::Tag == GameMessages::DownloadBrowser::Tag)
+            if (!PatchDownloadsEnabled(T::Tag))
+                return false;
+        return SessionBase::SendDmlMessage(message);
+    }
+
+    template<DeclaredMessage T>
+    bool SendDmlMessageDelayedClose(T const& message)
+    {
+        if constexpr (T::Tag == GameMessages::DownloadPackage::Tag || T::Tag == GameMessages::DownloadPackageElement::Tag || T::Tag == GameMessages::DownloadBrowser::Tag)
+            if (!PatchDownloadsEnabled(T::Tag))
+                return false;
+        return SessionBase::SendDmlMessageDelayedClose(message);
+    }
+
     uint64 GetAccountId() const noexcept { return _accountId.load(std::memory_order_relaxed); }
     void SetAccountId(uint64 accountId) noexcept { _accountId.store(accountId, std::memory_order_relaxed); }
 
@@ -125,6 +143,7 @@ public:
     void HandleDoneShopping(GameMessages::DoneShopping& message);
     void HandleLogClientResolution(GameMessages::LogClientResolution& message);
     void HandleLogPatchClientPatchTime(GameMessages::LogPatchClientPatchTime& message);
+    void HandlePatchingBlocked(GameMessages::PatchingBlocked& message);
     void HandleQuestFinderOption(GameMessages::QuestFinderOption& message);
     void SendBadges();
     void HandlePlayerWizBang(GameMessages::PlayerWizBang& message);
@@ -150,6 +169,7 @@ private:
     friend struct GameSessionLifecycleTestAccess;
 
     std::shared_ptr<GameSession> SharedSelf();
+    bool PatchDownloadsEnabled(std::string_view tag) const;
     SQLOperation::CompletionHandler MakeCompletionHandler();
     void Diagnose(LoginKeyClaim claim, int64 now);
     void AcceptAttach(LoginKeyClaim const& claim);

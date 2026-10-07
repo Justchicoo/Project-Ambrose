@@ -85,6 +85,8 @@ namespace
                 "How far past the visibility distance an object already shown may go before it is taken away, read at each visibility update, so one standing at the edge is not shown and taken away over and over."),
             Unsigned("Zone.MoveIdleIntervals", "2", "1", "100", "", "Zones", Game, NextUse,
                 "How many flushes a wizard said to be moving may pass without a new move before the others are told it is standing, read at each flush."),
+            Flag("Patch.Enabled", "false", "Patching", Game, Live,
+                "Whether the realm may send package-download messages; read at each send, so a live change applies to the next package message."),
             Unsigned("Player.LinkDeadTime", "60", "0", "86400", "s", "Player", Game, Live,
                 "How long a disconnected wizard remains visible and may reattach before being removed from the world."),
             Unsigned("Player.AfkWarnTime", "900", "0", "86400", "s", "Player", Game, Live,

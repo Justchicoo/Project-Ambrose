@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives MSG_USER_AUTHEN_V3 over loopback against a real LoginSession: a closed login database times out, and with AMBROSE_TEST_DB set valid credentials are admitted with the session key stored, sealed with the active key when there is one and bound to its account, a wrong session id, wrong ClientKey1, oversized or malformed Rec1, unknown account, banned machine, banned address, locked or banned account and disallowed revision each get their error and store no session, a ban or lock carrying its end in Unix seconds, a permanent one the latest end the client reads, and nothing else any TimeStamp, account bans stay hidden behind a wrong password, the attempt limit is read live and locks the address out, overlapping requests strike and a client that leaves mid-login leaves no claim or reservation behind, duplicate logins kick each earlier session or are rejected, verifiers are sealed again with the active key at login, and the older authentication messages are refused until the session closes.
+ * Drives MSG_USER_AUTHEN_V3 over loopback against a real LoginSession: a closed login database times out, and with AMBROSE_TEST_DB set valid credentials are admitted with the session key stored, sealed with the active key when there is one and bound to its account, a wrong session id, wrong ClientKey1, oversized or malformed Rec1, unknown account, banned machine, banned address, locked or banned account and disallowed revision each get their error and store no session, a ban or lock carrying its end in Unix seconds or forever and nothing else any TimeStamp, account bans stay hidden behind a wrong password, revision enforcement is checked on each login and can be changed live, the attempt limit is read live and locks the address out, overlapping requests strike and a client that leaves mid-login leaves no claim or reservation behind, duplicate logins kick each earlier session or are rejected, verifiers are sealed again with the active key at login, and the older authentication messages are refused until the session closes.
  */
 
 #include "AccountMgr.h"
@@ -186,6 +186,25 @@ TEST_F(AuthHandlerDatabaseTest, ValidCredentialsAreAdmittedWithAStoredSessionKey
     SendAuthen(client, Credentials(client, "wizard", "hunter22"));
     EXPECT_FALSE(ReadDml(*client.Socket, std::chrono::milliseconds(300)));
     EXPECT_EQ(session->GetStrikes(), 0u);
+}
+
+TEST_F(AuthHandlerDatabaseTest, RevisionEnforcementCanBeChangedForTheNextLogin)
+{
+    LoginSettings settings;
+    settings.MaxAuthAttempts = 100;
+    settings.EnforceRevision = false;
+    settings.AllowedRevisions = { "r0.Test" };
+    sLoginMgr.SetSettings(settings);
+
+    LoginClient accepted = _server->Connect();
+    SendAuthen(accepted, Credentials(accepted, "Wizard", "hunter22"), "r1.Other");
+    ASSERT_FALSE(ExpectAdmitted(accepted).empty()) << "a revision mismatch is allowed while Login.EnforceRevision is off";
+
+    settings.EnforceRevision = true;
+    sLoginMgr.SetSettings(settings);
+    LoginClient refused = _server->Connect();
+    SendAuthen(refused, Credentials(refused, "Wizard", "hunter22"), "r1.Other");
+    ExpectFailure(refused, AuthResult::ErrorNoLock, "disallowed revision after a live setting change");
 }
 
 TEST_F(AuthHandlerDatabaseTest, EachFailureGetsItsErrorAndStoresNoSession)

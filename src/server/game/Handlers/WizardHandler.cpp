@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Answers the WIZARD messages a client sends as it enters the world: its timed access passes and subscriber-only items with empty lists of the classes the client's own handlers load, ActiveTimedAccessPassList and SubscriberOnlyItemsList, written raw because the client reads them with no envelope and no flags word, and its crown balance with none, the only fields the client reads back being Failure and TotalCrowns, until accounts keep crowns; tells a wizard entering the world which badges it holds with MSG_BADGES, whose BadgeInfo and BadgeFilterInfo are enveloped BadgeInfoList and BadgeFilterInfoList objects, which the client cannot read unwrapped and reads only when Add is set, since GameClient::MSG_Badges adds a BadgeInfoList only then and shows no earned popup unless Display is set: its school's badge, the badge of the install's Badges table whose text is the school's title, such as Pyromancer, sent under that badge's key, shown complete in the Miscellaneous filter of the install's BadgeFilterDescriptions.xml with the install's first badge art, a badge and a filter each known by the client's string hash of its name; and logs the notes it sends about its screen, its patch time, the end of its shopping and its quest finder; and relays a player's spellbook wizbang to the wizards in the same zone instance.
+ * Answers the WIZARD messages a client sends as it enters the world: its timed access passes and subscriber-only items with empty lists of the classes the client's own handlers load, ActiveTimedAccessPassList and SubscriberOnlyItemsList, written raw because the client reads them with no envelope and no flags word, and its crown balance with none, the only fields the client reads back being Failure and TotalCrowns, until accounts keep crowns; tells a wizard entering the world which badges it holds with MSG_BADGES, whose BadgeInfo and BadgeFilterInfo are enveloped BadgeInfoList and BadgeFilterInfoList objects, which the client cannot read unwrapped and reads only when Add is set, since GameClient::MSG_Badges adds a BadgeInfoList only then and shows no earned popup unless Display is set: its school's badge, the badge of the install's Badges table whose text is the school's title, such as Pyromancer, sent under that badge's key, shown complete in the Miscellaneous filter of the install's BadgeFilterDescriptions.xml with the install's first badge art, a badge and a filter each known by the client's string hash of its name; and logs the notes it sends about its screen, the end of its shopping and its quest finder; and relays a player's spellbook wizbang to the wizards in the same zone instance.
  */
 
 #include "GameSession.h"
@@ -173,11 +173,6 @@ void GameSession::HandleLogClientResolution(GameMessages::LogClientResolution& m
 {
     LOG_DEBUG(WizardLog, "Session {} runs its client at {}x{}, {}{}", GetSessionId(), message.ScreenWidth, message.ScreenHeight,
         message.FullScreen ? "full screen" : "in a window", message.ClassicMode ? ", in classic mode" : "");
-}
-
-void GameSession::HandleLogPatchClientPatchTime(GameMessages::LogPatchClientPatchTime& message)
-{
-    LOG_DEBUG(WizardLog, "Session {} reports a patch client patch time of {}", GetSessionId(), message.PatchClientPatchTime);
 }
 
 void GameSession::HandleQuestFinderOption(GameMessages::QuestFinderOption& message)
