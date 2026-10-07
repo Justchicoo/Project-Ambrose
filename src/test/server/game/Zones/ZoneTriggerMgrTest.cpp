@@ -1,15 +1,18 @@
 /*
  * Project Ambrose by Imjustchico
- * With AMBROSE_TEST_DB set, reads a zone's volumes, triggers and events from a fresh world database: a volume's enter event fires the trigger that listens for it, editing that trigger's fire event and running `.reload zone_trigger` changes what fires on the next enter with nothing restarted, and a volume row whose shape Ambrose does not know fails the reload, which names the row and keeps the triggers it had; a client may post only the events zone_client_event lists for its zone, and listing an event a volume posts fails the load.
+ * With AMBROSE_TEST_DB set, reads a zone's volumes, triggers and events from a fresh world database: a volume's enter event fires the trigger that listens for it, editing that trigger's fire event and running `.reload zone_trigger` changes what fires on the next enter with nothing restarted, and a volume row whose shape Ambrose does not know fails the reload, which names the row and keeps the triggers it had; a client may post only the events zone_client_event lists for its zone, and listing an event a volume posts fails the load. Without a database, Ravenwood POI's result as the client data holds it reads as the WizardPOI_00000001 notify text of type 1, and a cut one does not.
  */
 
 #include "DBUpdater.h"
 #include "DatabaseEnv.h"
 #include "Environment.h"
 #include "ReloadMgr.h"
+#include "StringHash.h"
+#include "TypeRegistry.h"
 #include "ZoneTriggerMgr.h"
 
 #include <fmt/format.h>
+#include <nlohmann/json.hpp>
 
 #include <gtest/gtest.h>
 
@@ -119,4 +122,46 @@ TEST_F(ZoneTriggerMgrDatabaseTest, ClientsMayPostOnlyTheEventsTheirZoneListsAndN
     ASSERT_EQ(errors.size(), 1u);
     EXPECT_NE(errors.front().find("volume 0 posts"), std::string::npos) << errors.front();
     EXPECT_FALSE(sZoneTriggerMgr.Find(Hub)->ClientEvents.contains("Enter_Ravenwood POI")) << "a failed reload keeps the set it had";
+}
+
+TEST(ZoneTriggerResultTest, RavenwoodsPoiResultReadsAsTheNotifyTextItShows)
+{
+    nlohmann::json properties = nlohmann::json::object();
+    auto const add = [&properties](std::string const& name, std::string const& type, uint32 id, uint32 hash)
+    {
+        properties[name] = nlohmann::json{ { "type", type }, { "id", id }, { "offset", 8 * (id + 1) }, { "flags", 7 }, { "container", "Static" }, { "dynamic", false },
+            { "singleton", false }, { "pointer", false }, { "hash", hash } };
+    };
+    add("#783721823", "bool", 0, 783721823);
+    add("m_text", "std::string", 1, 1717580128);
+    add("m_type", "int", 2, 219902012);
+    add("#2122593183", "bool", 3, 2122593183);
+    add("m_radius", "float", 4, 989410271);
+    add("m_volumeX", "float", 5, 1125210087);
+    add("m_volumeY", "float", 6, 1125210088);
+    add("m_volumeZ", "float", 7, 1125210089);
+    add("#1475192380", "bool", 8, 1475192380);
+    nlohmann::json classes = nlohmann::json::object();
+    uint32 const base = StringHash::KiStringHash("class PropertyClass");
+    classes[std::to_string(base)] = nlohmann::json{ { "name", "class PropertyClass" }, { "bases", nlohmann::json::array() }, { "hash", base }, { "properties", nlohmann::json::object() } };
+    classes["2001472307"] = nlohmann::json{ { "name", "class ResClientNotifyText" }, { "bases", nlohmann::json::array({ "class PropertyClass" }) }, { "hash", 2001472307 },
+        { "properties", properties } };
+    TypeRegistry registry;
+    ASSERT_TRUE(registry.LoadFromText(nlohmann::json{ { "version", 2 }, { "classes", classes } }.dump(), "notify.json")) << (registry.GetErrors().empty() ? std::string() : registry.GetErrors().front());
+
+    std::string const hex = "330B4C77B1030000410000005FA5B62E00E700000060316066120057697A617264504F495F3030303030303031600000003C701B0D01000000410000009F33847E0067000000"
+                            "DF33F93A0000000060000000E75711430000000060000000E85711430000000060000000E957114300000000410000003CA6ED5700";
+    std::vector<uint8> bytes;
+    for (std::size_t at = 0; at + 1 < hex.size(); at += 2)
+        bytes.push_back(static_cast<uint8>(std::stoi(hex.substr(at, 2), nullptr, 16)));
+
+    std::string error;
+    std::optional<ZoneNotifyText> const text = ZoneTriggerMgr::ReadNotifyText(registry.GetCatalog(), bytes, error);
+    ASSERT_TRUE(text) << error;
+    EXPECT_EQ(text->Text, "WizardPOI_00000001");
+    EXPECT_EQ(text->Type, 1);
+
+    bytes.resize(bytes.size() / 2);
+    EXPECT_FALSE(ZoneTriggerMgr::ReadNotifyText(registry.GetCatalog(), bytes, error)) << "a cut result must not read";
+    EXPECT_FALSE(ZoneTriggerMgr::ReadNotifyText(nullptr, bytes, error));
 }

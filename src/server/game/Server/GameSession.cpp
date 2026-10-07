@@ -1184,9 +1184,18 @@ void GameSession::ArriveInVolumes()
 
 std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now)
 {
-    std::vector<std::string> fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now);
+    std::vector<ZoneNotifyText> texts;
+    std::vector<std::string> fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now, &texts);
     for (std::string const& trigger : fired)
         sScriptMgr.OnTriggerFired(_zonePath, *_mapId, trigger, _worldGuid);
+    for (ZoneNotifyText const& text : texts)
+    {
+        GameMessages::ClientNotifyText message;
+        message.NotifyText = text.Text;
+        message.Type = text.Type;
+        SendDmlMessage(message);
+        LOG_INFO("server.gamesession", "Session {} showed wizard {} the notify text {} of type {}", GetSessionId(), _worldGuid, Ambrose::ForLog(text.Text, 128), text.Type);
+    }
     return fired;
 }
 
