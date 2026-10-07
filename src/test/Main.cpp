@@ -33,7 +33,7 @@ namespace
         limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
         SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
         std::u8string const name(distribution->begin(), distribution->end());
-        std::wstring command = L"wsl.exe -d \"" + std::filesystem::path(name).wstring() + L"\" --exec sleep infinity";
+        std::wstring command = L"wsl.exe -d " + std::filesystem::path(name).wstring() + L" --exec sleep infinity";
         STARTUPINFOW startup{};
         startup.cb = sizeof(startup);
         PROCESS_INFORMATION process{};
