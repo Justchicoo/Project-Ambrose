@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Binds wizard fields to the characters statements and reads joined character and appearance rows back field by field; refuses a zero guid or account, a character already marked deleted, and text that is not UTF-8, holds control characters or is too long, before touching the database; treats a commit whose reply was lost as done when the stored character matches; and tells soft deletion, restoring and the online flag apart by the rows each update changed. A stats write older than the row it would replace changes nothing, which the statement itself decides, so it is not an error. A stats row with a negative amount or vital, or a potion charge that is not a finite number of zero or more, is refused before it is written, A stats read that finds the wizard but no row loads as having none, and one that finds no wizard is told apart from both; a spellbook read does the same, a wizard with no spell rows reading as one row of nothing. A spell row for spell 0 is refused, since no spell's name hashes to it.
+ * Binds wizard fields to the characters statements and reads joined character and appearance rows back field by field; refuses a zero guid or account, a character already marked deleted, and text that is not UTF-8, holds control characters or is too long, before touching the database; treats a commit whose reply was lost as done when the stored character matches; and tells soft deletion, restoring and the online flag apart by the rows each update changed. A stats write older than the row it would replace changes nothing, which the statement itself decides, so it is not an error. A stats row with a negative amount or vital, or a potion charge that is not a finite number of zero or more, is refused before it is written, A stats read that finds the wizard but no row loads as having none, and one that finds no wizard is told apart from both; a spellbook read does the same, a wizard with no spell rows reading as one row of nothing. A spell row for spell 0 is refused, since no spell's name hashes to it. An item with no id, no template or no quantity is refused before the database is touched, and trashing an item another wizard owns changes nothing and is reported as not found.
  */
 
 #include "CharacterRepository.h"
@@ -572,4 +572,126 @@ std::string_view CharacterRepository::GetResultName(CharacterOpResult result) no
         case CharacterOpResult::DatabaseError: return "the characters database could not be reached";
     }
     return "unknown";
+}
+
+CharacterInventoryLoad CharacterRepository::LoadInventory(uint64 guid)
+{
+    Statement const statement = PrepareLoadInventory(guid);
+    if (!statement)
+        return {};
+    PreparedQueryResult result;
+    if (!CharacterDatabase.TryQuery(*statement, result))
+        return {};
+    if (!result)
+        return { CharacterOpResult::NotFound, {} };
+    return { CharacterOpResult::Ok, ReadInventory(*result) };
+}
+
+CharacterOpResult CharacterRepository::AddItem(uint64 guid, CharacterItem const& item)
+{
+    if (guid == 0 || item.Guid == 0 || item.TemplateId == 0 || item.Quantity == 0)
+        return CharacterOpResult::InvalidData;
+    CreateTransaction const transaction = PrepareAddItem(guid, item);
+    if (!transaction)
+        return CharacterOpResult::DatabaseError;
+    return CharacterDatabase.DirectCommitTransaction(transaction) ? CharacterOpResult::Ok : CharacterOpResult::DatabaseError;
+}
+
+CharacterOpResult CharacterRepository::TrashItem(uint64 guid, uint64 itemGuid)
+{
+    if (guid == 0 || itemGuid == 0)
+        return CharacterOpResult::InvalidData;
+    Statement const statement = PrepareTrashItem(guid, itemGuid);
+    if (!statement)
+        return CharacterOpResult::DatabaseError;
+    std::optional<uint64> const changed = CharacterDatabase.DirectExecuteCounted(*statement);
+    if (!changed)
+        return CharacterOpResult::DatabaseError;
+    return *changed > 0 ? CharacterOpResult::Ok : CharacterOpResult::NotFound;
+}
+
+std::optional<uint64> CharacterRepository::GetMaxItemGuid()
+{
+    Statement const statement = Prepare(CHAR_SEL_MAX_ITEM_GUID);
+    if (!statement)
+        return std::nullopt;
+    PreparedQueryResult result;
+    if (!CharacterDatabase.TryQuery(*statement, result) || !result)
+        return std::nullopt;
+    return (*result)[0].Get<uint64>();
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareLoadInventory(uint64 guid)
+{
+    Statement statement = Prepare(CHAR_SEL_CHARACTER_INVENTORY);
+    if (statement)
+        statement->SetData(0, guid);
+    return statement;
+}
+
+CharacterRepository::CreateTransaction CharacterRepository::PrepareAddItem(uint64 guid, CharacterItem const& item)
+{
+    if (guid == 0 || item.Guid == 0 || item.TemplateId == 0 || item.Quantity == 0)
+        return nullptr;
+    Statement instance = Prepare(CHAR_INS_ITEM_INSTANCE);
+    Statement inventory = Prepare(CHAR_INS_CHARACTER_INVENTORY);
+    Statement sequence = Prepare(CHAR_INS_ID_SEQUENCE);
+    if (!instance || !inventory || !sequence)
+        return nullptr;
+    instance->SetData(0, item.Guid);
+    instance->SetData(1, guid);
+    instance->SetData(2, item.TemplateId);
+    instance->SetData(3, item.Quantity);
+    instance->SetData(4, item.PrimaryColor);
+    instance->SetData(5, item.SecondaryColor);
+    instance->SetData(6, item.Pattern);
+    instance->SetData(7, static_cast<uint8>(item.Locked ? 1 : 0));
+    instance->SetData(8, item.Flags);
+    instance->SetData(9, item.Created);
+    inventory->SetData(0, guid);
+    inventory->SetData(1, item.Guid);
+    inventory->SetData(2, item.Slot);
+    sequence->SetData(0, ItemGuidSequence);
+    sequence->SetData(1, item.Guid);
+    sequence->SetData(2, item.Guid);
+
+    CreateTransaction transaction = CharacterDatabase.BeginTransaction();
+    transaction->Append(std::move(instance));
+    transaction->Append(std::move(inventory));
+    transaction->Append(std::move(sequence));
+    return transaction;
+}
+
+CharacterRepository::Statement CharacterRepository::PrepareTrashItem(uint64 guid, uint64 itemGuid)
+{
+    Statement statement = Prepare(CHAR_DEL_ITEM_INSTANCE);
+    if (!statement)
+        return statement;
+    statement->SetData(0, itemGuid);
+    statement->SetData(1, guid);
+    return statement;
+}
+
+std::vector<CharacterItem> CharacterRepository::ReadInventory(PreparedResultSet& result)
+{
+    std::vector<CharacterItem> items;
+    do
+    {
+        Field const* const row = result.Fetch();
+        if (row[0].Get<uint32>() == 0)
+            continue;
+        CharacterItem item;
+        item.Guid = row[1].Get<uint64>();
+        item.TemplateId = row[2].Get<uint32>();
+        item.Quantity = row[3].Get<uint32>();
+        item.PrimaryColor = row[4].Get<uint8>();
+        item.SecondaryColor = row[5].Get<uint8>();
+        item.Pattern = row[6].Get<uint8>();
+        item.Locked = row[7].Get<uint8>() != 0;
+        item.Flags = row[8].Get<uint32>();
+        item.Created = row[9].Get<uint64>();
+        item.Slot = row[10].Get<uint32>();
+        items.push_back(item);
+    } while (result.NextRow());
+    return items;
 }

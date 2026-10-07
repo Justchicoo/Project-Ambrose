@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Stores and loads wizards in the characters database: creating a character with its appearance and the guid high-water mark in one transaction, which a caller that must not block its network thread can build and commit itself, listing and counting an account's live characters, loading one by guid even when deleted, soft deletion of offline characters and restoring, the online flag, the highest guid ever used, a wizard's position written under the revision of its row, its character_stats row, read through the wizard so a missing wizard, a wizard with no row yet and a failed read are told apart, and saved whole, and its character_spell rows, read the same way in the order it learned them and each written under its spellbook's revision, with statement builders and row readers for callers that query or save asynchronously.
+ * Stores and loads wizards in the characters database: creating a character with its appearance and the guid high-water mark in one transaction, which a caller that must not block its network thread can build and commit itself, listing and counting an account's live characters, loading one by guid even when deleted, soft deletion of offline characters and restoring, the online flag, the highest guid ever used, a wizard's position written under the revision of its row, its character_stats row, read through the wizard so a missing wizard, a wizard with no row yet and a failed read are told apart, and saved whole, and its character_spell rows, read the same way in the order it learned them and each written under its spellbook's revision, and its backpack, read the same way in the order its items arrived, an item added with its instance, its backpack row and the item sequence in one transaction and trashed only by its owner, and the highest item id ever used, with statement builders and row readers for callers that query or save asynchronously.
  */
 
 #ifndef AMBROSE_CHARACTERREPOSITORY_H
 #define AMBROSE_CHARACTERREPOSITORY_H
 
+#include "CharacterItem.h"
 #include "CharacterSpell.h"
 #include "CharacterStats.h"
 #include "CharacterSummary.h"
@@ -44,6 +45,12 @@ struct CharacterSpellsLoad
     std::vector<CharacterSpell> Spells;
 };
 
+struct CharacterInventoryLoad
+{
+    CharacterOpResult Result = CharacterOpResult::DatabaseError;
+    std::vector<CharacterItem> Items;
+};
+
 struct DeletedCharacter
 {
     uint64 Guid = 0;
@@ -66,6 +73,7 @@ public:
     using CreateTransaction = std::shared_ptr<Transaction<CharacterDatabaseConnection>>;
 
     static constexpr std::string_view GuidSequence = "character";
+    static constexpr std::string_view ItemGuidSequence = "item";
     static constexpr std::size_t MaxCustomNameBytes = 64;
     static constexpr std::size_t MaxZoneBytes = 128;
 
@@ -87,6 +95,10 @@ public:
     static CharacterOpResult SavePosition(uint64 guid, float x, float y, float z, float orientation, uint64 revision);
     static CharacterSpellsLoad LoadSpells(uint64 guid);
     static CharacterOpResult SaveSpell(uint64 guid, CharacterSpell const& spell);
+    static CharacterInventoryLoad LoadInventory(uint64 guid);
+    static CharacterOpResult AddItem(uint64 guid, CharacterItem const& item);
+    static CharacterOpResult TrashItem(uint64 guid, uint64 itemGuid);
+    static std::optional<uint64> GetMaxItemGuid();
 
     static Statement PrepareLoadByAccount(uint64 account);
     static Statement PrepareDelete(uint64 guid, uint64 account, std::optional<uint64> deletedAt);
@@ -101,6 +113,10 @@ public:
     static Statement PrepareLoadSpells(uint64 guid);
     static Statement PrepareSaveSpell(uint64 guid, CharacterSpell const& spell);
     static std::vector<CharacterSpell> ReadSpells(PreparedResultSet& result);
+    static Statement PrepareLoadInventory(uint64 guid);
+    static CreateTransaction PrepareAddItem(uint64 guid, CharacterItem const& item);
+    static Statement PrepareTrashItem(uint64 guid, uint64 itemGuid);
+    static std::vector<CharacterItem> ReadInventory(PreparedResultSet& result);
     static bool IsValidStats(CharacterStats const& stats) noexcept;
     static std::string_view GetResultName(CharacterOpResult result) noexcept;
 };
