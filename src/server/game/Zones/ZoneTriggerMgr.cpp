@@ -103,7 +103,7 @@ bool ZoneTriggerMgr::Load(std::vector<std::string>& errors)
         do
         {
             Field const* row = rows->Fetch();
-            ZoneTrigger trigger{ row[1].Get<uint32>(), row[2].Get<std::string>(), row[3].Get<int32>(), row[4].Get<float>(), row[5].Get<int64>() != 0, {} };
+            ZoneTrigger trigger{ row[1].Get<uint32>(), row[2].Get<std::string>(), row[3].Get<int32>(), row[4].Get<float>(), row[5].Get<int64>() != 0, {}, {} };
             if (!std::isfinite(trigger.CooldownSeconds) || trigger.CooldownSeconds < 0.0f)
                 errors.push_back(fmt::format("{} trigger {} ({}) has a cooldown that is not a number of seconds", row[0].Get<std::string>(), trigger.Index, trigger.Name));
             else

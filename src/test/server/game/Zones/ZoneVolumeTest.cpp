@@ -69,8 +69,8 @@ TEST(ZoneVolumeTest, PresenceEntersAtTheEdgeLeavesPastTheMarginAndAPlacedWizardI
 
 TEST(ZoneVolumeTest, ATriggerFiresOncePerWizardPerCooldownWithinItsMaxAndNeverWithRequirements)
 {
-    ZoneTriggers triggers({ { 1, "Trigger POI Ravenwood", -1, 30.0f, false, { "Enter_Ravenwood POI" } }, { 2, "Once", 1, 0.0f, false, { "Enter_Ravenwood POI" } },
-        { 3, "Needs a quest", -1, 0.0f, true, { "Enter_Ravenwood POI" } }, { 4, "Elsewhere", -1, 0.0f, false, { "Enter_Other" } } });
+    ZoneTriggers triggers({ { 1, "Trigger POI Ravenwood", -1, 30.0f, false, { "Enter_Ravenwood POI" }, {} }, { 2, "Once", 1, 0.0f, false, { "Enter_Ravenwood POI" }, {} },
+        { 3, "Needs a quest", -1, 0.0f, true, { "Enter_Ravenwood POI" }, {} }, { 4, "Elsewhere", -1, 0.0f, false, { "Enter_Other" }, {} } });
     ZoneTriggers::Clock::time_point const start{};
 
     std::vector<ZoneTrigger const*> fired = triggers.Post("Enter_Ravenwood POI", 7, start);
