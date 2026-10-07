@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests username and password rules offline and that a closed login database is an error, and with AMBROSE_TEST_DB set installs the login schema in order and checks account creation, stored and sealed verifiers, duplicates in any case, names that cannot be stored, passwords, security levels, locks and bans that replace earlier ones.
+ * Tests username and password rules offline and that a closed login database is an error, and with AMBROSE_TEST_DB set installs the login schema in order and checks account creation, stored and sealed verifiers, duplicates in any case, names that cannot be stored, passwords, security levels, locks, bans and timed mutes.
  */
 
 #include "AccountMgr.h"
@@ -290,6 +290,37 @@ TEST_F(AccountMgrDatabaseTest, TwoBansInTheSameSecondUpdateTheSameRow)
     ASSERT_TRUE(ban);
     EXPECT_TRUE(ban->IsPermanent());
     EXPECT_EQ(ban->Reason, "second");
+}
+
+TEST_F(AccountMgrDatabaseTest, TimedMutesReplaceEarlierRecordsAndUnmuteDeletesThem)
+{
+    uint64 id = 0;
+    ASSERT_EQ(sAccountMgr.CreateAccount("muted", "testpass", "", &id), AccountOpResult::Ok);
+
+    uint64 firstMuteUntil = 0;
+    ASSERT_EQ(sAccountMgr.MuteAccount(id, std::chrono::hours(1), "Moderator", "first reason", &firstMuteUntil), AccountOpResult::Ok);
+    QueryResult first = LoginDatabase.Query(fmt::format("SELECT `until`, `reason`, `by` FROM `account_muted` WHERE `account_id` = {}", id));
+    ASSERT_TRUE(first);
+    uint64 const firstUntil = (*first)[0].Get<uint64>();
+    EXPECT_EQ(firstUntil, firstMuteUntil);
+    EXPECT_EQ((*first)[1].Get<std::string>(), "first reason");
+    EXPECT_EQ((*first)[2].Get<std::string>(), "Moderator");
+
+    uint64 replacementMuteUntil = 0;
+    ASSERT_EQ(sAccountMgr.MuteAccount(id, std::chrono::minutes(5), "Console", "replacement reason", &replacementMuteUntil), AccountOpResult::Ok);
+    QueryResult const replacementCount = LoginDatabase.Query(fmt::format("SELECT COUNT(*) FROM `account_muted` WHERE `account_id` = {}", id));
+    ASSERT_TRUE(replacementCount);
+    EXPECT_EQ((*replacementCount)[0].Get<uint64>(), 1u);
+    QueryResult replacement = LoginDatabase.Query(fmt::format("SELECT `until`, `reason`, `by` FROM `account_muted` WHERE `account_id` = {}", id));
+    ASSERT_TRUE(replacement);
+    EXPECT_LT((*replacement)[0].Get<uint64>(), firstUntil);
+    EXPECT_EQ((*replacement)[0].Get<uint64>(), replacementMuteUntil);
+    EXPECT_EQ((*replacement)[1].Get<std::string>(), "replacement reason");
+    EXPECT_EQ((*replacement)[2].Get<std::string>(), "Console");
+    EXPECT_EQ(sAccountMgr.MuteAccount(id, std::chrono::seconds::zero(), "Console", "invalid"), AccountOpResult::BadDuration);
+
+    ASSERT_EQ(sAccountMgr.UnmuteAccount(id), AccountOpResult::Ok);
+    EXPECT_FALSE(LoginDatabase.Query(fmt::format("SELECT `account_id` FROM `account_muted` WHERE `account_id` = {}", id)));
 }
 
 TEST_F(AccountMgrDatabaseTest, NamesThatCannotBeStoredAreSimplyNotFound)

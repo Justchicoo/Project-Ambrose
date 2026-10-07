@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests SQL splitting, statement and file classification, in-memory updater policy decisions, update names and LF-normalized hashes offline, and with AMBROSE_TEST_DB set runs the updater on fresh databases: base import, ordered and custom updates, a folder an update adds applied in the same run, bad names, failing files, the repository's own login schema, and a live listing and data-only apply that stops before a schema change and rolls a failing file back.
+ * Tests SQL splitting, statement and file classification, in-memory updater policy decisions, update names and LF-normalized hashes offline, and with AMBROSE_TEST_DB set runs the updater on fresh databases: base import, ordered and custom updates, a folder an update adds applied in the same run, bad names, failing files, the repository's own login schema, two updaters started together against one database, which take turns, and a live listing and data-only apply that stops before a schema change and rolls a failing file back.
  */
 
 #include "DBUpdater.h"
@@ -20,8 +20,12 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <fstream>
 #include <random>
+#include <thread>
+#include <vector>
 
 namespace
 {
@@ -368,6 +372,33 @@ TEST(DBUpdaterTest, RepositoryLoginSchemaInstallsFromScratch)
     EXPECT_EQ(Count(*info, "SELECT COUNT(*) FROM `updates_include` WHERE `path` = '$/data/sql/updates/pending_db_login' AND `state` = 'PENDING'"), 1u);
     ASSERT_TRUE(DBUpdater::Run(*info, "login", UpdaterSettings{}));
     EXPECT_TRUE(log.Contains("The login database is up to date"));
+}
+
+TEST(DBUpdaterTest, TwoUpdatersStartedTogetherAgainstOneDatabaseBothSucceed)
+{
+    for (int round = 0; round < 3; ++round)
+    {
+        std::optional<MySQLConnectionInfo> const info = TestDatabase("ambrose_updater_together");
+        if (!info)
+            GTEST_SKIP() << "AMBROSE_TEST_DB is not set";
+        DropDatabase(*info);
+        ScopeExit const drop([&info] { DropDatabase(*info); });
+        std::atomic<int> ready{ 0 };
+        std::array<bool, 2> succeeded{};
+        std::vector<std::thread> servers;
+        for (std::size_t server = 0; server < succeeded.size(); ++server)
+            servers.emplace_back([&info, &ready, &succeeded, server]
+            {
+                ++ready;
+                while (ready.load() < 2)
+                    std::this_thread::yield();
+                succeeded[server] = DBUpdater::Run(*info, "characters", UpdaterSettings{});
+            });
+        for (std::thread& server : servers)
+            server.join();
+        EXPECT_TRUE(succeeded[0] && succeeded[1]) << "round " << round << ": a login and a game server starting together must both find the database ready";
+        EXPECT_GT(Count(*info, "SELECT COUNT(*) FROM `updates` WHERE `name` = '2026_09_25_01.sql'"), 0u) << "the update both raced to record was recorded";
+    }
 }
 
 TEST(DBUpdaterTest, AnUpdateThatAddsAFolderHasItsFilesAppliedInTheSameRun)

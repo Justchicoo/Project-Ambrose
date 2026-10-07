@@ -541,6 +541,88 @@ class BuildStageTests(unittest.TestCase):
         self.assertEqual(ran[-1], ["ctest", "--preset", "linux-gcc-asan", "--label-exclude", "^(render|slow)$"])
 
 
+class BuildProfileTests(unittest.TestCase):
+    def test_profile_reads_each_steps_latest_run_and_the_test_costs(self):
+        with tempfile.TemporaryDirectory() as tree:
+            Path(tree, ".ninja_log").write_text("# ninja log v5\n0\t9000\t1\ta.cpp.o\th\n0\t4000\t1\tb.cpp.obj\th\n10\t2010\t1\ta.cpp.o\th\n0\t30000\t1\tbin/unit_tests\th\n5\t1405\t1\tbuild.ninja\tr\n5\t1405\t1\tcmake_install.cmake\tr\nbroken\n", encoding="utf-8")
+            Path(tree, "Testing", "Temporary").mkdir(parents=True)
+            Path(tree, "Testing", "Temporary", "CTestCostData.txt").write_text("Fast.Test 3 0.5\nSlow.Test 2 120.25\n---\nSlow.Test\n", encoding="utf-8")
+            self.assertEqual(ci_build.ninja_steps(os.path.join(tree, ".ninja_log")), {"a.cpp.o": 2.0, "b.cpp.obj": 4.0, "bin/unit_tests": 30.0, "build.ninja": 1.4},
+                             "one step writing several outputs counts once")
+            self.assertEqual(ci_build.test_costs(os.path.join(tree, "Testing", "Temporary", "CTestCostData.txt")), {"Fast.Test": 0.5, "Slow.Test": 120.25})
+            text = ci_build.profile(tree, 1)
+            self.assertIn("2 compiles taking 6s together, 2 other steps such as links taking 31s", text)
+            self.assertIn("      4.0s  b.cpp.obj", text)
+            self.assertNotIn("a.cpp.o", text)
+            self.assertIn("    120.2s  Slow.Test", text)
+            Path(tree, ".ninja_log").write_text("# ninja log v5\n0\t3000\t1\tsrc/test/CMakeFiles/unit_tests.dir/Debug/A.cpp.o\th\n0\t2000\t1\tsrc/test/CMakeFiles/unit_tests.dir/Debug/B.cpp.o\th\n0\t1000\t1\tsrc/common/CMakeFiles/common.dir/Debug/C.cpp.o\th\n", encoding="utf-8")
+            text = ci_build.profile(tree, 2)
+            self.assertIn("        5s      2 files  unit_tests\n        1s      1 files  common", text)
+
+    def test_a_tree_with_neither_file_says_so(self):
+        with tempfile.TemporaryDirectory() as tree:
+            text = ci_build.profile(tree, 5)
+            self.assertIn("no .ninja_log", text)
+            self.assertIn("no Testing/Temporary/CTestCostData.txt", text)
+
+    def test_profile_builds_nothing(self):
+        with tempfile.TemporaryDirectory() as tree, mock.patch.object(ci_build, "run") as ran, mock.patch("sys.stdout", new_callable=io.StringIO):
+            self.assertEqual(ci_build.main(["--profile", tree]), 0)
+        ran.assert_not_called()
+
+
+class BuildTargetTests(unittest.TestCase):
+    LISTING = json.dumps({"tests": [
+        {"name": "Auth.One", "command": ["/b/bin/Debug/unit_tests", "--gtest_filter=Auth.One"]},
+        {"name": "Auth.Two", "command": ["C:\\b\\bin\\Debug\\unit_tests.exe", "--gtest_filter=Auth.Two"]},
+        {"name": "Zone.Client", "command": ["/b/bin/Debug/client_tests"]},
+        {"name": "ci.selftest", "command": ["/usr/bin/python3", "x.py"]},
+        {"name": "NoCommand"}]})
+
+    def arguments(self, **overrides):
+        values = {"build_preset": "linux-gcc-debug", "test_preset": None, "target": ["unit_tests"], "tests": None, "jobs": 4, "test_jobs": 4, "exclude_label": []}
+        values.update(overrides)
+        return argparse.Namespace(**values)
+
+    def test_a_targets_tests_are_those_its_own_program_runs(self):
+        self.assertEqual(ci_build.tests_of(self.LISTING, ["unit_tests"]), ["Auth.One", "Auth.Two"])
+        self.assertEqual(ci_build.tests_of(self.LISTING, ["unit_tests"], "Two$"), ["Auth.Two"])
+        self.assertEqual(ci_build.tests_of(self.LISTING, ["client_tests", "unit_tests"]), ["Auth.One", "Auth.Two", "Zone.Client"])
+
+    def test_it_builds_the_target_at_the_jobs_given_and_runs_only_its_tests(self):
+        ran = []
+        listed = []
+
+        def runner(command, **_):
+            ran.append(command)
+            if command[0] == "ctest":
+                listed.append(Path(command[command.index("--tests-from-file") + 1]).read_text(encoding="utf-8"))
+
+        self.assertEqual(ci_build.run_targets(self.arguments(tests="One"), {}, runner, lambda _: self.LISTING), 0)
+        self.assertEqual(ran[0], ["cmake", "--build", "--preset", "linux-gcc-debug", "--target", "unit_tests", "--parallel", "4"])
+        self.assertEqual(ran[1][:4], ["ctest", "--preset", "linux-gcc-debug", "--tests-from-file"])
+        self.assertEqual(ran[1][-2:], ["--parallel", "4"])
+        self.assertEqual(listed, ["Auth.One\n"])
+        self.assertFalse(os.path.exists(ran[1][5]), "the list is removed after the run")
+
+    def test_a_target_with_no_matching_test_is_built_only(self):
+        ran = []
+        with mock.patch("sys.stdout", new_callable=io.StringIO):
+            self.assertEqual(ci_build.run_targets(self.arguments(target=["gameserver"]), {}, lambda command, **_: ran.append(command), lambda _: self.LISTING), 0)
+        self.assertEqual(len(ran), 1)
+
+    def test_a_failed_build_is_its_exit_status(self):
+        def runner(command, **_):
+            raise subprocess.CalledProcessError(3, command)
+
+        self.assertEqual(ci_build.run_targets(self.arguments(), {}, runner, lambda _: self.LISTING), 3)
+
+    def test_the_quick_bus_job_counts_are_the_defaults(self):
+        with mock.patch.dict(os.environ, {"CMAKE_BUILD_PARALLEL_LEVEL": "4", "CTEST_PARALLEL_LEVEL": "4"}), mock.patch.object(ci_build, "run_targets", return_value=0) as targets:
+            self.assertEqual(ci_build.main(["--build-preset", "linux-gcc-debug", "--target", "unit_tests"]), 0)
+        self.assertEqual((targets.call_args[0][0].jobs, targets.call_args[0][0].test_jobs), (4, 4))
+
+
 class BuildLegTests(unittest.TestCase):
     def test_a_leg_names_its_presets_and_defaults_the_rest(self):
         self.assertEqual(ci_build.parse_leg("linux-gcc:linux-gcc-debug"), {"configure": "linux-gcc", "build": "linux-gcc-debug", "test": "linux-gcc-debug"})

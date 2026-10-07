@@ -32,7 +32,7 @@ doc/REVIEWING.md is the rulebook. Read it whole before any review; its first lin
 
 ## Landing
 
-- Contributor work lands as one squashed commit authored to the contributor, with their `Co-Authored-By`. The subject is `<item id>: <what landed>`.
+- Contributor work lands as one commit made with `git merge --squash prN` on main, authored to the contributor's numeric noreply address, with their `Co-Authored-By`. The subject is `<item id>: <what landed>`. Never use GitHub's squash button for it, which names their account email.
 - Whatever the maintainer's side can finish in the same sitting is fixed on main, one commit per fix, naming the pull request and the fault.
 - Update the tracks in the same sitting: the merged table, "Started, still open", and doc/MILESTONE-TRACK.md's Started and Landed rows. Run `python apps/ci/tests/test_ci.py` and `python apps/site/build.py --check` before pushing.
 - When a batch teaches something, write it into doc/REVIEWING.md or the contributor prompts (contrib/AI-START-HERE.md, contrib/AI-MILESTONES-HERE.md), not into a review comment.
