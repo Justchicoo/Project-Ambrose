@@ -57,8 +57,6 @@ namespace
     uint16 TransferPort = 0;
     constexpr int64 TransferKeyLifetimeSeconds = 120;
 
-    // The client copies MSG_SERVERTRANSFER's INT Key into MSG_ATTACH's STR LoginKey, which arrives empty, so the key sent is kept here
-    // and the attach that follows proves itself with its PassKey instead.
     struct PendingTransfer
     {
         std::string Key;
@@ -73,16 +71,22 @@ namespace
         PendingTransfers[{ accountId, characterId }] = PendingTransfer{ std::move(key), expires };
     }
 
-    std::optional<std::string> TakeTransfer(uint64 accountId, uint64 characterId, int64 now)
+    std::optional<std::string> FindTransfer(uint64 accountId, uint64 characterId, int64 now)
     {
         std::lock_guard const lock(PendingTransferMutex);
         std::erase_if(PendingTransfers, [now](auto const& entry) { return entry.second.Expires <= now; });
         auto const found = PendingTransfers.find({ accountId, characterId });
         if (found == PendingTransfers.end())
             return std::nullopt;
-        std::string key = std::move(found->second.Key);
-        PendingTransfers.erase(found);
-        return key;
+        return found->second.Key;
+    }
+
+    void ForgetTransfer(uint64 accountId, uint64 characterId, std::string const& key)
+    {
+        std::lock_guard const lock(PendingTransferMutex);
+        auto const found = PendingTransfers.find({ accountId, characterId });
+        if (found != PendingTransfers.end() && found->second.Key == key)
+            PendingTransfers.erase(found);
     }
 
     int64 NowEpochSeconds()
@@ -286,7 +290,7 @@ void GameSession::HandleAttach(GameMessages::Attach& message)
     int64 const now = NowEpochSeconds();
     if (claim.Key.empty() && !message.PassKey.empty())
     {
-        std::optional<std::string> key = TakeTransfer(claim.AccountId, claim.CharacterId, now);
+        std::optional<std::string> key = FindTransfer(claim.AccountId, claim.CharacterId, now);
         if (!key)
         {
             RefuseAttach(claim, LoginKeyVerdict::Unknown);
@@ -326,6 +330,7 @@ void GameSession::CheckTransferPassKey(LoginKeyClaim claim, std::string passKey,
             RefuseAttach(claim, LoginKeyVerdict::WrongPassKey);
             return;
         }
+        ForgetTransfer(claim.AccountId, claim.CharacterId, claim.Key);
         ConsumeKey(claim, now);
     }));
 }

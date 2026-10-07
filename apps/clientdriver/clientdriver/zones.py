@@ -7,7 +7,6 @@ from . import paths
 from .errors import StepFailed
 
 NO_WINDOW = 0x08000000
-# 4: volumes and triggers, which the extractor reads only through a world database's server classes.
 LAYOUT = 4
 
 
