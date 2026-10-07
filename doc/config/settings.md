@@ -55,6 +55,13 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Files.MinFreePercent` | unsigned | 5 % | from 0 to 90 % | live | supervisor | normal | The least free space a volume must keep after any write the panel makes, as a share of the volume; the larger of this and Files.MinFreeBytes holds. |
 | `Files.ReadMaxBytes` | unsigned | 4194304 bytes | from 65536 to 67108864 bytes | live | supervisor | normal | The most of a file one read hands the panel; a file this size or smaller also carries its content hash, and a configuration file larger than this is not shown. |
 
+## Inventory
+
+| Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
+|---|---|---|---|---|---|---|---|
+| `Inventory.ExtraSlots` | unsigned | 0 items | from 0 to 10000 items | live | gameserver | normal | How many items every wizard's backpack holds beyond Inventory.Slots, read at each add, so raising it lets the next add to a full backpack succeed; the client is told the new total when the wizard next enters the world. |
+| `Inventory.Slots` | unsigned | 100 items | from 0 to 10000 items | next connection or operation | gameserver | normal | How many items every wizard's backpack holds, read when the wizard enters the world and sent to its client as the m_numItemsAllowed of its inventory behavior, since neither the player template nor any other file of the install gives one. |
+
 ## Locale
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
