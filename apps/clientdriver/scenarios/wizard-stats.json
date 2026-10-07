@@ -1,14 +1,15 @@
 {
-  "title": "A level 5 wizard's stored health, mana, gold and level show on the HUD, in the backpack and on the character sheet",
+  "title": "A level 5 game master's live gold, heal and potion changes reach its client",
   "include": "parts/common.json",
   "notes": [
-    "The run seeds a level 5 Fire wizard with 900 experience and a character_stats row holding 1234 gold, 300 health",
-    "and 10 mana, below the 503 health and 24 mana its school's level 5 row gives, so every number the client shows",
-    "can only have come from the database.",
+    "The run makes its account a game master and seeds a level 5 Fire wizard with 900 experience and a character_stats",
+    "row holding 1234 gold, 300 health and 10 mana, below the 503 health and 24 mana its school's level 5 row gives.",
     "The game server builds the wizard's stats from that row and the level tables it extracted from the install itself,",
     "logs what it put in the wizard's WizGameStats, and sends them in the wizard's own object in MSG_LOGINCOMPLETE.",
-    "Once the wizard stands in Ravenwood the run shoots the HUD, then opens the backpack with B and the character",
-    "stats with C, the keys the client's own InputBindings.xml gives ToggleInventory and ToggleCharStats, and shoots each.",
+    "The HUD and backpack are shot before and after .character gold 500 changes gold live without a relog.",
+    "The run sets mana to 5 and potion capacity to 2, uses a potion at Potion.RestoreFraction 0.1, changes the live",
+    "setting to 0.2 before the next use, then uses .character heal to fill health with DisplayDiff=1.",
+    "The character stats screen is opened with C, the key the client's own InputBindings.xml gives ToggleCharStats.",
     "The rest follows enter-world: the chatter the client sends entering the world is answered or allowed, and the",
     "wizard must still be connected at the next keepalive.",
     "Opening the backpack sends MSG_PLAYERWIZBANG, which asks the server to show other players the icon over the wizard's head;",
@@ -55,6 +56,13 @@
     }
   },
   "steps": [
+    {
+      "action": "server_command",
+      "name": "make the account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
     {
       "action": "wait_client_log",
       "name": "the client brings its renderer up",
@@ -261,8 +269,204 @@
     },
     {
       "action": "key",
+      "name": "close the backpack before viewing stored character stats",
+      "vk": "0x42"
+    },
+    {
+      "action": "key",
+      "name": "open the character stats before live changes",
+      "vk": "0x43"
+    },
+    {
+      "action": "shot",
+      "name": "the character stats show the stored level and school",
+      "file": "character-stats",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "close the stored character stats",
+      "vk": "0x43"
+    },
+    {
+      "action": "key",
+      "name": "reopen the backpack for live gold",
+      "vk": "0x42"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .character gold 500",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash before .character gold 500",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .character gold 500",
+      "text": ".character gold 500"
+    },
+    {
+      "action": "char",
+      "name": "send .character gold 500",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master changes gold live",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran character gold 500, which worked",
+      "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the backpack shows live gold",
+      "file": "backpack-live-gold",
+      "settle": 1
+    },
+    {
+      "action": "key",
       "name": "close the backpack",
       "vk": "0x42"
+    },
+    {
+      "action": "game_command",
+      "name": "set the first potion restore fraction",
+      "command": "settings set Potion.RestoreFraction 0.1 the 8.01 potion check",
+      "pattern": "Potion\\.RestoreFraction is now 0\\.1",
+      "timeout": 20
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .character mana 5",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash before .character mana 5",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .character mana 5",
+      "text": ".character mana 5"
+    },
+    {
+      "action": "char",
+      "name": "send .character mana 5",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master lowers mana",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran character mana 5, which worked",
+      "timeout": 20
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .character potion 2",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash before .character potion 2",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .character potion 2",
+      "text": ".character potion 2"
+    },
+    {
+      "action": "char",
+      "name": "send .character potion 2",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master fills two potion charges",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran character potion 2, which worked",
+      "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the HUD shows two filled potion charges",
+      "file": "potions-filled",
+      "settle": 1
+    },
+    {
+      "action": "click",
+      "name": "use the first potion",
+      "target": "potion_use"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the first potion restores health",
+      "pattern": "MSG_UpdateHealth: Updating health globe \\(new health: 350, new health max: 503\\)",
+      "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the first potion restores health and mana and empties one charge",
+      "file": "potion-first-use",
+      "settle": 1
+    },
+    {
+      "action": "game_command",
+      "name": "change the restore fraction while the game server stays up",
+      "command": "settings set Potion.RestoreFraction 0.2 the 8.01 live-setting check",
+      "pattern": "Potion\\.RestoreFraction is now 0\\.2",
+      "timeout": 20
+    },
+    {
+      "action": "click",
+      "name": "use the second potion at the new restore fraction",
+      "target": "potion_use_remaining"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the second potion uses the new health restore fraction",
+      "pattern": "MSG_UpdateHealth: Updating health globe \\(new health: 451, new health max: 503\\)",
+      "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the second potion applies the new fraction and empties the last charge",
+      "file": "potion-live-setting",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .character heal",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash before .character heal",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .character heal",
+      "text": ".character heal"
+    },
+    {
+      "action": "char",
+      "name": "send .character heal",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master heals the wizard",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran character heal, which worked",
+      "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the health globe shows the live heal",
+      "file": "healed",
+      "settle": 1
     },
     {
       "action": "key",
@@ -271,8 +475,8 @@
     },
     {
       "action": "shot",
-      "name": "the character stats show the level and school",
-      "file": "character-stats",
+      "name": "the character stats show the level and school after live changes",
+      "file": "character-stats-after",
       "settle": 3
     },
     {
