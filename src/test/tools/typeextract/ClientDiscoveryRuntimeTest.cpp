@@ -196,8 +196,12 @@ TEST(ClientDiscoveryRuntimeTest, ThePropertyListLinkAndPointerFlagAreDerivedAtSh
     EXPECT_EQ(derived.ListName, shifted.ListName);
     EXPECT_EQ(derived.TypePointer, shifted.TypePointer);
     for (ClientLayoutEvidence const& evidence : derived.Evidence())
+    {
         if (evidence.Field == "Type.pointer" || evidence.Field == "Type.property_list" || evidence.Field == "PropertyList.name")
+        {
             EXPECT_EQ(evidence.Status, "derived") << evidence.Field;
+        }
+    }
 
     std::vector<uint64> const fewLists(types.begin(), types.begin() + 6);
     ClientLayout refused;
