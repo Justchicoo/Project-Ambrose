@@ -4,7 +4,8 @@
   "notes": [
     "6.06: two wizards enter the Commons as two-wizards.json has them and the main account is a game master. It walks away, types .tele Start",
     "and snaps to the Start fountain with no loading screen while the companion sees it pop there; .gps prints its place beside the minimap;",
-    "after another walk .tele add keeps the spot, which .tele takes it back to at once, with no reload, before .tele del removes it."
+    "after another walk .tele add keeps the spot, which .tele takes it back to at once, with no reload, before .tele del removes it.",
+    "Then .go xyz 200000 0 0 is refused, and the companion, a player, types .tele Start, which is said as chat."
   ],
   "requires": {
     "gameserver": true
@@ -494,6 +495,77 @@
       "name": "the point is removed",
       "pattern": "account \\d+ with wizard {wizard_guid} ran tele del DriverSpot, which worked",
       "timeout": 20
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to try an out-of-range coordinate",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash before the out-of-range command",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "try a coordinate no position can be sent as",
+      "text": ".go xyz 200000 0 0"
+    },
+    {
+      "action": "char",
+      "name": "send the out-of-range coordinate",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the server refuses the out-of-range coordinate",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran go xyz 200000 0 0, which was not used correctly",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the game master reads the refusal and has not moved",
+      "file": "out-of-range-refused",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "open the companion chat line to try the GM teleport",
+      "vk": "0xBF",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash before the player's teleport text",
+      "code": 8,
+      "client": "companion"
+    },
+    {
+      "action": "type",
+      "name": "try the GM teleport as a player",
+      "text": ".tele Start",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "send the player's teleport text",
+      "code": 13,
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the player's .tele Start is said as chat",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} sent a chat line, shown to (\\d+) other wizard",
+      "timeout": 20,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the game master sees the player's ordinary chat line",
+      "file": "player-cannot-teleport",
+      "settle": 1
     }
   ]
 }

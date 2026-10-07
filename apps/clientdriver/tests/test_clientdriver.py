@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation.
+# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation.
 import json
 import os
 import re
@@ -469,6 +469,32 @@ class WorldEntryTests(TemporaryFolder):
         self.assertTrue(loaded.needs_gameserver)
         self.assertEqual(loaded.wizard["zone"], "WizardCity/WC_Ravenwood")
         self.assertIn("charselect_play", loaded.targets_used())
+
+    def test_a_wsl_database_s_distribution_is_held_until_the_driver_exits(self):
+        started, registered = [], []
+
+        class Holder:
+            def kill(self):
+                pass
+
+        def start(command, **_options):
+            started.append(command)
+            return Holder()
+
+        holder = database.hold_wsl("Ubuntu-24.04", start=start, at_exit=registered.append, platform="win32")
+        self.assertEqual(started, [["wsl.exe", "-d", "Ubuntu-24.04", "--exec", "sleep", "infinity"]])
+        self.assertEqual(registered, [holder.kill])
+        self.assertIsNone(database.hold_wsl(None, start=start, at_exit=registered.append, platform="win32"))
+        self.assertIsNone(database.hold_wsl("Ubuntu-24.04", start=start, at_exit=registered.append, platform="linux"))
+        self.assertEqual(len(started), 1)
+
+    def test_a_held_distribution_that_cannot_start_fails_the_run_with_its_name(self):
+        def start(_command, **_options):
+            raise OSError("wsl.exe is not installed")
+
+        with self.assertRaises(StepFailed) as raised:
+            database.hold_wsl("Ubuntu-24.04", start=start, at_exit=lambda _kill: None, platform="win32")
+        self.assertIn("Ubuntu-24.04", str(raised.exception))
 
     def test_the_game_server_announces_its_realm_at_the_run_s_own_address_and_port(self):
         scratch = database.Scratch("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose_driver_run")
