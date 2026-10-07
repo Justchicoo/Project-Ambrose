@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests runtime discovery over synthetic heaps and code: std::map node fields derived from the tree's shape at default and shifted offsets, the property list link and pointer flag derived from registered types, a map head among decoy nodes, cycle refusal, constructor and initializer votes, and Type and string fields derived from chosen values at non-default offsets.
+ * Tests runtime discovery over synthetic heaps and code: std::map node fields derived from the tree's shape at default and shifted offsets, the property list link and pointer flag derived from registered types, PropertyList base, singleton and name placed by chosen constructor values, a map head among decoy nodes, cycle refusal, constructor and initializer votes, and Type and string fields derived from chosen values at non-default offsets.
  */
 
 #include "ClientDiscovery.h"
@@ -317,4 +317,51 @@ TEST(ClientDiscoveryRuntimeTest, ConstructorChosenValuesLocateTypeAndStringField
     EXPECT_EQ(layout.StringInlineCapacity, 7u);
     EXPECT_EQ(layout.StringObjectSize, 0x18u);
     EXPECT_EQ(layout.FirstUnresolvedField(), "std::map.node.left");
+}
+
+TEST(ClientDiscoveryRuntimeTest, ListConstructorChosenValuesLocateBaseSingletonAndNameAwayFromDefaults)
+{
+    ClientLayout shifted;
+    shifted.ListBase = 0x30;
+    shifted.ListSingleton = 0x0B;
+    shifted.ListName = 0x60;
+    Heap h(shifted);
+    std::vector<ConstructedListSample> samples;
+    for (int index = 0; index < 4; ++index)
+    {
+        ConstructedListSample& sample = samples.emplace_back();
+        sample.Address = h.heap.Allocate(0x200, true);
+        sample.Base = h.heap.Allocate(0x200, true);
+        sample.Singleton = index % 2 == 0;
+        sample.Name = "AmbroseListProbe";
+        h.machine.WriteU64(sample.Address, 0x140020000);
+        h.machine.WriteU8(sample.Address + shifted.ListSingleton, sample.Singleton ? 1 : 0);
+        h.machine.WriteU64(sample.Address + shifted.ListBase, sample.Base);
+        h.objects.WriteString(sample.Address + shifted.ListName, sample.Name);
+    }
+
+    ClientLayout derived;
+    std::string error;
+    ASSERT_TRUE(ClientDiscovery::DeriveConstructedListLayout(h.machine, samples, derived, error)) << error;
+    EXPECT_EQ(derived.ListBase, shifted.ListBase);
+    EXPECT_EQ(derived.ListSingleton, shifted.ListSingleton);
+    EXPECT_EQ(derived.ListName, shifted.ListName);
+    for (std::string_view const field : { "PropertyList.base", "PropertyList.singleton", "PropertyList.name" })
+    {
+        EXPECT_TRUE(derived.DerivedFields.contains(std::string(field))) << field;
+    }
+
+    ClientLayout disagreeing;
+    disagreeing.ConfirmDerived("PropertyList.name", "registered lists");
+    disagreeing.ListName = 0xB8;
+    EXPECT_FALSE(ClientDiscovery::DeriveConstructedListLayout(h.machine, samples, disagreeing, error));
+    EXPECT_NE(error.find("the registered lists hold it at 0xb8"), std::string::npos) << error;
+
+    std::vector<ConstructedListSample> sameFlag(samples.begin(), samples.end());
+    for (ConstructedListSample& sample : sameFlag)
+        sample.Singleton = true;
+    ClientLayout refused;
+    EXPECT_FALSE(ClientDiscovery::DeriveConstructedListLayout(h.machine, sameFlag, refused, error));
+    EXPECT_NE(error.find("with and without the singleton flag"), std::string::npos) << error;
+    EXPECT_TRUE(refused.DerivedFields.empty());
 }

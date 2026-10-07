@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs a whole extraction: refuses an install whose revision cannot name a dump file, loads the install's client program and runtime, derives the type map's std::map node layout from the heap (before the search for an unknown build, and afterwards as a check against the written offsets for a known one) Type and std::string layout from values passed to the client's constructor (whose probe Types it then leaves out of the walk), and the property list link and pointer flag from the registered types, runs its initializers and lazy getters, adds its races, validates the type map and server catalog, and reports per-field evidence, timings, counts and discoveries.
+ * Runs a whole extraction: refuses an install whose revision cannot name a dump file, loads the install's client program and runtime, derives the type map's std::map node layout from the heap (before the search for an unknown build, and afterwards as a check against the written offsets for a known one) Type and std::string layout from values passed to the client's constructor (whose probe Types it then leaves out of the walk), the property list link and pointer flag from the registered types, and PropertyList base and singleton by probing the client's PropertyList constructor, runs its initializers and lazy getters, adds its races, validates the type map and server catalog, and reports per-field evidence, timings, counts and discoveries.
  */
 
 #include "TypeExtraction.h"
@@ -101,6 +101,54 @@ namespace
             return false;
         layout = std::move(candidate);
         return true;
+    }
+
+    std::optional<uint64> ProbeListLayout(GuestProcess& process, uint64 typeConstructor, std::span<uint64 const> candidates, ClientLayout& layout, std::unordered_set<uint64>& probes, std::string& error)
+    {
+        constexpr std::string_view className = "class AmbroseListProbe";
+        uint64 const type = process.GetHeap().Allocate(0x200, true);
+        probes.insert(type);
+        try
+        {
+            process.Call(typeConstructor, { type, process.StoreCString(className), StringHash::KiStringHash(className) }, TypeConstructorProbeBudget);
+        }
+        catch (EmulationError const& failure)
+        {
+            error = fmt::format("PropertyList.base could not be derived: the probe Type could not be built: {}", failure.what());
+            return std::nullopt;
+        }
+        std::vector<std::string> rejected;
+        for (uint64 const candidate : candidates)
+        {
+            std::vector<ConstructedListSample> samples;
+            try
+            {
+                for (int index = 0; index < 4; ++index)
+                {
+                    ConstructedListSample& sample = samples.emplace_back();
+                    sample.Address = process.GetHeap().Allocate(0x200, true);
+                    sample.Base = process.GetHeap().Allocate(0x200, true);
+                    sample.Singleton = index % 2 == 0;
+                    sample.Name = TypeWalker::ListNameOf(className);
+                    process.Call(candidate, { sample.Address, type, 0, sample.Base, 0, sample.Singleton ? 1u : 0u }, TypeConstructorProbeBudget);
+                }
+            }
+            catch (EmulationError const& failure)
+            {
+                rejected.push_back(fmt::format("{} faulted: {}", process.DescribeAddress(candidate), failure.what()));
+                continue;
+            }
+            ClientLayout derived = layout;
+            std::string reason;
+            if (ClientDiscovery::DeriveConstructedListLayout(process.GetMachine(), samples, derived, reason))
+            {
+                layout = std::move(derived);
+                return candidate;
+            }
+            rejected.push_back(fmt::format("{}: {}", process.DescribeAddress(candidate), reason));
+        }
+        error = fmt::format("PropertyList.base could not be derived: no PropertyList constructor among {} candidates ({})", candidates.size(), fmt::join(rejected, "; "));
+        return std::nullopt;
     }
 
     bool UsesReferenceTypeLayout(std::string_view revision)
@@ -315,6 +363,25 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
         if (!listInitializer)
             return fail(fmt::format("the PropertyList initializer was not found: {}", error));
         result.Discovered.push_back(fmt::format("PropertyList initializer at {} ({} votes, runner-up {} votes)", process.DescribeAddress(listInitializer->Winner), listInitializer->WinnerVotes, listInitializer->RunnerUpVotes));
+        auto deriveListFields = [&](ClientLayout& target, std::span<uint64 const> registered)
+        {
+            std::vector<uint64> lists;
+            std::unordered_set<uint64> seenLists;
+            for (uint64 const type : registered)
+                if (uint64 const list = machine.ReadU64(type + target.TypePropertyList); list && seenLists.insert(list).second)
+                    lists.push_back(list);
+            std::array<uint64, 2> const known{ constructor->Winner, listInitializer->Winner };
+            std::vector<uint64> const candidates = ClientDiscovery::FindPropertyListConstructorCandidates(code, lists, listInitializer->Winner, known);
+            std::optional<uint64> const listConstructor = ProbeListLayout(process, constructor->Winner, candidates, target, probes, error);
+            if (!listConstructor)
+                return false;
+            result.Discovered.push_back(fmt::format("PropertyList constructor at {} (candidate {} of {})", process.DescribeAddress(*listConstructor),
+                std::find(candidates.begin(), candidates.end(), *listConstructor) - candidates.begin() + 1, candidates.size()));
+            announce(target, { "PropertyList.base", "PropertyList.singleton" });
+            return true;
+        };
+        if ((options.RequireDerivedLayout || !referenceLayout) && !deriveListFields(layout, *types))
+            return fail(fmt::format("the client layout could not be derived: {}", error));
         std::optional<uint64> const raceAdder = ClientDiscovery::FindRaceAdder(code, error);
         if (!raceAdder)
             return fail(fmt::format("the race adder was not found: {}", error));
@@ -462,6 +529,10 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
                 result.Discovered.push_back(fmt::format("pointer flag derivation unavailable: {}", error));
             else
                 confirmIfWritten(derived, "pointer flag", [](std::string_view field) { return field == "Type.pointer"; });
+            if (!deriveListFields(derived, *types))
+                result.Discovered.push_back(fmt::format("PropertyList constructor derivation unavailable: {}", error));
+            else
+                confirmIfWritten(derived, "PropertyList constructor", [](std::string_view field) { return field == "PropertyList.base" || field == "PropertyList.singleton"; });
             deriveTypeLayout();
             reportLayout();
         }

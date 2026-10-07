@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The discovery steps that read the emulated process: the std::map node layout taken from the largest tree on the heap whose links, nil flag, red-black colors, rising keys and values holding and naming their keys all agree, allowing one alias node in 64 that shares another's Type, the type map head found from heap nodes whose type name hashes to their key, an in-order walk of that map, Type and std::string fields matched against values supplied to the Type constructor, the property list link voted on by lists that name their class, the pointer flag taken from the byte set for pointer and shared pointer types, and votes for the Type constructor and PropertyList initializer.
+ * The discovery steps that read the emulated process: the std::map node layout taken from the largest tree on the heap whose links, nil flag, red-black colors, rising keys and values holding and naming their keys all agree, allowing one alias node in 64 that shares another's Type, the type map head found from heap nodes whose type name hashes to their key, an in-order walk of that map, Type and std::string fields matched against values supplied to the Type constructor, the property list link voted on by lists that name their class, the pointer flag taken from the byte set for pointer and shared pointer types, the PropertyList constructor found among what the lazy getters' class constructors call with their own object and the base, singleton and name its chosen arguments place, and votes for the Type constructor and PropertyList initializer.
  */
 
 #include "ClientDiscovery.h"
@@ -739,6 +739,9 @@ namespace
     constexpr uint64 TypeFieldWindow = 0x100;
     constexpr uint64 ListNameWindow = 0x100;
     constexpr std::size_t ListSampleTypes = 256;
+    constexpr uint64 ListObjectWindow = 0x100;
+    constexpr std::size_t ListConstructorInstructions = 4000;
+    constexpr std::size_t ListConstructorCandidates = 8;
 
     struct TypeSnapshot
     {
@@ -895,5 +898,139 @@ bool ClientDiscovery::DeriveTypePointerFlag(Machine const& machine, GuestHeap co
     layout.TypePointer = flags[0];
     layout.ConfirmDerived("Type.pointer", fmt::format("the one byte that is 1 for the {} types named as pointers or shared pointers and 0 for the other {}, but for {} exceptions{}{}",
         pointers, snapshots.size() - pointers, fewestMisses, exceptions.empty() ? "" : ": ", fmt::join(exceptions, ", ")));
+    return true;
+}
+
+std::vector<uint64> ClientDiscovery::FindPropertyListConstructorCandidates(CodeIndex const& code, std::span<uint64 const> lists, uint64 finalizer, std::span<uint64 const> known)
+{
+    std::unordered_set<uint64> const listSet(lists.begin(), lists.end());
+    std::unordered_set<uint64> classConstructors;
+    for (uint64 const getter : FunctionsCalling(code, finalizer))
+    {
+        std::optional<uint64> listInRcx;
+        std::vector<std::pair<uint64, uint64>> callsOnLists;
+        for (DecodedInstruction const& instruction : code.DecodeFunctionFrom(getter, ListConstructorInstructions))
+        {
+            if (instruction.Kind == InstructionKind::Call)
+            {
+                if (instruction.BranchTarget && listInRcx)
+                    callsOnLists.emplace_back(*listInRcx, *instruction.BranchTarget);
+                listInRcx.reset();
+                continue;
+            }
+            if (instruction.FirstRegisterFamily != "rcx" || !instruction.WritesFirstOperand || instruction.FirstOperandIsMemory)
+                continue;
+            if (instruction.Kind == InstructionKind::Lea && instruction.RipRelativeTarget && listSet.contains(*instruction.RipRelativeTarget))
+                listInRcx = instruction.RipRelativeTarget;
+            else
+                listInRcx.reset();
+        }
+        for (auto const& [list, target] : callsOnLists)
+            if (target != finalizer && std::find(known.begin(), known.end(), target) == known.end()
+                && std::any_of(callsOnLists.begin(), callsOnLists.end(), [&](auto const& call) { return call.first == list && call.second == finalizer; }))
+                classConstructors.insert(target);
+    }
+    std::unordered_map<uint64, std::vector<uint64>> thisCallees;
+    auto calledWithThis = [&](uint64 function) -> std::vector<uint64> const&
+    {
+        if (auto const found = thisCallees.find(function); found != thisCallees.end())
+            return found->second;
+        std::vector<uint64> called;
+        std::unordered_set<std::string> holdingThis = { "rcx" };
+        for (DecodedInstruction const& instruction : code.DecodeFunctionFrom(function, ListConstructorInstructions))
+        {
+            if (instruction.Kind == InstructionKind::Call)
+            {
+                if (instruction.BranchTarget && holdingThis.contains("rcx") && std::find(known.begin(), known.end(), *instruction.BranchTarget) == known.end()
+                    && std::find(called.begin(), called.end(), *instruction.BranchTarget) == called.end())
+                    called.push_back(*instruction.BranchTarget);
+                for (std::string_view const volatileRegister : { "rax", "rcx", "rdx", "r8", "r9", "r10", "r11" })
+                    holdingThis.erase(std::string(volatileRegister));
+                continue;
+            }
+            if (!instruction.WritesFirstOperand || instruction.FirstOperandIsMemory || instruction.FirstRegisterFamily.empty())
+                continue;
+            if (instruction.Kind == InstructionKind::Mov && holdingThis.contains(instruction.SecondRegisterFamily) && instruction.SecondRegisterFamily == instruction.SecondRegister)
+                holdingThis.insert(instruction.FirstRegisterFamily);
+            else
+                holdingThis.erase(instruction.FirstRegisterFamily);
+        }
+        return thisCallees.emplace(function, std::move(called)).first->second;
+    };
+    std::map<uint64, uint64> callers;
+    for (uint64 const constructor : classConstructors)
+    {
+        std::unordered_set<uint64> reached;
+        for (uint64 const callee : std::vector<uint64>(calledWithThis(constructor)))
+        {
+            reached.insert(callee);
+            for (uint64 const inner : std::vector<uint64>(calledWithThis(callee)))
+                reached.insert(inner);
+        }
+        for (uint64 const target : reached)
+            ++callers[target];
+    }
+    std::vector<std::pair<uint64, uint64>> ranked(callers.begin(), callers.end());
+    std::sort(ranked.begin(), ranked.end(), [](auto const& a, auto const& b) { return a.second != b.second ? a.second > b.second : a.first < b.first; });
+    std::vector<uint64> candidates;
+    for (auto const& [target, count] : ranked)
+        if (candidates.size() < ListConstructorCandidates && count >= MinimumWinnerVotes)
+            candidates.push_back(target);
+    return candidates;
+}
+
+bool ClientDiscovery::DeriveConstructedListLayout(Machine const& machine, std::span<ConstructedListSample const> samples, ClientLayout& layout, std::string& error)
+{
+    bool const bothSingletons = std::any_of(samples.begin(), samples.end(), [](ConstructedListSample const& s) { return s.Singleton; })
+        && std::any_of(samples.begin(), samples.end(), [](ConstructedListSample const& s) { return !s.Singleton; });
+    if (samples.size() < 2 || !bothSingletons)
+    {
+        error = "PropertyList.singleton needs constructor samples with and without the singleton flag";
+        return false;
+    }
+    std::vector<std::vector<uint8>> objects;
+    for (ConstructedListSample const& sample : samples)
+    {
+        std::vector<uint8>& bytes = objects.emplace_back(static_cast<std::size_t>(ListObjectWindow));
+        if (!machine.TryRead(sample.Address, bytes))
+        {
+            error = fmt::format("the constructed list at {:#x} cannot be read", sample.Address);
+            return false;
+        }
+    }
+    std::vector<uint64> bases;
+    for (uint64 offset = 0; offset + 8 <= ListObjectWindow; offset += 8)
+        if (std::all_of(samples.begin(), samples.end(), [&, index = std::size_t{ 0 }](ConstructedListSample const& sample) mutable { return Get64(objects[index++], offset) == sample.Base; }))
+            bases.push_back(offset);
+    std::vector<uint64> names;
+    for (uint64 offset = 0; offset + layout.StringObjectSize <= ListObjectWindow; offset += 8)
+        if (std::all_of(samples.begin(), samples.end(), [&](ConstructedListSample const& sample) { return ReadLayoutString(machine, sample.Address + offset, layout) == sample.Name; }))
+            names.push_back(offset);
+    std::vector<uint64> singletons;
+    for (uint64 offset = 0; offset < ListObjectWindow; ++offset)
+    {
+        bool const outside = std::none_of(bases.begin(), bases.end(), [&](uint64 base) { return offset >= base && offset < base + 8; })
+            && std::none_of(names.begin(), names.end(), [&](uint64 name) { return offset >= name && offset < name + layout.StringObjectSize; });
+        if (outside && std::all_of(samples.begin(), samples.end(), [&, index = std::size_t{ 0 }](ConstructedListSample const& sample) mutable { return objects[index++][offset] == (sample.Singleton ? 1 : 0); }))
+            singletons.push_back(offset);
+    }
+    if (bases.size() != 1 || names.size() != 1 || singletons.size() != 1)
+    {
+        error = fmt::format("the PropertyList constructor's samples place the base at {} offsets, the name at {} and the singleton flag at {}", bases.size(), names.size(), singletons.size());
+        return false;
+    }
+    if (layout.DerivedFields.contains("PropertyList.name") && layout.ListName != names[0])
+    {
+        error = fmt::format("the PropertyList constructor wrote the name at {:#x}, but the registered lists hold it at {:#x}", names[0], layout.ListName);
+        return false;
+    }
+    layout.ListBase = bases[0];
+    layout.ListSingleton = singletons[0];
+    layout.ListName = names[0];
+    std::string const evidence = fmt::format("{} lists built by the client's PropertyList constructor with chosen bases and singleton flags", samples.size());
+    layout.ConfirmDerived("PropertyList.base", fmt::format("{}: the chosen base landed at {:#x}", evidence, bases[0]));
+    layout.ConfirmDerived("PropertyList.singleton", fmt::format("{}: only the byte at {:#x} followed the chosen flag", evidence, singletons[0]));
+    if (!layout.DerivedFields.contains("PropertyList.name"))
+        layout.ConfirmDerived("PropertyList.name", fmt::format("{}: the class name without its class keyword landed at {:#x}", evidence, names[0]));
     return true;
 }
