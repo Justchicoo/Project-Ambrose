@@ -395,7 +395,7 @@ TEST_F(ZoneExtractorTest, TheScriptReplacesTheZoneTablesAndWritesNullForNoRequir
     ASSERT_TRUE(extraction.Ok()) << Report(extraction);
     WorldSqlScript const script = ZoneSqlScript::Build(extraction);
     std::vector<std::string> const& statements = script.GetStatements();
-    ASSERT_EQ(statements.size(), 10u) << "the volume and trigger tables are emptied too, with no rows to write";
+    ASSERT_EQ(statements.size(), 12u) << "the volume, trigger and spawner tables are emptied too, with no rows to write";
     EXPECT_EQ(statements[0], "DELETE FROM `zone_template`");
     EXPECT_NE(statements[1].find(WorldSqlScript::Literal(std::string(Hub))), std::string::npos) << statements[1];
     EXPECT_EQ(statements[4], "DELETE FROM `zone_object`");
@@ -403,8 +403,10 @@ TEST_F(ZoneExtractorTest, TheScriptReplacesTheZoneTablesAndWritesNullForNoRequir
     EXPECT_NE(statements[5].find("'', 0, 0, 1, NULL)"), std::string::npos) << "the emitter's loading type is 1 and it has no spawn requirements: " << statements[5];
     EXPECT_EQ(statements[6], "DELETE FROM `zone_volume`");
     EXPECT_EQ(statements[9], "DELETE FROM `zone_trigger_result`");
+    EXPECT_EQ(statements[10], "DELETE FROM `zone_spawner`");
+    EXPECT_EQ(statements[11], "DELETE FROM `zone_spawner_entry`");
     EXPECT_EQ(WorldSqlScript::Literal(std::monostate{}), "NULL");
-    EXPECT_EQ(ZoneSqlScript::GetTables(), (std::vector<std::string_view>{ "zone_template", "zone_location", "zone_object", "zone_volume", "zone_trigger", "zone_trigger_event", "zone_trigger_result" }));
+    EXPECT_EQ(ZoneSqlScript::GetTables(), (std::vector<std::string_view>{ "zone_template", "zone_location", "zone_object", "zone_volume", "zone_trigger", "zone_trigger_event", "zone_trigger_result", "zone_spawner", "zone_spawner_entry" }));
 }
 
 TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtracted)

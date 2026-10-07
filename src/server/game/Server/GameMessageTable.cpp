@@ -120,7 +120,7 @@ namespace
             Sends<UpdateCustomEmotes>();
             Sends<NewObject>();
             Sends<RemoveObject>();
-            Sends<DeleteObject>();
+            Sends<GameMessages::DeleteObject>();
             Sends<ServerMove>();
             Sends<ServerTeleport>();
             Sends<MoveState>();
