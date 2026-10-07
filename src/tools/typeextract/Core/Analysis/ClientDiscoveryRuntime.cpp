@@ -368,7 +368,9 @@ std::optional<uint64> ClientDiscovery::DeriveTypeMapLayout(Machine const& machin
                     std::optional<std::vector<uint64>> nodes = WalkCandidateTree(view, head, root, links);
                     if (!nodes || nodes->size() < MinimumDerivedMapNodes)
                         continue;
-                    DerivedMap map{ head, links };
+                    DerivedMap map;
+                    map.Head = head;
+                    map.Links = links;
                     map.Nodes = std::move(*nodes);
                     if (PlaceMapFields(view, map))
                         maps.push_back(std::move(map));
