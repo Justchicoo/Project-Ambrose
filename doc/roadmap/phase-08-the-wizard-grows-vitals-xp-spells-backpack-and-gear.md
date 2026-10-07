@@ -39,9 +39,11 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Acceptance**
 
-- [ ] ModifyGold clamps at pouch
-- [ ] USEPOTION with 0 charges changes nothing
-- [ ] Changing Potion.RestoreFraction applies to the next potion without a restart
+- [x] ModifyGold clamps at pouch [PlayerStatsTest.GoldModificationClampsAtThePouchAndReportsTheOverflow]
+- [x] USEPOTION with 0 charges changes nothing [PlayerStatsTest.UsingAPotionWithNoChargesChangesNothing and GameSessionLifecycleTest.AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction]
+- [x] A wizard that enters below full starts its potion refill countdown [PlayerStatsTest.AWizardThatEntersBelowFullStartsItsRefillCountdown]
+- [x] Session-handled gold and potion changes persist before world departure [GameSessionStatsSaveTest.LiveGoldAndPotionChangesPersistBeforeLeavingTheWorld]
+- [x] Changing Potion.RestoreFraction applies to the next potion without a restart [PlayerStatsTest.EachPotionUsesTheCurrentRestoreFraction and GameSessionLifecycleTest.AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction passed; client run 20261003-190527 changed 0.1 to 0.2 while running]
 - [ ] Real client: '.character gold 500' updates live; heal animates; potion restores and empties by one
 
 ### Detailed spec from WIZ-6: Live vitals, gold and potions
@@ -69,9 +71,11 @@ Health, mana, gold, power-pip and potion changes on the server show up immediate
 
 **Acceptance**
 
-- [ ] Unit test: ModifyGold above m_baseGoldPouch clamps and reports the overflow
-- [ ] Unit test: USEPOTION with 0 charges changes nothing
-- [ ] Unit test: after Potion.RestoreFraction changes, the next potion restores the new fraction without a restart
+- [x] Unit test: ModifyGold above m_baseGoldPouch clamps and reports the overflow [PlayerStatsTest.GoldModificationClampsAtThePouchAndReportsTheOverflow]
+- [x] Unit test: USEPOTION with 0 charges changes nothing [PlayerStatsTest.UsingAPotionWithNoChargesChangesNothing and GameSessionLifecycleTest.AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction]
+- [x] Unit test: a wizard entering below full starts its refill countdown [PlayerStatsTest.AWizardThatEntersBelowFullStartsItsRefillCountdown]
+- [x] Database-backed lifecycle test: live gold and potion changes persist before leaving the world [GameSessionStatsSaveTest.LiveGoldAndPotionChangesPersistBeforeLeavingTheWorld]
+- [x] Unit test: after Potion.RestoreFraction changes, the next potion restores the new fraction without a restart [PlayerStatsTest.EachPotionUsesTheCurrentRestoreFraction and GameSessionLifecycleTest.AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction passed; client run 20261003-190527 changed 0.1 to 0.2 while running]
 - [ ] Real client: '.character gold 500' makes the backpack gold counter update without relogging. Damaging then '.character heal' makes the health globe animate up (DisplayDiff=1 floats the number). Clicking a filled potion restores health and mana, and the potion bottle empties by one.
 
 **Risks**

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, each object of that zone the server sends it, as the unwrapped CoreObject Data the client builds it from, and the id of one that leaves its view, another wizard's move as its client packed it with that wizard's mobile id and its movement state with its global id, the forced teleport that snaps a wizard to a place in its zone, packed the same way, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits; and what a wizard says for the others around it to see: a typed line, whose Message holds the text as a wide string packed into the byte field, a quick chat phrase by id, a phrase in the extended form and an emote a wizard plays, each with the reply that shows it but the emote, which is shown as a state, which names the speaker by the name the client's name codec packs and by global id. It also declares MSG_QUERY_LOGOUT, which the server answers, MSG_CLIENT_DISCONNECT and MSG_NOT_AFK, and the MSG_ZOMBIE_PLAYER, MSG_DISCONNECT_AFK and MSG_SERVERSHUTDOWN notices it sends when a wizard drops, idles or the server stops, and the wizbang state a wizard's client names with the wizbang the server shows the wizards around it, and the fifteen GAME messages of the friends and ignore lists: the list request answered by each entry and the list's end, a friend request with its acceptance, denial and withdrawal, a dropped friend, a friend's presence, the best-friend mark, the friend cap, an ignored wizard added, dropped and listed, and the chat error a refused social action gets.
+ * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, each object of that zone the server sends it, as the unwrapped CoreObject Data the client builds it from, and the id of one that leaves its view, another wizard's move as its client packed it with that wizard's mobile id and its movement state with its global id, the forced teleport that snaps a wizard to a place in its zone, packed the same way, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits; and what a wizard says for the others around it to see: a typed line, whose Message holds the text as a wide string packed into the byte field, a quick chat phrase by id, a phrase in the extended form and an emote a wizard plays, each with the reply that shows it but the emote, which is shown as a state, which names the speaker by the name the client's name codec packs and by global id. It also declares MSG_QUERY_LOGOUT, which the server answers, MSG_CLIENT_DISCONNECT and MSG_NOT_AFK, and the MSG_ZOMBIE_PLAYER, MSG_DISCONNECT_AFK and MSG_SERVERSHUTDOWN notices it sends when a wizard drops, idles or the server stops, and the wizbang state a wizard's client names with the wizbang the server shows the wizards around it, and the fifteen GAME messages of the friends and ignore lists: the list request answered by each entry and the list's end, a friend request with its acceptance, denial and withdrawal, a dropped friend, a friend's presence, the best-friend mark, the friend cap, an ignored wizard added, dropped and listed, and the chat error a refused social action gets, and the WIZARD live vitals, gold, potion and pip updates with MSG_USEPOTION.
  */
 
 #ifndef AMBROSE_GAMEMESSAGES_H
@@ -1125,6 +1125,167 @@ namespace GameMessages
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("Name", &CoreEmote::Name), DmlField("ExcludeOriginator", &CoreEmote::ExcludeOriginator), DmlField("PhraseID", &CoreEmote::PhraseId) };
+        }
+    };
+
+    struct UpdateHealth
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_UPDATEHEALTH";
+
+        uint64 CharacterId = 0;
+        int32 NewHealth = 0;
+        int32 NewHealthMax = 0;
+        uint8 DisplayDiff = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("CharacterID", &UpdateHealth::CharacterId), DmlField("NewHealth", &UpdateHealth::NewHealth),
+                DmlField("NewHealthMax", &UpdateHealth::NewHealthMax), DmlField("DisplayDiff", &UpdateHealth::DisplayDiff) };
+        }
+    };
+
+    struct UpdateMana
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_UPDATEMANA";
+
+        int32 Mana = 0;
+        int32 MaxMana = 0;
+        uint8 DisplayDiff = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Mana", &UpdateMana::Mana), DmlField("MaxMana", &UpdateMana::MaxMana), DmlField("DisplayDiff", &UpdateMana::DisplayDiff) };
+        }
+    };
+
+    struct UpdateGold
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_UPDATEGOLD";
+
+        int32 Gold = 0;
+        int32 MaxGold = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Gold", &UpdateGold::Gold), DmlField("MaxGold", &UpdateGold::MaxGold) };
+        }
+    };
+
+    struct UpdatePowerPip
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_UPDATEPOWERPIP";
+
+        float PowerPip = 0.0f;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("PowerPip", &UpdatePowerPip::PowerPip) };
+        }
+    };
+
+    struct UpdatePotions
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_UPDATEPOTIONS";
+
+        float PotionMax = 0.0f;
+        float PotionCharge = 0.0f;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("PotionMax", &UpdatePotions::PotionMax), DmlField("PotionCharge", &UpdatePotions::PotionCharge) };
+        }
+    };
+
+    struct UsePotion
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_USEPOTION";
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{};
+        }
+    };
+
+    struct UpdateShadowPipRating
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_UPDATESHADOWPIPRATING";
+
+        float ShadowPipRating = 0.0f;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ShadowPipRating", &UpdateShadowPipRating::ShadowPipRating) };
+        }
+    };
+
+    struct ElixirStateChange
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_ELIXIRSTATECHANGE";
+
+        uint64 ParentId = 0;
+        int8 EffectEnabled = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("parentID", &ElixirStateChange::ParentId), DmlField("EffectEnabled", &ElixirStateChange::EffectEnabled) };
+        }
+    };
+
+    struct UpdateMaxShadowPips
+    {
+        static constexpr uint8 ServiceId = Wizard2Service;
+        static constexpr std::string_view Tag = "MSG_UPDATEMAXSHADOWPIPS";
+
+        int32 MaxShadowPips = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("MaxShadowPips", &UpdateMaxShadowPips::MaxShadowPips) };
+        }
+    };
+
+    struct UpdatePipConversion
+    {
+        static constexpr uint8 ServiceId = Wizard2Service;
+        static constexpr std::string_view Tag = "MSG_UPDATEPIPCONVERSION";
+
+        int32 PipConversionBaseAllSchools = 0;
+        int32 PipConversionBaseFire = 0;
+        int32 PipConversionBaseIce = 0;
+        int32 PipConversionBaseStorm = 0;
+        int32 PipConversionBaseLife = 0;
+        int32 PipConversionBaseMyth = 0;
+        int32 PipConversionBaseDeath = 0;
+        int32 PipConversionBaseBalance = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("PipConversionBaseAllSchools", &UpdatePipConversion::PipConversionBaseAllSchools),
+                DmlField("PipConversionBaseFire", &UpdatePipConversion::PipConversionBaseFire), DmlField("PipConversionBaseIce", &UpdatePipConversion::PipConversionBaseIce),
+                DmlField("PipConversionBaseStorm", &UpdatePipConversion::PipConversionBaseStorm), DmlField("PipConversionBaseLife", &UpdatePipConversion::PipConversionBaseLife),
+                DmlField("PipConversionBaseMyth", &UpdatePipConversion::PipConversionBaseMyth), DmlField("PipConversionBaseDeath", &UpdatePipConversion::PipConversionBaseDeath),
+                DmlField("PipConversionBaseBalance", &UpdatePipConversion::PipConversionBaseBalance) };
+        }
+    };
+
+    struct UpdateArchmastery
+    {
+        static constexpr uint8 ServiceId = Wizard3Service;
+        static constexpr std::string_view Tag = "MSG_UPDATEARCHMASTERY";
+
+        float Stat = 0.0f;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("Stat", &UpdateArchmastery::Stat) };
         }
     };
 
