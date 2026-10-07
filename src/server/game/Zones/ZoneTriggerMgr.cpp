@@ -1,11 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the volumes, triggers and their events zone by zone, taking a volume with no shape and only a radius as a sphere, refusing a volume whose shape is unknown or whose size or place is not a usable number, a trigger whose cooldown is not, and an event that names a trigger the zone does not hold; swaps a whole good set in at once, dropping each instance's counts and cooldowns with it, and keeps each zone instance's trigger state until its map is forgotten.
+ * Reads the volumes, triggers, their events and the zone-entry texts their ResClientNotifyText results show zone by zone, a result read through the server classes and refused when it does not decode, taking a volume with no shape and only a radius as a sphere, refusing a volume whose shape is unknown or whose size or place is not a usable number, a trigger whose cooldown is not, and an event that names a trigger the zone does not hold; swaps a whole good set in at once, dropping each instance's counts and cooldowns with it, and keeps each zone instance's trigger state until its map is forgotten.
  */
 
 #include "ZoneTriggerMgr.h"
 #include "DatabaseEnv.h"
 #include "Log.h"
+#include "ObjectSerializer.h"
+#include "PropertyObject.h"
 #include "ReloadMgr.h"
 
 #include <fmt/format.h>
@@ -18,6 +20,42 @@ ZoneTriggerMgr& ZoneTriggerMgr::Instance()
 {
     static ZoneTriggerMgr instance;
     return instance;
+}
+
+std::optional<ZoneNotifyText> ZoneTriggerMgr::ReadNotifyText(TypeCatalogPtr const& catalog, std::span<uint8 const> data, std::string& error)
+{
+    if (!catalog)
+    {
+        error = "no type catalog is loaded";
+        return std::nullopt;
+    }
+    SerializerOptions options;
+    options.Versionable = true;
+    options.Flags = SerializerFlag::None;
+    options.Mask = 0;
+    options.AllowNullRoot = false;
+    options.AllowTrailingBytes = false;
+    DecodeResult const decoded = ObjectSerializer::Decode(catalog, data, options);
+    if (!decoded.Ok() || !decoded.Object)
+    {
+        error = decoded.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(decoded.Status)) : decoded.Detail;
+        return std::nullopt;
+    }
+    if (!decoded.Object->IsA(NotifyTextClass))
+    {
+        error = fmt::format("it holds a {}", decoded.Object->GetClass().Name);
+        return std::nullopt;
+    }
+    PropertyValue const* const text = decoded.Object->Get("m_text");
+    std::string const* const key = text ? text->GetIf<std::string>() : nullptr;
+    if (!key || key->empty())
+    {
+        error = "its m_text is empty";
+        return std::nullopt;
+    }
+    PropertyValue const* const type = decoded.Object->Get("m_type");
+    int32 const* const kind = type ? type->GetIf<int32>() : nullptr;
+    return ZoneNotifyText{ *key, kind ? *kind : 0 };
 }
 
 bool ZoneTriggerMgr::Load(std::vector<std::string>& errors)
@@ -106,6 +144,33 @@ bool ZoneTriggerMgr::Load(std::vector<std::string>& errors)
                 trigger->FireEvents.push_back(std::move(event));
         } while (rows->NextRow());
     }
+    if (!WorldDatabase.TryQuery(fmt::format("SELECT `zone_path`, `trigger_index`, `position`, `data` FROM `zone_trigger_result` WHERE `list` = 'results' AND `class_name` = '{}' "
+        "ORDER BY `zone_path`, `trigger_index`, `position`", NotifyTextClass), rows))
+    {
+        errors.push_back("zone_trigger_result could not be read");
+        return false;
+    }
+    if (rows)
+    {
+        TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
+        do
+        {
+            Field const* row = rows->Fetch();
+            std::string const zone = row[0].Get<std::string>();
+            uint32 const index = row[1].Get<uint32>();
+            ZoneTriggerData& data = zones[zone];
+            auto const trigger = std::find_if(data.Triggers.begin(), data.Triggers.end(), [index](ZoneTrigger const& candidate) { return candidate.Index == index; });
+            std::vector<uint8> const bytes = row[3].Get<std::vector<uint8>>();
+            std::string error;
+            std::optional<ZoneNotifyText> text = ReadNotifyText(catalog, bytes, error);
+            if (trigger == data.Triggers.end())
+                errors.push_back(fmt::format("{} has a notify text result for trigger {}, which the zone does not hold", zone, index));
+            else if (!text)
+                errors.push_back(fmt::format("{} trigger {} ({}) has a notify text result at {} that does not read: {}", zone, index, trigger->Name, row[2].Get<uint32>(), error));
+            else
+                trigger->NotifyTexts.push_back(std::move(*text));
+        } while (rows->NextRow());
+    }
     if (!WorldDatabase.TryQuery("SELECT `zone_path`, `event_name` FROM `zone_client_event`", rows))
     {
         errors.push_back("zone_client_event could not be read");
@@ -173,7 +238,8 @@ std::shared_ptr<ZoneTriggerData const> ZoneTriggerMgr::Find(std::string_view zon
     return found == _zones.end() ? nullptr : found->second;
 }
 
-std::vector<std::string> ZoneTriggerMgr::Post(uint32 mapId, std::string_view zone, std::string_view event, uint64 wizard, ZoneTriggers::Clock::time_point now)
+std::vector<std::string> ZoneTriggerMgr::Post(uint32 mapId, std::string_view zone, std::string_view event, uint64 wizard, ZoneTriggers::Clock::time_point now,
+    std::vector<ZoneNotifyText>* texts)
 {
     std::lock_guard const lock(_mutex);
     auto const data = _zones.find(zone);
@@ -184,7 +250,11 @@ std::vector<std::string> ZoneTriggerMgr::Post(uint32 mapId, std::string_view zon
         instance = _instances.emplace(mapId, ZoneTriggers(data->second->Triggers)).first;
     std::vector<std::string> names;
     for (ZoneTrigger const* trigger : instance->second.Post(event, wizard, now))
+    {
         names.push_back(trigger->Name);
+        if (texts)
+            texts->insert(texts->end(), trigger->NotifyTexts.begin(), trigger->NotifyTexts.end());
+    }
     return names;
 }
 
