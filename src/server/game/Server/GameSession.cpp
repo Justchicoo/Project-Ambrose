@@ -786,10 +786,7 @@ void GameSession::ShowMovementOf(GameSession const& mover, MovementUpdate const&
 
 bool GameSession::TeleportWithinMap(PlayerPosition const& target, std::vector<std::shared_ptr<GameSession>> const& onlookers, std::string& problem)
 {
-    std::optional<int16> const x = MovementPacking::TryPackLocation(target.X);
-    std::optional<int16> const y = MovementPacking::TryPackLocation(target.Y);
-    std::optional<int16> const z = MovementPacking::TryPackLocation(target.Z);
-    if (!x || !y || !z)
+    if (!MovementPacking::TryPackLocation(target.X) || !MovementPacking::TryPackLocation(target.Y) || !MovementPacking::TryPackLocation(target.Z))
     {
         problem = fmt::format("({}, {}, {}) lies outside the {} to {} a position can be sent as", target.X, target.Y, target.Z,
             MovementPacking::UnpackLocation(std::numeric_limits<int16>::min()), MovementPacking::UnpackLocation(std::numeric_limits<int16>::max()));
@@ -800,8 +797,14 @@ bool GameSession::TeleportWithinMap(PlayerPosition const& target, std::vector<st
         problem = "the wizard does not stand in a zone";
         return false;
     }
-    PackedMove const place{ static_cast<uint16>(*x), static_cast<uint16>(*y), static_cast<uint16>(*z), MovementPacking::PackYaw(target.Yaw) };
-    _movement.Apply(place.X, place.Y, place.Z, place.Direction, _movement.GetZoneCounter());
+    std::optional<PackedMove> const teleported = _movement.Teleport(target);
+    if (!teleported)
+    {
+        problem = fmt::format("the facing {} is not a number", target.Yaw);
+        return false;
+    }
+    PackedMove const place = *teleported;
+    _relay.Reset(_movement);
     std::size_t shown = 0;
     for (std::shared_ptr<GameSession> const& viewer : onlookers)
     {
