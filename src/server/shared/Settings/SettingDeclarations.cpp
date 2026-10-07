@@ -73,8 +73,10 @@ namespace
             Unsigned("LoginComplete.CSRSecurityLevel", "2", "0", "4", "", "World", Game, NextUse, "The account security level from which MSG_LOGINCOMPLETE opens the client's game master tools."),
             Flag("LoginComplete.TestServer", "false", "World", Game, NextUse, "Whether MSG_LOGINCOMPLETE tells the client it is on a test server."),
 
+            Unsigned("Inventory.Slots", "100", "0", "10000", "items", "Inventory", Game, NextUse,
+                "How many items every wizard's backpack holds, read when the wizard enters the world and sent to its client as the m_numItemsAllowed of its inventory behavior, since neither the player template nor any other file of the install gives one."),
             Unsigned("Inventory.ExtraSlots", "0", "0", "10000", "items", "Inventory", Game, Live,
-                "How many items every wizard's backpack holds beyond the m_numItemsAllowed its player template gives, read at each add, so raising it lets the next add to a full backpack succeed."),
+                "How many items every wizard's backpack holds beyond Inventory.Slots, read at each add, so raising it lets the next add to a full backpack succeed; the client is told the new total when the wizard next enters the world."),
 
             Unsigned("Templates.CacheSize", "256", "1", "65536", "MiB", "World", Game, Live,
                 "How much memory the object templates decoded from the install may hold before the least recently used is dropped; a smaller budget drops them at once."),

@@ -1,38 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * Keeps a wizard's backpack in arrival order, works out its capacity, which never goes below zero or past the 32-bit range, finds m_numItemsAllowed on whichever of the player template's behaviors carries it, and adds, checks and removes items by the rules its header gives.
+ * Keeps a wizard's backpack in arrival order, works out its capacity, which never goes below zero or past the 32-bit range, and adds, checks and removes items by the rules its header gives.
  */
 
 #include "PlayerBackpack.h"
-#include "PropertyObject.h"
 
 #include <algorithm>
 #include <limits>
 #include <utility>
-
-namespace
-{
-    std::optional<int64> Whole(PropertyValue const& value)
-    {
-        if (auto const* const held = value.GetIf<int8>())
-            return *held;
-        if (auto const* const held = value.GetIf<uint8>())
-            return *held;
-        if (auto const* const held = value.GetIf<int16>())
-            return *held;
-        if (auto const* const held = value.GetIf<uint16>())
-            return *held;
-        if (auto const* const held = value.GetIf<int32>())
-            return *held;
-        if (auto const* const held = value.GetIf<uint32>())
-            return *held;
-        if (auto const* const held = value.GetIf<int64>())
-            return *held;
-        if (auto const* const held = value.GetIf<uint64>())
-            return static_cast<int64>(std::min<uint64>(*held, static_cast<uint64>(std::numeric_limits<int64>::max())));
-        return std::nullopt;
-    }
-}
 
 PlayerBackpack PlayerBackpack::FromStored(std::vector<CharacterItem> stored)
 {
@@ -48,23 +23,6 @@ uint32 PlayerBackpack::CapacityFor(int64 itemsAllowed, uint32 extraSlots) noexce
 {
     int64 const total = std::max<int64>(itemsAllowed, 0) + extraSlots;
     return static_cast<uint32>(std::min<int64>(total, std::numeric_limits<uint32>::max()));
-}
-
-std::optional<int64> PlayerBackpack::ReadItemsAllowed(PropertyObject const& playerTemplate)
-{
-    PropertyValue const* const behaviors = playerTemplate.Get("m_behaviors");
-    PropertyValue::List const* const list = behaviors ? behaviors->GetList() : nullptr;
-    if (!list)
-        return std::nullopt;
-    for (PropertyValue const& entry : *list)
-    {
-        PropertyObject const* const behavior = entry.AsObject();
-        PropertyValue const* const allowed = behavior ? behavior->Get(ItemsAllowedProperty) : nullptr;
-        if (allowed)
-            if (std::optional<int64> const value = Whole(*allowed))
-                return value;
-    }
-    return std::nullopt;
 }
 
 CharacterItem const* PlayerBackpack::Find(uint64 itemGuid) const noexcept

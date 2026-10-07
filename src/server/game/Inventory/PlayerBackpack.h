@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A wizard's backpack while it plays: the items it holds in the order they arrived, read from its stored rows, and how many it may hold, the m_numItemsAllowed its player template's inventory behavior gives plus the extra slots the server grants; an add to a full backpack is refused before an id is spent, so nothing is made or stored, and an item is trashed only by the wizard that holds it, of the template the client names, and while it is not locked.
+ * A wizard's backpack while it plays: the items it holds in the order they arrived, read from its stored rows, and how many it may hold, the slots the server gives every backpack plus the extra slots it grants; an add to a full backpack is refused before an id is spent, so nothing is made or stored, and an item is trashed only by the wizard that holds it, of the template the client names, and while it is not locked.
  */
 
 #ifndef AMBROSE_PLAYERBACKPACK_H
@@ -12,8 +12,6 @@
 #include <optional>
 #include <string_view>
 #include <vector>
-
-class PropertyObject;
 
 enum class BackpackAddResult : uint8
 {
@@ -42,11 +40,8 @@ enum class BackpackTrashResult : uint8
 class PlayerBackpack
 {
 public:
-    static constexpr std::string_view ItemsAllowedProperty = "m_numItemsAllowed";
-
     static PlayerBackpack FromStored(std::vector<CharacterItem> stored);
     static uint32 CapacityFor(int64 itemsAllowed, uint32 extraSlots) noexcept;
-    static std::optional<int64> ReadItemsAllowed(PropertyObject const& playerTemplate);
 
     std::vector<CharacterItem> const& GetItems() const noexcept { return _items; }
     std::size_t Size() const noexcept { return _items.size(); }

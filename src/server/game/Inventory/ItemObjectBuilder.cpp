@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Makes an item's game object from the catalog's own class and defaults, refusing a template class the catalog or core_template_type does not know rather than guessing a core type, sets only its header, global id and template id, and encodes it through the message field ObjectFields declares for it, so the envelope and the CoreObject form are the field's, not this file's; the backpack's objects go to whichever of the player's behaviors has an m_itemList, and a list the class refuses fails the fill whole, leaving the player object as it was.
+ * Makes an item's game object from the catalog's own class and defaults, refusing a template class the catalog or core_template_type does not know rather than guessing a core type, sets only its header, global id and template id, and encodes it through the message field ObjectFields declares for it, so the envelope and the CoreObject form are the field's, not this file's; the backpack's objects go to whichever of the player's behaviors has an m_itemList, and a list the class refuses fails the fill whole, leaving the player object as it was; the capacity goes to whichever of them has an m_numItemsAllowed, ClientWizInventoryBehavior in the type dump.
  */
 
 #include "ItemObjectBuilder.h"
@@ -10,6 +10,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <limits>
 #include <span>
 
 PropertyObjectPtr ItemObjectBuilder::Build(TypeCatalogPtr const& catalog, CoreObjectTypeTable const& types, ItemTemplateRecord const& itemTemplate, CharacterItem const& item,
@@ -97,6 +98,32 @@ bool ItemObjectBuilder::FillBackpack(PropertyObject& player, CoreObjectTypeTable
         list.emplace_back(std::move(object));
     }
     PropertyFiller(*inventory, problem).Set(ItemListProperty, std::move(list));
+    PropertyFiller(player, problem).Set("m_inactiveBehaviors", std::move(behaviors));
+    return problem.empty();
+}
+
+bool ItemObjectBuilder::SetItemsAllowed(PropertyObject& player, uint32 capacity, std::string& problem)
+{
+    problem.clear();
+    PropertyValue const* const held = player.Get("m_inactiveBehaviors");
+    PropertyValue::List const* const current = held ? held->GetList() : nullptr;
+    if (!current)
+    {
+        problem = fmt::format("{} has no behavior list", player.GetClass().Name);
+        return false;
+    }
+    PropertyValue::List behaviors = *current;
+    auto const inventory = std::find_if(behaviors.begin(), behaviors.end(), [](PropertyValue& entry)
+    {
+        PropertyObject* const behavior = entry.AsObject();
+        return behavior && behavior->GetClass().FindProperty(ItemsAllowedProperty);
+    });
+    if (inventory == behaviors.end())
+    {
+        problem = fmt::format("no behavior of the player object carries {}", ItemsAllowedProperty);
+        return false;
+    }
+    PropertyFiller(*inventory->AsObject(), problem).Set(ItemsAllowedProperty, static_cast<int32>(std::min<uint32>(capacity, std::numeric_limits<int32>::max())));
     PropertyFiller(player, problem).Set("m_inactiveBehaviors", std::move(behaviors));
     return problem.empty();
 }

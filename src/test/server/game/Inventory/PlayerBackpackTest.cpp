@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests a wizard's backpack: its capacity is the template's allowance plus the extra slots, never below zero; an add to a full backpack is refused without spending an item id or giving a row to store, and room made by more slots lets the next add through; added items take ids from the item line and slots in arrival order, which a backpack read from rows in any order keeps; and an item is trashed only when the backpack holds it, of the template named, and unlocked.
+ * Tests a wizard's backpack: its capacity is the slots every backpack has plus the extra slots, never below zero; an add to a full backpack is refused without spending an item id or giving a row to store, and room made by more slots lets the next add through; added items take ids from the item line and slots in arrival order, which a backpack read from rows in any order keeps; and an item is trashed only when the backpack holds it, of the template named, and unlocked.
  */
 
 #include "ObjectGuid.h"
@@ -23,7 +23,7 @@ namespace
     }
 }
 
-TEST(PlayerBackpackTest, CapacityIsTheTemplateAllowancePlusTheExtraSlots)
+TEST(PlayerBackpackTest, CapacityIsTheSlotsPlusTheExtraSlots)
 {
     EXPECT_EQ(PlayerBackpack::CapacityFor(80, 0), 80u);
     EXPECT_EQ(PlayerBackpack::CapacityFor(80, 20), 100u);

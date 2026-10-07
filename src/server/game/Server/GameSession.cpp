@@ -550,10 +550,14 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     uint32 const permissions = AccountMgr::EntryPermissions(_accountPermissions, sSettings.Get<uint32>("LoginComplete.Permissions"));
     PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, entering, *stats, trackers, placement, permissions, problem);
     PlayerBackpack backpack = resumedBackpack ? std::move(*resumedBackpack) : PlayerBackpack::FromStored(items);
-    std::optional<int64> const itemsAllowed = playerTemplate->Object ? PlayerBackpack::ReadItemsAllowed(*playerTemplate->Object) : std::nullopt;
-    if (!itemsAllowed)
-        LOG_WARN("server.gamesession", "Session {}'s player template gives no behavior an {}, so wizard {}'s backpack holds only the {} slot(s) Inventory.ExtraSlots grants",
-            GetSessionId(), PlayerBackpack::ItemsAllowedProperty, character.Guid, sSettings.Get<uint32>("Inventory.ExtraSlots"));
+    uint32 const itemsAllowed = sSettings.Get<uint32>("Inventory.Slots");
+    if (player)
+    {
+        std::string allowedProblem;
+        uint32 const capacity = PlayerBackpack::CapacityFor(itemsAllowed, sSettings.Get<uint32>("Inventory.ExtraSlots"));
+        if (!ItemObjectBuilder::SetItemsAllowed(*player, capacity, allowedProblem))
+            LOG_WARN("server.gamesession", "Session {} cannot tell wizard {}'s client its backpack holds {} item(s), since {}", GetSessionId(), character.Guid, capacity, allowedProblem);
+    }
     std::shared_ptr<ItemTemplateStore const> const itemTemplates = sItemMgr.GetItems();
     if (player && types && backpack.Size() > 0)
     {
@@ -642,7 +646,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         _statsRevision = stored ? stored->Revision : 0;
     _spellbook = std::move(spellbook);
     _backpack = std::move(backpack);
-    _itemsAllowed = itemsAllowed.value_or(0);
+    _itemsAllowed = itemsAllowed;
     if (resumed)
     {
         _movement = std::move(movement);
