@@ -4,6 +4,7 @@
  */
 
 #include "AnimationListMgr.h"
+#include "ChatFilter.h"
 #include "TypeDumpCache.h"
 #include "RealmHeartbeat.h"
 #include "Settings.h"
@@ -327,7 +328,7 @@ namespace
             }
             _settingsSubscription = sSettings.Subscribe([this](SettingChange const& change) { ApplySetting(change); });
             ExtractServerClasses(setup, system, *prompt);
-            if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup) || !LoadSpells(setup) || !LoadCustomEmotes(setup) || !LoadSigils(setup) || !LoadItems(setup) || !LoadChatData(setup))
+            if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup) || !LoadSpells(setup) || !LoadCustomEmotes(setup) || !LoadSigils(setup) || !LoadItems(setup) || !LoadChatFilter(setup) || !LoadChatData(setup))
             {
                 _databases.Close();
                 return false;
@@ -552,6 +553,28 @@ namespace
             for (std::string const& problem : errors)
                 LOG_ERROR("server.gameserver", "Chat: {}", problem);
             LOG_ERROR("server.gameserver", "Cannot read the quick chat phrases and animation types from {}", ClientLocator::PathText(setup.Install->Root));
+            return false;
+        }
+
+        bool LoadChatFilter(ClientSetupResult const& setup)
+        {
+            sChatFilterMgr.RegisterReloadTarget([](std::vector<std::u16string> const& blacklist, std::vector<std::u16string> const& whitelist)
+            {
+                sWorld.SendChatFilterAdditions(blacklist, whitelist);
+            });
+            if (!setup.Install)
+            {
+                sChatFilterMgr.Clear();
+                LOG_WARN("server.gameserver", "No Wizard101 install is in use, so filtered chat is unavailable");
+                return true;
+            }
+            sChatFilterMgr.SetInstall(setup.Install->Root);
+            std::vector<std::string> errors;
+            if (sChatFilterMgr.Load(errors))
+                return true;
+            for (std::string const& problem : errors)
+                LOG_ERROR("server.gameserver", "Chat filter: {}", problem);
+            LOG_ERROR("server.gameserver", "Cannot read the chat-filter lists from {}", ClientLocator::PathText(setup.Install->Root));
             return false;
         }
 

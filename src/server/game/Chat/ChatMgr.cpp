@@ -21,6 +21,20 @@ uint8 ChatMgr::FilterFor(uint32 permissions) noexcept
     return 0;
 }
 
+uint32 ChatMgr::PermissionsForMode(uint32 permissions, uint8 chatMode) noexcept
+{
+    switch (chatMode)
+    {
+        case 0:
+            return permissions;
+        case 1:
+            return permissions & ~uint32(OpenChatPermission | 0x8);
+        case 2:
+        default:
+            return permissions & ~ChatPermissionMask;
+    }
+}
+
 bool ChatMgr::IsCommand(std::u16string_view text, std::string_view prefix)
 {
     if (prefix.empty())

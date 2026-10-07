@@ -22,6 +22,7 @@
 #include "PlayerLevelMgr.h"
 #include "PackedName.h"
 #include "PlayerObjectBuilder.h"
+#include "ScriptMgr.h"
 #include "Settings.h"
 #include "SpellMgr.h"
 #include "StringHash.h"
@@ -105,6 +106,11 @@ void GameSession::WorldUpdate(std::chrono::steady_clock::time_point now)
         return;
     if (IsAttached() && _inWorld.load(std::memory_order_relaxed) && GetStatus() == SessionStatus::InWorld)
     {
+        if (_player && _player->RefillPotion(now, std::chrono::seconds(sSettings.Get<uint32>("Potion.RefillInterval"))))
+        {
+            SendPotionUpdate();
+            SaveStatsIfDirty();
+        }
         if (!_afkTimerStarted)
         {
             _afkStarted = now;
@@ -316,7 +322,7 @@ void GameSession::AcceptAttach(LoginKeyClaim const& claim)
 
 void GameSession::LoadAccount(LoginKeyClaim const& claim)
 {
-    std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> statement = LoginDatabase.IsOpen() ? AccountMgr::PrepareGetAccountById(claim.AccountId) : nullptr;
+    std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> statement = LoginDatabase.IsOpen() ? AccountMgr::PrepareGetAccountByIdWithMute(claim.AccountId, AccountMgr::Now()) : nullptr;
     if (!statement)
     {
         RefuseEntry(claim, "the login database is not open");
@@ -333,6 +339,11 @@ void GameSession::LoadAccount(LoginKeyClaim const& claim)
         }
         AccountInfo const account = AccountMgr::ReadAccountRow(*result);
         SetSecurityLevel(account.SecurityLevel);
+        SetChatMode(account.ChatMode);
+        if (_chatMode > 2)
+            LOG_WARN("server.gamesession", "Session {}'s account {} has chat_mode {}; chat permissions are disabled until it is corrected", GetSessionId(), account.Id, _chatMode);
+        if (std::optional<AccountMute> const mute = AccountMgr::ReadAccountMuteRow(*result))
+            _muteUntil = mute->Until;
         _accountPermissions = account.Permissions;
         LoadCharacter(claim);
     }));
@@ -425,6 +436,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     uint16 mobileId = 0;
     bool resumed = false;
     std::optional<PlayerStats> resumedStats;
+    std::optional<Player> resumedPlayer;
     std::optional<PlayerSpellbook> resumedSpellbook;
     PlayerMovement movement;
     MovementRelay relay;
@@ -449,7 +461,11 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
             entering.PositionY = current.Y;
             entering.PositionZ = current.Z;
             entering.Orientation = current.Yaw;
-            resumedStats = previous->_stats;
+            if (previous->_player)
+            {
+                resumedPlayer = previous->_player;
+                resumedStats = previous->_player->GetStats();
+            }
             resumedSpellbook = previous->_spellbook;
             movement = previous->_movement;
             relay = previous->_relay;
@@ -520,7 +536,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
     std::shared_ptr<BehaviorClientClasses const> const behaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
     std::shared_ptr<ObjectTemplate const> const playerTemplate = sObjectTemplateMgr.GetPlayer();
-    uint32 const permissions = AccountMgr::EntryPermissions(_accountPermissions, sSettings.Get<uint32>("LoginComplete.Permissions"));
+    uint32 const permissions = ChatMgr::PermissionsForMode(AccountMgr::EntryPermissions(_accountPermissions, sSettings.Get<uint32>("LoginComplete.Permissions")), _chatMode);
     PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, entering, *stats, trackers, placement, permissions, problem);
     ObjectField const* const field = ObjectFields::Find("MSG_LOGINCOMPLETE", "Data");
     EncodeResult const data = player && field ? CoreObjectSerializer::EncodeField(*field, *player, *types) : EncodeResult{};
@@ -591,7 +607,11 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         _relay.Reset(_movement);
         _characterRevision = entering.StateRevision;
     }
-    _stats = std::move(stats);
+    _zoneDisplay = entering.ZoneDisplay.empty() ? entering.Zone : entering.ZoneDisplay;
+    if (resumedPlayer)
+        _player = std::move(resumedPlayer);
+    else
+        _player.emplace(std::move(*stats));
     if (!resumed)
         _statsRevision = stored ? stored->Revision : 0;
     _spellbook = std::move(spellbook);
@@ -604,6 +624,8 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     _inWorld.store(true, std::memory_order_relaxed);
     _afkTimerStarted = false;
     SendDmlMessage(complete);
+    if (_muteUntil != 0)
+        SendMuteNotice();
     SendBadges();
     SendMapObjects(*map);
     SendCustomEmotes();
@@ -614,8 +636,48 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         GetSessionId(), complete.ZoneName, complete.ZoneId, complete.DynamicZoneId, complete.DynamicServerProcId, complete.ServerTime, complete.RealmName, complete.Permissions,
         complete.IsCsr, complete.TestServer, complete.CriticalObjects.empty() ? "none" : "a list");
     LOG_INFO("server.gamesession", "Session {} put wizard {} in {} instance {} at ({}, {}, {}) with mobile id {}, level {} with {} of {} health and {} of {} mana and {} spell(s) in its book, and sent its {}-byte object and the zone's {} object(s)",
-        GetSessionId(), character.Guid, entering.Zone, map->GetDynamicZoneId(), placement.X, placement.Y, placement.Z, placement.MobileId, _stats->GetLevel(), _stats->GetHitpoints(),
-        _stats->GetMaxHitpoints(), _stats->GetMana(), _stats->GetMaxMana(), trackers.size(), data.Bytes.size(), map->GetObjects().size());
+        GetSessionId(), character.Guid, entering.Zone, map->GetDynamicZoneId(), placement.X, placement.Y, placement.Z, placement.MobileId, _player->GetStats().GetLevel(), _player->GetStats().GetHitpoints(),
+        _player->GetStats().GetMaxHitpoints(), _player->GetStats().GetMana(), _player->GetStats().GetMaxMana(), trackers.size(), data.Bytes.size(), map->GetObjects().size());
+}
+
+void GameSession::ApplyMute(uint64 until)
+{
+    _muteUntil = until;
+    if (IsOpen())
+        SendMuteNotice();
+}
+
+void GameSession::ClearMute()
+{
+    if (_muteUntil == 0)
+        return;
+    _muteUntil = 0;
+    if (IsOpen())
+        SendServerMessage(u"You have been unmuted.");
+}
+
+bool GameSession::RejectMutedSpeech()
+{
+    if (_muteUntil == 0)
+        return false;
+    if (NowEpochSeconds() >= static_cast<int64>(_muteUntil))
+    {
+        ClearMute();
+        return false;
+    }
+    SendMuteNotice();
+    return true;
+}
+
+void GameSession::SendMuteNotice()
+{
+    int64 const remaining = static_cast<int64>(_muteUntil) - NowEpochSeconds();
+    if (remaining <= 0 || !IsOpen())
+        return;
+    GameMessages::Mute message;
+    message.MuteTime = fmt::format("{}", remaining);
+    message.ForceMessage = 1;
+    SendDmlMessage(message);
 }
 
 void GameSession::ShowPlayer(GameSession const& other)
@@ -764,8 +826,10 @@ void GameSession::SendMapObjects(Map const& map)
 
 void GameSession::SendCustomEmotes()
 {
-    std::array<uint32, 3> const& emotes = _stats->GetPurchasedCustomEmotes();
-    std::array<uint32, 3> const& teleportEffects = _stats->GetPurchasedCustomTeleportEffects();
+    if (!_player)
+        return;
+    std::array<uint32, 3> const& emotes = _player->GetStats().GetPurchasedCustomEmotes();
+    std::array<uint32, 3> const& teleportEffects = _player->GetStats().GetPurchasedCustomTeleportEffects();
     for (uint8 rank = 0; rank < emotes.size(); ++rank)
     {
         GameMessages::UpdateCustomEmotes message;
@@ -817,6 +881,164 @@ void GameSession::HandleClientZoned(GameMessages::ClientZoned& message)
     LOG_INFO("server.gamesession", "Session {} loaded {}, and wizard {} stands in the world", GetSessionId(), _zonePath, _worldGuid);
 }
 
+bool GameSession::SetHealth(int32 value)
+{
+    if (!_player)
+        return false;
+    int32 const oldValue = _player->GetStats().GetHitpoints();
+    if (!_player->SetHealth(value))
+        return false;
+    int32 const newValue = _player->GetStats().GetHitpoints();
+    SendHealthUpdate(1);
+    sScriptMgr.OnHealthChanged(*_player, oldValue, newValue);
+    SaveStatsIfDirty();
+    return true;
+}
+
+bool GameSession::SetMana(int32 value)
+{
+    if (!_player || !_player->SetMana(value))
+        return false;
+    SendManaUpdate(1);
+    SaveStatsIfDirty();
+    return true;
+}
+
+bool GameSession::SetGold(int64 value)
+{
+    if (!_player)
+        return false;
+    int32 const oldValue = _player->GetStats().GetGold();
+    if (!_player->SetGold(value))
+        return false;
+    int32 const newValue = _player->GetStats().GetGold();
+    SendGoldUpdate();
+    sScriptMgr.OnGoldChanged(*_player, oldValue, newValue);
+    SaveStatsIfDirty();
+    return true;
+}
+
+int64 GameSession::ModifyGold(int64 amount)
+{
+    if (!_player)
+        return amount;
+    int32 const oldValue = _player->GetStats().GetGold();
+    int64 const overflow = _player->ModifyGold(amount);
+    int32 const newValue = _player->GetStats().GetGold();
+    if (oldValue != newValue)
+    {
+        SendGoldUpdate();
+        sScriptMgr.OnGoldChanged(*_player, oldValue, newValue);
+        SaveStatsIfDirty();
+    }
+    return overflow;
+}
+
+bool GameSession::SetPotionCapacity(uint32 capacity)
+{
+    if (!_player || !_player->SetPotionCapacity(capacity))
+        return false;
+    SendPotionUpdate();
+    SaveStatsIfDirty();
+    return true;
+}
+
+bool GameSession::SetPowerPip(float value)
+{
+    if (!_player || !_player->SetPowerPip(value))
+        return false;
+    GameMessages::UpdatePowerPip message;
+    message.PowerPip = _player->GetStats().GetPowerPip();
+    SendDmlMessage(message);
+    return true;
+}
+
+bool GameSession::SetShadowPipRating(float value)
+{
+    if (!_player || !_player->SetShadowPipRating(value))
+        return false;
+    GameMessages::UpdateShadowPipRating message;
+    message.ShadowPipRating = _player->GetStats().GetShadowPipRating();
+    SendDmlMessage(message);
+    return true;
+}
+
+void GameSession::SendElixirStateChange(uint64 parentId, uint8 effectEnabled)
+{
+    if (!_player)
+        return;
+    GameMessages::ElixirStateChange message;
+    message.ParentId = parentId;
+    message.EffectEnabled = effectEnabled;
+    SendDmlMessage(message);
+}
+
+void GameSession::SendHealthUpdate(uint8 displayDiff)
+{
+    if (!_player)
+        return;
+    GameMessages::UpdateHealth message;
+    message.CharacterId = _worldGuid;
+    message.NewHealth = _player->GetStats().GetHitpoints();
+    message.NewHealthMax = _player->GetStats().GetMaxHitpoints();
+    message.DisplayDiff = displayDiff;
+    SendDmlMessage(message);
+}
+
+void GameSession::SendManaUpdate(uint8 displayDiff)
+{
+    if (!_player)
+        return;
+    GameMessages::UpdateMana message;
+    message.Mana = _player->GetStats().GetMana();
+    message.MaxMana = _player->GetStats().GetMaxMana();
+    message.DisplayDiff = displayDiff;
+    SendDmlMessage(message);
+}
+
+void GameSession::SendGoldUpdate()
+{
+    if (!_player)
+        return;
+    GameMessages::UpdateGold message;
+    message.Gold = _player->GetStats().GetGold();
+    message.MaxGold = _player->GetStats().GetBase().Gold;
+    SendDmlMessage(message);
+}
+
+void GameSession::SendPotionUpdate()
+{
+    if (!_player)
+        return;
+    GameMessages::UpdatePotions message;
+    message.PotionMax = _player->GetStats().GetPotionMax();
+    message.PotionCharge = _player->GetStats().GetPotionCharge();
+    SendDmlMessage(message);
+}
+
+void GameSession::HandleUsePotion(GameMessages::UsePotion&)
+{
+    if (!_player)
+        return;
+    int32 const oldHealth = _player->GetStats().GetHitpoints();
+    int32 const oldMana = _player->GetStats().GetMana();
+    double const restoreFraction = sSettings.Get<float>("Potion.RestoreFraction");
+    std::chrono::seconds const refillInterval(sSettings.Get<uint32>("Potion.RefillInterval"));
+    if (!_player->UsePotion(restoreFraction, std::chrono::steady_clock::now(), refillInterval))
+    {
+        LOG_DEBUG("server.gamesession", "Session {}'s wizard {} asked to use a potion without a full charge; its vitals and potion charges stay unchanged", GetSessionId(), _worldGuid);
+        return;
+    }
+    int32 const newHealth = _player->GetStats().GetHitpoints();
+    int32 const newMana = _player->GetStats().GetMana();
+    SendPotionUpdate();
+    SendHealthUpdate(newHealth != oldHealth ? 1 : 0);
+    SendManaUpdate(newMana != oldMana ? 1 : 0);
+    if (newHealth != oldHealth)
+        sScriptMgr.OnHealthChanged(*_player, oldHealth, newHealth);
+    SaveStatsIfDirty();
+}
+
 std::string GameSession::GetCharacterName() const
 {
     std::lock_guard const lock(_nameMutex);
@@ -831,9 +1053,9 @@ void GameSession::SetCharacterName(std::string name)
 
 void GameSession::SaveStats()
 {
-    if (!_stats || !CharacterDatabase.IsOpen())
+    if (!_player || !CharacterDatabase.IsOpen())
         return;
-    CharacterStats stored = _stats->ToStored();
+    CharacterStats stored = _player->GetStats().ToStored();
     stored.Revision = ++_statsRevision;
     if (!CharacterRepository::IsValidStats(stored))
     {
@@ -841,7 +1063,16 @@ void GameSession::SaveStats()
         return;
     }
     if (CharacterRepository::Statement statement = CharacterRepository::PrepareSaveStats(_worldGuid, stored))
+    {
         CharacterDatabase.Execute(std::move(statement));
+        _player->ClearDirtyStats();
+    }
+}
+
+void GameSession::SaveStatsIfDirty()
+{
+    if (_player && _player->HasDirtyStats())
+        SaveStats();
 }
 
 SpellbookChange GameSession::LearnSpell(uint32 spellId)
@@ -907,12 +1138,13 @@ void GameSession::LeaveWorld()
     _linkDeadStartPending.store(false, std::memory_order_relaxed);
     MarkOffline();
     SetCharacterName(std::string());
+    _zoneDisplay.clear();
     _wizBangId = 0;
     _pendingWizBang.reset();
-    if (_stats)
+    if (_player)
     {
         SaveStats();
-        _stats.reset();
+        _player.reset();
     }
     _spellbook.reset();
     if (std::optional<PlayerPosition> const moved = _movement.TakeWrite())
@@ -934,6 +1166,7 @@ void GameSession::TransferWorldStateTo(GameSession& replacement)
 {
     replacement._mapId = _mapId;
     replacement._zonePath = _zonePath;
+    replacement._zoneDisplay = _zoneDisplay;
     replacement._worldGuid = _worldGuid;
     replacement._mobileId = _mobileId;
     replacement._movement = _movement;
@@ -950,7 +1183,7 @@ void GameSession::TransferWorldStateTo(GameSession& replacement)
     _linkDeadNotified = false;
     _mapId.reset();
     _publicObject.clear();
-    _stats.reset();
+    _player.reset();
     _spellbook.reset();
     _worldGuid = 0;
     _zonePath.clear();
