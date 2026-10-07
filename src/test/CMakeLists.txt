@@ -48,6 +48,10 @@ target_link_libraries(unit_tests
         nlohmann_json::nlohmann_json
         GTest::gmock)
 
+if(TARGET login)
+    target_link_libraries(unit_tests PRIVATE login)
+endif()
+
 if(WIN32)
     target_link_libraries(unit_tests PRIVATE advapi32 ws2_32)
 endif()
