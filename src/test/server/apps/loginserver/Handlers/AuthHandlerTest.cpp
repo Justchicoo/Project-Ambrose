@@ -199,6 +199,10 @@ TEST_F(AuthHandlerDatabaseTest, RevisionEnforcementCanBeChangedForTheNextLogin)
     LoginClient accepted = _server->Connect();
     SendAuthen(accepted, Credentials(accepted, "Wizard", "hunter22"), "r1.Other");
     ASSERT_FALSE(ExpectAdmitted(accepted).empty()) << "a revision mismatch is allowed while Login.EnforceRevision is off";
+    accepted.Socket.reset();
+    ASSERT_TRUE(WaitForCondition([&] {
+        return sLoginMgr.GetAccountSessionCount() == 0 && Count("SELECT COUNT(*) FROM `account_session`") == 0;
+    }));
 
     settings.EnforceRevision = true;
     sLoginMgr.SetSettings(settings);
