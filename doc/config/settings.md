@@ -104,7 +104,7 @@ Access says who may see and change a setting over the admin API and the panel. A
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
-| `Patch.Enabled` | bool | false | none | live | gameserver | normal | Whether the realm may send package-download messages; read at each send, so a live change applies to the next package message. The gate sits on `GameSession`'s own send, so download messages must only ever be sent through `GameSession`. |
+| `Patch.Enabled` | bool | false | none | live | gameserver | normal | Whether the realm may send package-download messages; read at each send, so a live change applies to the next package message. The gate sits on GameSession's own send, so download messages must only ever be sent through GameSession. |
 
 ## Player
 
