@@ -110,6 +110,9 @@ namespace
                 "How far a wizard's typed chat, quick chat and emotes reach the other wizards in its instance, read at each tick; 0 reaches the whole instance."),
             Flag("GM.LogCommands", "true", "Commands", Game, Live, "Whether every command run is written to the log."),
 
+            Unsigned("Social.MaxFriends", "100", "0", "10000", "", "Social", Game, Live,
+                "How many friends one wizard may have; a change applies to the next friend request and max-friends reply."),
+
             Text("Locale.Default", "en-US", "16", "Locale", Game | Login, Live, "The locale names and texts are read in when a client names none."),
 
             Flag("Network.PacketLog.Enable", "false", "Network", Game | Login, Live,

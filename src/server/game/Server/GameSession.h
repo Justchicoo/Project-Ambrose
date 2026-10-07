@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook and stats stay with the world thread and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it, as are the game effects its wizard carries, each added or taken away on the world thread and shown to the wizard and every wizard in its instance at the next tick, and to each that comes to see it after the object.
+ * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook and stats stay with the world thread and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it, as are the game effects its wizard carries, each added or taken away on the world thread and shown to the wizard and every wizard in its instance at the next tick, and to each that comes to see it after the object. Its friend, best-friend, friend-cap and ignore messages are answered through the social manager, and the display name of the zone its wizard stands in is kept for the presence its friends are shown.
  */
 
 #ifndef AMBROSE_GAMESESSION_H
@@ -33,6 +33,7 @@
 #include <vector>
 
 struct ChatSpeaker;
+class SocialMgr;
 
 struct WorldDeparture
 {
@@ -80,6 +81,8 @@ public:
 
     std::string GetCharacterName() const;
     void SetCharacterName(std::string name);
+    std::string const& GetZonePath() const noexcept { return _zonePath; }
+    std::string const& GetZoneDisplay() const noexcept { return _zoneDisplay; }
 
     std::size_t DrainQueue(std::size_t limit = MaxQueuedMessages);
     void WorldUpdate(std::chrono::steady_clock::time_point now);
@@ -118,11 +121,13 @@ public:
     uint8 GetChatFilter() const noexcept { return _chatFilter; }
     uint8 GetSecurityLevel() const noexcept { return _securityLevel.load(std::memory_order_relaxed); }
     void SetSecurityLevel(uint8 level) noexcept { _securityLevel.store(level, std::memory_order_relaxed); }
+    void SetChatMode(uint8 mode) noexcept { _chatMode = mode; }
+    void ApplyMute(uint64 until);
+    void ClearMute();
     MovementUpdate TakeMovementUpdate(uint32 idleFlushes);
     void ShowMovementOf(GameSession const& mover, MovementUpdate const& update);
     bool TeleportWithinMap(PlayerPosition const& target, std::vector<std::shared_ptr<GameSession>> const& onlookers, std::string& problem);
     void ShowTeleportOf(GameSession const& mover, PackedMove const& place);
-    std::string const& GetZonePath() const noexcept { return _zonePath; }
     void SendObjectChanges(MapObjectChanges const& changes);
     PlayerStats const* GetStats() const noexcept { return _stats ? &*_stats : nullptr; }
     PlayerMovement const& GetMovement() const noexcept { return _movement; }
@@ -145,6 +150,16 @@ public:
     void SendBadges();
     void HandlePlayerWizBang(GameMessages::PlayerWizBang& message);
 
+    void HandleBuddyRequestList(GameMessages::BuddyRequestList& message);
+    void HandleBuddyRequestAdd(GameMessages::BuddyRequestAdd& message);
+    void HandleBuddyRequestAccept(GameMessages::BuddyRequestAccept& message);
+    void HandleBuddyRequestDeny(GameMessages::BuddyRequestDeny& message);
+    void HandleBuddyRequestDrop(GameMessages::BuddyRequestDrop& message);
+    void HandleBestFriend(GameMessages::BestFriend& message);
+    void HandleRequestMaxFriends(GameMessages::RequestMaxFriends& message);
+    void HandleIgnoreAdd(GameMessages::IgnoreAdd& message);
+    void HandleIgnoreDrop(GameMessages::IgnoreDrop& message);
+
     void HandleCombatMove(GameMessages::CombatMove& message);
     void HandleCombatDraw(GameMessages::CombatDraw& message);
     void HandleCombatAFK(GameMessages::CombatAFK& message);
@@ -163,7 +178,10 @@ protected:
 
 private:
     friend class World;
+    friend class SocialMgr;
     friend struct GameSessionLifecycleTestAccess;
+    friend struct SocialMgrTestAccess;
+    friend struct ChatHandlerTestAccess;
 
     std::shared_ptr<GameSession> SharedSelf();
     SQLOperation::CompletionHandler MakeCompletionHandler();
@@ -182,6 +200,9 @@ private:
     void SavePosition(PlayerPosition const& position);
     void RefuseEntry(LoginKeyClaim const& claim, std::string const& reason);
     bool CanSpeak(std::string_view what) const;
+    bool RejectClosedChat();
+    bool RejectMutedSpeech();
+    void SendMuteNotice();
     void QueueSpeech(Speech speech, std::string_view what);
     void QueueEmote(std::string_view name, uint8 excludeOriginator, std::string_view what);
     void MarkOffline();
@@ -204,6 +225,8 @@ private:
     std::atomic<bool> _linkDeadStartPending{ false };
     std::atomic<int64> _socketLostAtNanoseconds{ 0 };
     std::atomic<uint8> _securityLevel{ 0 };
+    uint8 _chatMode = 0;
+    uint64 _muteUntil = 0;
     std::optional<uint32> _accountPermissions;
     std::chrono::steady_clock::time_point const _connectedAt = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point _afkStarted;
@@ -235,6 +258,7 @@ private:
     uint64 _characterRevision = 0;
     mutable std::mutex _nameMutex;
     std::string _characterName;
+    std::string _zoneDisplay;
 };
 
 #endif

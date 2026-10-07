@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Takes what a wizard's client asks the wizards around it to see, once the wizard stands shown in an instance: a typed line whose text reads as the client packs it, unless it is a command, which is never shown to anyone: an account above player level runs it through CommandMgr with its replies gathered into as few MSG_SERVERMESSAGE as their length allows, each of which its client adds to its chat window and shows once as a notice, and hides the talking emote its client plays with every line, and a player's is shown as an ordinary line or refused with a reply as GM.PlayerCommandsAsChat says, a quick chat phrase the install's QuickChat.xml holds, an extended phrase as the client wrote it once the client's own parser would read it, an emote whose animation the install's animation list holds, played through an EmoteStateOverrideInfo naming that animation, and an owned custom emote relayed with its client-written line. Each is kept until the world's next tick, a wizard keeping only so many between ticks, and then shown to each listener as the message its client plays it from, naming the speaker by its packed name and global id and showing a line under the speaker's own chat level.
+ * Validates client chat and emotes, runs private game-master commands, applies permissions and moderation, and queues accepted speech for in-instance listeners.
  */
 
 #include "AnimationListMgr.h"
@@ -80,6 +80,14 @@ bool GameSession::CanSpeak(std::string_view what) const
     return false;
 }
 
+bool GameSession::RejectClosedChat()
+{
+    if (_chatMode < 2)
+        return false;
+    SendServerMessage(u"Chat is disabled for this account.");
+    return true;
+}
+
 void GameSession::QueueSpeech(Speech speech, std::string_view what)
 {
     if (_speech.size() >= ChatMgr::MaxQueuedSpeech)
@@ -131,6 +139,16 @@ void GameSession::HandleRequestRadialChat(GameMessages::RequestRadialChat& messa
         case TypedLine::Shown:
             break;
     }
+    if (RejectMutedSpeech())
+    {
+        _hideNextChatEmote = true;
+        return;
+    }
+    if (RejectClosedChat())
+    {
+        _hideNextChatEmote = true;
+        return;
+    }
     if (!CanSpeak("a chat line"))
         return;
     Speech speech;
@@ -167,6 +185,16 @@ bool GameSession::TakeCommandLine(std::string_view packed)
 void GameSession::HandleRequestRadialQuickChat(GameMessages::RequestRadialQuickChat& message)
 {
     _hideNextChatEmote = false;
+    if (RejectMutedSpeech())
+    {
+        _hideNextChatEmote = true;
+        return;
+    }
+    if (RejectClosedChat())
+    {
+        _hideNextChatEmote = true;
+        return;
+    }
     if (!CanSpeak("a quick chat phrase"))
         return;
     if (!sQuickChatMgr.GetPhrases()->Find(message.MessageId))
@@ -184,6 +212,16 @@ void GameSession::HandleRequestRadialQuickChat(GameMessages::RequestRadialQuickC
 void GameSession::HandleRequestRadialQuickChatExt(GameMessages::RequestRadialQuickChatExt& message)
 {
     _hideNextChatEmote = false;
+    if (RejectMutedSpeech())
+    {
+        _hideNextChatEmote = true;
+        return;
+    }
+    if (RejectClosedChat())
+    {
+        _hideNextChatEmote = true;
+        return;
+    }
     if (!CanSpeak("an extended quick chat phrase"))
         return;
     if (!ChatMgr::IsExtendedPhrase(message.Message))
@@ -205,6 +243,8 @@ void GameSession::HandleCoreEmote(GameMessages::CoreEmote& message)
         _hideNextChatEmote = false;
         return;
     }
+    if (RejectMutedSpeech())
+        return;
     if (CanSpeak("an emote"))
         QueueEmote(message.Name, message.ExcludeOriginator, "an emote");
 }
