@@ -243,19 +243,27 @@ def serve(arguments):
                 found = await self.fetch_channel(int(channel_id))
             return found
 
-        async def retire(self, entry, kind, channel):
+        async def retire(self, guild_id, kind):
+            entry = boards.guild(self.state, guild_id)
+            joined = self.get_guild(int(guild_id))
+            if entry["retired"].get(kind) or joined is None or boards.webhooks_live(self.root()):
+                return
             ids = await asyncio.to_thread(boards.retired_ids, self.root())
             for message_id in ids.get(kind, []):
-                try:
-                    old = await channel.fetch_message(message_id)
+                for channel in joined.text_channels:
+                    try:
+                        old = await channel.fetch_message(message_id)
+                    except discord.HTTPException:
+                        continue
                     if old.webhook_id:
-                        await old.delete()
-                        log.info("deleted the old webhook %s message %s", kind, message_id)
-                except discord.NotFound:
-                    pass
-                except discord.HTTPException as failure:
-                    log.warning("could not delete the old webhook %s message %s: %s", kind, message_id, failure)
+                        try:
+                            await old.delete()
+                            log.info("deleted the old webhook %s message %s in #%s", kind, message_id, channel.name)
+                        except discord.HTTPException as failure:
+                            log.warning("could not delete the old webhook %s message %s: %s", kind, message_id, failure)
+                    break
             entry["retired"][kind] = True
+            self.save()
 
         async def update_board(self, guild_id, kind):
             entry = boards.guild(self.state, guild_id)
@@ -271,14 +279,14 @@ def serve(arguments):
                     try:
                         message = await channel.fetch_message(int(message_id))
                         await message.edit(embed=embed)
+                        await self.retire(guild_id, kind)
                         return
                     except discord.NotFound:
                         log.info("the %s board message is gone, posting it again", kind)
-                if not entry["retired"].get(kind) and not boards.webhooks_live(self.root()):
-                    await self.retire(entry, kind, channel)
                 message = await channel.send(embed=embed)
                 entry["messages"][kind] = str(message.id)
                 self.save()
+                await self.retire(guild_id, kind)
             except discord.HTTPException as failure:
                 log.warning("could not update the %s board in %s: %s", kind, guild_id, failure)
 
