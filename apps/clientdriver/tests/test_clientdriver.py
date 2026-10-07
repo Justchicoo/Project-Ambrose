@@ -513,6 +513,35 @@ class WorldEntryTests(TemporaryFolder):
         self.assertIn("LoginServerPort=12100", login.overrides())
         self.assertTrue(login.log.path.endswith("Login.log"))
 
+    def reloading_login(self, answer):
+        scratch = database.Scratch("127.0.0.1", 3307, "ambrose", "ambrose", "ambrose_driver_run")
+        login = server.LoginServer("loginserver.exe", "loginserver.conf.dist", os.path.join(self.folder, "login"), "127.0.0.2", 12100, scratch)
+        login.console = LogTail(self.write(os.path.join("login", "console.txt"), []), interval=0.01)
+        sent = []
+
+        class Input:
+            def write(self, data):
+                sent.append(data.decode("utf-8").strip())
+                self.console_lines(answer)
+
+            def flush(self):
+                pass
+
+        Input.console_lines = lambda _self, lines: self.write(os.path.join("login", "console.txt"), lines)
+        login.process = SimpleNamespace(poll=lambda: None, stdin=Input())
+        return login, sent
+
+    def test_the_login_server_rereads_the_rows_the_game_server_wrote_after_it_started(self):
+        login, sent = self.reloading_login(["Account clientdriver created with id 1", "creation is now generation 2"])
+        self.assertEqual(login.reload("creation", timeout=1), "creation is now generation 2")
+        self.assertEqual(sent, ["reload creation"])
+
+    def test_a_reload_the_login_server_refuses_stops_the_run_with_its_reason(self):
+        login, _sent = self.reloading_login(["names was not reloaded and generation 1 goes on serving", "  the world database is not open"])
+        with self.assertRaises(StepFailed) as raised:
+            login.reload("names", timeout=1)
+        self.assertIn("could not reload names", str(raised.exception))
+
     def test_the_zone_rows_are_cached_by_revision_and_layout_outside_the_repository(self):
         path = zones.cache_path("r806919.Wizard_1_610")
         self.assertTrue(path.endswith(os.path.join("clientdriver", "zones", f"r806919.Wizard_1_610.v{zones.LAYOUT}.sql")))
