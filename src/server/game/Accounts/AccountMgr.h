@@ -33,6 +33,7 @@ enum class AccountOpResult : uint8
     ReasonTooLong,
     ReasonInvalid,
     BadDuration,
+    AddressInvalid,
     ReadBackFailed,
     DatabaseError
 };
@@ -62,6 +63,7 @@ struct AccountInfo
     uint64 LastLogin = 0;
     std::string LastIp;
     uint64 LastMachineId = 0;
+    std::optional<uint32> Permissions;
 };
 
 struct AccountBan
@@ -113,6 +115,12 @@ public:
     AccountOpResult Unban(uint64 accountId);
     AccountOpResult MuteAccount(uint64 accountId, std::chrono::seconds duration, std::string_view mutedBy, std::string_view reason, uint64* muteUntil = nullptr);
     AccountOpResult UnmuteAccount(uint64 accountId);
+    AccountOpResult DeleteAccount(uint64 accountId);
+    AccountOpResult SetPermissions(uint64 accountId, std::optional<uint32> permissions);
+    AccountOpResult BanAddress(std::string_view address, std::chrono::seconds duration, std::string_view bannedBy, std::string_view reason);
+    AccountOpResult UnbanAddress(std::string_view address);
+    AccountOpResult BanMachine(uint64 machineId, std::chrono::seconds duration, std::string_view bannedBy, std::string_view reason);
+    AccountOpResult UnbanMachine(uint64 machineId);
 
     AccountLookup GetAccountByName(std::string_view username) const;
     AccountLookup GetAccountById(uint64 accountId) const;
@@ -124,12 +132,17 @@ public:
     std::optional<std::string> GetVerifier(AccountInfo const& account) const;
 
     static std::string_view Describe(AccountOpResult result) noexcept;
+    static uint32 EntryPermissions(std::optional<uint32> account, uint32 setting) noexcept { return account.value_or(setting); }
     static uint64 Now() noexcept;
 
 private:
     AccountMgr();
 
     AccountOpResult StoreVerifier(uint64 accountId, std::string_view username, std::string_view password);
+    template<class Key>
+    AccountOpResult AddBan(LoginDatabaseStatements index, Key const& key, std::chrono::seconds duration, std::string_view bannedBy, std::string_view reason);
+    template<class Key>
+    AccountOpResult EndBan(LoginDatabaseStatements index, Key const& key);
 
     mutable std::mutex _settingsMutex;
     std::shared_ptr<AccountSettings const> _settings;

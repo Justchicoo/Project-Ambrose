@@ -1,10 +1,10 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the installer: that conf copies each installed template once, that running it again leaves an edited .conf alone, that a relative install prefix resolves against the checkout rather than the working directory, that compile installs the configuration the release presets build, RelWithDebInfo, rather than the build type's name, that run starts an app from its bin folder, so a supervisor finds the configurations it names relatively, that both the shell and the PowerShell script agree, each skipping where its interpreter is absent, and that the PowerShell deps -Plan lists every install step it would take, or skip for what it found, never runs winget, and fails clearly without winget.
+# Self-tests for the installer: that conf copies each installed template once, that running it again leaves an edited .conf alone, that a relative install prefix resolves against the checkout rather than the working directory, that compile installs the configuration the release presets build, RelWithDebInfo, rather than the build type's name, that run starts an app from its bin folder, so a supervisor finds the configurations it names relatively, that both the shell and the PowerShell script agree, each skipping where its interpreter is absent or, like WSL's bash on Windows, cannot take the checkout's paths, and that the PowerShell deps -Plan lists every install step it would take, or skip for what it found, never runs winget, and fails clearly without winget.
+import functools
 import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
 
@@ -15,8 +15,26 @@ TEMPLATE = "# Project Ambrose by Imjustchico\nLogAsync.Enable = 0\n"
 EDITED = "# edited by the operator\n"
 
 
+def takes_this_checkouts_paths(candidate):
+    try:
+        probe = subprocess.run([candidate, "-c", 'test -f "$1"', "bash", SHELL], capture_output=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return probe.returncode == 0
+
+
+@functools.lru_cache(maxsize=None)
 def bash():
-    return shutil.which("bash")
+    candidates = [shutil.which("bash")]
+    if os.name == "nt":
+        git = shutil.which("git")
+        roots = [os.path.dirname(os.path.dirname(git))] if git else []
+        roots += [os.path.join(os.environ.get(name, ""), "Git") for name in ("ProgramFiles", "ProgramW6432", "LOCALAPPDATA")]
+        candidates += [os.path.join(root, "bin", "bash.exe") for root in roots]
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate) and takes_this_checkouts_paths(candidate):
+            return candidate
+    return None
 
 
 def powershell():
@@ -45,7 +63,7 @@ def run_powershell(command, prefix, cwd=None):
 
 
 class RunTests(unittest.TestCase):
-    @unittest.skipUnless(bash(), "bash is not installed")
+    @unittest.skipUnless(bash(), "no bash that takes this checkout's paths is installed (on Windows, WSL's bash cannot; install Git for Windows)")
     def test_run_starts_the_app_from_its_bin_folder_so_its_relative_paths_resolve_there(self):
         with tempfile.TemporaryDirectory() as folder:
             prefix_with_templates(folder, ("supervisor",))
@@ -92,7 +110,7 @@ class ConfTests(unittest.TestCase):
             with open(written, encoding="utf-8") as handle:
                 self.assertIn(EDITED.strip(), handle.read())
 
-    @unittest.skipUnless(bash(), "bash is not installed")
+    @unittest.skipUnless(bash(), "no bash that takes this checkout's paths is installed (on Windows, WSL's bash cannot; install Git for Windows)")
     def test_the_shell_script_copies_each_template_once_and_keeps_an_edit(self):
         self.check_copies_then_preserves(run_shell)
 
@@ -107,7 +125,7 @@ class ConfTests(unittest.TestCase):
             self.assertEqual(os.listdir(elsewhere), [],
                              "a relative prefix was resolved against the working directory")
 
-    @unittest.skipUnless(bash(), "bash is not installed")
+    @unittest.skipUnless(bash(), "no bash that takes this checkout's paths is installed (on Windows, WSL's bash cannot; install Git for Windows)")
     def test_the_shell_script_resolves_a_relative_prefix_against_the_checkout(self):
         self.check_relative_prefix_is_not_the_working_directory(run_shell)
 
@@ -115,7 +133,7 @@ class ConfTests(unittest.TestCase):
     def test_the_powershell_script_resolves_a_relative_prefix_against_the_checkout(self):
         self.check_relative_prefix_is_not_the_working_directory(run_powershell)
 
-    @unittest.skipUnless(bash(), "bash is not installed")
+    @unittest.skipUnless(bash(), "no bash that takes this checkout's paths is installed (on Windows, WSL's bash cannot; install Git for Windows)")
     def test_conf_refuses_when_nothing_is_installed_yet(self):
         with tempfile.TemporaryDirectory() as folder:
             result = run_shell("conf", folder)

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Ambrose-authored LOGIN, GAME, WIZARD, WIZARD2 and WizCombat message definitions for login and game server tests: the authentication requests and replies, the AFK and shutdown messages with their field layouts, the character list request and its replies, the character pick and where it sends the client, the GAME attach, its refusal, the moves, movement states and jumps a client sends and the moves, movement states and object states the server relays to other clients, the typed lines, quick chat phrases and emotes a client sends and the lines the server shows the others, the logout query and its answer, the disconnect and not-AFK notes a client sends and the link-dead, AFK and shutdown notices the game server sends, and the login completion that hands the client its object, which the game server sends and the login server never accepts, with the objects the game server brings into view and takes away, the WIZARD requests and notes a client sends as it enters with the replies that answer them, and the spell the game server adds to a wizard's spellbook or takes from it, at the orders the r806919 client gives them, the WIZARD2 note the client sends once it has loaded its zone, and the service-51 catalog plus the two tested wire layouts, and the wizbang state a client names with the wizbang the game server shows.
+ * Ambrose-authored LOGIN, GAME, WIZARD, WIZARD2, WIZARD3 and WizCombat message definitions for login and game server tests: the authentication requests and replies, the AFK and shutdown messages with their field layouts, the character list request and its replies, the character pick and where it sends the client, the GAME attach, its refusal, the moves, movement states and jumps a client sends, the forced teleport and the moves, movement states and object states the server relays to other clients, the typed lines, quick chat phrases and emotes a client sends and the lines the server shows the others, the logout query and its answer, the disconnect and not-AFK notes a client sends and the link-dead, AFK and shutdown notices the game server sends, and the login completion that hands the client its object, which the game server sends and the login server never accepts, with the objects the game server brings into view and takes away, the WIZARD requests and notes a client sends as it enters with the replies that answer them, and the spell the game server adds to a wizard's spellbook or takes from it, at the orders the r806919 client gives them, the WIZARD2 note the client sends once it has loaded its zone and the custom-emote mask update the server sends, the WIZARD3 custom radial emote request and reply messages, the wizbang state a client names with the wizbang the game server shows, and the service-51 catalog plus the two tested wire layouts.
  */
 
 #ifndef AMBROSE_LOGINMESSAGEFIXTURES_H
@@ -70,6 +70,7 @@ namespace LoginMessageFixtures
 <MSG_REQUESTRADIALQUICKCHAT><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">204</_MsgOrder><MessageID TYPE="UINT"></MessageID></RECORD></MSG_REQUESTRADIALQUICKCHAT>
 <MSG_REQUESTRADIALQUICKCHATEXT><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">205</_MsgOrder><Message TYPE="STR"></Message></RECORD></MSG_REQUESTRADIALQUICKCHATEXT>
 <MSG_SERVERMOVE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">218</_MsgOrder><LocationX TYPE="USHRT"></LocationX><LocationY TYPE="USHRT"></LocationY><LocationZ TYPE="USHRT"></LocationZ><Direction TYPE="UBYT"></Direction><MobileID TYPE="USHRT"></MobileID></RECORD></MSG_SERVERMOVE>
+<MSG_SERVERTELEPORT><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">220</_MsgOrder><LocationX TYPE="USHRT"></LocationX><LocationY TYPE="USHRT"></LocationY><LocationZ TYPE="USHRT"></LocationZ><Direction TYPE="UBYT"></Direction><MobileID TYPE="USHRT"></MobileID></RECORD></MSG_SERVERTELEPORT>
 <MSG_SERVERSHUTDOWN><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">219</_MsgOrder><Message TYPE="UINT"></Message></RECORD></MSG_SERVERSHUTDOWN>
 <MSG_WIZBANG><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">247</_MsgOrder><GameObjectID TYPE="GID"></GameObjectID><WizBangID TYPE="UINT"></WizBangID></RECORD></MSG_WIZBANG>
 <MSG_MUTE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">250</_MsgOrder><MuteTime TYPE="STR"></MuteTime><ForceMessage TYPE="UBYT"></ForceMessage></RECORD></MSG_MUTE>
@@ -102,7 +103,17 @@ namespace LoginMessageFixtures
 <FixtureWizard2Messages>
 <_ProtocolInfo><RECORD><ServiceID TYPE="UBYT">53</ServiceID><ProtocolType TYPE="STR">WIZARD2</ProtocolType></RECORD></_ProtocolInfo>
 <MSG_CLIENTZONED><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">64</_MsgOrder><ZoneNameID TYPE="UINT"></ZoneNameID></RECORD></MSG_CLIENTZONED>
+<MSG_UPDATECUSTOMEMOTES><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">228</_MsgOrder><CustomEmotes TYPE="UINT"></CustomEmotes><CustomTeleportEffects TYPE="UINT"></CustomTeleportEffects><Rank TYPE="UBYT"></Rank></RECORD></MSG_UPDATECUSTOMEMOTES>
 </FixtureWizard2Messages>
+)";
+
+    inline constexpr std::string_view Wizard3Xml = R"(<?xml version="1.0" ?>
+<FixtureWizard3Messages>
+<_ProtocolInfo><RECORD><ServiceID TYPE="UBYT">56</ServiceID><ProtocolType TYPE="STR">WIZARD3</ProtocolType></RECORD></_ProtocolInfo>
+<MSG_CORE_PIIRADIALMENUEMOTE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">23</_MsgOrder><EmoteAnimationName TYPE="STR"></EmoteAnimationName><ExcludeOriginator TYPE="UBYT"></ExcludeOriginator></RECORD></MSG_CORE_PIIRADIALMENUEMOTE>
+<MSG_PIIRADIALMENUPLAYEMOTE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">73</_MsgOrder><SourceName TYPE="STR"></SourceName><SourceID TYPE="GID"></SourceID><EmoteAnimationName TYPE="STR"></EmoteAnimationName><EmoteText TYPE="WSTR"></EmoteText></RECORD></MSG_PIIRADIALMENUPLAYEMOTE>
+<MSG_REQUESTPIIRADIALMENUPLAYEMOTE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">148</_MsgOrder><EmoteAnimationName TYPE="STR"></EmoteAnimationName><EmoteText TYPE="WSTR"></EmoteText></RECORD></MSG_REQUESTPIIRADIALMENUPLAYEMOTE>
+</FixtureWizard3Messages>
 )";
 
     inline constexpr std::string_view WizCombatXml = R"(<?xml version="1.0" ?>
@@ -151,7 +162,7 @@ namespace LoginMessageFixtures
     {
         return definitions.Add(LoginXml, "FixtureLoginMessages.xml")
             && (!withGame || (definitions.Add(GameXml, "FixtureGameMessages.xml") && definitions.Add(WizardXml, "FixtureWizardMessages.xml") && definitions.Add(Wizard2Xml, "FixtureWizard2Messages.xml")
-                && definitions.Add(WizCombatXml, "FixtureWizCombatMessages.xml")))
+                && definitions.Add(Wizard3Xml, "FixtureWizard3Messages.xml") && definitions.Add(WizCombatXml, "FixtureWizCombatMessages.xml")))
             && BaseMessageFixtures::AddTo(definitions);
     }
 }

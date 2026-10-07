@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the template extractor over a Root.wad and a world archive the test writes through a type dump it declares: every template the manifest lists that reads as a CoreTemplate becomes a row in id order with its class, source, names, display key, icon, visual id, object type, loot table, adjectives and behaviors in order, a behavior of a class the reader's dump lacks keeps its place with its class hash and the m_behaviorName its skipped bytes hold, and the template still gives a row, an empty slot gives an empty name, another CoreTemplate gives the name its ObjectName property holds, an entry that is missing or not a template is counted as not read without stopping the rest, ObjectData entries are counted apart, and the SQL script replaces the three tables whole, so running it twice writes the same rows.
+ * Tests the template extractor over a Root.wad and a world archive the test writes through a type dump it declares: every template the manifest lists that reads as a CoreTemplate becomes a row in id order with its class, source, names, display key, icon, visual id, object type, loot table, adjectives and behaviors in order, a behavior of a class the reader's dump lacks keeps its place with its class hash and the m_behaviorName its skipped bytes hold, and the template still gives a row, an empty slot gives an empty name, another CoreTemplate gives the name its ObjectName property holds, an entry that is missing or not a template is counted as not read without stopping the rest, ObjectData entries are counted apart, and the SQL script replaces the seven tables whole, the item tables emptied when no template is an item, so running it twice writes the same rows.
  */
 
 #include "BindFile.h"
@@ -241,12 +241,21 @@ TEST_F(TemplateExtractorTest, TheScriptReplacesTheTablesWhole)
     ASSERT_TRUE(extraction.Ok());
     WorldSqlScript const script = TemplateScript::Build(extraction);
     std::vector<std::string> const& statements = script.GetStatements();
-    ASSERT_EQ(statements.size(), 6u);
+    ASSERT_EQ(statements.size(), 14u);
     EXPECT_EQ(statements[0], "DELETE FROM `object_template`");
     EXPECT_EQ(statements[2], "DELETE FROM `object_template_adjective`");
     EXPECT_EQ(statements[4], "DELETE FROM `object_template_behavior`");
     EXPECT_NE(statements[5].find(fmt::format("(38232, 2, {}, {})", StringHash::KiStringHash(Unknown), WorldSqlScript::Literal(std::string("BasicNPCServiceBehavior")))), std::string::npos)
         << statements[5];
+    EXPECT_EQ(statements[6], "DELETE FROM `item_template`") << "no item template, so the item tables are only emptied";
+    EXPECT_EQ(statements[7], "DELETE FROM `item_template_requirement_list`");
+    EXPECT_EQ(statements[8], "DELETE FROM `item_template_requirement`");
+    EXPECT_EQ(statements[9], "DELETE FROM `item_template_effect`");
+    EXPECT_EQ(statements[10], "DELETE FROM `item_set_bonus`");
+    EXPECT_EQ(statements[11], "DELETE FROM `item_set_bonus_tier`");
+    EXPECT_EQ(statements[12], "DELETE FROM `item_set_bonus_requirement`");
+    EXPECT_EQ(statements[13], "DELETE FROM `item_set_bonus_effect`");
     EXPECT_EQ(TemplateScript::Build(extraction).ToText(), script.ToText()) << "the same install writes the same rows";
-    EXPECT_EQ(TemplateScript::GetTables(), (std::vector<std::string_view>{ "object_template", "object_template_adjective", "object_template_behavior" }));
+    EXPECT_EQ(TemplateScript::GetTables(), (std::vector<std::string_view>{ "object_template", "object_template_adjective", "object_template_behavior", "item_template",
+        "item_template_requirement_list", "item_template_requirement", "item_template_effect", "item_set_bonus", "item_set_bonus_tier", "item_set_bonus_requirement", "item_set_bonus_effect" }));
 }

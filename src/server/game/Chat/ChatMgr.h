@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What a wizard says for the others around it (ChatMgr): each typed line, quick chat phrase, extended phrase and emote its client asks the server to show is kept as a Speech until the world's next tick. The filter a line is shown under is the chat level the speaker's own client shows its line at, 2 for open chat, 1 for menu chat and 0 for neither, read from the permissions the server gave it; account chat mode keeps open permissions, limits them to menu chat, or clears chat permissions; a typed line that starts with the command prefix is a command and is never shown to anyone: an account above player level runs it, and a player's is shown as an ordinary line or refused as GM.PlayerCommandsAsChat says, and a line whose text does not read or is empty is not shown either; an extended phrase is shown only when the client's QuickChatX parser would read it, at least three words between spaces, the first naming one of the kinds it knows, Quest, Duel, Stats or Tour; and a listener in the same instance hears a wizard within the say range of it, anywhere in the instance when the range is 0.
+ * Models queued typed, quick-chat, extended, ordinary-emote and custom-emote speech, command handling, chat permissions and filters, and which in-instance listeners hear it.
  */
 
 #ifndef AMBROSE_CHATMGR_H
@@ -18,7 +18,8 @@ enum class SpeechKind : uint8
     Say,
     QuickChat,
     QuickChatExt,
-    Emote
+    Emote,
+    CustomEmote
 };
 
 enum class TypedLine : uint8
@@ -40,6 +41,7 @@ struct Speech
 {
     SpeechKind Kind = SpeechKind::Say;
     std::string Payload;
+    std::u16string WidePayload;
     std::string Animation;
     uint32 PhraseId = 0;
     bool SpeakerSees = false;
@@ -63,6 +65,7 @@ public:
     static uint8 FilterFor(uint32 permissions) noexcept;
     static uint32 PermissionsForMode(uint32 permissions, uint8 chatMode) noexcept;
     static bool IsCommand(std::u16string_view text, std::string_view prefix);
+    static bool IsCustomEmoteText(std::u16string_view text, std::string_view prefix);
     static TypedLine Judge(std::string_view message, std::string_view prefix);
     static CommandLine FateOf(uint8 securityLevel, bool playersChat) noexcept;
     static bool IsExtendedPhrase(std::string_view message);

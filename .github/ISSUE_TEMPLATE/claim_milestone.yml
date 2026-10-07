@@ -1,21 +1,21 @@
 # Project Ambrose by Imjustchico
-# The form for claiming a roadmap milestone from the milestone track: which one, what the contributor can build and run it on, and which of its acceptance checks they already know they cannot run.
+# The form for saying which roadmap milestone a contributor is building, any one being open to anyone: which one, what they can build and run it on, and which of its acceptance checks they already know they cannot run.
 name: Claim a milestone
-description: Hold one of the roadmap milestones that are open to outside help, before you start building it.
+description: Say which roadmap milestone you are building, so the board shows it. Every milestone is open to anyone.
 title: "Claim: "
 labels: ["milestone-track"]
 body:
   - type: markdown
     attributes:
       value: |
-        doc/MILESTONE-TRACK.md lists the milestones open to outside help and says what finishing one means. A milestone not in its "Open now" table is held or still waiting on another, so check the table first. `python apps/progress/ready.py --open` prints the same list from a clone.
+        Every milestone in doc/ROADMAP.md is open to anyone, in any order, and nobody has to be asked. doc/MILESTONE-TRACK.md says what finishing one means, and `python apps/progress/ready.py` prints the ones whose dependencies are all built. If the board says somebody already has a pull request for yours, say so on it before you start.
 
-        Opening a draft pull request holds a milestone just as well as this form, and sooner.
+        Opening a draft pull request shows the board you are building it just as well as this form, and sooner.
   - type: input
     id: milestone
     attributes:
       label: Which milestone
-      description: Its id and title, as doc/MILESTONE-TRACK.md writes them.
+      description: Its id and title, as its phase file writes them.
       placeholder: 4.04 World wire math and LocationString
     validations:
       required: true
@@ -23,7 +23,7 @@ body:
     id: have
     attributes:
       label: What you have
-      description: What a milestone needs is in its row. Say what you can actually run, and nothing you cannot.
+      description: What a milestone needs is in its phase file. Say what you can actually run, and nothing you cannot.
       options:
         - label: A working build of the project, on Windows or on Linux
         - label: Your own client installation at the pinned revision
@@ -40,6 +40,6 @@ body:
     id: when
     attributes:
       label: When you expect to open a draft pull request
-      description: A claim with no push for two weeks goes back to the open table, with whatever you pushed left in place.
+      description: A claim with no push for two weeks stops showing as being built, with whatever you pushed left in place.
     validations:
       required: false

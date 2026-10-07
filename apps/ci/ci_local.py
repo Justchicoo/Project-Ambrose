@@ -31,7 +31,7 @@ def command_for(name, command, base, branch):
     if "ci_contrib_paths" in command:
         return f'python apps/ci/ci_contrib_paths.py --range "{base}...HEAD" --branch "{branch}"' if branch else None
     if "ci_roadmap_state" in command:
-        return f'python apps/ci/ci_roadmap_state.py --range "{base}..HEAD" --branch "{branch}"'
+        return f'python apps/ci/ci_roadmap_state.py --range "{base}...HEAD" --branch "{branch}"'
     if "ci_commit_trailer" in command:
         return f'python apps/ci/ci_commit_trailer.py --range "{base}..HEAD"'
     if "ci_sql.py check" in command:

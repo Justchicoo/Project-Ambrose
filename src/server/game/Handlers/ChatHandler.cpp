@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Takes what a wizard's client asks the wizards around it to see, once the wizard stands shown in an instance: typed chat is read in the client's packed format, commands are kept private, and muted requests are refused. The speaker's permissions set the chat level so each receiving client applies its own chat filter. Game-master commands run through CommandMgr with replies sent as server notices, quick chat must exist in the install, extended phrases must pass the client's own parser, and emotes must name a known animation. Accepted speech waits for the world's next tick and is shown to each listener with the speaker's packed name, global id and chat level.
+ * Validates client chat and emotes, runs private game-master commands, applies permissions and moderation, and queues accepted speech for in-instance listeners.
  */
 
 #include "AnimationListMgr.h"
@@ -36,6 +36,7 @@ namespace
         uint8 GetSecurityLevel() const override { return _level; }
         bool IsConsole() const override { return false; }
         std::string GetName() const override { return fmt::format("account {} with wizard {}", _session.GetAccountId(), _session.GetCharacterId()); }
+        uint64 GetCharacterId() const override { return _session.GetCharacterId(); }
 
         void Reply(std::string_view line) override
         {
@@ -269,6 +270,9 @@ void GameSession::HearSpeech(ChatSpeaker const& who, Speech const& speech)
         case SpeechKind::Emote:
             SendDmlMessage(SpeechMessages::EndEmote(who));
             SendDmlMessage(SpeechMessages::Emote(who, speech));
+            return;
+        case SpeechKind::CustomEmote:
+            HearCustomEmote(who, speech);
             return;
     }
 }

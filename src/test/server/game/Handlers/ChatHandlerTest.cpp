@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives client chat through a real game session over loopback: speech and emotes queue for the world thread and remain hidden until the wizard stands in an instance; game-master commands run before mute rejection; a rejected typed line hides its paired talking emote with one notice; closed chat suppresses its paired emote; and refused messages do not count as unhandled.
+ * Tests chat handling through game sessions, including queued speech, custom emotes, command replies, mute and closed-chat rejection, and paired talking-emote suppression.
  */
 
 #include "AccountMgr.h"
@@ -100,6 +100,27 @@ TEST_F(ChatHandlerTest, ChatIsQueuedForTheWorldAndShownToNobodyBeforeTheWizardSt
     ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 4; })) << "each waits for the world thread, where the wizard's place is kept";
     EXPECT_EQ(session->DrainQueue(), 4u);
     EXPECT_TRUE(session->TakeSpeech().empty()) << "a wizard shown in no instance has nobody to be heard by";
+    EXPECT_EQ(session->GetUnhandledMessageCount(), 0u);
+    EXPECT_EQ(session->GetStrikes(), 0u);
+}
+
+TEST_F(ChatHandlerTest, TheRadialMenuCustomEmoteMessagesAreHandled)
+{
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Connect(client, true);
+    ASSERT_TRUE(session);
+
+    GameMessages::CorePiiRadialMenuEmote emote;
+    emote.EmoteAnimationName = "Wave";
+    emote.ExcludeOriginator = 1;
+    Send(*client, emote);
+    GameMessages::RequestPiiRadialMenuPlayEmote request;
+    request.EmoteAnimationName = emote.EmoteAnimationName;
+    request.EmoteText = u"hello";
+    Send(*client, request);
+
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 2; }));
+    EXPECT_EQ(session->DrainQueue(), 2u);
     EXPECT_EQ(session->GetUnhandledMessageCount(), 0u);
     EXPECT_EQ(session->GetStrikes(), 0u);
 }

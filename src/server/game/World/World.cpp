@@ -135,6 +135,7 @@ namespace
             case SpeechKind::QuickChat: return fmt::format("quick chat phrase {}", speech.PhraseId);
             case SpeechKind::QuickChatExt: return "an extended quick chat phrase";
             case SpeechKind::Emote: return fmt::format("the emote {}", speech.Animation);
+            case SpeechKind::CustomEmote: return fmt::format("the custom emote {}", speech.Animation);
         }
         return "something";
     }

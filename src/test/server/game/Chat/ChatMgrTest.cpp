@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the chat rules: a line shows under the chat level the speaker's permissions give it, open chat before menu chat and neither as 0, the default permissions open chat; a line is a command when it starts with the command prefix, whatever that prefix is, and nothing is a command without one; and a listener hears a speaker within the say range, and anywhere when the range is 0; a typed line is shown unless it is a command, empty or does not read as the client packs it; an account above player level runs a command line while a player's is said or refused as the setting says; and an extended phrase is shown only when the client's own parser would read it.
+ * Tests the chat rules: a line shows under the chat level the speaker's permissions give it, open chat before menu chat and neither as 0, the default permissions open chat; a line is a command when it starts with the command prefix, whatever that prefix is, and nothing is a command without one; a custom emote requires valid, nonempty UTF-16 text that is not a command; a listener hears a speaker within the say range, and anywhere when the range is 0; a typed line is shown unless it is a command, empty or does not read as the client packs it; an account above player level runs a command line while a player's is said or refused as the setting says; and an extended phrase is shown only when the client's own parser would read it.
  */
 
 #include "AccountMgr.h"
@@ -53,6 +53,14 @@ TEST(ChatMgrTest, ATypedLineIsShownUnlessItIsACommandOrDoesNotRead)
     EXPECT_EQ(ChatMgr::Judge(ChatText::Write(u".help"), "!"), TypedLine::Shown) << "the prefix in use decides";
     EXPECT_EQ(ChatMgr::Judge(ChatText::Write(u""), "."), TypedLine::Empty);
     EXPECT_EQ(ChatMgr::Judge("hello", "."), TypedLine::Unreadable);
+}
+
+TEST(ChatMgrTest, ACustomEmoteNeedsValidNonemptyTextThatIsNotACommand)
+{
+    EXPECT_TRUE(ChatMgr::IsCustomEmoteText(u"hello", "."));
+    EXPECT_FALSE(ChatMgr::IsCustomEmoteText(u"", "."));
+    EXPECT_FALSE(ChatMgr::IsCustomEmoteText(u".help", "."));
+    EXPECT_FALSE(ChatMgr::IsCustomEmoteText(std::u16string{ 0xD800 }, "."));
 }
 
 TEST(ChatMgrTest, AnExtendedPhraseIsShownOnlyWhenTheClientsParserWouldReadIt)
