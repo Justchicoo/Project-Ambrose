@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, each object of that zone the server sends it, as the unwrapped CoreObject Data the client builds it from, and the id of one that leaves its view, another wizard's move as its client packed it with that wizard's mobile id and its movement state with its global id, the forced teleport that snaps a wizard to a place in its zone, packed the same way, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits; and what a wizard says for the others around it to see: a typed line, whose Message holds the text as a wide string packed into the byte field, a quick chat phrase by id, a phrase in the extended form and an emote a wizard plays, each with the reply that shows it but the emote, which is shown as a state, which names the speaker by the name the client's name codec packs and by global id. It also declares MSG_QUERY_LOGOUT, which the server answers, MSG_CLIENT_DISCONNECT and MSG_NOT_AFK, and the MSG_ZOMBIE_PLAYER, MSG_DISCONNECT_AFK and MSG_SERVERSHUTDOWN notices it sends when a wizard drops, idles or the server stops, and the wizbang state a wizard's client names with the wizbang the server shows the wizards around it, and the fifteen GAME messages of the friends and ignore lists: the list request answered by each entry and the list's end, a friend request with its acceptance, denial and withdrawal, a dropped friend, a friend's presence, the best-friend mark, the friend cap, an ignored wizard added, dropped and listed, and the chat error a refused social action gets, and the WIZARD live vitals, gold, potion and pip updates with MSG_USEPOTION, and the game effect the server adds to an object, carried as the effect object itself, with the one it takes away, which the client finds by its internal id.
+ * The game service ids and the messages the game server decodes or sends, declared by tag with only the fields it reads or sets: the attach a client sends the moment it reconnects, carrying the key the login server gave it and the wizard and place it was promised, the refusal that sends it back where it came from, the login completion that hands it its own wizard's object and the zone it stands in, each object of that zone the server sends it, as the unwrapped CoreObject Data the client builds it from, and the id of one that leaves its view, another wizard's move as its client packed it with that wizard's mobile id and its movement state with its global id, the forced teleport that snaps a wizard to a place in its zone, packed the same way, the zone transfer request a wizard's client acknowledges or refuses, the transfer that sends it to reconnect for another zone with a single-use key, and the client's request to send that transfer again, the note the client sends once it has loaded that zone, naming it by the string hash of its path, the first typed messages and stubs for WizCombat service 51, and the WIZARD messages a client sends as it enters: its requests for timed access passes, subscriber-only items and its crown balance with the replies that answer them, and its notes on its screen, its patch time, its shopping and its quest finder; the spell the server adds to a wizard's spellbook or takes from it, named by its template id, which DML carries as an INT holding the id's bits; and what a wizard says for the others around it to see: a typed line, whose Message holds the text as a wide string packed into the byte field, a quick chat phrase by id, a phrase in the extended form and an emote a wizard plays, each with the reply that shows it but the emote, which is shown as a state, which names the speaker by the name the client's name codec packs and by global id. It also declares MSG_QUERY_LOGOUT, which the server answers, MSG_CLIENT_DISCONNECT and MSG_NOT_AFK, and the MSG_ZOMBIE_PLAYER, MSG_DISCONNECT_AFK and MSG_SERVERSHUTDOWN notices it sends when a wizard drops, idles or the server stops, and the wizbang state a wizard's client names with the wizbang the server shows the wizards around it, and the fifteen GAME messages of the friends and ignore lists: the list request answered by each entry and the list's end, a friend request with its acceptance, denial and withdrawal, a dropped friend, a friend's presence, the best-friend mark, the friend cap, an ignored wizard added, dropped and listed, and the chat error a refused social action gets, and the WIZARD live vitals, gold, potion and pip updates with MSG_USEPOTION, and the game effect the server adds to an object, carried as the effect object itself, with the one it takes away, which the client finds by its internal id.
  */
 
 #ifndef AMBROSE_GAMEMESSAGES_H
@@ -30,12 +30,14 @@ namespace GameMessages
         uint64 CharId = 0;
         std::string ZoneName;
         std::string Location;
+        std::string PassKey;
         uint8 Reattach = 0;
 
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("LoginKey", &Attach::LoginKey), DmlField("UserID", &Attach::UserId), DmlField("CharID", &Attach::CharId),
-                DmlField("ZoneName", &Attach::ZoneName), DmlField("Location", &Attach::Location), DmlField("Reattach", &Attach::Reattach) };
+                DmlField("ZoneName", &Attach::ZoneName), DmlField("Location", &Attach::Location), DmlField("PassKey", &Attach::PassKey),
+                DmlField("Reattach", &Attach::Reattach) };
         }
     };
 
@@ -305,6 +307,105 @@ namespace GameMessages
         {
             return std::tuple{ DmlField("LocationX", &ServerTeleport::LocationX), DmlField("LocationY", &ServerTeleport::LocationY), DmlField("LocationZ", &ServerTeleport::LocationZ),
                 DmlField("Direction", &ServerTeleport::Direction), DmlField("MobileID", &ServerTeleport::MobileId) };
+        }
+    };
+
+    struct ZoneTransferRequest
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_ZONETRANSFERREQUEST";
+
+        std::string ZoneName;
+        uint8 SendAck = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ZoneName", &ZoneTransferRequest::ZoneName), DmlField("SendAck", &ZoneTransferRequest::SendAck) };
+        }
+    };
+
+    struct PostZoneEventFromClient
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_POSTZONEEVENTFROMCLIENT";
+
+        std::string EventName;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("EventName", &PostZoneEventFromClient::EventName) };
+        }
+    };
+
+    struct ZoneTransferAck
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_ZONETRANSFERACK";
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{};
+        }
+    };
+
+    struct ZoneTransferNack
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_ZONETRANSFERNACK";
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{};
+        }
+    };
+
+    struct RetryTeleport
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_RETRYTELEPORT";
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{};
+        }
+    };
+
+    struct ServerTransfer
+    {
+        static constexpr uint8 ServiceId = GameService;
+        static constexpr std::string_view Tag = "MSG_SERVERTRANSFER";
+
+        std::string Ip;
+        int32 TcpPort = 0;
+        int32 UdpPort = 0;
+        int32 Key = 0;
+        uint64 UserId = 0;
+        uint64 CharId = 0;
+        std::string ZoneName;
+        uint64 ZoneId = 0;
+        std::string Location;
+        int32 Slot = 0;
+        uint64 SessionId = 0;
+        int32 SessionSlot = 0;
+        uint64 TargetPlayerId = 0;
+        std::string FallbackIp;
+        int32 FallbackTcpPort = 0;
+        int32 FallbackUdpPort = 0;
+        int32 FallbackKey = 0;
+        std::string FallbackZone;
+        uint64 FallbackZoneId = 0;
+        uint32 TransitionId = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("IP", &ServerTransfer::Ip), DmlField("TCPPort", &ServerTransfer::TcpPort), DmlField("UDPPort", &ServerTransfer::UdpPort),
+                DmlField("Key", &ServerTransfer::Key), DmlField("UserID", &ServerTransfer::UserId), DmlField("CharID", &ServerTransfer::CharId),
+                DmlField("ZoneName", &ServerTransfer::ZoneName), DmlField("ZoneID", &ServerTransfer::ZoneId), DmlField("Location", &ServerTransfer::Location),
+                DmlField("Slot", &ServerTransfer::Slot), DmlField("SessionID", &ServerTransfer::SessionId), DmlField("SessionSlot", &ServerTransfer::SessionSlot),
+                DmlField("TargetPlayerID", &ServerTransfer::TargetPlayerId), DmlField("FallbackIP", &ServerTransfer::FallbackIp),
+                DmlField("FallbackTCPPort", &ServerTransfer::FallbackTcpPort), DmlField("FallbackUDPPort", &ServerTransfer::FallbackUdpPort),
+                DmlField("FallbackKey", &ServerTransfer::FallbackKey), DmlField("FallbackZone", &ServerTransfer::FallbackZone),
+                DmlField("FallbackZoneID", &ServerTransfer::FallbackZoneId), DmlField("TransitionID", &ServerTransfer::TransitionId) };
         }
     };
 

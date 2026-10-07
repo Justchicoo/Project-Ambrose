@@ -129,7 +129,7 @@ class Run:
             if companion is not None:
                 self.note("the companion's account", server.ensure_account(variables["companion_user"], variables["companion_password"]))
             if game is not None:
-                sql, how = zones.ensure(self.environment["binaries"], self.environment.get("install"), self.environment.get("revision"))
+                sql, how = zones.ensure(self.environment["binaries"], self.environment.get("install"), self.environment.get("revision"), databases.info("world"))
                 self.note("the zone rows", how)
                 self.note("the world database", databases.apply_sql("world", sql))
                 self.cleanups.append(("stop the game server", game.stop))

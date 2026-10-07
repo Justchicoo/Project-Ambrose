@@ -336,9 +336,9 @@ A GM can instantly move themselves or another player to a named location or coor
 
 **Acceptance**
 
-- [ ] '.tele zone WizardCity/WC_Ravenwood' loads Ravenwood 'Start'; B in WC_Hub sees A disappear
-- [ ] Bad zone path gives an error and the player stays
-- [ ] Double request ignored; NACK clears; transfer key works once
+- [x] '.tele zone WizardCity/WC_Ravenwood' loads Ravenwood 'Start'; B in WC_Hub sees A disappear (client driver run 20261007-150905, gm-zone-transfer.json: shot 19-main-loading.png shows the loading screen, 22-main-in-ravenwood.png the game master at Ravenwood's Start, which the server put at (-5.6, -1531.5, -30.5), and 20-companion-sees-main-gone.png the Commons without it on the companion's client)
+- [x] Bad zone path gives an error and the player stays (client driver run 20261007-150905, gm-zone-transfer.json: shot 17-main-bad-zone.png shows `No zone has the path Nowhere/NoSuchZone, so nobody was moved` with the game master still in the Commons)
+- [x] Double request ignored; NACK clears; transfer key works once (ZoneTransferQueueTest.ASecondRequestWhileOneWaitsIsIgnoredAndANackClearsIt, LoginKeySpendTest.AValidKeyPassesOnceAndTheReplayIsRefused; client driver run 20261007-150905, gm-zone-transfer.json: the transfer's attach was accepted and its key spent)
 
 ### Detailed spec from WLD-13: Cross-zone transfer via reconnect (MSG_SERVERTRANSFER)
 
@@ -364,15 +364,15 @@ Players can move between zones with the retail loading-screen flow, triggered he
 
 **Acceptance**
 
-- [ ] Real client: '.tele zone WizardCity/WC_Ravenwood' shows the loading screen and the player arrives at Ravenwood 'Start'; B in WC_Hub sees A disappear
-- [ ] Real client: transferring to a zone path that does not exist gives an error message and the player stays put
-- [ ] Unit: a second transfer request while one is queued is ignored; a NACK clears the queue
-- [ ] Unit: the attach key issued for the transfer works exactly once
+- [x] Real client: '.tele zone WizardCity/WC_Ravenwood' shows the loading screen and the player arrives at Ravenwood 'Start'; B in WC_Hub sees A disappear (client driver run 20261007-150905, gm-zone-transfer.json: shots 19-main-loading.png, 22-main-in-ravenwood.png and 20-companion-sees-main-gone.png)
+- [x] Real client: transferring to a zone path that does not exist gives an error message and the player stays put (client driver run 20261007-150905, gm-zone-transfer.json: shot 17-main-bad-zone.png)
+- [x] Unit: a second transfer request while one is queued is ignored; a NACK clears the queue (ZoneTransferQueueTest.ASecondRequestWhileOneWaitsIsIgnoredAndANackClearsIt)
+- [x] Unit: the attach key issued for the transfer works exactly once (LoginKeySpendTest.AValidKeyPassesOnceAndTheReplayIsRefused, which the transfer's attach spends through once its PassKey matches)
 
 **Risks**
 
 - This is the path the behavior reference uses for every zone change and it is known to work; the cheaper same-connection MSG_ZONETRANSFER is WLD-21
-- Key is INT in MSG_SERVERTRANSFER but STR in MSG_CHARACTERSELECTED. How the client carries it into MSG_ATTACH.LoginKey is unverified.
+- Key is INT in MSG_SERVERTRANSFER but STR in MSG_CHARACTERSELECTED. The client's `GameClient::MSG_ServerTransfer` (0x1416f8810 in r806919) keeps the transfer message, and its attach (0x1416e0570) copies that message's Key into MSG_ATTACH.LoginKey, which arrives empty for an INT. The same attach always sends PassKey, the SHA-512 of the session key its login was given with this connection's offer, made as PassKey3 is (0x14256ddc0). So the game server keeps the key it sent and spends it for an attach with no LoginKey only when that PassKey matches the account's session key.
 
 ## 6.08 Logout, link-dead, AFK, shutdown (WLD-20)
 
@@ -611,11 +611,11 @@ Walk-in volumes and event triggers for every zone are decoded into typed world r
 
 **Acceptance**
 
-- [ ] Containment for each primitive incl. boundary
-- [ ] Cooldown fires once per player
-- [ ] Walking into Ravenwood POI logs 'Enter_Ravenwood POI' and fires 'Trigger POI Ravenwood'; spawning inside fires nothing
-- [ ] Triggers with requirements fail closed until 7.04
-- [ ] `.reload zone_trigger` applies an edited trigger; a failed reload keeps the old set
+- [x] Containment for each primitive incl. boundary (ZoneVolumeTest.EachShapeContainsItsBoundaryAndNothingPastIt)
+- [x] Cooldown fires once per player (ZoneVolumeTest.ATriggerFiresOncePerWizardPerCooldownWithinItsMaxAndNeverWithRequirements)
+- [ ] Walking into Ravenwood POI logs 'Enter_Ravenwood POI' and fires 'Trigger POI Ravenwood'; spawning inside fires nothing (open until the POI's zone-entry text shows; what passes so far: client driver run 20261007-151147, zone-volumes.json: the server logged `entered volume 0 (Ravenwood POI) in WizardCity/WC_Hub, posting Enter_Ravenwood POI, which fired Trigger POI Ravenwood` with the wizard inside it in shot 33-inside-ravenwood-poi.png, and on arrival `inside 1 of its 38 volume(s), firing no enter`, shot 06-the-wizard-arrives-inside-the-commons-home-volume-without-firing-its-enter.png)
+- [x] Triggers with requirements fail closed until 7.04 (ZoneVolumeTest.ATriggerFiresOncePerWizardPerCooldownWithinItsMaxAndNeverWithRequirements)
+- [x] `.reload zone_trigger` applies an edited trigger; a failed reload keeps the old set (ZoneTriggerMgrDatabaseTest.AnEditedTriggerTakesHoldAtTheReloadAndABadRowKeepsTheOldSet)
 
 ### Detailed spec from WLD-14: Volumes and walk-in trigger events
 
@@ -645,11 +645,11 @@ Walking into a zone volume fires its enter and exit events into the zone's trigg
 
 **Acceptance**
 
-- [ ] Unit: containment tests for each primitive type, including boundary and hysteresis
-- [ ] Unit: a trigger with a cooldown fires once per player per cooldown
-- [ ] Real client: walking into Ravenwood's POI sphere in WC_Hub logs 'Enter_Ravenwood POI' and fires 'Trigger POI Ravenwood'; with the POI-text result wired, the zone-entry text shows
-- [ ] Real client: logging in while standing inside a volume fires no enter event
-- [ ] Unit: editing a zone_trigger row, then `.reload zone_trigger`, changes what fires on the next enter without a restart; a row that fails validation keeps the old triggers and reports the error
+- [x] Unit: containment tests for each primitive type, including boundary and hysteresis (ZoneVolumeTest.EachShapeContainsItsBoundaryAndNothingPastIt, ZoneVolumeTest.PresenceEntersAtTheEdgeLeavesPastTheMarginAndAPlacedWizardIsAlreadyInside)
+- [x] Unit: a trigger with a cooldown fires once per player per cooldown (ZoneVolumeTest.ATriggerFiresOncePerWizardPerCooldownWithinItsMaxAndNeverWithRequirements)
+- [ ] Real client: walking into Ravenwood's POI sphere in WC_Hub logs 'Enter_Ravenwood POI' and fires 'Trigger POI Ravenwood'; with the POI-text result wired, the zone-entry text shows (open: client driver run 20261007-151147, zone-volumes.json: shot 33-inside-ravenwood-poi.png and the server's `posting Enter_Ravenwood POI, which fired Trigger POI Ravenwood` pass, but the POI-text result is not wired yet, so no zone-entry text shows)
+- [x] Real client: logging in while standing inside a volume fires no enter event (client driver run 20261007-151147, zone-volumes.json: `arrived in WizardCity/WC_Hub inside 1 of its 38 volume(s), firing no enter`, shot 06-the-wizard-arrives-inside-the-commons-home-volume-without-firing-its-enter.png)
+- [x] Unit: editing a zone_trigger row, then `.reload zone_trigger`, changes what fires on the next enter without a restart; a row that fails validation keeps the old triggers and reports the error (ZoneTriggerMgrDatabaseTest.AnEditedTriggerTakesHoldAtTheReloadAndABadRowKeepsTheOldSet)
 
 **Risks**
 

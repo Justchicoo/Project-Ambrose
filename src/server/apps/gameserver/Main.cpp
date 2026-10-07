@@ -26,6 +26,7 @@
 #include "SigilMgr.h"
 #include "SpellMgr.h"
 #include "ZoneMgr.h"
+#include "ZoneTriggerMgr.h"
 #include "CharacterNameScript.h"
 #include "ClientExtractionScript.h"
 #include "ClientSystem.h"
@@ -33,7 +34,7 @@
 #include "LevelScript.h"
 #include "MapObjectSpawner.h"
 #include "ZoneExtractor.h"
-#include "ZoneScript.h"
+#include "ZoneSqlScript.h"
 #include "ServerClassCache.h"
 #include "ServerClassScript.h"
 #include "StringUtil.h"
@@ -328,6 +329,11 @@ namespace
                 return false;
             }
             _settingsSubscription = sSettings.Subscribe([this](SettingChange const& change) { ApplySetting(change); });
+            if (!sAccountMgr.LoadSettings(Config()))
+            {
+                _databases.Close();
+                return false;
+            }
             ExtractServerClasses(setup, system, *prompt);
             if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup) || !LoadSpells(setup) || !LoadCustomEmotes(setup) || !LoadSigils(setup) || !LoadGameEffects(setup) || !LoadItems(setup) || !LoadChatFilter(setup) || !LoadChatData(setup))
             {
@@ -394,6 +400,11 @@ namespace
                 if (zones.Zones == 0)
                     LOG_WARN("server.gameserver", "The world database holds no zone, so there is nowhere to stand; run the extractor's zones command against your install");
             }
+            std::vector<std::string> triggerErrors;
+            if (WorldDatabase.IsOpen() && !sZoneTriggerMgr.Load(triggerErrors))
+                for (std::string const& error : triggerErrors)
+                    LOG_ERROR("server.world", "Zone volumes and triggers: {}", error);
+            sZoneTriggerMgr.RegisterReloadTargets();
             LoadQuests();
 
             uint32 const realmId = Config().GetOption<uint32>("RealmID", 1, true);
@@ -429,7 +440,9 @@ namespace
             sStats.Publish("sessions", [this] { return Ambrose::StatValue(static_cast<int64>(_sockets ? _sockets->GetConnectionCount() : 0)); });
             sStats.Publish("realm_beating", [this] { return Ambrose::StatValue(_heartbeat.Beating()); });
 
-            _heartbeat.Configure(RealmHeartbeatSettings::Load(Config()),
+            RealmHeartbeatSettings const realmSettings = RealmHeartbeatSettings::Load(Config());
+            GameSession::SetTransferEndpoint(realmSettings.Address, realmSettings.Port);
+            _heartbeat.Configure(realmSettings,
                 [](std::string const& realm, uint32 population, int64 heartbeat, bool online)
                 {
                     if (!LoginDatabase.IsOpen())
@@ -937,7 +950,7 @@ namespace
             }
             std::optional<MySQLConnectionInfo> const world = MySQLConnectionInfo::Parse(Config().GetOption<std::string>("WorldDatabaseInfo", "", true), &error);
             StartProgress::Report("writing the zones to the world database", WriteAllowance);
-            if (!world || !Recorded(ZoneScript::Build(*extraction), setup, ClientExtractionScript::Zones).Apply(*world, error))
+            if (!world || !Recorded(ZoneSqlScript::Build(*extraction), setup, ClientExtractionScript::Zones).Apply(*world, error))
             {
                 LOG_ERROR("server.gameserver", "Cannot write the zones to the world database: {}", error);
                 return false;
