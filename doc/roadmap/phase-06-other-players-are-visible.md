@@ -372,7 +372,7 @@ Players can move between zones with the retail loading-screen flow, triggered he
 **Risks**
 
 - This is the path the behavior reference uses for every zone change and it is known to work; the cheaper same-connection MSG_ZONETRANSFER is WLD-21
-- Key is INT in MSG_SERVERTRANSFER but STR in MSG_CHARACTERSELECTED. How the client carries it into MSG_ATTACH.LoginKey is unverified.
+- Key is INT in MSG_SERVERTRANSFER but STR in MSG_CHARACTERSELECTED. The client's `GameClient::MSG_ServerTransfer` (0x1416f8810 in r806919) keeps the transfer message, and its attach (0x1416e0570) copies that message's Key into MSG_ATTACH.LoginKey, which arrives empty for an INT. The same attach always sends PassKey, the SHA-512 of the session key its login was given with this connection's offer, made as PassKey3 is (0x14256ddc0). So the game server keeps the key it sent and spends it for an attach with no LoginKey only when that PassKey matches the account's session key.
 
 ## 6.08 Logout, link-dead, AFK, shutdown (WLD-20)
 
