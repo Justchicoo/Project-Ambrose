@@ -1,7 +1,9 @@
 # Project Ambrose by Imjustchico
-# The scratch databases a run owns: it touches only names starting with ambrose_driver_, lets the server's own updater create them, loads the zone rows the game server stands wizards in, seeds the wizard a scenario enters the world with, its level, experience and any stats it carries, and reads its name back from the name tables the game server extracted, copies another database's wizard with its stats when that database has them, reads a value for an assertion, and drops them when the run ends.
+# The scratch databases a run owns: it touches only names starting with ambrose_driver_, lets the server's own updater create them, loads the zone rows the game server stands wizards in, seeds the wizard a scenario enters the world with, its level, experience and any stats it carries, and reads its name back from the name tables the game server extracted, copies another database's wizard with its stats when that database has them, reads a value for an assertion, and drops them when the run ends; and it keeps a WSL distribution attached for the whole run when the database lives in one, because WSL stops a distribution, and the MariaDB in it, once no wsl.exe is attached.
+import atexit
 import socket
 import subprocess
+import sys
 import time
 
 LOCALES = ("de", "el", "en-US", "es", "fr", "it", "pl", "pt-BR")
@@ -19,6 +21,18 @@ from .errors import Refused, StepFailed
 PREFIX = "ambrose_driver_"
 KINDS = ("login", "characters", "world")
 NO_WINDOW = 0x08000000
+
+
+def hold_wsl(distribution, start=subprocess.Popen, at_exit=atexit.register, platform=sys.platform):
+    if not distribution or platform != "win32":
+        return None
+    command = ["wsl.exe", "-d", distribution, "--exec", "sleep", "infinity"]
+    try:
+        holder = start(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
+    except OSError as error:
+        raise StepFailed(f"the WSL distribution {distribution} could not be held for the run: {error}")
+    at_exit(holder.kill)
+    return holder
 
 
 def checked_name(name):

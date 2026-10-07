@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# The driver's command line: run a scenario against the install named by --client or AMBROSE_CLIENT_DIR, say whether a run is possible on this machine and skip with 77 when it is not, rebuild the reference crops from a live client, or list the scenarios.
+# The driver's command line: run a scenario against the install named by --client or AMBROSE_CLIENT_DIR, say whether a run is possible on this machine and skip with 77 when it is not, rebuild the reference crops from a live client, or list the scenarios, holding the WSL distribution the scratch database runs in, named by --wsl-distro or AMBROSE_TEST_DB_WSL, for as long as the driver runs.
 import argparse
 import os
 import sys
@@ -31,7 +31,7 @@ def add_common(parser):
     parser.add_argument("--db-user", default=DEFAULT_DB[2], help="user on the scratch database server")
     parser.add_argument("--db-password", default=DEFAULT_DB[3], help="password on the scratch database server")
     parser.add_argument("--db-prefix", default=DEFAULT_DB[4], help="name prefix of the databases the run owns; it must start with ambrose_driver_")
-    parser.add_argument("--wsl-distro", help="WSL distribution whose MariaDB service to start when nothing answers")
+    parser.add_argument("--wsl-distro", help="WSL distribution the scratch MariaDB runs in, held for the whole run and started when nothing answers (default AMBROSE_TEST_DB_WSL)")
     parser.add_argument("--references", default=paths.REFERENCES, help="the reference file describing the screens and presses")
     parser.add_argument("--refs", default=paths.refs_root(), help="folder holding the reference crops, which are never committed")
     parser.add_argument("--runs", default=paths.run_root(), help="folder the run writes its report, screenshots and logs into")
@@ -56,7 +56,7 @@ def options_of(args, need_crops=True):
         "db_user": args.db_user,
         "db_password": args.db_password,
         "db_prefix": args.db_prefix,
-        "wsl": args.wsl_distro,
+        "wsl": args.wsl_distro or os.environ.get("AMBROSE_TEST_DB_WSL") or None,
         "refs": args.refs,
         "runs": args.runs,
         "capture": args.capture,
@@ -83,8 +83,9 @@ def load(args):
 
 
 def start_database(options):
-    from .database import Scratch
+    from .database import Scratch, hold_wsl
 
+    hold_wsl(options.get("wsl"))
     scratch = Scratch(options["db_host"], options["db_port"], options["db_user"], options["db_password"], options["db_prefix"])
     if scratch.answers() or not options.get("wsl"):
         return None
