@@ -34,6 +34,7 @@
 #include "InstanceSight.h"
 #include "ScriptMgr.h"
 #include "Settings.h"
+#include "SpawnerMgr.h"
 #include "SpellMgr.h"
 #include "StringHash.h"
 #include "StringUtil.h"
@@ -1216,6 +1217,10 @@ std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std:
     std::vector<std::string> fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now);
     for (std::string const& trigger : fired)
         sScriptMgr.OnTriggerFired(_zonePath, *_mapId, trigger, _worldGuid);
+    if (!fired.empty())
+        if (Map* const map = sMapMgr.Find(*_mapId))
+            sMapMgr.QueueChanges(sSpawnerMgr.TriggerFromWorld(*map, fired, _worldGuid, now,
+                std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MobileIdReleaseDelay"))));
     return fired;
 }
 

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the zone spawners on the zone object classes the fixtures lay out: an instance fills each spawner to its count, a despawned object comes back after its respawn time and not before, and no number of passes ever holds more than the count; Rate.Respawn changed as a live setting scales the delay of the next despawn with nothing restarted; a new set with a raised count spawns only the difference and a lowered one takes the extra away; a spawner with requirements places nothing; a game master's spawn is placed and deleted with its despawn effect while a zone's own object cannot be; a set with a broken row fails its build and names the row; and with AMBROSE_TEST_DB set, `.reload zone_spawner` with a raised count spawns the difference and a reload over a broken row keeps the old spawners serving.
+ * Tests the zone spawners on the zone object classes the fixtures lay out: an instance fills each spawner to its count, a despawned object comes back after its respawn time and not before, and no number of passes ever holds more than the count; Rate.Respawn changed as a live setting scales the delay of the next despawn with nothing restarted; a new set with a raised count spawns only the difference and a lowered one takes the extra away; a spawner with requirements places nothing; a game master's spawn is placed and deleted with its despawn effect while a zone's own object cannot be; a set with a broken row fails its build and names the row; ResSpawn and ResDespawn decode from the bytes a trigger holds, a ResSpawn starts an inactive spawner and a ResDespawn takes its objects away with its effect and keeps it stopped; entries that all have no chance share the spawns equally; and with AMBROSE_TEST_DB set, `.reload zone_spawner` with a raised count spawns the difference and a reload over a broken row keeps the old spawners serving.
  */
 
 #include "ConfigMgr.h"
@@ -9,9 +9,13 @@
 #include "Environment.h"
 #include "LogTestDirectory.h"
 #include "MemorySettingStore.h"
+#include "ObjectSerializer.h"
+#include "PropertyFiller.h"
+#include "PropertyObject.h"
 #include "ReloadMgr.h"
 #include "Settings.h"
 #include "SpawnerMgr.h"
+#include "StringHash.h"
 #include "ZoneObjectFixtures.h"
 
 #include <fmt/format.h>
@@ -21,6 +25,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <random>
@@ -80,6 +85,23 @@ namespace
                 if (object.Origin == MapObjectOrigin::Spawner && object.SpawnerIndex == index)
                     return object.GlobalId;
             return 0;
+        }
+
+        std::vector<uint8> EncodeAs(std::string const& className, std::function<void(PropertyFiller&)> const& fill)
+        {
+            PropertyObjectPtr const result = PropertyObject::Create(_catalog, className);
+            if (!result)
+                return {};
+            std::string problem;
+            PropertyFiller filler(*result, problem);
+            fill(filler);
+            EXPECT_TRUE(problem.empty()) << problem;
+            SerializerOptions options;
+            options.Versionable = true;
+            options.Mask = 0;
+            EncodeResult const encoded = ObjectSerializer::Encode(result.get(), options);
+            EXPECT_TRUE(encoded.Ok()) << encoded.Detail;
+            return encoded.Bytes;
         }
 
         Map::Clock::time_point _start = Map::Clock::now();
@@ -340,4 +362,100 @@ TEST_F(SpawnerMgrDatabaseTest, AReloadWithARaisedCountSpawnsTheDifferenceAndABro
     EXPECT_EQ(sSpawnerMgr.Get()->In(Hub)->front().MaxSpawns, 3u);
     EXPECT_FALSE(Update(map, _start + 2s).Changed());
     EXPECT_EQ(Alive(map, 0), 3u);
+}
+
+TEST_F(SpawnerMgrTest, ResSpawnAndResDespawnDecodeFromTheBytesATriggerHolds)
+{
+    std::string error;
+    std::vector<uint8> const spawn = EncodeAs("class ResSpawn", [](PropertyFiller& filler) { filler.Set("m_spawnID", uint64{ 7690150 }).Set("m_activate", true); });
+    std::optional<ZoneSpawnResult> const started = SpawnerMgr::ReadResult(_catalog, spawn, error);
+    ASSERT_TRUE(started) << error;
+    EXPECT_FALSE(started->Despawn);
+    EXPECT_EQ(started->SpawnerId, 7690150u);
+    EXPECT_TRUE(started->Activate);
+
+    std::vector<uint8> const despawn = EncodeAs("class ResDespawn", [](PropertyFiller& filler)
+    {
+        filler.Set("m_spawnID", uint64{ 7690149 }).Set("m_templateID", int32{ 88057 }).Set("m_despawnEffect", std::string("WispDespawn"));
+    });
+    std::optional<ZoneSpawnResult> const stopped = SpawnerMgr::ReadResult(_catalog, despawn, error);
+    ASSERT_TRUE(stopped) << error;
+    EXPECT_TRUE(stopped->Despawn);
+    EXPECT_EQ(stopped->SpawnerId, 7690149u);
+    EXPECT_EQ(stopped->TemplateId, 88057u);
+    EXPECT_EQ(stopped->Effect, "WispDespawn");
+
+    std::vector<uint8> const other = EncodeAs("class Result", [](PropertyFiller&) {});
+    EXPECT_FALSE(SpawnerMgr::ReadResult(_catalog, other, error)) << "a result of another kind is not a spawn result";
+    EXPECT_FALSE(SpawnerMgr::ReadResult(_catalog, std::vector<uint8>{ 1, 2, 3 }, error)) << "bytes that do not decode are refused";
+    EXPECT_FALSE(SpawnerMgr::ReadResult(nullptr, spawn, error));
+}
+
+TEST_F(SpawnerMgrTest, AResSpawnStartsAnInactiveSpawnerAndAResDespawnTakesItsObjectsAwayWithItsEffect)
+{
+    Map map(1, Hub, true);
+    ZoneSpawner arena = Spawner(0, 2, 30);
+    arena.SpawnerId = 7690150;
+    arena.Active = false;
+    std::vector<ZoneSpawner> const spawners{ arena };
+    EXPECT_FALSE(SpawnerMgr::Update(map, spawners, 1, Context(_start)).Changed()) << "an inactive spawner waits for its trigger";
+
+    std::vector<ZoneSpawnResult> const results{
+        { "Trigger Start Dueling", 0, false, 7690150, true, 0, "" },
+        { "Trigger Stop Dueling", 0, true, 7690150, false, 0, "WispDespawn" },
+        { "Trigger Clear Dueling", 0, true, 7690150, false, KioskTemplate, "" },
+    };
+    MapObjectChanges unrelated;
+    SpawnerMgr::RunResults(map, spawners, results, "Trigger Somewhere Else", 42, Context(_start), unrelated);
+    EXPECT_FALSE(SpawnerMgr::Update(map, spawners, 1, Context(_start + 1s)).Changed()) << "another trigger leaves the spawner alone";
+
+    MapObjectChanges started;
+    SpawnerMgr::RunResults(map, spawners, results, "Trigger Start Dueling", 42, Context(_start + 2s), started);
+    EXPECT_EQ(SpawnerMgr::Update(map, spawners, 1, Context(_start + 2s)).Added.size(), 2u) << "the ResSpawn starts the spawner, which fills to its count";
+    EXPECT_EQ(Alive(map, 0), 2u);
+
+    std::vector<uint64> const before{ map.GetSpawnerState().Spawners.at(0).Alive };
+    MapObjectChanges stopped;
+    SpawnerMgr::RunResults(map, spawners, results, "Trigger Stop Dueling", 42, Context(_start + 3s), stopped);
+    ASSERT_EQ(stopped.Deleted.size(), 2u);
+    for (MapObjectDeletion const& deleted : stopped.Deleted)
+    {
+        EXPECT_NE(std::find(before.begin(), before.end(), deleted.GlobalId), before.end());
+        EXPECT_EQ(deleted.Killer, 42u);
+        EXPECT_EQ(deleted.Effect, StringHash::KiStringHash("WispDespawn"));
+    }
+    EXPECT_TRUE(stopped.Removed.empty());
+    EXPECT_EQ(Alive(map, 0), 0u);
+    EXPECT_FALSE(SpawnerMgr::Update(map, spawners, 1, Context(_start + 1000s)).Changed()) << "a stopped spawner brings nothing back";
+
+    SpawnerMgr::RunResults(map, spawners, results, "Trigger Start Dueling", 42, Context(_start + 1001s), started);
+    ASSERT_EQ(SpawnerMgr::Update(map, spawners, 1, Context(_start + 1001s)).Added.size(), 2u);
+    MapObjectChanges cleared;
+    SpawnerMgr::RunResults(map, spawners, results, "Trigger Clear Dueling", 42, Context(_start + 1002s), cleared);
+    EXPECT_EQ(cleared.Removed.size(), 2u) << "a ResDespawn with no effect, naming the objects' template, is a plain removal";
+    EXPECT_TRUE(cleared.Deleted.empty());
+    EXPECT_EQ(Alive(map, 0), 0u);
+}
+
+TEST_F(SpawnerMgrTest, EntriesThatAllHaveNoChanceShareTheSpawnsEqually)
+{
+    ZoneSpawner shared = Spawner(0, 1, 30);
+    shared.Entries.front().PercentChance = 0;
+    ZoneSpawnEntry second = shared.Entries.front();
+    second.Position = 1;
+    second.Object.Position = { 300.0f, 0.0f, 0.0f };
+    shared.Entries.push_back(second);
+    EXPECT_EQ(shared.TotalChance(), 2u);
+    EXPECT_EQ(shared.WeightOf(shared.Entries.front()), 1u);
+
+    Map map(1, Hub, true);
+    SpawnerContext context = Context(_start);
+    context.Roll = [](uint32 total) { return total - 1; };
+    ASSERT_EQ(SpawnerMgr::Update(map, { shared }, 1, context).Added.size(), 1u);
+    MapObject const* const placed = map.FindObject(FirstOf(map, 0));
+    ASSERT_NE(placed, nullptr);
+    EXPECT_FLOAT_EQ(placed->Spawn.Position.X, 300.0f) << "the last roll lands on the second entry";
+
+    shared.Entries.back().PercentChance = 50;
+    EXPECT_EQ(shared.WeightOf(shared.Entries.front()), 0u) << "once any entry has a chance, one with none is never chosen";
 }

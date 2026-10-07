@@ -1,14 +1,18 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads the spawners and their entries zone by zone and refuses a spawner whose zone no template holds, whose count or respawn time is past what a zone can mean, or whose entry names no template, a loading type the client does not have or a chance above a hundred, and an entry of a spawner that is not there; a spawner or entry with requirements fails closed until the requirement engine exists, so it places nothing. In an instance, a new set of spawners is met by keeping each spawner's live objects that its entries still place, up to its count, and taking away the rest; then every spawner tops itself up to its count, less the respawns still waiting, at once, which is how an instance first fills and how a raised count spawns only the difference. A placement that fails waits a minute before it is tried again rather than every tick.
+ * Reads the spawners and their entries zone by zone and refuses a spawner whose zone no template holds, whose count or respawn time is past what a zone can mean, or whose entry names no template, a loading type the client does not have or a chance above a hundred, and an entry of a spawner that is not there; a spawner or entry with requirements fails closed until the requirement engine exists, so it places nothing. In an instance, a new set of spawners is met by keeping each spawner's live objects that its entries still place, up to its count, and taking away the rest; then every spawner tops itself up to its count, less the respawns still waiting, at once, which is how an instance first fills and how a raised count spawns only the difference. A placement that fails waits a minute before it is tried again rather than every tick. Entries are chosen by their chances, and when none of a spawner's entries has one, as in the shipped zones, by equal shares. A trigger's ResSpawn result starts its spawner in that instance and fills it at once; a ResDespawn stops it and takes its objects, or only those of the template it names, away with the effect it names, the KiStringHash of that name with the wizard who fired the trigger as killer, or plainly when it names none. Spawn results whose bytes the zones were extracted without are counted and skipped, and one that does not decode fails the load.
  */
 
 #include "SpawnerMgr.h"
 #include "DatabaseEnv.h"
 #include "Log.h"
+#include "ObjectSerializer.h"
+#include "PropertyObject.h"
 #include "ReloadMgr.h"
+#include "StringHash.h"
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <algorithm>
 #include <cmath>
@@ -21,7 +25,13 @@ namespace
 
     bool Eligible(ZoneSpawnEntry const& entry) noexcept
     {
-        return entry.PercentChance > 0 && !entry.Object.HasSpawnRequirements;
+        return !entry.Object.HasSpawnRequirements;
+    }
+
+    std::optional<bool> SwitchOf(MapSpawnerState const& state, uint32 index)
+    {
+        auto const found = state.Switched.find(index);
+        return found == state.Switched.end() ? std::nullopt : std::optional<bool>(found->second);
     }
 
     bool PlacesRow(ZoneSpawner const& spawner, ZoneObjectSpawn const& row)
@@ -42,11 +52,12 @@ namespace
         uint32 roll = context.Roll ? context.Roll(total) % total : 0;
         for (ZoneSpawnEntry const& entry : spawner.Entries)
         {
-            if (!Eligible(entry))
+            uint32 const weight = spawner.WeightOf(entry);
+            if (weight == 0)
                 continue;
-            if (roll < entry.PercentChance)
+            if (roll < weight)
                 return &entry;
-            roll -= entry.PercentChance;
+            roll -= weight;
         }
         return nullptr;
     }
@@ -69,12 +80,12 @@ namespace
                 MapObject const* const object = map.FindObject(id);
                 if (!object)
                     continue;
-                if (spawner != spawners.end() && spawner->Spawns() && kept.size() < spawner->MaxSpawns && PlacesRow(*spawner, object->Spawn))
+                if (spawner != spawners.end() && spawner->Spawns(SwitchOf(state, live->first)) && kept.size() < spawner->MaxSpawns && PlacesRow(*spawner, object->Spawn))
                     kept.push_back(id);
                 else
                     TakeAway(map, id, context, changes);
             }
-            if (spawner == spawners.end() || !spawner->Spawns())
+            if (spawner == spawners.end() || !spawner->Spawns(SwitchOf(state, live->first)))
             {
                 live = state.Spawners.erase(live);
                 continue;
@@ -91,18 +102,25 @@ namespace
     }
 }
 
-bool ZoneSpawner::Spawns() const noexcept
+bool ZoneSpawner::Spawns(std::optional<bool> active) const noexcept
 {
-    return Active && !HasRequirements && MaxSpawns > 0 && TotalChance() > 0;
+    return active.value_or(Active) && !HasRequirements && MaxSpawns > 0 && TotalChance() > 0;
 }
 
 uint32 ZoneSpawner::TotalChance() const noexcept
 {
     uint32 total = 0;
     for (ZoneSpawnEntry const& entry : Entries)
-        if (Eligible(entry))
-            total += entry.PercentChance;
+        total += WeightOf(entry);
     return total;
+}
+
+uint32 ZoneSpawner::WeightOf(ZoneSpawnEntry const& entry) const noexcept
+{
+    if (!Eligible(entry))
+        return 0;
+    bool const chanced = std::any_of(Entries.begin(), Entries.end(), [](ZoneSpawnEntry const& other) { return Eligible(other) && other.PercentChance > 0; });
+    return chanced ? entry.PercentChance : 1;
 }
 
 ZoneSpawners::ZoneSpawners(std::map<std::string, std::vector<ZoneSpawner>, std::less<>> byZone) : _byZone(std::move(byZone))
@@ -113,6 +131,25 @@ std::vector<ZoneSpawner> const* ZoneSpawners::In(std::string_view zone) const
 {
     auto const found = _byZone.find(zone);
     return found == _byZone.end() ? nullptr : &found->second;
+}
+
+std::vector<ZoneSpawnResult> const* ZoneSpawners::ResultsIn(std::string_view zone) const
+{
+    auto const found = _results.find(zone);
+    return found == _results.end() ? nullptr : &found->second;
+}
+
+void ZoneSpawners::SetResults(std::map<std::string, std::vector<ZoneSpawnResult>, std::less<>> results)
+{
+    _results = std::move(results);
+}
+
+std::size_t ZoneSpawners::ResultCount() const noexcept
+{
+    std::size_t count = 0;
+    for (auto const& [zone, results] : _results)
+        count += results.size();
+    return count;
 }
 
 std::size_t ZoneSpawners::Count() const noexcept
@@ -261,10 +298,49 @@ bool SpawnerMgr::Load(std::vector<std::string>& errors)
             entries.emplace_back(std::move(zone), std::make_pair(index, std::move(entry)));
         } while (rows->NextRow());
     }
+    std::map<std::string, std::vector<ZoneSpawnResult>, std::less<>> results;
+    if (!WorldDatabase.TryQuery(fmt::format("SELECT r.`zone_path`, t.`name`, r.`position`, r.`data` IS NOT NULL, r.`data` FROM `zone_trigger_result` r JOIN `zone_trigger` t "
+        "ON t.`zone_path` = r.`zone_path` AND t.`trigger_index` = r.`trigger_index` WHERE r.`list` = 'results' AND r.`class_name` IN ('{}', '{}') "
+        "ORDER BY r.`zone_path`, r.`trigger_index`, r.`position`", SpawnResultClass, DespawnResultClass), rows))
+    {
+        errors.push_back("zone_trigger_result could not be read");
+        return false;
+    }
+    std::size_t unread = 0;
+    if (rows)
+    {
+        TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
+        do
+        {
+            Field const* row = rows->Fetch();
+            if (!row[3].Get<bool>())
+            {
+                ++unread;
+                continue;
+            }
+            std::string const zone = row[0].Get<std::string>();
+            std::string const trigger = row[1].Get<std::string>();
+            std::vector<uint8> const bytes = row[4].Get<std::vector<uint8>>();
+            std::string error;
+            std::optional<ZoneSpawnResult> result = ReadResult(catalog, bytes, error);
+            if (!result)
+            {
+                errors.push_back(fmt::format("{} trigger {} has a spawn result at {} that does not read: {}", zone, trigger, row[2].Get<uint32>(), error));
+                continue;
+            }
+            result->Trigger = trigger;
+            result->Position = row[2].Get<uint32>();
+            results[zone].push_back(std::move(*result));
+        } while (rows->NextRow());
+    }
     std::optional<ZoneSpawners> built = Build(std::move(spawners), std::move(entries), zones, errors);
     if (!built)
         return false;
-    LOG_INFO("server.world", "Loaded {} zone spawner(s) in {} zone(s)", built->Count(), built->ZoneCount());
+    built->SetResults(std::move(results));
+    if (unread > 0)
+        LOG_WARN("server.world", "{} spawn result(s) of the zone triggers hold no bytes, since the zones were extracted before their classes were known; run `extractor zones` again "
+            "to read them", unread);
+    LOG_INFO("server.world", "Loaded {} zone spawner(s) in {} zone(s) and {} spawn result(s) of their triggers", built->Count(), built->ZoneCount(), built->ResultCount());
     Replace(std::move(*built));
     return true;
 }
@@ -313,7 +389,7 @@ MapObjectChanges SpawnerMgr::Update(Map& map, std::vector<ZoneSpawner> const& sp
     }
     for (ZoneSpawner const& spawner : spawners)
     {
-        if (!spawner.Spawns())
+        if (!spawner.Spawns(SwitchOf(state, spawner.Index)))
             continue;
         MapSpawnerLive& live = state.Spawners[spawner.Index];
         live.RespawnSeconds = spawner.RespawnSeconds;
@@ -399,6 +475,99 @@ MapObject const* SpawnerMgr::FindNearest(Map const& map, PropertyTypes::Vector3D
     return nearest;
 }
 
+std::optional<ZoneSpawnResult> SpawnerMgr::ReadResult(TypeCatalogPtr const& catalog, std::span<uint8 const> data, std::string& error)
+{
+    if (!catalog)
+    {
+        error = "no type catalog is loaded";
+        return std::nullopt;
+    }
+    SerializerOptions options;
+    options.Versionable = true;
+    options.Flags = SerializerFlag::None;
+    options.Mask = 0;
+    options.AllowNullRoot = false;
+    options.AllowTrailingBytes = false;
+    DecodeResult const decoded = ObjectSerializer::Decode(catalog, data, options);
+    if (!decoded.Ok() || !decoded.Object)
+    {
+        error = decoded.Detail.empty() ? std::string(ObjectSerializer::GetStatusName(decoded.Status)) : decoded.Detail;
+        return std::nullopt;
+    }
+    ZoneSpawnResult result;
+    result.Despawn = decoded.Object->IsA(DespawnResultClass);
+    if (!result.Despawn && !decoded.Object->IsA(SpawnResultClass))
+    {
+        error = fmt::format("it holds a {}", decoded.Object->GetClass().Name);
+        return std::nullopt;
+    }
+    PropertyValue const* const id = decoded.Object->Get("m_spawnID");
+    uint64 const* const spawner = id ? id->GetIf<uint64>() : nullptr;
+    if (!spawner)
+    {
+        error = "it names no spawner in m_spawnID";
+        return std::nullopt;
+    }
+    result.SpawnerId = *spawner;
+    if (result.Despawn)
+    {
+        PropertyValue const* const templateId = decoded.Object->Get("m_templateID");
+        int32 const* const kind = templateId ? templateId->GetIf<int32>() : nullptr;
+        result.TemplateId = kind && *kind > 0 ? static_cast<uint32>(*kind) : 0;
+        PropertyValue const* const effect = decoded.Object->Get("m_despawnEffect");
+        std::string const* const name = effect ? effect->GetIf<std::string>() : nullptr;
+        result.Effect = name ? *name : std::string();
+    }
+    else
+    {
+        PropertyValue const* const activate = decoded.Object->Get("m_activate");
+        bool const* const on = activate ? activate->GetIf<bool>() : nullptr;
+        result.Activate = on && *on;
+    }
+    return result;
+}
+
+void SpawnerMgr::RunResults(Map& map, std::vector<ZoneSpawner> const& spawners, std::vector<ZoneSpawnResult> const& results, std::string_view trigger, uint64 wizard,
+    SpawnerContext const& context, MapObjectChanges& changes)
+{
+    MapSpawnerState& state = map.GetSpawnerState();
+    changes.DynamicZoneId = map.GetDynamicZoneId();
+    for (ZoneSpawnResult const& result : results)
+    {
+        if (result.Trigger != trigger)
+            continue;
+        auto const spawner = std::find_if(spawners.begin(), spawners.end(), [&result](ZoneSpawner const& candidate) { return candidate.SpawnerId == result.SpawnerId; });
+        if (spawner == spawners.end())
+            continue;
+        state.Switched[spawner->Index] = !result.Despawn;
+        if (!result.Despawn)
+            continue;
+        auto const live = state.Spawners.find(spawner->Index);
+        if (live == state.Spawners.end())
+            continue;
+        std::vector<uint64> kept;
+        for (uint64 const id : live->second.Alive)
+        {
+            MapObject const* const object = map.FindObject(id);
+            if (!object)
+                continue;
+            if (result.TemplateId != 0 && object->Spawn.TemplateId != result.TemplateId)
+            {
+                kept.push_back(id);
+                continue;
+            }
+            if (!map.RemoveObject(id, context.Now, context.ReleaseDelay))
+                continue;
+            if (result.Effect.empty())
+                changes.Removed.push_back(id);
+            else
+                changes.Deleted.push_back({ id, wizard, StringHash::KiStringHash(result.Effect) });
+        }
+        live->second.Alive = std::move(kept);
+        live->second.Respawns.clear();
+    }
+}
+
 SpawnerContext SpawnerMgr::WorldContext(Map::Clock::time_point now, std::chrono::milliseconds releaseDelay) const
 {
     static thread_local std::mt19937 random{ std::random_device{}() };
@@ -420,6 +589,24 @@ MapObjectChanges SpawnerMgr::UpdateFromWorld(Map& map, Map::Clock::time_point no
     MapObjectChanges changes = Update(map, list ? *list : none, GetGeneration(), WorldContext(now, releaseDelay));
     if (first && !changes.Added.empty())
         LOG_INFO("server.zones", "{} spawner(s) placed {} object(s) in instance {} of {}", list ? list->size() : 0, changes.Added.size(), map.GetDynamicZoneId(), map.GetZonePath());
+    return changes;
+}
+
+MapObjectChanges SpawnerMgr::TriggerFromWorld(Map& map, std::vector<std::string> const& fired, uint64 wizard, Map::Clock::time_point now, std::chrono::milliseconds releaseDelay)
+{
+    MapObjectChanges changes;
+    std::shared_ptr<ZoneSpawners const> const spawners = Get();
+    std::vector<ZoneSpawner> const* const list = spawners ? spawners->In(map.GetZonePath()) : nullptr;
+    std::vector<ZoneSpawnResult> const* const results = spawners ? spawners->ResultsIn(map.GetZonePath()) : nullptr;
+    if (!list || !results || fired.empty())
+        return changes;
+    SpawnerContext const context = WorldContext(now, releaseDelay);
+    for (std::string const& trigger : fired)
+        RunResults(map, *list, *results, trigger, wizard, context, changes);
+    changes.Absorb(Update(map, *list, GetGeneration(), context));
+    if (changes.Changed())
+        LOG_INFO("server.zones", "Triggers {} in instance {} of {} spawned {} and took away {} object(s)", fmt::join(fired, ", "), map.GetDynamicZoneId(), map.GetZonePath(),
+            changes.Added.size(), changes.Removed.size() + changes.Deleted.size());
     return changes;
 }
 

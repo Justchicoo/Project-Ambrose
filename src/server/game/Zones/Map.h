@@ -52,6 +52,7 @@ struct MapSpawnerState
 
     std::optional<uint64> Generation;
     std::map<uint32, MapSpawnerLive> Spawners;
+    std::map<uint32, bool> Switched;
     uint64 NextSpawnId = FirstSpawnId;
 };
 

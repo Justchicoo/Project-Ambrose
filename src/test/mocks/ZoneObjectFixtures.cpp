@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Writes the zone object classes as a type dump and loads them, builds the core object and behavior tables over them as the client registers its own, and makes templates and placed rows the way the zone data holds them.
+ * Writes the zone object classes and the ResSpawn and ResDespawn trigger results as a type dump and loads them, builds the core object and behavior tables over them as the client registers its own, and makes templates and placed rows the way the zone data holds them.
  */
 
 #include "ZoneObjectFixtures.h"
@@ -91,6 +91,16 @@ namespace
         Json critical = Json::object();
         critical["m_objList"] = Property("gid", "m_objList", 0, WirePublic, "List");
         AddClass(classes, "class CriticalObjectList", Json::array({ "PropertyClass" }), critical);
+        AddClass(classes, "class Result", Json::array({ "PropertyClass" }), Json::object());
+        Json spawn = Json::object();
+        spawn["m_spawnID"] = Property("gid", "m_spawnID", 0, Wire);
+        spawn["m_activate"] = Property("bool", "m_activate", 1, Wire);
+        AddClass(classes, "class ResSpawn", Json::array({ "Result", "PropertyClass" }), spawn);
+        Json despawn = Json::object();
+        despawn["m_spawnID"] = Property("gid", "m_spawnID", 0, Wire);
+        despawn["m_templateID"] = Property("int", "m_templateID", 1, Wire);
+        despawn["m_despawnEffect"] = Property("std::string", "m_despawnEffect", 2, Wire);
+        AddClass(classes, "class ResDespawn", Json::array({ "Result", "PropertyClass" }), despawn);
         return Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump();
     }
 

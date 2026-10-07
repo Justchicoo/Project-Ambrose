@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Every zone's spawners from zone_spawner and zone_spawner_entry (sSpawnerMgr), read at start and again by `.reload zone_spawner`, which builds the new set off to the side, validates it and swaps it in only when every row is good, keeping the old set and reporting each error otherwise; and what each spawner does in each running zone instance: it keeps as many of its objects alive as its count allows, choosing each by its entries' chances, brings one back its respawn time after one is taken away, that time scaled by Rate.Respawn as it stands at the moment of the despawn, and never holds more than its count. A game master's own spawns are placed and taken away here too, and so is any object a despawn effect takes away.
+ * Every zone's spawners from zone_spawner and zone_spawner_entry (sSpawnerMgr), read at start and again by `.reload zone_spawner`, which builds the new set off to the side, validates it and swaps it in only when every row is good, keeping the old set and reporting each error otherwise; and what each spawner does in each running zone instance: it keeps as many of its objects alive as its count allows, choosing each by its entries' chances, brings one back its respawn time after one is taken away, that time scaled by Rate.Respawn as it stands at the moment of the despawn, and never holds more than its count. A game master's own spawns are placed and taken away here too, and so is any object a despawn effect takes away; and the ResSpawn and ResDespawn results zone_trigger_result holds for the zone's triggers, read with the spawners, which start a spawner in the instance whose trigger fired or stop it and take its objects away with the effect they name.
  */
 
 #ifndef AMBROSE_SPAWNERMGR_H
@@ -9,6 +9,7 @@
 #include "Map.h"
 #include "MapObjectSpawner.h"
 #include "ReloadableStore.h"
+#include "TypeRegistry.h"
 #include "Types.h"
 #include "ZoneMgr.h"
 
@@ -19,6 +20,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -47,8 +49,22 @@ struct ZoneSpawner
     std::vector<ZoneSpawnEntry> Entries;
 
     bool operator==(ZoneSpawner const&) const = default;
-    bool Spawns() const noexcept;
+    bool Spawns(std::optional<bool> active = std::nullopt) const noexcept;
     uint32 TotalChance() const noexcept;
+    uint32 WeightOf(ZoneSpawnEntry const& entry) const noexcept;
+};
+
+struct ZoneSpawnResult
+{
+    std::string Trigger;
+    uint32 Position = 0;
+    bool Despawn = false;
+    uint64 SpawnerId = 0;
+    bool Activate = false;
+    uint32 TemplateId = 0;
+    std::string Effect;
+
+    bool operator==(ZoneSpawnResult const&) const = default;
 };
 
 class ZoneSpawners
@@ -58,11 +74,15 @@ public:
     explicit ZoneSpawners(std::map<std::string, std::vector<ZoneSpawner>, std::less<>> byZone);
 
     std::vector<ZoneSpawner> const* In(std::string_view zone) const;
+    std::vector<ZoneSpawnResult> const* ResultsIn(std::string_view zone) const;
+    void SetResults(std::map<std::string, std::vector<ZoneSpawnResult>, std::less<>> results);
     std::size_t Count() const noexcept;
     std::size_t ZoneCount() const noexcept;
+    std::size_t ResultCount() const noexcept;
 
 private:
     std::map<std::string, std::vector<ZoneSpawner>, std::less<>> _byZone;
+    std::map<std::string, std::vector<ZoneSpawnResult>, std::less<>> _results;
 };
 
 struct SpawnerContext
@@ -81,6 +101,8 @@ public:
     static constexpr uint32 MaxSpawnsPerSpawner = 1000;
     static constexpr uint32 MaxRespawnSeconds = 7 * 24 * 60 * 60;
     static constexpr uint32 DefaultDespawnEffect = 0;
+    static constexpr std::string_view SpawnResultClass = "class ResSpawn";
+    static constexpr std::string_view DespawnResultClass = "class ResDespawn";
 
     using RateReader = std::function<float()>;
 
@@ -106,11 +128,15 @@ public:
     static std::optional<uint64> SpawnTemporary(Map& map, uint64 templateId, PropertyTypes::Vector3D const& position, float yaw, SpawnerContext const& context,
         MapObjectChanges& changes);
     static MapObject const* FindNearest(Map const& map, PropertyTypes::Vector3D const& position, float range);
+    static std::optional<ZoneSpawnResult> ReadResult(TypeCatalogPtr const& catalog, std::span<uint8 const> data, std::string& error);
+    static void RunResults(Map& map, std::vector<ZoneSpawner> const& spawners, std::vector<ZoneSpawnResult> const& results, std::string_view trigger, uint64 wizard,
+        SpawnerContext const& context, MapObjectChanges& changes);
     static std::chrono::milliseconds RespawnDelay(ZoneSpawner const& spawner, float rate);
 
     SpawnerContext WorldContext(Map::Clock::time_point now, std::chrono::milliseconds releaseDelay) const;
     MapObjectChanges UpdateFromWorld(Map& map, Map::Clock::time_point now, std::chrono::milliseconds releaseDelay);
     static MapObjectChanges PopulateFromWorld(Map& map, Map::Clock::time_point now, std::chrono::milliseconds releaseDelay);
+    MapObjectChanges TriggerFromWorld(Map& map, std::vector<std::string> const& fired, uint64 wizard, Map::Clock::time_point now, std::chrono::milliseconds releaseDelay);
 
 private:
     SpawnerMgr() = default;
