@@ -39,6 +39,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Oversized.** 12.23 MoveBehavior/Physics observation plus speed validation across services 15/16 (S). Under-sized.
 - **Correction.** 12.19/12.20 group MSG_CURRENTREALM with GAME realm messages, but it lives in GameMessages2.xml (svc 55). 12.03's MSG_REQUESTRADIALFRIENDQUICKCHATEXT is in WizardMessages2 (53). The names are valid, but these service placements are unacknowledged.
 - **Handed on from 6.03.** 12.14 takes the radial menu's emotes, read from the r806919 client in 6.03. The client plays the emote on its own wizard and sends two messages: MSG_CORE_PIIRADIALMENUEMOTE, with `EmoteAnimationName` and `ExcludeOriginator` 1, and MSG_REQUESTPIIRADIALMENUPLAYEMOTE, with the animation and the `EmoteText` line it wrote. Other clients play the animation from the Emoting state that 6.03 sends for MSG_CORE_EMOTE, and show the line from MSG_PIIRADIALMENUPLAYEMOTE (`SourceName`, `SourceID`, `EmoteAnimationName`, `EmoteText`). The line is client-written text, so the server shows it only after checking it against the emote the wizard owns. EmotesRadialMenuBehavior keeps the menu's three custom pages as blobs. The player object still leaves its slot null, as in the player object the client already accepts, so the Emotes quick-chat entry has no slots to open. `client disasm 0x141e77b00` on r806919 checks identifier 0xFACEACE8 and rejects versions 4 or higher. `client types RadialMenuSlotInfo` reports each slot's index, emote GID, emote template ID, and menu chat phrase ID; the parser adds an emote slot only when its emote GID is nonzero. The pages a server writes have to match what that loader reads, and a slot's emote GID is the global id of an emote item the wizard holds, which waits on 8.08's item instances. `client template 1457184` resolves to `ObjectData/Emotes/Emote0_Fresh.xml`, which carries `CustomEmoteBehaviorTemplate`. `client template 1664452` resolves to `ObjectData/Emotes/Emote84_TrickOrTreat.xml`, whose non-default animation `P_B_Emote_Trick_Or_Treat` has bitfield -1; the catalog loads this sentinel but never considers it owned by the three purchased masks. The earlier identifier 0x0FACECE8 in this note was a transcription error. Purchased emote and teleport-effect masks are now persisted with character stats, sent in the three zero-based ranks of MSG_UPDATECUSTOMEMOTES, and included in WizGameStats. The server now indexes emote animation names from the templates and checks both radial-emote requests against the wizard's saved ownership masks. Sending the behavior with written pages, checking the line against the emote, and the real-client check remain open.
+- **Found on 12.07.** Sending GAME `MSG_NOTMUTED` to an r806919 client opens `GUI_MuteFailedMsg` / `GUI_MuteFailedTitle` with "The player was not muted, but was reported." / "You can not mute that player." The probe was observed in client-driver run `20261001-232925`; keep normal unmute on the client-safe server message "You have been unmuted." and do not send `MSG_NOTMUTED` for it. In client-driver probe `20261001-235518`, with temporary probe code since removed, a filtered wizard's client obscured a word blacklisted at runtime and showed a phrase whitelisted at runtime unchanged; the real-client check reruns that from the tree.
 
 ## 12.01 Friends (WIZ-17 part 1)
 
@@ -50,9 +51,9 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Acceptance**
 
-- [ ] Accepting an unsent request fails with CHATERROR
+- [x] Accepting an unsent request fails with CHATERROR (SocialMgrDatabaseTest.AcceptingAnUnsentRequestSendsOnlyTheSelectedChatError)
 - [ ] Real client: add/accept shows both online with zone; logout shows offline
-- [ ] Lowering Social.MaxFriends refuses the next request over the cap without a restart
+- [x] Lowering Social.MaxFriends refuses the next request over the cap without a restart (SocialMgrDatabaseTest.LoweringTheLiveFriendCapRefusesARequestThroughTheHandler)
 
 ### Detailed spec from WIZ-17: Friends and ignore lists
 
@@ -75,14 +76,15 @@ Players can add, accept, deny and remove friends and ignored players, see online
 
 **Acceptance**
 
-- [ ] Unit test: accepting a request that was never sent fails with CHATERROR
-- [ ] Unit test: ignoring a player removes them from friends and suppresses their radial chat to the owner
-- [ ] Unit test: lowering Social.MaxFriends with `.settings set` refuses the next request over the new cap without a restart
+- [x] Unit test: accepting a request that was never sent fails with CHATERROR (SocialMgrDatabaseTest.AcceptingAnUnsentRequestSendsOnlyTheSelectedChatError)
+- [x] Unit test: ignoring a player removes them from friends and suppresses their radial chat to the owner (SocialMgrDatabaseTest.IgnoringAFriendFiltersTheActualWorldRelay)
+- [x] Unit test: lowering Social.MaxFriends with `.settings set` refuses the next request over the new cap without a restart (SocialMgrDatabaseTest.LoweringTheLiveFriendCapRefusesARequestThroughTheHandler)
 - [ ] Two real clients: A clicks B and chooses Add Friend. B gets the friend request popup and accepts. Both friends lists show each other online with zone name. B logs out and A's list shows B offline within one status update. A ignores B and stops seeing B's chat bubbles.
 
 **Risks**
 
-- The Status, FriendInfo and Permissions bit meanings in BUDDYENTRY are unverified.
+- Status values are taken from the local r806919 type dump, but client-visible status transitions and FriendInfo/Permissions semantics remain unverified until the real-client check.
+- The numeric CHATERROR.Error used for request rejection remains unverified against a real client.
 - True-friend chat codes (REQUESTCHATCODE/SENDCHATCODE/USECHATCODE) are planned as a follow-up milestone in this phase, kept apart to keep this milestone small.
 
 ## 12.02 Ignore list (WIZ-17 part 2)
@@ -95,7 +97,7 @@ Players can add, accept, deny and remove friends and ignored players, see online
 
 **Acceptance**
 
-- [ ] Ignoring removes friendship and suppresses radial chat
+- [x] Ignoring removes friendship and suppresses radial chat (SocialMgrDatabaseTest.IgnoringAFriendFiltersTheActualWorldRelay)
 - [ ] Real client: A stops seeing B's bubbles
 
 ### Detailed spec from WIZ-17: Friends and ignore lists
@@ -119,9 +121,9 @@ Players can add, accept, deny and remove friends and ignored players, see online
 
 **Acceptance**
 
-- [ ] Unit test: accepting a request that was never sent fails with CHATERROR
-- [ ] Unit test: ignoring a player removes them from friends and suppresses their radial chat to the owner
-- [ ] Unit test: lowering Social.MaxFriends with `.settings set` refuses the next request over the new cap without a restart
+- [x] Unit test: accepting a request that was never sent fails with CHATERROR (SocialMgrDatabaseTest.AcceptingAnUnsentRequestSendsOnlyTheSelectedChatError)
+- [x] Unit test: ignoring a player removes them from friends and suppresses their radial chat to the owner (SocialMgrDatabaseTest.IgnoringAFriendFiltersTheActualWorldRelay)
+- [x] Unit test: lowering Social.MaxFriends with `.settings set` refuses the next request over the new cap without a restart (SocialMgrDatabaseTest.LoweringTheLiveFriendCapRefusesARequestThroughTheHandler)
 - [ ] Two real clients: A clicks B and chooses Add Friend. B gets the friend request popup and accepts. Both friends lists show each other online with zone name. B logs out and A's list shows B offline within one status update. A ignores B and stops seeing B's chat bubbles.
 
 **Risks**
@@ -291,10 +293,10 @@ Players can set privacy toggles (friend requests, teleports, trade, hatch, party
 
 **Acceptance**
 
-- [ ] Blacklisted word flagged; whitelisted phrase passes
-- [ ] Muted REQUESTRADIALCHAT dropped with notice
+- [x] Blacklisted word flagged; whitelisted phrase passes [ChatFilterTest.FindsBlacklistedWordsAndLetsWhitelistEntriesPass]
+- [x] Muted REQUESTRADIALCHAT dropped with notice [ChatHandlerTest.AMutedChatRequestIsDroppedAndTheClientIsNotified]
 - [ ] Real client: '.mute <name> 5m' works
-- [ ] `.reload chatfilter` keeps the old lists on a failed load
+- [x] `.reload chatfilter` keeps the old lists on a failed load [ChatFilterTest.FailedReloadKeepsOldListsAndValidReloadSwapsTheWholeSnapshot]
 
 ### Detailed spec from WIZ-21: Chat moderation: filter, permissions and mute
 
@@ -320,9 +322,10 @@ Accounts get open or filtered chat, filtered words are handled the way the clien
 
 **Acceptance**
 
-- [ ] Unit test: a blacklisted word from a fixture list is flagged and a whitelisted phrase passes
-- [ ] Unit test: a muted account's REQUESTRADIALCHAT is dropped with a notice
-- [ ] Unit test: `.reload chatfilter` with a missing list file keeps the old lists and reports the error; with valid files a newly blacklisted word is flagged without a restart
+- [x] Unit test: a blacklisted word from a fixture list is flagged and a whitelisted phrase passes [ChatFilterTest.FindsBlacklistedWordsAndLetsWhitelistEntriesPass]
+- [x] Unit test: a muted account's REQUESTRADIALCHAT is dropped with a notice [ChatHandlerTest.AMutedChatRequestIsDroppedAndTheClientIsNotified]
+- [x] Unit test: `.reload chatfilter` with a missing list file keeps the old lists and reports the error; with valid files a newly blacklisted word is flagged without a restart [ChatFilterTest.FailedReloadKeepsOldListsAndValidReloadSwapsTheWholeSnapshot]
+- [x] Successful reload additions reach connected clients in CHATFILTERBLACK/CHATFILTERWHITE carrying the recipient wizard's GlobalID [ChatFilterTest.SuccessfulReloadSendsAddedWordsToConnectedWizards]
 - [ ] Real client: after '.mute <name> 5m', the muted player gets the mute notice and nobody sees their chat until it expires. A filtered-chat account sees another player's off-whitelist message as filtered text.
 
 **Risks**

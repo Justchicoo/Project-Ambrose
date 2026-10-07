@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation.
+# Self-tests for every part of the client driver that has no client in it: the log tailer against recorded fixtures, the scenario loader with its includes, variables and patterns and the wizard a scenario seeds for the game server and the companion client that shows a second wizard, the scratch game server's settings, the WSL distribution a run holds while its database lives there, the zone rows' cache and the copy of a wizard from another database, the reference file, the screen matcher on synthetic frames, the step engine against a fake client and a fake server, the order in which a run starts and stops what it owns, the guard's rule for which processes are its own, the capture that ends what it started, the teardown that decides from the client's own log whether it may be asked to quit, the crop rebuild that refuses a picture of the wrong screen, the report builder against recorded logs, and the check that decides whether a machine can run a scenario, and the ports a scenario watches, the launcher command run without its patch flag and the report's checks for both, and the launcher window a scenario opens, read and pressed through a fake of UI Automation, and the window messages a click and a key send, through fakes of the Windows calls.
 import json
 import os
 import re
@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -734,6 +735,44 @@ class ScreenTests(unittest.TestCase):
             read = screens.load_png(path)
             self.assertEqual(read.size, picture.size)
             self.assertEqual(screens.compare(read, picture)["fraction"], 1.0)
+
+
+class ClientInputTests(unittest.TestCase):
+    def test_mouse_click_allows_a_lagging_client_to_process_window_messages(self):
+        api = mock.Mock()
+        api.GetAsyncKeyState.return_value = 0
+        gui = mock.Mock()
+        con = SimpleNamespace(WM_MOUSEMOVE=0x0200, WM_LBUTTONDOWN=0x0201, WM_LBUTTONUP=0x0202)
+        client_window = client.Client.__new__(client.Client)
+        client_window.handle = 0x1234
+
+        with (mock.patch.dict(sys.modules, {"win32api": api, "win32con": con, "win32gui": gui}),
+              mock.patch.object(client.Client, "activated", return_value=mock.MagicMock()),
+              mock.patch.object(client.Client, "cursor_at", return_value=mock.MagicMock()),
+              mock.patch("clientdriver.client.time.sleep")):
+            client_window.click(30, 40)
+
+        self.assertEqual(gui.SendMessageTimeout.call_count, 3)
+        self.assertTrue(all(call.args[-1] == client.SEND_MESSAGE_TIMEOUT_MS
+                            for call in gui.SendMessageTimeout.call_args_list))
+
+
+    def test_key_events_activate_the_client_window(self):
+        api = mock.Mock()
+        api.GetAsyncKeyState.return_value = 0
+        api.MapVirtualKey.side_effect = lambda virtual_key, _mode: virtual_key
+        gui = mock.Mock()
+        con = SimpleNamespace(VK_RETURN=0x0D, WM_KEYDOWN=0x0100, WM_KEYUP=0x0101)
+        activated = mock.MagicMock()
+        client_window = client.Client.__new__(client.Client)
+        client_window.handle = 0x1234
+        with (mock.patch.dict(sys.modules, {"win32api": api, "win32con": con, "win32gui": gui}),
+              mock.patch.object(client.Client, "activated", return_value=activated) as activate,
+              mock.patch("clientdriver.client.time.sleep")):
+            client_window.keys([0x46], hold=0.01)
+
+        activate.assert_called_once_with()
+        self.assertEqual(gui.PostMessage.call_count, 2)
 
 
 class FakeClient:

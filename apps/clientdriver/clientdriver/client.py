@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Drives the user's own client: the Ambrose launcher starts it, or for a scenario that opens the launcher window it starts that window, found by its class and placed like the client's, and the client starts only when its Play is pressed, and that window is asked to close once the client is done; the client's window is found by class and size, text and keys are posted as window messages so the machine stays usable, a press borrows the cursor and the foreground for about a second and raises the window above anything covering the point it presses, because the client's interface drops mouse messages while its window is not the active one and hit-tests a press against the real cursor, and says whether it got them, several keys can be held down together, the window can be moved to a screen of the user's choosing, the main client to its top left and a companion to its bottom right, so the user can keep using another screen, a second client of the same run keeps a launcher log of its own, and frames come from the composited window surface so a covered window still reads, with a blank frame, which the client gives while it swaps what it draws, tried again a few times before a step fails on it.
+# Drives the user's own client: the Ambrose launcher starts it, or for a scenario that opens the launcher window it starts that window, found by its class and placed like the client's, and the client starts only when its Play is pressed, and that window is asked to close once the client is done; the client's window is found by class and size, text is posted as window messages so the machine stays usable, keys are posted the same way while the client's window borrows the foreground for as long as they are held, a press borrows the cursor and the foreground for about a second and raises the window above anything covering the point it presses, because the client's interface drops mouse messages while its window is not the active one and hit-tests a press against the real cursor, and says whether it got them, several keys can be held down together, the window can be moved to a screen of the user's choosing, the main client to its top left and a companion to its bottom right, so the user can keep using another screen, a second client of the same run keeps a launcher log of its own, and frames come from the composited window surface so a covered window still reads, with a blank frame, which the client gives while it swaps what it draws, tried again a few times before a step fails on it.
 import contextlib
 import ctypes
 import os
@@ -23,6 +23,7 @@ NO_WINDOW = 0x08000000
 SW_SHOWNOACTIVATE = 4
 PW_RENDERFULLCONTENT = 2
 SMTO_ABORTIFHUNG = 0x0002
+SEND_MESSAGE_TIMEOUT_MS = 10000
 MK_LBUTTON = 0x0001
 DWMWA_EXTENDED_FRAME_BOUNDS = 9
 MODIFIER_KEYS = (0x10, 0x11, 0x12, 0x5B, 0x5C)
@@ -495,11 +496,12 @@ class Client:
         def parameter(virtual_key):
             return 1 | (win32api.MapVirtualKey(virtual_key, 0) << 16) | (1 << 24 if virtual_key in EXTENDED_KEYS else 0)
 
-        for virtual_key in virtual_keys:
-            win32gui.PostMessage(self.handle, win32con.WM_KEYDOWN, virtual_key, parameter(virtual_key))
-        time.sleep(hold)
-        for virtual_key in reversed(virtual_keys):
-            win32gui.PostMessage(self.handle, win32con.WM_KEYUP, virtual_key, parameter(virtual_key) | (3 << 30))
+        with self.activated():
+            for virtual_key in virtual_keys:
+                win32gui.PostMessage(self.handle, win32con.WM_KEYDOWN, virtual_key, parameter(virtual_key))
+            time.sleep(hold)
+            for virtual_key in reversed(virtual_keys):
+                win32gui.PostMessage(self.handle, win32con.WM_KEYUP, virtual_key, parameter(virtual_key) | (3 << 30))
 
     @contextlib.contextmanager
     def cursor_at(self, x, y):
@@ -538,7 +540,7 @@ class Client:
         position = (y << 16) | (x & 0xFFFF)
 
         def send(message, wparam):
-            win32gui.SendMessageTimeout(self.handle, message, wparam, position, SMTO_ABORTIFHUNG, 3000)
+            win32gui.SendMessageTimeout(self.handle, message, wparam, position, SMTO_ABORTIFHUNG, SEND_MESSAGE_TIMEOUT_MS)
 
         with self.activated() as active, self.cursor_at(x, y):
             send(win32con.WM_MOUSEMOVE, 0)

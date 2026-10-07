@@ -1,0 +1,543 @@
+{
+  "title": "Filtered chat and timed mute in the Commons",
+  "include": "parts/common.json",
+  "notes": [
+    "The main account uses filtered chat. The companion is made a game master and mutes the main wizard for five",
+    "minutes. After checking a muted quick-chat request, the companion unmutes the wizard; an off-whitelist line",
+    "then verifies receiver filtering. A second short mute expires before the wizard sends quick chat again."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Zone.MobileIdReleaseDelay=60000"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "pending_allowed": [
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_GETLADDER",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_TOURNAMENTLOOTROLLINFO",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_CHECK_MAIL",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_CONNECTIONSTATS",
+    "MSG_REQASKSERVER",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_CrownShopLogging",
+    "MSG_SplashEnabled",
+    "MSG_AdvPvPEloData",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_RIDERSLIST"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "companion": {
+    "wizard": {
+      "school": 2343174,
+      "zone": "WizardCity/WC_Hub",
+      "zone_display": "The Commons",
+      "locale": "en-US",
+      "first": 2,
+      "middle": 3,
+      "last": 4,
+      "appearance": {
+        "gender": 1,
+        "race": 79806088,
+        "hair_model": 6,
+        "hair_color": 60,
+        "hat_color": 2,
+        "hat_decal": 4,
+        "torso_color": 2,
+        "torso_decal": 4,
+        "feet_color": 2,
+        "feet_decal": 12
+      }
+    }
+  },
+  "steps": [
+    {
+      "action": "db_exec",
+      "name": "set the main account to filtered chat before login",
+      "database": "login",
+      "statement": "UPDATE account SET chat_mode = 1 WHERE username = '{user}'"
+    },
+    {
+      "action": "wait_db",
+      "name": "confirm the main account is filtered",
+      "database": "login",
+      "query": "SELECT chat_mode FROM account WHERE username = '{user}'",
+      "expect": 1,
+      "timeout": 10
+    },
+    {
+      "action": "server_command",
+      "name": "make the companion account a game master",
+      "command": "account set gmlevel {companion_user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": ["login"],
+      "timeout": 120
+    },
+    {
+      "action": "click",
+      "name": "focus the login account field",
+      "target": "login_account",
+      "on_screen": "login",
+      "attempts": 3
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": ["charselect"],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the main wizard key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the main wizard in the Commons",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the main client loads the zone",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the main client finishes loading its world interface",
+      "pattern": "GUI manager has shown all interactive HUDs",
+      "timeout": 60
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the companion brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the companion login window is on the screen",
+      "screens": ["login"],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "focus the companion login account field",
+      "target": "login_account",
+      "on_screen": "login",
+      "attempts": 3,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "log in the companion",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the companion password",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the companion is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30,
+      "client": "companion"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the companion character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the companion character selection screen is on the screen",
+      "screens": ["charselect"],
+      "timeout": 90,
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "press play for the companion",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{companion_wizard_guid}",
+        "record": true
+      },
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the companion key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{companion_wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the companion in the Commons",
+      "pattern": "put wizard {companion_wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "both wizards are shown to each other",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} and the (\\d+) wizard\\(s\\) already in instance \\d+ were shown to each other",
+      "timeout": 10,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the companion client loads the zone",
+      "pattern": "loaded (\\S+), and wizard {companion_wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the companion finishes loading its world interface",
+      "pattern": "GUI manager has shown all interactive HUDs",
+      "timeout": 60,
+      "client": "companion"
+    },
+    {
+      "action": "key",
+      "name": "open the companion chat line for the mute command",
+      "vk": "0xBF",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "remove the slash before the companion mute command",
+      "code": 8,
+      "client": "companion"
+    },
+    {
+      "action": "type",
+      "name": "type the timed mute command on the companion",
+      "text": ".mute Adam AngleBane 5m",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "send the timed mute command from the companion",
+      "code": 13,
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server applies the timed mute",
+      "pattern": "account \\d+ with wizard {companion_wizard_guid} ran mute Adam AngleBane 5m, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "wait_db",
+      "name": "the five minute mute is persisted",
+      "database": "login",
+      "query": "SELECT COUNT(*) FROM account_muted m JOIN account a ON a.id = m.account_id WHERE a.username = '{user}' AND m.until > UNIX_TIMESTAMP()",
+      "expect": 1,
+      "timeout": 10
+    },
+    {
+      "action": "shot",
+      "name": "the muted main wizard sees its notice",
+      "file": "muted-notice",
+      "settle": 1,
+      "client": "main"
+    },
+    {
+      "action": "click",
+      "name": "open the filtered wizard's quick chat menu",
+      "target": "quickchat_open"
+    },
+    {
+      "action": "shot",
+      "name": "the filtered wizard's quick chat menu",
+      "file": "filtered-quickchat-menu",
+      "settle": 1,
+      "client": "main"
+    },
+    {
+      "action": "click",
+      "name": "pick Yes while the filtered wizard is muted",
+      "target": "quickchat_yes"
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees no muted quick chat",
+      "file": "no-muted-chat",
+      "settle": 1,
+      "client": "companion"
+    },
+    {
+      "action": "key",
+      "name": "open the companion chat line for unmute",
+      "vk": "0xBF",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "remove the slash before companion unmute",
+      "code": 8,
+      "client": "companion"
+    },
+    {
+      "action": "type",
+      "name": "type the unmute command on the companion",
+      "text": ".unmute Adam AngleBane",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "send the unmute command from the companion",
+      "code": 13,
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server removes the mute without relaying the muted line",
+      "pattern": "account \\d+ with wizard {companion_wizard_guid} ran unmute Adam AngleBane, which worked",
+      "timeout": 20,
+      "fail": "Session \\d+'s wizard {wizard_guid} sent quick chat phrase \\d+, shown to \\d+ other wizard\\(s\\)",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the muted wizard sees the unmute notice",
+      "pattern": "Server Message: You have been unmuted\\.",
+      "timeout": 10
+    },
+    {
+      "action": "forbid_log",
+      "name": "unmute did not open a mute-failed dialog",
+      "side": "client",
+      "pattern": "GUI_MuteFailedMsg|GUI_MuteFailedTitle"
+    },
+    {
+      "action": "key",
+      "name": "open the companion chat line after unmute",
+      "vk": "0xBF",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "remove the slash before the companion's off-whitelist line",
+      "code": 8,
+      "client": "companion"
+    },
+    {
+      "action": "type",
+      "name": "type a benign off-whitelist line from the open-chat companion",
+      "text": "A quasar hums softly.",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "send the off-whitelist line",
+      "code": 13,
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the off-whitelist line reaches the filtered main wizard",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} sent a chat line, shown to (\\d+) other wizard\\(s\\)",
+      "timeout": 20,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the filtered main wizard sees filtered chat",
+      "file": "filtered-chat",
+      "settle": 1,
+      "client": "main"
+    },
+    {
+      "action": "key",
+      "name": "open the companion chat line for an expiring mute",
+      "vk": "0xBF",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "remove the slash before the expiring mute",
+      "code": 8,
+      "client": "companion"
+    },
+    {
+      "action": "type",
+      "name": "type the short mute command",
+      "text": ".mute Adam AngleBane 10s",
+      "client": "companion"
+    },
+    {
+      "action": "char",
+      "name": "send the short mute command",
+      "code": 13,
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server applies the short mute",
+      "pattern": "account \\d+ with wizard {companion_wizard_guid} ran mute Adam AngleBane 10s, which worked",
+      "timeout": 20
+    },
+    {
+      "action": "wait_db",
+      "name": "the short mute is persisted",
+      "database": "login",
+      "query": "SELECT COUNT(*) FROM account_muted m JOIN account a ON a.id = m.account_id WHERE a.username = '{user}' AND m.until > UNIX_TIMESTAMP()",
+      "expect": 1,
+      "timeout": 10
+    },
+    {
+      "action": "wait_db",
+      "name": "the short mute expires",
+      "database": "login",
+      "query": "SELECT IF(COALESCE(MAX(m.until), 0) <= UNIX_TIMESTAMP(), 1, 0) FROM account_muted m JOIN account a ON a.id = m.account_id WHERE a.username = '{user}'",
+      "expect": 1,
+      "timeout": 30
+    },
+    {
+      "action": "click",
+      "name": "open quick chat after the mute expires",
+      "target": "quickchat_open",
+      "client": "main"
+    },
+    {
+      "action": "click",
+      "name": "send Yes after the mute expires",
+      "target": "quickchat_yes",
+      "client": "main"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the companion receives quick chat after expiry",
+      "pattern": "Session \\d+'s wizard {wizard_guid} sent quick chat phrase \\d+, shown to (\\d+) other wizard\\(s\\)",
+      "expect": "1",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the expired mute clears with a client-safe notice",
+      "pattern": "Server Message: You have been unmuted\\.",
+      "timeout": 10
+    },
+    {
+      "action": "forbid_log",
+      "name": "expiry did not open a mute-failed dialog",
+      "side": "client",
+      "pattern": "GUI_MuteFailedMsg|GUI_MuteFailedTitle"
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees post-expiry quick chat",
+      "file": "post-expiry-quick-chat",
+      "settle": 1,
+      "client": "companion"
+    }
+  ]
+}

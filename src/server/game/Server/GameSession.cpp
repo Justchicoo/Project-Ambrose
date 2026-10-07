@@ -318,7 +318,7 @@ void GameSession::AcceptAttach(LoginKeyClaim const& claim)
 
 void GameSession::LoadAccount(LoginKeyClaim const& claim)
 {
-    std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> statement = LoginDatabase.IsOpen() ? AccountMgr::PrepareGetAccountById(claim.AccountId) : nullptr;
+    std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> statement = LoginDatabase.IsOpen() ? AccountMgr::PrepareGetAccountByIdWithMute(claim.AccountId, AccountMgr::Now()) : nullptr;
     if (!statement)
     {
         RefuseEntry(claim, "the login database is not open");
@@ -335,6 +335,11 @@ void GameSession::LoadAccount(LoginKeyClaim const& claim)
         }
         AccountInfo const account = AccountMgr::ReadAccountRow(*result);
         SetSecurityLevel(account.SecurityLevel);
+        SetChatMode(account.ChatMode);
+        if (_chatMode > 2)
+            LOG_WARN("server.gamesession", "Session {}'s account {} has chat_mode {}; chat permissions are disabled until it is corrected", GetSessionId(), account.Id, _chatMode);
+        if (std::optional<AccountMute> const mute = AccountMgr::ReadAccountMuteRow(*result))
+            _muteUntil = mute->Until;
         _accountPermissions = account.Permissions;
         LoadCharacter(claim);
     }));
@@ -547,7 +552,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
     std::shared_ptr<BehaviorClientClasses const> const behaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
     std::shared_ptr<ObjectTemplate const> const playerTemplate = sObjectTemplateMgr.GetPlayer();
-    uint32 const permissions = AccountMgr::EntryPermissions(_accountPermissions, sSettings.Get<uint32>("LoginComplete.Permissions"));
+    uint32 const permissions = ChatMgr::PermissionsForMode(AccountMgr::EntryPermissions(_accountPermissions, sSettings.Get<uint32>("LoginComplete.Permissions")), _chatMode);
     PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, entering, *stats, trackers, placement, permissions, problem);
     PlayerBackpack backpack = resumedBackpack ? std::move(*resumedBackpack) : PlayerBackpack::FromStored(items);
     uint32 const itemsAllowed = sSettings.Get<uint32>("Inventory.Slots");
@@ -641,6 +646,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         _relay.Reset(_movement);
         _characterRevision = entering.StateRevision;
     }
+    _zoneDisplay = entering.ZoneDisplay.empty() ? entering.Zone : entering.ZoneDisplay;
     _stats = std::move(stats);
     if (!resumed)
         _statsRevision = stored ? stored->Revision : 0;
@@ -656,6 +662,8 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     _inWorld.store(true, std::memory_order_relaxed);
     _afkTimerStarted = false;
     SendDmlMessage(complete);
+    if (_muteUntil != 0)
+        SendMuteNotice();
     SendBadges();
     SendMapObjects(*map);
     SendCustomEmotes();
@@ -668,6 +676,46 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     LOG_INFO("server.gamesession", "Session {} put wizard {} in {} instance {} at ({}, {}, {}) with mobile id {}, level {} with {} of {} health and {} of {} mana and {} spell(s) in its book, and sent its {}-byte object and the zone's {} object(s)",
         GetSessionId(), character.Guid, entering.Zone, map->GetDynamicZoneId(), placement.X, placement.Y, placement.Z, placement.MobileId, _stats->GetLevel(), _stats->GetHitpoints(),
         _stats->GetMaxHitpoints(), _stats->GetMana(), _stats->GetMaxMana(), trackers.size(), data.Bytes.size(), map->GetObjects().size());
+}
+
+void GameSession::ApplyMute(uint64 until)
+{
+    _muteUntil = until;
+    if (IsOpen())
+        SendMuteNotice();
+}
+
+void GameSession::ClearMute()
+{
+    if (_muteUntil == 0)
+        return;
+    _muteUntil = 0;
+    if (IsOpen())
+        SendServerMessage(u"You have been unmuted.");
+}
+
+bool GameSession::RejectMutedSpeech()
+{
+    if (_muteUntil == 0)
+        return false;
+    if (NowEpochSeconds() >= static_cast<int64>(_muteUntil))
+    {
+        ClearMute();
+        return false;
+    }
+    SendMuteNotice();
+    return true;
+}
+
+void GameSession::SendMuteNotice()
+{
+    int64 const remaining = static_cast<int64>(_muteUntil) - NowEpochSeconds();
+    if (remaining <= 0 || !IsOpen())
+        return;
+    GameMessages::Mute message;
+    message.MuteTime = fmt::format("{}", remaining);
+    message.ForceMessage = 1;
+    SendDmlMessage(message);
 }
 
 void GameSession::ShowPlayer(GameSession const& other)
@@ -959,6 +1007,7 @@ void GameSession::LeaveWorld()
     _linkDeadStartPending.store(false, std::memory_order_relaxed);
     MarkOffline();
     SetCharacterName(std::string());
+    _zoneDisplay.clear();
     _wizBangId = 0;
     _pendingWizBang.reset();
     if (_stats)
@@ -987,6 +1036,7 @@ void GameSession::TransferWorldStateTo(GameSession& replacement)
 {
     replacement._mapId = _mapId;
     replacement._zonePath = _zonePath;
+    replacement._zoneDisplay = _zoneDisplay;
     replacement._worldGuid = _worldGuid;
     replacement._mobileId = _mobileId;
     replacement._movement = _movement;
