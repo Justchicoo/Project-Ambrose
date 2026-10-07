@@ -6,9 +6,9 @@
     "percent": 26.7
   },
   "checks": {
-    "done": 998,
+    "done": 1008,
     "total": 2866,
-    "percent": 34.8
+    "percent": 35.2
   },
   "contributor_track": {
     "merged": 93,
@@ -52,7 +52,7 @@
       "title": "The zone comes alive for one player",
       "milestones_done": 7,
       "milestones_total": 8,
-      "checks_done": 54,
+      "checks_done": 55,
       "checks_total": 57
     },
     {
@@ -108,7 +108,7 @@
       "title": "Social wizards instances and realms",
       "milestones_done": 0,
       "milestones_total": 23,
-      "checks_done": 0,
+      "checks_done": 9,
       "checks_total": 138
     },
     {
