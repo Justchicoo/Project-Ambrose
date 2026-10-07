@@ -81,15 +81,52 @@ void ItemTemplateFixtures::Write(std::filesystem::path const& gameData, float ha
     EXPECT_EQ(effect->Set("m_effectName", std::string("MaxHealth")), PropertySetResult::Ok);
     effects.emplace_back(std::move(effect));
     EXPECT_EQ(robeItem->Set("m_equipEffects", std::move(effects)), PropertySetResult::Ok);
+    PropertyObjectPtr requirement = Create(robe == Robe::UnknownRequirement ? UnknownRequirement : "class ReqMagicLevel");
+    if (robe == Robe::UnknownRequirement)
+    {
+        EXPECT_EQ(requirement->Set("m_badgeName", std::string("Ice Elemental")), PropertySetResult::Ok);
+    }
+    else
+    {
+        EXPECT_EQ(requirement->Set("m_numericValue", float{ 5 }), PropertySetResult::Ok);
+        EXPECT_EQ(requirement->Set("m_operatorType", int32{ 3 }), PropertySetResult::Ok);
+        EXPECT_EQ(requirement->Set("m_magicSchool", std::string("Ice")), PropertySetResult::Ok);
+    }
+    PropertyValue::List requirements;
+    requirements.emplace_back(std::move(requirement));
+    PropertyObjectPtr list = Create("class RequirementList");
+    EXPECT_EQ(list->Set("m_operator", int64{ 1 }), PropertySetResult::Ok);
+    EXPECT_EQ(list->Set("m_requirements", std::move(requirements)), PropertySetResult::Ok);
+    EXPECT_EQ(robeItem->Set("m_equipRequirements", std::move(list)), PropertySetResult::Ok);
 
     PropertyObjectPtr npc = Create("class GameObjectTemplate");
     EXPECT_EQ(npc->Set("m_objectName", std::string("WC-RAV-NPC06")), PropertySetResult::Ok);
+    PropertyObjectPtr set = Create("class ItemSetBonusTemplate");
+    EXPECT_EQ(set->Set("m_objectName", std::string("ItemSet-Ice-02")), PropertySetResult::Ok);
+    EXPECT_EQ(set->Set("m_displayName", std::string("ItemSets_00000042")), PropertySetResult::Ok);
+    EXPECT_EQ(set->Set("m_noStacking", true), PropertySetResult::Ok);
+    PropertyValue::List bonuses;
+    for (int32 const items : { 2, 3 })
+    {
+        PropertyObjectPtr bonus = Create("class ItemSetBonusData");
+        EXPECT_EQ(bonus->Set("m_numItemsToEquip", int32{ items }), PropertySetResult::Ok);
+        PropertyValue::List granted;
+        for (int32 effects = 0; effects < items - 1; ++effects)
+        {
+            PropertyObjectPtr accuracy = Create("class GameEffectInfo");
+            EXPECT_EQ(accuracy->Set("m_effectName", std::string("CanonicalIceAccuracy")), PropertySetResult::Ok);
+            granted.emplace_back(std::move(accuracy));
+        }
+        EXPECT_EQ(bonus->Set("m_equipEffectsGranted", std::move(granted)), PropertySetResult::Ok);
+        bonuses.emplace_back(std::move(bonus));
+    }
+    EXPECT_EQ(set->Set("m_itemSetBonusDataList", std::move(bonuses)), PropertySetResult::Ok);
     PropertyObjectPtr spell = Create("class SpellTemplate");
     EXPECT_EQ(spell->Set("m_name", std::string("Not An Item")), PropertySetResult::Ok);
 
     Files const files{ { "ObjectData/Items/Hats/WC-Hat-Fire-01.xml", WriteBind(hat) }, { "ObjectData/Items/Robes/WC-Robe-Ice-02.xml", WriteBind(robeItem) },
-        { "ObjectData/WC/WC-RAV-NPC06.xml", WriteBind(npc) }, { "Spells/Not An Item.xml", WriteBind(spell) } };
+        { "ObjectData/WC/WC-RAV-NPC06.xml", WriteBind(npc) }, { "ObjectData/ItemSets/ItemSet-Ice-02.xml", WriteBind(set) }, { "Spells/Not An Item.xml", WriteBind(spell) } };
     Locations const locations{ { HatId, "ObjectData/Items/Hats/WC-Hat-Fire-01.xml" }, { RobeId, "ObjectData/Items/Robes/WC-Robe-Ice-02.xml" },
-        { NpcId, "ObjectData/WC/WC-RAV-NPC06.xml" }, { SpellId, "Spells/Not An Item.xml" } };
+        { NpcId, "ObjectData/WC/WC-RAV-NPC06.xml" }, { SetBonusId, "ObjectData/ItemSets/ItemSet-Ice-02.xml" }, { SpellId, "Spells/Not An Item.xml" } };
     TemplateDumpFixtures::WriteRoot(gameData, _writer.GetCatalog(), locations, files);
 }

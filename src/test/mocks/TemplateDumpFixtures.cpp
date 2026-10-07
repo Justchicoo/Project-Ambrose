@@ -198,7 +198,27 @@ namespace TemplateDumpFixtures
     {
         for (char const* name : { "enum ObjectType", "enum RarityType" })
             AddClass(classes, name, Json::array(), Json::object());
-        AddClass(classes, "class RequirementList", Json::array({ "PropertyClass" }), Json::object());
+        AddClass(classes, "enum Requirement::Operator", Json::array(), Json::object());
+        Json requirement = Json::object();
+        requirement["m_applyNOT"] = Property("bool", "m_applyNOT", 0);
+        requirement["m_operator"] = Enum("enum Requirement::Operator", "m_operator", 1, Json{ { "OPERATOR_AND", 0 }, { "OPERATOR_OR", 1 } });
+        AddClass(classes, "class Requirement", Json::array({ "PropertyClass" }), requirement);
+        Json level = requirement;
+        level["m_numericValue"] = Property("float", "m_numericValue", 2);
+        level["m_operatorType"] = Property("int", "m_operatorType", 3);
+        level["m_magicSchool"] = Property("std::string", "m_magicSchool", 4);
+        AddClass(classes, "class ReqMagicLevel", Json::array({ "Requirement", "PropertyClass" }), level);
+        if (withStatEffect)
+        {
+            Json badge = requirement;
+            badge["m_badgeName"] = Property("std::string", "m_badgeName", 2);
+            AddClass(classes, "class ReqHasBadge", Json::array({ "Requirement", "PropertyClass" }), badge);
+        }
+        Json list = Json::object();
+        list["m_applyNOT"] = Property("bool", "m_applyNOT", 0);
+        list["m_operator"] = Enum("enum Requirement::Operator", "m_operator", 1, Json{ { "OPERATOR_AND", 0 }, { "OPERATOR_OR", 1 } });
+        list["m_requirements"] = Property("class Requirement*", "m_requirements", 2, "List");
+        AddClass(classes, "class RequirementList", Json::array({ "PropertyClass" }), list);
         Json effect = Json::object();
         effect["m_effectName"] = Property("std::string", "m_effectName", 0);
         AddClass(classes, "class GameEffectInfo", Json::array({ "PropertyClass" }), effect);
@@ -241,6 +261,20 @@ namespace TemplateDumpFixtures
         item["m_numPrimaryColors"] = Property("unsigned char", "m_numPrimaryColors", 26);
         item["m_numSecondaryColors"] = Property("unsigned char", "m_numSecondaryColors", 27);
         AddClass(classes, "class WizItemTemplate", Json::array({ "GameObjectTemplate", "CoreTemplate", "PropertyClass" }), item);
+        Json bonus = Json::object();
+        bonus["m_numItemsToEquip"] = Property("int", "m_numItemsToEquip", 0);
+        bonus["m_description"] = Property("std::string", "m_description", 1);
+        bonus["m_equipEffectsGrantedRequirements"] = Property("class RequirementList*", "m_equipEffectsGrantedRequirements", 2);
+        bonus["m_equipEffectsGranted"] = Property("class GameEffectInfo*", "m_equipEffectsGranted", 3, "List");
+        AddClass(classes, "class ItemSetBonusData", Json::array({ "PropertyClass" }), bonus);
+        Json set = Json::object();
+        set["m_behaviors"] = Property("class BehaviorTemplate*", "m_behaviors", 0, "List");
+        set["m_objectName"] = Property("std::string", "m_objectName", 1);
+        set["m_templateID"] = Property("unsigned int", "m_templateID", 2);
+        set["m_displayName"] = Property("std::string", "m_displayName", 3);
+        set["m_noStacking"] = Property("bool", "m_noStacking", 4);
+        set["m_itemSetBonusDataList"] = Property("class ItemSetBonusData", "m_itemSetBonusDataList", 5, "List");
+        AddClass(classes, "class ItemSetBonusTemplate", Json::array({ "CoreTemplate", "PropertyClass" }), set);
     }
 
     std::string Dump(Json const& classes)

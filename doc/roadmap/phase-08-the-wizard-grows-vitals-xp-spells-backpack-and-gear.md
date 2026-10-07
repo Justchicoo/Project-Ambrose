@@ -345,7 +345,7 @@ Every equippable and backpack item in the user's client is available to the serv
 
 **Acceptance**
 
-- [ ] Unit test: a synthetic WizItemTemplate BINd fixture maps to one item_template row with its requirements and effects
+- [x] Unit test: a synthetic WizItemTemplate BINd fixture maps to one item_template row with its requirements and effects [ItemExtractorTest.ASyntheticWizItemTemplateMapsToOneItemTemplateRow: the synthetic robe keeps its ReqMagicLevel requirement (5, Ice, operator 3) and its MaxHealth equip effect]
 - [x] On the user's install: item_template has around 76,679 rows and every requirement or effect class is present in the type registry (unknown hashes fail the import, never skipped silently) [ItemMgrClientTest and TemplateExtractorClientTest pass on r806919 with the install's class file; without it the 8 items holding ReqMonsterMagicLevel or ReqHasItems fail and are named]
 - [x] sItemMgr load time and memory are logged at gameserver startup [ItemMgr::Load, called by the game server's LoadItems, logs counts by class, MiB, ms and threads]
 - [x] `.reload item_template` applies an edited row without a restart, and a reload that meets an unknown class hash keeps the old store and reports it [ItemMgrTest reload tests]
@@ -363,9 +363,9 @@ Every equippable and backpack item in the user's client is available to the serv
 
 **Acceptance**
 
-- [ ] Every requirement/effect class is known; unknown hashes fail the import
-- [ ] 42 ItemSetBonusTemplate rows
-- [ ] A reload with an unknown requirement or effect hash keeps the old store
+- [x] Every requirement/effect class is known; unknown hashes fail the import [ItemExtractorTest: an equip requirement or equip effect of a class the dump lacks fails the extraction and names the class; ItemMgrClientTest and TemplateExtractorClientTest pass on r806919 with the install's class file]
+- [x] 42 ItemSetBonusTemplate rows [TemplateExtractorClientTest.EveryItemSetBonusIsARowWithItsTiers on r806919: 42 sets, and the Fire set 1502574 needs 2, 3, 5 and 7 items, its first tier granting CanonicalFireAccuracy]
+- [x] A reload with an unknown requirement or effect hash keeps the old store [ItemMgrTest: a reload that meets an equip requirement of a class the dump lacks keeps the set serving, as one with an unknown equip effect does]
 
 ### Detailed spec from WIZ-10: Item template extractor
 
@@ -391,7 +391,7 @@ Every equippable and backpack item in the user's client is available to the serv
 
 **Acceptance**
 
-- [ ] Unit test: a synthetic WizItemTemplate BINd fixture maps to one item_template row with its requirements and effects
+- [x] Unit test: a synthetic WizItemTemplate BINd fixture maps to one item_template row with its requirements and effects [ItemExtractorTest.ASyntheticWizItemTemplateMapsToOneItemTemplateRow: the synthetic robe keeps its ReqMagicLevel requirement (5, Ice, operator 3) and its MaxHealth equip effect]
 - [ ] On the user's install: item_template has around 76,679 rows and every requirement or effect class is present in the type registry (unknown hashes fail the import, never skipped silently)
 - [ ] sItemMgr load time and memory are logged at gameserver startup
 - [ ] `.reload item_template` applies an edited row without a restart, and a reload that meets an unknown class hash keeps the old store and reports it

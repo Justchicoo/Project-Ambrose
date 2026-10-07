@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * An install for the item template tests: a writer's type dump holding a stat effect class and a shop behavior class the reader's dump leaves out, and a Root.wad whose manifest lists a hat, a robe with a behavior of a class the reader lacks, an NPC that is no item and a spell outside ObjectData, written again with an edited hat or with a robe whose equip effect is of a class the reader lacks.
+ * An install for the item template tests: a writer's type dump holding a stat effect class and a shop behavior class the reader's dump leaves out, and a Root.wad whose manifest lists a hat, a robe with a behavior of a class the reader lacks, an equip requirement of Ice magic level 5 or more and a max health equip effect, an NPC that is no item, the robe's item set bonus 42, which does not stack, with a tier for two items granting one accuracy effect and one for three granting two, and a spell outside ObjectData, written again with an edited hat or with a robe whose equip effect or requirement is of a class the reader lacks.
  */
 
 #ifndef AMBROSE_ITEMTEMPLATEFIXTURES_H
@@ -21,10 +21,12 @@ public:
     static constexpr uint32 RobeId = 1652300;
     static constexpr uint32 NpcId = 38232;
     static constexpr uint32 SpellId = 77;
+    static constexpr uint32 SetBonusId = 42;
     static constexpr char const* UnknownEffect = "class StatisticEffectInfo";
     static constexpr char const* UnknownBehavior = "class ShopBehaviorTemplate";
+    static constexpr char const* UnknownRequirement = "class ReqHasBadge";
 
-    enum class Robe { Plain, UnknownEffect };
+    enum class Robe { Plain, UnknownEffect, UnknownRequirement };
 
     ItemTemplateFixtures();
 
