@@ -67,7 +67,7 @@ Clone vcpkg whole, never with `--depth 1`, because `vcpkg.json` pins a baseline 
 A login server also needs a MySQL or MariaDB it can reach. The default is `127.0.0.1;3306;ambrose;ambrose;ambrose_login`, an unreachable one stops startup, and `dbimport` creates the databases. Docker gives one in a minute, the second line succeeding once the server has started:
 
 ```
-docker run -d --name ambrose-mysql -p 127.0.0.1:3306:3306 -e MYSQL_ROOT_PASSWORD=root mysql:8.0
+docker run -d --name ambrose-mysql -p 127.0.0.1:3306:3306 -e MYSQL_ROOT_PASSWORD=root mysql:8.0 --innodb-flush-log-at-trx-commit=2
 docker exec ambrose-mysql mysql -uroot -proot -e "CREATE USER 'ambrose'@'%' IDENTIFIED BY 'ambrose'; GRANT ALL ON *.* TO 'ambrose'@'%';"
 ```
 
