@@ -4,6 +4,8 @@
  */
 
 #include "Environment.h"
+#include "AnimationListMgr.h"
+#include "CustomEmoteMgr.h"
 #include "InstalledRevision.h"
 #include "KiwadArchive.h"
 #include "KiwadBuilder.h"
@@ -123,6 +125,27 @@ TEST_F(ObjectTemplateMgrClientTest, TemplateOneIsThePlayerObjectEveryWizardIsMad
     std::vector<std::string> errors;
     ASSERT_TRUE(_store.LoadPlayer(errors)) << errors.front();
     EXPECT_EQ(_store.GetPlayer()->Behaviors, player.Behaviors);
+}
+
+TEST_F(ObjectTemplateMgrClientTest, CustomEmoteCatalogReadsAnimationsAndLeavesTeleportEffectsSeparate)
+{
+    std::vector<std::string> errors;
+    std::size_t threads = 0;
+    std::optional<CustomEmoteStore> const emotes = CustomEmoteStore::Read(s_install / "Data" / "GameData", sTypeRegistry.GetCatalog(), *_store.GetManifest(), errors, threads);
+    ASSERT_TRUE(emotes.has_value()) << (errors.empty() ? std::string() : errors.front());
+    EXPECT_GT(emotes->Size(), 0u);
+    EXPECT_TRUE(emotes->OwnsAnimation("Fresh", { uint32{ 1 }, 0, 0 }));
+    EXPECT_FALSE(emotes->OwnsAnimation("Fresh", {}));
+    EXPECT_FALSE(emotes->OwnsAnimation("Teleport0", { 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu }));
+
+    std::string error;
+    std::unique_ptr<KiwadArchive> const root = KiwadArchive::Open(s_install / "Data" / "GameData" / std::string(AnimationListMgr::RootArchive), error);
+    ASSERT_TRUE(root) << error;
+    errors.clear();
+    std::shared_ptr<AnimationList const> const animations = AnimationListMgr::Read(*root, errors);
+    ASSERT_TRUE(animations) << (errors.empty() ? std::string() : errors.front());
+    for (std::string const& name : emotes->AnimationNames())
+        EXPECT_TRUE(animations->Contains(name)) << name;
 }
 
 TEST_F(ObjectTemplateMgrClientTest, Template1652259IsTheBalanceHat)

@@ -17,6 +17,7 @@ target_link_libraries(client_tests
         gameserver-sessions
         spells
         combat
+        items
         nlohmann_json::nlohmann_json
         GTest::gmock)
 

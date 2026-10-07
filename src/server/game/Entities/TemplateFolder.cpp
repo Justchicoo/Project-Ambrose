@@ -84,7 +84,7 @@ bool TemplateFolder::ReadAll(std::filesystem::path const& gameData, TypeCatalogP
                 failures[index] = fmt::format("{} in {} does not read: {}", location.Path, location.Archive, decoded.Ok() ? std::string("it holds no object") : decoded.Detail);
                 continue;
             }
-            read[index] = reader(index, entries[index], *decoded.Decoded.Object, failures[index]) ? 1 : 0;
+            read[index] = reader(index, entries[index], *decoded.Decoded.Object, decoded.Decoded.Issues, failures[index]) ? 1 : 0;
         }
     };
     std::size_t const hardware = std::max(1u, std::thread::hardware_concurrency());

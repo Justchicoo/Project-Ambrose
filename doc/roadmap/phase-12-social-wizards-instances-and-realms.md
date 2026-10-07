@@ -19,7 +19,7 @@
 | 12.11 | Dye shop (EXT-3 + WIZ-26 dye) | S | 10.10, 8.10, 4.15 |
 | 12.12 | Stitching (EXT-4 + WIZ-26 stitch) | S | 12.11, 4.16 |
 | 12.13 | Equipment sets (WIZ-26 part) | M | 8.10 |
-| 12.14 | Custom emotes and pet rename (WIZ-26 part) | M | 6.03, 5.05 |
+| 12.14 | Custom emotes and pet rename (WIZ-26 part) | M | 6.03, 5.05, 8.08 |
 | 12.15 | Crowns balance and crown services (EXT-7) | S | 10.10, 2.13, 4.16 |
 | 12.16 | Bazaar (EXT-5) | M | 10.10, 12.09, 4.15, 4.16 |
 | 12.17 | Public instances by capacity (WLD-22 part 1) | M | 6.14, 4.15, 4.16 |
@@ -38,7 +38,7 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 - **Ordering.** 12.23 speed validation acceptance says 'mounts never corrected', but mounts (MSG_RIDEOBJECT, MSG_SETSTOREDMOUNT, MSG_RIDABLEUPDATE in WizardMessages2) are not implemented in any earlier milestone.
 - **Oversized.** 12.23 MoveBehavior/Physics observation plus speed validation across services 15/16 (S). Under-sized.
 - **Correction.** 12.19/12.20 group MSG_CURRENTREALM with GAME realm messages, but it lives in GameMessages2.xml (svc 55). 12.03's MSG_REQUESTRADIALFRIENDQUICKCHATEXT is in WizardMessages2 (53). The names are valid, but these service placements are unacknowledged.
-- **Handed on from 6.03.** 12.14 takes the radial menu's emotes, read from the r806919 client in 6.03. The client plays the emote on its own wizard and sends two messages: MSG_CORE_PIIRADIALMENUEMOTE, with `EmoteAnimationName` and `ExcludeOriginator` 1, and MSG_REQUESTPIIRADIALMENUPLAYEMOTE, with the animation and the `EmoteText` line it wrote. Other clients play the animation from the Emoting state that 6.03 sends for MSG_CORE_EMOTE, and show the line from MSG_PIIRADIALMENUPLAYEMOTE (`SourceName`, `SourceID`, `EmoteAnimationName`, `EmoteText`). The line is client-written text, so the server shows it only after checking it against the emote the wizard owns. EmotesRadialMenuBehavior keeps the menu's three custom pages as blobs. Each blob opens with 0x0FACECE8 and a version below 4, and its slots name either an owned emote by global id or, with a zero id, a menu chat phrase. In 6.03's runs, the Emotes entry of the quick chat menu did not open the wheel for a wizard of ours, which sent nothing when it was pressed; find out why here.
+- **Handed on from 6.03.** 12.14 takes the radial menu's emotes, read from the r806919 client in 6.03. The client plays the emote on its own wizard and sends two messages: MSG_CORE_PIIRADIALMENUEMOTE, with `EmoteAnimationName` and `ExcludeOriginator` 1, and MSG_REQUESTPIIRADIALMENUPLAYEMOTE, with the animation and the `EmoteText` line it wrote. Other clients play the animation from the Emoting state that 6.03 sends for MSG_CORE_EMOTE, and show the line from MSG_PIIRADIALMENUPLAYEMOTE (`SourceName`, `SourceID`, `EmoteAnimationName`, `EmoteText`). The line is client-written text, so the server shows it only after checking it against the emote the wizard owns. EmotesRadialMenuBehavior keeps the menu's three custom pages as blobs. The player object still leaves its slot null, as in the player object the client already accepts, so the Emotes quick-chat entry has no slots to open. `client disasm 0x141e77b00` on r806919 checks identifier 0xFACEACE8 and rejects versions 4 or higher. `client types RadialMenuSlotInfo` reports each slot's index, emote GID, emote template ID, and menu chat phrase ID; the parser adds an emote slot only when its emote GID is nonzero. The pages a server writes have to match what that loader reads, and a slot's emote GID is the global id of an emote item the wizard holds, which waits on 8.08's item instances. `client template 1457184` resolves to `ObjectData/Emotes/Emote0_Fresh.xml`, which carries `CustomEmoteBehaviorTemplate`. `client template 1664452` resolves to `ObjectData/Emotes/Emote84_TrickOrTreat.xml`, whose non-default animation `P_B_Emote_Trick_Or_Treat` has bitfield -1; the catalog loads this sentinel but never considers it owned by the three purchased masks. The earlier identifier 0x0FACECE8 in this note was a transcription error. Purchased emote and teleport-effect masks are now persisted with character stats, sent in the three zero-based ranks of MSG_UPDATECUSTOMEMOTES, and included in WizGameStats. The server now indexes emote animation names from the templates and checks both radial-emote requests against the wizard's saved ownership masks. Sending the behavior with written pages, checking the line against the emote, and the real-client check remain open.
 
 ## 12.01 Friends (WIZ-17 part 1)
 
@@ -664,7 +664,7 @@ Quality-of-life wardrobe features work: saved equipment sets, unlocked custom em
 
 **Goal:** Unlocked emotes.
 
-**Size:** M. **Depends on:** 6.03, 5.05
+**Size:** M. **Depends on:** 6.03, 5.05, 8.08
 
 **Client messages:** MSG_UPDATECUSTOMEMOTES, MSG_REQUESTPIIRADIALMENUPLAYEMOTE, MSG_PIIRADIALMENUPLAYEMOTE, MSG_PETRENAMEREQUEST, MSG_PETRENAMECONFIRM
 
@@ -703,7 +703,10 @@ Quality-of-life wardrobe features work: saved equipment sets, unlocked custom em
 **Risks**
 
 - This milestone is broad and may need to be split into three (sets, emotes, dye/stitch) when scheduled.
-- Where the custom emote template list lives is unverified.
+- Emote templates and bitfield ownership rules are now confirmed, but a radial-menu slot names an emote by the global id of an emote item the wizard holds, and item instances come with 8.08.
+- Pet rename is assigned to 13.02, which depends on 13.01; do not fabricate a pet or inventory ID for it in this milestone.
+
+**Pet rename coordination:** The WIZ-26 detailed deliverable says to coordinate PET. Phase 13 assigns pet rename to 13.02 after pet core in 13.01. This server has no pet or item-instance model to establish ownership yet, so pet rename remains with that pet milestone rather than accepting an invented ID here.
 
 ## 12.15 Crowns balance and crown services (EXT-7)
 

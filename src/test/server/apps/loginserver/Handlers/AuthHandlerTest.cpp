@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives MSG_USER_AUTHEN_V3 over loopback against a real LoginSession: a closed login database times out, and with AMBROSE_TEST_DB set valid credentials are admitted with the session key stored, sealed with the active key when there is one and bound to its account, a wrong session id, wrong ClientKey1, oversized or malformed Rec1, unknown account, banned machine, banned address, locked or banned account and disallowed revision each get their error and store no session, a ban or lock carrying its end in Unix seconds or forever and nothing else any TimeStamp, account bans stay hidden behind a wrong password, the attempt limit is read live and locks the address out, overlapping requests strike and a client that leaves mid-login leaves no claim or reservation behind, duplicate logins kick each earlier session or are rejected, verifiers are sealed again with the active key at login, and the older authentication messages are refused until the session closes.
+ * Drives MSG_USER_AUTHEN_V3 over loopback against a real LoginSession: a closed login database times out, and with AMBROSE_TEST_DB set valid credentials are admitted with the session key stored, sealed with the active key when there is one and bound to its account, a wrong session id, wrong ClientKey1, oversized or malformed Rec1, unknown account, banned machine, banned address, locked or banned account and disallowed revision each get their error and store no session, a ban or lock carrying its end in Unix seconds, a permanent one the latest end the client reads, and no Reason, and nothing else any TimeStamp, account bans stay hidden behind a wrong password, the attempt limit is read live and locks the address out, overlapping requests strike and a client that leaves mid-login leaves no claim or reservation behind, duplicate logins kick each earlier session or are rejected, verifiers are sealed again with the active key at login, and the older authentication messages are refused until the session closes.
  */
 
 #include "AccountMgr.h"
@@ -107,7 +107,8 @@ namespace
                 EXPECT_TRUE(_timeStamp.empty()) << scenario << " is no ban, so it carries no TimeStamp";
             }
             EXPECT_EQ(response->Error, expected) << scenario;
-            EXPECT_EQ(response->Reason, AuthResults::GetName(expected)) << scenario;
+            bool const ban = expected == AuthResult::AccountBanned || expected == AuthResult::MachineBanned;
+            EXPECT_EQ(response->Reason, ban ? std::string() : std::string(AuthResults::GetName(expected))) << scenario << ": the client shows GUI_<Reason> beside a ban's dated line";
             EXPECT_EQ(response->UserId, 0u) << scenario;
             EXPECT_TRUE(response->Rec1.empty()) << scenario;
             EXPECT_EQ(Count("SELECT COUNT(*) FROM `account_session`"), 0u) << scenario;
@@ -214,7 +215,7 @@ TEST_F(AuthHandlerDatabaseTest, EachFailureGetsItsErrorAndStoresNoSession)
     ASSERT_TRUE(LoginDatabase.DirectExecute(fmt::format("INSERT INTO `machine_banned` VALUES ({}, {}, 0, 'test', 'test')", Machine, now)));
     SendAuthen(client, Credentials(client, "Wizard", "hunter22"));
     ExpectFailure(client, AuthResult::MachineBanned, "banned machine");
-    EXPECT_EQ(_timeStamp, "forever") << "a machine ban whose unbandate is 0 never ends";
+    EXPECT_EQ(_timeStamp, "2147483647") << "a machine ban whose unbandate is 0 never ends, which the client's login dialog shows as permanent only past five years";
     SendAuthen(client, Credentials(client, "Wizard", "hunter22"), "r0.Test", Machine + 1);
     std::string const admittedElsewhere = "machine ban only covers its machine";
 
@@ -237,7 +238,7 @@ TEST_F(AuthHandlerDatabaseTest, EachFailureGetsItsErrorAndStoresNoSession)
     ExpectFailure(client, AuthResult::AuthenFailed, "locked account with a wrong password");
     SendAuthen(client, Credentials(client, "Wizard", "hunter22"), "r0.Test", Machine + 1);
     ExpectFailure(client, AuthResult::AccountBanned, "locked account");
-    EXPECT_EQ(_timeStamp, "forever") << "a lock has no end";
+    EXPECT_EQ(_timeStamp, "2147483647") << "a lock has no end";
     ASSERT_EQ(sAccountMgr.SetLocked(_accountId, false), AccountOpResult::Ok);
 
     ASSERT_EQ(sAccountMgr.Ban(_accountId, std::chrono::hours(1), "test", "testing"), AccountOpResult::Ok);

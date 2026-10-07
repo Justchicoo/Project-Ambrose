@@ -12,6 +12,7 @@
 #include "PropertyObject.h"
 #include "StatEffects.h"
 
+#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -35,6 +36,8 @@ public:
     int32 GetMana() const noexcept { return _mana; }
     int32 GetGold() const noexcept { return _stored.Gold; }
     int32 GetTrainingPoints() const noexcept { return _stored.TrainingPoints; }
+    std::array<uint32, 3> const& GetPurchasedCustomEmotes() const noexcept { return _stored.PurchasedCustomEmotes; }
+    std::array<uint32, 3> const& GetPurchasedCustomTeleportEffects() const noexcept { return _stored.PurchasedCustomTeleportEffects; }
 
     CharacterStats ToStored() const;
     bool WriteGameStats(PropertyObject& gameStats, std::string& problem) const;
