@@ -6,9 +6,9 @@
     "percent": 27.7
   },
   "checks": {
-    "done": 1060,
+    "done": 1070,
     "total": 2870,
-    "percent": 36.9
+    "percent": 37.3
   },
   "contributor_track": {
     "merged": 93,
@@ -76,7 +76,7 @@
       "title": "The wizard grows vitals xp spells backpack and gear",
       "milestones_done": 2,
       "milestones_total": 14,
-      "checks_done": 39,
+      "checks_done": 49,
       "checks_total": 101
     },
     {

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A permID is FNV-1a over the zone path, a separator, and the template and object ids in little-endian order, so it is the same number on every machine and every run for the same placed object, and it is never zero, because zero is what an object with no permID carries. Runtime GIDs come from one generator that starts at RuntimeBase.
+ * A permID is FNV-1a over the zone path, a separator, and the template and object ids in little-endian order, so it is the same number on every machine and every run for the same placed object, and it is never zero, because zero is what an object with no permID carries. Runtime GIDs come from one generator that starts at RuntimeBase, and item GIDs from another that starts at ItemBase.
  */
 
 #include "ObjectGuid.h"
@@ -43,4 +43,15 @@ std::optional<uint64> ObjectGuid::NextRuntime() noexcept
 bool ObjectGuid::IsRuntime(uint64 guid) noexcept
 {
     return guid >= RuntimeBase;
+}
+
+GuidGenerator& ObjectGuid::ItemGuids() noexcept
+{
+    static GuidGenerator guids(ItemBase);
+    return guids;
+}
+
+bool ObjectGuid::IsItem(uint64 guid) noexcept
+{
+    return guid >= ItemBase && guid < RuntimeBase;
 }

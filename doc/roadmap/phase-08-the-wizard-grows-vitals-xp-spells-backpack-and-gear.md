@@ -415,8 +415,8 @@ Every equippable and backpack item in the user's client is available to the serv
 
 **Acceptance**
 
-- [ ] Trashing an item not owned rejected
-- [ ] Real client: '.additem <hat>' shows the icon and tooltip; trash persists across relog
+- [x] Trashing an item not owned rejected [InventoryHandlerTest.TrashingAnItemNotOwnedIsRejectedAndLogged]
+- [x] Real client: '.additem <hat>' shows the icon and tooltip; trash persists across relog [real client run 20261007-123432 with apps/clientdriver/scenarios/backpack-add-and-trash.json: `.additem 1652259` put "Cute Fairy Kei Broadbrim" in the backpack at 1/100 and its tooltip showed the name; trashing it through the client's confirm dialog emptied it to 0/100, and after a quit and relog it stayed 0/100 with no item_instance rows]
 
 ### Detailed spec from WIZ-11: Backpack inventory
 
@@ -444,10 +444,10 @@ A wizard has a persistent backpack whose items show in the client, and items can
 
 **Acceptance**
 
-- [ ] Unit test: adding to a full backpack sends ITEMDROP and does not persist the item
-- [ ] Unit test: raising Inventory.ExtraSlots lets the next add to a full backpack succeed without a restart
-- [ ] Unit test: trashing an item not owned is rejected and logged
-- [ ] Real client: '.additem <hat template>' makes a new hat icon appear in the backpack with the right name tooltip. Trashing it removes it and it stays gone after relogging. Locking an item shows the lock icon and hides the trash option.
+- [x] Unit test: adding to a full backpack sends ITEMDROP and does not persist the item [InventoryHandlerTest.AddingToAFullBackpackSendsItemDropAndDoesNotPersistTheItem]
+- [x] Unit test: raising Inventory.ExtraSlots lets the next add to a full backpack succeed without a restart [InventoryHandlerTest.RaisingExtraSlotsLetsTheNextAddToAFullBackpackSucceedWithoutARestart]
+- [x] Unit test: trashing an item not owned is rejected and logged [InventoryHandlerTest.TrashingAnItemNotOwnedIsRejectedAndLogged]
+- [ ] Real client: '.additem <hat template>' makes a new hat icon appear in the backpack with the right name tooltip. Trashing it removes it and it stays gone after relogging. Locking an item shows the lock icon and hides the trash option. The add, tooltip, trash and relog parts pass in real client run 20261007-123432 with apps/clientdriver/scenarios/backpack-add-and-trash.json; the lock part waits on 8.09, because the item object carries no lock flag yet and the server has no toggle-lock handler
 
 **Risks**
 
@@ -464,8 +464,8 @@ A wizard has a persistent backpack whose items show in the client, and items can
 
 **Acceptance**
 
-- [ ] Full backpack sends ITEMDROP and does not persist
-- [ ] Raising Inventory.ExtraSlots makes room on the next add without a restart
+- [x] Full backpack sends ITEMDROP and does not persist [InventoryHandlerTest.AddingToAFullBackpackSendsItemDropAndDoesNotPersistTheItem, shared with 8.08]
+- [x] Raising Inventory.ExtraSlots makes room on the next add without a restart [InventoryHandlerTest.RaisingExtraSlotsLetsTheNextAddToAFullBackpackSucceedWithoutARestart, shared with 8.08]
 - [ ] Locked item shows lock icon and hides trash
 
 ### Detailed spec from WIZ-11: Backpack inventory
@@ -494,9 +494,9 @@ A wizard has a persistent backpack whose items show in the client, and items can
 
 **Acceptance**
 
-- [ ] Unit test: adding to a full backpack sends ITEMDROP and does not persist the item
-- [ ] Unit test: raising Inventory.ExtraSlots lets the next add to a full backpack succeed without a restart
-- [ ] Unit test: trashing an item not owned is rejected and logged
+- [x] Unit test: adding to a full backpack sends ITEMDROP and does not persist the item [InventoryHandlerTest.AddingToAFullBackpackSendsItemDropAndDoesNotPersistTheItem, shared with 8.08]
+- [x] Unit test: raising Inventory.ExtraSlots lets the next add to a full backpack succeed without a restart [InventoryHandlerTest.RaisingExtraSlotsLetsTheNextAddToAFullBackpackSucceedWithoutARestart, shared with 8.08]
+- [x] Unit test: trashing an item not owned is rejected and logged [InventoryHandlerTest.TrashingAnItemNotOwnedIsRejectedAndLogged, shared with 8.08]
 - [ ] Real client: '.additem <hat template>' makes a new hat icon appear in the backpack with the right name tooltip. Trashing it removes it and it stays gone after relogging. Locking an item shows the lock icon and hides the trash option.
 
 **Risks**
