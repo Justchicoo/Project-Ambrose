@@ -66,7 +66,7 @@ void GameSession::SendBadges()
     std::vector<std::string> ranks;
     std::shared_ptr<PlayerLevelSet const> const levels = sPlayerLevelMgr.GetLevels();
     std::shared_ptr<LocaleTable const> const texts = sLocaleStore.IsLoaded() ? sLocaleStore.GetTable() : nullptr;
-    MagicSchool const* const school = levels && _stats ? levels->FindSchool(_stats->GetSchoolId()) : nullptr;
+    MagicSchool const* const school = levels && _player ? levels->FindSchool(_player->GetStats().GetSchoolId()) : nullptr;
     std::string const* const title = school && texts ? texts->Find(fmt::format("MagicSchools_{}Title", school->Name)) : nullptr;
     if (title)
         ranks.push_back(*title);

@@ -19,7 +19,7 @@ LEGS = OrderedDict([
     ("windows-msvc-x64", {"os": "windows-latest", "configure": "windows-msvc-x64", "build": "windows-debug", "configure_timeout": 90, "build_timeout": 40}),
     ("linux-gcc", {"os": "ubuntu-latest", "configure": "linux-gcc", "build": "linux-gcc-debug", "configure_timeout": 45, "build_timeout": 20}),
     ("linux-clang", {"os": "ubuntu-latest", "configure": "linux-clang", "build": "linux-clang-debug", "configure_timeout": 45, "build_timeout": 25}),
-    ("linux-gcc-asan", {"os": "ubuntu-latest", "configure": "linux-gcc-asan", "build": "linux-gcc-asan", "configure_timeout": 45, "build_timeout": 35}),
+    ("linux-gcc-asan", {"os": "ubuntu-latest", "configure": "linux-gcc-asan", "build": "linux-gcc-asan", "configure_timeout": 45, "build_timeout": 45}),
     ("linux-clang-tsan", {"os": "ubuntu-latest", "configure": "linux-clang-tsan", "build": "linux-clang-tsan", "configure_timeout": 45, "build_timeout": 25}),
     ("linux-clang-fuzz", {"os": "ubuntu-latest", "configure": "linux-clang-fuzz", "build": "linux-clang-fuzz", "configure_timeout": 45, "build_timeout": 40}),
 ])

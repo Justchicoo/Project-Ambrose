@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Account management over the login database: creating accounts with validated names and encrypted-at-rest verifiers, passwords, security levels, locks, bans that replace earlier bans, and lookups by name or id.
+ * Account management over the login database: creating accounts with validated names and encrypted-at-rest verifiers, passwords, security levels, locks, bans and timed mutes that replace earlier records, and lookups by name or id.
  */
 
 #ifndef AMBROSE_ACCOUNTMGR_H
@@ -76,6 +76,13 @@ struct AccountBan
     bool IsPermanent() const noexcept { return UnbanDate == 0; }
 };
 
+struct AccountMute
+{
+    uint64 Until = 0;
+    std::string Reason;
+    std::string By;
+};
+
 struct AccountLookup
 {
     AccountOpResult Result = AccountOpResult::DatabaseError;
@@ -88,6 +95,7 @@ public:
     static constexpr uint32 MaxBannedByLength = 64;
     static constexpr uint32 MaxReasonLength = 255;
     static constexpr std::chrono::seconds MaxBanDuration{ 100LL * 365 * 24 * 3600 };
+    static constexpr std::chrono::seconds MaxMuteDuration{ 100LL * 365 * 24 * 3600 };
 
     static AccountMgr& Instance();
 
@@ -105,6 +113,8 @@ public:
     AccountOpResult SetLocked(uint64 accountId, bool locked);
     AccountOpResult Ban(uint64 accountId, std::chrono::seconds duration, std::string_view bannedBy, std::string_view reason);
     AccountOpResult Unban(uint64 accountId);
+    AccountOpResult MuteAccount(uint64 accountId, std::chrono::seconds duration, std::string_view mutedBy, std::string_view reason, uint64* muteUntil = nullptr);
+    AccountOpResult UnmuteAccount(uint64 accountId);
     AccountOpResult DeleteAccount(uint64 accountId);
     AccountOpResult SetPermissions(uint64 accountId, std::optional<uint32> permissions);
     AccountOpResult BanAddress(std::string_view address, std::chrono::seconds duration, std::string_view bannedBy, std::string_view reason);
@@ -115,7 +125,9 @@ public:
     AccountLookup GetAccountByName(std::string_view username) const;
     AccountLookup GetAccountById(uint64 accountId) const;
     static std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> PrepareGetAccountById(uint64 accountId);
+    static std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> PrepareGetAccountByIdWithMute(uint64 accountId, uint64 now);
     static AccountInfo ReadAccountRow(PreparedResultSet const& row);
+    static std::optional<AccountMute> ReadAccountMuteRow(PreparedResultSet const& row);
     std::optional<AccountBan> GetActiveBan(uint64 accountId, AccountOpResult* result = nullptr) const;
     std::optional<std::string> GetVerifier(AccountInfo const& account) const;
 
