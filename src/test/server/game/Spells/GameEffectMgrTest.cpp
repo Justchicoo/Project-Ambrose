@@ -3,6 +3,7 @@
  * Tests the game effect templates on a Root.wad the test writes through a type dump it lays out: every template of every GameEffectData/ list file is found by the hash of its name, as the client finds it, with its class, duration, visibility and pet flag; the effect a template makes is its effect class carrying the template's id and the values both classes share by name and type, and travels as MSG_ADDEFFECT's EffectData; a template whose class makes no effect makes none; a name read twice keeps the first and a nameless template is left out, each with a warning; and a file that is not a template list fails a reload, which keeps the set serving.
  */
 
+#include "CoreObjectSerializer.h"
 #include "GameEffectFixtures.h"
 #include "GameEffectHolder.h"
 #include "GameEffectMgr.h"
@@ -138,9 +139,10 @@ TEST_F(GameEffectMgrTest, AnEffectCarriesItsTemplatesIdAndTheValuesBothClassesSh
     ASSERT_TRUE(holder.Add(std::move(post), problem)) << problem;
     ObjectField const* const field = ObjectFields::Find("MSG_ADDEFFECT", "EffectData");
     ASSERT_NE(field, nullptr);
-    EncodeResult const data = ObjectSerializer::EncodeField(*field, holder.Find(1)->Effect.get());
+    CoreObjectTypeTable const types;
+    EncodeResult const data = GameEffectHolder::Encode(*holder.Find(1)->Effect, types);
     ASSERT_TRUE(data.Ok()) << data.Detail;
-    DecodeResult const back = ObjectSerializer::DecodeField(_catalog, *field, data.Bytes);
+    DecodeResult const back = CoreObjectSerializer::DecodeField(_catalog, *field, data.Bytes, types);
     ASSERT_TRUE(back.Ok() && back.Object) << back.Detail;
     EXPECT_EQ(*back.Object->Get("m_effectNameID")->GetIf<uint32>(), StringHash::KiStringHash("PostCombatEffect"));
     EXPECT_EQ(*back.Object->Get("m_internalID")->GetIf<int32>(), 1);

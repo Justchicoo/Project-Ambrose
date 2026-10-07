@@ -108,9 +108,9 @@ TEST_F(EffectCommandTest, WhatIsMissingOrUnknownIsSaidRatherThanGuessed)
     EXPECT_TRUE(AnyLineHas(Run({ "effect", "remove", "one", "555" }, CommandResult::Usage), "effect remove takes the internal id"));
     EXPECT_TRUE(AnyLineHas(Run({ "effect", "list" }, CommandResult::Usage), "effect list takes the wizard"));
     EXPECT_TRUE(AnyLineHas(Run({ "effect", "add", "PostCombatEffect", "Nobody Here" }, CommandResult::Usage), "No wizard in the world has the character id or name Nobody Here"));
-    std::vector<std::string> const near = Run({ "effect", "info", "PostCombat" }, CommandResult::Usage);
-    EXPECT_TRUE(AnyLineHas(near, "No game effect is named PostCombat, but 2 hold(s) it in their names"));
-    EXPECT_TRUE(AnyLineHas(near, "PostCombatGlow"));
+    std::vector<std::string> const similar = Run({ "effect", "info", "PostCombat" }, CommandResult::Usage);
+    EXPECT_TRUE(AnyLineHas(similar, "No game effect is named PostCombat, but 2 hold(s) it in their names"));
+    EXPECT_TRUE(AnyLineHas(similar, "PostCombatGlow"));
     EXPECT_TRUE(AnyLineHas(Run({ "effect", "info", "postcombateffect" }, CommandResult::Ran), "lasts 30 s, seen by everyone, shown on the wizard"));
 }
 

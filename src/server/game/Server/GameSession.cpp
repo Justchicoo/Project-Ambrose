@@ -663,17 +663,17 @@ std::optional<int32> GameSession::AddGameEffect(PropertyObjectPtr effect, std::s
         problem = "the wizard is not in the world";
         return std::nullopt;
     }
-    ObjectField const* const field = ObjectFields::Find(GameMessages::AddEffect::Tag, "EffectData");
-    if (!field)
+    CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
+    if (!types)
     {
-        problem = "MSG_ADDEFFECT's EffectData is not declared";
+        problem = "the core object table is not loaded, so no effect can be sent";
         return std::nullopt;
     }
     std::optional<int32> const id = _effects.Add(std::move(effect), problem);
     if (!id)
         return std::nullopt;
     ActiveGameEffect const& added = *_effects.Find(*id);
-    EncodeResult const data = ObjectSerializer::EncodeField(*field, added.Effect.get());
+    EncodeResult const data = GameEffectHolder::Encode(*added.Effect, *types);
     if (!data.Ok())
     {
         problem = fmt::format("the effect does not encode: {}", data.Detail);
@@ -716,12 +716,12 @@ void GameSession::ShowGameEffectOf(uint64 worldGuid, GameEffectChange const& cha
 
 void GameSession::ShowGameEffectsOf(GameSession const& other)
 {
-    ObjectField const* const field = ObjectFields::Find(GameMessages::AddEffect::Tag, "EffectData");
-    if (!field)
+    CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
+    if (!types)
         return;
     for (ActiveGameEffect const& active : other._effects.GetEffects())
     {
-        EncodeResult const data = ObjectSerializer::EncodeField(*field, active.Effect.get());
+        EncodeResult const data = GameEffectHolder::Encode(*active.Effect, *types);
         if (!data.Ok())
         {
             LOG_WARN("server.gamesession", "Session {} cannot show wizard {}'s effect with internal id {}: {}", GetSessionId(), other._worldGuid, active.InternalId, data.Detail);

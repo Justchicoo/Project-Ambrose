@@ -9,7 +9,8 @@
     "MSG_REMOVEEFFECT with internal id 1 and both are shot again. The same is done with BearBallerinaTransformation, a",
     "TransformationEffect that carries its template's m_sRace. Neither client may fail to load an effect it is sent or to find",
     "its template. The server does not yet end an effect when its template's duration runs out, so each stays until it is",
-    "taken off."
+    "taken off.",
+    "Neither client's log may hold a refused effect or a failed removal: a passing run must have shown both effects."
   ],
   "requires": {
     "gameserver": true
@@ -426,6 +427,19 @@
       "file": "companion-bear-off",
       "client": "companion",
       "settle": 1
+    },
+    {
+      "action": "forbid_log",
+      "name": "the main client loaded every effect and took each away",
+      "side": "client",
+      "pattern": "MSG_AddEffect\\(\\) - Invalid object received|Failed to find core template|LoadObject Failed|Failed to remove effect by internal ID"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the companion loaded every effect and took each away",
+      "side": "client",
+      "pattern": "MSG_AddEffect\\(\\) - Invalid object received|Failed to find core template|LoadObject Failed|Failed to remove effect by internal ID",
+      "client": "companion"
     }
   ],
   "pending_allowed": [

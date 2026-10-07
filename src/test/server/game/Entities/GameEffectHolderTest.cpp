@@ -1,8 +1,9 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the effects one object carries, on classes the test lays out the way the client's dump gives them: each effect gets the lowest internal id no effect on the object holds, written into its m_internalID, ids never repeat while their effects are kept and come free when one is taken away, an object that is not a GameEffectBase is refused, the container an effect behavior carries is never null and lists a copy of each effect under m_publicEffects, and an effect reads back equal through MSG_ADDEFFECT's EffectData.
+ * Tests the effects one object carries, on classes the test lays out the way the client's dump gives them: each effect gets the lowest internal id no effect on the object holds, written into its m_internalID, ids never repeat while their effects are kept and come free when one is taken away, an object that is not a GameEffectBase is refused, the container an effect behavior carries is never null and lists a copy of each effect under m_publicEffects, and an effect reads back equal through MSG_ADDEFFECT's EffectData, which opens with a CoreObject header of core type zero and the effect's class hash, as the client reads it.
  */
 
+#include "CoreObjectSerializer.h"
 #include "GameEffectFixtures.h"
 #include "GameEffectHolder.h"
 #include "ObjectFields.h"
@@ -129,7 +130,7 @@ TEST(GameEffectHolderTest, AnEffectReadsBackEqualThroughAddEffectsData)
     ObjectField const* const field = ObjectFields::Find("MSG_ADDEFFECT", "EffectData");
     ASSERT_NE(field, nullptr);
     EXPECT_FALSE(field->Enveloped);
-    EXPECT_FALSE(field->CoreObjects);
+    EXPECT_TRUE(field->CoreObjects) << "the client reads the effect after a CoreObject header";
 
     GameEffectHolder holder;
     std::string problem;
@@ -137,9 +138,15 @@ TEST(GameEffectHolderTest, AnEffectReadsBackEqualThroughAddEffectsData)
     ASSERT_EQ(effect->Set("m_overrideName", "Test"), PropertySetResult::Ok);
     ASSERT_EQ(effect->Set("m_originatorID", uint64{ 99 }), PropertySetResult::Ok);
     ASSERT_TRUE(holder.Add(std::move(effect), problem)) << problem;
-    EncodeResult const data = ObjectSerializer::EncodeField(*field, holder.Find(1)->Effect.get());
+    CoreObjectTypeTable const types;
+    EncodeResult const data = GameEffectHolder::Encode(*holder.Find(1)->Effect, types);
     ASSERT_TRUE(data.Ok()) << data.Detail;
-    DecodeResult const back = ObjectSerializer::DecodeField(catalog, *field, data.Bytes);
+    ASSERT_GE(data.Bytes.size(), 6u);
+    EXPECT_EQ(data.Bytes[0], 0) << "a zero core type says a plain class hash follows, not a core template id";
+    EXPECT_EQ(data.Bytes[1], 0);
+    uint32 const hash = static_cast<uint32>(data.Bytes[2]) | static_cast<uint32>(data.Bytes[3]) << 8 | static_cast<uint32>(data.Bytes[4]) << 16 | static_cast<uint32>(data.Bytes[5]) << 24;
+    EXPECT_EQ(hash, catalog->FindClass("class NamedEffect")->Hash);
+    DecodeResult const back = CoreObjectSerializer::DecodeField(catalog, *field, data.Bytes, types);
     ASSERT_TRUE(back.Ok() && back.Object) << back.Detail;
     EXPECT_TRUE(back.Object->IsA("class NamedEffect"));
     EXPECT_EQ(*back.Object->Get("m_effectNameID")->GetIf<uint32>(), 1234567u);
@@ -148,5 +155,5 @@ TEST(GameEffectHolderTest, AnEffectReadsBackEqualThroughAddEffectsData)
     EXPECT_EQ(*back.Object->Get("m_originatorID")->GetIf<uint64>(), 0u) << "the originator is not transmitted";
 
     PropertyObjectPtr const other = PropertyObject::Create(catalog, "class WizardCharacterBehavior");
-    EXPECT_FALSE(ObjectSerializer::EncodeField(*field, other.get()).Ok()) << "the field carries only a game effect";
+    EXPECT_FALSE(GameEffectHolder::Encode(*other, types).Ok()) << "the field carries only a game effect";
 }

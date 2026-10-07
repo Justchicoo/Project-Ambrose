@@ -4,6 +4,7 @@
  */
 
 #include "GameEffectHolder.h"
+#include "ObjectFields.h"
 #include "PropertyFiller.h"
 
 #include <fmt/format.h>
@@ -93,6 +94,19 @@ std::optional<uint32> GameEffectHolder::GetEffectNameId(PropertyObject const& ef
     PropertyValue const* const value = effect.Get("m_effectNameID");
     uint32 const* const id = value != nullptr ? value->GetIf<uint32>() : nullptr;
     return id != nullptr ? std::optional<uint32>(*id) : std::nullopt;
+}
+
+EncodeResult GameEffectHolder::Encode(PropertyObject const& effect, CoreObjectTypeTable const& types)
+{
+    ObjectField const* const field = ObjectFields::Find(AddEffectMessage, AddEffectField);
+    if (!field)
+    {
+        EncodeResult missing;
+        missing.Status = SerializerStatus::UnknownClass;
+        missing.Detail = fmt::format("{}'s {} is not declared", AddEffectMessage, AddEffectField);
+        return missing;
+    }
+    return CoreObjectSerializer::EncodeField(*field, effect, types);
 }
 
 int32 GameEffectHolder::NextFreeId() const noexcept
