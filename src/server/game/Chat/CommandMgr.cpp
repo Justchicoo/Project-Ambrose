@@ -4,7 +4,9 @@
  */
 
 #include "CommandMgr.h"
+#include "DatabaseEnv.h"
 #include "Log.h"
+#include "ReloadMgr.h"
 #include "StringUtil.h"
 
 #include <fmt/format.h>
@@ -115,6 +117,42 @@ void CommandMgr::SetOverrides(std::map<std::string, uint8, std::less<>> override
     _overrides = std::move(overrides);
     for (Node& root : _roots)
         ApplyOverrides(root);
+}
+
+bool CommandMgr::LoadSecurity()
+{
+    std::map<std::string, uint8, std::less<>> overrides;
+    if (WorldDatabase.IsOpen())
+    {
+        QueryResult rows;
+        if (!WorldDatabase.TryQuery("SELECT `command`, `security_level` FROM `command_security`", rows))
+        {
+            LOG_ERROR("server.commands", "command_security could not be read, so every command keeps the level it had");
+            return false;
+        }
+        if (rows)
+        {
+            do
+            {
+                Field const* row = rows->Fetch();
+                overrides.emplace(row[0].Get<std::string>(), row[1].Get<uint8>());
+            } while (rows->NextRow());
+        }
+    }
+    LOG_INFO("server.commands", "{} command(s) have a level from command_security", overrides.size());
+    SetOverrides(std::move(overrides));
+    return true;
+}
+
+void CommandMgr::RegisterReloadTargets()
+{
+    sReloadMgr.Register(std::string(SecurityTarget), [this](std::vector<std::string>& errors)
+    {
+        if (LoadSecurity())
+            return true;
+        errors.push_back("command_security could not be read, so every command keeps the level it had");
+        return false;
+    });
 }
 
 void CommandMgr::SetPrefix(std::string prefix)

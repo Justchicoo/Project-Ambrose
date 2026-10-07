@@ -1,0 +1,581 @@
+{
+  "title": "A game master bans and unbans an account and restores a deleted wizard in chat, and an account's chat level shows beside its name",
+  "notes": [
+    "6.05: the main account is made a game master and the companion's account is given menu chat only (0x23) on the game server's console before either logs in;",
+    "both enter the Commons as two-wizards.json has them, and the main wizard sees the filtered balloon beside the companion's name while the companion,",
+    "seeing the game master's default open chat, sees no mark. The game master types .ban account in chat: the companion is disconnected as banned and",
+    "its next login is refused with AccountBanned. After .unban account it logs in again; its wizard is deleted as its owner would delete it, its list",
+    "is empty, and after the game master's .character deleted restore and a relog the wizard is back on its select screen."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Zone.MobileIdReleaseDelay=60000"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added",
+    "failed to authenticate as \\S+: the account is banned"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "companion": {
+    "wizard": {
+      "school": 2343174,
+      "zone": "WizardCity/WC_Hub",
+      "zone_display": "The Commons",
+      "locale": "en-US",
+      "first": 2,
+      "middle": 3,
+      "last": 4,
+      "appearance": {
+        "gender": 1,
+        "race": 79806088,
+        "hair_model": 6,
+        "hair_color": 60,
+        "hat_color": 2,
+        "hat_decal": 4,
+        "torso_color": 2,
+        "torso_decal": 4,
+        "feet_color": 2,
+        "feet_decal": 12
+      }
+    }
+  },
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ],
+  "include": "parts/common.json",
+  "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "game_command",
+      "name": "give the companion's account menu chat only",
+      "command": "account set permissions {companion_user} 0x23",
+      "pattern": "Account \\S+'s wizards enter the world with permissions 0x23",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "hold_key",
+      "name": "the main wizard backs away from the start",
+      "vk": "0x53",
+      "seconds": 1.5
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard alone",
+      "file": "main-alone",
+      "settle": 1
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up (companion)",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen (companion)",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "log in (companion)",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password (companion)",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted (companion)",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30,
+      "client": "companion"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads (companion)",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen (companion)",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90,
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "press play (companion)",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{companion_wizard_guid}",
+        "record": true
+      },
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key (companion)",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{companion_wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons (companion)",
+      "pattern": "put wizard {companion_wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true,
+      "keep": "companion_mobile"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the two wizards are shown to each other",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} and the (\\d+) wizard\\(s\\) already in instance \\d+ were shown to each other",
+      "timeout": 10,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it (companion)",
+      "pattern": "loaded (\\S+), and wizard {companion_wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the filtered balloon beside the companion's name",
+      "file": "main-sees-menu-chat-mark",
+      "settle": 2
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees no mark beside the game master's name",
+      "file": "companion-sees-open-chat",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .ban account",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .ban account",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .ban account",
+      "text": ".ban account {companion_user} 1h spam"
+    },
+    {
+      "action": "char",
+      "name": "send .ban account",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the companion is disconnected as banned",
+      "pattern": "Kicking session \\d+ from \\S+ with disconnect type (\\d+): This account is banned: spam",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master's ban runs",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran ban account \\S+ 1h spam, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the companion is told its account is banned",
+      "file": "companion-banned",
+      "client": "companion",
+      "settle": 2
+    },
+    {
+      "action": "shot",
+      "name": "the game master after the ban",
+      "file": "main-after-ban",
+      "settle": 1
+    },
+    {
+      "action": "kill_client",
+      "name": "stop the banned companion",
+      "client": "companion"
+    },
+    {
+      "action": "restart_client",
+      "name": "start the companion again while banned",
+      "client": "companion",
+      "timeout": 240
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the companion renderer starts while banned",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the companion login screen while banned",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "the companion logs in while banned",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the banned companion's login is refused",
+      "pattern": "failed to authenticate as {companion_user}: the account is banned; sent MSG_USER_AUTHEN_RSP Error=(\\S+)",
+      "timeout": 30,
+      "expect": "AccountBanned",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the companion is refused at login",
+      "file": "companion-login-refused",
+      "client": "companion",
+      "settle": 2
+    },
+    {
+      "action": "kill_client",
+      "name": "stop the refused companion",
+      "client": "companion"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .unban account",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .unban account",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .unban account",
+      "text": ".unban account {companion_user}"
+    },
+    {
+      "action": "char",
+      "name": "send .unban account",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master's unban runs",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran unban account \\S+, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "db_exec",
+      "name": "delete the companion's wizard as its owner would",
+      "database": "characters",
+      "statement": "UPDATE `characters` SET `deleted_at` = UNIX_TIMESTAMP(), `deleted_account` = `account`, `account` = 0 WHERE `guid` = {companion_wizard_guid}"
+    },
+    {
+      "action": "restart_client",
+      "name": "start the companion again after the unban",
+      "client": "companion",
+      "timeout": 240
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the companion renderer starts after the unban",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the companion login screen after the unban",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "the companion logs in after the unban",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the companion is let back in",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the companion's list holds no wizard",
+      "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+      "timeout": 30,
+      "expect": "0",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the companion's select screen without its deleted wizard",
+      "file": "companion-select-empty",
+      "client": "companion",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .character deleted restore",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .character deleted restore",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .character deleted restore",
+      "text": ".character deleted restore {companion_wizard_guid}"
+    },
+    {
+      "action": "char",
+      "name": "send .character deleted restore",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game master's restore runs",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran character deleted restore \\d+, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "kill_client",
+      "name": "the companion leaves to log in again",
+      "client": "companion"
+    },
+    {
+      "action": "restart_client",
+      "name": "start the companion again after the restore",
+      "client": "companion",
+      "timeout": 240
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the companion renderer starts after the restore",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the companion login screen after the restore",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "the companion logs in after the restore",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the companion is accepted again",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the companion's list holds its wizard again",
+      "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_screen",
+      "name": "the companion's select screen",
+      "client": "companion",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "shot",
+      "name": "the restored wizard on the companion's select screen",
+      "file": "companion-select-restored",
+      "client": "companion",
+      "settle": 2
+    }
+  ]
+}

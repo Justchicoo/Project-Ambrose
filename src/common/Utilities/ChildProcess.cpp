@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements running a child process: on Windows CreateProcessW with a command line quoted by CommandLineToArgvW rules, CREATE_NO_WINDOW unless the program draws its own window, only the input, which is the NUL device or the read end of an anonymous pipe whose write end stays uninheritable here, and two overlapped named pipes inherited, and a kill-on-close job object, running <path>.exe for a program path without an extension when only that file exists, refusing batch files because cmd.exe reparses their arguments, and wording system errors in UTF-8; on POSIX posix_spawn into a new process group with /dev/null or the read end of a close-on-exec pipe as input and output pipes read with poll, ending the group with SIGTERM then SIGKILL, after clearing a SIGCHLD disposition that would reap the child before its exit code is read; a program named without a folder is searched for on the PATH, and output is split into UTF-8 lines, with invalid bytes replaced, on the calling thread. StartDetached shares that command building and starts a program nobody waits for: on Windows a detached process of its own group, breaking away from a job when the job allows it, and on POSIX posix_spawn into a session of its own with every standard handle on the null device. ExitWhenInputEnds reads standard input on a detached thread and ends the process with no cleanup once it reaches its end or fails. A ChildProcessHandle launch opens the output and error files for appending and hands them over as the standard handles, keeps the write end of the input pipe non-blocking, and on Windows creates the process suspended with no window in a process group of its own, breaking away from an outer job when that job allows it, then puts it in a job named after its process id and start time that ends nothing when this process closes it, and leaves a handle to that job inside the child, because a name lives only while a handle does, so a later process can open that job by name to end the tree for as long as the child runs, and reads its identity from the process times and image name; on POSIX it spawns into a session of its own, reads the identity from /proc with the boot id beside it and a deleted executable's suffix dropped, watches the exit with a pidfd where the kernel has one, and blocks SIGPIPE on the writing thread so a closed input never ends this process. SendConsoleBreak, for a helper process only, leaves its own console, attaches to the target's and sends Ctrl+Break to its group.
+ * Implements running a child process: on Windows CreateProcessW with a command line quoted by CommandLineToArgvW rules, CREATE_NO_WINDOW unless the program draws its own window, only the input, which is the NUL device or the read end of an anonymous pipe whose write end stays uninheritable here, and two overlapped named pipes inherited, and a kill-on-close job object, running <path>.exe for a program path without an extension when only that file exists, refusing batch files because cmd.exe reparses their arguments, and wording system errors in UTF-8; on POSIX posix_spawn into a new process group with /dev/null or the read end of a close-on-exec pipe as input and output pipes read with poll, ending the group with SIGTERM then SIGKILL, after clearing a SIGCHLD disposition that would reap the child before its exit code is read; a program named without a folder is searched for on the PATH, and output is split into UTF-8 lines, with invalid bytes replaced, on the calling thread. StartDetached shares that command building and starts a program nobody waits for: on Windows a detached process of its own group, breaking away from a job when the job allows it, and on POSIX posix_spawn into a session of its own with every standard handle on the null device. ExitWhenInputEnds reads standard input on a detached thread and ends the process with no cleanup once it reaches its end or fails. A ChildProcessHandle launch opens the output and error files for appending and hands them over as the standard handles, keeps the write end of the input pipe non-blocking, and on Windows creates the process suspended with no window in a process group of its own, breaking away from an outer job when that job allows it, then puts it in a job named after its process id and start time that ends nothing when this process closes it, and leaves a handle to that job inside the child, because a name lives only while a handle does, so a later process can open that job by name to end the tree for as long as the child runs, and reads its identity from the process times and image name, and a later adoption that finds another identity names whether the boot, the start time or the program differs; on POSIX it spawns into a session of its own, reads the identity from /proc with the boot id beside it and a deleted executable's suffix dropped, reading it again for up to a second while /proc still shows this program, because posix_spawn can return while the child still runs in this process's memory before its exec replaces it, and an identity read then names the parent's program and never matches the child again, watches the exit with a pidfd where the kernel has one, and blocks SIGPIPE on the writing thread so a closed input never ends this process. SendConsoleBreak, for a helper process only, leaves its own console, attaches to the target's and sends Ctrl+Break to its group.
  */
 
 #include "ChildProcess.h"
@@ -73,6 +73,15 @@ namespace
 #else
         return path.native();
 #endif
+    }
+
+    std::string MismatchText(ChildProcessIdentity const& expected, ChildProcessIdentity const& actual)
+    {
+        if (actual.BootId != expected.BootId)
+            return fmt::format("process {} belongs to another boot, not the one the program was recorded in", expected.Id);
+        if (actual.StartTime != expected.StartTime)
+            return fmt::format("process {} is {} started at another time, {} rather than the recorded {}", expected.Id, PathText(actual.Executable), actual.StartTime, expected.StartTime);
+        return fmt::format("process {} is {}, not the recorded {}", expected.Id, PathText(actual.Executable), PathText(expected.Executable));
     }
 
     std::chrono::milliseconds WaitUntil(Clock::time_point now, Clock::time_point wake)
@@ -1634,7 +1643,7 @@ namespace
         }
         if (!actual->Matches(expected))
         {
-            error = fmt::format("process {} is {} started at another time, not the program that was recorded", expected.Id, PathText(actual->Executable));
+            error = MismatchText(expected, *actual);
             return nullptr;
         }
         Handle job(OpenJobObjectW(JOB_OBJECT_TERMINATE | JOB_OBJECT_QUERY, FALSE, JobName(expected).c_str()));
@@ -2010,6 +2019,17 @@ namespace
         }
         auto state = std::make_unique<ChildProcessHandle::State>();
         std::optional<ChildProcessIdentity> identity = DescribeProcess(id);
+#ifdef __linux__
+        std::error_code selfError;
+        std::filesystem::path const self = std::filesystem::read_symlink("/proc/self/exe", selfError);
+        bool const startsSelf = !selfError && program.filename() == self.filename();
+        auto const identityDeadline = std::chrono::steady_clock::now() + ChildProcess::PollInterval * 10;
+        while ((!identity || (!startsSelf && !selfError && identity->Executable == self)) && std::chrono::steady_clock::now() < identityDeadline)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            identity = DescribeProcess(id);
+        }
+#endif
         if (!identity)
         {
             identity = ChildProcessIdentity{};
@@ -2034,7 +2054,7 @@ namespace
         }
         if (!actual->Matches(expected))
         {
-            error = fmt::format("process {} is {} started at another time, not the program that was recorded", expected.Id, PathText(actual->Executable));
+            error = MismatchText(expected, *actual);
             return nullptr;
         }
         if (getpgid(static_cast<pid_t>(expected.Id)) != static_cast<pid_t>(expected.Id))

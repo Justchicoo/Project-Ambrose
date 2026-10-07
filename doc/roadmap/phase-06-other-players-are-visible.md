@@ -237,10 +237,10 @@ Four deliverables wait on other work:
 
 **Acceptance**
 
-- [ ] Lower security levels refused
-- [ ] A command_security override applies after `.reload command_security` without a restart
-- [ ] `ban account test 1h spam` disconnects and blocks next login; unban restores
-- [ ] `character deleted restore <guid>` brings the wizard back
+- [x] Lower security levels refused (GmAccountCommandTest.EachCommandRefusesAnAccountBelowItsLevel)
+- [x] A command_security override applies after `.reload command_security` without a restart (GmAccountCommandDatabaseTest.RaisingBanAccountAndReloadingRefusesAGameMasterWithNothingRestarted)
+- [x] `ban account test 1h spam` disconnects and blocks next login; unban restores (GmAccountCommandDatabaseTest.ABanBlocksTheAccountAndUnbanLiftsIt; client driver run 20261006-153609, gm-ban-and-restore.json: the game master's `.ban account clientdriver2 1h spam` kicked the companion, whose client showed the dated suspension notice with Quit, its next login was refused with MSG_USER_AUTHEN_RSP Error=AccountBanned and the notice shown once, and after `.unban account` it was let back in)
+- [x] `character deleted restore <guid>` brings the wizard back (GmAccountCommandDatabaseTest.ADeletedWizardIsRestoredToTheAccountItWasDeletedFrom; client driver run 20261001-184159, gm-ban-and-restore.json: after its owner's delete the companion's list held 0 characters, and after `.character deleted restore 2` and a relog it held 1 and the select screen showed the wizard)
 
 ### Detailed spec from LOG-17: GM account and character commands
 
@@ -267,12 +267,12 @@ Operators can manage accounts, bans, security levels and deleted characters from
 
 **Acceptance**
 
-- [ ] Unit: each command's permission check refuses a lower security level
-- [ ] Unit: a world.command_security row raising '.ban account' to ADMINISTRATOR, then `.reload command_security`, refuses a GAMEMASTER account without a restart
-- [ ] Real client: `ban account test 1h spam` from a GM character disconnects the target, whose next login attempt is refused; `unban` lets them back in
-- [ ] Real client: `character deleted restore <guid>` makes a deleted wizard reappear on its owner's select screen after a relog
-- [ ] Unit: an account's own permissions reach MSG_LOGINCOMPLETE and the name behavior, and an account without them gets `LoginComplete.Permissions`
-- [ ] Real client: an account set to menu chat only shows the filtered balloon beside its wizard's name on another client, and one with open chat shows no mark
+- [x] Unit: each command's permission check refuses a lower security level (GmAccountCommandTest.EachCommandRefusesAnAccountBelowItsLevel)
+- [x] Unit: a world.command_security row raising '.ban account' to ADMINISTRATOR, then `.reload command_security`, refuses a GAMEMASTER account without a restart (GmAccountCommandDatabaseTest.RaisingBanAccountAndReloadingRefusesAGameMasterWithNothingRestarted)
+- [x] Real client: `ban account test 1h spam` from a GM character disconnects the target, whose next login attempt is refused; `unban` lets them back in (client driver run 20261006-153609, gm-ban-and-restore.json: typed in game chat, `.ban account clientdriver2 1h spam` kicked the companion, whose client showed This account has been suspended until the ban's end with a Quit button; its next login was refused with Error=AccountBanned and the same dated line shown once; `.unban account clientdriver2` let it log in again)
+- [x] Real client: `character deleted restore <guid>` makes a deleted wizard reappear on its owner's select screen after a relog (client driver run 20261001-184159, gm-ban-and-restore.json: the deleted wizard was gone from the companion's list, and after `.character deleted restore 2` and a relog the select screen showed it again)
+- [x] Unit: an account's own permissions reach MSG_LOGINCOMPLETE and the name behavior, and an account without them gets `LoginComplete.Permissions` (GmAccountCommandTest.AnAccountsOwnPermissionsTakeThePlaceOfTheSetting chooses the account's own over the setting, and PlayerObjectBuilderTest.TheWizardsObjectCarriesItsHeaderIdsPlaceAndBehaviorsInTemplateOrder puts what it is given in the name behavior's m_chatPermissions of the object MSG_LOGINCOMPLETE carries)
+- [x] Real client: an account set to menu chat only shows the filtered balloon beside its wizard's name on another client, and one with open chat shows no mark (client driver run 20261001-184159, gm-ban-and-restore.json: the companion's account, set to 0x23 on the console, showed the filtered balloon beside its wizard's name on the game master's client; client driver run 20261001-184643, gm-teleport.json: the game master's account with the default open chat showed no mark beside its name on the companion's client)
 
 **Risks**
 
@@ -288,10 +288,10 @@ Operators can manage accounts, bans, security levels and deleted characters from
 
 **Acceptance**
 
-- [ ] '.tele Start' snaps without loading; B sees it
-- [ ] '.gps' matches minimap
-- [ ] Out-of-range '.go xyz' refused; players cannot '.tele'
-- [ ] A point from '.tele add' works at once without a reload
+- [x] '.tele Start' snaps without loading; B sees it (client driver run 20261001-184643, gm-teleport.json: typed in chat, it put the game master at (0, 48, -28) facing 5.1 with no loading screen, shown to 1 other wizard, and the companion's client showed it at the fountain)
+- [x] '.gps' matches minimap (client driver run 20261001-184643, gm-teleport.json: `.gps` printed Zone WizardCity/WC_Hub, x 0.00, y 48.00, z -28.00, yaw 5.100, zone instance 1, the place the teleport had just put the wizard at the Start fountain, where the client drew it)
+- [x] Out-of-range '.go xyz' refused; players cannot '.tele' (TeleCommandTest.APlaceOutsideWhatAPositionCanBeSentAsIsRefusedWithTheRange and TeleCommandTest.APlayerCannotTeleportOrAskWhereItStands)
+- [x] A point from '.tele add' works at once without a reload (GameTeleDatabaseTest.APointAddedWorksAtOnceIsJournaledAndAReloadKeepsTheListOnABadRow; client driver run 20261001-184643, gm-teleport.json: `.tele add DriverSpot`, then `.tele Start` and `.tele DriverSpot`, which worked at once)
 
 ### Detailed spec from WLD-12: Same-zone teleport and GM teleport commands
 
@@ -316,11 +316,11 @@ A GM can instantly move themselves or another player to a named location or coor
 
 **Acceptance**
 
-- [ ] Real client: '.tele Start' in WC_Hub snaps the wizard to the Start fountain with no loading screen, and B sees A pop to the new spot
-- [ ] Real client: '.gps' prints coordinates matching the minimap position
-- [ ] Unit: '.go xyz' outside the packable range is refused with a message
-- [ ] A player-level account cannot run '.tele'
-- [ ] Real client: a point added with '.tele add' works immediately without a reload or restart
+- [x] Real client: '.tele Start' in WC_Hub snaps the wizard to the Start fountain with no loading screen, and B sees A pop to the new spot (client driver run 20261001-184643, gm-teleport.json: MSG_SERVERTELEPORT put the game master at (0, 48, -28), shown to 1 other wizard, and the companion's screenshot shows it at the fountain)
+- [x] Real client: '.gps' prints coordinates matching the minimap position (client driver run 20261001-184643, gm-teleport.json: `.gps` printed x 0.00, y 48.00, z -28.00, yaw 5.100 in the chat box and beside the minimap, the place the teleport had just set)
+- [x] Unit: '.go xyz' outside the packable range is refused with a message (TeleCommandTest.APlaceOutsideWhatAPositionCanBeSentAsIsRefusedWithTheRange)
+- [x] A player-level account cannot run '.tele' (TeleCommandTest.APlayerCannotTeleportOrAskWhereItStands)
+- [x] Real client: a point added with '.tele add' works immediately without a reload or restart (client driver run 20261001-184643, gm-teleport.json: `.tele add DriverSpot` and then `.tele DriverSpot` moved the game master there at once, with no reload or restart)
 
 **Risks**
 
@@ -336,9 +336,9 @@ A GM can instantly move themselves or another player to a named location or coor
 
 **Acceptance**
 
-- [ ] '.tele zone WizardCity/WC_Ravenwood' loads Ravenwood 'Start'; B in WC_Hub sees A disappear
-- [ ] Bad zone path gives an error and the player stays
-- [ ] Double request ignored; NACK clears; transfer key works once
+- [x] '.tele zone WizardCity/WC_Ravenwood' loads Ravenwood 'Start'; B in WC_Hub sees A disappear (client driver run 20261007-150905, gm-zone-transfer.json: shot 19-main-loading.png shows the loading screen, 22-main-in-ravenwood.png the game master at Ravenwood's Start, which the server put at (-5.6, -1531.5, -30.5), and 20-companion-sees-main-gone.png the Commons without it on the companion's client)
+- [x] Bad zone path gives an error and the player stays (client driver run 20261007-150905, gm-zone-transfer.json: shot 17-main-bad-zone.png shows `No zone has the path Nowhere/NoSuchZone, so nobody was moved` with the game master still in the Commons)
+- [x] Double request ignored; NACK clears; transfer key works once (ZoneTransferQueueTest.ASecondRequestWhileOneWaitsIsIgnoredAndANackClearsIt, LoginKeySpendTest.AValidKeyPassesOnceAndTheReplayIsRefused; client driver run 20261007-150905, gm-zone-transfer.json: the transfer's attach was accepted and its key spent)
 
 ### Detailed spec from WLD-13: Cross-zone transfer via reconnect (MSG_SERVERTRANSFER)
 
@@ -364,15 +364,15 @@ Players can move between zones with the retail loading-screen flow, triggered he
 
 **Acceptance**
 
-- [ ] Real client: '.tele zone WizardCity/WC_Ravenwood' shows the loading screen and the player arrives at Ravenwood 'Start'; B in WC_Hub sees A disappear
-- [ ] Real client: transferring to a zone path that does not exist gives an error message and the player stays put
-- [ ] Unit: a second transfer request while one is queued is ignored; a NACK clears the queue
-- [ ] Unit: the attach key issued for the transfer works exactly once
+- [x] Real client: '.tele zone WizardCity/WC_Ravenwood' shows the loading screen and the player arrives at Ravenwood 'Start'; B in WC_Hub sees A disappear (client driver run 20261007-150905, gm-zone-transfer.json: shots 19-main-loading.png, 22-main-in-ravenwood.png and 20-companion-sees-main-gone.png)
+- [x] Real client: transferring to a zone path that does not exist gives an error message and the player stays put (client driver run 20261007-150905, gm-zone-transfer.json: shot 17-main-bad-zone.png)
+- [x] Unit: a second transfer request while one is queued is ignored; a NACK clears the queue (ZoneTransferQueueTest.ASecondRequestWhileOneWaitsIsIgnoredAndANackClearsIt)
+- [x] Unit: the attach key issued for the transfer works exactly once (LoginKeySpendTest.AValidKeyPassesOnceAndTheReplayIsRefused, which the transfer's attach spends through once its PassKey matches)
 
 **Risks**
 
 - This is the path the behavior reference uses for every zone change and it is known to work; the cheaper same-connection MSG_ZONETRANSFER is WLD-21
-- Key is INT in MSG_SERVERTRANSFER but STR in MSG_CHARACTERSELECTED. How the client carries it into MSG_ATTACH.LoginKey is unverified.
+- Key is INT in MSG_SERVERTRANSFER but STR in MSG_CHARACTERSELECTED. The client's `GameClient::MSG_ServerTransfer` (0x1416f8810 in r806919) keeps the transfer message, and its attach (0x1416e0570) copies that message's Key into MSG_ATTACH.LoginKey, which arrives empty for an INT. The same attach always sends PassKey, the SHA-512 of the session key its login was given with this connection's offer, made as PassKey3 is (0x14256ddc0). So the game server keeps the key it sent and spends it for an attach with no LoginKey only when that PassKey matches the account's session key.
 
 ## 6.08 Logout, link-dead, AFK, shutdown (WLD-20)
 
@@ -611,11 +611,11 @@ Walk-in volumes and event triggers for every zone are decoded into typed world r
 
 **Acceptance**
 
-- [ ] Containment for each primitive incl. boundary
-- [ ] Cooldown fires once per player
-- [ ] Walking into Ravenwood POI logs 'Enter_Ravenwood POI' and fires 'Trigger POI Ravenwood'; spawning inside fires nothing
-- [ ] Triggers with requirements fail closed until 7.04
-- [ ] `.reload zone_trigger` applies an edited trigger; a failed reload keeps the old set
+- [x] Containment for each primitive incl. boundary (ZoneVolumeTest.EachShapeContainsItsBoundaryAndNothingPastIt)
+- [x] Cooldown fires once per player (ZoneVolumeTest.ATriggerFiresOncePerWizardPerCooldownWithinItsMaxAndNeverWithRequirements)
+- [ ] Walking into Ravenwood POI logs 'Enter_Ravenwood POI' and fires 'Trigger POI Ravenwood'; spawning inside fires nothing (open until the POI's zone-entry text shows; what passes so far: client driver run 20261007-151147, zone-volumes.json: the server logged `entered volume 0 (Ravenwood POI) in WizardCity/WC_Hub, posting Enter_Ravenwood POI, which fired Trigger POI Ravenwood` with the wizard inside it in shot 33-inside-ravenwood-poi.png, and on arrival `inside 1 of its 38 volume(s), firing no enter`, shot 06-the-wizard-arrives-inside-the-commons-home-volume-without-firing-its-enter.png)
+- [x] Triggers with requirements fail closed until 7.04 (ZoneVolumeTest.ATriggerFiresOncePerWizardPerCooldownWithinItsMaxAndNeverWithRequirements)
+- [x] `.reload zone_trigger` applies an edited trigger; a failed reload keeps the old set (ZoneTriggerMgrDatabaseTest.AnEditedTriggerTakesHoldAtTheReloadAndABadRowKeepsTheOldSet)
 
 ### Detailed spec from WLD-14: Volumes and walk-in trigger events
 
@@ -645,11 +645,11 @@ Walking into a zone volume fires its enter and exit events into the zone's trigg
 
 **Acceptance**
 
-- [ ] Unit: containment tests for each primitive type, including boundary and hysteresis
-- [ ] Unit: a trigger with a cooldown fires once per player per cooldown
-- [ ] Real client: walking into Ravenwood's POI sphere in WC_Hub logs 'Enter_Ravenwood POI' and fires 'Trigger POI Ravenwood'; with the POI-text result wired, the zone-entry text shows
-- [ ] Real client: logging in while standing inside a volume fires no enter event
-- [ ] Unit: editing a zone_trigger row, then `.reload zone_trigger`, changes what fires on the next enter without a restart; a row that fails validation keeps the old triggers and reports the error
+- [x] Unit: containment tests for each primitive type, including boundary and hysteresis (ZoneVolumeTest.EachShapeContainsItsBoundaryAndNothingPastIt, ZoneVolumeTest.PresenceEntersAtTheEdgeLeavesPastTheMarginAndAPlacedWizardIsAlreadyInside)
+- [x] Unit: a trigger with a cooldown fires once per player per cooldown (ZoneVolumeTest.ATriggerFiresOncePerWizardPerCooldownWithinItsMaxAndNeverWithRequirements)
+- [ ] Real client: walking into Ravenwood's POI sphere in WC_Hub logs 'Enter_Ravenwood POI' and fires 'Trigger POI Ravenwood'; with the POI-text result wired, the zone-entry text shows (open: client driver run 20261007-151147, zone-volumes.json: shot 33-inside-ravenwood-poi.png and the server's `posting Enter_Ravenwood POI, which fired Trigger POI Ravenwood` pass, but the POI-text result is not wired yet, so no zone-entry text shows)
+- [x] Real client: logging in while standing inside a volume fires no enter event (client driver run 20261007-151147, zone-volumes.json: `arrived in WizardCity/WC_Hub inside 1 of its 38 volume(s), firing no enter`, shot 06-the-wizard-arrives-inside-the-commons-home-volume-without-firing-its-enter.png)
+- [x] Unit: editing a zone_trigger row, then `.reload zone_trigger`, changes what fires on the next enter without a restart; a row that fails validation keeps the old triggers and reports the error (ZoneTriggerMgrDatabaseTest.AnEditedTriggerTakesHoldAtTheReloadAndABadRowKeepsTheOldSet)
 
 **Risks**
 

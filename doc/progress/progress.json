@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 122,
+    "done": 127,
     "total": 469,
-    "percent": 26.0
+    "percent": 27.1
   },
   "checks": {
-    "done": 974,
-    "total": 2866,
-    "percent": 34.0
+    "done": 1044,
+    "total": 2870,
+    "percent": 36.4
   },
   "contributor_track": {
     "merged": 93,
@@ -52,15 +52,15 @@
       "title": "The zone comes alive for one player",
       "milestones_done": 7,
       "milestones_total": 8,
-      "checks_done": 54,
+      "checks_done": 55,
       "checks_total": 57
     },
     {
       "phase": 6,
       "title": "Other players are visible",
-      "milestones_done": 11,
+      "milestones_done": 14,
       "milestones_total": 18,
-      "checks_done": 86,
+      "checks_done": 120,
       "checks_total": 139
     },
     {
@@ -74,18 +74,18 @@
     {
       "phase": 8,
       "title": "The wizard grows vitals xp spells backpack and gear",
-      "milestones_done": 1,
+      "milestones_done": 2,
       "milestones_total": 14,
-      "checks_done": 23,
-      "checks_total": 97
+      "checks_done": 38,
+      "checks_total": 101
     },
     {
       "phase": 9,
       "title": "A duel completes",
-      "milestones_done": 1,
+      "milestones_done": 2,
       "milestones_total": 12,
-      "checks_done": 13,
-      "checks_total": 84
+      "checks_done": 17,
+      "checks_total": 83
     },
     {
       "phase": 10,
@@ -108,8 +108,8 @@
       "title": "Social wizards instances and realms",
       "milestones_done": 0,
       "milestones_total": 23,
-      "checks_done": 0,
-      "checks_total": 138
+      "checks_done": 16,
+      "checks_total": 139
     },
     {
       "phase": 13,

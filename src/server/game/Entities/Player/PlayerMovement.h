@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Where a wizard stands while it plays, as its own client last said: a position and facing taken from each move the client sends while its zone counter matches the session's, the movement state it last reported, the move itself as the client packed it with a count of the times it changed, which other players are sent as it stands, and one pending write the moment it has moved, taken when the wizard leaves the world rather than as it moves.
+ * Where a wizard stands while it plays, as its own client last said or a GM last teleported it: a position and facing taken from each move the client sends while its zone counter matches the session's, the movement state it last reported, the move itself as the client packed it with a count of the times it changed, which other players are sent as it stands, and one pending write the moment it has moved, taken when the wizard leaves the world rather than as it moves.
  */
 
 #ifndef AMBROSE_PLAYERMOVEMENT_H
@@ -42,6 +42,7 @@ public:
     void Reset(PlayerPosition const& start, uint8 zoneCounter);
 
     MoveResult Apply(uint16 locationX, uint16 locationY, uint16 locationZ, uint8 direction, uint8 zoneCounter);
+    std::optional<PackedMove> Teleport(PlayerPosition const& destination) noexcept;
     void SetMoveState(int8 state) noexcept { _moveState = state; }
     void SetZoneCounter(uint8 zoneCounter) noexcept { _zoneCounter = zoneCounter; }
 

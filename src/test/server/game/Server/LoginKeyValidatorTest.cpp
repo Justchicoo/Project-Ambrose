@@ -100,7 +100,7 @@ TEST(LoginKeyJudgeTest, EveryVerdictSaysSomething)
 {
     for (LoginKeyVerdict verdict : { LoginKeyVerdict::Accepted, LoginKeyVerdict::Unknown, LoginKeyVerdict::AlreadyUsed,
         LoginKeyVerdict::Expired, LoginKeyVerdict::WrongAccount, LoginKeyVerdict::WrongCharacter,
-        LoginKeyVerdict::WrongRealm, LoginKeyVerdict::Unavailable })
+        LoginKeyVerdict::WrongRealm, LoginKeyVerdict::WrongPassKey, LoginKeyVerdict::Unavailable })
         EXPECT_FALSE(LoginKeyValidator::Describe(verdict).empty());
 }
 

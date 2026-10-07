@@ -14,8 +14,8 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Account.AllowPlainVerifiers` | bool | true | none | next connection or operation | loginserver | restricted | Whether an account whose verifier is still unencrypted may log in while a verifier key is active. |
 | `Account.PasswordMinLength` | unsigned | 4 characters | from 1 to 128 characters | next connection or operation | loginserver | normal | The fewest characters a new or changed password may have. |
 | `Account.UsernameMinLength` | unsigned | 3 characters | from 1 to 32 characters | next connection or operation | loginserver | normal | The shortest username a new account may use. |
-| `Account.VerifierActiveKey` | unsigned | 0 | from 0 to 255 | next connection or operation | loginserver | restricted | The key id that seals new and changed verifiers, which Account.VerifierKeys must list; 0 stores them unencrypted and is refused while keys are listed. |
-| `Account.VerifierKeys` | string | empty | at most 65535 bytes | next connection or operation | loginserver | secret, restricted | The AES-256 keys that seal stored password verifiers, written id:hex with ids 1 to 255 and 64 hex digits each, separated by commas; keep every key that still seals a stored verifier. |
+| `Account.VerifierActiveKey` | unsigned | 0 | from 0 to 255 | next connection or operation | gameserver, loginserver | restricted | The key id that seals new and changed verifiers, which Account.VerifierKeys must list; 0 stores them unencrypted and is refused while keys are listed. |
+| `Account.VerifierKeys` | string | empty | at most 65535 bytes | next connection or operation | gameserver, loginserver | secret, restricted | The AES-256 keys that seal stored password verifiers, written id:hex with ids 1 to 255 and 64 hex digits each, separated by commas; keep every key that still seals a stored verifier. |
 
 ## Characters
 
@@ -104,7 +104,7 @@ Access says who may see and change a setting over the admin API and the panel. A
 
 | Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
 |---|---|---|---|---|---|---|---|
-| `Patch.Enabled` | bool | false | none | live | gameserver | normal | Whether the realm may send package-download messages; read at each send, so a live change applies to the next package message. |
+| `Patch.Enabled` | bool | false | none | live | gameserver | normal | Whether the realm may send package-download messages; read at each send, so a live change applies to the next package message. The gate sits on `GameSession`'s own send, so download messages must only ever be sent through `GameSession`. |
 
 ## Player
 
@@ -113,6 +113,8 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Player.AfkTime` | unsigned | 1800 s | from 0 to 86400 s | live | gameserver | normal | How long an in-world wizard may be idle before its session is disconnected; 0 disables the AFK timer. |
 | `Player.AfkWarnTime` | unsigned | 900 s | from 0 to 86400 s | live | gameserver | normal | How long an in-world wizard may be idle before the client receives MSG_DISCONNECT_AFK. |
 | `Player.LinkDeadTime` | unsigned | 60 s | from 0 to 86400 s | live | gameserver | normal | How long a disconnected wizard remains visible and may reattach before being removed from the world. |
+| `Potion.RefillInterval` | unsigned | 300 s | from 0 to 86400 s | live | gameserver | normal | How long after a potion is used before one charge refills; 0 disables later refills, and changes apply after the next charge refills. |
+| `Potion.RestoreFraction` | float | 1 fraction | from 0 to 1 fraction | live | gameserver | normal | The share of maximum health and mana each potion restores, read whenever a wizard uses a potion. |
 
 ## Rates
 
@@ -136,6 +138,12 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Realm.Name` | string | Ambrose | at most 64 bytes | next connection or operation | gameserver | normal | The realm's name, announced to the login server with each heartbeat and sent in MSG_LOGINCOMPLETE. |
 | `Realm.OfflineAfterIntervals` | unsigned | 3 | from 1 to 1000 | live | loginserver | normal | How many heartbeats a realm may miss before no player is sent to it. |
 | `Realm.RefreshInterval` | unsigned | 10 s | from 1 to 3600 s | live | loginserver | normal | How often the login server rereads the realmlist table. |
+
+## Social
+
+| Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
+|---|---|---|---|---|---|---|---|
+| `Social.MaxFriends` | unsigned | 100 | from 0 to 10000 | live | gameserver | normal | How many friends one wizard may have; a change applies to the next friend request and max-friends reply. |
 
 ## World
 
