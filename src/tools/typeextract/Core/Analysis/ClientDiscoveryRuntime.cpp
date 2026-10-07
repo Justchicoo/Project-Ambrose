@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The discovery steps that read the emulated process: the std::map node layout taken from the largest tree on the heap whose links, nil flag, red-black colors, rising keys and values holding and naming their keys all agree, allowing one alias node in 64 that shares another's Type, the type map head found from heap nodes whose type name hashes to their key, an in-order walk of that map, Type and std::string fields matched against values supplied to the Type constructor, the property list link voted on by lists that name their class, the pointer flag taken from the byte set for pointer and shared pointer types, the property vector, its stride and Property name, type and hash voted on by properties whose hash is that of their type's name and their own, Property id from each property's position in its list, the container slot and its name and dynamic vtable entries from what each kind of container returns when called on a copy, the PropertyList constructor found among what the lazy getters' class constructors call with their own object and the base, singleton and name its chosen arguments place, and votes for the Type constructor and PropertyList initializer.
+ * The discovery steps that read the emulated process: the std::map node layout taken from the largest tree on the heap whose links, nil flag, red-black colors, rising keys and values holding and naming their keys all agree, allowing one alias node in 64 that shares another's Type, the type map head found from heap nodes whose type name hashes to their key, an in-order walk of that map, Type and std::string fields matched against values supplied to the Type constructor, the property list link voted on by lists that name their class, the pointer flag taken from the byte set for pointer and shared pointer types, the property vector, its stride and Property name, type and hash voted on by properties whose hash is that of their type's name and their own, Property id from each property's position in its list, the container slot and its name and dynamic vtable entries from what each kind of container returns when called on a copy, the PropertyList constructor found among what the lazy getters' class constructors call with their own object and the base, singleton and name its chosen arguments place, enum option vectors whose entries are a name and a mostly numeric value, Property offset and flags placed by values chosen for a property adder, and votes for the Type constructor and PropertyList initializer.
  */
 
 #include "ClientDiscovery.h"
@@ -1376,6 +1376,189 @@ bool ClientDiscovery::DeriveContainerLayout(Machine const& machine, std::span<Li
     std::string const evidence = fmt::format("all {} properties point at {:#x} to a container of one of {} kinds, whose vtable entry {} returns Static, Vector or List and entry {} is clear for Static alone{}{}",
         properties.size(), placement.Slot, placement.Containers, placement.NameSlot, placement.DynamicSlot, mirrors.empty() ? "" : "; every property holds the same pointer again at ", fmt::join(mirrors, ", "));
     for (std::string_view const field : { "Property.container", "Container.name_slot", "Container.dynamic_slot" })
+        layout.ConfirmDerived(std::string(field), evidence);
+    return true;
+}
+
+namespace
+{
+    constexpr std::size_t PropertyAdderCandidates = 12;
+}
+
+std::vector<uint64> ClientDiscovery::FindPropertyAdderCandidates(CodeIndex const& code, uint64 finalizer)
+{
+    std::map<uint64, uint64> callers;
+    for (uint64 const getter : FunctionsCalling(code, finalizer))
+    {
+        bool finalized = false;
+        bool textInRdx = false;
+        std::unordered_set<uint64> adders;
+        for (DecodedInstruction const& instruction : code.DecodeFunctionFrom(getter, ListConstructorInstructions))
+        {
+            if (instruction.Kind == InstructionKind::Call)
+            {
+                if (instruction.BranchTarget && *instruction.BranchTarget == finalizer)
+                    finalized = true;
+                else if (instruction.BranchTarget && finalized && textInRdx)
+                    adders.insert(*instruction.BranchTarget);
+                textInRdx = false;
+                continue;
+            }
+            if (instruction.FirstRegisterFamily == "rdx" && instruction.WritesFirstOperand && !instruction.FirstOperandIsMemory)
+                textInRdx = instruction.Kind == InstructionKind::Lea && instruction.RipRelativeTarget.has_value();
+        }
+        for (uint64 const adder : adders)
+            ++callers[adder];
+    }
+    std::vector<std::pair<uint64, uint64>> ranked(callers.begin(), callers.end());
+    std::sort(ranked.begin(), ranked.end(), [](auto const& a, auto const& b) { return a.second != b.second ? a.second > b.second : a.first < b.first; });
+    std::vector<uint64> candidates;
+    for (auto const& [adder, count] : ranked)
+        if (candidates.size() < PropertyAdderCandidates)
+            candidates.push_back(adder);
+    return candidates;
+}
+
+bool ClientDiscovery::DeriveConstructedPropertyLayout(Machine const& machine, std::span<ConstructedPropertySample const> samples, ClientLayout& layout, std::string& error)
+{
+    if (samples.size() < 2)
+    {
+        error = "Property.offset needs at least two properties built with chosen offsets and flags";
+        return false;
+    }
+    std::array const taken = { Span{ layout.PropertyName, 8 }, Span{ layout.PropertyType, 8 }, Span{ layout.PropertyHash, 4 }, Span{ layout.PropertyId, 4 }, Span{ layout.PropertyContainer, 8 } };
+    auto place = [&](auto&& chosen) -> std::vector<uint64>
+    {
+        std::vector<uint64> found;
+        for (uint64 offset = 0; offset + 4 <= PropertyObjectWindow; offset += 4)
+            if (!Overlaps(offset, 4, taken) && std::all_of(samples.begin(), samples.end(), [&](ConstructedPropertySample const& sample)
+                {
+                    std::optional<uint64> const value = TryReadU64(machine, sample.Address + offset);
+                    return value && static_cast<uint32>(*value) == chosen(sample);
+                }))
+                found.push_back(offset);
+        return found;
+    };
+    std::vector<uint64> const offsets = place([](ConstructedPropertySample const& sample) { return sample.Offset; });
+    std::vector<uint64> const flags = place([](ConstructedPropertySample const& sample) { return sample.Flags; });
+    if (offsets.size() != 1 || flags.size() != 1)
+    {
+        error = fmt::format("the property adder's samples place the offset at {} offsets and the flags at {}", offsets.size(), flags.size());
+        return false;
+    }
+    layout.PropertyOffset = offsets[0];
+    layout.PropertyFlags = flags[0];
+    std::string const evidence = fmt::format("{} properties built by the client's own property adder with chosen field offsets and flags", samples.size());
+    layout.ConfirmDerived("Property.offset", fmt::format("{}: the chosen offset landed at {:#x}", evidence, offsets[0]));
+    layout.ConfirmDerived("Property.flags", fmt::format("{}: the chosen flags landed at {:#x}", evidence, flags[0]));
+    return true;
+}
+
+namespace
+{
+    constexpr uint64 MinOptionSize = 0x20;
+    constexpr uint64 MaxOptionSize = 0x100;
+    constexpr uint64 MaxOptions = 4096;
+
+    bool IsNumber(std::string_view text)
+    {
+        if (!text.empty() && text.front() == '-')
+            text.remove_prefix(1);
+        return !text.empty() && std::all_of(text.begin(), text.end(), [](char c) { return c >= '0' && c <= '9'; });
+    }
+}
+
+bool ClientDiscovery::DeriveOptionLayout(Machine const& machine, std::span<ListedProperty const> properties, ClientLayout& layout, std::string& error)
+{
+    std::array const taken = { Span{ layout.PropertyName, 8 }, Span{ layout.PropertyType, 8 }, Span{ layout.PropertyHash, 4 }, Span{ layout.PropertyId, 4 },
+        Span{ layout.PropertyContainer, 8 }, Span{ layout.PropertyOffset, 4 }, Span{ layout.PropertyFlags, 4 } };
+    struct Placement
+    {
+        uint64 Slot = 0;
+        uint64 Size = 0;
+        uint64 Value = 0;
+        uint64 Name = 0;
+        std::size_t Properties = 0;
+        std::size_t Options = 0;
+        std::size_t Numbers = 0;
+    };
+    std::vector<Placement> placements;
+    for (uint64 slot = 0; slot + 16 <= PropertyObjectWindow; slot += 8)
+    {
+        if (Overlaps(slot, 16, taken))
+            continue;
+        std::vector<std::pair<uint64, uint64>> vectors;
+        bool valid = true;
+        for (ListedProperty const& property : properties)
+        {
+            std::optional<uint64> const begin = TryReadU64(machine, property.Address + slot);
+            std::optional<uint64> const end = TryReadU64(machine, property.Address + slot + 8);
+            if (!begin || !end || *end < *begin || (*begin == 0) != (*end == 0))
+            {
+                valid = false;
+                break;
+            }
+            if (*end > *begin)
+                vectors.emplace_back(*begin, *end);
+        }
+        if (!valid || vectors.size() < MinimumWinnerVotes)
+            continue;
+        for (uint64 size = MinOptionSize; size <= MaxOptionSize; size += 8)
+        {
+            if (!std::all_of(vectors.begin(), vectors.end(), [&](auto const& vector) { return (vector.second - vector.first) % size == 0 && (vector.second - vector.first) / size <= MaxOptions; }))
+                continue;
+            std::vector<uint64> strings;
+            for (uint64 offset = 0; offset + layout.StringObjectSize <= size; offset += 8)
+            {
+                std::size_t entries = 0;
+                std::size_t blanks = 0;
+                bool const everyEntry = std::all_of(vectors.begin(), vectors.end(), [&](auto const& vector)
+                {
+                    for (uint64 entry = vector.first; entry < vector.second; entry += size, ++entries)
+                    {
+                        std::optional<std::string> const text = ReadLayoutString(machine, entry + offset, layout);
+                        if (!text)
+                            return false;
+                        blanks += text->empty() ? 1 : 0;
+                    }
+                    return true;
+                });
+                if (everyEntry && blanks <= entries / MapAliasShare)
+                    strings.push_back(offset);
+            }
+            if (strings.size() != 2 || strings[1] < strings[0] + layout.StringObjectSize)
+                continue;
+            std::array<std::size_t, 2> numbers{};
+            std::array<std::size_t, 2> empty{};
+            std::size_t options = 0;
+            for (auto const& [begin, end] : vectors)
+                for (uint64 entry = begin; entry < end; entry += size, ++options)
+                    for (std::size_t which = 0; which < 2; ++which)
+                    {
+                        std::string const text = ReadLayoutString(machine, entry + strings[which], layout).value_or("");
+                        numbers[which] += IsNumber(text) ? 1 : 0;
+                        empty[which] += text.empty() ? 1 : 0;
+                    }
+            std::size_t const value = numbers[0] >= numbers[1] ? 0 : 1;
+            if (numbers[value] <= numbers[1 - value] || empty[1 - value] > options / MapAliasShare)
+                continue;
+            placements.push_back({ slot, size, strings[value], strings[1 - value], vectors.size(), options, numbers[value] });
+            break;
+        }
+    }
+    if (placements.size() != 1)
+    {
+        error = fmt::format("Property.options could not be placed: {} slots of a property hold vectors whose entries are a name and a mostly numeric value", placements.size());
+        return false;
+    }
+    Placement const& placement = placements[0];
+    layout.PropertyOptions = placement.Slot;
+    layout.OptionSize = placement.Size;
+    layout.OptionValue = placement.Value;
+    layout.OptionName = placement.Name;
+    std::string const evidence = fmt::format("{} properties hold {} options in vectors at {:#x}, {:#x} bytes apart, each a name at {:#x} and a value at {:#x}, {} of the values numbers",
+        placement.Properties, placement.Options, placement.Slot, placement.Size, placement.Name, placement.Value, placement.Numbers);
+    for (std::string_view const field : { "Property.options", "EnumOption.size", "EnumOption.value", "EnumOption.name" })
         layout.ConfirmDerived(std::string(field), evidence);
     return true;
 }

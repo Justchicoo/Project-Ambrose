@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests runtime discovery over synthetic heaps and code: std::map node fields derived from the tree's shape at default and shifted offsets, the property list link and pointer flag derived from registered types, PropertyList base, singleton and name placed by chosen constructor values, the property vector and Property name, type and hash voted on by property hashes, Property id from list positions and the container slot and vtable entries from what containers return, a map head among decoy nodes, cycle refusal, constructor and initializer votes, and Type and string fields derived from chosen values at non-default offsets.
+ * Tests runtime discovery over synthetic heaps and code: std::map node fields derived from the tree's shape at default and shifted offsets, the property list link and pointer flag derived from registered types, PropertyList base, singleton and name placed by chosen constructor values, the property vector and Property name, type and hash voted on by property hashes, Property id from list positions, the container slot and vtable entries from what containers return, Property offset and flags placed by chosen adder values, enum options with their mostly numeric values, a map head among decoy nodes, cycle refusal, constructor and initializer votes, and Type and string fields derived from chosen values at non-default offsets.
  */
 
 #include "ClientDiscovery.h"
@@ -479,4 +479,66 @@ TEST(ClientDiscoveryRuntimeTest, PropertyIdsAndContainersAreDerivedAtShiftedOffs
     EXPECT_FALSE(ClientDiscovery::DeriveContainerLayout(h.machine, properties, refused, allStatic, error));
     EXPECT_NE(error.find("Property.container could not be placed"), std::string::npos) << error;
     EXPECT_FALSE(refused.DerivedFields.contains("Property.container"));
+}
+
+TEST(ClientDiscoveryRuntimeTest, AdderChosenValuesLocatePropertyOffsetAndFlagsAwayFromDefaults)
+{
+    Heap h;
+    std::vector<ConstructedPropertySample> samples;
+    std::array<std::pair<uint32, uint32>, 2> const chosen = { std::pair{ 0x1234u, 0x5A5A1u }, std::pair{ 0x2468u, 0x0A0A3u } };
+    for (auto const& [offset, flags] : chosen)
+    {
+        uint64 const property = h.heap.Allocate(0xE0, true);
+        h.machine.WriteU32(property + 0x7C, offset);
+        h.machine.WriteU32(property + 0x8C, flags);
+        h.machine.WriteU32(property + 0xC0, 1);
+        samples.push_back({ property, offset, flags });
+    }
+    ClientLayout layout;
+    std::string error;
+    ASSERT_TRUE(ClientDiscovery::DeriveConstructedPropertyLayout(h.machine, samples, layout, error)) << error;
+    EXPECT_EQ(layout.PropertyOffset, 0x7Cu);
+    EXPECT_EQ(layout.PropertyFlags, 0x8Cu);
+    EXPECT_TRUE(layout.DerivedFields.contains("Property.offset"));
+    EXPECT_TRUE(layout.DerivedFields.contains("Property.flags"));
+
+    h.machine.WriteU32(samples[1].Address + 0x7C, 0);
+    ClientLayout refused;
+    EXPECT_FALSE(ClientDiscovery::DeriveConstructedPropertyLayout(h.machine, samples, refused, error));
+    EXPECT_NE(error.find("place the offset at 0 offsets"), std::string::npos) << error;
+}
+
+TEST(ClientDiscoveryRuntimeTest, EnumOptionsAreDerivedAtShiftedOffsetsWithTheValueTheMostlyNumericString)
+{
+    ClientLayout shifted;
+    shifted.PropertyOptions = 0x90;
+    shifted.OptionSize = 0x50;
+    shifted.OptionValue = 0x08;
+    shifted.OptionName = 0x30;
+    Heap h(shifted);
+    uint64 const intType = h.objects.Type("int");
+    std::vector<uint64> types = { intType };
+    for (int i = 0; i < 24; ++i)
+    {
+        std::string const name = fmt::format("class E{}", i);
+        uint64 const list = h.objects.List(TypeWalker::ListNameOf(name), 0);
+        uint64 const kind = h.objects.Property(intType, "int", "m_kind", 0, 0x48, 31, 0);
+        h.objects.SetOptions(kind, { { "eKind::First", "0" }, { "eKind::Second", "1" }, { "__DEFAULT", i == 0 ? "eKind::First" : "0" } });
+        h.objects.SetProperties(list, { kind, h.objects.Property(intType, "int", "m_count", 1, 0x4C, 31, 0) });
+        types.push_back(h.objects.Type(name, 0x140010000, false, list));
+    }
+    std::vector<ListedProperty> const properties = ClientDiscovery::ListedProperties(h.machine, h.heap, types, shifted);
+    ClientLayout derived = shifted;
+    derived.PropertyOptions = derived.OptionSize = derived.OptionValue = derived.OptionName = 0x99;
+    std::string error;
+    ASSERT_TRUE(ClientDiscovery::DeriveOptionLayout(h.machine, properties, derived, error)) << error;
+    EXPECT_EQ(derived.PropertyOptions, shifted.PropertyOptions);
+    EXPECT_EQ(derived.OptionSize, shifted.OptionSize);
+    EXPECT_EQ(derived.OptionValue, shifted.OptionValue);
+    EXPECT_EQ(derived.OptionName, shifted.OptionName);
+
+    std::vector<ListedProperty> const few(properties.begin(), properties.begin() + 10);
+    ClientLayout refused = shifted;
+    EXPECT_FALSE(ClientDiscovery::DeriveOptionLayout(h.machine, few, refused, error));
+    EXPECT_NE(error.find("Property.options could not be placed"), std::string::npos) << error;
 }

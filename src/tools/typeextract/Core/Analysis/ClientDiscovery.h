@@ -51,6 +51,13 @@ struct ConstructedListSample
     std::string Name;
 };
 
+struct ConstructedPropertySample
+{
+    uint64 Address = 0;
+    uint32 Offset = 0;
+    uint32 Flags = 0;
+};
+
 struct ListedProperty
 {
     uint64 Address = 0;
@@ -79,6 +86,9 @@ namespace ClientDiscovery
     std::vector<ListedProperty> ListedProperties(Machine const& machine, GuestHeap const& heap, std::span<uint64 const> types, ClientLayout const& layout);
     bool DerivePropertyId(Machine const& machine, std::span<ListedProperty const> properties, ClientLayout& layout, std::string& error);
     bool DeriveContainerLayout(Machine const& machine, std::span<ListedProperty const> properties, ClientLayout& layout, GuestCall const& call, std::string& error);
+    std::vector<uint64> FindPropertyAdderCandidates(CodeIndex const& code, uint64 finalizer);
+    bool DeriveConstructedPropertyLayout(Machine const& machine, std::span<ConstructedPropertySample const> samples, ClientLayout& layout, std::string& error);
+    bool DeriveOptionLayout(Machine const& machine, std::span<ListedProperty const> properties, ClientLayout& layout, std::string& error);
     std::vector<uint64> FindPropertyListConstructorCandidates(CodeIndex const& code, std::span<uint64 const> lists, uint64 finalizer, std::span<uint64 const> known);
     bool DeriveConstructedListLayout(Machine const& machine, std::span<ConstructedListSample const> samples, ClientLayout& layout, std::string& error);
     std::optional<uint64> FindRaceAdder(CodeIndex const& code, std::string& error);
