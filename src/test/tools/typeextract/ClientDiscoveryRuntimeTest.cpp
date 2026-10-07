@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests runtime discovery over synthetic heaps and code: a map head among decoy nodes, cycle refusal, constructor and initializer votes, and Type and string fields derived from chosen values at non-default offsets.
+ * Tests runtime discovery over synthetic heaps and code: std::map node fields derived from the tree's shape at default and shifted offsets, a map head among decoy nodes, cycle refusal, constructor and initializer votes, and Type and string fields derived from chosen values at non-default offsets.
  */
 
 #include "ClientDiscovery.h"
@@ -19,9 +19,13 @@ namespace
 
     struct Heap
     {
+        explicit Heap(ClientLayout layout = {}) : objects(machine, heap, layout)
+        {
+        }
+
         Machine machine;
         GuestHeap heap{ machine, HeapBase, 0x1000000 };
-        GuestObjects objects{ machine, heap };
+        GuestObjects objects;
     };
 
     void PutDisp(std::vector<uint8>& code, std::size_t at, int64 value)
@@ -90,6 +94,74 @@ TEST(ClientDiscoveryRuntimeTest, AHeapWithoutTypesOrWithTwoMapsIsAnError)
     BuildMap(two, { "class D", "class E", "class F" });
     EXPECT_FALSE(ClientDiscovery::FindTypeMapHead(two.machine, two.heap, {}, error));
     EXPECT_NE(error.find("2 heads"), std::string::npos) << error;
+}
+
+TEST(ClientDiscoveryRuntimeTest, TheMapNodeLayoutIsDerivedFromTheTreeAtDefaultAndShiftedOffsets)
+{
+    ClientLayout shifted;
+    shifted.MapNodeLeft = 0x10;
+    shifted.MapNodeParent = 0x00;
+    shifted.MapNodeRight = 0x08;
+    shifted.MapNodeColor = 0x1A;
+    shifted.MapNodeIsNil = 0x1B;
+    shifted.MapNodeKey = 0x1C;
+    shifted.MapNodeValue = 0x20;
+    for (ClientLayout const& expected : { ClientLayout{}, shifted })
+    {
+        Heap h(expected);
+        uint64 const decoyType = h.objects.Type("class Decoy");
+        h.objects.MapNode(StringHash::KiStringHash("class Decoy"), decoyType, false);
+        Map const unnamed = BuildMap(h, { "class X", "class Y", "class Z" });
+        for (uint64 const type : unnamed.types)
+            h.objects.WriteString(type + expected.TypeName, "not its name");
+        Map const map = BuildMap(h, { "class Alpha", "int", "class SharedPointer<class Alpha>" });
+
+        ClientLayout derived;
+        derived.MapNodeLeft = derived.MapNodeParent = derived.MapNodeRight = derived.MapNodeColor = derived.MapNodeIsNil = derived.MapNodeKey = derived.MapNodeValue = 0x99;
+        std::string error;
+        std::optional<uint64> const head = ClientDiscovery::DeriveTypeMapLayout(h.machine, h.heap, derived, error);
+        ASSERT_TRUE(head) << error;
+        EXPECT_EQ(*head, map.head);
+        EXPECT_EQ(derived.MapNodeLeft, expected.MapNodeLeft);
+        EXPECT_EQ(derived.MapNodeParent, expected.MapNodeParent);
+        EXPECT_EQ(derived.MapNodeRight, expected.MapNodeRight);
+        EXPECT_EQ(derived.MapNodeColor, expected.MapNodeColor);
+        EXPECT_EQ(derived.MapNodeIsNil, expected.MapNodeIsNil);
+        EXPECT_EQ(derived.MapNodeKey, expected.MapNodeKey);
+        EXPECT_EQ(derived.MapNodeValue, expected.MapNodeValue);
+        for (ClientLayoutEvidence const& evidence : derived.Evidence())
+            EXPECT_EQ(evidence.Status, evidence.Field.starts_with("std::map.") ? "derived" : "assumed") << evidence.Field;
+
+        std::optional<uint64> const found = ClientDiscovery::FindTypeMapHead(h.machine, h.heap, derived, error);
+        ASSERT_TRUE(found) << error;
+        EXPECT_EQ(*found, map.head);
+        std::optional<std::vector<uint64>> const walked = ClientDiscovery::WalkTypeMap(h.machine, *found, derived, error);
+        ASSERT_TRUE(walked) << error;
+        EXPECT_EQ(*walked, map.types);
+    }
+}
+
+TEST(ClientDiscoveryRuntimeTest, AMapLayoutWithNoTreeOrTwoEqualTreesIsRefusedNamingTheField)
+{
+    std::string error;
+    ClientLayout layout;
+    Heap empty;
+    empty.heap.Allocate(64, true);
+    EXPECT_FALSE(ClientDiscovery::DeriveTypeMapLayout(empty.machine, empty.heap, layout, error));
+    EXPECT_NE(error.find("std::map.node.left could not be placed"), std::string::npos) << error;
+
+    Heap broken;
+    Map const map = BuildMap(broken, { "class A", "class B", "class C" });
+    broken.machine.WriteU32(map.types[0] + ClientLayout{}.TypeHash, 1);
+    EXPECT_FALSE(ClientDiscovery::DeriveTypeMapLayout(broken.machine, broken.heap, layout, error));
+    EXPECT_NE(error.find("std::map.node.left could not be placed"), std::string::npos) << error;
+
+    Heap two;
+    BuildMap(two, { "class A", "class B", "class C" });
+    BuildMap(two, { "class D", "class E", "class F" });
+    EXPECT_FALSE(ClientDiscovery::DeriveTypeMapLayout(two.machine, two.heap, layout, error));
+    EXPECT_NE(error.find("two std::maps of 3 nodes"), std::string::npos) << error;
+    EXPECT_TRUE(layout.DerivedFields.empty());
 }
 
 TEST(ClientDiscoveryRuntimeTest, TheConstructorAndListInitializerWinTheirVotes)

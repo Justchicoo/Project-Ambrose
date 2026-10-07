@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Finds the client's C and C++ initializer tables, scans its emulated heap for the type map, votes on the Type constructor and PropertyList initializer, derives Type and std::string layout from chosen constructor values, and locates RaceManager's race adder; a vote without a clear winner is an error.
+ * Finds the client's C and C++ initializer tables, derives the type map's std::map node layout from the shape of the trees on its emulated heap, scans that heap for the type map, votes on the Type constructor and PropertyList initializer, derives Type and std::string layout from chosen constructor values, and locates RaceManager's race adder; a vote without a clear winner is an error.
  */
 
 #ifndef AMBROSE_CLIENTDISCOVERY_H
@@ -50,6 +50,7 @@ namespace ClientDiscovery
 
     std::optional<InitializerTable> FindInitializerTable(PeImage const& image, CodeIndex const& code, std::string& error);
     std::optional<InitializerTable> FindCInitializerTable(PeImage const& image, CodeIndex const& code, std::string& error);
+    std::optional<uint64> DeriveTypeMapLayout(Machine const& machine, GuestHeap const& heap, ClientLayout& layout, std::string& error);
     std::optional<uint64> FindTypeMapHead(Machine const& machine, GuestHeap const& heap, ClientLayout const& layout, std::string& error);
     std::optional<std::vector<uint64>> WalkTypeMap(Machine const& machine, uint64 head, ClientLayout const& layout, std::string& error);
     bool DeriveConstructedTypeLayout(Machine const& machine, GuestHeap const& heap, std::span<ConstructedTypeSample const> samples, ClientLayout& layout, std::string& error);

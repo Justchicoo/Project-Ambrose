@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs a whole extraction: refuses an install whose revision cannot name a dump file, loads the install's client program and runtime, derives Type and std::string layout from values passed to the client's constructor, runs its initializers and lazy getters, adds its races, validates the type map and server catalog, and reports per-field evidence, timings, counts and discoveries.
+ * Runs a whole extraction: refuses an install whose revision cannot name a dump file, loads the install's client program and runtime, derives the type map's std::map node layout from the heap (before the search for an unknown build, and afterwards as a check against the written offsets for a known one) and Type and std::string layout from values passed to the client's constructor, runs its initializers and lazy getters, adds its races, validates the type map and server catalog, and reports per-field evidence, timings, counts and discoveries.
  */
 
 #include "TypeExtraction.h"
@@ -236,9 +236,29 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
         result.Stats.InitializeMilliseconds = Milliseconds(phase);
 
         phase = Clock::now();
+        bool const referenceLayout = UsesReferenceTypeLayout(result.Metadata.Revision);
+        auto deriveMapLayout = [&](ClientLayout& target) -> std::optional<uint64>
+        {
+            std::optional<uint64> const mapHead = ClientDiscovery::DeriveTypeMapLayout(machine, process.GetHeap(), target, error);
+            if (!mapHead)
+                return std::nullopt;
+            for (ClientLayoutEvidence const& evidence : target.Evidence())
+                if (evidence.Field.starts_with("std::map."))
+                    result.Discovered.push_back(fmt::format("layout derivation: {} at {:#x} ({})", evidence.Field, evidence.Value, evidence.ConfirmedBy));
+            return mapHead;
+        };
+        std::optional<uint64> derivedHead;
+        if (options.RequireDerivedLayout || !referenceLayout)
+        {
+            derivedHead = deriveMapLayout(layout);
+            if (!derivedHead)
+                return fail(fmt::format("the client layout could not be derived: {}", error));
+        }
         std::optional<uint64> const head = ClientDiscovery::FindTypeMapHead(machine, process.GetHeap(), layout, error);
         if (!head)
             return fail(fmt::format("the type map was not found: {}", error));
+        if (derivedHead && *derivedHead != *head)
+            return fail(fmt::format("the std::map layout was derived from the tree at {:#x}, but the type map is at {:#x}", *derivedHead, *head));
         std::optional<std::vector<uint64>> types = ClientDiscovery::WalkTypeMap(machine, *head, layout, error);
         if (!types)
             return fail(fmt::format("the type map could not be walked: {}", error));
@@ -262,7 +282,6 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
                         evidence.Field, evidence.Value, evidence.ConfirmedBy));
             return true;
         };
-        bool const referenceLayout = UsesReferenceTypeLayout(result.Metadata.Revision);
         if (options.RequireDerivedLayout || !referenceLayout)
         {
             if (!deriveTypeLayout())
@@ -393,6 +412,26 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
 
         if (!options.RequireDerivedLayout && referenceLayout)
         {
+            ClientLayout derived = layout;
+            if (std::optional<uint64> const checkedHead = deriveMapLayout(derived); !checkedHead)
+                result.Discovered.push_back(fmt::format("std::map layout derivation unavailable: {}", error));
+            else if (*checkedHead != *head)
+                result.Discovered.push_back(fmt::format("std::map layout derivation differs: it chose the tree at {:#x}, not the type map at {:#x}", *checkedHead, *head));
+            else
+            {
+                std::vector<ClientLayoutEvidence> const written = layout.Evidence();
+                std::vector<ClientLayoutEvidence> const found = derived.Evidence();
+                std::vector<std::string> differences;
+                for (std::size_t index = 0; index < written.size(); ++index)
+                    if (written[index].Field.starts_with("std::map.") && written[index].Value != found[index].Value)
+                        differences.push_back(fmt::format("{} derived as {:#x} where {} writes {:#x}", written[index].Field, found[index].Value, result.Metadata.Revision, written[index].Value));
+                for (std::string const& difference : differences)
+                    result.Discovered.push_back(fmt::format("std::map layout derivation differs: {}", difference));
+                if (differences.empty())
+                    for (ClientLayoutEvidence const& evidence : found)
+                        if (evidence.Field.starts_with("std::map."))
+                            layout.ConfirmDerived(evidence.Field, evidence.ConfirmedBy);
+            }
             deriveTypeLayout();
             reportLayout();
         }
