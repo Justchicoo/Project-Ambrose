@@ -218,6 +218,14 @@ Measures a flaky test before and after its fix the same way every time: `python 
 - **Lives in:** apps/ci/ci_stress.py, with its self-tests in apps/ci/tests/test_ci.py
 - **Needs:** a built unit_tests; nothing else
 
+### discordbot (built on 2026-10-07)
+
+The project's own Discord bot, hosted on one machine that keeps it online, in place of the webhook workflows. `python apps/discordbot/bot.py setup --home <folder>` clones main into `<folder>/repo`, asks for the bot token without showing it and keeps it only in `<folder>/token.txt`, installs discord.py into `<folder>/venv`, adds the bot to the Windows user's startup apps, so it starts at sign-in with no window, starts it now and prints the link that invites it to a server. `run` keeps one copy of the bot going, refusing to start a second from the same folder, restarting it with backoff after a crash and at once when main changes `apps/discordbot` or `apps/progress`, so a merged change to the bot reaches it without anyone at that machine. Every five minutes, and when it starts, it brings its clone to main and edits the progress and openings boards in place with the embeds `apps/progress/announce.py` and `openings.py` build, so the boards and the README card read the same figures and the bot catches up after being off. Slash commands: `/progress`, `/openings`, `/milestone <id>` with completion, `/prs`, and for members who can manage the server `/board here`, `/board off` and `/board refresh`, which choose the channel for the progress, openings and merges boards. The merges board posts each pull request merged since the last one it saw. The first time it posts a board it deletes the old webhook message whose id is committed under `doc/progress/` or kept on the old state branches. `preview` prints what the boards would show with no Discord. A GitHub token in `<folder>/github-token.txt` or `AMBROSE_GITHUB_TOKEN` is optional and only raises GitHub's rate limit.
+
+- **Form:** a long-running program (Python, discord.py) and its CLI
+- **Lives in:** apps/discordbot, with its self-tests in apps/discordbot/tests/test_discordbot.py
+- **Needs:** git and Python 3.10 or later; the self-tests and `preview` need nothing else
+
 ### ci_local (built on 2026-09-27)
 
 Runs every step of CI's checks job on a local clone, read from `.github/workflows/core-build.yml` so it follows the workflow as it changes: `python apps/ci/ci_local.py [--branch <pull request branch>] [--base <ref>] [--list] [--stamp <file>]`. The range steps run over what the next push would send, against the project's `main` fetched first. `--branch` adds the contributor path check, and without it the step CI runs only on a push to `main` runs instead, so a run with no branch is the check before pushing to `main`. `--stamp` writes the commit a green run covered to a file, which a pre-push guard can compare with the commit being pushed.

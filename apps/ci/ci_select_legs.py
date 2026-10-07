@@ -46,7 +46,7 @@ MILESTONE_PREFIX = "milestone/"
 
 SMOKE_PATHS = (".github/", "apps/ci/ci_build.py", "apps/ci/ci_vcpkg_cache.py", "vcpkg.json")
 BUILD_PATHS = ("CMakeLists.txt", "CMakePresets.json", "cmake/", "data/", "src/")
-PUSH_PATHS = (".github/**", "CMakeLists.txt", "CMakePresets.json", "THIRD-PARTY-NOTICES.md", "apps/ci/**", "apps/clientdriver/**", "apps/codestyle/**", "apps/designtokens/**", "apps/installer/**", "apps/progress/**", "apps/site/**", "cmake/**", "contrib/findings/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/progress/**", "doc/roadmap/**", "doc/work/**", "src/**", "vcpkg.json")
+PUSH_PATHS = (".github/**", "CMakeLists.txt", "CMakePresets.json", "THIRD-PARTY-NOTICES.md", "apps/ci/**", "apps/clientdriver/**", "apps/codestyle/**", "apps/designtokens/**", "apps/discordbot/**", "apps/installer/**", "apps/progress/**", "apps/site/**", "cmake/**", "contrib/findings/**", "data/**", "design/**", "doc/ROADMAP.md", "doc/progress/**", "doc/roadmap/**", "doc/work/**", "src/**", "vcpkg.json")
 CODE_PATHSPEC = (".", ":(exclude)doc", ":(exclude,glob)**/*.md")
 ZERO_SHA = re.compile(r"^0*$")
 
