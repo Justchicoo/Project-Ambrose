@@ -1,12 +1,16 @@
 /*
  * Project Ambrose by Imjustchico
- * Exercises live AFK and link-dead deadlines, reconnect takeover of one character's existing placement, and shutdown-safe session state.
+ * Exercises live AFK and link-dead deadlines, reconnect takeover of one character's existing placement, session-owned dirty-stat saves, live potion setting reads and refill timing, and shutdown-safe session state.
  */
 
 #include "ConfigMgr.h"
+#include "CharacterRepository.h"
+#include "DBUpdater.h"
+#include "Environment.h"
 #include "GameSession.h"
 #include "LogTestDirectory.h"
 #include "MemorySettingStore.h"
+#include "PlayerStatsFixtures.h"
 #include "Settings.h"
 #include "StringHash.h"
 #include "World.h"
@@ -14,12 +18,16 @@
 #include <asio/io_context.hpp>
 #include <asio/ip/tcp.hpp>
 
+#include <fmt/format.h>
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cmath>
 #include <memory>
 #include <optional>
+#include <random>
 #include <string>
+#include <thread>
 #include <vector>
 
 struct GameSessionLifecycleTestAccess
@@ -67,6 +75,11 @@ struct GameSessionLifecycleTestAccess
         session._zonePath = std::move(zonePath);
     }
 
+    static void SetPlayer(GameSession& session, Player player)
+    {
+        session._player = std::move(player);
+    }
+
     static void TransferWorldState(GameSession& current, GameSession& replacement)
     {
         current.TransferWorldStateTo(replacement);
@@ -86,6 +99,31 @@ struct GameSessionLifecycleTestAccess
 
 namespace
 {
+    std::optional<PlayerStats> MakeLifecyclePlayerStats(uint64 guid, CharacterStats const& stored)
+    {
+        CharacterSummary character;
+        character.Guid = guid;
+        character.Account = guid;
+        character.SchoolId = PlayerStatsFixtures::Fire;
+        character.Level = 5;
+
+        std::vector<std::string> errors;
+        std::shared_ptr<PlayerLevelSet const> const levels = PlayerLevelSet::Build(PlayerStatsFixtures::FireLevels(5), errors);
+        EXPECT_TRUE(levels) << (errors.empty() ? "" : errors.front());
+        if (!levels)
+            return std::nullopt;
+
+        std::shared_ptr<StatEffectSet const> const effects = StatEffectSet::Build({ { { "m_shadowPipMax", 2.0 } }, {}, {} }, errors);
+        EXPECT_TRUE(effects) << (errors.empty() ? "" : errors.front());
+        if (!effects)
+            return std::nullopt;
+
+        std::string problem;
+        std::optional<PlayerStats> stats = PlayerStats::Create(character, stored, *levels, *effects, problem);
+        EXPECT_TRUE(stats) << problem;
+        return stats;
+    }
+
     class GameSessionLifecycleTest : public testing::Test
     {
     protected:
@@ -94,7 +132,7 @@ namespace
             sWorld.Clear();
             sSettings.Clear();
             _configFile = _directory.Write("gameserver.conf",
-                "Player.LinkDeadTime = 1\nPlayer.AfkWarnTime = 2\nPlayer.AfkTime = 4\n");
+                "Player.LinkDeadTime = 1\nPlayer.AfkWarnTime = 2\nPlayer.AfkTime = 4\nPotion.RestoreFraction = 0.1\nPotion.RefillInterval = 30\n");
             _config = std::make_unique<ConfigMgr>([](std::string const&) -> std::optional<std::string> { return std::nullopt; });
             ASSERT_TRUE(_config->LoadInitial(_configFile).Succeeded());
             std::vector<std::string> errors;
@@ -125,6 +163,44 @@ namespace
         std::filesystem::path _configFile;
         std::unique_ptr<ConfigMgr> _config;
         std::shared_ptr<SessionContext> _context;
+    };
+
+    class GameSessionStatsSaveTest : public GameSessionLifecycleTest
+    {
+    protected:
+        void SetUp() override
+        {
+            GameSessionLifecycleTest::SetUp();
+            std::optional<std::string> const text = Ambrose::GetEnv("AMBROSE_TEST_DB");
+            if (!text || text->empty())
+                GTEST_SKIP() << "AMBROSE_TEST_DB is not set";
+            std::optional<MySQLConnectionInfo> info = MySQLConnectionInfo::Parse(*text);
+            ASSERT_TRUE(info);
+            info->Database = fmt::format("ambrose_session_stats_{:08x}", std::random_device()());
+            _info = *info;
+            ASSERT_TRUE(DBUpdater::Run(_info, "characters", UpdaterSettings{}));
+            ASSERT_TRUE(CharacterDatabase.SetConnectionInfo(_info.ToConnectionString(), 1, 1));
+            ASSERT_EQ(CharacterDatabase.Open(), 0u);
+            _databaseOpen = true;
+        }
+
+        void TearDown() override
+        {
+            if (_databaseOpen)
+                CharacterDatabase.Close();
+            if (!_info.Database.empty())
+            {
+                MySQLConnectionInfo server = _info;
+                server.Database.clear();
+                MySQLConnection connection(server);
+                if (connection.Open() == 0)
+                    connection.Execute(fmt::format("DROP DATABASE IF EXISTS {}", DBUpdater::QuoteIdentifier(_info.Database)));
+            }
+            GameSessionLifecycleTest::TearDown();
+        }
+
+        MySQLConnectionInfo _info;
+        bool _databaseOpen = false;
     };
 }
 
@@ -210,4 +286,94 @@ TEST_F(GameSessionLifecycleTest, ReplacementAttachTakesOverTheExistingCharacterP
     EXPECT_EQ(replacement->GetWorldGuid(), 42u);
     EXPECT_EQ(replacement->GetMovement().GetPosition(), position);
     EXPECT_EQ(sWorld.FindSessionByCharacterId(42), replacement);
+}
+
+TEST_F(GameSessionLifecycleTest, AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction)
+{
+    constexpr uint64 Guid = 1800080101;
+    CharacterStats stored;
+    stored.Health = 20;
+    stored.Mana = 5;
+    stored.PotionCharge = 0.0f;
+    stored.PotionMax = 2.0f;
+    std::optional<PlayerStats> stats = MakeLifecyclePlayerStats(Guid, stored);
+    ASSERT_TRUE(stats);
+    std::shared_ptr<GameSession> const session = MakeSession();
+    GameSessionLifecycleTestAccess::PrepareAttachedInWorld(*session, Guid);
+    GameSessionLifecycleTestAccess::SetPlayer(*session, Player(std::move(*stats)));
+
+    int32 const health = session->GetStats()->GetHitpoints();
+    int32 const mana = session->GetStats()->GetMana();
+    GameMessages::UsePotion noCharges;
+    session->HandleUsePotion(noCharges);
+    EXPECT_EQ(session->GetStats()->GetHitpoints(), health);
+    EXPECT_EQ(session->GetStats()->GetMana(), mana);
+    EXPECT_FLOAT_EQ(session->GetStats()->GetPotionCharge(), 0.0f);
+
+    ASSERT_TRUE(session->SetPotionCapacity(2));
+    ASSERT_TRUE(session->SetHealth(0));
+    ASSERT_TRUE(session->SetMana(0));
+    ASSERT_TRUE(sSettings.Set("Potion.RestoreFraction", "0.25", { "test", 1, "unit_test" }, "use the first live potion fraction").Ok());
+    GameMessages::UsePotion firstUse;
+    session->HandleUsePotion(firstUse);
+    int32 const firstHealth = std::lround(static_cast<double>(session->GetStats()->GetMaxHitpoints()) * 0.25);
+    EXPECT_EQ(session->GetStats()->GetHitpoints(), firstHealth);
+    EXPECT_FLOAT_EQ(session->GetStats()->GetPotionCharge(), 1.0f);
+
+    ASSERT_TRUE(session->SetHealth(0));
+    ASSERT_TRUE(session->SetMana(0));
+    ASSERT_TRUE(sSettings.Set("Potion.RestoreFraction", "0.5", { "test", 1, "unit_test" }, "use the next live potion fraction").Ok());
+    GameMessages::UsePotion secondUse;
+    session->HandleUsePotion(secondUse);
+    int32 const secondHealth = std::lround(static_cast<double>(session->GetStats()->GetMaxHitpoints()) * 0.5);
+    EXPECT_EQ(session->GetStats()->GetHitpoints(), secondHealth);
+    EXPECT_FLOAT_EQ(session->GetStats()->GetPotionCharge(), 0.0f);
+}
+
+TEST_F(GameSessionStatsSaveTest, LiveGoldAndPotionChangesPersistBeforeLeavingTheWorld)
+{
+    constexpr uint64 Guid = 1800080102;
+    CharacterSummary character;
+    character.Guid = Guid;
+    character.Account = Guid;
+    character.SchoolId = PlayerStatsFixtures::Fire;
+    character.Level = 5;
+    character.Zone = "WizardCity/WC_Ravenwood";
+    character.ZoneDisplay = "Ravenwood";
+    character.Created = 1;
+    ASSERT_EQ(CharacterRepository::Create(character), CharacterOpResult::Ok);
+
+    CharacterStats stored;
+    stored.Gold = 100;
+    stored.Health = 100;
+    stored.Mana = 5;
+    stored.PotionCharge = 2.0f;
+    stored.PotionMax = 2.0f;
+    ASSERT_EQ(CharacterRepository::SaveStats(Guid, stored), CharacterOpResult::Ok);
+    std::optional<PlayerStats> stats = MakeLifecyclePlayerStats(Guid, stored);
+    ASSERT_TRUE(stats);
+
+    std::shared_ptr<GameSession> const session = MakeSession();
+    GameSessionLifecycleTestAccess::PrepareAttachedInWorld(*session, Guid);
+    GameSessionLifecycleTestAccess::SetPlacement(*session, 1, Guid, 1);
+    GameSessionLifecycleTestAccess::SetPlayer(*session, Player(std::move(*stats)));
+    ASSERT_TRUE(sSettings.Set("Potion.RestoreFraction", "0.25", { "test", 1, "unit_test" }, "restore a quarter of each vital").Ok());
+
+    ASSERT_TRUE(session->SetGold(500));
+    GameMessages::UsePotion usePotion;
+    session->HandleUsePotion(usePotion);
+
+    CharacterStatsLoad persisted;
+    for (int attempt = 0; attempt < 100; ++attempt)
+    {
+        persisted = CharacterRepository::LoadStats(Guid);
+        if (persisted.Stats && persisted.Stats->Gold == 500 && persisted.Stats->PotionCharge == 1.0f && persisted.Stats->Revision >= 2)
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_EQ(persisted.Result, CharacterOpResult::Ok);
+    ASSERT_TRUE(persisted.Stats);
+    EXPECT_EQ(persisted.Stats->Gold, 500);
+    EXPECT_FLOAT_EQ(persisted.Stats->PotionCharge, 1.0f);
+    EXPECT_EQ(persisted.Stats->Revision, 2u);
 }

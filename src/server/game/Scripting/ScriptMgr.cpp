@@ -15,6 +15,11 @@ WorldScript::WorldScript(std::string name) : ScriptObject(std::move(name))
     sScriptMgr.Register(this);
 }
 
+PlayerScript::PlayerScript(std::string name) : ScriptObject(std::move(name))
+{
+    sScriptMgr.Register(this);
+}
+
 CommandScript::CommandScript(std::string name) : ScriptObject(std::move(name))
 {
     sScriptMgr.Register(this);
@@ -39,6 +44,11 @@ ScriptMgr::~ScriptMgr()
 void ScriptMgr::Register(WorldScript* script)
 {
     _worldScripts.push_back(script);
+}
+
+void ScriptMgr::Register(PlayerScript* script)
+{
+    _playerScripts.push_back(script);
 }
 
 void ScriptMgr::Register(CommandScript* script)
@@ -87,6 +97,9 @@ void ScriptMgr::Unload()
     for (WorldScript* script : _worldScripts)
         delete script;
     _worldScripts.clear();
+    for (PlayerScript* script : _playerScripts)
+        delete script;
+    _playerScripts.clear();
     for (CommandScript* script : _commandScripts)
         delete script;
     _commandScripts.clear();
@@ -95,7 +108,7 @@ void ScriptMgr::Unload()
 
 std::size_t ScriptMgr::GetScriptCount() const
 {
-    return _worldScripts.size() + _commandScripts.size() + _serverScripts.size();
+    return _worldScripts.size() + _playerScripts.size() + _commandScripts.size() + _serverScripts.size();
 }
 
 std::vector<std::string> ScriptMgr::GetScriptNames() const
@@ -103,6 +116,8 @@ std::vector<std::string> ScriptMgr::GetScriptNames() const
     std::vector<std::string> names;
     names.reserve(GetScriptCount());
     for (WorldScript const* script : _worldScripts)
+        names.push_back(script->GetName());
+    for (PlayerScript const* script : _playerScripts)
         names.push_back(script->GetName());
     for (CommandScript const* script : _commandScripts)
         names.push_back(script->GetName());
@@ -115,6 +130,26 @@ template<typename Hook>
 void ScriptMgr::ForEach(std::string_view what, Hook hook)
 {
     for (WorldScript* script : _worldScripts)
+    {
+        try
+        {
+            hook(script);
+        }
+        catch (std::exception const& failure)
+        {
+            LOG_ERROR("server.scripts", "The script {} threw from {}: {}", script->GetName(), what, failure.what());
+        }
+        catch (...)
+        {
+            LOG_ERROR("server.scripts", "The script {} threw from {} for a reason it did not say", script->GetName(), what);
+        }
+    }
+}
+
+template<typename Hook>
+void ScriptMgr::ForEachPlayer(std::string_view what, Hook hook)
+{
+    for (PlayerScript* script : _playerScripts)
     {
         try
         {
@@ -149,6 +184,16 @@ void ScriptMgr::OnConfigLoad(bool reload)
 void ScriptMgr::OnWorldUpdate(std::chrono::milliseconds diff)
 {
     ForEach("OnUpdate", [diff](WorldScript* script) { script->OnUpdate(diff); });
+}
+
+void ScriptMgr::OnGoldChanged(Player& player, int32 oldValue, int32 newValue)
+{
+    ForEachPlayer("OnGoldChanged", [&player, oldValue, newValue](PlayerScript* script) { script->OnGoldChanged(player, oldValue, newValue); });
+}
+
+void ScriptMgr::OnHealthChanged(Player& player, int32 oldValue, int32 newValue)
+{
+    ForEachPlayer("OnHealthChanged", [&player, oldValue, newValue](PlayerScript* script) { script->OnHealthChanged(player, oldValue, newValue); });
 }
 
 template<typename Hook>
