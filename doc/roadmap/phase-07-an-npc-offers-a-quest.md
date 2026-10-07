@@ -128,10 +128,10 @@ The server holds quests, goals, dialogs and NPC menus as its own C++ types and c
 
 **Acceptance**
 
-- [ ] Prep entries [38232, 0] index as offered by 38232 only
-- [ ] Validator rejects missing goalsToAdd, bounty without adjectives/tally, unknown persona, logic with both complete and add
-- [ ] Start log 'Loaded N quests, M goals, K validation errors'
-- [ ] `.reload quest_template` swaps in an added quest; a reload that introduces an error keeps the old snapshot
+- [x] Prep entries [38232, 0] index as offered by 38232 only (`QuestMgrTest.PrepEntriesIndexAsOfferedByTheFirstSpeakerOnly`: the Prep lines by template 38232 then template 0 make GetQuestsOfferedBy(38232) the one quest and 0 offer nothing)
+- [x] Validator rejects missing goalsToAdd, bounty without adjectives/tally, unknown persona, logic with both complete and add (`QuestMgrValidatorTest.RejectsGoalsToAddNamingAMissingGoal`, `RejectsABountyGoalWithNoAdjectives`, `RejectsABountyGoalWithATallyCountOfZero`, `RejectsAPersonaNoObjectIsNamed` and `RejectsALogicEntryThatBothCompletesAndAddsGoals` each find exactly that one error)
+- [x] Start log 'Loaded N quests, M goals, K validation errors' (Windows Debug gameserver on a world database dbimport set up, which applied 2026_10_07_02.sql: it logged 'Loaded 0 quests, 0 goals, 0 validation errors' and then 'gameserver ready' with no error line; `QuestMgrTest.StartSkipsInvalidQuestsAndLogsTheCounts` loads a fixture holding an invalid quest, which is skipped and counted while the valid ones load)
+- [x] `.reload quest_template` swaps in an added quest; a reload that introduces an error keeps the old snapshot (`QuestMgrTest.ReloadSwapsInAnAddedQuestAndIndexesItsStarter` and `QuestMgrTest.ReloadThatIntroducesErrorsKeepsTheOldSnapshotAndReportsEveryError` through sReloadMgr's quest_template target, which `.reload quest_template` runs)
 
 ### Detailed spec from QST-5: World database quest schema, QuestMgr loader and validator
 
@@ -165,10 +165,10 @@ Quests authored as SQL rows load into an immutable sQuestMgr snapshot built on t
 
 **Acceptance**
 
-- [ ] Unit test: a fixture quest whose Prep dialog has entries [template 38232, template 0] indexes as offered by 38232 only.
-- [ ] Unit test: the validator rejects (a) goalsToAdd naming a missing goal, (b) a bounty goal with no adjectives or tally_count=0, (c) a persona_name matching no object name, (d) a logic row with both completeQuest and goalsToAdd.
-- [ ] Gameserver start log reports 'Loaded N quests, M goals, K validation errors' and refuses to register invalid quests (they are skipped, not crashed on).
-- [ ] Unit test: `.reload quest_template` with an added quest swaps it in and indexes its starter. A reload that introduces a validation error keeps the old snapshot serving and reports every error.
+- [x] Unit test: a fixture quest whose Prep dialog has entries [template 38232, template 0] indexes as offered by 38232 only. (`QuestMgrTest.PrepEntriesIndexAsOfferedByTheFirstSpeakerOnly`; 13 of 13 QuestMgrTest and QuestMgrValidatorTest tests pass with -Wall -Wextra -Wpedantic -Werror in a build of the Quests sources with the real ReloadMgr and logging, since this container's vcpkg could not fetch its ports for the linux-gcc preset)
+- [x] Unit test: the validator rejects (a) goalsToAdd naming a missing goal, (b) a bounty goal with no adjectives or tally_count=0, (c) a persona_name matching no object name, (d) a logic row with both completeQuest and goalsToAdd. (`QuestMgrValidatorTest.RejectsGoalsToAddNamingAMissingGoal`, `RejectsABountyGoalWithNoAdjectives`, `RejectsABountyGoalWithATallyCountOfZero`, `RejectsAPersonaNoObjectIsNamed`, `RejectsALogicEntryThatBothCompletesAndAddsGoals`; 13 of 13 QuestMgrTest and QuestMgrValidatorTest tests pass with -Wall -Wextra -Wpedantic -Werror in a build of the Quests sources with the real ReloadMgr and logging, since this container's vcpkg could not fetch its ports for the linux-gcc preset)
+- [x] Gameserver start log reports 'Loaded N quests, M goals, K validation errors' and refuses to register invalid quests (they are skipped, not crashed on). (Windows Debug gameserver on a world database dbimport set up, which applied 2026_10_07_02.sql: it logged 'Loaded 0 quests, 0 goals, 0 validation errors' and then 'gameserver ready' with no error line; `QuestMgrTest.StartSkipsInvalidQuestsAndLogsTheCounts` loads a fixture holding an invalid quest, which is skipped and counted while the valid ones load)
+- [x] Unit test: `.reload quest_template` with an added quest swaps it in and indexes its starter. A reload that introduces a validation error keeps the old snapshot serving and reports every error. (`QuestMgrTest.ReloadSwapsInAnAddedQuestAndIndexesItsStarter`: the added quest's Prep speaker offers it and the log says 'Loaded 2 quests, 5 goals, 0 validation errors'; `QuestMgrTest.ReloadThatIntroducesErrorsKeepsTheOldSnapshotAndReportsEveryError`: three errors brought at once are all reported and the same snapshot and generation keep serving; 13 of 13 QuestMgrTest and QuestMgrValidatorTest tests pass with -Wall -Wextra -Wpedantic -Werror in a build of the Quests sources with the real ReloadMgr and logging, since this container's vcpkg could not fetch its ports for the linux-gcc preset)
 
 **Risks**
 

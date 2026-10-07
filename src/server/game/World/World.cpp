@@ -1,12 +1,13 @@
 /*
  * Project Ambrose by Imjustchico
- * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means, until Clear forgets it along with the sessions, since a later thread may be given the same id; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, each session is then given the tick's time, which is how one that never attaches is closed, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone; then the wizards that left an instance this tick are taken away from the wizards still in it and those that arrived are shown to the wizards already there, and those wizards to them, each wizard's friends are told when it comes online, goes link-dead, changes zone or leaves, and a wizard that jumped is shown entering its jumping state to the others in its instance, and to its own client when it did not ask to be left out; then what each wizard said or played since the last tick is shown to every other wizard in its instance within Chat.SayRange of it that does not ignore it, a line never to the speaker, whose client shows its own, and an emote to the speaker too when it did not ask to be left out, timed as the chat part of the tick; after the instances are looked after, each is brought in line with its zone's objects, and the wizards in an instance whose objects changed are told which left and which came. When a movement flush is due, every wizard in an instance is asked for what changed of its movement since the last one, and what it gives is sent to every other wizard in the same instance. A wizard is in the world from the moment its session is sent its object until it is kicked or its socket closes, and work for one from another thread is queued on its session and waited for, run at once when the caller is the world thread itself, which could never wait on its own tick; each tick times its subsystems, showing wizards to each other, their jumps and the movement flush counted together as movement, the game effects a wizard gained or lost shown to it and to the wizards in its instance, and only while an operator has asked for a profile records a bounded Chrome trace of them; a wizard whose client drops without logging out stays in its instance as link-dead, shown to the others standing still with MSG_ZOMBIE_PLAYER, until its session's link-dead time passes or the same character attaches again and takes its place.
+ * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means, until Clear forgets it along with the sessions, since a later thread may be given the same id; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, each session is then given the tick's time, which is how one that never attaches is closed, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone; then the wizards that left an instance this tick are taken away from the wizards still seeing them, and each wizard's view is brought up to date from one grid of its instance's objects and wizards, so it is shown what came within the visibility distance and loses what went past it and the hysteresis band, an arrival meeting those already there, each wizard's friends are told when it comes online, goes link-dead, changes zone or leaves, and a wizard that jumped is shown entering its jumping state to the others in its instance who see it, and to its own client when it did not ask to be left out; then what each wizard said or played since the last tick is shown to every other wizard in its instance within Chat.SayRange of it that does not ignore it, a line never to the speaker, whose client shows its own, and an emote to the speaker too when it did not ask to be left out, timed as the chat part of the tick; after the instances are looked after, each is brought in line with its zone's objects, and the wizards in an instance whose objects changed are told which left and which came. When a movement flush is due, every wizard in an instance is asked for what changed of its movement since the last one, and what it gives is sent to every other wizard in the same instance that sees it. A wizard is in the world from the moment its session is sent its object until it is kicked or its socket closes, and work for one from another thread is queued on its session and waited for, run at once when the caller is the world thread itself, which could never wait on its own tick; each tick times its subsystems, showing wizards to each other, their jumps and the movement flush counted together as movement, the game effects a wizard gained or lost shown to it and to the wizards in its instance, and only while an operator has asked for a profile records a bounded Chrome trace of them; a wizard whose client drops without logging out stays in its instance as link-dead, shown to the others standing still with MSG_ZOMBIE_PLAYER, until its session's link-dead time passes or the same character attaches again and takes its place.
  */
 
 #include "World.h"
 #include "ChatMgr.h"
 #include "GameMessages.h"
 #include "GameSession.h"
+#include "InstanceSight.h"
 #include "Log.h"
 #include "MapMgr.h"
 #include "MetricRegistry.h"
@@ -34,7 +35,7 @@
 
 namespace
 {
-    void MeetPlayers(std::vector<std::shared_ptr<GameSession>> const& sessions)
+    std::vector<std::size_t> MeetPlayers(std::vector<std::shared_ptr<GameSession>> const& sessions)
     {
         std::vector<PlayerPresence> players;
         players.reserve(sessions.size());
@@ -57,31 +58,61 @@ namespace
             players.push_back(presence);
         }
         if (!changed)
-            return;
+            return {};
         PlayerMeetingPlan const plan = PlanPlayerMeetings(players);
         std::map<std::size_t, std::size_t> told;
         for (PlayerHiding const& hiding : plan.Hidings)
         {
-            sessions[hiding.Viewer]->HidePlayer(players[hiding.Left].LeftGuid);
-            ++told[hiding.Left];
+            GameSession& viewer = *sessions[hiding.Viewer];
+            if (viewer.Sees(players[hiding.Left].LeftGuid))
+                ++told[hiding.Left];
+            viewer.ForgetSight(players[hiding.Left].LeftGuid);
         }
         for (auto const& [left, count] : told)
             LOG_DEBUG("server.world", "Session {}'s wizard {} was taken away from the {} wizard(s) still in instance {}", sessions[left]->GetSessionId(), players[left].LeftGuid,
                 count, *players[left].LeftMapId);
-        std::map<std::size_t, std::size_t> met;
-        for (PlayerMeeting const& meeting : plan.Meetings)
+        std::vector<std::size_t> arrived;
+        for (std::size_t index = 0; index < players.size(); ++index)
+            if (players[index].Arrived && players[index].MapId)
+                arrived.push_back(index);
+        return arrived;
+    }
+
+    void UpdateSight(std::vector<std::shared_ptr<GameSession>> const& sessions, std::vector<std::size_t> const& arrived)
+    {
+        std::map<uint32, std::vector<GameSession*>> instances;
+        for (std::shared_ptr<GameSession> const& session : sessions)
+            if (session->IsOpen() || session->IsLinkDead())
+                if (std::optional<uint32> const map = session->GetMapId())
+                    instances[*map].push_back(session.get());
+        for (auto const& [mapId, present] : instances)
         {
-            GameSession& arrived = *sessions[meeting.Arrived];
-            GameSession& other = *sessions[meeting.Other];
-            if (meeting.ArrivedSees)
-                arrived.ShowPlayer(other);
-            if (meeting.OtherSees)
-                other.ShowPlayer(arrived);
-            ++met[meeting.Arrived];
+            Map const* const map = sMapMgr.Find(mapId);
+            if (!map)
+                continue;
+            InstanceSight sight(*map, GameSession::SightRangeOf(*map));
+            std::map<uint64, GameSession const*> wizards;
+            for (GameSession const* wizard : present)
+                if (wizard->IsShown())
+                {
+                    PlayerPosition const& at = wizard->GetMovement().GetPosition();
+                    sight.PlaceWizard(wizard->GetWorldGuid(), { at.X, at.Y, at.Z });
+                    wizards.emplace(wizard->GetWorldGuid(), wizard);
+                }
+            for (GameSession* viewer : present)
+                if (viewer->IsOpen())
+                    viewer->UpdateSight(*map, sight, wizards);
         }
-        for (auto const& [arrived, count] : met)
-            LOG_DEBUG("server.world", "Session {}'s wizard {} and the {} wizard(s) already in instance {} were shown to each other", sessions[arrived]->GetSessionId(),
-                sessions[arrived]->GetWorldGuid(), count, *players[arrived].MapId);
+        for (std::size_t const index : arrived)
+        {
+            GameSession const& newcomer = *sessions[index];
+            std::size_t met = 0;
+            for (std::shared_ptr<GameSession> const& other : sessions)
+                if (other.get() != &newcomer && other->GetMapId() == newcomer.GetMapId() && newcomer.Sees(other->GetWorldGuid()) && other->Sees(newcomer.GetWorldGuid()))
+                    ++met;
+            LOG_DEBUG("server.world", "Session {}'s wizard {} and the {} wizard(s) already in instance {} were shown to each other", newcomer.GetSessionId(), newcomer.GetWorldGuid(),
+                met, *newcomer.GetMapId());
+        }
     }
 
     void RelayJumps(std::vector<std::shared_ptr<GameSession>> const& sessions)
@@ -94,7 +125,7 @@ namespace
             std::size_t told = 0;
             for (std::shared_ptr<GameSession> const& viewer : sessions)
             {
-                if (!viewer->IsOpen() || viewer->GetMapId() != jumper->GetMapId() || (viewer == jumper && *excludeOriginator != 0))
+                if (!viewer->IsOpen() || viewer->GetMapId() != jumper->GetMapId() || (viewer == jumper && *excludeOriginator != 0) || (viewer != jumper && !viewer->Sees(jumper->GetWorldGuid())))
                     continue;
                 viewer->ShowStateOf(jumper->GetWorldGuid(), PlayerStates::Jumping);
                 if (viewer != jumper)
@@ -117,7 +148,7 @@ namespace
             std::size_t recipients = 0;
             for (std::shared_ptr<GameSession> const& viewer : sessions)
             {
-                if (!viewer->IsOpen() || !viewer->IsShown() || viewer->GetMapId() != mapId)
+                if (!viewer->IsOpen() || !viewer->IsShown() || viewer->GetMapId() != mapId || (viewer != sender && !viewer->Sees(sender->GetWorldGuid())))
                     continue;
                 viewer->ShowWizBangOf(sender->GetWorldGuid(), *wizBangId);
                 ++recipients;
@@ -214,7 +245,7 @@ namespace
             return;
         for (std::shared_ptr<GameSession> const& viewer : sessions)
         {
-            if (!viewer->IsOpen() || viewer.get() == &lost || viewer->GetMapId() != lost.GetMapId())
+            if (!viewer->IsOpen() || viewer.get() == &lost || viewer->GetMapId() != lost.GetMapId() || !viewer->Sees(lost.GetWorldGuid()))
                 continue;
             MovementUpdate stopped;
             stopped.State = MovementRelay::Standing;
@@ -237,7 +268,7 @@ namespace
                 if (update.Empty())
                     continue;
                 for (GameSession* viewer : wizards)
-                    if (viewer != mover)
+                    if (viewer != mover && viewer->Sees(mover->GetWorldGuid()))
                         viewer->ShowMovementOf(*mover, update);
             }
     }
@@ -538,7 +569,7 @@ void World::Update(std::chrono::milliseconds diff)
     RecordProfileEvent("session_cleanup", cleanupStarted, cleanupEnded);
 
     auto const meetingStarted = std::chrono::steady_clock::now();
-    MeetPlayers(sessions);
+    UpdateSight(sessions, MeetPlayers(sessions));
     sSocialMgr.UpdatePresence(sessions);
     RelayJumps(sessions);
     RelayWizBangs(sessions);
