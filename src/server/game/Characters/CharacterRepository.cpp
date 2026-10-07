@@ -432,6 +432,24 @@ CharacterRepository::Statement CharacterRepository::PrepareSavePosition(uint64 g
     return statement;
 }
 
+CharacterRepository::Statement CharacterRepository::PrepareSavePlace(uint64 guid, std::string const& zone, std::string const& zoneDisplay, float x, float y, float z, float orientation,
+    uint64 revision)
+{
+    Statement statement = Prepare(CHAR_UPD_PLACE);
+    if (!statement)
+        return statement;
+    statement->SetData(0, zone);
+    statement->SetData(1, zoneDisplay);
+    statement->SetData(2, x);
+    statement->SetData(3, y);
+    statement->SetData(4, z);
+    statement->SetData(5, orientation);
+    statement->SetData(6, revision);
+    statement->SetData(7, guid);
+    statement->SetData(8, revision);
+    return statement;
+}
+
 CharacterSpellsLoad CharacterRepository::LoadSpells(uint64 guid)
 {
     Statement const statement = PrepareLoadSpells(guid);

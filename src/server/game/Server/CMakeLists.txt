@@ -10,6 +10,7 @@ target_link_libraries(gameserver-sessions
         characters
         entities
         chat
+        scripting
         spells
         inventory
         zones)

@@ -54,7 +54,7 @@ REQUIRES = ("client", "capture", "gameserver")
 WIZARD = ("school", "zone", "first", "middle", "last")
 WIZARD_STATS = ("overflow_xp", "secondary_school", "training_points", "gold", "health", "mana", "potion_charge", "potion_max", "arena_points", "level_locked",
                 "purchased_custom_emotes_1", "purchased_custom_emotes_2", "purchased_custom_emotes_3")
-SIDES = ("server", "client")
+SIDES = ("server", "game", "client")
 OUTCOMES = ("pass", "failure")
 MAX_HOLD_SECONDS = 30
 MAX_SETTLE_SECONDS = 30

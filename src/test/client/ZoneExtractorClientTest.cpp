@@ -14,7 +14,7 @@
 #include "StringHash.h"
 #include "ZoneExtractor.h"
 #include "ZoneMgr.h"
-#include "ZoneScript.h"
+#include "ZoneSqlScript.h"
 
 #include <fmt/format.h>
 #include <gtest/gtest.h>
@@ -186,7 +186,7 @@ TEST_F(ZoneExtractorClientTest, TheRowsFillAWorldDatabaseTheZoneManagerLoads)
 
     ASSERT_TRUE(DBUpdater::Run(world, "world", UpdaterSettings{}));
     std::string error;
-    ASSERT_TRUE(ZoneScript::Build(*s_extraction).Apply(world, error)) << error;
+    ASSERT_TRUE(ZoneSqlScript::Build(*s_extraction).Apply(world, error)) << error;
     ASSERT_TRUE(WorldDatabase.SetConnectionInfo(world.ToConnectionString(), 1, 1));
     ASSERT_EQ(WorldDatabase.Open(), 0u);
     sZoneMgr.Clear();

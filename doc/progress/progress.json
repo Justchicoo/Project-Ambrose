@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 126,
+    "done": 127,
     "total": 469,
-    "percent": 26.9
+    "percent": 27.1
   },
   "checks": {
-    "done": 1039,
+    "done": 1054,
     "total": 2870,
-    "percent": 36.2
+    "percent": 36.7
   },
   "contributor_track": {
     "merged": 93,
@@ -58,9 +58,9 @@
     {
       "phase": 6,
       "title": "Other players are visible",
-      "milestones_done": 13,
+      "milestones_done": 14,
       "milestones_total": 18,
-      "checks_done": 105,
+      "checks_done": 120,
       "checks_total": 139
     },
     {
