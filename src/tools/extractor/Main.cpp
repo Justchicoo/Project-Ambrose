@@ -250,7 +250,13 @@ database fails, 2 on bad usage.
         std::cout << fmt::format("zone_trigger: {} rows\n", extraction.GetTriggerCount());
         std::cout << fmt::format("zone_trigger_event: {} rows\n", events);
         std::cout << fmt::format("zone_trigger_result: {} rows, {} of classes no class the server knows describes\n", results, unknownResults);
-        std::cout << fmt::format("zones whose volume or trigger files do not decode: {}\n", extraction.GetTriggerFailureZoneCount());
+        std::size_t spawnEntries = 0;
+        for (ExtractedZone const& zone : extraction.Zones)
+            for (ExtractedSpawner const& spawner : zone.Spawners)
+                spawnEntries += spawner.Items.size();
+        std::cout << fmt::format("zone_spawner: {} rows\n", extraction.GetSpawnerCount());
+        std::cout << fmt::format("zone_spawner_entry: {} rows\n", spawnEntries);
+        std::cout << fmt::format("zones whose volume, trigger or spawn files do not decode: {}\n", extraction.GetTriggerFailureZoneCount());
         for (std::size_t index = 0; index < extraction.TriggerFailures.size() && index < 10; ++index)
             std::cout << fmt::format("  {} {}: {}\n", extraction.TriggerFailures[index].Zone, extraction.TriggerFailures[index].File, extraction.TriggerFailures[index].Detail);
         std::map<uint32, std::size_t> wholeByClass;

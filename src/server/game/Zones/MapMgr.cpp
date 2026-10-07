@@ -120,9 +120,16 @@ std::vector<uint32> MapMgr::Update()
     return removed;
 }
 
+void MapMgr::QueueChanges(MapObjectChanges changes)
+{
+    if (changes.Changed())
+        _queued.push_back(std::move(changes));
+}
+
 std::vector<MapObjectChanges> MapMgr::RefreshObjects()
 {
     std::vector<MapObjectChanges> changed;
+    changed.swap(_queued);
     if (!_populator)
         return changed;
     Clock::time_point const now = Now();
@@ -150,4 +157,5 @@ void MapMgr::Clear()
     _clock = nullptr;
     _populator = nullptr;
     _reported.clear();
+    _queued.clear();
 }

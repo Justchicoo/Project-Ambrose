@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Extracts every zone of the user's own install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it, with the counts recorded for the installed revision, r806919's below: every zone archive reads without an error and no two zones share a path; the only object list entries left out anywhere are sigils, whose classes the dump does not describe; the Commons comes out as WizardCity/WC_Hub under its own display key with every placed object its data lists but its six sigils, 123 of them the server's to send, and with its start and exit places; Ravenwood holds its objects, 40 of them the server's to send, its places and the templates of its statues and teachers; and with AMBROSE_TEST_DB set the rows fill a new world database that the zone manager loads, the server sending the objects its data marks as the server's own to send, and the Commons' volumes.xml and triggers.xml read through the authored classes that database holds: the Ravenwood POI sphere with its enter and exit events, the trigger that fires on entering it, and TeleportToShoppingDistrict, whose one result is a ResTeleport with no destination, as the client's class has no properties.
+ * Extracts every zone of the user's own install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it, with the counts recorded for the installed revision, r806919's below: every zone archive reads without an error and no two zones share a path; the only object list entries left out anywhere are sigils, whose classes the dump does not describe; the Commons comes out as WizardCity/WC_Hub under its own display key with every placed object its data lists but its six sigils, 123 of them the server's to send, and with its start and exit places; Ravenwood holds its objects, 40 of them the server's to send, its places and the templates of its statues and teachers; every zone's spawnData.xml decodes, Ravenwood's five spawners include SpawnPoint_Wood_01 placing with SNT_RANDOM_UNIQUE, and the Commons' HalloweenSpawner1 waits on a ReqGlobalRegistryValue; and with AMBROSE_TEST_DB set the rows fill a new world database that the zone manager loads, the server sending the objects its data marks as the server's own to send, and the Commons' volumes.xml and triggers.xml read through the authored classes that database holds: the Ravenwood POI sphere with its enter and exit events, the trigger that fires on entering it, and TeleportToShoppingDistrict, whose one result is a ResTeleport with no destination, as the client's class has no properties.
  */
 
 #include "DBUpdater.h"
 #include "DatabaseEnv.h"
 #include "KiwadArchive.h"
+#include "ObjectSerializer.h"
 #include "ServerClassScript.h"
 #include "TypeRegistry.h"
 #include "Environment.h"
@@ -158,6 +159,50 @@ TEST_F(ZoneExtractorClientTest, RavenwoodHoldsItsObjectsPlacesAndTeachers)
             EXPECT_TRUE(templates.contains(wanted)) << wanted;
     }
     InstalledRevision::Expect(SentByTheServer(ravenwood), { { "r806919", 40u } }, "Ravenwood objects the server sends");
+}
+
+TEST_F(ZoneExtractorClientTest, RavenwoodsSpawnersAndTheCommonsHalloweenSpawnerReadFromTheirSpawnData)
+{
+    EXPECT_TRUE(std::none_of(s_extraction->TriggerFailures.begin(), s_extraction->TriggerFailures.end(), [](TriggerFileFailure const& failure)
+    {
+        return failure.File == ZoneExtractor::SpawnEntry;
+    })) << "every spawnData.xml decodes";
+    ExtractedZone const& ravenwood = Zone(Ravenwood);
+    InstalledRevision::Expect(ravenwood.Spawners.size(), { { "r806919", 5u } }, "Ravenwood spawners");
+    auto const wood = std::find_if(ravenwood.Spawners.begin(), ravenwood.Spawners.end(), [](ExtractedSpawner const& spawner) { return spawner.Name == "SpawnPoint_Wood_01"; });
+    ASSERT_NE(wood, ravenwood.Spawners.end());
+    ASSERT_FALSE(wood->Items.empty());
+    constexpr int64 RandomUnique = 1;
+    EXPECT_TRUE(std::any_of(wood->Items.begin(), wood->Items.end(), [](ExtractedSpawnItem const& item) { return item.StartNodeType == RandomUnique; }))
+        << "SpawnPoint_Wood_01 places with SNT_RANDOM_UNIQUE";
+
+    ExtractedZone const& hub = Zone(Commons);
+    auto const halloween = std::find_if(hub.Spawners.begin(), hub.Spawners.end(), [](ExtractedSpawner const& spawner) { return spawner.Name == "HalloweenSpawner1"; });
+    ASSERT_NE(halloween, hub.Spawners.end());
+    TypeRegistry registry;
+    ASSERT_TRUE(registry.LoadFromFile(LogConfig::Utf8Path(*Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH"))));
+    SerializerOptions options;
+    options.Versionable = true;
+    options.Flags = SerializerFlag::None;
+    options.Mask = 0;
+    std::vector<std::vector<uint8> const*> lists;
+    if (halloween->GlobalDynamicReqs)
+        lists.push_back(&*halloween->GlobalDynamicReqs);
+    for (ExtractedSpawnItem const& item : halloween->Items)
+        if (item.Object.SpawnRequirements)
+            lists.push_back(&*item.Object.SpawnRequirements);
+    std::set<std::string> classes;
+    for (std::vector<uint8> const* bytes : lists)
+    {
+        DecodeResult const decoded = ObjectSerializer::Decode(registry.GetCatalog(), *bytes, options);
+        ASSERT_TRUE(decoded.Ok() && decoded.Object) << decoded.Detail;
+        PropertyValue const* const requirements = decoded.Object->Get("m_requirements");
+        ASSERT_TRUE(requirements && requirements->GetList());
+        for (PropertyValue const& requirement : *requirements->GetList())
+            if (requirement.AsObject())
+                classes.insert(requirement.AsObject()->GetClass().Name);
+    }
+    EXPECT_TRUE(classes.contains("class ReqGlobalRegistryValue")) << "HalloweenSpawner1 waits on a global registry value";
 }
 
 TEST_F(ZoneExtractorClientTest, TheRowsFillAWorldDatabaseTheZoneManagerLoads)

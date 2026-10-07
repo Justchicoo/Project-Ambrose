@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Opens every GameData archive in name order and reads the gamedata.bin of each that holds one as a versionable object, the form the client keeps zone data in. The decoder names every part of a class the dump does not list by its path, so an object list entry that came back empty is matched to the part it was and reported as a skipped object, a part deeper inside an entry is reported as a skipped part of a row that is still written, and any other problem the decoder names is an error, because it means the dump and the data disagree. A zone is known by its own m_zoneName, which is how the client is told where it is and how it finds the archive, so a name whose archive is not the one it was read from is an error rather than a second guess. Spawn requirements are kept as the versionable bytes the zone data holds them in, written again from the decoded object, so a stored client object stays in the client's own form. A zone's volumes.xml and triggers.xml are BINd files whose classes the dump does not list, so each field is read by its name, and by its hash where no name fits yet, and a field that is missing or of another type fails the file rather than giving a row a default, where a null pointer is a value and a list entry of a class nothing describes, or any issue other than an unknown class, fails it too; a result of a class nothing describes keeps its place with the hash the file gives it, and a part deeper inside a kept entry is reported as a skipped part as in gamedata.bin.
+ * Opens every GameData archive in name order and reads the gamedata.bin of each that holds one as a versionable object, the form the client keeps zone data in. The decoder names every part of a class the dump does not list by its path, so an object list entry that came back empty is matched to the part it was and reported as a skipped object, a part deeper inside an entry is reported as a skipped part of a row that is still written, and any other problem the decoder names is an error, because it means the dump and the data disagree. A zone is known by its own m_zoneName, which is how the client is told where it is and how it finds the archive, so a name whose archive is not the one it was read from is an error rather than a second guess. Spawn requirements are kept as the versionable bytes the zone data holds them in, written again from the decoded object, so a stored client object stays in the client's own form. A zone's volumes.xml and triggers.xml are BINd files whose classes the dump does not list, so each field is read by its name, and by its hash where no name fits yet, and a field that is missing or of another type fails the file rather than giving a row a default, where a null pointer is a value and a list entry of a class nothing describes, or any issue other than an unknown class, fails it too; a result of a class nothing describes keeps its place with the hash the file gives it, and a part deeper inside a kept entry is reported as a skipped part as in gamedata.bin. A zone's spawnData.xml is a BINd of classes the dump does list, so it is read through the spawn views, each spawner's requirements and each item's spawn requirements kept as versionable bytes the same way, and an item that is not a SpawnItem placing a SpawnObjectInfo fails the file.
  */
 
 #include "ZoneExtractor.h"
@@ -354,6 +354,14 @@ std::size_t ZoneExtraction::GetTriggerCount() const noexcept
     return count;
 }
 
+std::size_t ZoneExtraction::GetSpawnerCount() const noexcept
+{
+    std::size_t count = 0;
+    for (ExtractedZone const& zone : Zones)
+        count += zone.Spawners.size();
+    return count;
+}
+
 std::size_t ZoneExtraction::GetTriggerFailureZoneCount() const
 {
     std::set<std::string_view> zones;
@@ -600,6 +608,91 @@ void ZoneExtractor::ReadTriggers(TypeCatalogPtr const& catalog, ExtractedZone& z
     zone.Triggers = std::move(triggers);
 }
 
+void ZoneExtractor::ReadSpawns(TypeCatalogPtr const& catalog, ExtractedZone& zone, std::span<uint8 const> data, ZoneExtraction& extraction)
+{
+    constexpr std::string_view Root = "class SpawnManager";
+    std::string failure;
+    std::optional<BindReadResult> const read = ReadServerFile(catalog, data, Root, failure);
+    if (!read)
+    {
+        extraction.TriggerFailures.push_back({ zone.Path, std::string(SpawnEntry), std::move(failure) });
+        return;
+    }
+    std::string const listPath = fmt::format("{}.m_spawners[", Root);
+    FileIssues issues = SortIssues(read->Decoded.Issues, listPath);
+    std::optional<SpawnManagerView> const root = SpawnManagerView::From(read->Decoded.Object.get());
+    if (!root)
+        failure = "class SpawnManager does not read through the spawn view; the type dump must list it";
+    std::vector<ExtractedSpawner> spawners;
+    PropertyValue::List const* const list = root ? &root->GetSpawners() : nullptr;
+    for (std::size_t index = 0; issues.Failure.empty() && failure.empty() && list && index < list->size(); ++index)
+    {
+        std::string const at = fmt::format("{}{}]", listPath, index);
+        std::optional<SpawnObjectView> const spawner = SpawnObjectView::From((*list)[index].AsObject());
+        if (!spawner)
+        {
+            failure = fmt::format("{} is not a SpawnObject", at);
+            break;
+        }
+        ExtractedSpawner row;
+        row.Name = spawner->GetName();
+        row.Id = spawner->GetId();
+        row.Active = spawner->IsActive();
+        row.PopSensitive = spawner->IsPopSensitive();
+        row.MaxSpawns = spawner->GetMaxSpawns();
+        row.AtLeastOneSpawn = spawner->HasAtLeastOneSpawn();
+        row.ActivateAtMax = spawner->ActivatesAtMax();
+        row.SpawnTime = spawner->GetSpawnTime();
+        row.RespawnRate = spawner->GetRespawnRate();
+        row.GlobalDynamic = spawner->IsGlobalDynamic();
+        row.WaitForTimer = spawner->WaitsForTimer();
+        row.ZoneLevelMin = spawner->GetZoneLevelMin();
+        row.ZoneLevelMax = spawner->GetZoneLevelMax();
+        row.ZoneLevelUp = spawner->GetZoneLevelUp();
+        if (PropertyObject const* const requirements = spawner->GetGlobalDynamicReqs())
+        {
+            std::string error;
+            row.GlobalDynamicReqs = Versionable(requirements, error);
+            if (!row.GlobalDynamicReqs)
+            {
+                failure = fmt::format("{}.m_globalDynamicReqs does not encode: {}", at, error);
+                break;
+            }
+        }
+        PropertyValue::List const& items = spawner->GetSpawnList();
+        for (std::size_t position = 0; failure.empty() && position < items.size(); ++position)
+        {
+            std::string const itemAt = fmt::format("{}.m_spawnList[{}]", at, position);
+            std::optional<SpawnItemView> const item = SpawnItemView::From(items[position].AsObject());
+            PropertyObject const* const placed = item ? item->GetObjectInfo() : nullptr;
+            std::optional<CoreObjectInfoView> const info = CoreObjectInfoView::From(placed);
+            std::optional<SpawnObjectInfoView> const spawnInfo = SpawnObjectInfoView::From(placed);
+            if (!item || !info || !spawnInfo)
+            {
+                failure = fmt::format("{} is not a SpawnItem placing a SpawnObjectInfo", itemAt);
+                break;
+            }
+            std::string error;
+            std::optional<ExtractedObject> object = ObjectValues(*info, error);
+            if (!object)
+            {
+                failure = fmt::format("the spawn requirements of {} do not encode: {}", itemAt, error);
+                break;
+            }
+            row.Items.push_back({ item->GetPercentChance(), std::move(*object), spawnInfo->GetStartNodeType(), spawnInfo->GetStartNode(), spawnInfo->GetPathId(),
+                spawnInfo->GetUniqueLoc() });
+        }
+        spawners.push_back(std::move(row));
+    }
+    if (!issues.Failure.empty() || !failure.empty())
+    {
+        extraction.TriggerFailures.push_back({ zone.Path, std::string(SpawnEntry), issues.Failure.empty() ? failure : issues.Failure });
+        return;
+    }
+    SkipUnplacedParts(issues, zone.Path, extraction);
+    zone.Spawners = std::move(spawners);
+}
+
 ZoneExtraction ZoneExtractor::Extract(std::filesystem::path const& gameData, TypeCatalogPtr const& catalog, ZoneExtractionProgress const& progress)
 {
     ZoneExtraction extraction;
@@ -642,7 +735,7 @@ ZoneExtraction ZoneExtractor::Extract(std::filesystem::path const& gameData, Typ
         if (extraction.Zones.size() == zones)
             continue;
         ExtractedZone& zone = extraction.Zones.back();
-        for (std::string_view const entry : { VolumeEntry, TriggerEntry })
+        for (std::string_view const entry : { VolumeEntry, TriggerEntry, SpawnEntry })
         {
             if (!archive->Find(entry))
                 continue;
@@ -654,8 +747,10 @@ ZoneExtraction ZoneExtractor::Extract(std::filesystem::path const& gameData, Typ
             }
             if (entry == VolumeEntry)
                 ReadVolumes(catalog, zone, read.Data, extraction);
-            else
+            else if (entry == TriggerEntry)
                 ReadTriggers(catalog, zone, read.Data, extraction);
+            else
+                ReadSpawns(catalog, zone, read.Data, extraction);
         }
     }
     if (progress)

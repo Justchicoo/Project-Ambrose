@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables and the level and stat tables after the world database takes one, writes the classes the install holds that its type dump does not describe to the world database when it holds none marked install, from the class file schemaprobe builds once per revision, the same way it asks before other extractions and starting without them when that fails, loads the character name tables and the level and stat tables when the world database is open and, when either set is empty, extracts it from the install and loads it again, automatically in auto mode, after a yes in ask mode and never in off mode, registering the level and stat sets as reload targets, loads the zones, the named places inside them and the objects placed in them, extracting them from the install first when the world database holds none, the same way it does the level tables, with each extraction, each zone archive and each write to the world database reported as a start step with the time it may take, so a supervisor waits for a first run that is still working and ends only one that stalls, and registers each as a reload target, refusing to start when they cannot be read, has every zone instance filled with the objects its zone places that the server sends, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close, after every wizard still in the world has left it and so been saved. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits, template cache or realm heartbeat is applied on the world thread. It reads the template manifest before the player's template and then every spell, sigil and item template, the game effect templates of Root.wad, the quick chat phrases and the animation types an emote must name, each a reload target, and the authored quests of the world database, leaving out and counting each quest that fails a check, through the reload target quest_template.
+ * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables and the level and stat tables after the world database takes one, writes the classes the install holds that its type dump does not describe to the world database when it holds none marked install, from the class file schemaprobe builds once per revision, the same way it asks before other extractions and starting without them when that fails, loads the character name tables and the level and stat tables when the world database is open and, when either set is empty, extracts it from the install and loads it again, automatically in auto mode, after a yes in ask mode and never in off mode, registering the level and stat sets as reload targets, loads the zones, the named places inside them and the objects placed in them, extracting them from the install first when the world database holds none, the same way it does the level tables, with each extraction, each zone archive and each write to the world database reported as a start step with the time it may take, so a supervisor waits for a first run that is still working and ends only one that stalls, and registers each as a reload target, refusing to start when they cannot be read, has every zone instance filled with the objects its zone places that the server sends and kept full by its zone's spawners, their respawns timed by Rate.Respawn, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close, after every wizard still in the world has left it and so been saved. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits, template cache or realm heartbeat is applied on the world thread. It reads the template manifest before the player's template and then every spell, sigil and item template, the game effect templates of Root.wad, the quick chat phrases and the animation types an emote must name, each a reload target, and the authored quests of the world database, leaving out and counting each quest that fails a check, through the reload target quest_template.
  */
 
 #include "AnimationListMgr.h"
@@ -24,6 +24,7 @@
 #include "QuestMgr.h"
 #include "QuickChatMgr.h"
 #include "SigilMgr.h"
+#include "SpawnerMgr.h"
 #include "SpellMgr.h"
 #include "ZoneMgr.h"
 #include "ZoneTriggerMgr.h"
@@ -385,7 +386,8 @@ namespace
                 settings.MobileIdReleaseDelay = std::chrono::milliseconds(sSettings.Get<uint32>("Zone.MobileIdReleaseDelay"));
                 return settings;
             });
-            sMapMgr.SetObjectPopulator(&MapObjectSpawner::PopulateFromWorld);
+            sMapMgr.SetObjectPopulator(&SpawnerMgr::PopulateFromWorld);
+            sSpawnerMgr.SetRateReader([] { return sSettings.Get<float>("Rate.Respawn"); });
             if (WorldDatabase.IsOpen())
             {
                 ZoneLoadResult zones = sZoneMgr.LoadAll();
@@ -406,6 +408,11 @@ namespace
                     LOG_ERROR("server.world", "Zone volumes and triggers: {}", error);
             sZoneTriggerMgr.RegisterReloadTargets();
             LoadQuests();
+            std::vector<std::string> spawnerErrors;
+            if (WorldDatabase.IsOpen() && !sSpawnerMgr.Load(spawnerErrors))
+                for (std::string const& error : spawnerErrors)
+                    LOG_ERROR("server.world", "Zone spawners: {}", error);
+            sSpawnerMgr.RegisterReloadTargets();
 
             uint32 const realmId = Config().GetOption<uint32>("RealmID", 1, true);
             AppenderDB::Enable(Logger(), realmId);
@@ -955,13 +962,13 @@ namespace
                 LOG_ERROR("server.gameserver", "Cannot write the zones to the world database: {}", error);
                 return false;
             }
-            LOG_INFO("server.gameserver", "Extracted {} zones with {} named places, {} placed objects, {} volumes and {} triggers from {}, leaving out {} object list entries of classes the type dump does not describe",
-                extraction->Zones.size(), extraction->GetLocationCount(), extraction->GetObjectCount(), extraction->GetVolumeCount(), extraction->GetTriggerCount(), install,
+            LOG_INFO("server.gameserver", "Extracted {} zones with {} named places, {} placed objects, {} volumes, {} triggers and {} spawners from {}, leaving out {} object list entries of classes the type dump does not describe",
+                extraction->Zones.size(), extraction->GetLocationCount(), extraction->GetObjectCount(), extraction->GetVolumeCount(), extraction->GetTriggerCount(), extraction->GetSpawnerCount(), install,
                 extraction->GetSkippedObjectCount());
             if (!extraction->TriggerFailures.empty())
             {
                 TriggerFileFailure const& first = extraction->TriggerFailures.front();
-                LOG_WARN("server.gameserver", "The volume or trigger files of {} zones do not decode, so those zones have none, the first {} of {}: {}", extraction->GetTriggerFailureZoneCount(),
+                LOG_WARN("server.gameserver", "The volume, trigger or spawn files of {} zones do not decode, so those zones have none, the first {} of {}: {}", extraction->GetTriggerFailureZoneCount(),
                     first.File, first.Zone, first.Detail);
             }
             return true;

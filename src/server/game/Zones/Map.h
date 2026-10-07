@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One running instance of a zone: the dynamic zone id the client is told, the zone it is an instance of, the wizards standing in it, the objects its zone places that the server sends, each with its ids and the Data MSG_NEWOBJECT carries encoded once for every wizard who comes, the generations of the zone rows, classes, tables and templates they were built from, and the mobile ids it has handed out. It lives on the world thread and is touched nowhere else, so it holds no lock. When its last wizard leaves it remembers when it may be taken down, with the delay read at that moment, so a changed Zone.UnloadDelay applies to the next instance that empties and a wizard who comes back before then finds the same instance still there.
+ * One running instance of a zone: the dynamic zone id the client is told, the zone it is an instance of, the wizards standing in it, the objects its zone places that the server sends, each with its ids and the Data MSG_NEWOBJECT carries encoded once for every wizard who comes, the generations of the zone rows, classes, tables and templates they were built from, the mobile ids it has handed out, and the objects its zone's spawners and game masters placed while it runs, each marked with where it came from, with what each spawner holds alive and the times its next objects return. It lives on the world thread and is touched nowhere else, so it holds no lock. When its last wizard leaves it remembers when it may be taken down, with the delay read at that moment, so a changed Zone.UnloadDelay applies to the next instance that empties and a wizard who comes back before then finds the same instance still there.
  */
 
 #ifndef AMBROSE_MAP_H
@@ -32,9 +32,34 @@ struct MapObjectStamp
     }
 };
 
+enum class MapObjectOrigin : uint8
+{
+    Zone,
+    Spawner,
+    Command
+};
+
+struct MapSpawnerLive
+{
+    uint32 RespawnSeconds = 0;
+    std::vector<uint64> Alive;
+    std::vector<std::chrono::steady_clock::time_point> Respawns;
+};
+
+struct MapSpawnerState
+{
+    static constexpr uint64 FirstSpawnId = uint64{ 1 } << 62;
+
+    std::optional<uint64> Generation;
+    std::map<uint32, MapSpawnerLive> Spawners;
+    uint64 NextSpawnId = FirstSpawnId;
+};
+
 struct MapObject
 {
     ZoneObjectSpawn Spawn;
+    MapObjectOrigin Origin = MapObjectOrigin::Zone;
+    uint32 SpawnerIndex = 0;
     uint64 GlobalId = 0;
     uint64 PermId = 0;
     uint16 MobileId = 0;
@@ -76,6 +101,9 @@ public:
     std::vector<uint64> GetPlayers() const;
     void AddObject(MapObject object);
     std::optional<MapObject> RemoveSpawn(uint64 spawnId, Clock::time_point now, std::chrono::milliseconds releaseDelay);
+    std::optional<MapObject> RemoveObject(uint64 globalId, Clock::time_point now, std::chrono::milliseconds releaseDelay);
+    MapSpawnerState& GetSpawnerState() noexcept { return _spawners; }
+    MapSpawnerState const& GetSpawnerState() const noexcept { return _spawners; }
     std::optional<MapObjectStamp> const& GetObjectStamp() const noexcept { return _objectStamp; }
     void SetObjectStamp(MapObjectStamp const& stamp) noexcept { _objectStamp = stamp; }
 
@@ -87,6 +115,7 @@ private:
     MobileIdAllocator _mobileIds;
     std::vector<MapObject> _objects;
     std::optional<MapObjectStamp> _objectStamp;
+    MapSpawnerState _spawners;
     std::optional<Clock::time_point> _unloadAt;
 };
 
