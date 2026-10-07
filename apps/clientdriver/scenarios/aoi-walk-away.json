@@ -1,11 +1,12 @@
 {
-  "title": "A game master travels from the Commons to Ravenwood through the loading screen, and a zone that does not exist is refused",
+  "title": "Two wizards in the Commons with a short visibility distance: one walks out of sight and back, and an exempt landmark stays shown",
   "include": "parts/common.json",
   "notes": [
-    "6.07: two wizards enter the Commons as two-wizards.json has them and the main account is a game master. .tele zone to a path the",
-    "server does not hold is refused and the wizard stays. .tele zone WizardCity/WC_Ravenwood sends MSG_ZONETRANSFERREQUEST; the client acknowledges,",
-    "the game server takes the wizard out of the Commons, which the companion sees, writes Ravenwood's Start as its place and a single-use transfer key,",
-    "and sends MSG_SERVERTRANSFER; the client shows its loading screen, attaches again with the key and stands in Ravenwood."
+    "6.16: Visibility.Distance is 400 so the Commons is larger than what a wizard sees. The companion backs away until the main wizard loses",
+    "sight of it, and its client takes the companion away; walking back, the companion is shown again where it stands. The server names the",
+    "Commons' objects exempt from area of interest, which every wizard is shown wherever it stands. The main wizard stays at Start: backing",
+    "away for 1.5 s, as two-wizard scenarios do, takes it about 900 units off, past the distance, before the companion arrives. Backing and",
+    "walking both cover about 600 units a held second, so 3 s back is well out of sight and 2.6 s forward ends inside it again."
   ],
   "requires": {
     "gameserver": true
@@ -14,7 +15,7 @@
     "Logger.server=2,Console Server Errors Stream",
     "Realm.Name=Ambrose Driver",
     "Logger.network.session=2,Console Server Errors Stream",
-    "Zone.MobileIdReleaseDelay=60000"
+    "Visibility.Distance=400"
   ],
   "server_log_allowed": [
     "character_create_school holds no school, so no wizard can be created until it does",
@@ -86,13 +87,6 @@
     "MSG_TOURNAMENTLOOTROLLINFO"
   ],
   "steps": [
-    {
-      "action": "server_command",
-      "name": "make the main account a game master",
-      "command": "account set gmlevel {user} 2",
-      "pattern": "Security level of \\S+ set to 2",
-      "timeout": 20
-    },
     {
       "action": "wait_client_log",
       "name": "the client brings its renderer up",
@@ -173,12 +167,6 @@
       "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
       "timeout": 300,
       "expect": "WizardCity/WC_Hub"
-    },
-    {
-      "action": "hold_key",
-      "name": "the main wizard backs away from the start",
-      "vk": "0x53",
-      "seconds": 1.5
     },
     {
       "action": "shot",
@@ -284,121 +272,75 @@
       "expect": "WizardCity/WC_Hub"
     },
     {
-      "action": "key",
-      "name": "open the chat line to type .tele zone to a zone that does not exist",
-      "vk": "0xBF"
-    },
-    {
-      "action": "char",
-      "name": "take out the slash the key writes before .tele zone to a zone that does not exist",
-      "code": 8
-    },
-    {
-      "action": "type",
-      "name": "type .tele zone to a zone that does not exist",
-      "text": ".tele zone Nowhere/NoSuchZone"
-    },
-    {
-      "action": "char",
-      "name": "send .tele zone to a zone that does not exist",
-      "code": 13
+      "action": "wait_game_log",
+      "name": "the main wizard sees the companion",
+      "pattern": "wizard {wizard_guid} sees wizard {companion_wizard_guid} at \\((\\S+, \\S+, \\S+)\\)",
+      "timeout": 10,
+      "from": "start",
+      "record": true
     },
     {
       "action": "wait_game_log",
-      "name": "a zone that does not exist is refused",
-      "pattern": "account \\d+ with wizard {wizard_guid} ran tele zone Nowhere/NoSuchZone, which (\\S+)",
-      "timeout": 20,
-      "reject": "worked",
+      "name": "an object of the Commons is exempt from area of interest",
+      "pattern": "Object (\\d+) of zone_object row \\d+ \\(template \\d+\\) at \\(\\S+, \\S+, \\S+\\) in WizardCity/WC_Hub is exempt from area of interest",
+      "timeout": 5,
+      "from": "start",
       "record": true
     },
     {
       "action": "shot",
-      "name": "the game master is told and stays in the Commons",
-      "file": "main-bad-zone",
+      "name": "the main wizard with the companion beside it",
+      "file": "main-sees-companion",
       "settle": 1
     },
     {
-      "action": "key",
-      "name": "open the chat line to type .tele zone WizardCity/WC_Ravenwood",
-      "vk": "0xBF"
-    },
-    {
-      "action": "char",
-      "name": "take out the slash the key writes before .tele zone WizardCity/WC_Ravenwood",
-      "code": 8
-    },
-    {
-      "action": "type",
-      "name": "type .tele zone WizardCity/WC_Ravenwood",
-      "text": ".tele zone WizardCity/WC_Ravenwood"
-    },
-    {
-      "action": "char",
-      "name": "send .tele zone WizardCity/WC_Ravenwood",
-      "code": 13
+      "action": "hold_key",
+      "name": "the companion backs far away",
+      "vk": "0x53",
+      "seconds": 3,
+      "moves": true,
+      "client": "companion"
     },
     {
       "action": "wait_game_log",
-      "name": "the client is asked to leave the Commons",
-      "pattern": "Session \\d+ asked its client to leave WizardCity/WC_Hub for WizardCity/WC_Ravenwood",
-      "timeout": 20
-    },
-    {
-      "action": "wait_game_log",
-      "name": "the companion sees the game master leave",
-      "pattern": "Session \\d+'s wizard {wizard_guid} was taken away from the (\\d+) wizard\\(s\\) still in instance",
-      "timeout": 30,
-      "expect": "1",
-      "record": true
-    },
-    {
-      "action": "wait_game_log",
-      "name": "the client acknowledges and is sent with a transfer key",
-      "pattern": "sent wizard {wizard_guid} from WizardCity/WC_Hub to WizardCity/WC_Ravenwood at (\\S+) with a single-use transfer key",
-      "timeout": 30,
+      "name": "the main wizard loses sight of the companion",
+      "pattern": "wizard {wizard_guid} lost sight of wizard {companion_wizard_guid}",
+      "timeout": 15,
       "record": true
     },
     {
       "action": "shot",
-      "name": "the loading screen",
-      "file": "main-loading",
+      "name": "the companion is gone from the main wizard's view",
+      "file": "main-companion-gone",
       "settle": 1
     },
     {
       "action": "shot",
-      "name": "the companion sees the game master gone",
-      "file": "companion-sees-main-gone",
+      "name": "the companion far from the start",
+      "file": "companion-far",
       "client": "companion",
       "settle": 1
     },
     {
-      "action": "wait_game_log",
-      "name": "the client attaches again with the transfer key",
-      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
-      "timeout": 60,
-      "expect": "{wizard_guid}"
+      "action": "hold_key",
+      "name": "the companion walks back",
+      "vk": "0x57",
+      "seconds": 2.6,
+      "moves": true,
+      "client": "companion"
     },
     {
       "action": "wait_game_log",
-      "name": "the game master arrives at Ravenwood's Start",
-      "pattern": "put wizard {wizard_guid} in (\\S+) instance \\d+ at",
-      "timeout": 60,
-      "fail": "cannot enter the world",
-      "expect": "WizardCity/WC_Ravenwood",
+      "name": "the main wizard sees the companion again where it stands",
+      "pattern": "wizard {wizard_guid} sees wizard {companion_wizard_guid} at \\((\\S+, \\S+, \\S+)\\)",
+      "timeout": 15,
       "record": true
     },
     {
-      "action": "wait_game_log",
-      "name": "the client loads Ravenwood",
-      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
-      "timeout": 300,
-      "expect": "WizardCity/WC_Ravenwood"
-    },
-    {
       "action": "shot",
-      "name": "the game master in Ravenwood",
-      "file": "main-in-ravenwood",
-      "settle": 3
+      "name": "the companion is back in the main wizard's view",
+      "file": "main-sees-companion-again",
+      "settle": 1
     }
   ]
 }

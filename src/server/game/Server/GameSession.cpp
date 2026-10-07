@@ -29,6 +29,7 @@
 #include "PackedName.h"
 #include "PassKey3.h"
 #include "PlayerObjectBuilder.h"
+#include "InstanceSight.h"
 #include "ScriptMgr.h"
 #include "Settings.h"
 #include "SpellMgr.h"
@@ -780,7 +781,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     if (_muteUntil != 0)
         SendMuteNotice();
     SendBadges();
-    SendMapObjects(*map);
+    std::size_t const objectsInSight = UpdateSight(*map, InstanceSight(*map, SightRangeOf(*map)), {}).New.size();
     ShowGameEffectsOf(*this);
     SendCustomEmotes();
     if (!resumed)
@@ -789,9 +790,9 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     LOG_DEBUG("server.gamesession", "Session {} sent MSG_LOGINCOMPLETE: zone {}, id {}, dynamic zone {} in process {}, server time {}, realm {}, permissions {:#x}, CSR {}, test server {}, critical objects {}",
         GetSessionId(), complete.ZoneName, complete.ZoneId, complete.DynamicZoneId, complete.DynamicServerProcId, complete.ServerTime, complete.RealmName, complete.Permissions,
         complete.IsCsr, complete.TestServer, complete.CriticalObjects.empty() ? "none" : "a list");
-    LOG_INFO("server.gamesession", "Session {} put wizard {} in {} instance {} at ({}, {}, {}) with mobile id {}, level {} with {} of {} health and {} of {} mana and {} spell(s) in its book, and sent its {}-byte object and the zone's {} object(s)",
+    LOG_INFO("server.gamesession", "Session {} put wizard {} in {} instance {} at ({}, {}, {}) with mobile id {}, level {} with {} of {} health and {} of {} mana and {} spell(s) in its book, and sent its {}-byte object and the {} of the zone's {} object(s) in sight",
         GetSessionId(), character.Guid, entering.Zone, map->GetDynamicZoneId(), placement.X, placement.Y, placement.Z, placement.MobileId, _player->GetStats().GetLevel(), _player->GetStats().GetHitpoints(),
-        _player->GetStats().GetMaxHitpoints(), _player->GetStats().GetMana(), _player->GetStats().GetMaxMana(), trackers.size(), data.Bytes.size(), map->GetObjects().size());
+        _player->GetStats().GetMaxHitpoints(), _player->GetStats().GetMana(), _player->GetStats().GetMaxMana(), trackers.size(), data.Bytes.size(), objectsInSight, map->GetObjects().size());
 }
 
 void GameSession::ApplyMute(uint64 until)
@@ -1023,7 +1024,7 @@ bool GameSession::TeleportWithinMap(PlayerPosition const& target, std::vector<st
     std::size_t shown = 0;
     for (std::shared_ptr<GameSession> const& viewer : onlookers)
     {
-        if (!viewer->IsOpen() || viewer->GetMapId() != _mapId)
+        if (!viewer->IsOpen() || viewer->GetMapId() != _mapId || (viewer.get() != this && !viewer->Sees(_worldGuid)))
             continue;
         viewer->ShowTeleportOf(*this, place);
         if (viewer.get() != this)
@@ -1260,14 +1261,50 @@ void GameSession::HandlePostZoneEventFromClient(GameMessages::PostZoneEventFromC
         fired.empty() ? std::string("no trigger") : fmt::format("{}", fmt::join(fired, ", ")));
 }
 
-void GameSession::SendMapObjects(Map const& map)
+VisibilityRange GameSession::SightRangeOf(Map const& map)
 {
-    for (MapObject const& object : map.GetObjects())
+    std::shared_ptr<ZoneTemplates const> const templates = sZoneMgr.GetTemplates();
+    ZoneTemplate const* const zone = templates ? templates->Find(map.GetZonePath()) : nullptr;
+    return VisibilityRange::Resolve(sSettings.Get<float>("Visibility.Distance"), sSettings.Get<float>("Visibility.Hysteresis"), zone ? zone->FarClip : std::nullopt);
+}
+
+VisibilityChanges GameSession::UpdateSight(Map const& map, InstanceSight const& sight, std::map<uint64, GameSession const*> const& wizards)
+{
+    PlayerPosition const& at = _movement.GetPosition();
+    VisibilityChanges changes = _sight.Update(sight.CandidatesFor(_worldGuid, { at.X, at.Y, at.Z }), sight.GetRange());
+    for (uint64 const id : changes.Removed)
     {
-        GameMessages::NewObject message;
-        message.Data.assign(object.Data.begin(), object.Data.end());
-        SendDmlMessage(message);
+        HidePlayer(id);
+        if (wizards.contains(id))
+            LOG_DEBUG("server.gamesession", "Session {}'s wizard {} lost sight of wizard {}", GetSessionId(), _worldGuid, id);
     }
+    auto const show = [&](uint64 id)
+    {
+        if (MapObject const* const object = map.FindObject(id))
+        {
+            GameMessages::NewObject message;
+            message.Data.assign(object->Data.begin(), object->Data.end());
+            SendDmlMessage(message);
+        }
+        else if (auto const wizard = wizards.find(id); wizard != wizards.end())
+        {
+            ShowPlayer(*wizard->second);
+            PlayerPosition const& there = wizard->second->GetMovement().GetPosition();
+            LOG_DEBUG("server.gamesession", "Session {}'s wizard {} sees wizard {} at ({}, {}, {})", GetSessionId(), _worldGuid, id, there.X, there.Y, there.Z);
+        }
+    };
+    for (uint64 const id : changes.New)
+        show(id);
+    for (uint64 const id : changes.Added)
+        show(id);
+    return changes;
+}
+
+void GameSession::ForgetSight(uint64 id)
+{
+    if (_sight.IsVisible(id))
+        HidePlayer(id);
+    _sight.Forget(id);
 }
 
 void GameSession::SendCustomEmotes()
@@ -1291,21 +1328,7 @@ void GameSession::SendObjectChanges(MapObjectChanges const& changes)
     if (!_mapId || *_mapId != changes.DynamicZoneId)
         return;
     for (uint64 const removed : changes.Removed)
-    {
-        GameMessages::RemoveObject message;
-        message.GameObjectId = removed;
-        SendDmlMessage(message);
-    }
-    Map const* const map = sMapMgr.Find(*_mapId);
-    if (!map)
-        return;
-    for (uint64 const added : changes.Added)
-        if (MapObject const* const object = map->FindObject(added))
-        {
-            GameMessages::NewObject message;
-            message.Data.assign(object->Data.begin(), object->Data.end());
-            SendDmlMessage(message);
-        }
+        ForgetSight(removed);
 }
 
 void GameSession::HandleClientZoned(GameMessages::ClientZoned& message)
@@ -1587,6 +1610,7 @@ void GameSession::LeaveWorld()
     _zoneDisplay.clear();
     _wizBangId = 0;
     _pendingWizBang.reset();
+    _sight.Clear();
     if (_player)
     {
         SaveStats();

@@ -39,6 +39,7 @@ struct MapObject
     uint64 PermId = 0;
     uint16 MobileId = 0;
     bool Critical = false;
+    bool ExemptFromAoi = false;
     std::vector<uint8> Data;
 };
 
