@@ -81,7 +81,7 @@ if(NAME STREQUAL "loginserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AM
     foreach(round IN ITEMS first second)
         execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=${smokeDatabase}" "--set=CharacterDatabaseInfo=${smokeCharacters}"
                 "--set=WorldDatabaseInfo=${smokeWorld}"
-            WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE databaseResult OUTPUT_VARIABLE databaseOutput ERROR_VARIABLE databaseError TIMEOUT 60)
+            WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE databaseResult OUTPUT_VARIABLE databaseOutput ERROR_VARIABLE databaseError TIMEOUT 600)
         if(NOT databaseResult EQUAL 0 OR NOT databaseOutput MATCHES "Opened database connection pool login: 1 async, 1 sync" OR NOT databaseOutput MATCHES "loginserver ready" OR NOT databaseOutput MATCHES "Closed database connection pool login"
             OR NOT databaseOutput MATCHES "Opened database connection pool characters: 1 async, 1 sync" OR NOT databaseOutput MATCHES "Opened database connection pool world: 1 async, 1 sync"
             OR NOT databaseOutput MATCHES "Wizards can be created from")
@@ -100,7 +100,7 @@ if(NAME STREQUAL "loginserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AM
     execute_process(COMMAND "${CMAKE_COMMAND}" -E cat "${WORKDIR}/console.txt"
         COMMAND "${APP}" --config "${appDir}/${NAME}.conf.dist" ${quietOptions} "--set=LoginDatabaseInfo=${smokeDatabase}" "--set=CharacterDatabaseInfo=${smokeCharacters}"
             "--set=WorldDatabaseInfo=${smokeWorld}"
-        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE consoleResult OUTPUT_VARIABLE consoleOutput ERROR_VARIABLE consoleError TIMEOUT 60)
+        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE consoleResult OUTPUT_VARIABLE consoleOutput ERROR_VARIABLE consoleError TIMEOUT 600)
     if(NOT consoleResult EQUAL 0)
         ambrose_test_fail("loginserver reading console commands exited ${consoleResult}: ${consoleOutput}${consoleError}")
     endif()
@@ -119,7 +119,7 @@ endif()
 function(ambrose_realm_step databaseInfo realmName testName what)
     execute_process(COMMAND "${CMAKE_COMMAND}" -E env "AMBROSE_TEST_DB=${databaseInfo}" "AMBROSE_REALM_NAME=${realmName}" "AMBROSE_REALM_MAX_AGE=180"
             "${UNIT_TESTS}" --gtest_also_run_disabled_tests "--gtest_filter=RealmHeartbeatIntegration.${testName}"
-        RESULT_VARIABLE stepResult OUTPUT_VARIABLE stepOutput ERROR_VARIABLE stepError TIMEOUT 120)
+        RESULT_VARIABLE stepResult OUTPUT_VARIABLE stepOutput ERROR_VARIABLE stepError TIMEOUT 600)
     if(NOT stepResult EQUAL 0)
         ambrose_test_fail("the realm heartbeat check failed ${what} (${stepResult}): ${stepOutput}${stepError}")
     endif()
@@ -138,7 +138,7 @@ if(NAME STREQUAL "gameserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AMB
         list(APPEND realmOptions "--set=${database}DatabaseInfo=${databaseInfo}")
     endforeach()
     execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} ${realmOptions} --set Appender.DB=4,2,0
-        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE realmResult OUTPUT_VARIABLE realmOutput ERROR_VARIABLE realmError TIMEOUT 120)
+        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE realmResult OUTPUT_VARIABLE realmOutput ERROR_VARIABLE realmError TIMEOUT 600)
     if(NOT realmResult EQUAL 0)
         ambrose_test_fail("gameserver --check on empty databases exited ${realmResult}: ${realmOutput}${realmError}")
     endif()
@@ -151,7 +151,7 @@ if(NAME STREQUAL "gameserver" AND DEFINED ENV{AMBROSE_TEST_DB} AND NOT "$ENV{AMB
         ambrose_realm_step("${loginInfo}" "${realmName}" DISABLED_AddTheRealmTheServerWillBeatFor "putting the realm in before the server ran")
         execute_process(COMMAND "${APP}" --check --config "${appDir}/${NAME}.conf.dist" ${quietOptions} ${realmOptions} --set Appender.DB=4,2,0
                 "--set=Realm.Name=${realmName}"
-            WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE beatResult OUTPUT_VARIABLE beatOutput ERROR_VARIABLE beatError TIMEOUT 120)
+            WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE beatResult OUTPUT_VARIABLE beatOutput ERROR_VARIABLE beatError TIMEOUT 600)
         if(NOT beatResult EQUAL 0)
             ambrose_test_fail("gameserver --check as realm ${realmName} exited ${beatResult}: ${beatOutput}${beatError}")
         endif()

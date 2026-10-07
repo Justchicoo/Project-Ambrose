@@ -5,6 +5,7 @@
 
 #include "QuestMadlibs.h"
 
+#include <type_traits>
 #include <utility>
 
 namespace QuestMadlibs
@@ -47,6 +48,20 @@ namespace QuestMadlibs
         if (subscriberTotal)
             block.Arguments.push_back(Integer("SUBSCRIBER_TOTAL", *subscriberTotal));
         return block;
+    }
+
+    Block BuildGoal(Quests::QuestGoal const& goal, int32 count, std::optional<int32> subscriberTotal)
+    {
+        return std::visit([count, subscriberTotal](auto const& typedGoal)
+        {
+            using Goal = std::remove_cvref_t<decltype(typedGoal)>;
+            int32 total = 0;
+            if constexpr (std::is_same_v<Goal, Quests::BountyGoalTemplate>)
+                total = typedGoal.BountyTotal;
+            else if constexpr (std::is_same_v<Goal, Quests::ScavengeGoalTemplate>)
+                total = typedGoal.ItemTotal;
+            return BuildGoal(static_cast<Quests::GoalTemplate const&>(typedGoal), count, total, subscriberTotal);
+        }, goal);
     }
 
     Block BuildNpc(NpcFields const& npc)

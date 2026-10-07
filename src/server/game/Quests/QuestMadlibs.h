@@ -51,6 +51,7 @@ namespace QuestMadlibs
     };
 
     Block BuildQuest(Quests::QuestTemplate const& quest);
+    Block BuildGoal(Quests::QuestGoal const& goal, int32 count, std::optional<int32> subscriberTotal = {});
     Block BuildGoal(Quests::GoalTemplate const& goal, int32 count, int32 total, std::optional<int32> subscriberTotal = {});
     Block BuildNpc(NpcFields const& npc);
 }

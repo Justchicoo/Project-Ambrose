@@ -6,7 +6,7 @@
 #ifndef AMBROSE_ACTORDIALOG_H
 #define AMBROSE_ACTORDIALOG_H
 
-#include "../Quests/QuestMadlibs.h"
+#include "QuestMadlibs.h"
 
 #include <optional>
 #include <string>

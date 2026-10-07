@@ -6,7 +6,7 @@
 #ifndef AMBROSE_QUESTWIREENCODER_H
 #define AMBROSE_QUESTWIREENCODER_H
 
-#include "../Dialogs/ActorDialog.h"
+#include "ActorDialog.h"
 #include "BlobEnvelope.h"
 #include "ObjectSerializer.h"
 #include "QuestMadlibs.h"

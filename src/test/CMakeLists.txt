@@ -10,9 +10,6 @@ foreach(source IN LISTS all_test_sources)
     if(relative MATCHES "^(compile|client|fuzz|helpers|tools)/")
         continue()
     endif()
-    if(relative STREQUAL "server/game/Quests/QuestWireEncoderTest.cpp")
-        continue()
-    endif()
     if(relative MATCHES "^server/apps/loginserver/" AND NOT TARGET login)
         continue()
     endif()
@@ -48,18 +45,9 @@ target_link_libraries(unit_tests
         scripts
         world
         chat
+        quests
         nlohmann_json::nlohmann_json
         GTest::gmock)
-
-add_executable(quest_wire_encoder_tests
-    "${CMAKE_CURRENT_SOURCE_DIR}/Main.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/server/game/Quests/QuestWireEncoderTest.cpp")
-target_link_libraries(quest_wire_encoder_tests
-    PRIVATE
-        ambrose-compile-options
-        quests
-        GTest::gmock)
-gtest_discover_tests(quest_wire_encoder_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT 120 PROPERTIES LABELS client)
 
 if(WIN32)
     target_link_libraries(unit_tests PRIVATE advapi32 ws2_32)

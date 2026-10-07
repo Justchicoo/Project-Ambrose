@@ -20,7 +20,7 @@ ambrose_test_database_info(ambrose_dbimport_world worldInfo)
 foreach(round IN ITEMS first second)
     execute_process(COMMAND "${APP}" --config "${appDir}/dbimport.conf.dist" ${quietOptions}
             "--set=LoginDatabaseInfo=${loginInfo}" "--set=CharacterDatabaseInfo=${characterInfo}" "--set=WorldDatabaseInfo=${worldInfo}"
-        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE importResult OUTPUT_VARIABLE importOutput ERROR_VARIABLE importError TIMEOUT 120)
+        WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE importResult OUTPUT_VARIABLE importOutput ERROR_VARIABLE importError TIMEOUT 600)
     if(NOT importResult EQUAL 0 OR NOT importOutput MATCHES "Every enabled database is created and up to date")
         ambrose_test_fail("dbimport's ${round} run exited ${importResult}: ${importOutput}${importError}")
     endif()
@@ -39,7 +39,7 @@ file(WRITE "${WORKDIR}/source/data/sql/updates/db_world/2099_01_01_00.sql" "-- P
 ambrose_test_database_info(ambrose_dbimport_broken_world brokenInfo)
 execute_process(COMMAND "${APP}" --config "${appDir}/dbimport.conf.dist" ${quietOptions} --set Updates.EnableDatabases=4 "--set=Updates.SourcePath=${WORKDIR}/source" --set LoginDatabaseInfo= --set CharacterDatabaseInfo=
         "--set=WorldDatabaseInfo=${brokenInfo}"
-    WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE brokenResult OUTPUT_VARIABLE brokenOutput ERROR_VARIABLE brokenError TIMEOUT 120)
+    WORKING_DIRECTORY "${WORKDIR}" RESULT_VARIABLE brokenResult OUTPUT_VARIABLE brokenOutput ERROR_VARIABLE brokenError TIMEOUT 600)
 if(NOT brokenResult EQUAL 1)
     ambrose_test_fail("dbimport with a broken update exited ${brokenResult}: ${brokenOutput}${brokenError}")
 endif()

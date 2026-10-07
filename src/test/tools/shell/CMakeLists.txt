@@ -11,8 +11,19 @@ set(shell_smoke_supervisor "")
 if(TARGET supervisor)
     set(shell_smoke_supervisor "$<TARGET_FILE:supervisor>")
 endif()
+if(WIN32)
+    get_filename_component(openssl_install_dir "${OPENSSL_INCLUDE_DIR}" DIRECTORY)
+    set(openssl_ssl_dll "${openssl_install_dir}/bin/libssl-3-x64.dll")
+    set(openssl_crypto_dll "${openssl_install_dir}/bin/libcrypto-3-x64.dll")
+    if(NOT EXISTS "${openssl_ssl_dll}" OR NOT EXISTS "${openssl_crypto_dll}")
+        message(FATAL_ERROR "ShellSmoke requires the OpenSSL runtime DLLs beside the vcpkg include directory.")
+    endif()
+    set(shell_smoke_dlls "$<JOIN:$<TARGET_RUNTIME_DLLS:shell_smoke>,|>|${openssl_ssl_dll}|${openssl_crypto_dll}")
+else()
+    set(shell_smoke_dlls "")
+endif()
 add_test(NAME ShellSmoke
     COMMAND "${CMAKE_COMMAND}" "-DSMOKE=$<TARGET_FILE:shell_smoke>" "-DSUPERVISOR=${shell_smoke_supervisor}"
-        "-DDLLS=$<$<BOOL:${WIN32}>:$<JOIN:$<TARGET_RUNTIME_DLLS:shell_smoke>,|>>" "-DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/shell-smoke"
+        "-DDLLS=${shell_smoke_dlls}" "-DWORKDIR=${CMAKE_CURRENT_BINARY_DIR}/shell-smoke"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/ShellSmokeTest.cmake")
 set_tests_properties(ShellSmoke PROPERTIES SKIP_REGULAR_EXPRESSION "shell smoke skipped" TIMEOUT 600 RUN_SERIAL TRUE LABELS render)
