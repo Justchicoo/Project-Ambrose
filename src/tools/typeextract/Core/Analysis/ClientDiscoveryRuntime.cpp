@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The discovery steps that read the emulated process: the std::map node layout taken from the largest tree on the heap whose links, nil flag, red-black colors, rising keys and values holding and naming their keys all agree, allowing one alias node in 64 that shares another's Type, the type map head found from heap nodes whose type name hashes to their key, an in-order walk of that map, Type and std::string fields matched against values supplied to the Type constructor, and votes for the Type constructor and PropertyList initializer.
+ * The discovery steps that read the emulated process: the std::map node layout taken from the largest tree on the heap whose links, nil flag, red-black colors, rising keys and values holding and naming their keys all agree, allowing one alias node in 64 that shares another's Type, the type map head found from heap nodes whose type name hashes to their key, an in-order walk of that map, Type and std::string fields matched against values supplied to the Type constructor, the property list link voted on by lists that name their class, the pointer flag taken from the byte set for pointer and shared pointer types, and votes for the Type constructor and PropertyList initializer.
  */
 
 #include "ClientDiscovery.h"
@@ -9,8 +9,10 @@
 #include "Machine.h"
 #include "PeImage.h"
 #include "StringHash.h"
+#include "TypeWalker.h"
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <algorithm>
 #include <array>
@@ -730,4 +732,168 @@ std::optional<DiscoveryVote> ClientDiscovery::FindPropertyListInitializer(Machin
         }
     }
     return Elect(votes, "PropertyList initializer", error);
+}
+
+namespace
+{
+    constexpr uint64 TypeFieldWindow = 0x100;
+    constexpr uint64 ListNameWindow = 0x100;
+    constexpr std::size_t ListSampleTypes = 256;
+
+    struct TypeSnapshot
+    {
+        uint64 Address = 0;
+        std::string Name;
+        std::vector<uint8> Bytes;
+    };
+
+    std::optional<std::string> ReadLayoutString(Machine const& machine, uint64 address, ClientLayout const& layout)
+    {
+        std::optional<uint64> const length = TryReadU64(machine, address + layout.StringSize);
+        std::optional<uint64> const capacity = TryReadU64(machine, address + layout.StringCapacity);
+        if (!length || !capacity || *length > MaxTypeNameLength || *capacity < *length)
+            return std::nullopt;
+        uint64 text = address;
+        if (*capacity > layout.StringInlineCapacity)
+        {
+            std::optional<uint64> const pointer = TryReadU64(machine, address);
+            if (!pointer)
+                return std::nullopt;
+            text = *pointer;
+        }
+        std::vector<uint8> bytes(static_cast<std::size_t>(*length));
+        if (!machine.TryRead(text, bytes))
+            return std::nullopt;
+        return std::string(bytes.begin(), bytes.end());
+    }
+
+    std::vector<TypeSnapshot> SnapshotTypes(Machine const& machine, GuestHeap const& heap, std::span<uint64 const> types, ClientLayout const& layout)
+    {
+        uint64 size = TypeFieldWindow;
+        for (uint64 const type : types)
+            if (std::optional<uint64> const allocated = heap.SizeOf(type))
+                size = std::min(size, *allocated);
+        std::vector<TypeSnapshot> snapshots;
+        std::unordered_set<uint64> seen;
+        for (uint64 const type : types)
+        {
+            if (!seen.insert(type).second)
+                continue;
+            std::optional<std::string> name = ReadLayoutString(machine, type + layout.TypeName, layout);
+            std::vector<uint8> bytes(static_cast<std::size_t>(size));
+            if (name && !name->empty() && machine.TryRead(type, bytes))
+                snapshots.push_back({ type, std::move(*name), std::move(bytes) });
+        }
+        return snapshots;
+    }
+
+    bool NamesAPointer(std::string_view name)
+    {
+        return name.ends_with('*') || (name.starts_with("class SharedPointer<") && name.ends_with('>'));
+    }
+
+    bool TypeFieldTaken(ClientLayout const& layout, uint64 offset, uint64 length)
+    {
+        std::array const taken = { Span{ layout.TypeName, layout.StringObjectSize }, Span{ layout.TypeHash, 4 } };
+        return Overlaps(offset, length, taken);
+    }
+}
+
+bool ClientDiscovery::DerivePropertyListLink(Machine const& machine, GuestHeap const& heap, std::span<uint64 const> types, ClientLayout& layout, std::string& error)
+{
+    std::vector<TypeSnapshot> const snapshots = SnapshotTypes(machine, heap, types, layout);
+    uint64 const size = snapshots.empty() ? 0 : snapshots.front().Bytes.size();
+    std::map<uint64, uint64> votes;
+    for (uint64 slot = 0; slot + 8 <= size; slot += 8)
+    {
+        if (TypeFieldTaken(layout, slot, 8))
+            continue;
+        std::size_t sampled = 0;
+        for (TypeSnapshot const& type : snapshots)
+        {
+            uint64 const list = Get64(type.Bytes, slot);
+            if (!list || list == type.Address)
+                continue;
+            if (++sampled > ListSampleTypes)
+                break;
+            std::string const expected = TypeWalker::ListNameOf(type.Name);
+            for (uint64 name = 0; name < ListNameWindow; name += 8)
+                if (ReadLayoutString(machine, list + name, layout) == expected)
+                {
+                    ++votes[(slot << 16) | name];
+                    break;
+                }
+        }
+    }
+    std::optional<DiscoveryVote> const vote = Elect(votes, "Type.property_list and PropertyList.name", error);
+    if (!vote)
+    {
+        error = fmt::format("Type.property_list could not be placed: {}", error);
+        return false;
+    }
+    uint64 const slot = vote->Winner >> 16;
+    uint64 const name = vote->Winner & 0xFFFF;
+    std::size_t lists = 0;
+    std::size_t named = 0;
+    for (TypeSnapshot const& type : snapshots)
+        if (uint64 const list = Get64(type.Bytes, slot); list)
+        {
+            ++lists;
+            if (ReadLayoutString(machine, list + name, layout) == TypeWalker::ListNameOf(type.Name))
+                ++named;
+        }
+    if (named != lists)
+    {
+        error = fmt::format("Type.property_list could not be placed: {} of the {} lists at {:#x} in a Type do not hold their class's name at {:#x}", lists - named, lists, slot, name);
+        return false;
+    }
+    layout.TypePropertyList = slot;
+    layout.ListName = name;
+    std::string const evidence = fmt::format("each of {} types with a list points at {:#x} to one whose string at {:#x} names the type's class ({} sampled votes, runner-up {})", lists, slot, name, vote->WinnerVotes, vote->RunnerUpVotes);
+    layout.ConfirmDerived("Type.property_list", evidence);
+    layout.ConfirmDerived("PropertyList.name", evidence);
+    return true;
+}
+
+bool ClientDiscovery::DeriveTypePointerFlag(Machine const& machine, GuestHeap const& heap, std::span<uint64 const> types, ClientLayout& layout, std::string& error)
+{
+    std::vector<TypeSnapshot> const snapshots = SnapshotTypes(machine, heap, types, layout);
+    std::size_t const pointers = static_cast<std::size_t>(std::count_if(snapshots.begin(), snapshots.end(), [](TypeSnapshot const& type) { return NamesAPointer(type.Name); }));
+    if (pointers == 0 || pointers == snapshots.size())
+    {
+        error = fmt::format("Type.pointer could not be placed: {} of {} registered types are pointers, and it takes both kinds", pointers, snapshots.size());
+        return false;
+    }
+    uint64 const size = snapshots.front().Bytes.size();
+    std::size_t const tolerated = snapshots.size() / MapAliasShare;
+    std::vector<uint64> flags;
+    uint64 closest = 0;
+    std::size_t fewestMisses = std::numeric_limits<std::size_t>::max();
+    for (uint64 offset = 0; offset < size; ++offset)
+    {
+        if (TypeFieldTaken(layout, offset, 1) || Overlaps(offset, 1, std::array{ Span{ layout.TypePropertyList, 8 } }))
+            continue;
+        std::size_t const misses = static_cast<std::size_t>(std::count_if(snapshots.begin(), snapshots.end(), [&](TypeSnapshot const& type) { return type.Bytes[offset] != (NamesAPointer(type.Name) ? 1 : 0); }));
+        if (misses <= tolerated)
+            flags.push_back(offset);
+        if (misses < fewestMisses)
+        {
+            fewestMisses = misses;
+            closest = offset;
+        }
+    }
+    std::vector<std::string> exceptions;
+    for (TypeSnapshot const& type : snapshots)
+        if (exceptions.size() < 4 && type.Bytes[closest] != (NamesAPointer(type.Name) ? 1 : 0))
+            exceptions.push_back(fmt::format("{} ({})", type.Name, type.Bytes[closest]));
+    if (flags.size() != 1)
+    {
+        error = fmt::format("Type.pointer could not be placed: {} bytes of a Type are 1 for the {} pointer types among {} with at most {} exceptions; the closest, at {:#x}, differs on {}, such as {}",
+            flags.size(), pointers, snapshots.size(), tolerated, closest, fewestMisses, fmt::join(exceptions, ", "));
+        return false;
+    }
+    layout.TypePointer = flags[0];
+    layout.ConfirmDerived("Type.pointer", fmt::format("the one byte that is 1 for the {} types named as pointers or shared pointers and 0 for the other {}, but for {} exceptions{}{}",
+        pointers, snapshots.size() - pointers, fewestMisses, exceptions.empty() ? "" : ": ", fmt::join(exceptions, ", ")));
+    return true;
 }

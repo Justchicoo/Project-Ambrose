@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs a whole extraction: refuses an install whose revision cannot name a dump file, loads the install's client program and runtime, derives the type map's std::map node layout from the heap (before the search for an unknown build, and afterwards as a check against the written offsets for a known one) and Type and std::string layout from values passed to the client's constructor, runs its initializers and lazy getters, adds its races, validates the type map and server catalog, and reports per-field evidence, timings, counts and discoveries.
+ * Runs a whole extraction: refuses an install whose revision cannot name a dump file, loads the install's client program and runtime, derives the type map's std::map node layout from the heap (before the search for an unknown build, and afterwards as a check against the written offsets for a known one) Type and std::string layout from values passed to the client's constructor (whose probe Types it then leaves out of the walk), and the property list link and pointer flag from the registered types, runs its initializers and lazy getters, adds its races, validates the type map and server catalog, and reports per-field evidence, timings, counts and discoveries.
  */
 
 #include "TypeExtraction.h"
@@ -25,6 +25,7 @@
 #include <chrono>
 #include <cstddef>
 #include <exception>
+#include <initializer_list>
 #include <limits>
 #include <set>
 #include <string_view>
@@ -70,7 +71,7 @@ namespace
         return object;
     }
 
-    bool ProbeTypeLayout(GuestProcess& process, uint64 constructor, ClientLayout& layout, std::string& error)
+    bool ProbeTypeLayout(GuestProcess& process, uint64 constructor, ClientLayout& layout, std::unordered_set<uint64>& probes, std::string& error)
     {
         std::array<std::string_view, 2> const names = {
             "AmbroseProbe",
@@ -82,6 +83,7 @@ namespace
         {
             uint32 const hash = StringHash::KiStringHash(name);
             uint64 const object = process.GetHeap().Allocate(0x200, true);
+            probes.insert(object);
             uint64 const nameAddress = process.StoreCString(name);
             try
             {
@@ -268,9 +270,10 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
         if (!constructor)
             return fail(fmt::format("the Type constructor was not found: {}", error));
         result.Discovered.push_back(fmt::format("Type constructor at {} ({} votes, runner-up {} votes)", process.DescribeAddress(constructor->Winner), constructor->WinnerVotes, constructor->RunnerUpVotes));
+        std::unordered_set<uint64> probes;
         auto deriveTypeLayout = [&]()
         {
-            if (!ProbeTypeLayout(process, constructor->Winner, layout, error))
+            if (!ProbeTypeLayout(process, constructor->Winner, layout, probes, error))
             {
                 result.Discovered.push_back(fmt::format("layout derivation unavailable: {}", error));
                 return false;
@@ -282,16 +285,30 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
                         evidence.Field, evidence.Value, evidence.ConfirmedBy));
             return true;
         };
+        auto announce = [&](ClientLayout const& source, std::initializer_list<std::string_view> fields)
+        {
+            for (ClientLayoutEvidence const& evidence : source.Evidence())
+                if (std::find(fields.begin(), fields.end(), evidence.Field) != fields.end() && evidence.Status == "derived")
+                    result.Discovered.push_back(fmt::format("layout derivation: {} at {:#x} ({})", evidence.Field, evidence.Value, evidence.ConfirmedBy));
+        };
+        auto deriveListLink = [&](ClientLayout& target, std::span<uint64 const> registered)
+        {
+            if (!ClientDiscovery::DerivePropertyListLink(machine, process.GetHeap(), registered, target, error))
+                return false;
+            announce(target, { "Type.property_list", "PropertyList.name" });
+            return true;
+        };
+        auto derivePointerFlag = [&](ClientLayout& target, std::span<uint64 const> registered)
+        {
+            if (!ClientDiscovery::DeriveTypePointerFlag(machine, process.GetHeap(), registered, target, error))
+                return false;
+            announce(target, { "Type.pointer" });
+            return true;
+        };
         if (options.RequireDerivedLayout || !referenceLayout)
         {
-            if (!deriveTypeLayout())
+            if (!deriveTypeLayout() || !deriveListLink(layout, *types))
                 return fail(fmt::format("the client layout could not be derived: {}", error));
-            if (options.RequireDerivedLayout)
-            {
-                reportLayout();
-                if (!RequireDerivedLayout(layout, error))
-                    return fail(error);
-            }
         }
 
         std::optional<DiscoveryVote> const listInitializer = ClientDiscovery::FindPropertyListInitializer(machine, code, *types, layout, error);
@@ -370,8 +387,11 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
         types = ClientDiscovery::WalkTypeMap(machine, *head, layout, error);
         if (!types)
             return fail(fmt::format("the type map could not be walked: {}", error));
-        if (!options.RequireDerivedLayout && !referenceLayout)
+        std::erase_if(*types, [&](uint64 type) { return probes.contains(type); });
+        if (options.RequireDerivedLayout || !referenceLayout)
         {
+            if (!derivePointerFlag(layout, *types))
+                return fail(fmt::format("the client layout could not be derived: {}", error));
             reportLayout();
             if (!RequireDerivedLayout(layout, error))
                 return fail(error);
@@ -412,26 +432,36 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
 
         if (!options.RequireDerivedLayout && referenceLayout)
         {
+            auto confirmIfWritten = [&](ClientLayout const& derived, std::string_view what, auto&& inGroup)
+            {
+                std::vector<ClientLayoutEvidence> const written = layout.Evidence();
+                std::vector<ClientLayoutEvidence> const found = derived.Evidence();
+                std::vector<std::string> differences;
+                for (std::size_t index = 0; index < written.size(); ++index)
+                    if (inGroup(written[index].Field) && written[index].Value != found[index].Value)
+                        differences.push_back(fmt::format("{} derived as {:#x} where {} writes {:#x}", written[index].Field, found[index].Value, result.Metadata.Revision, written[index].Value));
+                for (std::string const& difference : differences)
+                    result.Discovered.push_back(fmt::format("{} derivation differs: {}", what, difference));
+                if (differences.empty())
+                    for (ClientLayoutEvidence const& evidence : found)
+                        if (inGroup(evidence.Field))
+                            layout.ConfirmDerived(evidence.Field, evidence.ConfirmedBy);
+            };
             ClientLayout derived = layout;
             if (std::optional<uint64> const checkedHead = deriveMapLayout(derived); !checkedHead)
                 result.Discovered.push_back(fmt::format("std::map layout derivation unavailable: {}", error));
             else if (*checkedHead != *head)
                 result.Discovered.push_back(fmt::format("std::map layout derivation differs: it chose the tree at {:#x}, not the type map at {:#x}", *checkedHead, *head));
             else
-            {
-                std::vector<ClientLayoutEvidence> const written = layout.Evidence();
-                std::vector<ClientLayoutEvidence> const found = derived.Evidence();
-                std::vector<std::string> differences;
-                for (std::size_t index = 0; index < written.size(); ++index)
-                    if (written[index].Field.starts_with("std::map.") && written[index].Value != found[index].Value)
-                        differences.push_back(fmt::format("{} derived as {:#x} where {} writes {:#x}", written[index].Field, found[index].Value, result.Metadata.Revision, written[index].Value));
-                for (std::string const& difference : differences)
-                    result.Discovered.push_back(fmt::format("std::map layout derivation differs: {}", difference));
-                if (differences.empty())
-                    for (ClientLayoutEvidence const& evidence : found)
-                        if (evidence.Field.starts_with("std::map."))
-                            layout.ConfirmDerived(evidence.Field, evidence.ConfirmedBy);
-            }
+                confirmIfWritten(derived, "std::map layout", [](std::string_view field) { return field.starts_with("std::map."); });
+            if (!deriveListLink(derived, *types))
+                result.Discovered.push_back(fmt::format("property list link derivation unavailable: {}", error));
+            else
+                confirmIfWritten(derived, "property list link", [](std::string_view field) { return field == "Type.property_list" || field == "PropertyList.name"; });
+            if (!derivePointerFlag(derived, *types))
+                result.Discovered.push_back(fmt::format("pointer flag derivation unavailable: {}", error));
+            else
+                confirmIfWritten(derived, "pointer flag", [](std::string_view field) { return field == "Type.pointer"; });
             deriveTypeLayout();
             reportLayout();
         }

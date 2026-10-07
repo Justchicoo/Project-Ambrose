@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests runtime discovery over synthetic heaps and code: std::map node fields derived from the tree's shape at default and shifted offsets, a map head among decoy nodes, cycle refusal, constructor and initializer votes, and Type and string fields derived from chosen values at non-default offsets.
+ * Tests runtime discovery over synthetic heaps and code: std::map node fields derived from the tree's shape at default and shifted offsets, the property list link and pointer flag derived from registered types, a map head among decoy nodes, cycle refusal, constructor and initializer votes, and Type and string fields derived from chosen values at non-default offsets.
  */
 
 #include "ClientDiscovery.h"
@@ -8,10 +8,13 @@
 #include "GuestObjects.h"
 #include "PeBuilder.h"
 #include "PeImage.h"
+#include "TypeWalker.h"
 
+#include <fmt/format.h>
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <iterator>
 
 namespace
 {
@@ -162,6 +165,49 @@ TEST(ClientDiscoveryRuntimeTest, AMapLayoutWithNoTreeOrTwoEqualTreesIsRefusedNam
     EXPECT_FALSE(ClientDiscovery::DeriveTypeMapLayout(two.machine, two.heap, layout, error));
     EXPECT_NE(error.find("two std::maps of 3 nodes"), std::string::npos) << error;
     EXPECT_TRUE(layout.DerivedFields.empty());
+}
+
+TEST(ClientDiscoveryRuntimeTest, ThePropertyListLinkAndPointerFlagAreDerivedAtShiftedOffsets)
+{
+    ClientLayout shifted;
+    shifted.TypePointer = 0x70;
+    shifted.TypePropertyList = 0xA0;
+    shifted.ListName = 0x80;
+    Heap h(shifted);
+    std::vector<uint64> types;
+    for (int i = 0; i < 24; ++i)
+    {
+        std::string const name = fmt::format("class T{}", i);
+        types.push_back(h.objects.Type(name, 0x140010000, false, h.objects.List(TypeWalker::ListNameOf(name), 0)));
+        if (i % 6 == 0)
+        {
+            types.push_back(h.objects.Type(name + "*", 0x140010000, true));
+            types.push_back(h.objects.Type("class SharedPointer<" + name + ">", 0x140010000, true));
+        }
+    }
+    types.push_back(h.objects.Type("int"));
+
+    ClientLayout derived;
+    derived.TypePointer = derived.TypePropertyList = derived.ListName = 0x99;
+    std::string error;
+    ASSERT_TRUE(ClientDiscovery::DerivePropertyListLink(h.machine, h.heap, types, derived, error)) << error;
+    ASSERT_TRUE(ClientDiscovery::DeriveTypePointerFlag(h.machine, h.heap, types, derived, error)) << error;
+    EXPECT_EQ(derived.TypePropertyList, shifted.TypePropertyList);
+    EXPECT_EQ(derived.ListName, shifted.ListName);
+    EXPECT_EQ(derived.TypePointer, shifted.TypePointer);
+    for (ClientLayoutEvidence const& evidence : derived.Evidence())
+        if (evidence.Field == "Type.pointer" || evidence.Field == "Type.property_list" || evidence.Field == "PropertyList.name")
+            EXPECT_EQ(evidence.Status, "derived") << evidence.Field;
+
+    std::vector<uint64> const fewLists(types.begin(), types.begin() + 6);
+    ClientLayout refused;
+    EXPECT_FALSE(ClientDiscovery::DerivePropertyListLink(h.machine, h.heap, fewLists, refused, error));
+    EXPECT_NE(error.find("Type.property_list could not be placed"), std::string::npos) << error;
+    std::vector<uint64> noPointers;
+    std::copy_if(types.begin(), types.end(), std::back_inserter(noPointers), [&](uint64 type) { return h.machine.ReadU8(type + shifted.TypePointer) == 0; });
+    EXPECT_FALSE(ClientDiscovery::DeriveTypePointerFlag(h.machine, h.heap, noPointers, refused, error));
+    EXPECT_NE(error.find("Type.pointer could not be placed"), std::string::npos) << error;
+    EXPECT_TRUE(refused.DerivedFields.empty());
 }
 
 TEST(ClientDiscoveryRuntimeTest, TheConstructorAndListInitializerWinTheirVotes)

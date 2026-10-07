@@ -54,6 +54,8 @@ namespace ClientDiscovery
     std::optional<uint64> FindTypeMapHead(Machine const& machine, GuestHeap const& heap, ClientLayout const& layout, std::string& error);
     std::optional<std::vector<uint64>> WalkTypeMap(Machine const& machine, uint64 head, ClientLayout const& layout, std::string& error);
     bool DeriveConstructedTypeLayout(Machine const& machine, GuestHeap const& heap, std::span<ConstructedTypeSample const> samples, ClientLayout& layout, std::string& error);
+    bool DerivePropertyListLink(Machine const& machine, GuestHeap const& heap, std::span<uint64 const> types, ClientLayout& layout, std::string& error);
+    bool DeriveTypePointerFlag(Machine const& machine, GuestHeap const& heap, std::span<uint64 const> types, ClientLayout& layout, std::string& error);
     std::optional<DiscoveryVote> FindTypeConstructor(Machine const& machine, CodeIndex const& code, std::span<uint64 const> types, std::string& error);
     std::optional<DiscoveryVote> FindPropertyListInitializer(Machine const& machine, CodeIndex const& code, std::span<uint64 const> types, ClientLayout const& layout, std::string& error);
     std::optional<uint64> FindRaceAdder(CodeIndex const& code, std::string& error);
