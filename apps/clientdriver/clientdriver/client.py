@@ -549,6 +549,18 @@ class Client:
             time.sleep(0.2)
         return f"{x},{y} after {dwell:.2f}s with the window " + ("active" if active else "NOT active"), active
 
+    def hover(self, x, y, seconds, then):
+        import win32con
+        import win32gui
+
+        wait_until_released(modifiers_held, "a modifier key")
+        wait_until_released(buttons_held, "a mouse button")
+        position = (y << 16) | (x & 0xFFFF)
+        with self.activated() as active, self.cursor_at(x, y):
+            win32gui.SendMessageTimeout(self.handle, win32con.WM_MOUSEMOVE, 0, position, SMTO_ABORTIFHUNG, 3000)
+            time.sleep(seconds)
+            return then(), active
+
     def close(self, timeout=60, force=False):
         import psutil
         import win32con

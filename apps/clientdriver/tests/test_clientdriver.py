@@ -405,12 +405,13 @@ class WorldEntryTests(TemporaryFolder):
             with self.assertRaises(Refused) as raised:
                 scenario.load("bad.json", search=search)
             self.assertIn(said, str(raised.exception))
-        for settle in (-1, 31, "2", True):
-            self.scenario_file("settle.json", {"title": "settle", "requires": {"gameserver": True}, "wizard": self.WIZARD,
-                                                "steps": [{"action": "shot", "name": "look", "settle": settle}]})
-            with self.assertRaises(Refused) as raised:
-                scenario.load("settle.json", search=search)
-            self.assertIn("settle for 0 to 30 seconds", str(raised.exception))
+        for action, extra in (("shot", {}), ("hover", {"target": "charselect_play"})):
+            for settle in (-1, 31, "2", True):
+                self.scenario_file("settle.json", {"title": "settle", "requires": {"gameserver": True}, "wizard": self.WIZARD,
+                                                    "steps": [dict({"action": action, "name": "look", "settle": settle}, **extra)]})
+                with self.assertRaises(Refused) as raised:
+                    scenario.load("settle.json", search=search)
+                self.assertIn("settle for 0 to 30 seconds", str(raised.exception))
 
     def test_a_kept_name_and_a_restart_wait_are_checked_before_anything_starts(self):
         search = (os.path.join(self.folder, "scenarios"),)

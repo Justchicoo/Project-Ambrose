@@ -497,6 +497,22 @@ class Engine:
                 last = StepFailed("the client's window never became the active one, so its interface dropped the press")
         raise StepFailed(f"{attempts} press(es) on {target} did not take, the last of them {said}: {last}")
 
+    def act_hover(self, step):
+        target = step["target"]
+        x, y = self.store.references.target_of(target)
+        name = step.get("file") or step.get("name", target)
+
+        def shoot():
+            picture = self.client.frame()
+            self.current = picture
+            return self.shot(name, picture)
+
+        taken, active = self.client.hover(x, y, float(step.get("settle", 1.5)), shoot)
+        if not taken:
+            raise StepFailed(f"the screenshot this step asks for could not be written: {self.notes[-1]['note']}")
+        self.screenshots[-1]["step"] = step.get("name", name)
+        return f"held the pointer on {target} at {x},{y} with the window " + ("active" if active else "NOT active") + f" and shot {taken}"
+
     def on_screen(self, name):
         picture = self.client.frame()
         self.current = picture

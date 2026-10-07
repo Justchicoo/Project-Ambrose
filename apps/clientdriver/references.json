@@ -54,7 +54,10 @@
     "quickchat_open": {"at": [31, 90], "presses": "the speech bubble at the top left that opens the quick chat menu"},
     "quickchat_yes": {"at": [150, 570], "presses": "Yes, one of the phrases at the foot of the quick chat menu"},
     "quickchat_hello": {"at": [150, 137], "presses": "the Hello/Goodbye category of the quick chat menu"},
-    "quickchat_hello_hi": {"at": [400, 166], "presses": "Hi, the first phrase of Hello/Goodbye, marked with the waving hand of the emote it plays"}
+    "quickchat_hello_hi": {"at": [400, 166], "presses": "Hi, the first phrase of Hello/Goodbye, marked with the waving hand of the emote it plays"},
+    "backpack_first_item": {"at": [782, 201], "presses": "the first item row on the right page of the backpack B opens, on its All tab"},
+    "backpack_trash": {"at": [882, 603], "presses": "the trash can at the right end of the row of buttons under the backpack's right page, lit while an item is chosen"},
+    "trash_confirm_yes": {"at": [646, 440], "presses": "YES in the Inventory dialog that asks whether to trash the chosen item"}
   },
   "client_writes": [
     {"path": "^Data/GameData/CharacterRegistry/\\d+\\.xml$", "because": "the client keeps a registry file for each wizard that has entered the world, named by its character id, in its own data folder, and writes it itself on every entry"},
