@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests ChildProcess by running the child_process_helper program: exit codes and the lines written to standard output and error, arguments with spaces, quotes, backslashes, empty strings and UTF-8 arriving exactly, a program path holding spaces and UTF-8 and, on Windows, named without .exe, lines split at MaxLineBytes without cutting a character, CRLF, a last line with no newline, invalid UTF-8 replaced, many lines in order, closed input and the working directory, an input that ends with the parent staying open while the child runs, so a child watching it keeps running, and ending, once Run returns, a copy of the helper in a process group of its own that exits when that input ends, a child watching an input already at its end exiting at once with the code it chose, programs and arguments that cannot start, a timeout, a stop request, a child ignoring SIGTERM and a grandchild holding the output open each ending the child and its grandchild, and on POSIX the exit code still read when SIGCHLD is ignored or set to reap children itself; StartDetached runs a program with no pipes and no exit code of its own, which a file that program writes shows, and reports a program that cannot start; also checks QuoteWindowsArgument against CommandLineToArgvW. ChildProcessHandle tests launch the helper with its output and errors in files it keeps appending to after the launcher lets go, stop a copy that waits like a server with a shutdown line on its input and with an interrupt, which is Ctrl+Break through the helper itself on Windows and SIGTERM on POSIX, end a child and its grandchild as one tree, adopt a running child from its identity after the launching handle is gone and refuse the same process id with another start time or executable, find no identity for a process that has ended, and report a program that cannot start.
+ * Tests ChildProcess by running the child_process_helper program: exit codes and the lines written to standard output and error, arguments with spaces, quotes, backslashes, empty strings and UTF-8 arriving exactly, a program path holding spaces and UTF-8 and, on Windows, named without .exe, lines split at MaxLineBytes without cutting a character, CRLF, a last line with no newline, invalid UTF-8 replaced, many lines in order, closed input and the working directory, an input that ends with the parent staying open while the child runs, so a child watching it keeps running, and ending, once Run returns, a copy of the helper in a process group of its own that exits when that input ends, a child watching an input already at its end exiting at once with the code it chose, programs and arguments that cannot start, a timeout, a stop request, a child ignoring SIGTERM and a grandchild holding the output open each ending the child and its grandchild, and on POSIX the exit code still read when SIGCHLD is ignored or set to reap children itself; StartDetached runs a program with no pipes and no exit code of its own, which a file that program writes shows, and reports a program that cannot start; also checks QuoteWindowsArgument against CommandLineToArgvW. ChildProcessHandle tests launch the helper with its output and errors in files it keeps appending to after the launcher lets go, stop a copy that waits like a server with a shutdown line on its input and with an interrupt, which is Ctrl+Break through the helper itself on Windows and SIGTERM on POSIX, end a child and its grandchild as one tree, adopt a running child from its identity after the launching handle is gone and refuse the same process id with another start time or executable, record on each of forty launches the helper rather than the test program it was spawned from, so a later description matches it, find no identity for a process that has ended, and report a program that cannot start.
  */
 
 #include "ChildProcess.h"
@@ -706,6 +706,25 @@ TEST(ChildProcessHandleTest, AdoptTakesARunningChildBackOnlyWhileItsIdentityMatc
 #endif
     std::vector<std::string> const lines = Lines(directory.Path() / "out.log");
     ExpectGrandchildEnded(lines);
+}
+
+TEST(ChildProcessHandleTest, EveryLaunchRecordsTheProgramItStartedRatherThanTheOneThatStartedIt)
+{
+    for (int launch = 0; launch < 40; ++launch)
+    {
+        LogTestDirectory directory;
+        std::string error;
+        ChildLaunchOptions const options = LaunchOptions(directory, { "wait-for-stop" });
+        ChildProcessHandle child = ChildProcessHandle::Launch(options, error);
+        ASSERT_TRUE(child) << error;
+        ScopeExit const cleanup([&child] { std::string ignored; child.EndTree(ignored); });
+        ChildProcessIdentity const identity = child.GetIdentity();
+        EXPECT_EQ(identity.Executable.filename(), options.Program.filename()) << "launch " << launch;
+        ASSERT_TRUE(WaitForText(directory.Path() / "out.log", "waiting\n"));
+        std::optional<ChildProcessIdentity> const described = ChildProcessHandle::Describe(identity.Id);
+        ASSERT_TRUE(described.has_value()) << "launch " << launch;
+        EXPECT_TRUE(described->Matches(identity)) << "launch " << launch;
+    }
 }
 
 TEST(ChildProcessHandleTest, LaunchReportsAProgramThatCannotStart)
