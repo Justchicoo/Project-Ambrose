@@ -1,12 +1,16 @@
 # Project Ambrose by Imjustchico
-# The scratch databases a run owns: it touches only names starting with ambrose_driver_, lets the server's own updater create them, loads the zone rows the game server stands wizards in, seeds the wizard a scenario enters the world with, its level, experience and any stats it carries, and reads its name back from the name tables the game server extracted, copies another database's wizard with its stats when that database has them, reads a value for an assertion, and drops them when the run ends.
+# The scratch databases a run owns: it touches only names starting with ambrose_driver_, lets the server's own updater create them, loads the zone rows the game server stands wizards in, seeds the wizard a scenario enters the world with, its level, experience and any stats it carries, and reads its name back from the name tables the game server extracted, copies another database's wizard with its stats when that database has them, reads a value for an assertion, and drops them when the run ends; and it keeps a WSL distribution attached for the whole run when the database lives in one, because WSL stops a distribution, and the MariaDB in it, once no wsl.exe is attached.
+import atexit
 import socket
 import subprocess
+import sys
 import time
 
 LOCALES = ("de", "el", "en-US", "es", "fr", "it", "pl", "pt-BR")
 STATS = {"overflow_xp": "overflow_xp", "secondary_school": "secondary_school_id", "training_points": "training_points", "gold": "gold", "health": "health", "mana": "mana",
-         "potion_charge": "potion_charge", "potion_max": "potion_max", "arena_points": "arena_points", "level_locked": "level_locked"}
+         "potion_charge": "potion_charge", "potion_max": "potion_max", "arena_points": "arena_points", "level_locked": "level_locked",
+         "purchased_custom_emotes_1": "purchased_custom_emotes_1", "purchased_custom_emotes_2": "purchased_custom_emotes_2",
+         "purchased_custom_emotes_3": "purchased_custom_emotes_3"}
 APPEARANCE = ("behavior_template_name_id", "gender", "race", "head_hands_model", "hair_model", "hat_model", "torso_model", "feet_model",
               "wand_model", "skin_color", "skin_decal", "hair_color", "hat_color", "hat_decal", "torso_color", "torso_decal", "torso_decal2",
               "feet_color", "feet_decal", "skin_decal2", "extended_hair_color", "extended_skin_decal", "after_combat_dance",
@@ -17,6 +21,18 @@ from .errors import Refused, StepFailed
 PREFIX = "ambrose_driver_"
 KINDS = ("login", "characters", "world")
 NO_WINDOW = 0x08000000
+
+
+def hold_wsl(distribution, start=subprocess.Popen, at_exit=atexit.register, platform=sys.platform):
+    if not distribution or platform != "win32":
+        return None
+    command = ["wsl.exe", "-d", distribution, "--exec", "sleep", "infinity"]
+    try:
+        holder = start(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
+    except OSError as error:
+        raise StepFailed(f"the WSL distribution {distribution} could not be held for the run: {error}")
+    at_exit(holder.kill)
+    return holder
 
 
 def checked_name(name):

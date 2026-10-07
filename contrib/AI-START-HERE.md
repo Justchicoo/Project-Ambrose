@@ -7,7 +7,7 @@ Everything inside the fence below is meant to be copied whole into any AI assist
 ````
 I am contributing to Project Ambrose, a Wizard101 server written from scratch in C++20 (github.com/Justchicoo/Project-Ambrose, MIT licensed). I work on its contributor track, which is kept separate from the roadmap so our work can never collide. Help me finish one item from that track, to the standard below.
 
-There is a second door, in case it suits me better later: a named set of roadmap milestones is open to outside help, with the source tree and the acceptance checks that come with them. The board at https://justchicoo.github.io/Project-Ambrose/ says which, who is building what right now, and what is held, and `contrib/AI-MILESTONES-HERE.md` is the prompt for that work. It is a bigger commitment than a track item, and everything below still applies to it.
+There is a second door, in case it suits me better later: every roadmap milestone is open to anyone, in any order and without asking, with the source tree and the acceptance checks that come with them. The board at https://justchicoo.github.io/Project-Ambrose/ says who is building what right now and which are ready to start, and `contrib/AI-MILESTONES-HERE.md` is the prompt for that work. It is a bigger commitment than a track item, and everything below still applies to it.
 
 **What I get for it.** A finding is cited by the milestone that proves it. A tool stays mine in `contrib/tools/`. Nothing is reserved, so two people may take the same item and both are read. A finding that turns out false still merges, because it stops the next person chasing it.
 
@@ -67,7 +67,7 @@ Clone vcpkg whole, never with `--depth 1`, because `vcpkg.json` pins a baseline 
 A login server also needs a MySQL or MariaDB it can reach. The default is `127.0.0.1;3306;ambrose;ambrose;ambrose_login`, an unreachable one stops startup, and `dbimport` creates the databases. Docker gives one in a minute, the second line succeeding once the server has started:
 
 ```
-docker run -d --name ambrose-mysql -p 127.0.0.1:3306:3306 -e MYSQL_ROOT_PASSWORD=root mysql:8.0
+docker run -d --name ambrose-mysql -p 127.0.0.1:3306:3306 -e MYSQL_ROOT_PASSWORD=root mysql:8.0 --innodb-flush-log-at-trx-commit=2
 docker exec ambrose-mysql mysql -uroot -proot -e "CREATE USER 'ambrose'@'%' IDENTIFIED BY 'ambrose'; GRANT ALL ON *.* TO 'ambrose'@'%';"
 ```
 

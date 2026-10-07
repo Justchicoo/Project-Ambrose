@@ -269,6 +269,32 @@
     },
     {
       "action": "key",
+      "name": "close the backpack before viewing stored character stats",
+      "vk": "0x42"
+    },
+    {
+      "action": "key",
+      "name": "open the character stats before live changes",
+      "vk": "0x43"
+    },
+    {
+      "action": "shot",
+      "name": "the character stats show the stored level and school",
+      "file": "character-stats",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "close the stored character stats",
+      "vk": "0x43"
+    },
+    {
+      "action": "key",
+      "name": "reopen the backpack for live gold",
+      "vk": "0x42"
+    },
+    {
+      "action": "key",
       "name": "open the chat line to type .character gold 500",
       "vk": "0xBF"
     },
@@ -449,8 +475,8 @@
     },
     {
       "action": "shot",
-      "name": "the character stats show the level and school",
-      "file": "character-stats",
+      "name": "the character stats show the level and school after live changes",
+      "file": "character-stats-after",
       "settle": 3
     },
     {

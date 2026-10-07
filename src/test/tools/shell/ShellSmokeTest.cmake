@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Runs shell_smoke: copies it with its libraries into a folder the user is then denied writing to, keeps the build directory on its DLL search path, opens the launcher's page from memory from there and checks the folder holds exactly what it did before, then runs its remote-origin checks against loopback listeners and its pin checks against two certificates written by supervisor --panel-self-signed; it reports itself skipped when this machine has no web view.
+# Runs shell_smoke: copies it with its libraries into a folder the user is then denied writing to, made immutable where a superuser ignores its permissions, opens the launcher's page from memory from there and checks the folder holds exactly what it did before, then runs its remote-origin checks against loopback listeners and its pin checks against two certificates written by supervisor --panel-self-signed; it reports itself skipped when this machine has no web view.
 if(NOT SMOKE OR NOT WORKDIR)
     message(FATAL_ERROR "SMOKE and WORKDIR must be set")
 endif()
@@ -17,11 +17,7 @@ function(allow_writing folder)
 endfunction()
 
 function(run_smoke label)
-    if(WIN32 AND BINARY_DIR)
-        execute_process(COMMAND "${CMAKE_COMMAND}" -E env "PATH=${BINARY_DIR};$ENV{PATH}" ${ARGN} RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 300)
-    else()
-        execute_process(COMMAND ${ARGN} RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 300)
-    endif()
+    execute_process(COMMAND ${ARGN} RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 300)
     if(output MATCHES "shell smoke skipped")
         allow_writing("${WORKDIR}/readonly")
         message(STATUS "shell smoke skipped: this machine has no web view")

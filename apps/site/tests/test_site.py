@@ -1,8 +1,7 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the work board: that a claim, a hold over a phase and a stale claim each change a milestone's status, that a hold nobody owns or that names no milestone is refused, that the board and doc/MILESTONE-TRACK.md never disagree about what is open, and that the page it writes declares every colour it uses.
+# Self-tests for the work board: that a pull request or a claim marks its milestone as being built, from its branch or from the ids its title starts with, that two of them on one milestone both show, that a stale claim stops counting, that every other milestone is open when its dependencies are built and waiting when they are not, with nothing held or reserved, that the track's Started table names only real milestones, and that the page it writes declares every colour it uses.
 import datetime
 import io
-import json
 import os
 import re
 import sys
@@ -42,59 +41,70 @@ class BoardTests(unittest.TestCase):
         for row in built["milestones"]:
             self.assertIn(row["status"], build.STATUS_ORDER, row["id"])
 
-    def test_the_open_list_is_what_the_track_opens(self):
+    def test_nothing_is_held_or_reserved(self):
         built = state()
-        opened = {row["id"] for row in built["milestones"] if row["status"] == "open"}
-        rows, _reserved = build.track_rows(ROOT)
-        named = {identifier for row in rows for identifier in row["ids"]}
-        landed = {row["id"] for row in built["milestones"] if row["status"] == "landed"}
-        self.assertEqual(opened, named - landed)
+        self.assertEqual(build.STATUS_ORDER, ("landed", "building", "open", "waiting"))
+        self.assertNotIn("holds", built)
+        self.assertFalse(os.path.exists(os.path.join(ROOT, "doc", "work", "holds.json")))
 
-    def test_nothing_open_is_also_held(self):
+    def test_a_milestone_nobody_is_building_is_open_once_its_dependencies_are_built(self):
         built = state()
         for row in built["milestones"]:
-            if row["status"] == "open":
-                self.assertIsNone(build.hold_for(row["id"], built["holds"]), row["id"] + " is open and held at once")
-
-    def test_a_held_phase_holds_every_milestone_in_it(self):
-        built = state()
-        for entry in built["holds"]:
-            if not entry["scope"].startswith("phase:"):
-                continue
-            phase = int(entry["scope"].split(":")[1])
-            spared = entry.get("except", [])
-            inside = [row for row in built["milestones"]
-                      if row["phase"] == phase and row["status"] != "landed" and row["id"] not in spared]
-            self.assertTrue(inside)
-            for row in inside:
-                self.assertEqual(row["status"], "held", row["id"])
+            if row["done"]:
+                self.assertEqual(row["status"], "landed", row["id"])
+            elif row["missing"]:
+                self.assertEqual(row["status"], "waiting", row["id"])
+            else:
+                self.assertEqual(row["status"], "open", row["id"])
+        self.assertTrue(takeable())
 
     def test_a_pull_request_claims_its_milestone(self):
         identifier = takeable()
-        if identifier is None:
-            self.skipTest("the track opens nothing right now, so there is nothing to claim")
         built = state({"pulls": [pull(identifier)], "issues": []})
         row = find(built, identifier)
         self.assertEqual(row["status"], "building")
         self.assertIn("someone", row["note"])
         self.assertEqual(row["claim"]["kind"], "a draft pull request")
 
+    def test_a_pull_request_from_any_branch_claims_the_milestones_its_title_starts_with(self):
+        def titled(number, title, branch="claude/some-session"):
+            return {"number": number, "title": title, "headRefName": branch, "isDraft": True, "author": {"login": "a"},
+                    "url": "u", "createdAt": "2026-09-21T10:00:00Z", "updatedAt": "2026-09-22T10:00:00Z"}
+        found = build.claims({"pulls": [titled(1, "8.06: the item template extractor"),
+                                        titled(2, "6.07 and 6.13: zone transfers; volumes"),
+                                        titled(3, "1.06, 1.07 and 1.08 locale checks"),
+                                        titled(4, "4.4 world wire math"),
+                                        titled(5, "Installer self-tests: use a bash that takes the paths"),
+                                        titled(6, "C-81: a corpus", "contrib/C-81"),
+                                        titled(7, "Bump vite from 6.1 to 6.2", "dependabot/npm/vite")], "issues": []}, NOW)
+        self.assertEqual(sorted(found), ["1.06", "1.07", "1.08", "4.04", "6.07", "6.13", "8.06"])
+        self.assertEqual(found["8.06"][0]["number"], 1)
+        self.assertEqual([claim["number"] for claim in found["6.13"]], [2])
+
+    def test_two_pull_requests_on_one_milestone_both_show(self):
+        identifier = takeable()
+        other = dict(pull(identifier, login="another"), number=131, headRefName="world/x",
+                     title=f"{identifier}: the same milestone from a session", createdAt="2026-09-21T09:00:00Z")
+        built = state({"pulls": [pull(identifier), other], "issues": []})
+        row = find(built, identifier)
+        self.assertEqual(row["status"], "building")
+        self.assertEqual([claim["who"] for claim in row["claims"]], ["someone", "another"])
+        self.assertIn("someone", row["note"])
+        self.assertIn("another", row["note"])
+        self.assertIn("#131", build.busy_row(row))
+
     def test_a_claim_nobody_has_pushed_to_falls_back_to_open(self):
         identifier = takeable()
-        if identifier is None:
-            self.skipTest("the track opens nothing right now, so there is nothing to claim")
         built = state({"pulls": [pull(identifier, updated="2026-09-01T10:00:00Z")], "issues": []})
         self.assertEqual(find(built, identifier)["status"], "open")
         self.assertTrue(find(built, identifier)["claim"]["stale"])
 
     def test_a_claim_issue_counts_as_a_claim(self):
-        takeable = next((row["id"] for row in state()["milestones"] if row["status"] == "open"), None)
-        if takeable is None:
-            self.skipTest("the track opens nothing right now, so there is nothing to claim")
-        issue = {"number": 7, "title": f"Claim: {takeable} something the track opens", "author": {"login": "third"},
+        identifier = takeable()
+        issue = {"number": 7, "title": f"Claim: {identifier} something", "author": {"login": "third"},
                  "url": "https://example.invalid/7", "createdAt": "2026-09-22T10:00:00Z", "updatedAt": "2026-09-22T10:00:00Z"}
         built = state({"pulls": [], "issues": [issue]})
-        self.assertEqual(find(built, takeable)["status"], "building")
+        self.assertEqual(find(built, identifier)["status"], "building")
 
     def test_a_branch_that_is_not_a_milestone_claims_nothing(self):
         snapshot = {"pulls": [{"number": 9, "headRefName": "contrib/C-60", "author": {"login": "a"}, "url": "u", "updatedAt": "2026-09-22T10:00:00Z"}], "issues": []}
@@ -104,22 +114,15 @@ class BoardTests(unittest.TestCase):
         snapshot = {"pulls": [
             {"number": 140, "title": "C-61: a corpus", "headRefName": "contrib/c61", "author": {"login": "someone"}, "url": "u", "updatedAt": "2026-09-22T12:00:00Z"},
             {"number": 141, "title": "bump", "headRefName": "dependabot/npm/x", "author": {"login": "dependabot[bot]"}, "url": "u", "updatedAt": "2026-09-22T12:00:00Z"},
-            pull(takeable() or "1.01")], "issues": []}
+            {"number": 142, "title": f"{takeable()}: from a session", "headRefName": "claude/x", "author": {"login": "b"}, "url": "u", "updatedAt": "2026-09-22T12:00:00Z"},
+            pull(takeable())], "issues": []}
         rows = build.other_work(snapshot, NOW)
         self.assertEqual([row["number"] for row in rows], [140, 141])
         self.assertEqual(rows[0]["kind"], "the contributor track")
         self.assertEqual(rows[1]["kind"], "a bot")
         built = build.build_state(ROOT, snapshot, NOW)
         self.assertEqual(len(built["other_open_work"]), 2)
-        if takeable() is not None:
-            self.assertEqual(find(built, takeable())["status"], "building")
-
-    def test_a_held_milestone_names_who_holds_it_and_what_they_are_on(self):
-        built = state()
-        held = [row for row in built["milestones"] if row["status"] == "held"]
-        self.assertTrue(held)
-        for row in held:
-            self.assertTrue(row["note"].strip(), row["id"])
+        self.assertEqual(find(built, takeable())["status"], "building")
 
     def test_what_a_milestone_unlocks_is_counted(self):
         built = state()
@@ -138,89 +141,49 @@ class BoardTests(unittest.TestCase):
         self.assertTrue(lines)
         self.assertTrue(all("finishing it frees" in line for line in lines))
 
-    def test_a_hold_nobody_has_moved_asks_to_be_checked(self):
-        newest = max(datetime.date.fromisoformat(entry["since"]) for entry in build.holds(ROOT))
-        start = datetime.datetime(newest.year, newest.month, newest.day, 23, 45, tzinfo=datetime.timezone.utc)
-        later = start + datetime.timedelta(days=build.HOLD_REVIEW_DAYS + 1)
-        fresh = build.build_state(ROOT, {"pulls": [], "issues": []}, start)
-        aged = build.build_state(ROOT, {"pulls": [], "issues": []}, later)
-        self.assertFalse(any(entry["needs_review"] for entry in fresh["holds"]))
-        self.assertTrue(all(entry["needs_review"] for entry in aged["holds"]))
-        self.assertTrue(all(entry["days"] >= 0 for entry in fresh["holds"]))
+    def test_a_started_milestone_says_who_started_it_and_what_is_left(self):
+        built = state()
+        started = [row for row in built["milestones"] if row.get("started")]
+        self.assertTrue(started)
+        for row in started:
+            self.assertTrue(row["started"]["by"].strip(), row["id"])
+            self.assertTrue(row["started"]["left"].strip(), row["id"])
+        self.assertEqual({row["id"] for row in started}, set(build.track_rows(ROOT)))
 
     def test_the_state_file_tells_an_assistant_how_to_read_it(self):
         built = state()
         joined = " ".join(built["how_to_use"]).lower()
-        for needle in ("open", "held", "milestone/", "draft pull request", "unticked"):
+        for needle in ("open to anyone", "permission", "waiting", "building", "milestone/", "draft pull request", "unticked"):
             self.assertIn(needle, joined)
+        self.assertIn("nothing is held or reserved", joined)
         self.assertIn("prompt", built["links"])
 
 
-class HoldTests(unittest.TestCase):
-    def hold(self, document):
+class TrackTests(unittest.TestCase):
+    def track(self, rows):
         folder = tempfile.mkdtemp()
-        path = os.path.join(folder, "doc", "work")
-        os.makedirs(path)
-        with io.open(os.path.join(path, "holds.json"), "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(json.dumps(document))
+        os.makedirs(os.path.join(folder, "doc"))
+        table = "\n".join(["## Started", "", "| ID | Started by | Sent as | What is left |", "|---|---|---|---|"] + rows + ["", "## Landed", ""])
+        with io.open(os.path.join(folder, "doc", "MILESTONE-TRACK.md"), "w", encoding="utf-8", newline="\n") as handle:
+            handle.write("# Milestone track\n\n" + table + "\n")
         return folder
 
-    def test_a_hold_with_a_scope_nobody_understands_is_refused(self):
-        folder = self.hold({"holds": [{"scope": "phase 17", "who": "me"}]})
-        with self.assertRaises(build.HoldError):
-            build.holds(folder)
+    def test_a_started_row_is_read_with_who_and_what_is_left(self):
+        folder = self.track(["| 4.04 | someone | on main | the last check, which waits on 4.05 |"])
+        self.assertEqual(build.track_rows(folder, known={"4.04": {}}),
+                         {"4.04": {"by": "someone", "sent_as": "on main", "left": "the last check, which waits on 4.05"}})
 
-    def test_a_hold_with_nobody_holding_it_is_refused(self):
-        folder = self.hold({"holds": [{"scope": "phase:17", "what": "the panel"}]})
-        with self.assertRaises(build.HoldError):
-            build.holds(folder)
+    def test_a_started_row_naming_no_milestone_is_refused(self):
+        folder = self.track(["| 99.99 | someone | on main | everything |"])
+        with self.assertRaises(build.TrackError):
+            build.track_rows(folder, known={"4.04": {}})
 
-    def test_a_hold_on_a_milestone_that_does_not_exist_is_refused(self):
-        folder = self.hold({"holds": [{"scope": "milestone:99.99", "who": "me"}]})
-        with self.assertRaises(build.HoldError):
-            build.holds(folder, known={"4.04": {}})
-
-    def test_a_phase_hold_can_spare_one_milestone(self):
-        folder = self.hold({"holds": [{"scope": "phase:17", "who": "me", "what": "the panel", "except": ["17.10"]}]})
-        kept = build.holds(folder)
-        self.assertEqual(kept[0]["except"], ["17.10"])
-        self.assertIsNone(build.hold_for("17.10", kept))
-        self.assertIsNotNone(build.hold_for("17.11", kept))
-
-    def test_a_spared_milestone_is_still_held_when_it_is_held_by_name(self):
-        folder = self.hold({"holds": [{"scope": "phase:17", "who": "me", "except": ["17.10"]},
-                                      {"scope": "milestone:17.10", "who": "me"}]})
-        kept = build.holds(folder)
-        self.assertIsNotNone(build.hold_for("17.10", kept))
-
-    def test_an_except_that_makes_no_sense_is_refused(self):
-        for document in ({"scope": "milestone:4.04", "who": "me", "except": ["4.05"]},
-                         {"scope": "phase:17", "who": "me", "except": ["4.04"]},
-                         {"scope": "phase:17", "who": "me", "except": ["seventeen"]},
-                         {"scope": "phase:17", "who": "me", "except": "17.10"}):
-            folder = self.hold({"holds": [document]})
-            with self.assertRaises(build.HoldError, msg=json.dumps(document)):
-                build.holds(folder)
-
-    def test_an_except_naming_no_milestone_in_the_roadmap_is_refused(self):
-        folder = self.hold({"holds": [{"scope": "phase:17", "who": "me", "except": ["17.99"]}]})
-        with self.assertRaises(build.HoldError):
-            build.holds(folder, known={"17.10": {}})
-
-    def test_broken_json_is_refused_rather_than_read_as_no_holds(self):
+    def test_a_track_with_no_started_table_starts_nothing(self):
         folder = tempfile.mkdtemp()
-        os.makedirs(os.path.join(folder, "doc", "work"))
-        with io.open(os.path.join(folder, "doc", "work", "holds.json"), "w", encoding="utf-8", newline="\n") as handle:
-            handle.write("{\"holds\": [")
-        with self.assertRaises(build.HoldError):
-            build.holds(folder)
-
-    def test_the_repository_holds_are_valid(self):
-        kept = build.holds(ROOT, known=build.ready.milestones(ROOT))
-        self.assertTrue(kept)
-        for entry in kept:
-            self.assertTrue(entry["who"])
-            self.assertTrue(entry["what"])
+        os.makedirs(os.path.join(folder, "doc"))
+        with io.open(os.path.join(folder, "doc", "MILESTONE-TRACK.md"), "w", encoding="utf-8", newline="\n") as handle:
+            handle.write("# Milestone track\n")
+        self.assertEqual(build.track_rows(folder), {})
 
 
 class PageTests(unittest.TestCase):
@@ -251,7 +214,7 @@ class PageTests(unittest.TestCase):
 
     def test_a_title_with_markup_in_it_is_escaped(self):
         row = {"id": "4.04", "title": "World <script>alert(1)</script>", "size": "S", "checks_left": 3,
-               "unlocks": 2, "needs": "A build", "why_worth_it": "Because & more"}
+               "unlocks": 2, "started": {"by": "a <b>", "sent_as": "on main", "left": "Because & more"}}
         drawn = build.card(row)
         self.assertNotIn("<script>", drawn)
         self.assertIn("&lt;script&gt;", drawn)

@@ -40,8 +40,10 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 **Acceptance**
 
 - [x] ModifyGold clamps at pouch [PlayerStatsTest.GoldModificationClampsAtThePouchAndReportsTheOverflow passed]
-- [x] USEPOTION with 0 charges changes nothing [PlayerStatsTest.UsingAPotionWithNoChargesChangesNothing passed]
-- [x] Changing Potion.RestoreFraction applies to the next potion without a restart [PlayerStatsTest.EachPotionUsesTheCurrentRestoreFraction passed; client run 20261003-190527 changed 0.1 to 0.2 while running]
+- [x] USEPOTION with 0 charges changes nothing [PlayerStatsTest.UsingAPotionWithNoChargesChangesNothing and GameSessionLifecycleTest.AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction passed]
+- [x] A wizard that enters below full starts its potion refill countdown [PlayerStatsTest.AWizardThatEntersBelowFullStartsItsRefillCountdown passed]
+- [x] Session-handled gold and potion changes persist before world departure [GameSessionStatsSaveTest.LiveGoldAndPotionChangesPersistBeforeLeavingTheWorld passed with AMBROSE_TEST_DB]
+- [x] Changing Potion.RestoreFraction applies to the next potion without a restart [PlayerStatsTest.EachPotionUsesTheCurrentRestoreFraction and GameSessionLifecycleTest.AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction passed; client run 20261003-190527 changed 0.1 to 0.2 while running]
 - [x] Real client: '.character gold 500' updates live; heal animates; potion restores and empties by one [client run 20261003-190527: 14-backpack-live-gold.png, 25-healed.png, 21-potion-first-use.png and 22-potion-live-setting.png]
 
 ### Detailed spec from WIZ-6: Live vitals, gold and potions
@@ -70,8 +72,10 @@ Health, mana, gold, power-pip and potion changes on the server show up immediate
 **Acceptance**
 
 - [x] Unit test: ModifyGold above m_baseGoldPouch clamps and reports the overflow [PlayerStatsTest.GoldModificationClampsAtThePouchAndReportsTheOverflow passed]
-- [x] Unit test: USEPOTION with 0 charges changes nothing [PlayerStatsTest.UsingAPotionWithNoChargesChangesNothing passed]
-- [x] Unit test: after Potion.RestoreFraction changes, the next potion restores the new fraction without a restart [PlayerStatsTest.EachPotionUsesTheCurrentRestoreFraction passed; client run 20261003-190527 changed 0.1 to 0.2 while running]
+- [x] Unit test: USEPOTION with 0 charges changes nothing [PlayerStatsTest.UsingAPotionWithNoChargesChangesNothing and GameSessionLifecycleTest.AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction passed]
+- [x] Unit test: a wizard entering below full starts its refill countdown [PlayerStatsTest.AWizardThatEntersBelowFullStartsItsRefillCountdown passed]
+- [x] Database-backed lifecycle test: live gold and potion changes persist before leaving the world [GameSessionStatsSaveTest.LiveGoldAndPotionChangesPersistBeforeLeavingTheWorld passed with AMBROSE_TEST_DB]
+- [x] Unit test: after Potion.RestoreFraction changes, the next potion restores the new fraction without a restart [PlayerStatsTest.EachPotionUsesTheCurrentRestoreFraction and GameSessionLifecycleTest.AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction passed; client run 20261003-190527 changed 0.1 to 0.2 while running]
 - [x] Real client: '.character gold 500' makes the backpack gold counter update without relogging. Damaging then '.character heal' makes the health globe animate up (DisplayDiff=1 floats the number). Clicking a filled potion restores health and mana, and the potion bottle empties by one. [client run 20261003-190527: 14-backpack-live-gold.png, 25-healed.png, 21-potion-first-use.png and 22-potion-live-setting.png]
 
 **Risks**
@@ -317,9 +321,9 @@ A wizard owns a persistent set of known spells that show up in the in-game spell
 
 **Acceptance**
 
-- [ ] Synthetic fixture maps to one row
-- [ ] ~76,679 rows on the install; load time and memory logged
-- [ ] `.reload item_template` applies an edited row live; a failing reload keeps the old store
+- [x] Synthetic fixture maps to one row [ItemExtractorTest: the synthetic hat maps to the row (1652259, 'Fire', 125, 1, 0, 0, 2, 1)]
+- [x] ~76,679 rows on the install; load time and memory logged [ItemMgrClientTest on r806919: WizItemTemplate 76679 of "80164 item templates, 851 behaviors of classes nothing describes, 62.2 MiB, read in 94925 ms" (Debug)]
+- [x] `.reload item_template` applies an edited row live; a failing reload keeps the old store [ItemMgrTest: an edited cost applies on reload under a new generation; an unknown equip effect fails the reload and keeps the old set]
 
 ### Detailed spec from WIZ-10: Item template extractor
 
@@ -329,7 +333,7 @@ Every equippable and backpack item in the user's client is available to the serv
 
 - src/tools/extractor/ItemExtractor: Root.wad ObjectData/**.xml where the root class is WizItemTemplate (76,679 files) -> world.item_template (m_templateID, m_objectName, m_displayName, m_nObjectType, m_adjectiveList, m_school, m_baseCost, m_rank, m_itemLimit, m_itemSetBonusTemplateID, m_numPrimaryColors, m_numSecondaryColors), child tables for equip requirements and equip effects (serialized GameEffectInfo, typed columns where the class is known), and the behaviors blob
 - ItemSetBonusTemplate (42 files) -> world.item_set_bonus
-- src/server/game/Items/ItemMgr (sItemMgr) on a 4.15 reloadable store: `.reload item_template` builds and validates the templates off to the side and swaps them, and a failure keeps the old store and reports every error
+- src/server/game/Items/ItemMgr (sItemMgr) on a 4.15 reloadable store: `.reload item_template` builds and validates the templates off to the side and swaps them, and a failure keeps the old store and reports every error. It reads the item templates from the install at run time, as Item templates in doc/ARCHITECTURE.md settles, and item_template holds each item's own fields beside its object_template row for the relational lookups of vendors, loot and the panel
 - src/test/tools/ItemExtractorTest.cpp
 
 **Data sources**
@@ -345,10 +349,10 @@ Every equippable and backpack item in the user's client is available to the serv
 
 **Acceptance**
 
-- [ ] Unit test: a synthetic WizItemTemplate BINd fixture maps to one item_template row with its requirements and effects
-- [ ] On the user's install: item_template has around 76,679 rows and every requirement or effect class is present in the type registry (unknown hashes fail the import, never skipped silently)
-- [ ] sItemMgr load time and memory are logged at gameserver startup
-- [ ] `.reload item_template` applies an edited row without a restart, and a reload that meets an unknown class hash keeps the old store and reports it
+- [x] Unit test: a synthetic WizItemTemplate BINd fixture maps to one item_template row with its requirements and effects [ItemExtractorTest.ASyntheticWizItemTemplateMapsToOneItemTemplateRow: the synthetic robe keeps its ReqMagicLevel requirement (5, Ice, operator 3) and its MaxHealth equip effect]
+- [x] On the user's install: item_template has around 76,679 rows and every requirement or effect class is present in the type registry (unknown hashes fail the import, never skipped silently) [ItemMgrClientTest and TemplateExtractorClientTest pass on r806919 with the install's class file; without it the 8 items holding ReqMonsterMagicLevel or ReqHasItems fail and are named]
+- [x] sItemMgr load time and memory are logged at gameserver startup [ItemMgr::Load, called by the game server's LoadItems, logs counts by class, MiB, ms and threads]
+- [x] `.reload item_template` applies an edited row without a restart, and a reload that meets an unknown class hash keeps the old store and reports it [ItemMgrTest reload tests]
 
 **Risks**
 
@@ -363,9 +367,9 @@ Every equippable and backpack item in the user's client is available to the serv
 
 **Acceptance**
 
-- [ ] Every requirement/effect class is known; unknown hashes fail the import
-- [ ] 42 ItemSetBonusTemplate rows
-- [ ] A reload with an unknown requirement or effect hash keeps the old store
+- [x] Every requirement/effect class is known; unknown hashes fail the import [ItemExtractorTest: an equip requirement or equip effect of a class the dump lacks fails the extraction and names the class; ItemMgrClientTest and TemplateExtractorClientTest pass on r806919 with the install's class file]
+- [x] 42 ItemSetBonusTemplate rows [TemplateExtractorClientTest.EveryItemSetBonusIsARowWithItsTiers on r806919: 42 sets, and the Fire set 1502574 needs 2, 3, 5 and 7 items, its first tier granting CanonicalFireAccuracy]
+- [x] A reload with an unknown requirement or effect hash keeps the old store [ItemMgrTest: a reload that meets an equip requirement of a class the dump lacks keeps the set serving, as one with an unknown equip effect does]
 
 ### Detailed spec from WIZ-10: Item template extractor
 
@@ -391,7 +395,7 @@ Every equippable and backpack item in the user's client is available to the serv
 
 **Acceptance**
 
-- [ ] Unit test: a synthetic WizItemTemplate BINd fixture maps to one item_template row with its requirements and effects
+- [x] Unit test: a synthetic WizItemTemplate BINd fixture maps to one item_template row with its requirements and effects [ItemExtractorTest.ASyntheticWizItemTemplateMapsToOneItemTemplateRow: the synthetic robe keeps its ReqMagicLevel requirement (5, Ice, operator 3) and its MaxHealth equip effect]
 - [ ] On the user's install: item_template has around 76,679 rows and every requirement or effect class is present in the type registry (unknown hashes fail the import, never skipped silently)
 - [ ] sItemMgr load time and memory are logged at gameserver startup
 - [ ] `.reload item_template` applies an edited row without a restart, and a reload that meets an unknown class hash keeps the old store and reports it

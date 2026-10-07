@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Takes what a wizard's client asks the wizards around it to see, once the wizard stands shown in an instance: a typed line whose text reads as the client packs it, unless it is a command, which is never shown to anyone: an account above player level runs it through CommandMgr with its replies gathered into as few MSG_SERVERMESSAGE as their length allows, each of which its client adds to its chat window and shows once as a notice, and hides the talking emote its client plays with every line, and a player's is shown as an ordinary line or refused with a reply as GM.PlayerCommandsAsChat says, a quick chat phrase the install's QuickChat.xml holds, an extended phrase as the client wrote it once the client's own parser would read it, and an emote whose animation the install's animation list holds, played through an EmoteStateOverrideInfo naming that animation, which is encoded once for everyone who sees it, each listener first told the speaker's object is back in Unremarkable, since its client plays an emote only as the object enters Emoting. Each is kept until the world's next tick, a wizard keeping only so many between ticks, and then shown to each listener as the message its client plays it from, naming the speaker by its packed name and global id and showing a line under the speaker's own chat level.
+ * Takes what a wizard's client asks the wizards around it to see, once the wizard stands shown in an instance: a typed line whose text reads as the client packs it, unless it is a command, which is never shown to anyone: an account above player level runs it through CommandMgr with its replies gathered into as few MSG_SERVERMESSAGE as their length allows, each of which its client adds to its chat window and shows once as a notice, and hides the talking emote its client plays with every line, and a player's is shown as an ordinary line or refused with a reply as GM.PlayerCommandsAsChat says, a quick chat phrase the install's QuickChat.xml holds, an extended phrase as the client wrote it once the client's own parser would read it, an emote whose animation the install's animation list holds, played through an EmoteStateOverrideInfo naming that animation, and an owned custom emote relayed with its client-written line. Each is kept until the world's next tick, a wizard keeping only so many between ticks, and then shown to each listener as the message its client plays it from, naming the speaker by its packed name and global id and showing a line under the speaker's own chat level.
  */
 
 #include "AnimationListMgr.h"
@@ -37,6 +37,7 @@ namespace
         bool IsConsole() const override { return false; }
         std::string GetName() const override { return fmt::format("account {} with wizard {}", _session.GetAccountId(), _session.GetCharacterId()); }
         GameSession* GetGameSession() const override { return &_session; }
+        uint64 GetCharacterId() const override { return _session.GetCharacterId(); }
 
         void Reply(std::string_view line) override
         {
@@ -230,6 +231,9 @@ void GameSession::HearSpeech(ChatSpeaker const& who, Speech const& speech)
         case SpeechKind::Emote:
             SendDmlMessage(SpeechMessages::EndEmote(who));
             SendDmlMessage(SpeechMessages::Emote(who, speech));
+            return;
+        case SpeechKind::CustomEmote:
+            HearCustomEmote(who, speech);
             return;
     }
 }

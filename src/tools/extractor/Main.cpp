@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * extractor entry point: silences the log, reads its arguments and environment as UTF-8, refuses an option value that is itself an option and a command named twice, checks the world database, --sql and --dry-run before anything is searched, then when no install or type dump is named follows AMBROSE_SETUP_MODE: auto uses the newest install found and the type dump built from it, ask offers the finds and a build, off prints them with the flag to pass; opens the user's own Root.wad and a type dump bound to the views of every command named, extracts for each command in turn, the character names, disallowed names, schools and creation options for names, the level, school and stat tables for levels, every zone's settings, locations, placed objects, volumes and triggers from its own archive for zones, every template the manifest lists for templates, those two read through the server classes of the world database when one is named, and for classes the classes the install's archives hold that the type dump does not describe, from the class file schemaprobe builds once per revision in the Ambrose data folder on the authored classes the world database holds when one is named, prints their counts, the problems found and the zone parts a type dump could not describe, then replaces every command's world tables in one transaction, writes the SQL to a file, or on a dry run writes nothing and checks the world tables of any database it was given; exits 0 on success, 1 when the install, dump, data or database fails, and 2 on bad usage.
+ * extractor entry point: silences the log, reads its arguments and environment as UTF-8, refuses an option value that is itself an option and a command named twice, checks the world database, --sql and --dry-run before anything is searched, then when no install or type dump is named follows AMBROSE_SETUP_MODE: auto uses the newest install found and the type dump built from it, ask offers the finds and a build, off prints them with the flag to pass; opens the user's own Root.wad and a type dump bound to the views of every command named, extracts for each command in turn, the character names, disallowed names, schools and creation options for names, the level, school and stat tables for levels, every zone's settings, locations, placed objects, volumes and triggers from its own archive for zones, every template the manifest lists for templates, with each item template's own fields, requirements and equip effects and each item set bonus, those two read through the server classes of the world database when one is named, and for classes the classes the install's archives hold that the type dump does not describe, from the class file schemaprobe builds once per revision in the Ambrose data folder on the authored classes the world database holds when one is named, prints their counts, the problems found and the zone parts a type dump could not describe, then replaces every command's world tables in one transaction, writes the SQL to a file, or on a dry run writes nothing and checks the world tables of any database it was given; exits 0 on success, 1 when the install, dump, data or database fails, and 2 on bad usage.
  */
 
 #include "CharacterNameExtractor.h"
@@ -63,8 +63,10 @@ Commands:
           triggers from its volumes.xml and triggers.xml, read through the
           server classes of the world database named
   templates every template TemplateManifest.xml lists, with its class, names,
-          display key, icon, adjectives and behaviors, read through the server
-          classes of the world database named
+          display key, icon, adjectives and behaviors, and each item
+          template's school, cost, rank, limit, set bonus and colors, its
+          requirements and equip effects, and each item set bonus, read
+          through the server classes of the world database named
   classes the classes every archive of the install holds that the type dump
           does not describe and every object of which then decodes cleanly,
           with the evidence for each; schemaprobe finds them once per client
@@ -271,6 +273,8 @@ database fails, 2 on bad usage.
             extraction.GetUnknownBehaviorCount());
         for (auto const& [hash, count] : extraction.UnknownBehaviorClasses)
             std::cout << fmt::format("  {} behaviors of class hash {}\n", count, hash);
+        std::cout << fmt::format("item_template: {} rows\n", extraction.GetItemCount());
+        std::cout << fmt::format("item_set_bonus: {} rows\n", extraction.GetSetBonusCount());
         for (std::string const& problem : extraction.Unread)
             std::cout << fmt::format("  not read: {}\n", problem);
     }

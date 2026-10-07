@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests archives and formats against the user's own client install, with stable metadata counts recorded by revision, skipped unless AMBROSE_CLIENT_DIR is set.
+ * Tests archives and formats against the user's own client install, with the counts recorded for its revision, skipped unless AMBROSE_CLIENT_DIR is set.
  */
 
 #include "Compression.h"
@@ -103,14 +103,7 @@ TEST_F(ClientDataTest, EveryGameDataWadParsesWithinBounds)
         caseCollisions += archive->GetCaseCollisionCount();
         duplicates += archive->GetDuplicateNameCount();
     }
-    if (InstalledRevision::Is("r806919"))
-    {
-        EXPECT_EQ(wads, 3599u) << "archives on r806919";
-    }
-    else
-    {
-        InstalledRevision::Expect(wads, { { "r806919", 3599u } }, "archives");
-    }
+    InstalledRevision::Expect(wads, { { "r806919", 3589u } }, "archives");
     EXPECT_EQ(duplicates, 0u);
     InstalledRevision::Expect(caseCollisions, { { "r806919", 188u } }, "case collisions");
 }

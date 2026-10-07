@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives the chat a client sends through a real game session over loopback: a typed line, a quick chat phrase, an extended phrase and an emote from a wizard that has its object are each taken and queued for the world thread rather than counted as messages the server does not handle, and shown to nobody while the wizard does not yet stand shown in an instance; a line starting with the command prefix from a game master's account runs the command, whose reply comes back as one MSG_SERVERMESSAGE, a line too long for one split across several, before the wizard stands anywhere; and a client that has not attached is not listened to at all; and a server script refusing one message holds back exactly that one, reaching the session as though never sent, with no edit to the core.
+ * Drives the chat a client sends through a real game session over loopback: a typed line, a quick chat phrase, an extended phrase, an emote and the radial menu's custom-emote messages from a wizard that has its object are each taken and queued for the world thread rather than counted as messages the server does not handle, and shown to nobody while the wizard does not yet stand shown in an instance; a line starting with the command prefix from a game master's account runs the command, whose reply comes back as one MSG_SERVERMESSAGE, a line too long for one split across several, before the wizard stands anywhere; and a client that has not attached is not listened to at all; and a server script refusing one message holds back exactly that one, reaching the session as though never sent, with no edit to the core.
  */
 
 #include "AccountMgr.h"
@@ -99,6 +99,27 @@ TEST_F(ChatHandlerTest, ChatIsQueuedForTheWorldAndShownToNobodyBeforeTheWizardSt
     ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 4; })) << "each waits for the world thread, where the wizard's place is kept";
     EXPECT_EQ(session->DrainQueue(), 4u);
     EXPECT_TRUE(session->TakeSpeech().empty()) << "a wizard shown in no instance has nobody to be heard by";
+    EXPECT_EQ(session->GetUnhandledMessageCount(), 0u);
+    EXPECT_EQ(session->GetStrikes(), 0u);
+}
+
+TEST_F(ChatHandlerTest, TheRadialMenuCustomEmoteMessagesAreHandled)
+{
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Connect(client, true);
+    ASSERT_TRUE(session);
+
+    GameMessages::CorePiiRadialMenuEmote emote;
+    emote.EmoteAnimationName = "Wave";
+    emote.ExcludeOriginator = 1;
+    Send(*client, emote);
+    GameMessages::RequestPiiRadialMenuPlayEmote request;
+    request.EmoteAnimationName = emote.EmoteAnimationName;
+    request.EmoteText = u"hello";
+    Send(*client, request);
+
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 2; }));
+    EXPECT_EQ(session->DrainQueue(), 2u);
     EXPECT_EQ(session->GetUnhandledMessageCount(), 0u);
     EXPECT_EQ(session->GetStrikes(), 0u);
 }

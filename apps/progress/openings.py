@@ -1,11 +1,9 @@
 # Project Ambrose by Imjustchico
-# Keeps one Discord message listing the roadmap milestones open to outside help, read from doc/MILESTONE-TRACK.md's own table and counted against the phase files, editing the message it posted last time rather than posting another, and saying what it would post and exiting zero when no webhook is configured.
+# Keeps one Discord message saying every roadmap milestone is open to anyone and listing the ones ready to start, read from the phase files and led by those that unlock the most, editing the message it posted last time rather than posting another, and saying what it would post and exiting zero when no webhook is configured.
 
 import argparse
-import io
 import json
 import os
-import re
 import sys
 import urllib.error
 
@@ -15,59 +13,45 @@ import announce
 import ready
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TRACK = os.path.join("doc", "MILESTONE-TRACK.md")
 BOARD_URL = "https://justchicoo.github.io/Project-Ambrose/"
 PROMPT_URL = "https://github.com/Justchicoo/Project-Ambrose/blob/main/contrib/AI-MILESTONES-HERE.md"
 GOLD = 0xE4B457
-ROW = re.compile(r"^\| *([\d.,  ]+?) *\| *(.+?) *\| *(.+?) *\| *(.+?) *\|")
 
 
-def table(root):
-    with io.open(os.path.join(root, TRACK), encoding="utf-8") as handle:
-        text = handle.read()
-    if "## Open now" not in text:
-        return []
-    section = text.split("## Open now", 1)[1].split("\n## ", 1)[0]
-    rows = []
-    for line in section.splitlines():
-        found = ROW.match(line)
-        if not found or found.group(2).strip("- ") in ("Milestone", ""):
-            continue
-        identifiers = re.findall(r"\d+\.\d+", found.group(1))
-        if identifiers:
-            rows.append({"ids": identifiers, "title": found.group(2), "size": found.group(3), "needs": found.group(4)})
-    return rows
-
-
-def checks(root):
-    done, _blocked = ready.state(root)
-    return {row["id"]: row for row in done}
+def opened(root):
+    everything = ready.milestones(root)
+    unlocks = {identifier: 0 for identifier in everything}
+    for milestone in everything.values():
+        for dependency in milestone["depends_on"]:
+            if dependency in unlocks:
+                unlocks[dependency] += 1
+    rows, _waiting = ready.state(root)
+    for row in rows:
+        row["unlocks"] = unlocks.get(row["id"], 0)
+    return sorted(rows, key=lambda row: (-row["unlocks"], row["phase"], int(row["id"].split(".")[1])))
 
 
 def embed(root):
-    rows = table(root)
-    measured = checks(root)
+    rows = opened(root)
     fields = []
     for row in rows[:10]:
-        total = sum(measured[one]["checks_total"] for one in row["ids"] if one in measured)
-        ticked = sum(measured[one]["checks_done"] for one in row["ids"] if one in measured)
-        left = total - ticked
-        name = f'{", ".join(row["ids"])}  {row["title"]}'
-        value = f'{row["size"]} · {left} check{"s" if left != 1 else ""} to earn · needs {row["needs"][0].lower() + row["needs"][1:]}'
-        fields.append({"name": name[:256], "value": value[:1024], "inline": False})
-    count = sum(len(row["ids"]) for row in rows)
+        left = row["checks_total"] - row["checks_done"]
+        value = f'{row["size"]} · {left} check{"s" if left != 1 else ""} to earn · unlocks {row["unlocks"]}'
+        fields.append({"name": f'{row["id"]}  {row["title"]}'[:256], "value": value[:1024], "inline": False})
+    count = len(rows)
     return {
         "username": "Project Ambrose",
         "embeds": [{
-            "title": "Milestones open to outside help",
+            "title": "Milestones ready to start",
             "url": BOARD_URL,
-            "description": (f"{count} milestone{'s' if count != 1 else ''} from the roadmap {'are' if count != 1 else 'is'} open to anyone who wants one. "
-                            "Say which you are taking, or open a draft pull request, which holds it. "
-                            f"The board says what is taken and what is free: <https://justchicoo.github.io/Project-Ambrose/>. "
+            "description": ("Every milestone on the roadmap is open to anyone, in any order, and nobody needs to ask. "
+                            f"{count} milestone{'s' if count != 1 else ''} from the roadmap {'are' if count != 1 else 'is'} ready, with every dependency built, "
+                            "and the rest can be taken too by building what they rest on. "
+                            f"The board says who is building what: <{BOARD_URL}>. "
                             f"The prompt for your own AI is in [contrib/AI-MILESTONES-HERE.md]({PROMPT_URL})."),
             "color": GOLD,
             "fields": fields,
-            "footer": {"text": "Everything not listed here is reserved. A check you cannot run stays unticked."},
+            "footer": {"text": "Open a draft pull request from milestone/<id>-<short-name> and the board shows you building it. A check you cannot run stays unticked."},
         }],
     }
 
@@ -83,7 +67,7 @@ def main(argv=None):
 
     payload = embed(root)
     if not payload["embeds"][0]["fields"]:
-        print("no milestone is open, so nothing is posted")
+        print("no milestone is ready, so nothing is posted")
         return 0
     url = os.environ.get(args.webhook_env, "").strip()
     if args.dry_run or not url:

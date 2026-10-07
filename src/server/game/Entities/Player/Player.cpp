@@ -61,7 +61,13 @@ bool Player::UsePotion(double restoreFraction, Clock::time_point now, std::chron
 
 bool Player::RefillPotion(Clock::time_point now, std::chrono::seconds refillInterval) noexcept
 {
-    if (!_nextPotionRefill || now < *_nextPotionRefill || !_stats.RefillPotion())
+    if (!_nextPotionRefill)
+    {
+        if (_stats.GetPotionCharge() < _stats.GetPotionMax() && refillInterval.count() > 0)
+            _nextPotionRefill = now + refillInterval;
+        return false;
+    }
+    if (now < *_nextPotionRefill || !_stats.RefillPotion())
         return false;
 
     _dirtyStats = true;

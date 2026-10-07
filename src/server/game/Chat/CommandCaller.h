@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Whoever is running a command, so a command is written once and does not care whether it came from a console or a chat line in game: it says what level the caller holds, whether it is a console, who it is for the log, which game session it belongs to if it has one, and takes the lines the command replies with.
+ * Whoever is running a command, reporting its security, console status, identity, optional game session and character, and receiving its replies.
  */
 
 #ifndef AMBROSE_COMMANDCALLER_H
@@ -24,6 +24,7 @@ public:
     virtual bool IsConsole() const = 0;
     virtual std::string GetName() const = 0;
     virtual GameSession* GetGameSession() const { return nullptr; }
+    virtual uint64 GetCharacterId() const { return 0; }
     virtual void Reply(std::string_view line) = 0;
 };
 

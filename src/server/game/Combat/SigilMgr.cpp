@@ -74,7 +74,7 @@ bool SigilMgr::Load(std::vector<std::string>& errors)
     std::vector<std::optional<SigilInfo>> decoded(entries.size());
     std::size_t threads = 0;
     bool const read = TemplateFolder::ReadAll(gameData, catalog, entries, "sigils", Folder,
-        [&decoded](std::size_t index, TemplateFolderEntry const& entry, PropertyObject const& object, std::string& error)
+        [&decoded](std::size_t index, TemplateFolderEntry const& entry, PropertyObject const& object, std::vector<DecodeIssue> const&, std::string& error)
         {
             decoded[index] = SigilInfo::Read(object, entry.Id, entry.Location.Path, error);
             return decoded[index].has_value();

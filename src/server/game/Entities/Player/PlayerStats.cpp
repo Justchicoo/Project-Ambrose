@@ -172,6 +172,12 @@ bool PlayerStats::WriteGameStats(PropertyObject& gameStats, std::string& problem
         .Set("m_referenceLevel", _level)
         .Set("m_schoolID", _schoolId)
         .Set("m_secondarySchool", _stored.SecondarySchoolId);
+    filler.Set("m_purchasedCustomEmotes1", _stored.PurchasedCustomEmotes[0])
+        .Set("m_purchasedCustomEmotes2", _stored.PurchasedCustomEmotes[1])
+        .Set("m_purchasedCustomEmotes3", _stored.PurchasedCustomEmotes[2])
+        .Set("m_purchasedCustomTeleportEffects1", _stored.PurchasedCustomTeleportEffects[0])
+        .Set("m_purchasedCustomTeleportEffects2", _stored.PurchasedCustomTeleportEffects[1])
+        .Set("m_purchasedCustomTeleportEffects3", _stored.PurchasedCustomTeleportEffects[2]);
     if (_shadowPipMax)
         filler.Set("m_shadowPipMax", *_shadowPipMax);
     return problem.empty();

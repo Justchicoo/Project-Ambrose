@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Ambrose-authored LOGIN, GAME, WIZARD, WIZARD2, WIZARD3 and WizCombat message definitions used by login and game server tests, including the live vitals, potion and pip update messages.
+ * Ambrose-authored protocol fixtures for login and game tests, including movement, emote, live vital, potion, pip and custom-emote messages.
  */
 
 #ifndef AMBROSE_LOGINMESSAGEFIXTURES_H
@@ -70,6 +70,7 @@ namespace LoginMessageFixtures
 <MSG_REQUESTRADIALQUICKCHAT><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">204</_MsgOrder><MessageID TYPE="UINT"></MessageID></RECORD></MSG_REQUESTRADIALQUICKCHAT>
 <MSG_REQUESTRADIALQUICKCHATEXT><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">205</_MsgOrder><Message TYPE="STR"></Message></RECORD></MSG_REQUESTRADIALQUICKCHATEXT>
 <MSG_SERVERMOVE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">218</_MsgOrder><LocationX TYPE="USHRT"></LocationX><LocationY TYPE="USHRT"></LocationY><LocationZ TYPE="USHRT"></LocationZ><Direction TYPE="UBYT"></Direction><MobileID TYPE="USHRT"></MobileID></RECORD></MSG_SERVERMOVE>
+<MSG_SERVERTELEPORT><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">220</_MsgOrder><LocationX TYPE="USHRT"></LocationX><LocationY TYPE="USHRT"></LocationY><LocationZ TYPE="USHRT"></LocationZ><Direction TYPE="UBYT"></Direction><MobileID TYPE="USHRT"></MobileID></RECORD></MSG_SERVERTELEPORT>
 <MSG_SERVERSHUTDOWN><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">219</_MsgOrder><Message TYPE="UINT"></Message></RECORD></MSG_SERVERSHUTDOWN>
 <MSG_WIZBANG><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">247</_MsgOrder><GameObjectID TYPE="GID"></GameObjectID><WizBangID TYPE="UINT"></WizBangID></RECORD></MSG_WIZBANG>
 <MSG_ZOMBIE_PLAYER><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">248</_MsgOrder><GlobalID TYPE="GID"></GlobalID><Remaining TYPE="FLT"></Remaining></RECORD></MSG_ZOMBIE_PLAYER>
@@ -108,6 +109,7 @@ namespace LoginMessageFixtures
 <MSG_CLIENTZONED><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">64</_MsgOrder><ZoneNameID TYPE="UINT"></ZoneNameID></RECORD></MSG_CLIENTZONED>
 <MSG_UPDATEMAXSHADOWPIPS><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">236</_MsgOrder><MaxShadowPips TYPE="INT"></MaxShadowPips></RECORD></MSG_UPDATEMAXSHADOWPIPS>
 <MSG_UPDATEPIPCONVERSION><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">240</_MsgOrder><PipConversionBaseAllSchools TYPE="INT"></PipConversionBaseAllSchools><PipConversionBaseFire TYPE="INT"></PipConversionBaseFire><PipConversionBaseIce TYPE="INT"></PipConversionBaseIce><PipConversionBaseStorm TYPE="INT"></PipConversionBaseStorm><PipConversionBaseLife TYPE="INT"></PipConversionBaseLife><PipConversionBaseMyth TYPE="INT"></PipConversionBaseMyth><PipConversionBaseDeath TYPE="INT"></PipConversionBaseDeath><PipConversionBaseBalance TYPE="INT"></PipConversionBaseBalance></RECORD></MSG_UPDATEPIPCONVERSION>
+<MSG_UPDATECUSTOMEMOTES><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">228</_MsgOrder><CustomEmotes TYPE="UINT"></CustomEmotes><CustomTeleportEffects TYPE="UINT"></CustomTeleportEffects><Rank TYPE="UBYT"></Rank></RECORD></MSG_UPDATECUSTOMEMOTES>
 </FixtureWizard2Messages>
 )";
 
@@ -115,6 +117,9 @@ namespace LoginMessageFixtures
 <FixtureWizard3Messages>
 <_ProtocolInfo><RECORD><ServiceID TYPE="UBYT">56</ServiceID><ProtocolType TYPE="STR">WIZARD3</ProtocolType></RECORD></_ProtocolInfo>
 <MSG_UPDATEARCHMASTERY><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">193</_MsgOrder><Stat TYPE="FLT"></Stat></RECORD></MSG_UPDATEARCHMASTERY>
+<MSG_CORE_PIIRADIALMENUEMOTE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">23</_MsgOrder><EmoteAnimationName TYPE="STR"></EmoteAnimationName><ExcludeOriginator TYPE="UBYT"></ExcludeOriginator></RECORD></MSG_CORE_PIIRADIALMENUEMOTE>
+<MSG_PIIRADIALMENUPLAYEMOTE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">73</_MsgOrder><SourceName TYPE="STR"></SourceName><SourceID TYPE="GID"></SourceID><EmoteAnimationName TYPE="STR"></EmoteAnimationName><EmoteText TYPE="WSTR"></EmoteText></RECORD></MSG_PIIRADIALMENUPLAYEMOTE>
+<MSG_REQUESTPIIRADIALMENUPLAYEMOTE><RECORD><_MsgOrder TYPE="UBYT" NOXFER="TRUE">148</_MsgOrder><EmoteAnimationName TYPE="STR"></EmoteAnimationName><EmoteText TYPE="WSTR"></EmoteText></RECORD></MSG_REQUESTPIIRADIALMENUPLAYEMOTE>
 </FixtureWizard3Messages>
 )";
 

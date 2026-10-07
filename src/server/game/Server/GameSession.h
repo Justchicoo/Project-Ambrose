@@ -86,6 +86,8 @@ public:
     void HandleRequestRadialQuickChat(GameMessages::RequestRadialQuickChat& message);
     void HandleRequestRadialQuickChatExt(GameMessages::RequestRadialQuickChatExt& message);
     void HandleCoreEmote(GameMessages::CoreEmote& message);
+    void HandleCorePiiRadialMenuEmote(GameMessages::CorePiiRadialMenuEmote& message);
+    void HandleRequestPiiRadialMenuPlayEmote(GameMessages::RequestPiiRadialMenuPlayEmote& message);
     void HandleQueryLogout(GameMessages::QueryLogout& message);
     void HandleClientDisconnect(GameMessages::ClientDisconnect& message);
     void HandleNotAfk(GameMessages::NotAfk& message);
@@ -104,12 +106,16 @@ public:
     void ShowStateOf(uint64 worldGuid, uint32 state);
     std::vector<Speech> TakeSpeech();
     void HearSpeech(ChatSpeaker const& speaker, Speech const& speech);
+    void HearCustomEmote(ChatSpeaker const& speaker, Speech const& speech);
     std::string const& GetChatName() const noexcept { return _chatName; }
     uint8 GetChatFilter() const noexcept { return _chatFilter; }
     uint8 GetSecurityLevel() const noexcept { return _securityLevel.load(std::memory_order_relaxed); }
     void SetSecurityLevel(uint8 level) noexcept { _securityLevel.store(level, std::memory_order_relaxed); }
     MovementUpdate TakeMovementUpdate(uint32 idleFlushes);
     void ShowMovementOf(GameSession const& mover, MovementUpdate const& update);
+    bool TeleportWithinMap(PlayerPosition const& target, std::vector<std::shared_ptr<GameSession>> const& onlookers, std::string& problem);
+    void ShowTeleportOf(GameSession const& mover, PackedMove const& place);
+    std::string const& GetZonePath() const noexcept { return _zonePath; }
     void SendObjectChanges(MapObjectChanges const& changes);
     PlayerStats const* GetStats() const noexcept { return _player ? &_player->GetStats() : nullptr; }
     Player* GetPlayer() noexcept { return _player ? &*_player : nullptr; }
@@ -162,6 +168,7 @@ private:
     void Diagnose(LoginKeyClaim claim, int64 now);
     void AcceptAttach(LoginKeyClaim const& claim);
     void SendMapObjects(Map const& map);
+    void SendCustomEmotes();
     void RefuseAttach(LoginKeyClaim const& claim, LoginKeyVerdict verdict);
     void LoadAccount(LoginKeyClaim const& claim);
     void LoadCharacter(LoginKeyClaim const& claim);
@@ -169,6 +176,7 @@ private:
     void LoadSpells(LoginKeyClaim const& claim, CharacterSummary character, std::optional<CharacterStats> stored);
     void EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character, std::optional<CharacterStats> const& stored, std::vector<CharacterSpell> const& spells);
     void SaveStats();
+    void SaveStatsIfDirty();
     void SaveSpell(CharacterSpell const& spell);
     void SavePosition(PlayerPosition const& position);
     void SendHealthUpdate(uint8 displayDiff);
@@ -198,6 +206,7 @@ private:
     std::atomic<bool> _linkDeadStartPending{ false };
     std::atomic<int64> _socketLostAtNanoseconds{ 0 };
     std::atomic<uint8> _securityLevel{ 0 };
+    std::optional<uint32> _accountPermissions;
     std::chrono::steady_clock::time_point const _connectedAt = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point _afkStarted;
     bool _afkTimerStarted = false;

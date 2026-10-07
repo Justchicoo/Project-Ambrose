@@ -170,6 +170,8 @@ TEST_F(PlayerStatsTest, TheGameStatsAndSchoolBehaviorCarryEveryValueAndReadBackT
     stored.PotionMax = 2.0f;
     stored.ArenaPoints = 9;
     stored.LevelLocked = true;
+    stored.PurchasedCustomEmotes = { 1u, 0x80000000u, 0xA5A55A5Au };
+    stored.PurchasedCustomTeleportEffects = { 2u, 0x40000000u, 0x5A5AA5A5u };
     std::optional<PlayerStats> const stats = Create(stored);
     ASSERT_TRUE(stats);
 
@@ -197,6 +199,12 @@ TEST_F(PlayerStatsTest, TheGameStatsAndSchoolBehaviorCarryEveryValueAndReadBackT
     EXPECT_EQ(*gameStats->Get("m_archmasteryBase")->GetIf<float>(), 40.0f);
     EXPECT_EQ(*gameStats->Get("m_schoolID")->GetIf<uint32>(), Fire);
     EXPECT_EQ(*gameStats->Get("m_secondarySchool")->GetIf<uint32>(), 72777u);
+    EXPECT_EQ(*gameStats->Get("m_purchasedCustomEmotes1")->GetIf<uint32>(), 1u);
+    EXPECT_EQ(*gameStats->Get("m_purchasedCustomEmotes2")->GetIf<uint32>(), 0x80000000u);
+    EXPECT_EQ(*gameStats->Get("m_purchasedCustomEmotes3")->GetIf<uint32>(), 0xA5A55A5Au);
+    EXPECT_EQ(*gameStats->Get("m_purchasedCustomTeleportEffects1")->GetIf<uint32>(), 2u);
+    EXPECT_EQ(*gameStats->Get("m_purchasedCustomTeleportEffects2")->GetIf<uint32>(), 0x40000000u);
+    EXPECT_EQ(*gameStats->Get("m_purchasedCustomTeleportEffects3")->GetIf<uint32>(), 0x5A5AA5A5u);
     EXPECT_EQ(*school->Get("m_schoolOfFocus")->GetIf<uint32>(), Fire);
     EXPECT_EQ(*school->Get("m_level")->GetIf<int32>(), 5);
     EXPECT_EQ(*school->Get("m_experiencePoints")->GetIf<int32>(), 1200);
@@ -330,4 +338,22 @@ TEST_F(PlayerStatsTest, RefillIntervalChangesApplyAfterTheCurrentRefill)
     EXPECT_TRUE(player.RefillPotion(now + std::chrono::seconds(35), std::chrono::seconds(5)));
     EXPECT_FLOAT_EQ(player.GetStats().GetPotionCharge(), 2.0f);
     EXPECT_TRUE(player.HasDirtyStats());
+}
+
+TEST_F(PlayerStatsTest, AWizardThatEntersBelowFullStartsItsRefillCountdown)
+{
+    CharacterStats stored;
+    stored.PotionCharge = 1.0f;
+    stored.PotionMax = 3.0f;
+    std::optional<PlayerStats> stats = Create(stored);
+    ASSERT_TRUE(stats);
+    Player player(std::move(*stats));
+    Player::Clock::time_point const now{};
+
+    EXPECT_FALSE(player.RefillPotion(now, std::chrono::seconds(30)));
+    EXPECT_FLOAT_EQ(player.GetStats().GetPotionCharge(), 1.0f);
+    EXPECT_FALSE(player.HasDirtyStats());
+    EXPECT_FALSE(player.RefillPotion(now + std::chrono::seconds(29), std::chrono::seconds(30)));
+    EXPECT_TRUE(player.RefillPotion(now + std::chrono::seconds(30), std::chrono::seconds(30)));
+    EXPECT_FLOAT_EQ(player.GetStats().GetPotionCharge(), 2.0f);
 }

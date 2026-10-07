@@ -4,7 +4,7 @@
 _One of two things, and one only per pull request._
 
 - **Contributor track item:** its id and title, for example `C-61: a corpus of duration strings`.
-- **Roadmap milestone:** its id and title, for example `4.04: world wire math and LocationString`. It has to be in doc/MILESTONE-TRACK.md's "Open now" table, and the branch has to be named `milestone/<id>-<short-name>`.
+- **Roadmap milestone:** its id and title, for example `4.04: world wire math and LocationString`. Any milestone may be taken, and the branch has to be named `milestone/<id>-<short-name>`.
 
 ## What this adds
 

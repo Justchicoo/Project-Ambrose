@@ -12,6 +12,7 @@
 #include "PropertyObject.h"
 #include "StatEffects.h"
 
+#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -41,6 +42,8 @@ public:
     float GetPowerPip() const noexcept { return _powerPip; }
     float GetShadowPipRating() const noexcept { return _shadowPipRating; }
     int32 GetTrainingPoints() const noexcept { return _stored.TrainingPoints; }
+    std::array<uint32, 3> const& GetPurchasedCustomEmotes() const noexcept { return _stored.PurchasedCustomEmotes; }
+    std::array<uint32, 3> const& GetPurchasedCustomTeleportEffects() const noexcept { return _stored.PurchasedCustomTeleportEffects; }
 
     bool SetHealth(int32 value) noexcept;
     bool SetMana(int32 value) noexcept;
