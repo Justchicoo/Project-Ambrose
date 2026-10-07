@@ -30,7 +30,7 @@ function(ambrose_drop_test_databases)
     list(JOIN AMBROSE_CREATED_TEST_DATABASES "," names)
     execute_process(COMMAND "${CMAKE_COMMAND}" -E env "AMBROSE_DROP_DATABASES=${names}"
             "${UNIT_TESTS}" --gtest_also_run_disabled_tests --gtest_filter=TestDatabaseCleanup.DISABLED_DropNamedDatabases
-        RESULT_VARIABLE dropResult OUTPUT_VARIABLE dropOutput ERROR_VARIABLE dropError TIMEOUT 60)
+        RESULT_VARIABLE dropResult OUTPUT_VARIABLE dropOutput ERROR_VARIABLE dropError TIMEOUT 120)
     if(NOT dropResult EQUAL 0)
         message(WARNING "Could not drop test databases ${names} (${dropResult}): ${dropOutput}${dropError}")
     endif()
