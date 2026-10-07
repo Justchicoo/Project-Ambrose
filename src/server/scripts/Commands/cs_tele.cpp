@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Teleports within a zone. '.tele <place> [wizard]' moves the caller's wizard, or a wizard named by character id or name, to one of its zone's own locations, such as Start, or to a game_tele point in that zone, and the wizard and everyone who sees it are sent MSG_SERVERTELEPORT, so it snaps there with no loading screen; '.go xyz <x> <y> <z> [yaw]' moves the caller's wizard to coordinates and refuses ones a position cannot be sent as; '.gps' says the caller's zone, place, facing and zone instance; '.tele add <name>' keeps the caller's place as a game_tele point that works at once, unless the name is already a location of the caller's zone, and '.tele del <name>' removes one. The move runs on the world thread, where positions are kept, and is answered once it has.
+ * Teleports within a zone. '.tele <place> [wizard]' moves the caller's wizard, or a wizard named by character id or name, to one of its zone's own locations, such as Start, or to a game_tele point in that zone, and the wizard and everyone who sees it are sent MSG_SERVERTELEPORT, so it snaps there with no loading screen; '.go xyz <x> <y> <z> [yaw]' moves the caller's wizard to coordinates, keeping its facing unless a yaw is given, and refuses ones a position cannot be sent as; '.gps' says the caller's zone, place, facing and zone instance; '.tele add <name>' keeps the caller's place as a game_tele point that works at once, unless the name is already a location of the caller's zone, and '.tele del <name>' removes one. The move runs on the world thread, where positions are kept, and is answered once it has.
  */
 
 #include "AccountMgr.h"
@@ -55,13 +55,15 @@ namespace
         std::string Problem;
     };
 
-    bool Move(CommandCaller& caller, std::shared_ptr<GameSession> const& wizard, std::optional<PlayerPosition> place, std::string const& placeName)
+    bool Move(CommandCaller& caller, std::shared_ptr<GameSession> const& wizard, std::optional<PlayerPosition> place, std::string const& placeName, bool keepFacing = false)
     {
         auto const moved = std::make_shared<Moved>();
-        bool const ran = sWorld.RunFor(wizard, [moved, place, placeName](GameSession& session)
+        bool const ran = sWorld.RunFor(wizard, [moved, place, placeName, keepFacing](GameSession& session)
         {
             moved->Zone = session.GetZonePath();
             std::optional<PlayerPosition> target = place;
+            if (target && keepFacing)
+                target->Yaw = session.GetMovement().GetPosition().Yaw;
             if (!target)
             {
                 std::shared_ptr<ZoneLocations const> const locations = sZoneMgr.GetLocations();
@@ -156,7 +158,7 @@ namespace
                 return false;
             place = PlayerPosition{ *x, *y, *z, *yaw };
             std::shared_ptr<GameSession> const wizard = CallerWizard(caller);
-            return wizard && Move(caller, wizard, place, fmt::format("({}, {}, {})", *x, *y, *z));
+            return wizard && Move(caller, wizard, place, fmt::format("({}, {}, {})", *x, *y, *z), arguments.size() == 3);
         }
 
         static bool Gps(CommandCaller& caller, std::vector<std::string> const& arguments)
