@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Teleports within a zone. '.tele <place> [wizard]' moves the caller's wizard, or a wizard named by character id or name, to one of its zone's own locations, such as Start, or to a game_tele point in that zone, and the wizard and everyone who sees it are sent MSG_SERVERTELEPORT, so it snaps there with no loading screen; '.go xyz <x> <y> <z> [yaw]' moves the caller's wizard to coordinates and refuses ones a position cannot be sent as; '.gps' says the caller's zone, place, facing and zone instance; '.tele add <name>' keeps the caller's place as a game_tele point that works at once, and '.tele del <name>' removes one. The move runs on the world thread, where positions are kept, and is answered once it has.
+ * Teleports within a zone. '.tele <place> [wizard]' moves the caller's wizard, or a wizard named by character id or name, to one of its zone's own locations, such as Start, or to a game_tele point in that zone, and the wizard and everyone who sees it are sent MSG_SERVERTELEPORT, so it snaps there with no loading screen; '.go xyz <x> <y> <z> [yaw]' moves the caller's wizard to coordinates and refuses ones a position cannot be sent as; '.gps' says the caller's zone, place, facing and zone instance; '.tele add <name>' keeps the caller's place as a game_tele point that works at once, unless the name is already a location of the caller's zone, and '.tele del <name>' removes one. The move runs on the world thread, where positions are kept, and is answered once it has.
  */
 
 #include "AccountMgr.h"
@@ -199,6 +199,12 @@ namespace
             if (!ran || tele->Zone.empty())
             {
                 caller.Reply("Your wizard's place could not be read, so no point was added");
+                return false;
+            }
+            std::shared_ptr<ZoneLocations const> const locations = sZoneMgr.GetLocations();
+            if (locations && locations->Find(tele->Zone, tele->Name).Result == ZoneLookup::Ok)
+            {
+                caller.Reply(fmt::format("Not added: {} is already a location of {}, which .tele {} reaches first", tele->Name, tele->Zone, tele->Name));
                 return false;
             }
             std::string error;
