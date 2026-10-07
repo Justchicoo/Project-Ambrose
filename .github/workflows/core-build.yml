@@ -193,7 +193,9 @@ jobs:
       - name: Install Ninja and Clang
         if: runner.os == 'Linux'
         timeout-minutes: 5
-        run: sudo apt-get update && sudo apt-get install -y ninja-build clang
+        run: |
+          apt_opts="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          sudo apt-get $apt_opts update && sudo apt-get $apt_opts install -y ninja-build clang
       - name: Lower mmap randomization for ThreadSanitizer
         if: matrix.configure == 'linux-clang-tsan'
         run: sudo sysctl -w vm.mmap_rnd_bits=28
