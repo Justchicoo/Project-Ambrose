@@ -6,9 +6,9 @@
     "percent": 26.7
   },
   "checks": {
-    "done": 998,
+    "done": 1004,
     "total": 2866,
-    "percent": 34.8
+    "percent": 35.0
   },
   "contributor_track": {
     "merged": 93,
@@ -68,7 +68,7 @@
       "title": "An npc offers a quest",
       "milestones_done": 1,
       "milestones_total": 13,
-      "checks_done": 9,
+      "checks_done": 15,
       "checks_total": 86
     },
     {
