@@ -78,6 +78,10 @@ namespace
             Refuse(GameService, "MSG_BUDDYSTATUSUPDATE");
             Refuse(GameService, "MSG_IGNORELIST");
             Refuse(GameService, "MSG_CHATERROR");
+            Refuse(GameService, "MSG_MUTE");
+            Refuse(GameService, "MSG_NOTMUTED");
+            Refuse(WizardService, "MSG_CHATFILTERBLACK");
+            Refuse(WizardService, "MSG_CHATFILTERWHITE");
             Refuse(WizardService, "MSG_ADDSPELLTOBOOK");
             Refuse(WizardService, "MSG_REMOVESPELLFROMBOOK");
 
@@ -102,6 +106,10 @@ namespace
             Sends<RadialChat>();
             Sends<RadialQuickChat>();
             Sends<RadialQuickChatExt>();
+            Sends<ChatFilterBlack>();
+            Sends<ChatFilterWhite>();
+            Sends<Mute>();
+            Sends<NotMuted>();
             Sends<PiiRadialMenuPlayEmote>();
             Sends<TimedAccessPasses>();
             Sends<SubscriberOnlyItems>();

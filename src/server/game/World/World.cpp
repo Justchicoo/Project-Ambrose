@@ -5,6 +5,7 @@
 
 #include "World.h"
 #include "ChatMgr.h"
+#include "GameMessages.h"
 #include "GameSession.h"
 #include "Log.h"
 #include "MapMgr.h"
@@ -17,6 +18,7 @@
 #include "SpeechRelay.h"
 #include "ScriptMgr.h"
 #include "StringUtil.h"
+#include "Utf.h"
 
 #include <fmt/format.h>
 
@@ -332,6 +334,46 @@ std::vector<std::shared_ptr<GameSession>> World::GetSessions() const
 {
     std::lock_guard const lock(_mutex);
     return _sessions;
+}
+
+void World::SendChatFilterAdditions(std::vector<std::u16string> const& blacklist, std::vector<std::u16string> const& whitelist) const
+{
+    for (std::shared_ptr<GameSession> const& session : GetSessions())
+    {
+        SessionStatus const status = session->GetStatus();
+        if (!session->IsOpen() || (status != SessionStatus::LoggedIn && status != SessionStatus::InWorld))
+            continue;
+
+        uint64 const globalId = session->GetCharacterId();
+        for (std::u16string const& entry : blacklist)
+        {
+            std::optional<std::string> const encoded = Utf::Utf16ToUtf8(entry, Utf::InvalidPolicy::Reject);
+            if (!encoded)
+            {
+                LOG_ERROR("server.chatfilter", "Could not encode an added blacklist entry for wizard {}", globalId);
+                continue;
+            }
+            GameMessages::ChatFilterBlack message;
+            message.GlobalId = globalId;
+            message.Blacklist = *encoded;
+            if (!session->SendDmlMessage(message))
+                LOG_WARN("server.chatfilter", "Could not send an added blacklist entry to wizard {}", globalId);
+        }
+        for (std::u16string const& entry : whitelist)
+        {
+            std::optional<std::string> const encoded = Utf::Utf16ToUtf8(entry, Utf::InvalidPolicy::Reject);
+            if (!encoded)
+            {
+                LOG_ERROR("server.chatfilter", "Could not encode an added whitelist entry for wizard {}", globalId);
+                continue;
+            }
+            GameMessages::ChatFilterWhite message;
+            message.GlobalId = globalId;
+            message.Whitelist = *encoded;
+            if (!session->SendDmlMessage(message))
+                LOG_WARN("server.chatfilter", "Could not send an added whitelist entry to wizard {}", globalId);
+        }
+    }
 }
 
 std::shared_ptr<GameSession> World::FindSessionByCharacterId(uint64 characterId, GameSession const* except) const
