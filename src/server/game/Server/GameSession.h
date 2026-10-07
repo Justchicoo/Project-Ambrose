@@ -1,21 +1,25 @@
 /*
  * Project Ambrose by Imjustchico
- * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook and stats stay with the world thread and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it.
+ * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook, backpack and stats stay with the world thread and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it. Its backpack holds as many items as its template's m_numItemsAllowed and the live Inventory.ExtraSlots allow, read at each add, so an add to a full one is refused with MSG_ITEMDROP and stores nothing, and an item it trashes is taken only from its own backpack.
  */
 
 #ifndef AMBROSE_GAMESESSION_H
 #define AMBROSE_GAMESESSION_H
 
 #include "AsyncCallbackProcessor.h"
+#include "CharacterItem.h"
 #include "CharacterSpell.h"
 #include "CharacterStats.h"
 #include "CharacterSummary.h"
 #include "ChatMgr.h"
 #include "GameMessages.h"
 #include "GameSessionWorld.h"
+#include "ItemTemplateRecord.h"
 #include "LoginKeyValidator.h"
+#include "LootListBuilder.h"
 #include "MapObjectSpawner.h"
 #include "MovementRelay.h"
+#include "PlayerBackpack.h"
 #include "PlayerMovement.h"
 #include "PlayerSpellbook.h"
 #include "PlayerStats.h"
@@ -121,6 +125,13 @@ public:
     PlayerSpellbook const* GetSpellbook() const noexcept { return _spellbook ? &*_spellbook : nullptr; }
     SpellbookChange LearnSpell(uint32 spellId);
     SpellbookChange UnlearnSpell(uint32 spellId);
+    PlayerBackpack const* GetBackpack() const noexcept { return _backpack ? &*_backpack : nullptr; }
+    uint32 GetBackpackCapacity() const;
+    BackpackAdd AddItem(ItemTemplateRecord const& itemTemplate, uint32 quantity);
+    std::optional<CharacterItem> RemoveItem(uint64 itemGuid);
+    BackpackTrashResult TrashItem(uint64 itemGuid, uint32 templateId);
+    bool ShowLoot(std::vector<LootItem> const& items);
+    void HandleTrashInventoryItem(GameMessages::TrashInventoryItem& message);
 
     void HandleGetTimedAccessPasses(GameMessages::GetTimedAccessPasses& message);
     void HandleGetSubscriberOnlyItems(GameMessages::GetSubscriberOnlyItems& message);
@@ -151,6 +162,7 @@ protected:
 private:
     friend class World;
     friend struct GameSessionLifecycleTestAccess;
+    friend struct GameSessionInventoryTestAccess;
 
     std::shared_ptr<GameSession> SharedSelf();
     SQLOperation::CompletionHandler MakeCompletionHandler();
@@ -163,9 +175,15 @@ private:
     void LoadCharacter(LoginKeyClaim const& claim);
     void LoadStats(LoginKeyClaim const& claim, CharacterSummary character);
     void LoadSpells(LoginKeyClaim const& claim, CharacterSummary character, std::optional<CharacterStats> stored);
-    void EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character, std::optional<CharacterStats> const& stored, std::vector<CharacterSpell> const& spells);
+    void LoadInventory(LoginKeyClaim const& claim, CharacterSummary character, std::optional<CharacterStats> stored, std::vector<CharacterSpell> spells);
+    void EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character, std::optional<CharacterStats> const& stored, std::vector<CharacterSpell> const& spells,
+        std::vector<CharacterItem> const& items);
     void SaveStats();
     void SaveSpell(CharacterSpell const& spell);
+    void SaveNewItem(CharacterItem const& item);
+    void DeleteStoredItem(uint64 itemGuid);
+    void SendItemAdded(ItemTemplateRecord const& itemTemplate, CharacterItem const& item);
+    void SendItemRemoved(uint64 itemGuid);
     void SavePosition(PlayerPosition const& position);
     void RefuseEntry(LoginKeyClaim const& claim, std::string const& reason);
     bool CanSpeak(std::string_view what) const;
@@ -205,6 +223,8 @@ private:
     std::optional<PlayerStats> _stats;
     uint64 _statsRevision = 0;
     std::optional<PlayerSpellbook> _spellbook;
+    std::optional<PlayerBackpack> _backpack;
+    int64 _itemsAllowed = 0;
     PlayerMovement _movement;
     MovementRelay _relay;
     std::vector<uint8> _publicObject;

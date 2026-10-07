@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, chat, outbound instance updates, and the custom emotes a wizard owns.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, the backpack it enters with, read after its spellbook and put into its object, chat, outbound instance updates, and the custom emotes a wizard owns.
  */
 
 #include "GameSession.h"
@@ -10,6 +10,8 @@
 #include "CoreObjectSerializer.h"
 #include "Frame.h"
 #include "GameMessageTable.h"
+#include "ItemMgr.h"
+#include "ItemObjectBuilder.h"
 #include "BlobEnvelope.h"
 #include "ConfigMgr.h"
 #include "Log.h"
@@ -405,14 +407,37 @@ void GameSession::LoadSpells(LoginKeyClaim const& claim, CharacterSummary charac
             RefuseEntry(claim, fmt::format("wizard {}'s spellbook cannot be read from the characters database", character.Guid));
             return;
         }
-        std::vector<CharacterSpell> spells = CharacterRepository::ReadSpells(*result);
+        LoadInventory(claim, character, stored, CharacterRepository::ReadSpells(*result));
+    }));
+}
+
+void GameSession::LoadInventory(LoginKeyClaim const& claim, CharacterSummary character, std::optional<CharacterStats> stored, std::vector<CharacterSpell> spells)
+{
+    CharacterRepository::Statement statement = CharacterDatabase.IsOpen() ? CharacterRepository::PrepareLoadInventory(character.Guid) : nullptr;
+    if (!statement)
+    {
+        RefuseEntry(claim, "the characters database is not open");
+        return;
+    }
+    _queryCallbacks.AddCallback(CharacterDatabase.AsyncQuery(std::move(statement), MakeCompletionHandler()).WithPreparedCallback(
+        [this, claim, character = std::move(character), stored = std::move(stored), spells = std::move(spells)](PreparedQueryResult result)
+    {
+        if (!IsOpen() || IsKicked())
+            return;
+        if (!result)
+        {
+            RefuseEntry(claim, fmt::format("wizard {}'s backpack cannot be read from the characters database", character.Guid));
+            return;
+        }
+        std::vector<CharacterItem> items = CharacterRepository::ReadInventory(*result);
         std::shared_ptr<GameSession> const self = SharedSelf();
-        if (!QueueInbound([self, claim, character, stored, spells = std::move(spells)] { self->EnterWorld(claim, character, stored, spells); }))
+        if (!QueueInbound([self, claim, character, stored, spells, items = std::move(items)] { self->EnterWorld(claim, character, stored, spells, items); }))
             RefuseEntry(claim, "its queue of work is full");
     }));
 }
 
-void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character, std::optional<CharacterStats> const& stored, std::vector<CharacterSpell> const& spells)
+void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character, std::optional<CharacterStats> const& stored, std::vector<CharacterSpell> const& spells,
+    std::vector<CharacterItem> const& items)
 {
     if (!_world)
     {
@@ -426,6 +451,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     bool resumed = false;
     std::optional<PlayerStats> resumedStats;
     std::optional<PlayerSpellbook> resumedSpellbook;
+    std::optional<PlayerBackpack> resumedBackpack;
     PlayerMovement movement;
     MovementRelay relay;
     if (previous && previous->IsLinkDead() && !previous->CanResume(std::chrono::steady_clock::now()))
@@ -451,6 +477,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
             entering.Orientation = current.Yaw;
             resumedStats = previous->_stats;
             resumedSpellbook = previous->_spellbook;
+            resumedBackpack = previous->_backpack;
             movement = previous->_movement;
             relay = previous->_relay;
         }
@@ -522,6 +549,25 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     std::shared_ptr<ObjectTemplate const> const playerTemplate = sObjectTemplateMgr.GetPlayer();
     uint32 const permissions = AccountMgr::EntryPermissions(_accountPermissions, sSettings.Get<uint32>("LoginComplete.Permissions"));
     PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, entering, *stats, trackers, placement, permissions, problem);
+    PlayerBackpack backpack = resumedBackpack ? std::move(*resumedBackpack) : PlayerBackpack::FromStored(items);
+    std::optional<int64> const itemsAllowed = playerTemplate->Object ? PlayerBackpack::ReadItemsAllowed(*playerTemplate->Object) : std::nullopt;
+    if (!itemsAllowed)
+        LOG_WARN("server.gamesession", "Session {}'s player template gives no behavior an {}, so wizard {}'s backpack holds only the {} slot(s) Inventory.ExtraSlots grants",
+            GetSessionId(), PlayerBackpack::ItemsAllowedProperty, character.Guid, sSettings.Get<uint32>("Inventory.ExtraSlots"));
+    std::shared_ptr<ItemTemplateStore const> const itemTemplates = sItemMgr.GetItems();
+    if (player && types && backpack.Size() > 0)
+    {
+        std::vector<uint64> unheld;
+        std::string backpackProblem;
+        if (!itemTemplates)
+            LOG_WARN("server.gamesession", "Session {} shows wizard {} an empty backpack, holding {} item(s), since no item templates are loaded", GetSessionId(), character.Guid,
+                backpack.Size());
+        else if (!ItemObjectBuilder::FillBackpack(*player, *types, *itemTemplates, backpack.GetItems(), unheld, backpackProblem))
+            LOG_WARN("server.gamesession", "Session {} shows wizard {} an empty backpack, holding {} item(s), since {}", GetSessionId(), character.Guid, backpack.Size(), backpackProblem);
+        if (!unheld.empty())
+            LOG_WARN("server.gamesession", "Session {} left {} item(s) wizard {} holds out of its backpack, since the items this server holds do not name their templates: {}",
+                GetSessionId(), unheld.size(), character.Guid, fmt::join(unheld, ", "));
+    }
     ObjectField const* const field = ObjectFields::Find("MSG_LOGINCOMPLETE", "Data");
     EncodeResult const data = player && field ? CoreObjectSerializer::EncodeField(*field, *player, *types) : EncodeResult{};
     if (!player || !field || !data.Ok())
@@ -595,6 +641,8 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     if (!resumed)
         _statsRevision = stored ? stored->Revision : 0;
     _spellbook = std::move(spellbook);
+    _backpack = std::move(backpack);
+    _itemsAllowed = itemsAllowed.value_or(0);
     if (resumed)
     {
         _movement = std::move(movement);
@@ -912,6 +960,7 @@ void GameSession::LeaveWorld()
         _stats.reset();
     }
     _spellbook.reset();
+    _backpack.reset();
     if (std::optional<PlayerPosition> const moved = _movement.TakeWrite())
         SavePosition(*moved);
     if (!_mapId)
@@ -949,6 +998,7 @@ void GameSession::TransferWorldStateTo(GameSession& replacement)
     _publicObject.clear();
     _stats.reset();
     _spellbook.reset();
+    _backpack.reset();
     _worldGuid = 0;
     _zonePath.clear();
     _movement.Reset({}, 0);
