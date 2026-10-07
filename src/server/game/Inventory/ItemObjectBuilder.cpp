@@ -1,10 +1,11 @@
 /*
  * Project Ambrose by Imjustchico
- * Makes an item's game object from the catalog's own class and defaults, refusing a template class the catalog or core_template_type does not know rather than guessing a core type, sets only its header, global id and template id, and encodes it through the message field ObjectFields declares for it, so the envelope and the CoreObject form are the field's, not this file's; the backpack's objects go to whichever of the player's behaviors has an m_itemList, and a list the class refuses fails the fill whole, leaving the player object as it was; the capacity goes to whichever of them has an m_numItemsAllowed, ClientWizInventoryBehavior in the type dump.
+ * Makes an item's game object from the catalog's own class and defaults, refusing a template class the catalog or core_template_type does not know rather than guessing a core type, sets only its header, global id, template id and, where the class has one, the pattern word whose top bit the client reads as the lock, and encodes it through the message field ObjectFields declares for it, so the envelope and the CoreObject form are the field's, not this file's; the backpack's objects go to whichever of the player's behaviors has an m_itemList, and a list the class refuses fails the fill whole, leaving the player object as it was; the capacity goes to whichever of them has an m_numItemsAllowed, ClientWizInventoryBehavior in the type dump.
  */
 
 #include "ItemObjectBuilder.h"
 #include "ObjectFields.h"
+#include "PlayerBackpack.h"
 #include "PropertyFiller.h"
 
 #include <fmt/format.h>
@@ -53,6 +54,10 @@ PropertyObjectPtr ItemObjectBuilder::Build(TypeCatalogPtr const& catalog, CoreOb
         .Set("m_globalID.m_full", item.Guid)
         .Set("m_permID", uint64{ 0 })
         .Set("m_templateID.m_full", uint64{ itemTemplate.TemplateId });
+    if (!problem.empty())
+        return nullptr;
+    if (object->GetClass().FindProperty(PatternProperty))
+        PropertyFiller(*object, problem).Set(PatternProperty, static_cast<int32>(PlayerBackpack::LockWord(item)));
     if (!problem.empty())
         return nullptr;
     return object;

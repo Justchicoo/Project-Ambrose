@@ -1132,6 +1132,22 @@ namespace GameMessages
         }
     };
 
+    struct RequestToggleLockItem
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_REQUESTTOGGLELOCKITEM";
+
+        uint64 ItemId = 0;
+        uint64 GlobalId = 0;
+        uint32 IsLocked = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ItemGID", &RequestToggleLockItem::ItemId), DmlField("GlobalID", &RequestToggleLockItem::GlobalId),
+                DmlField("IsLocked", &RequestToggleLockItem::IsLocked) };
+        }
+    };
+
     struct Loot
     {
         static constexpr uint8 ServiceId = WizardService;

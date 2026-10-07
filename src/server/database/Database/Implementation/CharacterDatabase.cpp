@@ -81,6 +81,7 @@ void CharacterDatabaseConnection::DoPrepareStatements()
         "`locked`, `flags`, `created`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ConnectionFlags::Both);
     PrepareStatement(CHAR_INS_CHARACTER_INVENTORY, "CHAR_INS_CHARACTER_INVENTORY", "INSERT INTO `character_inventory` (`guid`, `item`, `slot`) VALUES (?, ?, ?)", ConnectionFlags::Both);
     PrepareStatement(CHAR_DEL_ITEM_INSTANCE, "CHAR_DEL_ITEM_INSTANCE", "DELETE FROM `item_instance` WHERE `guid` = ? AND `owner` = ?", ConnectionFlags::Both);
+    PrepareStatement(CHAR_UPD_ITEM_LOCK, "CHAR_UPD_ITEM_LOCK", "UPDATE `item_instance` SET `locked` = ? WHERE `guid` = ? AND `owner` = ?", ConnectionFlags::Both);
     PrepareStatement(CHAR_SEL_MAX_ITEM_GUID, "CHAR_SEL_MAX_ITEM_GUID", "SELECT GREATEST(COALESCE((SELECT MAX(`guid`) FROM `item_instance`), 0), "
         "COALESCE((SELECT `highest` FROM `id_sequences` WHERE `name` = 'item'), 0))", ConnectionFlags::Both);
 

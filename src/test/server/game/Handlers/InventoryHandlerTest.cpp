@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Drives a wizard's backpack through a real game session over loopback: an add to a full backpack sends MSG_ITEMDROP naming the template and writes nothing, raising Inventory.ExtraSlots while the server runs lets the next add through, and MSG_TRASHINVENTORYITEM for an item the wizard does not hold is refused, logged and leaves every item where it was; with AMBROSE_TEST_DB set each also checks the characters database, where the refused add and the refused trash change no row and the allowed add stores the item.
+ * Drives a wizard's backpack through a real game session over loopback: an add to a full backpack sends MSG_ITEMDROP naming the template and writes nothing, raising Inventory.ExtraSlots while the server runs lets the next add through, MSG_TRASHINVENTORYITEM for an item the wizard does not hold is refused, logged and leaves every item where it was, and MSG_REQUESTTOGGLELOCKITEM locks an item it holds, answers with the lock bit and stops its trash, while one it does not hold is refused; with AMBROSE_TEST_DB set each also checks the characters database, where the refused add and the refused trash change no row and the allowed add stores the item.
  */
 
 #include "CharacterRepository.h"
@@ -294,5 +294,64 @@ TEST_F(InventoryHandlerTest, TrashingAnItemItHoldsRemovesItAndShowsItGone)
     if (_open)
     {
         EXPECT_TRUE(WaitForCondition([&] { return StoredFor(WizardId).empty(); }, std::chrono::seconds(10))) << "a trashed item stays gone after the wizard enters again";
+    }
+}
+
+TEST_F(InventoryHandlerTest, LockingAnItemStoresItAnswersWithTheLockBitAndRefusesItsTrash)
+{
+    CharacterItem const mine = Stored(WizardId, ObjectGuid::ItemBase - 50, RobeTemplate);
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Enter(client, 10, { mine });
+    ASSERT_TRUE(session);
+
+    GameMessages::RequestToggleLockItem toggle;
+    toggle.ItemId = mine.Guid;
+    toggle.GlobalId = WizardId;
+    toggle.IsLocked = 1;
+    Send(*client, toggle);
+    ASSERT_TRUE(WaitForCondition([&] { return session->GetQueuedMessageCount() == 1; })) << "a lock request waits for the world thread, where the backpack is kept";
+    EXPECT_EQ(session->DrainQueue(), 1u);
+
+    std::optional<GameMessages::RequestToggleLockItem> const locked = ReadReply<GameMessages::RequestToggleLockItem>(*client);
+    ASSERT_TRUE(locked) << "the client is told the item is locked";
+    EXPECT_EQ(locked->ItemId, mine.Guid);
+    EXPECT_EQ(locked->GlobalId, WizardId);
+    EXPECT_EQ(locked->IsLocked, PlayerBackpack::LockBit);
+    ASSERT_NE(session->GetBackpack()->Find(mine.Guid), nullptr);
+    EXPECT_TRUE(session->GetBackpack()->Find(mine.Guid)->Locked);
+    if (_open)
+    {
+        EXPECT_TRUE(WaitForCondition([&] { std::vector<CharacterItem> const stored = StoredFor(WizardId); return stored.size() == 1 && stored.front().Locked; },
+            std::chrono::seconds(10))) << "the lock is still there after the wizard enters again";
+    }
+
+    EXPECT_EQ(session->TrashItem(mine.Guid, mine.TemplateId), BackpackTrashResult::Locked);
+    EXPECT_EQ(Logged(fmt::format("refused wizard {}'s request to trash item {} of template {}, since the item is locked", WizardId, mine.Guid, mine.TemplateId)), 1u);
+    EXPECT_EQ(session->GetBackpack()->Size(), 1u);
+
+    EXPECT_EQ(session->ToggleItemLock(mine.Guid), BackpackLockResult::Unlocked);
+    std::optional<GameMessages::RequestToggleLockItem> const unlocked = ReadReply<GameMessages::RequestToggleLockItem>(*client);
+    ASSERT_TRUE(unlocked);
+    EXPECT_EQ(unlocked->IsLocked, 0u);
+    EXPECT_EQ(session->TrashItem(mine.Guid, mine.TemplateId), BackpackTrashResult::Trashed) << "an unlocked item can be trashed again";
+}
+
+TEST_F(InventoryHandlerTest, LockingAnItemNotOwnedIsRejectedAndLogged)
+{
+    CharacterItem const mine = Stored(WizardId, ObjectGuid::ItemBase - 60, RobeTemplate);
+    CharacterItem const theirs = Stored(StrangerId, ObjectGuid::ItemBase - 61, HatTemplate);
+    std::unique_ptr<FakeSessionClient> client;
+    std::shared_ptr<GameSession> const session = Enter(client, 10, { mine });
+    ASSERT_TRUE(session);
+
+    EXPECT_EQ(session->ToggleItemLock(theirs.Guid), BackpackLockResult::NotOwned);
+    EXPECT_EQ(Logged(fmt::format("refused wizard {}'s request to lock or unlock item {}", WizardId, theirs.Guid)), 1u);
+    EXPECT_FALSE(ReadReply<GameMessages::RequestToggleLockItem>(*client)) << "nothing is shown locked";
+    EXPECT_FALSE(session->GetBackpack()->Find(mine.Guid)->Locked);
+    if (_open)
+    {
+        std::vector<CharacterItem> const stored = StoredFor(StrangerId);
+        ASSERT_EQ(stored.size(), 1u);
+        EXPECT_FALSE(stored.front().Locked) << "the other wizard's item is left as it was";
     }
 }

@@ -690,6 +690,17 @@ CharacterRepository::Statement CharacterRepository::PrepareTrashItem(uint64 guid
     return statement;
 }
 
+CharacterRepository::Statement CharacterRepository::PrepareLockItem(uint64 guid, uint64 itemGuid, bool locked)
+{
+    Statement statement = Prepare(CHAR_UPD_ITEM_LOCK);
+    if (!statement)
+        return statement;
+    statement->SetData(0, static_cast<uint8>(locked ? 1 : 0));
+    statement->SetData(1, itemGuid);
+    statement->SetData(2, guid);
+    return statement;
+}
+
 std::vector<CharacterItem> CharacterRepository::ReadInventory(PreparedResultSet& result)
 {
     std::vector<CharacterItem> items;

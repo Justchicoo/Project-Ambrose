@@ -21,6 +21,7 @@ public:
     static constexpr std::string_view SerializedItemField = "SerializedItem";
     static constexpr std::string_view ItemListProperty = "m_itemList";
     static constexpr std::string_view ItemsAllowedProperty = "m_numItemsAllowed";
+    static constexpr std::string_view PatternProperty = "m_pattern";
 
     ItemObjectBuilder() = delete;
 
