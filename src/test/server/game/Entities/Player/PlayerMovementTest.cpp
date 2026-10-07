@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests where a wizard stands: a move under the session's zone counter places it by the client's own unpacking and a move under another counter is ignored, a thousand moves leave one write pending and nothing written before it is taken, the write is taken once, a wizard that never moved has nothing to write, and starting over forgets what came before.
+ * Tests where a wizard stands: a move under the session's zone counter places it by the client's own unpacking and a move under another counter is ignored, a thousand moves leave one write pending and nothing written before it is taken, the write is taken once, a wizard that never moved has nothing to write, starting over forgets what came before, a teleport packs as the client would and becomes the one pending write without counting as a move, and a teleport that cannot be packed changes nothing.
  */
 
 #include "MovementPacking.h"
@@ -57,5 +57,33 @@ TEST(PlayerMovementTest, AThousandMovesLeaveOneWriteThatIsTakenOnce)
     EXPECT_EQ(movement.GetMoves(), 0u);
     EXPECT_EQ(movement.GetZoneCounter(), 7);
     EXPECT_EQ(movement.GetMoveState(), 0);
+    EXPECT_FALSE(movement.TakeWrite());
+}
+
+TEST(PlayerMovementTest, ATeleportUsesClientPackingAndBecomesTheOnePendingPositionWrite)
+{
+    PlayerMovement movement;
+    movement.Reset({ 0.0f, 0.0f, 0.0f, 0.0f }, 3);
+
+    std::optional<PackedMove> const packed = movement.Teleport({ -7.5f, 9.9f, 15.9f, 0.5f });
+    ASSERT_TRUE(packed);
+    EXPECT_EQ(*packed, (PackedMove{ static_cast<uint16>(-1), 2, 3, 20 }));
+    EXPECT_EQ(movement.GetPosition(), (PlayerPosition{ -4.0f, 8.0f, 12.0f, 0.5f }));
+    EXPECT_EQ(movement.GetZoneCounter(), 3);
+    EXPECT_EQ(movement.GetMoves(), 0u);
+    EXPECT_TRUE(movement.HasMoved());
+    EXPECT_EQ(movement.TakeWrite(), (std::optional<PlayerPosition>(PlayerPosition{ -4.0f, 8.0f, 12.0f, 0.5f })));
+    EXPECT_FALSE(movement.TakeWrite());
+}
+
+TEST(PlayerMovementTest, ARejectedTeleportLeavesThePositionAndPendingWriteUntouched)
+{
+    PlayerMovement movement;
+    PlayerPosition const start{ 12.0f, -4.0f, 8.0f, 1.5f };
+    movement.Reset(start, 0);
+
+    EXPECT_FALSE(movement.Teleport({ 131072.0f, 0.0f, 0.0f, 1.0f }));
+    EXPECT_EQ(movement.GetPosition(), start);
+    EXPECT_FALSE(movement.HasMoved());
     EXPECT_FALSE(movement.TakeWrite());
 }

@@ -1,0 +1,3 @@
+# Project Ambrose by Imjustchico
+# The Python package the Discord bot needs on the machine that runs it, pinned to the version it was checked with; its unit tests and preview need nothing.
+discord.py==2.7.1

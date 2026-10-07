@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads TemplateManifest.xml from Root.wad and every template it lists in id order, each from the archive the manifest names, opened once and kept for the run. A template is a BINd file whose root is a CoreTemplate; a GameObjectTemplate, WizItemTemplate among them, also gives its object name, display and description keys, visual id, icon, object type, adjectives and loot table, and any other CoreTemplate gives the name its ObjectName property holds. Each behavior slot keeps its place: a behavior the dump describes gives its m_behaviorName, an empty slot gives an empty name, and a behavior of a class nothing describes gives the class hash the decoder reports for that slot and the m_behaviorName its skipped bytes hold, which every behavior template inherits and writes under the same hash, or no name when they hold none.
+ * Reads TemplateManifest.xml from Root.wad and every template it lists in id order, each from the archive the manifest names, opened once and kept for the run. A template is a BINd file whose root is a CoreTemplate; a GameObjectTemplate, WizItemTemplate among them, also gives its object name, display and description keys, visual id, icon, object type, adjectives and loot table, and any other CoreTemplate gives the name its ObjectName property holds; an item template is read into its item record and an item set bonus template into its set bonus record, either failing the run when it holds a class nothing describes. Each behavior slot keeps its place: a behavior the dump describes gives its m_behaviorName, an empty slot gives an empty name, and a behavior of a class nothing describes gives the class hash the decoder reports for that slot and the m_behaviorName its skipped bytes hold, which every behavior template inherits and writes under the same hash, or no name when they hold none.
  */
 
 #include "TemplateExtractor.h"
@@ -94,6 +94,11 @@ std::size_t TemplateExtraction::GetItemCount() const noexcept
     return static_cast<std::size_t>(std::count_if(Templates.begin(), Templates.end(), [](ExtractedTemplate const& found) { return found.Item.has_value(); }));
 }
 
+std::size_t TemplateExtraction::GetSetBonusCount() const noexcept
+{
+    return static_cast<std::size_t>(std::count_if(Templates.begin(), Templates.end(), [](ExtractedTemplate const& found) { return found.SetBonus.has_value(); }));
+}
+
 ExtractedTemplate const* TemplateExtraction::Find(uint32 templateId) const noexcept
 {
     auto const found = std::lower_bound(Templates.begin(), Templates.end(), templateId, [](ExtractedTemplate const& row, uint32 id) { return row.TemplateId < id; });
@@ -174,6 +179,13 @@ bool TemplateExtractor::ReadTemplate(TypeCatalogPtr const& catalog, uint32 templ
         std::string error;
         row.Item = ItemTemplateRecord::Read(object, templateId, location.Path, read.Decoded.Issues, error);
         if (!row.Item)
+            extraction.AddError(fmt::format("{} in {}: {}", templateId, location.Archive, error));
+    }
+    else if (ItemSetBonusRecord::IsSetBonus(object))
+    {
+        std::string error;
+        row.SetBonus = ItemSetBonusRecord::Read(object, templateId, location.Path, read.Decoded.Issues, error);
+        if (!row.SetBonus)
             extraction.AddError(fmt::format("{} in {}: {}", templateId, location.Archive, error));
     }
     extraction.Templates.push_back(std::move(row));
