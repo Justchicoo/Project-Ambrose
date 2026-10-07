@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means, until Clear forgets it along with the sessions, since a later thread may be given the same id; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, each session is then given the tick's time, which is how one that never attaches is closed, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone; then the wizards that left an instance this tick are taken away from the wizards still in it and those that arrived are shown to the wizards already there, and those wizards to them, and a wizard that jumped is shown entering its jumping state to the others in its instance, and to its own client when it did not ask to be left out; then what each wizard said or played since the last tick is shown to every other wizard in its instance within Chat.SayRange of it, a line never to the speaker, whose client shows its own, and an emote to the speaker too when it did not ask to be left out, timed as the chat part of the tick; after the instances are looked after, each is brought in line with its zone's objects, and the wizards in an instance whose objects changed are told which left and which came. When a movement flush is due, every wizard in an instance is asked for what changed of its movement since the last one, and what it gives is sent to every other wizard in the same instance. A wizard is in the world from the moment its session is sent its object until it is kicked or its socket closes, and work for one from another thread is queued on its session and waited for, run at once when the caller is the world thread itself, which could never wait on its own tick; each tick times its subsystems, showing wizards to each other, their jumps and the movement flush counted together as movement, and only while an operator has asked for a profile records a bounded Chrome trace of them; a wizard whose client drops without logging out stays in its instance as link-dead, shown to the others standing still with MSG_ZOMBIE_PLAYER, until its session's link-dead time passes or the same character attaches again and takes its place.
+ * The first call to Update decides which thread the world runs on and every later call is expected on it, so a test and a running server agree on what "the world thread" means, until Clear forgets it along with the sessions, since a later thread may be given the same id; sessions are drained under a lock held only long enough to take a copy of the list, because a handler may add or remove a session while it runs, each session is then given the tick's time, which is how one that never attaches is closed, and a session that has closed leaves its zone instance and is dropped after its last queued work has run, on this thread, because the instance is the world thread's alone; then the wizards that left an instance this tick are taken away from the wizards still in it and those that arrived are shown to the wizards already there, and those wizards to them, each wizard's friends are told when it comes online, goes link-dead, changes zone or leaves, and a wizard that jumped is shown entering its jumping state to the others in its instance, and to its own client when it did not ask to be left out; then what each wizard said or played since the last tick is shown to every other wizard in its instance within Chat.SayRange of it that does not ignore it, a line never to the speaker, whose client shows its own, and an emote to the speaker too when it did not ask to be left out, timed as the chat part of the tick; after the instances are looked after, each is brought in line with its zone's objects, and the wizards in an instance whose objects changed are told which left and which came. When a movement flush is due, every wizard in an instance is asked for what changed of its movement since the last one, and what it gives is sent to every other wizard in the same instance. A wizard is in the world from the moment its session is sent its object until it is kicked or its socket closes, and work for one from another thread is queued on its session and waited for, run at once when the caller is the world thread itself, which could never wait on its own tick; each tick times its subsystems, showing wizards to each other, their jumps and the movement flush counted together as movement, and only while an operator has asked for a profile records a bounded Chrome trace of them; a wizard whose client drops without logging out stays in its instance as link-dead, shown to the others standing still with MSG_ZOMBIE_PLAYER, until its session's link-dead time passes or the same character attaches again and takes its place.
  */
 
 #include "World.h"
@@ -12,6 +12,7 @@
 #include "PlayerMeetings.h"
 #include "PlayerStates.h"
 #include "Settings.h"
+#include "SocialMgr.h"
 #include "SpeechMessages.h"
 #include "SpeechRelay.h"
 #include "ScriptMgr.h"
@@ -162,11 +163,20 @@ namespace
             for (Speech const& speech : said)
             {
                 std::vector<std::size_t> const hearers = PlanHearers(listeners, index, speech.SpeakerSees, range);
+                std::size_t others = 0;
+                bool speakerHeard = false;
                 for (std::size_t const hearer : hearers)
+                {
+                    if (!sSocialMgr.ShouldRelayChat(sessions[hearer]->GetCharacterId(), speaker.GetCharacterId()))
+                        continue;
                     sessions[hearer]->HearSpeech(who, speech);
-                std::size_t const others = hearers.size() - (speech.SpeakerSees && std::find(hearers.begin(), hearers.end(), index) != hearers.end() ? 1 : 0);
+                    if (hearer == index)
+                        speakerHeard = true;
+                    else
+                        ++others;
+                }
                 LOG_DEBUG("server.world", "Session {}'s wizard {} sent {}, shown to {} other wizard(s){}", speaker.GetSessionId(), speaker.GetWorldGuid(), SpeechName(speech),
-                    others, speech.SpeakerSees ? " and to itself" : "");
+                    others, speakerHeard ? " and to itself" : "");
             }
         }
     }
@@ -391,6 +401,7 @@ void World::Clear()
         session->_world = nullptr;
     _sessions.clear();
     _moveFlush.Reset();
+    sSocialMgr.Clear();
     std::lock_guard const threadLock(_threadMutex);
     _worldThread = std::thread::id();
     _worldThreadKnown = false;
@@ -461,6 +472,7 @@ void World::Update(std::chrono::milliseconds diff)
 
     auto const meetingStarted = std::chrono::steady_clock::now();
     MeetPlayers(sessions);
+    sSocialMgr.UpdatePresence(sessions);
     RelayJumps(sessions);
     RelayWizBangs(sessions);
     auto const meetingEnded = std::chrono::steady_clock::now();
