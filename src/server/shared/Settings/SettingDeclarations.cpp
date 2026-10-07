@@ -163,9 +163,9 @@ namespace
 
             Unsigned("Account.UsernameMinLength", "3", "1", "32", "characters", "Accounts", Login, NextUse, "The shortest username a new account may use."),
             Unsigned("Account.PasswordMinLength", "4", "1", "128", "characters", "Accounts", Login, NextUse, "The fewest characters a new or changed password may have."),
-            Restricted(Secret(Text("Account.VerifierKeys", "", "65535", "Accounts", Login, NextUse,
+            Restricted(Secret(Text("Account.VerifierKeys", "", "65535", "Accounts", Game | Login, NextUse,
                 "The AES-256 keys that seal stored password verifiers, written id:hex with ids 1 to 255 and 64 hex digits each, separated by commas; keep every key that still seals a stored verifier."))),
-            Restricted(Unsigned("Account.VerifierActiveKey", "0", "0", "255", "", "Accounts", Login, NextUse,
+            Restricted(Unsigned("Account.VerifierActiveKey", "0", "0", "255", "", "Accounts", Game | Login, NextUse,
                 "The key id that seals new and changed verifiers, which Account.VerifierKeys must list; 0 stores them unencrypted and is refused while keys are listed.")),
             Restricted(Flag("Account.AllowPlainVerifiers", "true", "Accounts", Login, NextUse,
                 "Whether an account whose verifier is still unencrypted may log in while a verifier key is active.")),
