@@ -6,6 +6,8 @@
 #include "PlayerMovement.h"
 #include "MovementPacking.h"
 
+#include <cmath>
+
 void PlayerMovement::Reset(PlayerPosition const& start, uint8 zoneCounter)
 {
     _position = start;
@@ -34,6 +36,26 @@ MoveResult PlayerMovement::Apply(uint16 locationX, uint16 locationY, uint16 loca
     ++_moves;
     _moved = true;
     return MoveResult::Moved;
+}
+
+std::optional<PackedMove> PlayerMovement::Teleport(PlayerPosition const& destination) noexcept
+{
+    std::optional<int16> const x = MovementPacking::TryPackLocation(destination.X);
+    std::optional<int16> const y = MovementPacking::TryPackLocation(destination.Y);
+    std::optional<int16> const z = MovementPacking::TryPackLocation(destination.Z);
+    if (!x || !y || !z || !std::isfinite(destination.Yaw))
+        return std::nullopt;
+
+    PackedMove const packed{ static_cast<uint16>(*x), static_cast<uint16>(*y), static_cast<uint16>(*z), MovementPacking::PackYaw(destination.Yaw) };
+    _position = { MovementPacking::UnpackLocation(*x), MovementPacking::UnpackLocation(*y), MovementPacking::UnpackLocation(*z),
+        MovementPacking::UnpackYaw(packed.Direction) };
+    if (!_packed || *_packed != packed)
+    {
+        _packed = packed;
+        ++_changes;
+    }
+    _moved = true;
+    return packed;
 }
 
 std::optional<PlayerPosition> PlayerMovement::TakeWrite() noexcept

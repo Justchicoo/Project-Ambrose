@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Checks the teleport commands: a player-level account is told '.tele', '.go xyz' and '.gps' do not exist; a place outside what a position can be sent as is refused with the range named before anything moves; '.go xyz' with a word for a number says so; a wizard that stands in no zone is not moved; and with AMBROSE_TEST_DB set a point added through the teleport manager is found at once, written to game_tele and the world edit journal, removed the same way, and a reload that meets a bad row keeps the points it had and names the row.
+ * Checks the teleport commands: a player-level account is told '.tele', '.go xyz' and '.gps' do not exist; a place outside what a position can be sent as is refused with the range named before anything moves; '.go xyz' with a word for a number says so; a wizard that stands in no zone is not moved; and with AMBROSE_TEST_DB set a point added through the teleport manager is found at once, written to game_tele and the world edit journal, removed the same way, a reload that meets a bad row keeps the points it had and names the row, a hand edit is live only once `.reload game_tele` runs, and once the zones are loaded a point naming a zone zone_template does not hold fails that reload.
  */
 
 #include "AccountMgr.h"
@@ -11,9 +11,11 @@
 #include "Environment.h"
 #include "GameTeleMgr.h"
 #include "GameTestHarness.h"
+#include "ReloadMgr.h"
 #include "ScriptMgr.h"
 #include "World.h"
 #include "WorldEditJournal.h"
+#include "ZoneMgr.h"
 
 #include <fmt/format.h>
 
@@ -100,6 +102,8 @@ namespace
         void TearDown() override
         {
             sGameTeleMgr.Clear();
+            sZoneMgr.Clear();
+            sReloadMgr.Clear();
             sWorldEditJournal.Clear();
             if (_open)
                 WorldDatabase.Close();
@@ -171,6 +175,24 @@ TEST_F(GameTeleDatabaseTest, APointAddedWorksAtOnceIsJournaledAndAReloadKeepsThe
     ASSERT_EQ(errors.size(), 1u);
     EXPECT_NE(errors.front().find("Nowhere names no zone"), std::string::npos);
     EXPECT_TRUE(sGameTeleMgr.Find("Fountain Steps")) << "a failed reload keeps the points it had";
+
+    sReloadMgr.Clear();
+    sGameTeleMgr.RegisterReloadTargets();
+    ASSERT_TRUE(WorldDatabase.DirectExecute("DELETE FROM `game_tele` WHERE `name` = 'Nowhere'"));
+    ASSERT_TRUE(WorldDatabase.DirectExecute("UPDATE `game_tele` SET `x` = 99 WHERE `name` = 'Fountain Steps'"));
+    EXPECT_FLOAT_EQ(sGameTeleMgr.Find("Fountain Steps")->X, -12.5f) << "a hand edit is not live before its reload target runs";
+    ReloadOutcome const updated = sReloadMgr.Reload(GameTeleMgr::ReloadTarget);
+    ASSERT_TRUE(updated.Ok) << (updated.Errors.empty() ? std::string() : updated.Errors.front());
+    EXPECT_FLOAT_EQ(sGameTeleMgr.Find("Fountain Steps")->X, 99.0f);
+
+    ASSERT_TRUE(WorldDatabase.DirectExecute("INSERT INTO `zone_template` (`zone_path`, `display_name_key`, `soft_limit`) VALUES ('WizardCity/WC_Hub', 'WizardCity_WC_Hub', 50)"));
+    ASSERT_TRUE(sZoneMgr.LoadAll().Loaded);
+    ASSERT_TRUE(WorldDatabase.DirectExecute("INSERT INTO `game_tele` (`name`, `zone`, `x`, `y`, `z`, `yaw`) VALUES ('Broken', 'Nowhere/Unknown', 1, 2, 3, 0)"));
+    ReloadOutcome const rejected = sReloadMgr.Reload(GameTeleMgr::ReloadTarget);
+    EXPECT_FALSE(rejected.Ok);
+    ASSERT_EQ(rejected.Errors.size(), 1u);
+    EXPECT_NE(rejected.Errors.front().find("Nowhere/Unknown"), std::string::npos) << rejected.Errors.front();
+    EXPECT_FLOAT_EQ(sGameTeleMgr.Find("Fountain Steps")->X, 99.0f) << "a point naming a zone zone_template does not hold fails the reload, which keeps the list it had";
 
     ASSERT_TRUE(sGameTeleMgr.Remove("fountain steps", "test", error)) << error;
     EXPECT_FALSE(sGameTeleMgr.Find("Fountain Steps"));

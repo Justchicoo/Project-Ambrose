@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * With AMBROSE_TEST_DB set and a built login server, runs the real login server under the supervisor and stops it the way the panel does: the stop goes through the app's own admin API and the exit is recorded as one that was asked for, and, with AMBROSE_CLIENT_DIR naming an install so the server has the client's message definitions, a client that finished the session handshake is told the server is shutting down before the process ends, and a restart of the game server beside it leaves that client connected and counted, while a game server something else ends is counted as one crash and started again. A server run without a client is started with AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH hidden from it, since an empty ClientDir means the install is found as usual, the environment first, and one with a client needs both set.
+ * With AMBROSE_TEST_DB set and a built login server, runs the real login server under the supervisor and stops it the way the panel does: the stop goes through the app's own admin API and the exit is recorded as one that was asked for, and, with AMBROSE_CLIENT_DIR naming an install so the server has the client's message definitions, a client that finished the session handshake is told the server is shutting down before the process ends, and a restart of the game server beside it leaves that client connected and counted, while a game server something else ends is counted as one crash and started again. A server run without a client is started with AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH hidden from it, since an empty ClientDir means the install is found as usual, the environment first, and one with a client needs both set. A login server whose database refuses it is seen as crashed the moment its start fails, so no wait sits out the 300 s start timeout.
  */
 
 #include "AdminClient.h"
@@ -214,8 +214,15 @@ namespace
         bool WaitFor(AppState state, std::chrono::seconds timeout, std::string_view name = "loginserver") const
         {
             std::chrono::steady_clock::time_point const deadline = std::chrono::steady_clock::now() + timeout;
-            while (App(name).State != state && std::chrono::steady_clock::now() < deadline)
+            while (std::chrono::steady_clock::now() < deadline)
+            {
+                AppSnapshot const app = App(name);
+                if (app.State == state)
+                    return true;
+                if (app.State == AppState::Crashed && app.RestartEpochMs == 0)
+                    return false;
                 std::this_thread::sleep_for(50ms);
+            }
             return App(name).State == state;
         }
 
@@ -299,6 +306,24 @@ TEST(SupervisorLoginTest, AStopFromThePanelGoesThroughTheLoginServersAdminApiAnd
     EXPECT_EQ(stopped.Exits.back().Code, std::optional<int64>(0));
     EXPECT_TRUE(server.Said("through its admin API")) << "the stop did not go through the app's admin API";
     EXPECT_TRUE(server.Said("shutting down after the admin API"));
+}
+
+TEST(SupervisorLoginTest, ALoginServerThatCannotReachItsDatabaseIsReportedAtOnceRatherThanAfterItsStartTimeout)
+{
+    std::optional<MySQLConnectionInfo> login = TestDatabase("ambrose_unreachable_login");
+    std::optional<MySQLConnectionInfo> characters = TestDatabase("ambrose_unreachable_characters");
+    if (!login || !characters)
+        GTEST_SKIP() << "AMBROSE_TEST_DB is not set";
+    std::error_code exists;
+    if (!std::filesystem::is_regular_file(LoginServer(), exists))
+        GTEST_SKIP() << "the login server is not built beside the test helper";
+    login->Port = characters->Port = FreePort();
+
+    SupervisedLoginServer server(*login, *characters, false);
+    std::chrono::steady_clock::time_point const started = std::chrono::steady_clock::now();
+    EXPECT_FALSE(server.WaitFor(AppState::Running, 300s));
+    EXPECT_LT(std::chrono::steady_clock::now() - started, 120s) << "a start that already failed was waited out: " << server.App().Message;
+    EXPECT_EQ(server.App().State, AppState::Crashed) << server.App().Message;
 }
 
 TEST(SupervisorLoginClientTest, AStopFromThePanelTellsAConnectedClientBeforeTheLoginServerExits)
