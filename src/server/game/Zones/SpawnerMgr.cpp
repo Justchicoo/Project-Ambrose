@@ -196,7 +196,7 @@ bool SpawnerMgr::Load(std::vector<std::string>& errors)
             zones.insert(rows->Fetch()[0].Get<std::string>());
         while (rows->NextRow());
     std::vector<std::pair<std::string, ZoneSpawner>> spawners;
-    if (!WorldDatabase.TryQuery("SELECT `zone_path`, `spawner_index`, `name`, `spawner_id`, `active`, `max_spawns`, `respawn_rate`, "
+    if (!WorldDatabase.TryQuery("SELECT `zone_path`, `spawner_index`, `name`, `spawner_id`, `active`, `max_spawns`, GREATEST(`spawn_time`, 0), "
         "`global_dynamic_reqs` IS NOT NULL AND LENGTH(`global_dynamic_reqs`) > 0 FROM `zone_spawner`", rows))
     {
         errors.push_back("zone_spawner could not be read");
@@ -213,7 +213,7 @@ bool SpawnerMgr::Load(std::vector<std::string>& errors)
             spawner.SpawnerId = row[3].Get<uint64>();
             spawner.Active = row[4].Get<bool>();
             spawner.MaxSpawns = row[5].Get<uint32>();
-            spawner.RespawnSeconds = row[6].Get<uint32>();
+            spawner.RespawnSeconds = static_cast<uint32>(row[6].Get<int64>());
             spawner.HasRequirements = row[7].Get<int64>() != 0;
             spawners.emplace_back(row[0].Get<std::string>(), std::move(spawner));
         } while (rows->NextRow());

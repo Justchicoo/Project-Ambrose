@@ -103,7 +103,7 @@ namespace
             ASSERT_EQ(WorldDatabase.Open(), 0u);
             _open = true;
             Execute(fmt::format("INSERT INTO `zone_template` (`zone_path`, `display_name_key`) VALUES ('{}', 'WizardCity_WC_Hub')", Hub));
-            Execute(fmt::format("INSERT INTO `zone_spawner` (`zone_path`, `spawner_index`, `name`, `max_spawns`, `respawn_rate`) VALUES ('{}', 0, 'SpawnPoint_Wood_01', 1, 30)", Hub));
+            Execute(fmt::format("INSERT INTO `zone_spawner` (`zone_path`, `spawner_index`, `name`, `max_spawns`, `spawn_time`) VALUES ('{}', 0, 'SpawnPoint_Wood_01', 1, 30)", Hub));
             Execute(fmt::format("INSERT INTO `zone_spawner_entry` (`zone_path`, `spawner_index`, `position`, `percent_chance`, `template_id`, `loading_type`) "
                 "VALUES ('{}', 0, 0, 100, {}, 3)", Hub, KioskTemplate));
             sReloadMgr.Clear();
