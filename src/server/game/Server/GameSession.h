@@ -172,6 +172,8 @@ private:
 
     std::shared_ptr<GameSession> SharedSelf();
     SQLOperation::CompletionHandler MakeCompletionHandler();
+    void CheckTransferPassKey(LoginKeyClaim claim, std::string passKey, int64 now);
+    void ConsumeKey(LoginKeyClaim claim, int64 now);
     void Diagnose(LoginKeyClaim claim, int64 now);
     void AcceptAttach(LoginKeyClaim const& claim);
     void SendCustomEmotes();

@@ -15,6 +15,7 @@
 #include "CryptoRandom.h"
 #include "DisconnectReason.h"
 #include "LocationString.h"
+#include "LoginSalt.h"
 #include "Log.h"
 #include "MapMgr.h"
 #include "MessageRegistry.h"
@@ -24,6 +25,7 @@
 #include "ObjectTemplateMgr.h"
 #include "PlayerLevelMgr.h"
 #include "PackedName.h"
+#include "PassKey3.h"
 #include "PlayerObjectBuilder.h"
 #include "InstanceSight.h"
 #include "ScriptMgr.h"
@@ -55,6 +57,34 @@ namespace
     std::string TransferAddress;
     uint16 TransferPort = 0;
     constexpr int64 TransferKeyLifetimeSeconds = 120;
+
+    // The client copies MSG_SERVERTRANSFER's INT Key into MSG_ATTACH's STR LoginKey, which arrives empty, so the key sent is kept here
+    // and the attach that follows proves itself with its PassKey instead.
+    struct PendingTransfer
+    {
+        std::string Key;
+        int64 Expires = 0;
+    };
+    std::mutex PendingTransferMutex;
+    std::map<std::pair<uint64, uint64>, PendingTransfer> PendingTransfers;
+
+    void RememberTransfer(uint64 accountId, uint64 characterId, std::string key, int64 expires)
+    {
+        std::lock_guard const lock(PendingTransferMutex);
+        PendingTransfers[{ accountId, characterId }] = PendingTransfer{ std::move(key), expires };
+    }
+
+    std::optional<std::string> TakeTransfer(uint64 accountId, uint64 characterId, int64 now)
+    {
+        std::lock_guard const lock(PendingTransferMutex);
+        std::erase_if(PendingTransfers, [now](auto const& entry) { return entry.second.Expires <= now; });
+        auto const found = PendingTransfers.find({ accountId, characterId });
+        if (found == PendingTransfers.end())
+            return std::nullopt;
+        std::string key = std::move(found->second.Key);
+        PendingTransfers.erase(found);
+        return key;
+    }
 
     int64 NowEpochSeconds()
     {
@@ -255,6 +285,54 @@ void GameSession::HandleAttach(GameMessages::Attach& message)
     }
 
     int64 const now = NowEpochSeconds();
+    if (claim.Key.empty() && !message.PassKey.empty())
+    {
+        std::optional<std::string> key = TakeTransfer(claim.AccountId, claim.CharacterId, now);
+        if (!key)
+        {
+            RefuseAttach(claim, LoginKeyVerdict::Unknown);
+            return;
+        }
+        claim.Key = std::move(*key);
+        CheckTransferPassKey(claim, std::move(message.PassKey), now);
+        return;
+    }
+    ConsumeKey(claim, now);
+}
+
+void GameSession::CheckTransferPassKey(LoginKeyClaim claim, std::string passKey, int64 now)
+{
+    std::unique_ptr<PreparedStatement<LoginDatabaseConnection>> select = LoginDatabase.IsOpen() ? LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_SESSION_KEY) : nullptr;
+    if (!select)
+    {
+        RefuseAttach(claim, LoginKeyVerdict::Unavailable);
+        return;
+    }
+    select->SetData(0, claim.AccountId);
+    SessionTimestamp const offer = GetOfferTime();
+    LoginSalt const salt{ GetSessionId(), static_cast<uint32>(offer.GetSeconds()), offer.Milliseconds };
+    _queryCallbacks.AddCallback(LoginDatabase.AsyncQuery(std::move(select), MakeCompletionHandler()).WithPreparedCallback(
+        [this, claim, passKey = std::move(passKey), salt, now](PreparedQueryResult result)
+    {
+        if (!IsOpen() || IsKicked())
+            return;
+        if (!result || result->GetRowCount() == 0)
+        {
+            RefuseAttach(claim, LoginKeyVerdict::WrongPassKey);
+            return;
+        }
+        std::optional<std::string> const sessionKey = sAccountMgr.GetSettings()->Keys.OpenSessionKey((*result)[0].Get<std::string>(), (*result)[1].Get<uint8>(), claim.AccountId);
+        if (!sessionKey || !PassKey3::Verify(*sessionKey, salt, passKey))
+        {
+            RefuseAttach(claim, LoginKeyVerdict::WrongPassKey);
+            return;
+        }
+        ConsumeKey(claim, now);
+    }));
+}
+
+void GameSession::ConsumeKey(LoginKeyClaim claim, int64 now)
+{
     std::optional<CountedCallback> consume = LoginKeyValidator::BeginConsume(claim, now, MakeCompletionHandler());
     if (!consume)
     {
@@ -882,6 +960,7 @@ void GameSession::HandleZoneTransferAck(GameMessages::ZoneTransferAck&)
             }
             _intentionalDisconnect.store(true, std::memory_order_relaxed);
             _lastTransfer = message;
+            RememberTransfer(message.UserId, message.CharId, std::to_string(message.Key), NowEpochSeconds() + TransferKeyLifetimeSeconds);
             SendDmlMessage(message);
             LOG_INFO("server.gamesession", "Session {} sent wizard {} from {} to {} at {} with a single-use transfer key", GetSessionId(), message.CharId,
                 Ambrose::ForLog(from, 128), Ambrose::ForLog(message.ZoneName, 128), message.Location);

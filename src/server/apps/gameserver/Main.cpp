@@ -326,6 +326,12 @@ namespace
                 return false;
             }
             _settingsSubscription = sSettings.Subscribe([this](SettingChange const& change) { ApplySetting(change); });
+            // A transfer's attach is checked against the session key the login server sealed with these keys.
+            if (!sAccountMgr.LoadSettings(Config()))
+            {
+                _databases.Close();
+                return false;
+            }
             ExtractServerClasses(setup, system, *prompt);
             if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup) || !LoadSpells(setup) || !LoadCustomEmotes(setup) || !LoadSigils(setup) || !LoadItems(setup) || !LoadChatData(setup))
             {

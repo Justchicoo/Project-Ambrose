@@ -30,12 +30,14 @@ namespace GameMessages
         uint64 CharId = 0;
         std::string ZoneName;
         std::string Location;
+        std::string PassKey;
         uint8 Reattach = 0;
 
         static constexpr auto Fields()
         {
             return std::tuple{ DmlField("LoginKey", &Attach::LoginKey), DmlField("UserID", &Attach::UserId), DmlField("CharID", &Attach::CharId),
-                DmlField("ZoneName", &Attach::ZoneName), DmlField("Location", &Attach::Location), DmlField("Reattach", &Attach::Reattach) };
+                DmlField("ZoneName", &Attach::ZoneName), DmlField("Location", &Attach::Location), DmlField("PassKey", &Attach::PassKey),
+                DmlField("Reattach", &Attach::Reattach) };
         }
     };
 

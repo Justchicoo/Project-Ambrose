@@ -74,6 +74,7 @@ std::string_view LoginKeyValidator::Describe(LoginKeyVerdict verdict)
         case LoginKeyVerdict::WrongAccount: return "the key belongs to another account";
         case LoginKeyVerdict::WrongCharacter: return "the key belongs to another wizard";
         case LoginKeyVerdict::WrongRealm: return "the key was issued for another realm";
+        case LoginKeyVerdict::WrongPassKey: return "the PassKey was not made from the account's session key and this connection's offer";
         case LoginKeyVerdict::Unavailable: return "the login database could not answer";
     }
     return "the key was refused";
