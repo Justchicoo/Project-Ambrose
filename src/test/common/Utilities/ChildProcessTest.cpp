@@ -9,6 +9,7 @@
 #include "StringUtil.h"
 #include "Utf.h"
 
+#include <fmt/format.h>
 #include <gtest/gtest.h>
 
 #include <chrono>
@@ -689,9 +690,12 @@ TEST(ChildProcessHandleTest, AdoptTakesARunningChildBackOnlyWhileItsIdentityMatc
     laterStart.StartTime += 1;
     EXPECT_FALSE(ChildProcessHandle::Adopt(laterStart, {}, error));
     EXPECT_NE(error.find(std::to_string(identity.Id)), std::string::npos) << error;
+    EXPECT_NE(error.find(fmt::format("started at {} rather than {}", identity.StartTime, laterStart.StartTime)), std::string::npos) << error;
     ChildProcessIdentity otherProgram = identity;
     otherProgram.Executable = otherProgram.Executable.parent_path() / "another-program";
     EXPECT_FALSE(ChildProcessHandle::Adopt(otherProgram, {}, error));
+    EXPECT_NE(error.find("another-program"), std::string::npos) << error;
+    EXPECT_EQ(error.find("started at"), std::string::npos) << error;
 
     ChildProcessHandle adopted = ChildProcessHandle::Adopt(identity, {}, error);
     ASSERT_TRUE(adopted) << error;
