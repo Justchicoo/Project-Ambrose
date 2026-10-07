@@ -628,6 +628,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
         SendMuteNotice();
     SendBadges();
     SendMapObjects(*map);
+    ShowGameEffectsOf(*this);
     SendCustomEmotes();
     if (!resumed)
         _arrived = true;
@@ -688,6 +689,7 @@ void GameSession::ShowPlayer(GameSession const& other)
     ShowMovementOf(other, other._relay.Current(other._movement));
     if (other._wizBangId != 0)
         ShowWizBangOf(other._worldGuid, other._wizBangId);
+    ShowGameEffectsOf(other);
     if (other.IsLinkDead() && other._linkDeadNotified)
         ShowZombiePlayer(other);
 }
@@ -713,6 +715,82 @@ void GameSession::ShowWizBangOf(uint64 worldGuid, uint32 wizBangId)
     message.GameObjectId = worldGuid;
     message.WizBangId = wizBangId;
     SendDmlMessage(message);
+}
+
+std::optional<int32> GameSession::AddGameEffect(PropertyObjectPtr effect, std::string& problem)
+{
+    problem.clear();
+    if (!_mapId)
+    {
+        problem = "the wizard is not in the world";
+        return std::nullopt;
+    }
+    CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
+    if (!types)
+    {
+        problem = "the core object table is not loaded, so no effect can be sent";
+        return std::nullopt;
+    }
+    std::optional<int32> const id = _effects.Add(std::move(effect), problem);
+    if (!id)
+        return std::nullopt;
+    ActiveGameEffect const& added = *_effects.Find(*id);
+    EncodeResult const data = GameEffectHolder::Encode(*added.Effect, *types);
+    if (!data.Ok())
+    {
+        problem = fmt::format("the effect does not encode: {}", data.Detail);
+        _effects.Remove(*id);
+        return std::nullopt;
+    }
+    _effectChanges.push_back(GameEffectChange{ *id, added.EffectNameId, std::string(data.Bytes.begin(), data.Bytes.end()) });
+    LOG_INFO("server.gamesession", "Session {} gave wizard {} the effect {} named {} with internal id {}, and it carries {} effect(s)", GetSessionId(), _worldGuid,
+        added.Effect->GetClass().Name, added.EffectNameId, *id, _effects.Count());
+    return id;
+}
+
+std::optional<ActiveGameEffect> GameSession::RemoveGameEffect(int32 internalId)
+{
+    std::optional<ActiveGameEffect> removed = _effects.Remove(internalId);
+    if (!removed)
+        return std::nullopt;
+    _effectChanges.push_back(GameEffectChange{ removed->InternalId, removed->EffectNameId, std::nullopt });
+    LOG_INFO("server.gamesession", "Session {} took the effect named {} with internal id {} from wizard {}, and it carries {} effect(s)", GetSessionId(), removed->EffectNameId,
+        internalId, _worldGuid, _effects.Count());
+    return removed;
+}
+
+void GameSession::ShowGameEffectOf(uint64 worldGuid, GameEffectChange const& change)
+{
+    if (change.Data)
+    {
+        GameMessages::AddEffect message;
+        message.GameObjectId = worldGuid;
+        message.EffectData = *change.Data;
+        SendDmlMessage(message);
+        return;
+    }
+    GameMessages::RemoveEffect message;
+    message.GameObjectId = worldGuid;
+    message.EffectNameId = change.EffectNameId;
+    message.InternalId = change.InternalId;
+    SendDmlMessage(message);
+}
+
+void GameSession::ShowGameEffectsOf(GameSession const& other)
+{
+    CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
+    if (!types)
+        return;
+    for (ActiveGameEffect const& active : other._effects.GetEffects())
+    {
+        EncodeResult const data = GameEffectHolder::Encode(*active.Effect, *types);
+        if (!data.Ok())
+        {
+            LOG_WARN("server.gamesession", "Session {} cannot show wizard {}'s effect with internal id {}: {}", GetSessionId(), other._worldGuid, active.InternalId, data.Detail);
+            continue;
+        }
+        ShowGameEffectOf(other._worldGuid, GameEffectChange{ active.InternalId, active.EffectNameId, std::string(data.Bytes.begin(), data.Bytes.end()) });
+    }
 }
 
 std::optional<uint8> GameSession::TakeJump() noexcept
@@ -1147,6 +1225,8 @@ void GameSession::LeaveWorld()
         _player.reset();
     }
     _spellbook.reset();
+    _effects.Clear();
+    _effectChanges.clear();
     if (std::optional<PlayerPosition> const moved = _movement.TakeWrite())
         SavePosition(*moved);
     if (!_mapId)
@@ -1174,6 +1254,9 @@ void GameSession::TransferWorldStateTo(GameSession& replacement)
     replacement._characterRevision = _characterRevision;
     replacement._statsRevision = _statsRevision;
     replacement._arrived = _arrived;
+    replacement._effects = std::move(_effects);
+    _effects.Clear();
+    _effectChanges.clear();
     _superseded.store(true, std::memory_order_relaxed);
     _intentionalDisconnect.store(true, std::memory_order_relaxed);
     _attached.store(false, std::memory_order_relaxed);
