@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook, backpack and stats stay with the world thread and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it. Its friend, best-friend, friend-cap and ignore messages are answered through the social manager, and the display name of the zone its wizard stands in is kept for the presence its friends are shown. Its backpack holds as many items as Inventory.Slots, read as it enters and shown to its client, and the live Inventory.ExtraSlots allow, read at each add, so an add to a full one is refused with MSG_ITEMDROP and stores nothing, and an item it trashes is taken only from its own backpack.
+ * A connected game client and the world-thread-owned wizard behind it: attach spends a one-use handoff key, loads and checks the character, then gives the client its object; movement, spellbook, backpack and live player stats stay with the world thread, stat changes update the HUD and character persistence, and the final position is saved on a clean exit, disconnect expiry or server stop. Intentional exits mark the character offline immediately, link-dead sockets retain the wizard and online claim for a live-configured grace period, and a replacement attach can take over the existing world placement without creating a duplicate. What its wizard says and the emotes it plays are kept until the world's next tick shows them to the wizards around it, which hear them under the name the client's name codec packs for it and the chat level its permissions give it, and a command line its account may run is run at the account's security level, with the reply sent back to its own chat window, and the wizbang its wizard's client names is kept for the wizards around it and shown to each that comes to see it, as are the game effects its wizard carries, each added or taken away on the world thread and shown to the wizard and every wizard in its instance at the next tick, and to each that comes to see it after the object. Its friend, best-friend, friend-cap and ignore messages are answered through the social manager, and the display name of the zone its wizard stands in is kept for the presence its friends are shown. Its backpack holds as many items as Inventory.Slots, read as it enters and shown to its client, and the live Inventory.ExtraSlots allow, read at each add, so an add to a full one is refused with MSG_ITEMDROP and stores nothing, and an item it trashes is taken only from its own backpack.
  */
 
 #ifndef AMBROSE_GAMESESSION_H
@@ -12,6 +12,7 @@
 #include "CharacterStats.h"
 #include "CharacterSummary.h"
 #include "ChatMgr.h"
+#include "GameEffectHolder.h"
 #include "GameMessages.h"
 #include "GameSessionWorld.h"
 #include "ItemTemplateRecord.h"
@@ -21,6 +22,7 @@
 #include "MovementRelay.h"
 #include "PlayerBackpack.h"
 #include "PlayerMovement.h"
+#include "Player.h"
 #include "PlayerSpellbook.h"
 #include "PlayerStats.h"
 #include "SessionBase.h"
@@ -42,6 +44,13 @@ struct WorldDeparture
 {
     uint32 MapId = 0;
     uint64 WorldGuid = 0;
+};
+
+struct GameEffectChange
+{
+    int32 InternalId = 0;
+    uint32 EffectNameId = 0;
+    std::optional<std::string> Data;
 };
 
 enum class SpellbookChange : uint8
@@ -125,7 +134,16 @@ public:
     bool TeleportWithinMap(PlayerPosition const& target, std::vector<std::shared_ptr<GameSession>> const& onlookers, std::string& problem);
     void ShowTeleportOf(GameSession const& mover, PackedMove const& place);
     void SendObjectChanges(MapObjectChanges const& changes);
-    PlayerStats const* GetStats() const noexcept { return _stats ? &*_stats : nullptr; }
+    PlayerStats const* GetStats() const noexcept { return _player ? &_player->GetStats() : nullptr; }
+    Player* GetPlayer() noexcept { return _player ? &*_player : nullptr; }
+    bool SetHealth(int32 value);
+    bool SetMana(int32 value);
+    bool SetGold(int64 value);
+    int64 ModifyGold(int64 amount);
+    bool SetPotionCapacity(uint32 capacity);
+    bool SetPowerPip(float value);
+    bool SetShadowPipRating(float value);
+    void SendElixirStateChange(uint64 parentId, uint8 effectEnabled);
     PlayerMovement const& GetMovement() const noexcept { return _movement; }
     PlayerSpellbook const* GetSpellbook() const noexcept { return _spellbook ? &*_spellbook : nullptr; }
     SpellbookChange LearnSpell(uint32 spellId);
@@ -137,6 +155,11 @@ public:
     BackpackTrashResult TrashItem(uint64 itemGuid, uint32 templateId);
     bool ShowLoot(std::vector<LootItem> const& items);
     void HandleTrashInventoryItem(GameMessages::TrashInventoryItem& message);
+    std::optional<int32> AddGameEffect(PropertyObjectPtr effect, std::string& problem);
+    std::optional<ActiveGameEffect> RemoveGameEffect(int32 internalId);
+    GameEffectHolder const& GetGameEffects() const noexcept { return _effects; }
+    std::vector<GameEffectChange> TakeGameEffectChanges() noexcept { return std::exchange(_effectChanges, {}); }
+    void ShowGameEffectOf(uint64 worldGuid, GameEffectChange const& change);
 
     void HandleGetTimedAccessPasses(GameMessages::GetTimedAccessPasses& message);
     void HandleGetSubscriberOnlyItems(GameMessages::GetSubscriberOnlyItems& message);
@@ -145,6 +168,7 @@ public:
     void HandleLogClientResolution(GameMessages::LogClientResolution& message);
     void HandleLogPatchClientPatchTime(GameMessages::LogPatchClientPatchTime& message);
     void HandleQuestFinderOption(GameMessages::QuestFinderOption& message);
+    void HandleUsePotion(GameMessages::UsePotion& message);
     void SendBadges();
     void HandlePlayerWizBang(GameMessages::PlayerWizBang& message);
 
@@ -197,12 +221,17 @@ private:
     void EnterWorld(LoginKeyClaim const& claim, CharacterSummary const& character, std::optional<CharacterStats> const& stored, std::vector<CharacterSpell> const& spells,
         std::vector<CharacterItem> const& items);
     void SaveStats();
+    void SaveStatsIfDirty();
     void SaveSpell(CharacterSpell const& spell);
     void SaveNewItem(CharacterItem const& item);
     void DeleteStoredItem(uint64 itemGuid);
     void SendItemAdded(ItemTemplateRecord const& itemTemplate, CharacterItem const& item);
     void SendItemRemoved(uint64 itemGuid);
     void SavePosition(PlayerPosition const& position);
+    void SendHealthUpdate(uint8 displayDiff);
+    void SendManaUpdate(uint8 displayDiff);
+    void SendGoldUpdate();
+    void SendPotionUpdate();
     void RefuseEntry(LoginKeyClaim const& claim, std::string const& reason);
     bool CanSpeak(std::string_view what) const;
     bool RejectClosedChat();
@@ -213,6 +242,7 @@ private:
     void MarkOffline();
     void TransferWorldStateTo(GameSession& replacement);
     bool TakeCommandLine(std::string_view packed);
+    void ShowGameEffectsOf(GameSession const& other);
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;
     AsyncCallbackProcessor<QueryCallback> _queryCallbacks;
@@ -243,11 +273,13 @@ private:
     uint64 _worldGuid = 0;
     uint32 _wizBangId = 0;
     std::optional<uint32> _pendingWizBang;
-    std::optional<PlayerStats> _stats;
+    std::optional<Player> _player;
     uint64 _statsRevision = 0;
     std::optional<PlayerSpellbook> _spellbook;
     std::optional<PlayerBackpack> _backpack;
     int64 _itemsAllowed = 0;
+    GameEffectHolder _effects;
+    std::vector<GameEffectChange> _effectChanges;
     PlayerMovement _movement;
     MovementRelay _relay;
     std::vector<uint8> _publicObject;

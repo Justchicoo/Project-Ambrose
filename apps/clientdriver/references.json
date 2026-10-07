@@ -38,6 +38,8 @@
     "badge_filter_first": {"at": [685, 235], "presses": "BadgeButton1 of CharStatsSpellbookPage.gui, the first filter at the top left of the Badges tab's BadgeFilterPageBG"},
     "spellbook_fire": {"at": [398, 141], "presses": "the Fire tab along the top of the spellbook P opens"},
     "game_menu_quit": {"at": [431, 575], "presses": "the Quit button at the lower left of the in-world Graphics menu"},
+    "potion_use": {"at": [160, 670], "presses": "the first filled potion bottle beside the health and mana globes"},
+    "potion_use_remaining": {"at": [190, 670], "presses": "the second potion bottle beside the first, after one charge has been used"},
     "charselect_new": {"at": [946, 689], "presses": "the button of the character selection screen that starts a new wizard"},
     "charselect_delete": {"at": [815, 689], "presses": "the button of the character selection screen that deletes the chosen wizard"},
     "delete_word_field": {"at": [638, 402], "presses": "the text box of the delete dialog that takes the confirmation word"},

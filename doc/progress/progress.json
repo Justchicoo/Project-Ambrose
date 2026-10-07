@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 125,
+    "done": 126,
     "total": 469,
-    "percent": 26.7
+    "percent": 26.9
   },
   "checks": {
-    "done": 1025,
-    "total": 2867,
-    "percent": 35.8
+    "done": 1039,
+    "total": 2870,
+    "percent": 36.2
   },
   "contributor_track": {
     "merged": 93,
@@ -76,16 +76,16 @@
       "title": "The wizard grows vitals xp spells backpack and gear",
       "milestones_done": 2,
       "milestones_total": 14,
-      "checks_done": 38,
-      "checks_total": 97
+      "checks_done": 48,
+      "checks_total": 101
     },
     {
       "phase": 9,
       "title": "A duel completes",
-      "milestones_done": 1,
+      "milestones_done": 2,
       "milestones_total": 12,
-      "checks_done": 13,
-      "checks_total": 84
+      "checks_done": 17,
+      "checks_total": 83
     },
     {
       "phase": 10,
