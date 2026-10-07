@@ -6,9 +6,9 @@
     "percent": 26.7
   },
   "checks": {
-    "done": 1008,
-    "total": 2866,
-    "percent": 35.2
+    "done": 1015,
+    "total": 2867,
+    "percent": 35.4
   },
   "contributor_track": {
     "merged": 93,
@@ -108,8 +108,8 @@
       "title": "Social wizards instances and realms",
       "milestones_done": 0,
       "milestones_total": 23,
-      "checks_done": 9,
-      "checks_total": 138
+      "checks_done": 16,
+      "checks_total": 139
     },
     {
       "phase": 13,
