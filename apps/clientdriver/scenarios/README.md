@@ -93,7 +93,7 @@ directory outside the repository:
 ```powershell
 python apps\clientdriver\drive.py run `
   --scenario c39-idle-timeout.json `
-  --binaries C:\Path\To\Ambrose\bin `
+  --binaries C:\Path\To\Ambrose\build\windows-msvc-x64\bin\RelWithDebInfo `
   --client C:\Path\To\Your\Client `
   --runs C:\Temp\ambrose-clientdriver
 ```
