@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Decompiles functions of the client program through the user's own Ghidra. It starts Ghidra's headless analyzer itself, with the Java that Ghidra's LaunchSupport picks and the virtual machine arguments it asks for, rather than through Ghidra's launch scripts, so no batch file parses a path a second time; it works over a project that holds the program, importing and analyzing the program into a new project the first time, which takes a long while once; it runs a script it writes itself, which prints each program's SHA-256 and each function asked for between markers, so output from a project holding another build of the client is refused; and it keeps each function's C in a cache folder named for the program, so a function is decompiled once.
+ * Decompiles functions of the client program through the user's own Ghidra. It starts Ghidra's headless analyzer itself, with the Java that Ghidra's LaunchSupport picks and the virtual machine arguments it asks for, rather than through Ghidra's launch scripts, so no batch file parses a path a second time; it works over a project that holds the program, importing and analyzing the program into a new project the first time, which takes a long while once; it runs a Java script it writes itself, which needs no Python in Ghidra, which prints each program's SHA-256 and each function asked for between markers, so output from a project holding another build of the client is refused; and it keeps each function's C in a cache folder named for the program, so a function is decompiled once.
  */
 
 #ifndef AMBROSE_GHIDRADECOMPILER_H
@@ -52,7 +52,7 @@ class GhidraDecompiler
 public:
     using Progress = std::function<void(std::string_view line)>;
 
-    static constexpr std::string_view ScriptName = "AmbroseDecompile.py";
+    static constexpr std::string_view ScriptName = "AmbroseDecompile.java";
     static constexpr std::chrono::minutes DecompileTimeout{ 60 };
 
     explicit GhidraDecompiler(GhidraSettings settings);

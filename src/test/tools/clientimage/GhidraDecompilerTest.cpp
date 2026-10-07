@@ -29,8 +29,8 @@ TEST(GhidraDecompilerTest, OutputUnderTheClientsProgramGivesEachFunctionItsCodeO
 
 TEST(GhidraDecompilerTest, MarkersAreFoundAfterAPrefixGhidraPutsOnTheLine)
 {
-    std::vector<std::string> const lines{ "AmbroseDecompile.py> AMBROSE-PROGRAM abc", "AmbroseDecompile.py> AMBROSE-BEGIN 0x10 Sample::Load", "void f(void) {}",
-        "AmbroseDecompile.py> AMBROSE-END 0x10" };
+    std::vector<std::string> const lines{ "AmbroseDecompile.java> AMBROSE-PROGRAM abc", "AmbroseDecompile.java> AMBROSE-BEGIN 0x10 Sample::Load", "void f(void) {}",
+        "AmbroseDecompile.java> AMBROSE-END 0x10" };
     std::string error;
     std::vector<DecompiledFunction> const functions = GhidraDecompiler::ParseOutput(lines, { 0x10 }, "ABC", error);
     ASSERT_EQ(functions.size(), 1u) << error;
