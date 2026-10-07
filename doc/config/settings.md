@@ -14,8 +14,8 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Account.AllowPlainVerifiers` | bool | true | none | next connection or operation | loginserver | restricted | Whether an account whose verifier is still unencrypted may log in while a verifier key is active. |
 | `Account.PasswordMinLength` | unsigned | 4 characters | from 1 to 128 characters | next connection or operation | loginserver | normal | The fewest characters a new or changed password may have. |
 | `Account.UsernameMinLength` | unsigned | 3 characters | from 1 to 32 characters | next connection or operation | loginserver | normal | The shortest username a new account may use. |
-| `Account.VerifierActiveKey` | unsigned | 0 | from 0 to 255 | next connection or operation | loginserver | restricted | The key id that seals new and changed verifiers, which Account.VerifierKeys must list; 0 stores them unencrypted and is refused while keys are listed. |
-| `Account.VerifierKeys` | string | empty | at most 65535 bytes | next connection or operation | loginserver | secret, restricted | The AES-256 keys that seal stored password verifiers, written id:hex with ids 1 to 255 and 64 hex digits each, separated by commas; keep every key that still seals a stored verifier. |
+| `Account.VerifierActiveKey` | unsigned | 0 | from 0 to 255 | next connection or operation | gameserver, loginserver | restricted | The key id that seals new and changed verifiers, which Account.VerifierKeys must list; 0 stores them unencrypted and is refused while keys are listed. |
+| `Account.VerifierKeys` | string | empty | at most 65535 bytes | next connection or operation | gameserver, loginserver | secret, restricted | The AES-256 keys that seal stored password verifiers, written id:hex with ids 1 to 255 and 64 hex digits each, separated by commas; keep every key that still seals a stored verifier. |
 
 ## Characters
 
