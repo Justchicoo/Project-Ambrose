@@ -3,9 +3,9 @@
  * Lays extracted zones out for the world tables in the order they were read: one zone_template row per zone, then its locations, objects, volumes and triggers in list order, each volume and trigger known by its place in its list, with every event of each in order and every result of each trigger, replacing zone_template first so the rows that name a zone are only ever written after it, and zone_trigger before its results, with every float carried as the double it widens to and requirements, placed objects and result bytes NULL where there are none.
  */
 
-#include "ZoneScript.h"
+#include "ZoneSqlScript.h"
 
-WorldSqlScript ZoneScript::Build(ZoneExtraction const& extraction)
+WorldSqlScript ZoneSqlScript::Build(ZoneExtraction const& extraction)
 {
     auto const number = [](float value) { return WorldSqlScript::Value{ static_cast<double>(value) }; };
     auto const whole = [](int64 value) { return WorldSqlScript::Value{ value }; };
@@ -93,7 +93,7 @@ WorldSqlScript ZoneScript::Build(ZoneExtraction const& extraction)
     return script;
 }
 
-std::vector<std::string_view> ZoneScript::GetTables()
+std::vector<std::string_view> ZoneSqlScript::GetTables()
 {
     return { "zone_template", "zone_location", "zone_object", "zone_volume", "zone_trigger", "zone_trigger_event", "zone_trigger_result" };
 }

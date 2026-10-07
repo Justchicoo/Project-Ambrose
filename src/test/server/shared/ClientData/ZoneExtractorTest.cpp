@@ -15,7 +15,7 @@
 #include "WorldSqlScript.h"
 #include "ZoneExtractor.h"
 #include "ZoneMgr.h"
-#include "ZoneScript.h"
+#include "ZoneSqlScript.h"
 #include "ZoneViews.h"
 
 #include <fmt/format.h>
@@ -373,7 +373,7 @@ TEST_F(ZoneExtractorTest, TheScriptReplacesTheZoneTablesAndWritesNullForNoRequir
 {
     ZoneExtraction const extraction = ReadHub();
     ASSERT_TRUE(extraction.Ok()) << Report(extraction);
-    WorldSqlScript const script = ZoneScript::Build(extraction);
+    WorldSqlScript const script = ZoneSqlScript::Build(extraction);
     std::vector<std::string> const& statements = script.GetStatements();
     ASSERT_EQ(statements.size(), 10u) << "the volume and trigger tables are emptied too, with no rows to write";
     EXPECT_EQ(statements[0], "DELETE FROM `zone_template`");
@@ -384,7 +384,7 @@ TEST_F(ZoneExtractorTest, TheScriptReplacesTheZoneTablesAndWritesNullForNoRequir
     EXPECT_EQ(statements[6], "DELETE FROM `zone_volume`");
     EXPECT_EQ(statements[9], "DELETE FROM `zone_trigger_result`");
     EXPECT_EQ(WorldSqlScript::Literal(std::monostate{}), "NULL");
-    EXPECT_EQ(ZoneScript::GetTables(), (std::vector<std::string_view>{ "zone_template", "zone_location", "zone_object", "zone_volume", "zone_trigger", "zone_trigger_event", "zone_trigger_result" }));
+    EXPECT_EQ(ZoneSqlScript::GetTables(), (std::vector<std::string_view>{ "zone_template", "zone_location", "zone_object", "zone_volume", "zone_trigger", "zone_trigger_event", "zone_trigger_result" }));
 }
 
 TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtracted)
@@ -413,7 +413,7 @@ TEST_F(ZoneExtractorTest, TheScriptAppliesTwiceAndTheZoneManagerLoadsWhatWasExtr
 
     ZoneExtraction const extraction = ReadHub();
     ASSERT_TRUE(extraction.Ok()) << Report(extraction);
-    WorldSqlScript const script = ZoneScript::Build(extraction);
+    WorldSqlScript const script = ZoneSqlScript::Build(extraction);
     ASSERT_TRUE(DBUpdater::Run(world, "world", UpdaterSettings{}));
     std::string error;
     for (int round = 0; round < 2; ++round)
@@ -553,7 +553,7 @@ TEST(ZoneTriggerTest, VolumesAndTriggersBecomeRowsAndAResultOfAnUnknownClassKeep
 
     zone.Objects.clear();
     extraction.Zones.push_back(zone);
-    std::string const sql = ZoneScript::Build(extraction).ToText();
+    std::string const sql = ZoneSqlScript::Build(extraction).ToText();
     EXPECT_NE(sql.find(WorldSqlScript::Literal(std::string("Enter_Ravenwood POI"))), std::string::npos);
     EXPECT_NE(sql.find(WorldSqlScript::Literal(std::string("class ResTeleport"))), std::string::npos);
     EXPECT_NE(sql.find(fmt::format("{}, NULL, NULL", StringHash::KiStringHash("class ResMissing"))), std::string::npos) << "no class name and no bytes for the unknown result";

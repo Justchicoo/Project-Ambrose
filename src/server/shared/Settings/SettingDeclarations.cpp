@@ -73,6 +73,11 @@ namespace
             Unsigned("LoginComplete.CSRSecurityLevel", "2", "0", "4", "", "World", Game, NextUse, "The account security level from which MSG_LOGINCOMPLETE opens the client's game master tools."),
             Flag("LoginComplete.TestServer", "false", "World", Game, NextUse, "Whether MSG_LOGINCOMPLETE tells the client it is on a test server."),
 
+            Unsigned("Inventory.Slots", "100", "0", "10000", "items", "Inventory", Game, NextUse,
+                "How many items every wizard's backpack holds, read when the wizard enters the world and sent to its client as the m_numItemsAllowed of its inventory behavior, since neither the player template nor any other file of the install gives one."),
+            Unsigned("Inventory.ExtraSlots", "0", "0", "10000", "items", "Inventory", Game, Live,
+                "How many items every wizard's backpack holds beyond Inventory.Slots, read at each add, so raising it lets the next add to a full backpack succeed; the client is told the new total when the wizard next enters the world."),
+
             Unsigned("Templates.CacheSize", "256", "1", "65536", "MiB", "World", Game, Live,
                 "How much memory the object templates decoded from the install may hold before the least recently used is dropped; a smaller budget drops them at once."),
 
@@ -170,9 +175,9 @@ namespace
 
             Unsigned("Account.UsernameMinLength", "3", "1", "32", "characters", "Accounts", Login, NextUse, "The shortest username a new account may use."),
             Unsigned("Account.PasswordMinLength", "4", "1", "128", "characters", "Accounts", Login, NextUse, "The fewest characters a new or changed password may have."),
-            Restricted(Secret(Text("Account.VerifierKeys", "", "65535", "Accounts", Login, NextUse,
+            Restricted(Secret(Text("Account.VerifierKeys", "", "65535", "Accounts", Game | Login, NextUse,
                 "The AES-256 keys that seal stored password verifiers, written id:hex with ids 1 to 255 and 64 hex digits each, separated by commas; keep every key that still seals a stored verifier."))),
-            Restricted(Unsigned("Account.VerifierActiveKey", "0", "0", "255", "", "Accounts", Login, NextUse,
+            Restricted(Unsigned("Account.VerifierActiveKey", "0", "0", "255", "", "Accounts", Game | Login, NextUse,
                 "The key id that seals new and changed verifiers, which Account.VerifierKeys must list; 0 stores them unencrypted and is refused while keys are listed.")),
             Restricted(Flag("Account.AllowPlainVerifiers", "true", "Accounts", Login, NextUse,
                 "Whether an account whose verifier is still unencrypted may log in while a verifier key is active.")),
