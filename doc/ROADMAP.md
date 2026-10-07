@@ -29,6 +29,8 @@ Gaps the domain plans left open, filled here:
 - Duplicates merged: ByteBuffer (FND-6+NET-1), BitStream (FND-6+OBJ-1), CRC32 (FND-7+PAT-2), Twofish (FND-8+LOG-3; Rec1 needs a 32-byte key, so Twofish-256), zlib (FND-8+OBJ-3), .lang loader (OBJ-14+QST-1), CoreObject envelope (OBJ-9+WLD-6), LocationString (LOG-11+WLD-1), zone object extractor (WLD-2+QST-4), object template extractor (OBJ-17+QST-3), SpellMgr (CMB-2+WIZ-9), loot (QST-19+CMB-20), vendors (EXT-1+QST-20+WIZ-24), pets in combat (CMB-26+EXT-22), tutorial (CMB-28+EXT-24), dispatch (NET-9+LOG-1).
 - Ids are renumbered as <phase>.<nn>. Milestone titles keep their origin ids.
 
+9.02 closed on 2026-10-06: real-client run `20261006-170523` typed `.spell info Fire Cat`; `main-spell-info.png` shows Fire, rank 1, 75% accuracy, Damage, and the Fire damage effects against one enemy, and all 12 client-driver checks passed.
+
 ## The biggest thing first
 
 Phase 1's protocol spine: a clean-room message layer loaded at runtime from the user's own 29 client XML files (KIWAD reader 1.13, then definition parser 1.14, then the runtime message registry 1.15), sitting on the frame and session codec (1.17-1.21). The decision on how CI builds without client files is settled: definitions load at runtime, so CI needs no client (see doc/ARCHITECTURE.md).

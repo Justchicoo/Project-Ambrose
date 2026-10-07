@@ -78,8 +78,8 @@ All 36 service-51 messages and the combat WIZARD/GAME messages encode and decode
 
 **Acceptance**
 
-- [x] Sigils/CombatSigil8Actor.xml has 8 SigilSubCircle (4 Monster, 4 Player) with non-zero PvE limit fields
-- [x] `.sigil reload` with a broken sigil file keeps the old templates and lists every error
+- [x] Sigils/CombatSigil8Actor.xml has 8 SigilSubCircle (4 Monster, 4 Player) with non-zero PvE limit fields [SigilMgrClientTest.CombatSigil8ActorPlacesFourMonstersAndFourPlayersWithPvELimits: four circles of each kind, PvE damage limit 2.76 and resist limit 1.25]
+- [x] `.sigil reload` with a broken sigil file keeps the old templates and lists every error [SpellMgrTest.AReloadThatMeetsFailingSpellsKeepsTheSetServingAndNamesEachWayTheyFail and SigilMgrTest.AReloadThatMeetsFailingSigilsKeepsTheSetServingAndNamesEachFailure; both reloads also succeed on the game server]
 
 ### Detailed spec from CMB-2: SpellMgr and SigilMgr: load spell and sigil templates from the client
 
@@ -103,11 +103,11 @@ The game server holds every SpellTemplate and CombatSigilTemplate in memory, loo
 
 **Acceptance**
 
-- [x] Test (with a client install): 18173 Spells entries decode with 0 failures, or failures are listed by class name and fixed by teaching the registry. `SpellMgrClientTest.EverySpellUnderSpellsLoadsWithNoFailure` on r806919: all 18173 load with 106729 effects and no failure, in 531 ms on 16 threads in an optimized build
-- [x] Test: 'Fire Cat - Amulet' resolves with an effect of type kDamage, damage type Fire, target kEnemySingle. `SpellMgrClientTest.FireCatAmuletDealsFireDamageToOneEnemy`: template 957065192, Fire, accuracy 75, rank 1, its damage chosen by a RandomSpellEffect among kDamage Fire effects on kEnemySingle
-- [x] Test: Sigils/CombatSigil8Actor.xml has 8 SigilSubCircle entries (4 MonsterCircle, 4 PlayerCircle) and non-zero PvE damage/resist limit fields. `SigilMgrClientTest.CombatSigil8ActorPlacesFourMonstersAndFourPlayersWithPvELimits`: PvE damage limit 2.76 (k0 275) and resist limit 1.25 (k0 120)
-- [ ] GM in a real client types .spell info Fire Cat and gets chat output with school, pip rank, accuracy and effects. Waits for 6.04, which carries a GM's chat commands to the game server; the same command answers on the game server's console with the lines a GM will be sent: school Fire, rank 1, accuracy 75%, type Damage, then the random effect and its five kDamage Fire amounts on kEnemySingle
-- [x] Test: a `.spell reload` or `.sigil reload` that hits a decode failure keeps the old templates serving and lists every error. `SpellMgrTest.AReloadThatMeetsFailingSpellsKeepsTheSetServingAndNamesEachWayTheyFail` and `SigilMgrTest.AReloadThatMeetsFailingSigilsKeepsTheSetServingAndNamesEachFailure`: files of another class and files that do not decode are each named, the set that was serving goes on serving, and on the real game server both reloads succeed
+- [x] Test (with a client install): 18173 Spells entries decode with 0 failures, or failures are listed by class name and fixed by teaching the registry. [SpellMgrClientTest.EverySpellUnderSpellsLoadsWithNoFailure on r806919: all 18173 load with 106729 effects and no failure, in 531 ms on 16 threads in an optimized build]
+- [x] Test: 'Fire Cat - Amulet' resolves with an effect of type kDamage, damage type Fire, target kEnemySingle. [SpellMgrClientTest.FireCatAmuletDealsFireDamageToOneEnemy: template 957065192, Fire, accuracy 75, rank 1, damage chosen by a RandomSpellEffect among kDamage Fire effects on kEnemySingle]
+- [x] Test: Sigils/CombatSigil8Actor.xml has 8 SigilSubCircle entries (4 MonsterCircle, 4 PlayerCircle) and non-zero PvE damage/resist limit fields. [SigilMgrClientTest.CombatSigil8ActorPlacesFourMonstersAndFourPlayersWithPvELimits: PvE damage limit 2.76 (k0 275), resist limit 1.25 (k0 120)]
+- [x] GM in a real client types .spell info Fire Cat and gets chat output with school, pip rank, accuracy and effects. Waits for 6.04, which carries a GM's chat commands to the game server; the same command answers on the game server's console with the lines a GM will be sent: school Fire, rank 1, accuracy 75%, type Damage, then the random effect and its five kDamage Fire amounts on kEnemySingle [client-driver run 20261006-170523 passed all 12 checks; main-spell-info.png shows Fire, rank 1, 75% accuracy, Damage, and kDamage Fire amounts 80/90/100/110/120 to kEnemySingle; the game log records <account> with wizard <guid> running spell info Fire Cat successfully]
+- [x] Test: a `.spell reload` or `.sigil reload` that hits a decode failure keeps the old templates serving and lists every error. [SpellMgrTest.AReloadThatMeetsFailingSpellsKeepsTheSetServingAndNamesEachWayTheyFail and SigilMgrTest.AReloadThatMeetsFailingSigilsKeepsTheSetServingAndNamesEachFailure: each malformed and wrong-class file is named, the old set serves, and both reloads succeed on the game server]
 
 **Risks**
 
