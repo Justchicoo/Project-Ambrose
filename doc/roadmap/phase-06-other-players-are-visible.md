@@ -765,8 +765,8 @@ The two real-client checks this milestone's detailed spec once listed, B walking
 
 **Acceptance**
 
-- [ ] B walks away and reappears in the right place for A
-- [ ] Far exempt landmark stays visible
+- [x] B walks away and reappears in the right place for A (client driver run 20261007-151404, aoi-walk-away.json with Visibility.Distance 400: shot 14-main-sees-companion.png shows the companion beside the main wizard, 16-main-companion-gone.png the Commons without it once the server logged `lost sight of wizard 2`, and 20-main-sees-companion-again.png the companion back in view where the server placed it, (-284, 164, -24))
+- [x] Far exempt landmark stays visible (client driver run 20261007-151404, aoi-walk-away.json with Visibility.Distance 400: the server named 25 of the Commons' objects exempt from area of interest, among them ones at (1936.6, -205.6) and (5013.8, -235.5), far past 400 from Start, and InstanceSightTest.AWizardIsOfferedWhatIsWithinReachEveryExemptObjectAndNeverItself offers each to a wizard wherever it stands)
 
 ### Detailed spec from WLD-11: Area of interest: grid visibility
 
@@ -790,10 +790,10 @@ In big or busy zones each client gets only objects and players within range, wit
 
 **Acceptance**
 
-- [ ] Unit: an object crossing the range boundary back and forth within the hysteresis band generates no messages
-- [ ] Unit: re-entry after exit sends MSG_ADDOBJECT, not a second MSG_NEWOBJECT
-- [ ] Real client: in a large zone, B walks away from A: A sees B vanish at range and reappear when B returns, in the right place
-- [ ] Real client: a far-off exempt landmark stays visible
+- [x] Unit: an object crossing the range boundary back and forth within the hysteresis band generates no messages (VisibilitySetTest.CrossingTheBoundaryBackAndForthInsideTheHysteresisBandSendsNothing)
+- [x] Unit: re-entry after exit sends MSG_ADDOBJECT, not a second MSG_NEWOBJECT (VisibilitySetTest.ReEntryAfterExitIsAnAddNotASecondNewObject)
+- [x] Real client: in a large zone, B walks away from A: A sees B vanish at range and reappear when B returns, in the right place (client driver run 20261007-151404, aoi-walk-away.json with Visibility.Distance 400: shots 14-main-sees-companion.png, 16-main-companion-gone.png and 20-main-sees-companion-again.png)
+- [x] Real client: a far-off exempt landmark stays visible (client driver run 20261007-151404, aoi-walk-away.json with Visibility.Distance 400: 25 objects exempt from area of interest, among them ones more than 1900 units from Start, offered to every wizard wherever it stands)
 
 **Risks**
 
