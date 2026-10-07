@@ -134,7 +134,9 @@ namespace
         {
             CharacterItem const item = Held(guid, templateId);
             if (_open)
+            {
                 EXPECT_EQ(CharacterRepository::AddItem(owner, item), CharacterOpResult::Ok);
+            }
             return item;
         }
 
@@ -231,9 +233,13 @@ TEST_F(InventoryHandlerTest, RaisingExtraSlotsLetsTheNextAddToAFullBackpackSucce
     EXPECT_EQ(session->GetBackpack()->Size(), 2u);
     EXPECT_NE(session->GetBackpack()->Find(added.Item->Guid), nullptr);
     if (_open)
+    {
         EXPECT_TRUE(WaitForCondition([&] { return StoredFor(WizardId).size() == 2; }, std::chrono::seconds(10))) << "the item given is stored with its backpack row";
+    }
     else
+    {
         EXPECT_EQ(Logged("could not write item"), 1u) << "with no database the add is still tried, and its failure logged";
+    }
     EXPECT_EQ(session->AddItem(Hat(), 1).Result, BackpackAddResult::Full) << "two slots now hold two items";
 }
 
@@ -286,5 +292,7 @@ TEST_F(InventoryHandlerTest, TrashingAnItemItHoldsRemovesItAndShowsItGone)
     EXPECT_EQ(removed->ItemId, mine.Guid);
     EXPECT_EQ(session->GetBackpack()->Size(), 0u);
     if (_open)
+    {
         EXPECT_TRUE(WaitForCondition([&] { return StoredFor(WizardId).empty(); }, std::chrono::seconds(10))) << "a trashed item stays gone after the wizard enters again";
+    }
 }
