@@ -66,6 +66,7 @@ namespace ClientDiscovery
     bool DeriveTypePointerFlag(Machine const& machine, GuestHeap const& heap, std::span<uint64 const> types, ClientLayout& layout, std::string& error);
     std::optional<DiscoveryVote> FindTypeConstructor(Machine const& machine, CodeIndex const& code, std::span<uint64 const> types, std::string& error);
     std::optional<DiscoveryVote> FindPropertyListInitializer(Machine const& machine, CodeIndex const& code, std::span<uint64 const> types, ClientLayout const& layout, std::string& error);
+    bool DerivePropertyLayout(Machine const& machine, GuestHeap const& heap, std::span<uint64 const> types, ClientLayout& layout, std::string& error);
     std::vector<uint64> FindPropertyListConstructorCandidates(CodeIndex const& code, std::span<uint64 const> lists, uint64 finalizer, std::span<uint64 const> known);
     bool DeriveConstructedListLayout(Machine const& machine, std::span<ConstructedListSample const> samples, ClientLayout& layout, std::string& error);
     std::optional<uint64> FindRaceAdder(CodeIndex const& code, std::string& error);

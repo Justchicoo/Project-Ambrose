@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests runtime discovery over synthetic heaps and code: std::map node fields derived from the tree's shape at default and shifted offsets, the property list link and pointer flag derived from registered types, PropertyList base, singleton and name placed by chosen constructor values, a map head among decoy nodes, cycle refusal, constructor and initializer votes, and Type and string fields derived from chosen values at non-default offsets.
+ * Tests runtime discovery over synthetic heaps and code: std::map node fields derived from the tree's shape at default and shifted offsets, the property list link and pointer flag derived from registered types, PropertyList base, singleton and name placed by chosen constructor values, the property vector and Property name, type and hash voted on by property hashes, a map head among decoy nodes, cycle refusal, constructor and initializer votes, and Type and string fields derived from chosen values at non-default offsets.
  */
 
 #include "ClientDiscovery.h"
@@ -363,5 +363,52 @@ TEST(ClientDiscoveryRuntimeTest, ListConstructorChosenValuesLocateBaseSingletonA
     ClientLayout refused;
     EXPECT_FALSE(ClientDiscovery::DeriveConstructedListLayout(h.machine, sameFlag, refused, error));
     EXPECT_NE(error.find("with and without the singleton flag"), std::string::npos) << error;
+    EXPECT_TRUE(refused.DerivedFields.empty());
+}
+
+TEST(ClientDiscoveryRuntimeTest, ThePropertyVectorAndNameTypeAndHashAreDerivedAtShiftedOffsets)
+{
+    ClientLayout shifted;
+    shifted.ListProperties = 0x70;
+    shifted.ListEntrySize = 0x18;
+    shifted.PropertyName = 0x10;
+    shifted.PropertyType = 0x28;
+    shifted.PropertyHash = 0x34;
+    Heap h(shifted);
+    uint64 const intType = h.objects.Type("int");
+    uint64 const localType = h.objects.Type("enum eLocal");
+    std::vector<uint64> types = { intType };
+    for (int i = 0; i < 24; ++i)
+    {
+        std::string const name = fmt::format("class P{}", i);
+        uint64 const list = h.objects.List(TypeWalker::ListNameOf(name), 0);
+        h.objects.SetProperties(list, { h.objects.Property(intType, "int", fmt::format("m_count{}", i), 0, 0x48, 31, 0),
+            h.objects.Property(localType, "enum eLocal", "m_kind", 1, 0x4C, 7, 0) });
+        types.push_back(h.objects.Type(name, 0x140010000, false, list));
+    }
+
+    ClientLayout derived;
+    derived.ListProperties = derived.ListEntrySize = derived.PropertyName = derived.PropertyType = derived.PropertyHash = 0x99;
+    std::string error;
+    ASSERT_TRUE(ClientDiscovery::DerivePropertyLayout(h.machine, h.heap, types, derived, error)) << error;
+    EXPECT_EQ(derived.ListProperties, shifted.ListProperties);
+    EXPECT_EQ(derived.ListEntrySize, shifted.ListEntrySize);
+    EXPECT_EQ(derived.PropertyName, shifted.PropertyName);
+    EXPECT_EQ(derived.PropertyType, shifted.PropertyType);
+    EXPECT_EQ(derived.PropertyHash, shifted.PropertyHash);
+    for (std::string_view const field : { "PropertyList.properties", "PropertyList.entry_size", "Property.name", "Property.type", "Property.hash" })
+    {
+        EXPECT_TRUE(derived.DerivedFields.contains(std::string(field))) << field;
+    }
+
+    for (std::size_t index = 1; index < types.size(); ++index)
+    {
+        uint64 const list = h.machine.ReadU64(types[index] + shifted.TypePropertyList);
+        uint64 const property = h.machine.ReadU64(h.machine.ReadU64(list + shifted.ListProperties));
+        h.machine.WriteU32(property + shifted.PropertyHash, 1);
+    }
+    ClientLayout refused;
+    EXPECT_FALSE(ClientDiscovery::DerivePropertyLayout(h.machine, h.heap, types, refused, error));
+    EXPECT_NE(error.find("PropertyList.properties could not be placed"), std::string::npos) << error;
     EXPECT_TRUE(refused.DerivedFields.empty());
 }

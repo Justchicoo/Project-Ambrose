@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The discovery steps that read the emulated process: the std::map node layout taken from the largest tree on the heap whose links, nil flag, red-black colors, rising keys and values holding and naming their keys all agree, allowing one alias node in 64 that shares another's Type, the type map head found from heap nodes whose type name hashes to their key, an in-order walk of that map, Type and std::string fields matched against values supplied to the Type constructor, the property list link voted on by lists that name their class, the pointer flag taken from the byte set for pointer and shared pointer types, the PropertyList constructor found among what the lazy getters' class constructors call with their own object and the base, singleton and name its chosen arguments place, and votes for the Type constructor and PropertyList initializer.
+ * The discovery steps that read the emulated process: the std::map node layout taken from the largest tree on the heap whose links, nil flag, red-black colors, rising keys and values holding and naming their keys all agree, allowing one alias node in 64 that shares another's Type, the type map head found from heap nodes whose type name hashes to their key, an in-order walk of that map, Type and std::string fields matched against values supplied to the Type constructor, the property list link voted on by lists that name their class, the pointer flag taken from the byte set for pointer and shared pointer types, the property vector, its stride and Property name, type and hash voted on by properties whose hash is that of their type's name and their own, the PropertyList constructor found among what the lazy getters' class constructors call with their own object and the base, singleton and name its chosen arguments place, and votes for the Type constructor and PropertyList initializer.
  */
 
 #include "ClientDiscovery.h"
@@ -1033,4 +1033,168 @@ bool ClientDiscovery::DeriveConstructedListLayout(Machine const& machine, std::s
     if (!layout.DerivedFields.contains("PropertyList.name"))
         layout.ConfirmDerived("PropertyList.name", fmt::format("{}: the class name without its class keyword landed at {:#x}", evidence, names[0]));
     return true;
+}
+
+namespace
+{
+    constexpr std::array<uint64, 4> ListEntryStrides = { 8, 0x10, 0x18, 0x20 };
+    constexpr std::size_t PropertySampleLists = 256;
+    constexpr std::size_t PropertySampleEntries = 4;
+    constexpr uint64 PropertyObjectWindow = 0x100;
+    constexpr uint64 MaxListEntries = 4096;
+    constexpr std::size_t PropertyLayoutCandidates = 8;
+
+    using PropertyFields = std::array<uint64, 3>;
+
+    bool IsPropertyName(std::string_view text)
+    {
+        return !text.empty() && std::all_of(text.begin(), text.end(), [](char c) { return c > ' ' && c < 0x7F; });
+    }
+
+    std::string const* TypeNameAt(Machine const& machine, ClientLayout const& layout, uint64 address, std::unordered_map<uint64, std::optional<std::string>>& typeNames)
+    {
+        if (auto const known = typeNames.find(address); known != typeNames.end())
+            return known->second ? &*known->second : nullptr;
+        std::optional<std::string> name;
+        if (address >= Machine::PageSize)
+        {
+            name = ReadLayoutString(machine, address + layout.TypeName, layout);
+            std::optional<uint64> const hash = TryReadU64(machine, address + layout.TypeHash);
+            if (name && (name->empty() || !hash || static_cast<uint32>(*hash) != StringHash::KiStringHash(*name)))
+                name.reset();
+        }
+        std::optional<std::string> const& stored = typeNames.emplace(address, std::move(name)).first->second;
+        return stored ? &*stored : nullptr;
+    }
+
+    std::vector<PropertyFields> PlaceNameTypeHash(Machine const& machine, GuestHeap const& heap, ClientLayout const& layout, uint64 property, std::unordered_map<uint64, std::optional<std::string>>& typeNames)
+    {
+        uint64 const size = std::min(heap.SizeOf(property).value_or(PropertyObjectWindow), PropertyObjectWindow);
+        std::vector<uint8> bytes(static_cast<std::size_t>(size));
+        if (size < 8 || !machine.TryRead(property, bytes))
+            return {};
+        std::vector<std::pair<uint64, std::string>> names;
+        std::vector<std::pair<uint64, std::string const*>> types;
+        for (uint64 offset = 0; offset + 8 <= size; offset += 8)
+        {
+            uint64 const pointer = Get64(bytes, offset);
+            if (std::string const* const type = TypeNameAt(machine, layout, pointer, typeNames))
+                types.emplace_back(offset, type);
+            else if (pointer >= Machine::PageSize)
+            {
+                std::optional<std::string> name = machine.ReadCString(pointer, MaxTypeNameLength);
+                if (name && IsPropertyName(*name))
+                    names.emplace_back(offset, std::move(*name));
+            }
+        }
+        std::vector<PropertyFields> placed;
+        for (auto const& [nameOffset, name] : names)
+            for (auto const& [typeOffset, typeName] : types)
+            {
+                uint32 const hash = StringHash::PropertyHash(*typeName, name);
+                for (uint64 offset = 0; offset + 4 <= size; offset += 4)
+                    if (Get32(bytes, offset) == hash)
+                        placed.push_back({ nameOffset, typeOffset, offset });
+            }
+        return placed;
+    }
+}
+
+bool ClientDiscovery::DerivePropertyLayout(Machine const& machine, GuestHeap const& heap, std::span<uint64 const> types, ClientLayout& layout, std::string& error)
+{
+    std::unordered_map<uint64, std::optional<std::string>> typeNames;
+    std::vector<uint64> lists;
+    std::unordered_set<uint64> seenLists;
+    for (TypeSnapshot& type : SnapshotTypes(machine, heap, types, layout))
+    {
+        if (std::optional<uint64> const list = TryReadU64(machine, type.Address + layout.TypePropertyList); list && *list && seenLists.insert(*list).second)
+            lists.push_back(*list);
+        typeNames.emplace(type.Address, std::move(type.Name));
+    }
+    std::sort(lists.begin(), lists.end());
+
+    std::array const taken = { Span{ layout.ListBase, 8 }, Span{ layout.ListName, layout.StringObjectSize }, Span{ layout.ListSingleton, 1 } };
+    std::unordered_map<uint64, std::vector<PropertyFields>> placedByProperty;
+    auto placed = [&](uint64 property) -> std::vector<PropertyFields> const&
+    {
+        if (auto const found = placedByProperty.find(property); found != placedByProperty.end())
+            return found->second;
+        return placedByProperty.emplace(property, PlaceNameTypeHash(machine, heap, layout, property, typeNames)).first->second;
+    };
+    auto entries = [&](uint64 list, uint64 slot, uint64 stride) -> std::optional<std::pair<uint64, uint64>>
+    {
+        std::optional<uint64> const begin = TryReadU64(machine, list + slot);
+        std::optional<uint64> const end = TryReadU64(machine, list + slot + 8);
+        if (!begin || !end || *end < *begin || (*end - *begin) % stride != 0 || (*end - *begin) / stride > MaxListEntries || (*begin == 0) != (*end == 0))
+            return std::nullopt;
+        return std::pair{ *begin, (*end - *begin) / stride };
+    };
+    std::map<std::array<uint64, 5>, uint64> votes;
+    for (uint64 slot = 0; slot + 16 <= ListObjectWindow; slot += 8)
+    {
+        if (Overlaps(slot, 16, taken))
+            continue;
+        for (uint64 const stride : ListEntryStrides)
+        {
+            std::size_t sampled = 0;
+            for (uint64 const list : lists)
+            {
+                std::optional<std::pair<uint64, uint64>> const vector = entries(list, slot, stride);
+                if (!vector || vector->second == 0)
+                    continue;
+                if (++sampled > PropertySampleLists)
+                    break;
+                for (uint64 index = 0; index < vector->second && index < PropertySampleEntries; ++index)
+                    if (std::optional<uint64> const property = TryReadU64(machine, vector->first + index * stride))
+                        for (PropertyFields const& fields : placed(*property))
+                            ++votes[{ slot, stride, fields[0], fields[1], fields[2] }];
+            }
+        }
+    }
+    std::vector<std::pair<std::array<uint64, 5>, uint64>> ranked(votes.begin(), votes.end());
+    std::sort(ranked.begin(), ranked.end(), [](auto const& a, auto const& b) { return a.second > b.second; });
+    std::vector<std::string> rejected;
+    std::vector<PropertyFields> const none;
+    for (std::size_t rank = 0; rank < ranked.size() && rank < PropertyLayoutCandidates && ranked[rank].second >= MinimumWinnerVotes; ++rank)
+    {
+        auto const& [key, count] = ranked[rank];
+        auto const [slot, stride, name, typeSlot, hash] = key;
+        std::size_t properties = 0;
+        std::size_t misses = 0;
+        std::size_t badVectors = 0;
+        for (uint64 const list : lists)
+        {
+            std::optional<std::pair<uint64, uint64>> const vector = entries(list, slot, stride);
+            if (!vector)
+            {
+                ++badVectors;
+                continue;
+            }
+            for (uint64 index = 0; index < vector->second; ++index)
+            {
+                ++properties;
+                std::optional<uint64> const property = TryReadU64(machine, vector->first + index * stride);
+                std::vector<PropertyFields> const& fields = property ? placed(*property) : none;
+                if (std::find(fields.begin(), fields.end(), PropertyFields{ name, typeSlot, hash }) == fields.end())
+                    ++misses;
+            }
+        }
+        if (badVectors != 0 || misses > properties / MapAliasShare)
+        {
+            rejected.push_back(fmt::format("vector {:#x} stride {:#x}: {} lists without such a vector, {} of {} properties not named, typed and hashed there", slot, stride, badVectors, misses, properties));
+            continue;
+        }
+        layout.ListProperties = slot;
+        layout.ListEntrySize = stride;
+        layout.PropertyName = name;
+        layout.PropertyType = typeSlot;
+        layout.PropertyHash = hash;
+        std::string const evidence = fmt::format("{} of the {} properties in the vectors at {:#x} of {} lists, {:#x} bytes apart, point at a type at {:#x} and a C string at {:#x}, and hold the property hash of the two at {:#x} ({} sampled votes)",
+            properties - misses, properties, slot, lists.size(), stride, typeSlot, name, hash, count);
+        for (std::string_view const field : { "PropertyList.properties", "PropertyList.entry_size", "Property.name", "Property.type", "Property.hash" })
+            layout.ConfirmDerived(std::string(field), evidence);
+        return true;
+    }
+    error = fmt::format("PropertyList.properties could not be placed: {} candidates had {} votes or more{}{}", rejected.size(), MinimumWinnerVotes, rejected.empty() ? "" : ": ", fmt::join(rejected, "; "));
+    return false;
 }

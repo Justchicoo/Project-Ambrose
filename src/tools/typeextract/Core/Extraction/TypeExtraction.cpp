@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs a whole extraction: refuses an install whose revision cannot name a dump file, loads the install's client program and runtime, derives the type map's std::map node layout from the heap (before the search for an unknown build, and afterwards as a check against the written offsets for a known one) Type and std::string layout from values passed to the client's constructor (whose probe Types it then leaves out of the walk), the property list link and pointer flag from the registered types, and PropertyList base and singleton by probing the client's PropertyList constructor, runs its initializers and lazy getters, adds its races, validates the type map and server catalog, and reports per-field evidence, timings, counts and discoveries.
+ * Runs a whole extraction: refuses an install whose revision cannot name a dump file, loads the install's client program and runtime, derives the type map's std::map node layout from the heap (before the search for an unknown build, and afterwards as a check against the written offsets for a known one) Type and std::string layout from values passed to the client's constructor (whose probe Types it then leaves out of the walk), the property list link and pointer flag from the registered types, PropertyList base and singleton by probing the client's PropertyList constructor, and the property vector with Property name, type and hash from property hashes, runs its initializers and lazy getters, adds its races, validates the type map and server catalog, and reports per-field evidence, timings, counts and discoveries.
  */
 
 #include "TypeExtraction.h"
@@ -353,6 +353,13 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
             announce(target, { "Type.pointer" });
             return true;
         };
+        auto deriveProperties = [&](ClientLayout& target, std::span<uint64 const> registered)
+        {
+            if (!ClientDiscovery::DerivePropertyLayout(machine, process.GetHeap(), registered, target, error))
+                return false;
+            announce(target, { "PropertyList.properties", "PropertyList.entry_size", "Property.name", "Property.type", "Property.hash" });
+            return true;
+        };
         if (options.RequireDerivedLayout || !referenceLayout)
         {
             if (!deriveTypeLayout() || !deriveListLink(layout, *types))
@@ -457,7 +464,7 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
         std::erase_if(*types, [&](uint64 type) { return probes.contains(type); });
         if (options.RequireDerivedLayout || !referenceLayout)
         {
-            if (!derivePointerFlag(layout, *types))
+            if (!derivePointerFlag(layout, *types) || !deriveProperties(layout, *types))
                 return fail(fmt::format("the client layout could not be derived: {}", error));
             reportLayout();
             if (!RequireDerivedLayout(layout, error))
@@ -533,6 +540,13 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
                 result.Discovered.push_back(fmt::format("PropertyList constructor derivation unavailable: {}", error));
             else
                 confirmIfWritten(derived, "PropertyList constructor", [](std::string_view field) { return field == "PropertyList.base" || field == "PropertyList.singleton"; });
+            if (!deriveProperties(derived, *types))
+                result.Discovered.push_back(fmt::format("property layout derivation unavailable: {}", error));
+            else
+                confirmIfWritten(derived, "property layout", [](std::string_view field)
+                {
+                    return field == "PropertyList.properties" || field == "PropertyList.entry_size" || field == "Property.name" || field == "Property.type" || field == "Property.hash";
+                });
             deriveTypeLayout();
             reportLayout();
         }
