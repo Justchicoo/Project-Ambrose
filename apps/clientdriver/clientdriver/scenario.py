@@ -22,6 +22,7 @@ ACTIONS = {
     "hold_key": (("vk", "seconds"), ("moves", "watch", "watch_every", "watch_after")),
     "click": (("target",), ("attempts", "dwell", "dwell_step", "on_screen", "until", "watch", "watch_every", "watch_after")),
     "shot": ((), ("file", "settle")),
+    "hover": (("target",), ("file", "settle")),
     "server_command": (("command",), ("pattern", "timeout")),
     "game_command": (("command",), ("pattern", "timeout")),
     "stop_game_server": ((), ()),
@@ -37,7 +38,7 @@ ACTIONS = {
 COMMON_KEYS = ("action", "name", "client")
 CLIENTS = ("main", "companion")
 CLIENT_ACTIONS = ("wait_client_log", "forbid_log", "wait_screen", "submit_login", "type", "char", "key", "hold_key", "click", "shot",
-                  "kill_client", "restart_client", "wait_listener", "play")
+                  "kill_client", "restart_client", "wait_listener", "play", "hover")
 ALLOW_LISTS = ("pending_allowed", "dropped_allowed", "server_log_allowed", "client_log_allowed")
 TOP_LEVEL = ("title", "notes", "include", "requires", "server_settings", "game_settings", "wizard", "more_wizards", "companion", "variables", "expect", "steps",
              "patching", "launch", "listeners", "patch_config") + ALLOW_LISTS
@@ -53,7 +54,7 @@ REQUIRES = ("client", "capture", "gameserver")
 WIZARD = ("school", "zone", "first", "middle", "last")
 WIZARD_STATS = ("overflow_xp", "secondary_school", "training_points", "gold", "health", "mana", "potion_charge", "potion_max", "arena_points", "level_locked",
                 "purchased_custom_emotes_1", "purchased_custom_emotes_2", "purchased_custom_emotes_3")
-SIDES = ("server", "client")
+SIDES = ("server", "game", "client")
 OUTCOMES = ("pass", "failure")
 MAX_HOLD_SECONDS = 30
 MAX_SETTLE_SECONDS = 30
@@ -198,7 +199,7 @@ def _check_step(path, index, step):
         raise Refused(f"{where} ({name}) may wait more than 0 and at most 600 seconds for the client to come back")
     if action == "start_game_server" and "timeout" in step and (not isinstance(step["timeout"], (int, float)) or isinstance(step["timeout"], bool) or not 0 < step["timeout"] <= 600):
         raise Refused(f"{where} ({name}) may wait more than 0 and at most 600 seconds for the game server to come back")
-    if action == "shot" and "settle" in step and (not isinstance(step["settle"], (int, float)) or isinstance(step["settle"], bool) or not 0 <= step["settle"] <= MAX_SETTLE_SECONDS):
+    if action in ("shot", "hover") and "settle" in step and (not isinstance(step["settle"], (int, float)) or isinstance(step["settle"], bool) or not 0 <= step["settle"] <= MAX_SETTLE_SECONDS):
         raise Refused(f"{where} ({name}) may let the screen settle for 0 to {MAX_SETTLE_SECONDS} seconds before its shot")
     if "client" in step and step["client"] not in CLIENTS:
         raise Refused(f"{where} ({name}) drives the client {step['client']!r}; a run drives {' or '.join(CLIENTS)}")

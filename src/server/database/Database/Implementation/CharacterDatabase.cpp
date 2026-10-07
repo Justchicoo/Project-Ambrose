@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Registers every characters database statement with its name, SQL, and the connections that prepare it: an account's live characters in creation order, at most MaxCharactersListed of them, and one character by guid, each with its appearance, inserting a character and its appearance, soft deletion of an offline character that remembers the owner and restoring it, the newest deleted characters, of one account or all, and asking a wizard to choose a new name at its next login, counting an account's live characters the way the list finds them, the online flag, and the highest guid ever used, kept in id_sequences so deleted rows cannot hand a guid out again. It also registers the live settings statements: every persisted value, setting and removing one, writing a change's audit row, and reading a key's newest audit rows; and a wizard's character_stats row, read by guid through its character so the read returns a row whenever the wizard exists and an empty result means it failed, and written whole, inserted or replacing the one there only when the write's revision is newer than the row's, the revision assigned last so every column is judged against the revision the row had; a wizard's position, written with the next revision of its character row only when the row's is older; and a wizard's spellbook rows, read through its character in the order it learned them, and each written under the spellbook's next revision, inserted or changing the one there only when the write's revision is newer.
+ * Registers every characters database statement with its name, SQL, and the connections that prepare it: an account's live characters in creation order, at most MaxCharactersListed of them, and one character by guid, each with its appearance, inserting a character and its appearance, soft deletion of an offline character that remembers the owner and restoring it, the newest deleted characters, of one account or all, and asking a wizard to choose a new name at its next login, counting an account's live characters the way the list finds them, the online flag, and the highest guid ever used, kept in id_sequences so deleted rows cannot hand a guid out again. It also registers the live settings statements: every persisted value, setting and removing one, writing a change's audit row, and reading a key's newest audit rows; and a wizard's character_stats row, read by guid through its character so the read returns a row whenever the wizard exists and an empty result means it failed, and written whole, inserted or replacing the one there only when the write's revision is newer than the row's, the revision assigned last so every column is judged against the revision the row had; a wizard's position, and its zone with its position for a transfer, each written with the next revision of its character row only when the row's is older; and a wizard's spellbook rows, read through its character in the order it learned them, and each written under the spellbook's next revision, inserted or changing the one there only when the write's revision is newer. It also registers the social statements: a wizard's friends, the wizards it ignores and the friend requests sent to it, each with the other wizard's name and only while that wizard is not deleted, whether one request exists, adding and removing a request, a friend and an ignore, and setting a friend's best-friend symbol. It also registers the backpack statements: a wizard's backpack, read through its character in the order its items arrived so an empty result means the read failed, an item's instance and its backpack row, inserted together with the item sequence, an item deleted only from the wizard that owns it, which takes its backpack row with it, and the highest item id ever used.
  */
 
 #include "CharacterDatabase.h"
@@ -67,9 +67,41 @@ void CharacterDatabaseConnection::DoPrepareStatements()
         + "`revision` = GREATEST(`revision`, VALUES(`revision`))", ConnectionFlags::Both);
     PrepareStatement(CHAR_UPD_POSITION, "CHAR_UPD_POSITION", "UPDATE `characters` SET `pos_x` = ?, `pos_y` = ?, `pos_z` = ?, `orientation` = ?, `state_revision` = ? WHERE `guid` = ? AND `state_revision` < ?",
         ConnectionFlags::Both);
+    PrepareStatement(CHAR_UPD_PLACE, "CHAR_UPD_PLACE", "UPDATE `characters` SET `zone` = ?, `zone_display` = ?, `pos_x` = ?, `pos_y` = ?, `pos_z` = ?, `orientation` = ?, `state_revision` = ? "
+        "WHERE `guid` = ? AND `state_revision` < ?", ConnectionFlags::Both);
     PrepareStatement(CHAR_SEL_CHARACTER_SPELLS, "CHAR_SEL_CHARACTER_SPELLS", "SELECT s.`guid` IS NOT NULL, s.`spell_id`, s.`known`, s.`learned`, s.`revision` FROM `characters` c "
         "LEFT JOIN `character_spell` s ON s.`guid` = c.`guid` WHERE c.`guid` = ? ORDER BY s.`learned`, s.`spell_id`", ConnectionFlags::Both);
     PrepareStatement(CHAR_REP_CHARACTER_SPELL, "CHAR_REP_CHARACTER_SPELL", "INSERT INTO `character_spell` (`guid`, `spell_id`, `known`, `learned`, `revision`) VALUES (?, ?, ?, ?, ?) "
         "ON DUPLICATE KEY UPDATE `known` = IF(VALUES(`revision`) > `revision`, VALUES(`known`), `known`), `learned` = IF(VALUES(`revision`) > `revision`, VALUES(`learned`), `learned`), "
         "`revision` = GREATEST(`revision`, VALUES(`revision`))", ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_CHARACTER_INVENTORY, "CHAR_SEL_CHARACTER_INVENTORY", "SELECT i.`guid` IS NOT NULL, i.`guid`, i.`template`, i.`quantity`, i.`primary_color`, i.`secondary_color`, "
+        "i.`pattern`, i.`locked`, i.`flags`, i.`created`, v.`slot` FROM `characters` c LEFT JOIN `character_inventory` v ON v.`guid` = c.`guid` "
+        "LEFT JOIN `item_instance` i ON i.`guid` = v.`item` AND i.`owner` = c.`guid` WHERE c.`guid` = ? ORDER BY v.`slot`, v.`item`", ConnectionFlags::Both);
+    PrepareStatement(CHAR_INS_ITEM_INSTANCE, "CHAR_INS_ITEM_INSTANCE", "INSERT INTO `item_instance` (`guid`, `owner`, `template`, `quantity`, `primary_color`, `secondary_color`, `pattern`, "
+        "`locked`, `flags`, `created`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ConnectionFlags::Both);
+    PrepareStatement(CHAR_INS_CHARACTER_INVENTORY, "CHAR_INS_CHARACTER_INVENTORY", "INSERT INTO `character_inventory` (`guid`, `item`, `slot`) VALUES (?, ?, ?)", ConnectionFlags::Both);
+    PrepareStatement(CHAR_DEL_ITEM_INSTANCE, "CHAR_DEL_ITEM_INSTANCE", "DELETE FROM `item_instance` WHERE `guid` = ? AND `owner` = ?", ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_MAX_ITEM_GUID, "CHAR_SEL_MAX_ITEM_GUID", "SELECT GREATEST(COALESCE((SELECT MAX(`guid`) FROM `item_instance`), 0), "
+        "COALESCE((SELECT `highest` FROM `id_sequences` WHERE `name` = 'item'), 0))", ConnectionFlags::Both);
+
+    PrepareStatement(CHAR_SEL_SOCIAL_FRIENDS, "CHAR_SEL_SOCIAL_FRIENDS", "SELECT f.`friend_guid`, f.`best_friend_symbol`, f.`date`, c.`custom_name`, c.`name_indices`, a.`gender` "
+        "FROM `character_friend` f INNER JOIN `characters` c ON c.`guid` = f.`friend_guid` "
+        "INNER JOIN `character_appearance` a ON a.`guid` = c.`guid` WHERE f.`owner_guid` = ? AND c.`deleted_at` IS NULL ORDER BY f.`date`, f.`friend_guid`", ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_SOCIAL_IGNORES, "CHAR_SEL_SOCIAL_IGNORES", "SELECT i.`ignored_guid`, i.`platform_type`, c.`custom_name`, c.`name_indices`, a.`gender` "
+        "FROM `character_ignore` i INNER JOIN `characters` c ON c.`guid` = i.`ignored_guid` INNER JOIN `character_appearance` a ON a.`guid` = c.`guid` "
+        "WHERE i.`owner_guid` = ? AND c.`deleted_at` IS NULL ORDER BY i.`date`, i.`ignored_guid`", ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_SOCIAL_REQUESTS, "CHAR_SEL_SOCIAL_REQUESTS", "SELECT r.`requester_guid`, c.`custom_name`, c.`name_indices`, a.`gender`, c.`level` "
+        "FROM `character_friend_request` r INNER JOIN `characters` c ON c.`guid` = r.`requester_guid` INNER JOIN `character_appearance` a ON a.`guid` = c.`guid` "
+        "WHERE r.`target_guid` = ? AND c.`deleted_at` IS NULL ORDER BY r.`date`, r.`requester_guid`", ConnectionFlags::Both);
+    PrepareStatement(CHAR_SEL_SOCIAL_REQUEST_EXISTS, "CHAR_SEL_SOCIAL_REQUEST_EXISTS", "SELECT 1 FROM `character_friend_request` WHERE `requester_guid` = ? AND `target_guid` = ?", ConnectionFlags::Both);
+    PrepareStatement(CHAR_INS_SOCIAL_REQUEST, "CHAR_INS_SOCIAL_REQUEST", "INSERT INTO `character_friend_request` (`requester_guid`, `target_guid`, `date`) VALUES (?, ?, ?) "
+        "ON DUPLICATE KEY UPDATE `date` = VALUES(`date`)", ConnectionFlags::Both);
+    PrepareStatement(CHAR_DEL_SOCIAL_REQUEST, "CHAR_DEL_SOCIAL_REQUEST", "DELETE FROM `character_friend_request` WHERE `requester_guid` = ? AND `target_guid` = ?", ConnectionFlags::Both);
+    PrepareStatement(CHAR_INS_SOCIAL_FRIEND, "CHAR_INS_SOCIAL_FRIEND", "INSERT INTO `character_friend` (`owner_guid`, `friend_guid`, `best_friend_symbol`, `date`) VALUES (?, ?, ?, ?) "
+        "ON DUPLICATE KEY UPDATE `best_friend_symbol` = VALUES(`best_friend_symbol`), `date` = VALUES(`date`)", ConnectionFlags::Both);
+    PrepareStatement(CHAR_DEL_SOCIAL_FRIEND, "CHAR_DEL_SOCIAL_FRIEND", "DELETE FROM `character_friend` WHERE `owner_guid` = ? AND `friend_guid` = ?", ConnectionFlags::Both);
+    PrepareStatement(CHAR_UPD_SOCIAL_BEST_FRIEND, "CHAR_UPD_SOCIAL_BEST_FRIEND", "UPDATE `character_friend` SET `best_friend_symbol` = ? WHERE `owner_guid` = ? AND `friend_guid` = ?", ConnectionFlags::Both);
+    PrepareStatement(CHAR_INS_SOCIAL_IGNORE, "CHAR_INS_SOCIAL_IGNORE", "INSERT INTO `character_ignore` (`owner_guid`, `ignored_guid`, `platform_type`, `date`) VALUES (?, ?, ?, ?) "
+        "ON DUPLICATE KEY UPDATE `platform_type` = VALUES(`platform_type`), `date` = VALUES(`date`)", ConnectionFlags::Both);
+    PrepareStatement(CHAR_DEL_SOCIAL_IGNORE, "CHAR_DEL_SOCIAL_IGNORE", "DELETE FROM `character_ignore` WHERE `owner_guid` = ? AND `ignored_guid` = ?", ConnectionFlags::Both);
 }

@@ -39,9 +39,11 @@ The roadmap critic flagged these. Resolve each one before or while implementing 
 
 **Acceptance**
 
-- [ ] ModifyGold clamps at pouch
-- [ ] USEPOTION with 0 charges changes nothing
-- [ ] Changing Potion.RestoreFraction applies to the next potion without a restart
+- [x] ModifyGold clamps at pouch [PlayerStatsTest.GoldModificationClampsAtThePouchAndReportsTheOverflow]
+- [x] USEPOTION with 0 charges changes nothing [PlayerStatsTest.UsingAPotionWithNoChargesChangesNothing and GameSessionLifecycleTest.AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction]
+- [x] A wizard that enters below full starts its potion refill countdown [PlayerStatsTest.AWizardThatEntersBelowFullStartsItsRefillCountdown]
+- [x] Session-handled gold and potion changes persist before world departure [GameSessionStatsSaveTest.LiveGoldAndPotionChangesPersistBeforeLeavingTheWorld]
+- [x] Changing Potion.RestoreFraction applies to the next potion without a restart [PlayerStatsTest.EachPotionUsesTheCurrentRestoreFraction and GameSessionLifecycleTest.AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction passed; client run 20261003-190527 changed 0.1 to 0.2 while running]
 - [ ] Real client: '.character gold 500' updates live; heal animates; potion restores and empties by one
 
 ### Detailed spec from WIZ-6: Live vitals, gold and potions
@@ -69,9 +71,11 @@ Health, mana, gold, power-pip and potion changes on the server show up immediate
 
 **Acceptance**
 
-- [ ] Unit test: ModifyGold above m_baseGoldPouch clamps and reports the overflow
-- [ ] Unit test: USEPOTION with 0 charges changes nothing
-- [ ] Unit test: after Potion.RestoreFraction changes, the next potion restores the new fraction without a restart
+- [x] Unit test: ModifyGold above m_baseGoldPouch clamps and reports the overflow [PlayerStatsTest.GoldModificationClampsAtThePouchAndReportsTheOverflow]
+- [x] Unit test: USEPOTION with 0 charges changes nothing [PlayerStatsTest.UsingAPotionWithNoChargesChangesNothing and GameSessionLifecycleTest.AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction]
+- [x] Unit test: a wizard entering below full starts its refill countdown [PlayerStatsTest.AWizardThatEntersBelowFullStartsItsRefillCountdown]
+- [x] Database-backed lifecycle test: live gold and potion changes persist before leaving the world [GameSessionStatsSaveTest.LiveGoldAndPotionChangesPersistBeforeLeavingTheWorld]
+- [x] Unit test: after Potion.RestoreFraction changes, the next potion restores the new fraction without a restart [PlayerStatsTest.EachPotionUsesTheCurrentRestoreFraction and GameSessionLifecycleTest.AZeroChargePotionDoesNothingAndTheNextUseReadsTheLiveRestoreFraction passed; client run 20261003-190527 changed 0.1 to 0.2 while running]
 - [ ] Real client: '.character gold 500' makes the backpack gold counter update without relogging. Damaging then '.character heal' makes the health globe animate up (DisplayDiff=1 floats the number). Clicking a filled potion restores health and mana, and the potion bottle empties by one.
 
 **Risks**
@@ -217,7 +221,7 @@ The game server holds every SpellTemplate and CombatSigilTemplate in memory, loo
 - [x] Test (with a client install): 18173 Spells entries decode with 0 failures, or failures are listed by class name and fixed by teaching the registry. `SpellMgrClientTest.EverySpellUnderSpellsLoadsWithNoFailure` on r806919: all 18173 load with 106729 effects and no failure, in 531 ms on 16 threads in an optimized build
 - [x] Test: 'Fire Cat - Amulet' resolves with an effect of type kDamage, damage type Fire, target kEnemySingle. `SpellMgrClientTest.FireCatAmuletDealsFireDamageToOneEnemy`: template 957065192, Fire, accuracy 75, rank 1, its damage chosen by a RandomSpellEffect among kDamage Fire effects on kEnemySingle
 - [x] Test: Sigils/CombatSigil8Actor.xml has 8 SigilSubCircle entries (4 MonsterCircle, 4 PlayerCircle) and non-zero PvE damage/resist limit fields. `SigilMgrClientTest.CombatSigil8ActorPlacesFourMonstersAndFourPlayersWithPvELimits`: PvE damage limit 2.76 (k0 275) and resist limit 1.25 (k0 120)
-- [ ] GM in a real client types .spell info Fire Cat and gets chat output with school, pip rank, accuracy and effects. Waits for 6.04, which carries a GM's chat commands to the game server; the same command answers on the game server's console with the lines a GM will be sent: school Fire, rank 1, accuracy 75%, type Damage, then the random effect and its five kDamage Fire amounts on kEnemySingle
+- [x] GM in a real client types .spell info Fire Cat and gets chat output with school, pip rank, accuracy and effects. Earned on 2026-10-07 by run 20261007-181528 of `gm-commands-in-chat.json` on main 971187a, RelWithDebInfo, with the retail client: all 13 checks passed, the game server logged that the game master ran spell info Fire Cat and it worked, and shot `main-spell-info-fire-cat` shows the reply in the chat window: Fire Cat, a TieredSpellTemplate, school Fire, rank 1, accuracy 75%, type Damage, and its RandomSpellEffect of kDamage 80/90/100/110/120 Fire to kEnemySingle
 - [x] Test: a `.spell reload` or `.sigil reload` that hits a decode failure keeps the old templates serving and lists every error. `SpellMgrTest.AReloadThatMeetsFailingSpellsKeepsTheSetServingAndNamesEachWayTheyFail` and `SigilMgrTest.AReloadThatMeetsFailingSigilsKeepsTheSetServingAndNamesEachFailure`: files of another class and files that do not decode are each named, the set that was serving goes on serving, and on the real game server both reloads succeed
 
 **Risks**
@@ -411,8 +415,8 @@ Every equippable and backpack item in the user's client is available to the serv
 
 **Acceptance**
 
-- [ ] Trashing an item not owned rejected
-- [ ] Real client: '.additem <hat>' shows the icon and tooltip; trash persists across relog
+- [x] Trashing an item not owned rejected [InventoryHandlerTest.TrashingAnItemNotOwnedIsRejectedAndLogged]
+- [x] Real client: '.additem <hat>' shows the icon and tooltip; trash persists across relog [real client run 20261007-123432 with apps/clientdriver/scenarios/backpack-add-and-trash.json: `.additem 1652259` put "Cute Fairy Kei Broadbrim" in the backpack at 1/100 and its tooltip showed the name; trashing it through the client's confirm dialog emptied it to 0/100, and after a quit and relog it stayed 0/100 with no item_instance rows]
 
 ### Detailed spec from WIZ-11: Backpack inventory
 
@@ -440,10 +444,10 @@ A wizard has a persistent backpack whose items show in the client, and items can
 
 **Acceptance**
 
-- [ ] Unit test: adding to a full backpack sends ITEMDROP and does not persist the item
-- [ ] Unit test: raising Inventory.ExtraSlots lets the next add to a full backpack succeed without a restart
-- [ ] Unit test: trashing an item not owned is rejected and logged
-- [ ] Real client: '.additem <hat template>' makes a new hat icon appear in the backpack with the right name tooltip. Trashing it removes it and it stays gone after relogging. Locking an item shows the lock icon and hides the trash option.
+- [x] Unit test: adding to a full backpack sends ITEMDROP and does not persist the item [InventoryHandlerTest.AddingToAFullBackpackSendsItemDropAndDoesNotPersistTheItem]
+- [x] Unit test: raising Inventory.ExtraSlots lets the next add to a full backpack succeed without a restart [InventoryHandlerTest.RaisingExtraSlotsLetsTheNextAddToAFullBackpackSucceedWithoutARestart]
+- [x] Unit test: trashing an item not owned is rejected and logged [InventoryHandlerTest.TrashingAnItemNotOwnedIsRejectedAndLogged]
+- [ ] Real client: '.additem <hat template>' makes a new hat icon appear in the backpack with the right name tooltip. Trashing it removes it and it stays gone after relogging. Locking an item shows the lock icon and hides the trash option. The add, tooltip, trash and relog parts pass in real client run 20261007-123432 with apps/clientdriver/scenarios/backpack-add-and-trash.json; the lock part waits on 8.09, because the item object carries no lock flag yet and the server has no toggle-lock handler
 
 **Risks**
 
@@ -460,8 +464,8 @@ A wizard has a persistent backpack whose items show in the client, and items can
 
 **Acceptance**
 
-- [ ] Full backpack sends ITEMDROP and does not persist
-- [ ] Raising Inventory.ExtraSlots makes room on the next add without a restart
+- [x] Full backpack sends ITEMDROP and does not persist [InventoryHandlerTest.AddingToAFullBackpackSendsItemDropAndDoesNotPersistTheItem, shared with 8.08]
+- [x] Raising Inventory.ExtraSlots makes room on the next add without a restart [InventoryHandlerTest.RaisingExtraSlotsLetsTheNextAddToAFullBackpackSucceedWithoutARestart, shared with 8.08]
 - [ ] Locked item shows lock icon and hides trash
 
 ### Detailed spec from WIZ-11: Backpack inventory
@@ -490,9 +494,9 @@ A wizard has a persistent backpack whose items show in the client, and items can
 
 **Acceptance**
 
-- [ ] Unit test: adding to a full backpack sends ITEMDROP and does not persist the item
-- [ ] Unit test: raising Inventory.ExtraSlots lets the next add to a full backpack succeed without a restart
-- [ ] Unit test: trashing an item not owned is rejected and logged
+- [x] Unit test: adding to a full backpack sends ITEMDROP and does not persist the item [InventoryHandlerTest.AddingToAFullBackpackSendsItemDropAndDoesNotPersistTheItem, shared with 8.08]
+- [x] Unit test: raising Inventory.ExtraSlots lets the next add to a full backpack succeed without a restart [InventoryHandlerTest.RaisingExtraSlotsLetsTheNextAddToAFullBackpackSucceedWithoutARestart, shared with 8.08]
+- [x] Unit test: trashing an item not owned is rejected and logged [InventoryHandlerTest.TrashingAnItemNotOwnedIsRejectedAndLogged, shared with 8.08]
 - [ ] Real client: '.additem <hat template>' makes a new hat icon appear in the backpack with the right name tooltip. Trashing it removes it and it stays gone after relogging. Locking an item shows the lock icon and hides the trash option.
 
 **Risks**

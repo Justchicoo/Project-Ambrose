@@ -106,7 +106,7 @@ The game server holds every SpellTemplate and CombatSigilTemplate in memory, loo
 - [x] Test (with a client install): 18173 Spells entries decode with 0 failures, or failures are listed by class name and fixed by teaching the registry. `SpellMgrClientTest.EverySpellUnderSpellsLoadsWithNoFailure` on r806919: all 18173 load with 106729 effects and no failure, in 531 ms on 16 threads in an optimized build
 - [x] Test: 'Fire Cat - Amulet' resolves with an effect of type kDamage, damage type Fire, target kEnemySingle. `SpellMgrClientTest.FireCatAmuletDealsFireDamageToOneEnemy`: template 957065192, Fire, accuracy 75, rank 1, its damage chosen by a RandomSpellEffect among kDamage Fire effects on kEnemySingle
 - [x] Test: Sigils/CombatSigil8Actor.xml has 8 SigilSubCircle entries (4 MonsterCircle, 4 PlayerCircle) and non-zero PvE damage/resist limit fields. `SigilMgrClientTest.CombatSigil8ActorPlacesFourMonstersAndFourPlayersWithPvELimits`: PvE damage limit 2.76 (k0 275) and resist limit 1.25 (k0 120)
-- [ ] GM in a real client types .spell info Fire Cat and gets chat output with school, pip rank, accuracy and effects. Waits for 6.04, which carries a GM's chat commands to the game server; the same command answers on the game server's console with the lines a GM will be sent: school Fire, rank 1, accuracy 75%, type Damage, then the random effect and its five kDamage Fire amounts on kEnemySingle
+- [x] GM in a real client types .spell info Fire Cat and gets chat output with school, pip rank, accuracy and effects. Earned on 2026-10-07 by run 20261007-181528 of `gm-commands-in-chat.json` on main 971187a, RelWithDebInfo, with the retail client: all 13 checks passed, the game server logged that the game master ran spell info Fire Cat and it worked, and shot `main-spell-info-fire-cat` shows the reply in the chat window: Fire Cat, a TieredSpellTemplate, school Fire, rank 1, accuracy 75%, type Damage, and its RandomSpellEffect of kDamage 80/90/100/110/120 Fire to kEnemySingle
 - [x] Test: a `.spell reload` or `.sigil reload` that hits a decode failure keeps the old templates serving and lists every error. `SpellMgrTest.AReloadThatMeetsFailingSpellsKeepsTheSetServingAndNamesEachWayTheyFail` and `SigilMgrTest.AReloadThatMeetsFailingSigilsKeepsTheSetServingAndNamesEachFailure`: files of another class and files that do not decode are each named, the set that was serving goes on serving, and on the real game server both reloads succeed
 
 **Risks**
@@ -124,40 +124,31 @@ The game server holds every SpellTemplate and CombatSigilTemplate in memory, loo
 
 **Acceptance**
 
-- [ ] Internal ids are unique per object and released on removal
-- [ ] Real client: a GM-applied test effect shows and clears for self and viewers
+- [x] Internal ids are unique per object and released on removal (`GameEffectHolderTest.InternalIdsAreUniquePerObjectAndReleasedOnRemoval`: four effects on one wizard, two of the same name, get ids 1 to 4, a removed id is taken away once and is the lowest free id the next effect gets, and no two effects held share an id; client driver run 20261007-123808 gave PostCombatEffect internal id 1, took it off, and gave BearBallerinaTransformation id 1 again)
+- [x] Real client: a GM-applied test effect shows and clears for self and viewers (client driver run 20261007-123808, effect-show-and-clear.json, on r806919: `effect add PostCombatEffect` turned the main wizard see-through in its own window and faded in the companion's, `effect remove 1` made it solid in both, and `effect add BearBallerinaTransformation` turned it into a ballerina bear in a tutu in both windows until `effect remove 1` turned it back; both clients logged ClientTransformationEffect add and remove callbacks and neither logged a refused effect or a failed removal. The run's one failed check, an unhandled MSG_READTUTORIALTIP the client sent as the bear appeared, was added to the scenario's expected messages)
 
-### Detailed spec from WIZ-13: Equipment stat effects and set bonuses
+### Detailed spec
 
-Equipped gear changes the wizard's maximum health, damage, resist, crit, block, pips and other stats the way the client expects, and those changes show on the character sheet.
+An object carries the game effects put on it, each under an internal id of its own, and the wizards who see it are shown them as they are added and taken away. The WIZ-13 equipment stat checks this section once held are 11.02's and 11.03's, which list them as their acceptance.
 
 **Deliverables**
 
-- src/server/game/Entities/Player/StatCalculator: base stats from player_level_stats, plus each equipped item's m_equipEffects (WizStatisticEffect fields: m_hitPointBonus, m_manaBonus, m_damageBonusPercent, m_damageReducePercent, m_accuracyBonusPercent, m_criticalHitRating, m_blockRating, m_powerPipBonusPercent, m_pipConversionRating, m_archmastery, per-school fields via effect category), plus ItemSetBonusTemplate tiers by equipped count
-- GAME ADDEFFECT/REMOVEEFFECT sent on equip, unequip and login; UPDATEHEALTH/UPDATEMANA with the new maximums
-- Rating-to-percent conversions from stat_effect_config (critical, block, pip conversion) for derived WizGameStats fields
-- src/test/server/game/StatCalculatorTest.cpp
+- src/server/game/Entities/GameEffectHolder: the effects an object carries, each under the lowest free internal id, encoded for MSG_ADDEFFECT in CoreObject form
+- src/server/game/Spells/GameEffectMgr: the effect templates of Root.wad GameEffectData/*.xml, keyed by the hash of their names, each making the effect class it names, a reload target
+- GameSession and World: MSG_ADDEFFECT and MSG_REMOVEEFFECT sent to the wizard and every wizard in its instance at the next tick, and the effects it carries shown to each that comes to see it and to itself on entering the world
+- src/server/scripts/Commands/cs_effect.cpp: `effect info`, `add`, `remove`, `list` and `reload`
+- apps/clientdriver/scenarios/effect-show-and-clear.json
 
-**Client messages:** GAME MSG_ADDEFFECT, GAME MSG_REMOVEEFFECT, MSG_UPDATEHEALTH, MSG_UPDATEMANA
+**Client messages:** GAME MSG_ADDEFFECT, GAME MSG_REMOVEEFFECT
 
 **Data sources**
 
-- world.item_template_effect
-- world.item_set_bonus
-- world.stat_effect_config
-- Root.wad GameEffectRuleData/*.xml (134 WizardStatTable) for rating curves
-- Root.wad GameEffectData/CanonicalStatEffects.xml
+- Root.wad GameEffectData/*.xml
 
 **Acceptance**
 
-- [ ] Unit test: equipping a +100 HP hat raises m_baseHitpoints plus bonus by 100 and current health is clamped correctly on unequip
-- [ ] Unit test: a 3-piece set bonus applies only when 3 set items are equipped
-- [ ] Real client: equipping a hat with +5% Fire damage and +40 health makes the character sheet Stats tab show the new damage percent and the health globe maximum go up by 40. Unequipping reverts both.
-
-**Risks**
-
-- The exact rating-to-percent curves (WizardStatTable) and level thresholds need reverse engineering. Small errors show as mismatched character-sheet numbers.
-- The effect framework and m_internalID allocation are shared with CMB. Agree on ownership.
+- [x] Unit test: internal ids are unique per object and released on removal (`GameEffectHolderTest.InternalIdsAreUniquePerObjectAndReleasedOnRemoval`: four effects on one wizard, two of the same name, get ids 1 to 4, a removed id is taken away once and is the lowest free id the next effect gets, and no two effects held share an id; client driver run 20261007-123808 gave PostCombatEffect internal id 1, took it off, and gave BearBallerinaTransformation id 1 again)
+- [x] Real client: a GM-applied test effect shows and clears for the wizard and for a wizard watching it (client driver run 20261007-123808, effect-show-and-clear.json, on r806919: `effect add PostCombatEffect` turned the main wizard see-through in its own window and faded in the companion's, `effect remove 1` made it solid in both, and `effect add BearBallerinaTransformation` turned it into a ballerina bear in a tutu in both windows until `effect remove 1` turned it back; both clients logged ClientTransformationEffect add and remove callbacks and neither logged a refused effect or a failed removal. The run's one failed check, an unhandled MSG_READTUTORIALTIP the client sent as the bear appeared, was added to the scenario's expected messages)
 
 ## 9.04 Spawners and runtime spawn/despawn (WLD-18, without paths; QST-4 SpawnExtractor)
 
