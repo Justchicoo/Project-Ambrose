@@ -21,12 +21,14 @@
 #include "MessageRegistry.h"
 #include "MovementPacking.h"
 #include "ObjectFields.h"
+#include "ObjectSerializer.h"
 #include "ObjectSchemaMgr.h"
 #include "ObjectTemplateMgr.h"
 #include "PlayerLevelMgr.h"
 #include "PackedName.h"
 #include "PassKey3.h"
 #include "PlayerObjectBuilder.h"
+#include "PropertyFiller.h"
 #include "InstanceSight.h"
 #include "ScriptMgr.h"
 #include "Settings.h"
@@ -93,6 +95,33 @@ namespace
     int64 NowEpochSeconds()
     {
         return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    }
+
+    std::optional<std::string> EncodeDespawnInfo(MapObjectDeletion const& deletion)
+    {
+        TypeCatalogPtr const catalog = sTypeRegistry.GetCatalog();
+        PropertyObjectPtr const info = catalog ? PropertyObject::Create(catalog, "class DespawnInfo") : nullptr;
+        ObjectField const* const field = ObjectFields::Find("MSG_DELETEOBJECT", "Data");
+        if (!info || !field)
+        {
+            LOG_ERROR("server.gamesession", "Cannot encode how object {} leaves: {}", deletion.GlobalId, !info ? "the loaded type dump has no class DespawnInfo" :
+                "the loaded message definitions do not describe MSG_DELETEOBJECT.Data");
+            return std::nullopt;
+        }
+        std::string problem;
+        PropertyFiller(*info, problem).Set("m_killer", deletion.Killer).Set("m_despawnEffect", deletion.Effect);
+        if (!problem.empty())
+        {
+            LOG_ERROR("server.gamesession", "Cannot encode how object {} leaves: {}", deletion.GlobalId, problem);
+            return std::nullopt;
+        }
+        EncodeResult const encoded = ObjectSerializer::EncodeField(*field, info.get());
+        if (!encoded.Ok())
+        {
+            LOG_ERROR("server.gamesession", "Cannot encode how object {} leaves: {}", deletion.GlobalId, encoded.Detail);
+            return std::nullopt;
+        }
+        return std::string(encoded.Bytes.begin(), encoded.Bytes.end());
     }
 }
 
@@ -1275,6 +1304,22 @@ void GameSession::SendObjectChanges(MapObjectChanges const& changes)
 {
     if (!_mapId || *_mapId != changes.DynamicZoneId)
         return;
+    for (MapObjectDeletion const& deleted : changes.Deleted)
+    {
+        if (!_sight.IsVisible(deleted.GlobalId))
+            continue;
+        std::optional<std::string> data = EncodeDespawnInfo(deleted);
+        if (!data)
+        {
+            ForgetSight(deleted.GlobalId);
+            continue;
+        }
+        GameMessages::DeleteObject message;
+        message.GameObjectId = deleted.GlobalId;
+        message.Data = std::move(*data);
+        SendDmlMessage(message);
+        _sight.Forget(deleted.GlobalId);
+    }
     for (uint64 const removed : changes.Removed)
         ForgetSight(removed);
 }
