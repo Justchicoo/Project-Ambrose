@@ -436,7 +436,9 @@ TEST_F(AuthHandlerDatabaseTest, OlderAuthenticationMessagesAreRefused)
     LoginClient client = _server->Connect();
     Send(client, LoginMessages::UserAuthen{ "W.1.610.0" });
     ExpectFailure(client, AuthResult::AuthenFailed, "MSG_USER_AUTHEN");
-    Send(client, LoginMessages::UserAuthenV2{ "W.1.610.0" });
+    LoginMessages::UserAuthenV2 authenV2;
+    authenV2.Version = "W.1.610.0";
+    Send(client, authenV2);
     ExpectFailure(client, AuthResult::AuthenFailed, "MSG_USER_AUTHEN_V2");
     Send(client, LoginMessages::WebAuthen{ "W.1.610.0" });
     ExpectFailure(client, AuthResult::AuthenFailed, "MSG_WEB_AUTHEN");
