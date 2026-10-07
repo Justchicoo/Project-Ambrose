@@ -7,14 +7,15 @@ from . import paths
 from .errors import StepFailed
 
 NO_WINDOW = 0x08000000
-LAYOUT = 3
+# 4: volumes and triggers, which the extractor reads only through a world database's server classes.
+LAYOUT = 4
 
 
 def cache_path(revision):
     return os.path.join(paths.driver_folder(), "zones", f"{revision}.v{LAYOUT}.sql")
 
 
-def ensure(binaries, install, revision, timeout=1800):
+def ensure(binaries, install, revision, world_info=None, timeout=1800):
     if not revision:
         raise StepFailed("the install's revision is not known, so its zone rows cannot be cached under it")
     target = cache_path(revision)
@@ -28,7 +29,10 @@ def ensure(binaries, install, revision, timeout=1800):
         raise StepFailed(f"the type dump {dump} is missing; start a server once so it is built")
     os.makedirs(os.path.dirname(target), exist_ok=True)
     partial = target + ".part"
-    command = [extractor, "--client", install, "--type-dump", dump, "--sql", partial, "zones"]
+    command = [extractor, "--client", install, "--type-dump", dump, "--sql", partial]
+    if world_info:
+        command += ["--world-db", world_info]
+    command.append("zones")
     try:
         finished = subprocess.run(command, capture_output=True, timeout=timeout, creationflags=NO_WINDOW)
     except (OSError, subprocess.SubprocessError) as error:

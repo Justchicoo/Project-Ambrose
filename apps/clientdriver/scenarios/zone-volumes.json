@@ -198,6 +198,12 @@
       "timeout": 20
     },
     {
+      "action": "shot",
+      "name": "the camera settles facing no turn",
+      "file": "facing-no-turn",
+      "settle": 2
+    },
+    {
       "action": "hold_key",
       "name": "the wizard walks forward facing no turn",
       "vk": "0x57",
@@ -229,6 +235,12 @@
       "name": "the wizard stands just outside Ravenwood's POI facing a quarter turn",
       "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within WizardCity/WC_Hub to \\((\\S+, \\S+, \\S+)\\) facing",
       "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the camera settles facing a quarter turn",
+      "file": "facing-quarter-turn",
+      "settle": 2
     },
     {
       "action": "hold_key",
@@ -264,6 +276,12 @@
       "timeout": 20
     },
     {
+      "action": "shot",
+      "name": "the camera settles facing a half turn",
+      "file": "facing-half-turn",
+      "settle": 2
+    },
+    {
       "action": "hold_key",
       "name": "the wizard walks forward facing a half turn",
       "vk": "0x57",
@@ -295,6 +313,12 @@
       "name": "the wizard stands just outside Ravenwood's POI facing three quarter turns",
       "pattern": "Session \\d+'s wizard {wizard_guid} was teleported within WizardCity/WC_Hub to \\((\\S+, \\S+, \\S+)\\) facing",
       "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the camera settles facing three quarter turns",
+      "file": "facing-three-quarter-turns",
+      "settle": 2
     },
     {
       "action": "hold_key",

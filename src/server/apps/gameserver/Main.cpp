@@ -370,11 +370,6 @@ namespace
                 return false;
             }
             sZoneMgr.RegisterReloadTargets();
-            std::vector<std::string> triggerErrors;
-            if (WorldDatabase.IsOpen() && !sZoneTriggerMgr.Load(triggerErrors))
-                for (std::string const& error : triggerErrors)
-                    LOG_ERROR("server.world", "Zone volumes and triggers: {}", error);
-            sZoneTriggerMgr.RegisterReloadTargets();
             sMapMgr.SetSettingsReader([]
             {
                 MapSettings settings;
@@ -397,6 +392,12 @@ namespace
                 if (zones.Zones == 0)
                     LOG_WARN("server.gameserver", "The world database holds no zone, so there is nowhere to stand; run the extractor's zones command against your install");
             }
+            // After the zones, because extracting them also writes the volumes and triggers.
+            std::vector<std::string> triggerErrors;
+            if (WorldDatabase.IsOpen() && !sZoneTriggerMgr.Load(triggerErrors))
+                for (std::string const& error : triggerErrors)
+                    LOG_ERROR("server.world", "Zone volumes and triggers: {}", error);
+            sZoneTriggerMgr.RegisterReloadTargets();
 
             uint32 const realmId = Config().GetOption<uint32>("RealmID", 1, true);
             AppenderDB::Enable(Logger(), realmId);
