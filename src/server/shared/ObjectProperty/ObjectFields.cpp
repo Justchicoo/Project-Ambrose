@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Lists the ObjectProperty message fields the server reads or writes: badges travel enveloped, the character list and creation messages carry an unwrapped WizardCharacterCreationInfo, MSG_LOGINCOMPLETE carries the player's own game object enveloped and in CoreObject form, as every one the client has accepted there did, and the ids of the objects the client waits for as an unwrapped CriticalObjectList, which the client's MSG_LoginComplete handler loads straight from the field with the plain serializer, while it decompresses Data first, MSG_NEWOBJECT carries any game object unwrapped in CoreObject form, which the client's MSG_NewObject handler hands to the serializer Data is read with, without decompressing it, and MSG_TIMEDACCESSPASSES and MSG_SUBSCRIBERONLYITEMS carry an unwrapped ActiveTimedAccessPassList and SubscriberOnlyItemsList, the classes the client's own handlers load them into with a serializer that reads no envelope and no flags word, and MSG_IGNORELIST's ListData carries an unwrapped IgnoreEntryDataList.
+ * Lists the ObjectProperty message fields the server reads or writes: MSG_ADDEFFECT carries one unwrapped GameEffectBase in CoreObject form, its core type zero so a plain class hash follows, which the client's MSG_AddEffect handler loads and hands to the object's effect behavior, since a nonzero first byte has it look for a core template, badges travel enveloped, the character list and creation messages carry an unwrapped WizardCharacterCreationInfo, MSG_LOGINCOMPLETE carries the player's own game object enveloped and in CoreObject form, as every one the client has accepted there did, and the ids of the objects the client waits for as an unwrapped CriticalObjectList, which the client's MSG_LoginComplete handler loads straight from the field with the plain serializer, while it decompresses Data first, MSG_NEWOBJECT carries any game object unwrapped in CoreObject form, which the client's MSG_NewObject handler hands to the serializer Data is read with, without decompressing it, and MSG_TIMEDACCESSPASSES and MSG_SUBSCRIBERONLYITEMS carry an unwrapped ActiveTimedAccessPassList and SubscriberOnlyItemsList, the classes the client's own handlers load them into with a serializer that reads no envelope and no flags word, and MSG_IGNORELIST's ListData carries an unwrapped IgnoreEntryDataList.
  */
 
 #include "ObjectFields.h"
@@ -9,6 +9,7 @@
 
 namespace
 {
+    constexpr std::array<std::string_view, 1> GameEffectClasses{ "class GameEffectBase" };
     constexpr std::array<std::string_view, 1> BadgeInfoClasses{ "class BadgeInfoList" };
     constexpr std::array<std::string_view, 1> BadgeFilterClasses{ "class BadgeFilterInfoList" };
     constexpr std::array<std::string_view, 1> CreationClasses{ "class WizardCharacterCreationInfo" };
@@ -19,7 +20,8 @@ namespace
     constexpr std::array<std::string_view, 1> SubscriberOnlyItemClasses{ "class SubscriberOnlyItemsList" };
     constexpr std::array<std::string_view, 1> TimedAccessPassClasses{ "class ActiveTimedAccessPassList" };
 
-    constexpr std::array<ObjectField, 10> Fields{ {
+    constexpr std::array<ObjectField, 11> Fields{ {
+        { "MSG_ADDEFFECT", "EffectData", GameEffectClasses, false, false, true },
         { "MSG_BADGES", "BadgeInfo", BadgeInfoClasses, true, false },
         { "MSG_BADGES", "BadgeFilterInfo", BadgeFilterClasses, true, false },
         { "MSG_CHARACTERINFO", "CharacterInfo", CreationClasses, false, false },

@@ -124,40 +124,31 @@ The game server holds every SpellTemplate and CombatSigilTemplate in memory, loo
 
 **Acceptance**
 
-- [ ] Internal ids are unique per object and released on removal
-- [ ] Real client: a GM-applied test effect shows and clears for self and viewers
+- [x] Internal ids are unique per object and released on removal (`GameEffectHolderTest.InternalIdsAreUniquePerObjectAndReleasedOnRemoval`: four effects on one wizard, two of the same name, get ids 1 to 4, a removed id is taken away once and is the lowest free id the next effect gets, and no two effects held share an id; client driver run 20261007-123808 gave PostCombatEffect internal id 1, took it off, and gave BearBallerinaTransformation id 1 again)
+- [x] Real client: a GM-applied test effect shows and clears for self and viewers (client driver run 20261007-123808, effect-show-and-clear.json, on r806919: `effect add PostCombatEffect` turned the main wizard see-through in its own window and faded in the companion's, `effect remove 1` made it solid in both, and `effect add BearBallerinaTransformation` turned it into a ballerina bear in a tutu in both windows until `effect remove 1` turned it back; both clients logged ClientTransformationEffect add and remove callbacks and neither logged a refused effect or a failed removal. The run's one failed check, an unhandled MSG_READTUTORIALTIP the client sent as the bear appeared, was added to the scenario's expected messages)
 
-### Detailed spec from WIZ-13: Equipment stat effects and set bonuses
+### Detailed spec
 
-Equipped gear changes the wizard's maximum health, damage, resist, crit, block, pips and other stats the way the client expects, and those changes show on the character sheet.
+An object carries the game effects put on it, each under an internal id of its own, and the wizards who see it are shown them as they are added and taken away. The WIZ-13 equipment stat checks this section once held are 11.02's and 11.03's, which list them as their acceptance.
 
 **Deliverables**
 
-- src/server/game/Entities/Player/StatCalculator: base stats from player_level_stats, plus each equipped item's m_equipEffects (WizStatisticEffect fields: m_hitPointBonus, m_manaBonus, m_damageBonusPercent, m_damageReducePercent, m_accuracyBonusPercent, m_criticalHitRating, m_blockRating, m_powerPipBonusPercent, m_pipConversionRating, m_archmastery, per-school fields via effect category), plus ItemSetBonusTemplate tiers by equipped count
-- GAME ADDEFFECT/REMOVEEFFECT sent on equip, unequip and login; UPDATEHEALTH/UPDATEMANA with the new maximums
-- Rating-to-percent conversions from stat_effect_config (critical, block, pip conversion) for derived WizGameStats fields
-- src/test/server/game/StatCalculatorTest.cpp
+- src/server/game/Entities/GameEffectHolder: the effects an object carries, each under the lowest free internal id, encoded for MSG_ADDEFFECT in CoreObject form
+- src/server/game/Spells/GameEffectMgr: the effect templates of Root.wad GameEffectData/*.xml, keyed by the hash of their names, each making the effect class it names, a reload target
+- GameSession and World: MSG_ADDEFFECT and MSG_REMOVEEFFECT sent to the wizard and every wizard in its instance at the next tick, and the effects it carries shown to each that comes to see it and to itself on entering the world
+- src/server/scripts/Commands/cs_effect.cpp: `effect info`, `add`, `remove`, `list` and `reload`
+- apps/clientdriver/scenarios/effect-show-and-clear.json
 
-**Client messages:** GAME MSG_ADDEFFECT, GAME MSG_REMOVEEFFECT, MSG_UPDATEHEALTH, MSG_UPDATEMANA
+**Client messages:** GAME MSG_ADDEFFECT, GAME MSG_REMOVEEFFECT
 
 **Data sources**
 
-- world.item_template_effect
-- world.item_set_bonus
-- world.stat_effect_config
-- Root.wad GameEffectRuleData/*.xml (134 WizardStatTable) for rating curves
-- Root.wad GameEffectData/CanonicalStatEffects.xml
+- Root.wad GameEffectData/*.xml
 
 **Acceptance**
 
-- [ ] Unit test: equipping a +100 HP hat raises m_baseHitpoints plus bonus by 100 and current health is clamped correctly on unequip
-- [ ] Unit test: a 3-piece set bonus applies only when 3 set items are equipped
-- [ ] Real client: equipping a hat with +5% Fire damage and +40 health makes the character sheet Stats tab show the new damage percent and the health globe maximum go up by 40. Unequipping reverts both.
-
-**Risks**
-
-- The exact rating-to-percent curves (WizardStatTable) and level thresholds need reverse engineering. Small errors show as mismatched character-sheet numbers.
-- The effect framework and m_internalID allocation are shared with CMB. Agree on ownership.
+- [x] Unit test: internal ids are unique per object and released on removal (`GameEffectHolderTest.InternalIdsAreUniquePerObjectAndReleasedOnRemoval`: four effects on one wizard, two of the same name, get ids 1 to 4, a removed id is taken away once and is the lowest free id the next effect gets, and no two effects held share an id; client driver run 20261007-123808 gave PostCombatEffect internal id 1, took it off, and gave BearBallerinaTransformation id 1 again)
+- [x] Real client: a GM-applied test effect shows and clears for the wizard and for a wizard watching it (client driver run 20261007-123808, effect-show-and-clear.json, on r806919: `effect add PostCombatEffect` turned the main wizard see-through in its own window and faded in the companion's, `effect remove 1` made it solid in both, and `effect add BearBallerinaTransformation` turned it into a ballerina bear in a tutu in both windows until `effect remove 1` turned it back; both clients logged ClientTransformationEffect add and remove callbacks and neither logged a refused effect or a failed removal. The run's one failed check, an unhandled MSG_READTUTORIALTIP the client sent as the bear appeared, was added to the scenario's expected messages)
 
 ## 9.04 Spawners and runtime spawn/despawn (WLD-18, without paths; QST-4 SpawnExtractor)
 

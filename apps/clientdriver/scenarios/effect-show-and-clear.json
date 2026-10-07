@@ -1,0 +1,467 @@
+{
+  "title": "A game master puts an effect on a wizard, which it and a wizard watching it see, and takes it off again",
+  "include": "parts/common.json",
+  "notes": [
+    "Two wizards enter the Commons as in gm-commands-in-chat.json, and the companion turns to face the main wizard.",
+    "'effect add PostCombatEffect <wizard>' on the game server console gives the main wizard the effect the template",
+    "PostCombatEffect in Root.wad's GameEffectData makes, a NamedEffect that turns the wizard translucent; the game server sends",
+    "MSG_ADDEFFECT to the wizard's own client and to the companion's, and both are shot. 'effect remove 1 <wizard>' sends",
+    "MSG_REMOVEEFFECT with internal id 1 and both are shot again. The same is done with BearBallerinaTransformation, a",
+    "TransformationEffect that carries its template's m_sRace. Neither client may fail to load an effect it is sent or to find",
+    "its template. The server does not yet end an effect when its template's duration runs out, so each stays until it is",
+    "taken off.",
+    "Neither client's log may hold a refused effect or a failed removal: a passing run must have shown both effects."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Zone.MobileIdReleaseDelay=60000"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "companion": {
+    "wizard": {
+      "school": 2343174,
+      "zone": "WizardCity/WC_Hub",
+      "zone_display": "The Commons",
+      "locale": "en-US",
+      "first": 2,
+      "middle": 3,
+      "last": 4,
+      "appearance": {
+        "gender": 1,
+        "race": 79806088,
+        "hair_model": 6,
+        "hair_color": 60,
+        "hat_color": 2,
+        "hat_decal": 4,
+        "torso_color": 2,
+        "torso_decal": 4,
+        "feet_color": 2,
+        "feet_decal": 12
+      }
+    }
+  },
+  "steps": [
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "hold_key",
+      "name": "the main wizard backs away from the start",
+      "vk": "0x53",
+      "seconds": 1.5
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard alone",
+      "file": "main-alone",
+      "settle": 1
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up (companion)",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen (companion)",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "submit_login",
+      "name": "log in (companion)",
+      "password": "{companion_password}",
+      "client": "companion"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password (companion)",
+      "pattern": "authenticated as {companion_user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted (companion)",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30,
+      "client": "companion"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads (companion)",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120,
+      "client": "companion"
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen (companion)",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90,
+      "client": "companion"
+    },
+    {
+      "action": "click",
+      "name": "press play (companion)",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{companion_wizard_guid}",
+        "record": true
+      },
+      "client": "companion"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key (companion)",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{companion_wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons (companion)",
+      "pattern": "put wizard {companion_wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true,
+      "keep": "companion_mobile"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the two wizards are shown to each other",
+      "pattern": "Session \\d+'s wizard {companion_wizard_guid} and the (\\d+) wizard\\(s\\) already in instance \\d+ were shown to each other",
+      "timeout": 10,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it (companion)",
+      "pattern": "loaded (\\S+), and wizard {companion_wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees the companion arrive",
+      "file": "main-sees-companion",
+      "settle": 3
+    },
+    {
+      "action": "shot",
+      "name": "the companion faces away from the main wizard",
+      "file": "companion-faces-away",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "hold_key",
+      "name": "the companion turns to face the main wizard",
+      "vk": "0x44",
+      "seconds": 1.27,
+      "client": "companion",
+      "watch": "main",
+      "watch_every": 0.25,
+      "watch_after": 1
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the main wizard",
+      "file": "companion-sees-main",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "game_command",
+      "name": "describe PostCombatEffect",
+      "command": "effect info PostCombatEffect",
+      "pattern": "PostCombatEffect, template \\d+, a class \\S+ in GameEffectData/",
+      "timeout": 20
+    },
+    {
+      "action": "game_command",
+      "name": "put PostCombatEffect on the main wizard",
+      "command": "effect add PostCombatEffect {wizard_guid}",
+      "pattern": "carries PostCombatEffect \\(template \\d+\\) as internal id (\\d+), shown to it and everyone who sees it",
+      "timeout": 20
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server gives the main wizard PostCombatEffect",
+      "pattern": "gave wizard \\d+ the effect (class \\S+) named \\d+ with internal id 1,",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees itself carrying PostCombatEffect",
+      "file": "main-translucent-on",
+      "settle": 2
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the main wizard carrying PostCombatEffect",
+      "file": "companion-translucent-on",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "game_command",
+      "name": "list the main wizard's effects with PostCombatEffect",
+      "command": "effect list {wizard_guid}",
+      "pattern": "carries 1 effect\\(s\\):",
+      "timeout": 20
+    },
+    {
+      "action": "game_command",
+      "name": "take PostCombatEffect off the main wizard",
+      "command": "effect remove 1 {wizard_guid}",
+      "pattern": "no longer carries PostCombatEffect \\(internal id 1\\)",
+      "timeout": 20
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server takes PostCombatEffect away",
+      "pattern": "took the effect named \\d+ with internal id 1 from wizard \\d+, and it carries (\\d+) effect",
+      "timeout": 20,
+      "expect": "0",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees itself after PostCombatEffect is taken off",
+      "file": "main-translucent-off",
+      "settle": 2
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the main wizard after PostCombatEffect is taken off",
+      "file": "companion-translucent-off",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "game_command",
+      "name": "describe BearBallerinaTransformation",
+      "command": "effect info BearBallerinaTransformation",
+      "pattern": "BearBallerinaTransformation, template \\d+, a class \\S+ in GameEffectData/",
+      "timeout": 20
+    },
+    {
+      "action": "game_command",
+      "name": "put BearBallerinaTransformation on the main wizard",
+      "command": "effect add BearBallerinaTransformation {wizard_guid}",
+      "pattern": "carries BearBallerinaTransformation \\(template \\d+\\) as internal id (\\d+), shown to it and everyone who sees it",
+      "timeout": 20
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server gives the main wizard BearBallerinaTransformation",
+      "pattern": "gave wizard \\d+ the effect (class \\S+) named \\d+ with internal id 1,",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees itself carrying BearBallerinaTransformation",
+      "file": "main-bear-on",
+      "settle": 2
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the main wizard carrying BearBallerinaTransformation",
+      "file": "companion-bear-on",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "game_command",
+      "name": "list the main wizard's effects with BearBallerinaTransformation",
+      "command": "effect list {wizard_guid}",
+      "pattern": "carries 1 effect\\(s\\):",
+      "timeout": 20
+    },
+    {
+      "action": "game_command",
+      "name": "take BearBallerinaTransformation off the main wizard",
+      "command": "effect remove 1 {wizard_guid}",
+      "pattern": "no longer carries BearBallerinaTransformation \\(internal id 1\\)",
+      "timeout": 20
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server takes BearBallerinaTransformation away",
+      "pattern": "took the effect named \\d+ with internal id 1 from wizard \\d+, and it carries (\\d+) effect",
+      "timeout": 20,
+      "expect": "0",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the main wizard sees itself after BearBallerinaTransformation is taken off",
+      "file": "main-bear-off",
+      "settle": 2
+    },
+    {
+      "action": "shot",
+      "name": "the companion sees the main wizard after BearBallerinaTransformation is taken off",
+      "file": "companion-bear-off",
+      "client": "companion",
+      "settle": 1
+    },
+    {
+      "action": "forbid_log",
+      "name": "the main client loaded every effect and took each away",
+      "side": "client",
+      "pattern": "MSG_AddEffect\\(\\) - Invalid object received|Failed to find core template|LoadObject Failed|Failed to remove effect by internal ID"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the companion loaded every effect and took each away",
+      "side": "client",
+      "pattern": "MSG_AddEffect\\(\\) - Invalid object received|Failed to find core template|LoadObject Failed|Failed to remove effect by internal ID",
+      "client": "companion"
+    }
+  ],
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_READTUTORIALTIP",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_RIDERSLIST",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ]
+}

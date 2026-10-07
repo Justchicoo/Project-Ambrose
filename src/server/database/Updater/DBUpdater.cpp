@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Creates a missing schema with utf8mb4 when auto setup allows, imports base files into an empty schema with the update bookkeeping tables last, and runs every SQL file on its own multi-statement connection in batches under max_allowed_packet, inside one transaction when asked so a failure leaves nothing behind; a live listing or data-only apply first checks that the updater set the database up, and every failure is kept as text for the caller as well as logged.
+ * Creates a missing schema with utf8mb4 when auto setup allows, imports base files into an empty schema with the update bookkeeping tables last, and runs every SQL file on its own multi-statement connection in batches under max_allowed_packet, inside one transaction when asked so a failure leaves nothing behind; a live listing or data-only apply first checks that the updater set the database up, and every failure is kept as text for the caller as well as logged. Setting a database up and applying updates to it hold a named lock per database for as long as they run, so two servers started together against one database take turns, and the second reads the update list only once the first has written it.
  */
 
 #include "DBUpdater.h"
@@ -22,6 +22,25 @@ namespace
 {
     constexpr uint64 DefaultMaxPacket = 16 * 1024 * 1024;
     constexpr uint64 PacketMargin = 64 * 1024;
+    constexpr int UpdateLockWaitSeconds = 600;
+
+    bool TryUpdateLock(MySQLConnection& connection, std::string const& name, int waitSeconds)
+    {
+        QueryResult const taken = connection.Query(fmt::format("SELECT GET_LOCK('{}', {})", connection.Escape(name), waitSeconds));
+        return taken && !(*taken)[0].IsNull() && (*taken)[0].Get<uint64>() == 1;
+    }
+
+    bool TakeUpdateLock(MySQLConnection& connection, std::string_view database)
+    {
+        std::string const name = fmt::format("ambrose.updates.{}", database.substr(0, 48));
+        if (TryUpdateLock(connection, name, 0))
+            return true;
+        LOG_INFO("sql.updates", "Another process is setting up or updating database {}; waiting up to {} s for it to finish", database, UpdateLockWaitSeconds);
+        if (TryUpdateLock(connection, name, UpdateLockWaitSeconds))
+            return true;
+        LOG_ERROR("sql.updates", "Database {} was still being set up or updated by another process after {} s", database, UpdateLockWaitSeconds);
+        return false;
+    }
 
     void RegisterModuleIncludes(MySQLConnection& bookkeeping, std::filesystem::path const& source, std::string_view database)
     {
@@ -186,7 +205,9 @@ UpdateSummary DBUpdater::ApplyDataOnly(MySQLConnectionInfo const& info, std::str
 {
     UpdateSummary summary;
     MySQLConnection bookkeeping(info, connectionSettings);
-    if (!OpenBookkeeping(bookkeeping, info, summary.Failure))
+    if (OpenBookkeeping(bookkeeping, info, summary.Failure) && !TakeUpdateLock(bookkeeping, info.Database))
+        summary.Failure = "another process kept it locked for setup or updates";
+    if (!summary.Failure.empty())
     {
         LOG_ERROR("sql.updates", "Cannot apply data-only updates to the {} database: {}", folderName, summary.Failure);
         summary.Succeeded = false;
@@ -269,7 +290,7 @@ bool DBUpdater::Run(MySQLConnectionInfo const& info, std::string_view folderName
     MySQLConnectionInfo serverOnly = info;
     serverOnly.Database.clear();
     MySQLConnection server(serverOnly, connectionSettings);
-    if (server.Open() != 0)
+    if (server.Open() != 0 || !TakeUpdateLock(server, info.Database))
         return false;
     QueryResult const exists = server.Query(fmt::format("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = '{}'", server.Escape(info.Database)));
     if (server.GetLastErrorCode() != 0)
