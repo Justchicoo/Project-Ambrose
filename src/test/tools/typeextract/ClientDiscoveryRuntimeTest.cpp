@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests runtime discovery over synthetic heaps and code: std::map node fields derived from the tree's shape at default and shifted offsets, the property list link and pointer flag derived from registered types, PropertyList base, singleton and name placed by chosen constructor values, the property vector and Property name, type and hash voted on by property hashes, a map head among decoy nodes, cycle refusal, constructor and initializer votes, and Type and string fields derived from chosen values at non-default offsets.
+ * Tests runtime discovery over synthetic heaps and code: std::map node fields derived from the tree's shape at default and shifted offsets, the property list link and pointer flag derived from registered types, PropertyList base, singleton and name placed by chosen constructor values, the property vector and Property name, type and hash voted on by property hashes, Property id from list positions and the container slot and vtable entries from what containers return, a map head among decoy nodes, cycle refusal, constructor and initializer votes, and Type and string fields derived from chosen values at non-default offsets.
  */
 
 #include "ClientDiscovery.h"
@@ -411,4 +411,72 @@ TEST(ClientDiscoveryRuntimeTest, ThePropertyVectorAndNameTypeAndHashAreDerivedAt
     EXPECT_FALSE(ClientDiscovery::DerivePropertyLayout(h.machine, h.heap, types, refused, error));
     EXPECT_NE(error.find("PropertyList.properties could not be placed"), std::string::npos) << error;
     EXPECT_TRUE(refused.DerivedFields.empty());
+}
+
+TEST(ClientDiscoveryRuntimeTest, PropertyIdsAndContainersAreDerivedAtShiftedOffsetsAndVtableEntries)
+{
+    ClientLayout shifted;
+    shifted.PropertyId = 0x24;
+    shifted.PropertyContainer = 0x30;
+    shifted.ContainerNameSlot = 2;
+    shifted.ContainerDynamicSlot = 5;
+    Heap h(shifted);
+    constexpr uint64 FunctionBase = 0x70000000;
+    std::array<std::string_view, 2> const kinds = { "Static", "Vector" };
+    std::vector<uint64> containers;
+    std::vector<uint64> names;
+    for (std::size_t kind = 0; kind < kinds.size(); ++kind)
+    {
+        uint64 const vtable = h.heap.Allocate(16 * 8, true);
+        for (uint64 k = 0; k < 16; ++k)
+            h.machine.WriteU64(vtable + 8 * k, FunctionBase + kind * 0x100 + k * 8);
+        containers.push_back(h.heap.Allocate(0x40, true));
+        h.machine.WriteU64(containers.back(), vtable);
+        std::vector<uint8> text(kinds[kind].begin(), kinds[kind].end());
+        text.push_back(0);
+        names.push_back(h.heap.Allocate(text.size(), true));
+        h.machine.Write(names.back(), text);
+    }
+    GuestCall const call = [&](uint64 function, uint64) -> std::optional<uint64>
+    {
+        uint64 const kind = (function - FunctionBase) / 0x100;
+        uint64 const entry = (function - FunctionBase) % 0x100 / 8;
+        if (entry == shifted.ContainerNameSlot)
+            return names[kind];
+        if (entry == shifted.ContainerDynamicSlot)
+            return kind == 0 ? 0 : 1;
+        return std::nullopt;
+    };
+    uint64 const intType = h.objects.Type("int");
+    std::vector<uint64> types = { intType };
+    for (int i = 0; i < 24; ++i)
+    {
+        std::string const name = fmt::format("class C{}", i);
+        uint64 const list = h.objects.List(TypeWalker::ListNameOf(name), 0);
+        h.objects.SetProperties(list, { h.objects.Property(intType, "int", "m_first", 0, 0x48, 31, containers[0]),
+            h.objects.Property(intType, "int", "m_second", 1, 0x4C, 31, containers[static_cast<std::size_t>(i % 2)]),
+            h.objects.Property(intType, "int", "m_third", 2, 0x50, 31, containers[1]) });
+        types.push_back(h.objects.Type(name, 0x140010000, false, list));
+    }
+
+    std::vector<ListedProperty> const properties = ClientDiscovery::ListedProperties(h.machine, h.heap, types, shifted);
+    ASSERT_EQ(properties.size(), 72u);
+    ClientLayout derived = shifted;
+    derived.PropertyId = derived.PropertyContainer = derived.ContainerNameSlot = derived.ContainerDynamicSlot = 0x99;
+    std::string error;
+    ASSERT_TRUE(ClientDiscovery::DerivePropertyId(h.machine, properties, derived, error)) << error;
+    ASSERT_TRUE(ClientDiscovery::DeriveContainerLayout(h.machine, properties, derived, call, error)) << error;
+    EXPECT_EQ(derived.PropertyId, shifted.PropertyId);
+    EXPECT_EQ(derived.PropertyContainer, shifted.PropertyContainer);
+    EXPECT_EQ(derived.ContainerNameSlot, shifted.ContainerNameSlot);
+    EXPECT_EQ(derived.ContainerDynamicSlot, shifted.ContainerDynamicSlot);
+
+    GuestCall const allStatic = [&](uint64 function, uint64 object) -> std::optional<uint64>
+    {
+        return (function - FunctionBase) % 0x100 / 8 == shifted.ContainerNameSlot ? std::optional<uint64>(names[0]) : call(function, object);
+    };
+    ClientLayout refused = shifted;
+    EXPECT_FALSE(ClientDiscovery::DeriveContainerLayout(h.machine, properties, refused, allStatic, error));
+    EXPECT_NE(error.find("Property.container could not be placed"), std::string::npos) << error;
+    EXPECT_FALSE(refused.DerivedFields.contains("Property.container"));
 }

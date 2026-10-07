@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Runs a whole extraction: refuses an install whose revision cannot name a dump file, loads the install's client program and runtime, derives the type map's std::map node layout from the heap (before the search for an unknown build, and afterwards as a check against the written offsets for a known one) Type and std::string layout from values passed to the client's constructor (whose probe Types it then leaves out of the walk), the property list link and pointer flag from the registered types, PropertyList base and singleton by probing the client's PropertyList constructor, and the property vector with Property name, type and hash from property hashes, runs its initializers and lazy getters, adds its races, validates the type map and server catalog, and reports per-field evidence, timings, counts and discoveries.
+ * Runs a whole extraction: refuses an install whose revision cannot name a dump file, loads the install's client program and runtime, derives the type map's std::map node layout from the heap (before the search for an unknown build, and afterwards as a check against the written offsets for a known one) Type and std::string layout from values passed to the client's constructor (whose probe Types it then leaves out of the walk), the property list link and pointer flag from the registered types, PropertyList base and singleton by probing the client's PropertyList constructor, the property vector with Property name, type and hash from property hashes, and Property id and container from list positions and container calls, runs its initializers and lazy getters, adds its races, validates the type map and server catalog, and reports per-field evidence, timings, counts and discoveries.
  */
 
 #include "TypeExtraction.h"
@@ -37,6 +37,7 @@ namespace
     constexpr std::string_view ExecutableName = "WizardGraphicalClient.exe";
     constexpr std::string_view RaceFile = "Races.xml";
     constexpr uint64 TypeConstructorProbeBudget = 50000000;
+    constexpr std::size_t ContainerCopySize = 0x40;
 
     using Clock = std::chrono::steady_clock;
 
@@ -360,6 +361,30 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
             announce(target, { "PropertyList.properties", "PropertyList.entry_size", "Property.name", "Property.type", "Property.hash" });
             return true;
         };
+        auto deriveIdAndContainer = [&](ClientLayout& target, std::span<uint64 const> registered)
+        {
+            std::vector<ListedProperty> const properties = ClientDiscovery::ListedProperties(machine, process.GetHeap(), registered, target);
+            GuestCall const callOnCopy = [&](uint64 function, uint64 object) -> std::optional<uint64>
+            {
+                std::vector<uint8> bytes(ContainerCopySize);
+                if (!machine.TryRead(object, bytes))
+                    return std::nullopt;
+                uint64 const copy = process.GetHeap().Allocate(ContainerCopySize, true);
+                machine.Write(copy, bytes);
+                try
+                {
+                    return process.Call(function, { copy }, TypeWalker::ContainerCallBudget);
+                }
+                catch (EmulationError const&)
+                {
+                    return std::nullopt;
+                }
+            };
+            if (!ClientDiscovery::DerivePropertyId(machine, properties, target, error) || !ClientDiscovery::DeriveContainerLayout(machine, properties, target, callOnCopy, error))
+                return false;
+            announce(target, { "Property.id", "Property.container", "Container.name_slot", "Container.dynamic_slot" });
+            return true;
+        };
         if (options.RequireDerivedLayout || !referenceLayout)
         {
             if (!deriveTypeLayout() || !deriveListLink(layout, *types))
@@ -464,7 +489,7 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
         std::erase_if(*types, [&](uint64 type) { return probes.contains(type); });
         if (options.RequireDerivedLayout || !referenceLayout)
         {
-            if (!derivePointerFlag(layout, *types) || !deriveProperties(layout, *types))
+            if (!derivePointerFlag(layout, *types) || !deriveProperties(layout, *types) || !deriveIdAndContainer(layout, *types))
                 return fail(fmt::format("the client layout could not be derived: {}", error));
             reportLayout();
             if (!RequireDerivedLayout(layout, error))
@@ -546,6 +571,13 @@ TypeExtractionResult TypeExtraction::Extract(TypeExtractionOptions const& option
                 confirmIfWritten(derived, "property layout", [](std::string_view field)
                 {
                     return field == "PropertyList.properties" || field == "PropertyList.entry_size" || field == "Property.name" || field == "Property.type" || field == "Property.hash";
+                });
+            if (!deriveIdAndContainer(derived, *types))
+                result.Discovered.push_back(fmt::format("property id and container derivation unavailable: {}", error));
+            else
+                confirmIfWritten(derived, "property id and container", [](std::string_view field)
+                {
+                    return field == "Property.id" || field == "Property.container" || field == "Container.name_slot" || field == "Container.dynamic_slot";
                 });
             deriveTypeLayout();
             reportLayout();

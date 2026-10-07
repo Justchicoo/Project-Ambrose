@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The discovery steps that read the emulated process: the std::map node layout taken from the largest tree on the heap whose links, nil flag, red-black colors, rising keys and values holding and naming their keys all agree, allowing one alias node in 64 that shares another's Type, the type map head found from heap nodes whose type name hashes to their key, an in-order walk of that map, Type and std::string fields matched against values supplied to the Type constructor, the property list link voted on by lists that name their class, the pointer flag taken from the byte set for pointer and shared pointer types, the property vector, its stride and Property name, type and hash voted on by properties whose hash is that of their type's name and their own, the PropertyList constructor found among what the lazy getters' class constructors call with their own object and the base, singleton and name its chosen arguments place, and votes for the Type constructor and PropertyList initializer.
+ * The discovery steps that read the emulated process: the std::map node layout taken from the largest tree on the heap whose links, nil flag, red-black colors, rising keys and values holding and naming their keys all agree, allowing one alias node in 64 that shares another's Type, the type map head found from heap nodes whose type name hashes to their key, an in-order walk of that map, Type and std::string fields matched against values supplied to the Type constructor, the property list link voted on by lists that name their class, the pointer flag taken from the byte set for pointer and shared pointer types, the property vector, its stride and Property name, type and hash voted on by properties whose hash is that of their type's name and their own, Property id from each property's position in its list, the container slot and its name and dynamic vtable entries from what each kind of container returns when called on a copy, the PropertyList constructor found among what the lazy getters' class constructors call with their own object and the base, singleton and name its chosen arguments place, and votes for the Type constructor and PropertyList initializer.
  */
 
 #include "ClientDiscovery.h"
@@ -1197,4 +1197,185 @@ bool ClientDiscovery::DerivePropertyLayout(Machine const& machine, GuestHeap con
     }
     error = fmt::format("PropertyList.properties could not be placed: {} candidates had {} votes or more{}{}", rejected.size(), MinimumWinnerVotes, rejected.empty() ? "" : ": ", fmt::join(rejected, "; "));
     return false;
+}
+
+namespace
+{
+    constexpr std::size_t MaxContainers = 4096;
+    constexpr uint64 ContainerVtableSlots = 16;
+    constexpr std::array<std::string_view, 3> ContainerNames = { "Static", "Vector", "List" };
+}
+
+std::vector<ListedProperty> ClientDiscovery::ListedProperties(Machine const& machine, GuestHeap const& heap, std::span<uint64 const> types, ClientLayout const& layout)
+{
+    std::vector<ListedProperty> properties;
+    std::unordered_set<uint64> seenLists;
+    for (TypeSnapshot const& type : SnapshotTypes(machine, heap, types, layout))
+    {
+        std::optional<uint64> const list = TryReadU64(machine, type.Address + layout.TypePropertyList);
+        if (!list || !*list || !seenLists.insert(*list).second)
+            continue;
+        std::optional<uint64> const begin = TryReadU64(machine, *list + layout.ListProperties);
+        std::optional<uint64> const end = TryReadU64(machine, *list + layout.ListProperties + 8);
+        if (!begin || !end || *end < *begin)
+            continue;
+        uint64 index = 0;
+        for (uint64 slot = *begin; slot < *end && index < MaxListEntries; slot += layout.ListEntrySize, ++index)
+            if (std::optional<uint64> const property = TryReadU64(machine, slot))
+                properties.push_back({ *property, index });
+    }
+    return properties;
+}
+
+bool ClientDiscovery::DerivePropertyId(Machine const& machine, std::span<ListedProperty const> properties, ClientLayout& layout, std::string& error)
+{
+    std::array const taken = { Span{ layout.PropertyName, 8 }, Span{ layout.PropertyType, 8 }, Span{ layout.PropertyHash, 4 } };
+    std::size_t const positions = static_cast<std::size_t>(std::count_if(properties.begin(), properties.end(), [](ListedProperty const& p) { return p.Index != 0; }));
+    if (positions == 0)
+    {
+        error = "Property.id could not be placed: no list holds more than one property";
+        return false;
+    }
+    std::vector<uint64> ids;
+    for (uint64 offset = 0; offset + 4 <= PropertyObjectWindow; offset += 4)
+    {
+        if (Overlaps(offset, 4, taken))
+            continue;
+        if (std::all_of(properties.begin(), properties.end(), [&](ListedProperty const& p)
+            {
+                std::optional<uint64> const value = TryReadU64(machine, p.Address + offset);
+                return value && static_cast<uint32>(*value) == p.Index;
+            }))
+            ids.push_back(offset);
+    }
+    if (ids.size() != 1)
+    {
+        error = fmt::format("Property.id could not be placed: {} offsets of a property hold its position in the list for all {}", ids.size(), properties.size());
+        return false;
+    }
+    layout.PropertyId = ids[0];
+    layout.ConfirmDerived("Property.id", fmt::format("the one 32-bit word that holds each of {} properties' position in its list", properties.size()));
+    return true;
+}
+
+bool ClientDiscovery::DeriveContainerLayout(Machine const& machine, std::span<ListedProperty const> properties, ClientLayout& layout, GuestCall const& call, std::string& error)
+{
+    std::array const taken = { Span{ layout.PropertyName, 8 }, Span{ layout.PropertyType, 8 }, Span{ layout.PropertyHash, 4 }, Span{ layout.PropertyId, 4 } };
+    struct Placement
+    {
+        uint64 Slot = 0;
+        uint64 NameSlot = 0;
+        uint64 DynamicSlot = 0;
+        std::size_t Containers = 0;
+    };
+    std::vector<Placement> placements;
+    std::vector<std::string> rejected;
+    for (uint64 slot = 0; slot + 8 <= PropertyObjectWindow; slot += 8)
+    {
+        if (Overlaps(slot, 8, taken))
+            continue;
+        std::vector<uint64> containers;
+        std::unordered_set<uint64> vtables;
+        bool shared = true;
+        for (ListedProperty const& property : properties)
+        {
+            std::optional<uint64> const container = TryReadU64(machine, property.Address + slot);
+            std::optional<uint64> const vtable = container && *container ? TryReadU64(machine, *container) : std::nullopt;
+            if (!vtable || *vtable < Machine::PageSize)
+            {
+                shared = false;
+                break;
+            }
+            if (vtables.insert(*vtable).second)
+            {
+                containers.push_back(*container);
+                if (containers.size() > MaxContainers)
+                {
+                    shared = false;
+                    break;
+                }
+            }
+        }
+        if (!shared || containers.size() < 2)
+            continue;
+        std::vector<std::array<std::optional<std::optional<uint64>>, ContainerVtableSlots>> results(containers.size());
+        auto result = [&](std::size_t index, uint64 k) -> std::optional<uint64>
+        {
+            std::optional<std::optional<uint64>>& cell = results[index][k];
+            if (!cell)
+            {
+                std::optional<uint64> const function = TryReadU64(machine, machine.ReadU64(containers[index]) + 8 * k);
+                cell = function && *function >= Machine::PageSize ? call(*function, containers[index]) : std::nullopt;
+            }
+            return *cell;
+        };
+        std::vector<uint64> nameSlots;
+        std::vector<std::string> names(containers.size());
+        for (uint64 k = 0; k < ContainerVtableSlots; ++k)
+        {
+            std::vector<std::string> found;
+            for (std::size_t index = 0; index < containers.size(); ++index)
+            {
+                std::optional<uint64> const returned = result(index, k);
+                std::optional<std::string> const name = returned ? machine.ReadCString(*returned, 256) : std::nullopt;
+                if (!name || std::find(ContainerNames.begin(), ContainerNames.end(), *name) == ContainerNames.end())
+                    break;
+                found.push_back(*name);
+            }
+            if (found.size() == containers.size())
+            {
+                nameSlots.push_back(k);
+                names = std::move(found);
+            }
+        }
+        bool const bothKinds = std::count(names.begin(), names.end(), "Static") != 0 && std::count(names.begin(), names.end(), "Static") != static_cast<std::ptrdiff_t>(names.size());
+        std::vector<uint64> dynamicSlots;
+        for (uint64 k = 0; nameSlots.size() == 1 && bothKinds && k < ContainerVtableSlots; ++k)
+        {
+            if (k == nameSlots[0])
+                continue;
+            bool matches = true;
+            for (std::size_t index = 0; index < containers.size() && matches; ++index)
+            {
+                std::optional<uint64> const returned = result(index, k);
+                matches = returned && (*returned & 0xFF) == (names[index] == "Static" ? 0u : 1u);
+            }
+            if (matches)
+                dynamicSlots.push_back(k);
+        }
+        if (nameSlots.size() == 1 && dynamicSlots.size() == 1)
+            placements.push_back({ slot, nameSlots[0], dynamicSlots[0], containers.size() });
+        else
+            rejected.push_back(fmt::format("{:#x}: {} containers, {} name slots, {} dynamic slots", slot, containers.size(), nameSlots.size(), dynamicSlots.size()));
+    }
+    bool const mirrored = placements.size() > 1 && std::all_of(properties.begin(), properties.end(), [&](ListedProperty const& property)
+    {
+        uint64 const first = machine.ReadU64(property.Address + placements[0].Slot);
+        return std::all_of(placements.begin() + 1, placements.end(), [&](Placement const& other) { return machine.ReadU64(property.Address + other.Slot) == first; });
+    });
+    std::vector<std::string> mirrors;
+    if (mirrored)
+    {
+        for (auto other = placements.begin() + 1; other != placements.end(); ++other)
+            mirrors.push_back(fmt::format("{:#x}", other->Slot));
+        placements.resize(1);
+    }
+    if (placements.size() != 1)
+    {
+        std::vector<std::string> placed;
+        for (Placement const& placement : placements)
+            placed.push_back(fmt::format("{:#x} ({} kinds, name entry {}, dynamic entry {})", placement.Slot, placement.Containers, placement.NameSlot, placement.DynamicSlot));
+        error = fmt::format("Property.container could not be placed: {} slots of a property point at containers that name themselves{}{}{}{}", placements.size(),
+            placed.empty() ? "" : ": ", fmt::join(placed, ", "), rejected.empty() ? "" : "; ", fmt::join(rejected, "; "));
+        return false;
+    }
+    Placement const& placement = placements[0];
+    layout.PropertyContainer = placement.Slot;
+    layout.ContainerNameSlot = placement.NameSlot;
+    layout.ContainerDynamicSlot = placement.DynamicSlot;
+    std::string const evidence = fmt::format("all {} properties point at {:#x} to a container of one of {} kinds, whose vtable entry {} returns Static, Vector or List and entry {} is clear for Static alone{}{}",
+        properties.size(), placement.Slot, placement.Containers, placement.NameSlot, placement.DynamicSlot, mirrors.empty() ? "" : "; every property holds the same pointer again at ", fmt::join(mirrors, ", "));
+    for (std::string_view const field : { "Property.container", "Container.name_slot", "Container.dynamic_slot" })
+        layout.ConfirmDerived(std::string(field), evidence);
+    return true;
 }
