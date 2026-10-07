@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables and the level and stat tables after the world database takes one, writes the classes the install holds that its type dump does not describe to the world database when it holds none marked install, from the class file schemaprobe builds once per revision, the same way it asks before other extractions and starting without them when that fails, loads the character name tables and the level and stat tables when the world database is open and, when either set is empty, extracts it from the install and loads it again, automatically in auto mode, after a yes in ask mode and never in off mode, registering the level and stat sets as reload targets, loads the zones, the named places inside them and the objects placed in them, extracting them from the install first when the world database holds none, the same way it does the level tables, with each extraction, each zone archive and each write to the world database reported as a start step with the time it may take, so a supervisor waits for a first run that is still working and ends only one that stalls, and registers each as a reload target, refusing to start when they cannot be read, has every zone instance filled with the objects its zone places that the server sends, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close, after every wizard still in the world has left it and so been saved. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits, template cache or realm heartbeat is applied on the world thread. It reads the template manifest before the player's template and then every spell and sigil, the game effect templates of Root.wad, the quick chat phrases and the animation types an emote must name, each a reload target.
+ * Game server entry point: runs setup in Setup.Mode for the install and type dump, stopping cleanly when a stop arrives meanwhile, loads the type dump and the locale text of the install's Root.wad in Locale.Default, brings the login, characters and world databases current and opens them, which the admin API reports, lists the updates of and applies data-only updates to while the server runs, reloading the character name tables and the level and stat tables after the world database takes one, writes the classes the install holds that its type dump does not describe to the world database when it holds none marked install, from the class file schemaprobe builds once per revision, the same way it asks before other extractions and starting without them when that fails, loads the character name tables and the level and stat tables when the world database is open and, when either set is empty, extracts it from the install and loads it again, automatically in auto mode, after a yes in ask mode and never in off mode, registering the level and stat sets as reload targets, loads the zones, the named places inside them and the objects placed in them, extracting them from the install first when the world database holds none, the same way it does the level tables, with each extraction, each zone archive and each write to the world database reported as a start step with the time it may take, so a supervisor waits for a first run that is still working and ends only one that stalls, and registers each as a reload target, refusing to start when they cannot be read, has every zone instance filled with the objects its zone places that the server sends, loads the scripts and tells them the server has started, then runs the world update tick whose interval follows World.UpdateInterval live and carries every script's OnUpdate, and tells them it is shutting down before the databases close, after every wizard still in the world has left it and so been saved. Its live settings open over the characters database, and a change to the command prefix, command logging, default locale, session limits, template cache or realm heartbeat is applied on the world thread. It reads the template manifest before the player's template and then every spell, sigil and item template, the game effect templates of Root.wad, the quick chat phrases and the animation types an emote must name, each a reload target.
  */
 
 #include "AnimationListMgr.h"
@@ -15,6 +15,8 @@
 #include "AppenderDB.h"
 #include "CharacterNameExtractor.h"
 #include "CharacterNameMgr.h"
+#include "CustomEmoteMgr.h"
+#include "ItemMgr.h"
 #include "MapMgr.h"
 #include "ObjectSchemaMgr.h"
 #include "ObjectTemplateMgr.h"
@@ -53,6 +55,7 @@
 #include "ScriptMgr.h"
 #include "GameMessageTable.h"
 #include "GameSession.h"
+#include "GameTeleMgr.h"
 #include "GameShutdown.h"
 #include "MessageRegistry.h"
 #include "SessionContext.h"
@@ -324,7 +327,7 @@ namespace
             }
             _settingsSubscription = sSettings.Subscribe([this](SettingChange const& change) { ApplySetting(change); });
             ExtractServerClasses(setup, system, *prompt);
-            if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup) || !LoadSpells(setup) || !LoadSigils(setup) || !LoadGameEffects(setup) || !LoadChatData(setup))
+            if (!LoadObjectSchema(setup) || !LoadObjectTemplates(setup) || !LoadSpells(setup) || !LoadCustomEmotes(setup) || !LoadSigils(setup) || !LoadGameEffects(setup) || !LoadItems(setup) || !LoadChatData(setup))
             {
                 _databases.Close();
                 return false;
@@ -584,6 +587,42 @@ namespace
             for (std::string const& problem : errors)
                 LOG_ERROR("server.gameserver", "Spells: {}", problem);
             LOG_ERROR("server.gameserver", "Cannot read the spells from {}", ClientLocator::PathText(setup.Install->Root));
+            return false;
+        }
+
+        bool LoadCustomEmotes(ClientSetupResult const& setup)
+        {
+            sCustomEmoteMgr.RegisterReloadTargets();
+            if (!setup.Install || !sTypeRegistry.IsLoaded())
+            {
+                LOG_WARN("server.gameserver", "No Wizard101 install or type dump is in use, so no custom emote is read");
+                return true;
+            }
+            sCustomEmoteMgr.SetInstall(setup.Install->Root);
+            std::vector<std::string> errors;
+            if (sCustomEmoteMgr.Load(errors))
+                return true;
+            for (std::string const& problem : errors)
+                LOG_ERROR("server.gameserver", "Custom emotes: {}", problem);
+            LOG_ERROR("server.gameserver", "Cannot read the custom emotes from {}", ClientLocator::PathText(setup.Install->Root));
+            return false;
+        }
+
+        bool LoadItems(ClientSetupResult const& setup)
+        {
+            sItemMgr.RegisterReloadTargets();
+            if (!setup.Install || !sTypeRegistry.IsLoaded())
+            {
+                LOG_WARN("server.gameserver", "No Wizard101 install or type dump is in use, so no item is read");
+                return true;
+            }
+            sItemMgr.SetInstall(setup.Install->Root);
+            std::vector<std::string> errors;
+            if (sItemMgr.Load(errors))
+                return true;
+            for (std::string const& problem : errors)
+                LOG_ERROR("server.gameserver", "Items: {}", problem);
+            LOG_ERROR("server.gameserver", "Cannot read the item templates from {}", ClientLocator::PathText(setup.Install->Root));
             return false;
         }
 
@@ -882,21 +921,13 @@ namespace
             sCommandMgr.SetPrefix(sSettings.Get<std::string>("GM.CommandPrefix"));
             sCommandMgr.SetLogging(sSettings.Get<bool>("GM.LogCommands"));
             sCommandMgr.Load(sScriptMgr.GetCommands());
-            std::map<std::string, uint8, std::less<>> overrides;
-            if (WorldDatabase.IsOpen())
-            {
-                if (QueryResult rows = WorldDatabase.Query("SELECT command, security_level FROM command_security"))
-                {
-                    do
-                    {
-                        Field const* row = rows->Fetch();
-                        overrides.emplace(row[0].Get<std::string>(), row[1].Get<uint8>());
-                    } while (rows->NextRow());
-                }
-            }
-            if (!overrides.empty())
-                LOG_INFO("server.commands", "{} command(s) have a level from command_security", overrides.size());
-            sCommandMgr.SetOverrides(std::move(overrides));
+            sCommandMgr.LoadSecurity();
+            sCommandMgr.RegisterReloadTargets();
+            std::vector<std::string> teleErrors;
+            if (WorldDatabase.IsOpen() && !sGameTeleMgr.Load(teleErrors))
+                for (std::string const& error : teleErrors)
+                    LOG_ERROR("server.world", "Teleport points: {}", error);
+            sGameTeleMgr.RegisterReloadTargets();
             RegisterCommandConsole();
             LOG_INFO("server.commands", "{} command(s) are ready, typed after {}", sCommandMgr.GetCommandCount(), sCommandMgr.GetPrefix());
         }

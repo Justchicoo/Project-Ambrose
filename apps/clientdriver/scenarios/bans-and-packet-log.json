@@ -1,0 +1,397 @@
+{
+  "title": "C-77, a permanent ban, and 6.18's packet log and .network commands in one run",
+  "include": "parts/common.json",
+  "notes": [
+    "The account is banned for an hour before its first sign-in, then permanently, and each refusal's dialog is shot with the end the client reads from TimeStamp.",
+    "The login server's packet log is on from the start, so the refused authentication shows the named, redacted MSG_USER_AUTHEN_V3 line.",
+    "Unbanned and made an administrator, the wizard enters the Commons, asks .network sessions, then clears the suppress list and filters the packet log",
+    "to MSG_CLIENTMOVE from chat, and the next step it walks is logged by name with no restart."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "server_settings": [
+    "Network.PacketLog.Enable=true"
+  ],
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream",
+    "Zone.MobileIdReleaseDelay=60000",
+    "Network.PacketLog.Enable=true"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Hub",
+    "zone_display": "The Commons",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    }
+  },
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ],
+  "steps": [
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "server_command",
+      "name": "ban the account for an hour before its first sign-in",
+      "command": "account ban {user} 1h C-77-test",
+      "pattern": "Account {user} banned until",
+      "timeout": 20
+    },
+    {
+      "action": "submit_login",
+      "name": "submit the hour-banned account's password",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server refuses the hour-banned account",
+      "pattern": "failed to authenticate as {user}: the account is banned; sent MSG_USER_AUTHEN_RSP Error=(\\S+)",
+      "timeout": 20,
+      "expect": "AccountBanned"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client receives a non-success response (hour-banned)",
+      "pattern": "LOGIN RESPONSE: Error=(-?\\d+)",
+      "timeout": 30,
+      "reject": "0",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client chooses a refusal message (hour-banned)",
+      "pattern": "msg string key = (\\S+?),",
+      "timeout": 20,
+      "record": true,
+      "expect": "GUI_AccountBannedTime"
+    },
+    {
+      "action": "shot",
+      "name": "the client shows the hour-banned ban and when it ends",
+      "file": "banned-for-an-hour",
+      "settle": 1
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the packet log names the authentication message and redacts its fields",
+      "pattern": "session \\d+ C->S LOGIN MSG_USER_AUTHEN_V3 \\(7:27\\)( \\w+=<redacted>)+$",
+      "from": "start",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "server_command",
+      "name": "ban the account permanently",
+      "command": "account ban {user} perm C-77-permanent",
+      "pattern": "Account {user} banned permanently",
+      "timeout": 20
+    },
+    {
+      "action": "restart_client",
+      "name": "quit the client and start it again for the permanent ban",
+      "timeout": 240
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up again for the permanent ban",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen again for the permanent ban",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "submit the permanently banned account's password",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server refuses the permanently banned account",
+      "pattern": "failed to authenticate as {user}: the account is banned; sent MSG_USER_AUTHEN_RSP Error=(\\S+)",
+      "timeout": 20,
+      "expect": "AccountBanned"
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client receives a non-success response (permanently banned)",
+      "pattern": "LOGIN RESPONSE: Error=(-?\\d+)",
+      "timeout": 30,
+      "reject": "0",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client chooses a refusal message (permanently banned)",
+      "pattern": "msg string key = (\\S+?),",
+      "timeout": 20,
+      "record": true,
+      "expect": "GUI_AccountBannedPermanent"
+    },
+    {
+      "action": "shot",
+      "name": "the client shows the permanently banned ban and when it ends",
+      "file": "banned-permanently",
+      "settle": 1
+    },
+    {
+      "action": "server_command",
+      "name": "lift the bans",
+      "command": "account unban {user}",
+      "pattern": "Account {user} unbanned",
+      "timeout": 20
+    },
+    {
+      "action": "server_command",
+      "name": "make the account a game master",
+      "command": "account set gmlevel {user} 3",
+      "pattern": "Security level of \\S+ set to 3",
+      "timeout": 20
+    },
+    {
+      "action": "restart_client",
+      "name": "quit the client and start it again to play",
+      "timeout": 240
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up again to play",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen again to play",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server puts the wizard in the Commons",
+      "pattern": "put wizard {wizard_guid} in WizardCity/WC_Hub instance \\d+ at .* with mobile id (\\d+),",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard {wizard_guid} stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Hub"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .network sessions",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .network sessions",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .network sessions",
+      "text": ".network sessions"
+    },
+    {
+      "action": "char",
+      "name": "send .network sessions",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server answers .network sessions",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran network sessions, which worked",
+      "timeout": 20,
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the game master reads the live session count",
+      "file": "network-sessions",
+      "settle": 1
+    },
+    {
+      "action": "hold_key",
+      "name": "walk while MSG_CLIENTMOVE is suppressed",
+      "vk": "0x57",
+      "seconds": 1.0
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .network packetlog suppress",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .network packetlog suppress",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .network packetlog suppress",
+      "text": ".network packetlog suppress"
+    },
+    {
+      "action": "char",
+      "name": "send .network packetlog suppress",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the suppress list is cleared live",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran network packetlog suppress, which worked",
+      "timeout": 20
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .network packetlog filter MSG_CLIENTMOVE",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .network packetlog filter MSG_CLIENTMOVE",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .network packetlog filter MSG_CLIENTMOVE",
+      "text": ".network packetlog filter MSG_CLIENTMOVE"
+    },
+    {
+      "action": "char",
+      "name": "send .network packetlog filter MSG_CLIENTMOVE",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the filter is set live",
+      "pattern": "account \\d+ with wizard {wizard_guid} ran network packetlog filter MSG_CLIENTMOVE, which worked",
+      "timeout": 20
+    },
+    {
+      "action": "shot",
+      "name": "the game master reads the packet log replies",
+      "file": "network-packetlog",
+      "settle": 1
+    },
+    {
+      "action": "hold_key",
+      "name": "walk with the filter on MSG_CLIENTMOVE",
+      "vk": "0x57",
+      "seconds": 1.0
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the next move is logged by name without a restart",
+      "pattern": "session \\d+ C->S \\S+ MSG_CLIENTMOVE \\(\\d+:\\d+\\)",
+      "timeout": 20,
+      "record": true
+    }
+  ]
+}

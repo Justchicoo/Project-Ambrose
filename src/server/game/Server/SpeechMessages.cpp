@@ -38,6 +38,16 @@ GameMessages::RadialQuickChatExt SpeechMessages::QuickChatExt(ChatSpeaker const&
     return message;
 }
 
+GameMessages::PiiRadialMenuPlayEmote SpeechMessages::CustomEmote(ChatSpeaker const& speaker, Speech const& speech)
+{
+    GameMessages::PiiRadialMenuPlayEmote message;
+    message.SourceName = speaker.Name;
+    message.SourceId = speaker.Guid;
+    message.EmoteAnimationName = speech.Animation;
+    message.EmoteText = speech.WidePayload;
+    return message;
+}
+
 GameMessages::EnterState SpeechMessages::EndEmote(ChatSpeaker const& speaker)
 {
     GameMessages::EnterState message;

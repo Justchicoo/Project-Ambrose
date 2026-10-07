@@ -22,10 +22,12 @@ namespace PlayerStatsFixtures
     {
         using CharacterTypeFixtures::Detail::Property;
         constexpr uint32 Wire = 0x1F;
-        std::vector<std::pair<std::string, std::string>> const fields{ { "int", "m_baseHitpoints" }, { "int", "m_baseMana" }, { "int", "m_baseGoldPouch" }, { "int", "m_energyMax" },
+        std::vector<std::pair<std::string, std::string>> fields{ { "int", "m_baseHitpoints" }, { "int", "m_baseMana" }, { "int", "m_baseGoldPouch" }, { "int", "m_energyMax" },
             { "int", "m_currentHitpoints" }, { "int", "m_currentGold" }, { "int", "m_currentMana" }, { "int", "m_currentArenaPoints" }, { "float", "m_potionMax" }, { "float", "m_potionCharge" },
             { "int", "m_referenceLevel" }, { "int", "m_highestCharacterLevelOnAccount" }, { "float", "m_powerPipBase" }, { "int", "m_shadowPipMax" }, { "int", "m_pipConversionBaseAllSchools" },
             { "float", "m_shadowPipRating" }, { "float", "m_archmasteryBase" }, { "unsigned int", "m_schoolID" }, { "unsigned int", "m_secondarySchool" } };
+        fields.insert(fields.end(), { { "unsigned int", "m_purchasedCustomEmotes1" }, { "unsigned int", "m_purchasedCustomEmotes2" }, { "unsigned int", "m_purchasedCustomEmotes3" },
+            { "unsigned int", "m_purchasedCustomTeleportEffects1" }, { "unsigned int", "m_purchasedCustomTeleportEffects2" }, { "unsigned int", "m_purchasedCustomTeleportEffects3" } });
         std::vector<std::pair<std::string, CharacterTypeFixtures::Detail::Json>> properties;
         uint32 id = 0;
         for (auto const& [type, name] : fields)

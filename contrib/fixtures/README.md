@@ -71,6 +71,7 @@ python contrib\fixtures\validate_c63.py
 
 The validator renders each case using the documented short timestamp and
 18-character category column, then compares every expected line byte-for-byte.
+
 ## C-74 replay manifests
 
 `c74-login-replay.json`, `c74-wrong-password-replay.json`, and
@@ -83,3 +84,27 @@ encode the message-definition bodies: success and refusal use distinct
 address, or client-derived payload bytes.
 
 Run `python contrib\fixtures\validate_c74.py` to validate the three manifests.
+
+## C-81 SQL duality corpus
+
+`c81-sql-duality-corpus.json` pairs nine small update files under
+`c81-sql-duality/cases/` with the verdict each gets when it is run: clean
+files both servers accept, a syntax error both refuse with error 1064,
+statements only MariaDB accepts (`ADD COLUMN IF NOT EXISTS`,
+`DROP COLUMN IF EXISTS` and `CREATE INDEX IF NOT EXISTS`), and one only
+MySQL accepts (an `INVISIBLE` index). It also records the dated names the
+promotion rule gives pending `rev_<unix seconds>_<short-name>.sql` files,
+including the `_01` case when the day's `_00` name is taken. Every verdict
+and name was produced by running the file or the promotion command, never
+by reading the input.
+
+Run its validator from the repository root:
+
+```powershell
+python contrib\fixtures\validate_c81.py
+```
+
+The validator checks that the corpus lists exactly the files on disk, that
+each case file opens with the two-line header and ends in a newline, that
+every verdict matches its kind with a numeric error code where one is
+claimed, and that the naming rules carry the `_01` promotion case.

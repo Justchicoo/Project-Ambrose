@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used, even after its row is gone; and a wizard's stats row, missing until the first save, saved and replaced whole with full health and mana kept as full, a write older than the row changing nothing, refused with a negative amount, and read as no wizard for a guid that has none; a wizard's position written under the revision of its row, a late older write changing nothing and a position that is not a number refused; and a wizard's spellbook rows, none until it learns a spell, read in the order learned, an unlearned spell kept as a row that says so, a late older write changing nothing, spell 0 refused, and read as no wizard for a guid that has none.
+ * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used after its row is gone; and stats including custom-emote and teleport-effect ownership masks, missing until first save, replaced whole with full health and mana kept as full, older writes changing nothing, invalid amounts refused, and missing wizards not read as stats; positions written under the revision of their row, late writes changing nothing and non-finite positions refused; and spellbook rows, none until a spell is learned, read in the order learned, an unlearned spell kept as a row that says so, late writes changing nothing, spell 0 refused, and missing wizards not read as a spellbook.
  */
 
 #include "CharacterRepository.h"
@@ -359,6 +359,8 @@ TEST_F(CharacterRepositoryDatabaseTest, AWizardsStatsAreMissingUntilSavedAndThen
     stats.PotionMax = 2.0f;
     stats.ArenaPoints = 40;
     stats.LevelLocked = true;
+    stats.PurchasedCustomEmotes = { 0x1u, 0x80000000u, 0xA5A55A5Au };
+    stats.PurchasedCustomTeleportEffects = { 0x2u, 0x40000000u, 0x5A5AA5A5u };
     stats.Revision = 1;
     ASSERT_EQ(CharacterRepository::SaveStats(301, stats), CharacterOpResult::Ok);
     CharacterStatsLoad const saved = CharacterRepository::LoadStats(301);

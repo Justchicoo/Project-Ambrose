@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests outbound messages over loopback with Ambrose-authored SYSTEM and EXTENDEDBASE definitions: server message frames in short and long form, pings answered within the ping budget, a kick that flushes megabytes of backlog before MSG_FORCE_DISCONNECT and closes even without definitions, kick reasons cut at a character boundary, delayed close stopping input and later sends, the send queue limit, sends refused without definitions, declarations or encodable values, and the TimeStamp only a ban's disconnect carries: the ban's end in Unix seconds or forever, never with a colon.
+ * Tests outbound messages over loopback with Ambrose-authored SYSTEM and EXTENDEDBASE definitions: server message frames in short and long form, pings answered within the ping budget, a kick that flushes megabytes of backlog before MSG_FORCE_DISCONNECT and closes even without definitions, kick reasons cut at a character boundary, delayed close stopping input and later sends, the send queue limit, sends refused without definitions, declarations or encodable values, and the TimeStamp only a ban's disconnect carries: the ban's end in Unix seconds, the latest the client reads for a permanent one, never with a colon.
  */
 
 #include "BaseMessageFixtures.h"
@@ -182,14 +182,14 @@ namespace
 
 TEST(SystemMessagesTest, ABansEndIsUnixSecondsOrForeverAndNeverHoldsAColon)
 {
-    EXPECT_EQ(SystemMessages::FormatBanEnd(0), "forever") << "an unbandate of 0 never expires";
+    EXPECT_EQ(SystemMessages::FormatBanEnd(0), "2147483647") << "an unbandate of 0 never expires, and the ban dialog reads forever as 630720000, a date in 1989, and shows a ban as permanent only when it ends five years or more from now";
     EXPECT_EQ(SystemMessages::FormatBanEnd(1790000000), "1790000000");
     EXPECT_EQ(SystemMessages::FormatBanEnd(4102444800), "2147483647") << "the client reads the end with a 32-bit strtol, so a later end is held at 2038-01-19";
     for (uint64 const end : { uint64{ 0 }, uint64{ 1 }, uint64{ 1790000000 }, std::numeric_limits<uint64>::max() })
     {
         std::string const text = SystemMessages::FormatBanEnd(end);
         EXPECT_EQ(text.find(':'), std::string::npos) << text << ": the client's ban parser never returns from a colon";
-        EXPECT_TRUE(std::regex_match(text, std::regex("forever|[0-9]+"))) << text;
+        EXPECT_TRUE(std::regex_match(text, std::regex("[0-9]+"))) << text;
     }
     EXPECT_TRUE(SystemMessages::CarriesBanEnd(DisconnectReason::Banned));
     EXPECT_TRUE(SystemMessages::CarriesBanEnd(DisconnectReason::AccountBanned));
@@ -316,8 +316,8 @@ TEST_F(OutboundMessagesTest, ABanKickCarriesTheBansEndAndAnyOtherKickNone)
         uint64 UnbanDate;
         std::string TimeStamp;
     };
-    for (Kick const& kick : { Kick{ DisconnectReason::AccountBanned, 1790000000, "1790000000" }, Kick{ DisconnectReason::MachineBanned, 0, "forever" },
-             Kick{ DisconnectReason::Banned, 0, "forever" }, Kick{ DisconnectReason::Csr, 1790000000, "" } })
+    for (Kick const& kick : { Kick{ DisconnectReason::AccountBanned, 1790000000, "1790000000" }, Kick{ DisconnectReason::MachineBanned, 0, "2147483647" },
+             Kick{ DisconnectReason::Banned, 0, "2147483647" }, Kick{ DisconnectReason::Csr, 1790000000, "" } })
     {
         _session.reset();
         _client.reset();

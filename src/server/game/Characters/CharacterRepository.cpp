@@ -232,6 +232,43 @@ CharacterOpResult CharacterRepository::Restore(uint64 guid)
     return CharacterOpResult::Ok;
 }
 
+std::optional<std::vector<DeletedCharacter>> CharacterRepository::ListDeleted(uint64 account, uint32 limit)
+{
+    Statement const statement = Prepare(CHAR_SEL_DELETED);
+    if (!statement)
+        return std::nullopt;
+    statement->SetData(0, account);
+    statement->SetData(1, account);
+    statement->SetData(2, limit);
+    PreparedQueryResult result;
+    if (!CharacterDatabase.TryQuery(*statement, result))
+        return std::nullopt;
+    std::vector<DeletedCharacter> deleted;
+    if (!result)
+        return deleted;
+    do
+    {
+        PreparedResultSet const& row = *result;
+        deleted.push_back({ row[0].Get<uint64>(), row[1].Get<uint64>(), row[2].Get<uint64>(), row[3].Get<int32>(), row[4].Get<uint32>() });
+    } while (result->NextRow());
+    return deleted;
+}
+
+CharacterOpResult CharacterRepository::FlagRename(uint64 guid)
+{
+    Statement const statement = Prepare(CHAR_UPD_SHOULD_RENAME);
+    if (!statement)
+        return CharacterOpResult::DatabaseError;
+    statement->SetData(0, guid);
+    std::optional<uint64> const changed = CharacterDatabase.DirectExecuteCounted(*statement);
+    if (!changed)
+        return CharacterOpResult::DatabaseError;
+    if (*changed == 0)
+        return CharacterOpResult::NotFound;
+    LOG_INFO("characters", "Character {} will choose a new name at its next login", guid);
+    return CharacterOpResult::Ok;
+}
+
 CharacterOpResult CharacterRepository::SetOnline(uint64 guid, bool online)
 {
     Statement const statement = Prepare(CHAR_UPD_ONLINE);
@@ -482,7 +519,13 @@ CharacterRepository::Statement CharacterRepository::PrepareSaveStats(uint64 guid
     statement->SetData(8, stats.PotionMax);
     statement->SetData(9, stats.ArenaPoints);
     statement->SetData(10, static_cast<uint8>(stats.LevelLocked ? 1 : 0));
-    statement->SetData(11, stats.Revision);
+    statement->SetData(11, stats.PurchasedCustomEmotes[0]);
+    statement->SetData(12, stats.PurchasedCustomEmotes[1]);
+    statement->SetData(13, stats.PurchasedCustomEmotes[2]);
+    statement->SetData(14, stats.PurchasedCustomTeleportEffects[0]);
+    statement->SetData(15, stats.PurchasedCustomTeleportEffects[1]);
+    statement->SetData(16, stats.PurchasedCustomTeleportEffects[2]);
+    statement->SetData(17, stats.Revision);
     return statement;
 }
 
@@ -504,7 +547,9 @@ std::optional<CharacterStats> CharacterRepository::ReadStats(PreparedResultSet& 
     stats.PotionMax = row[8].Get<float>();
     stats.ArenaPoints = row[9].Get<int32>();
     stats.LevelLocked = row[10].Get<uint32>() != 0;
-    stats.Revision = row[11].Get<uint64>();
+    stats.PurchasedCustomEmotes = { row[11].Get<uint32>(), row[12].Get<uint32>(), row[13].Get<uint32>() };
+    stats.PurchasedCustomTeleportEffects = { row[14].Get<uint32>(), row[15].Get<uint32>(), row[16].Get<uint32>() };
+    stats.Revision = row[17].Get<uint64>();
     return stats;
 }
 

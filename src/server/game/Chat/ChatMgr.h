@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * What a wizard says for the others around it (ChatMgr): each typed line, quick chat phrase, extended phrase and emote its client asks the server to show is kept as a Speech until the world's next tick. The filter a line is shown under is the chat level the speaker's own client shows its line at, 2 for open chat, 1 for menu chat and 0 for neither, read from the permissions the server gave it; a typed line that starts with the command prefix is a command and is never shown to anyone: an account above player level runs it, and a player's is shown as an ordinary line or refused as GM.PlayerCommandsAsChat says, and a line whose text does not read or is empty is not shown either; an extended phrase is shown only when the client's QuickChatX parser would read it, at least three words between spaces, the first naming one of the kinds it knows, Quest, Duel, Stats or Tour; and a listener in the same instance hears a wizard within the say range of it, anywhere in the instance when the range is 0.
+ * What a wizard says for the others around it (ChatMgr): each typed line, quick chat phrase, extended phrase, ordinary emote and custom emote its client asks the server to show is kept as a Speech until the world's next tick. The filter a line is shown under is the chat level the speaker's own client shows its line at, 2 for open chat, 1 for menu chat and 0 for neither, read from the permissions the server gave it; a typed line that starts with the command prefix is a command and is never shown to anyone: an account above player level runs it, and a player's is shown as an ordinary line or refused as GM.PlayerCommandsAsChat says, and a line whose text does not read or is empty is not shown either; a custom emote's WSTR text must be nonempty, valid UTF-16 and not a command; an extended phrase is shown only when the client's QuickChatX parser would read it, at least three words between spaces, the first naming one of the kinds it knows, Quest, Duel, Stats or Tour; and a listener in the same instance hears a wizard within the say range of it, anywhere in the instance when the range is 0.
  */
 
 #ifndef AMBROSE_CHATMGR_H
@@ -18,7 +18,8 @@ enum class SpeechKind : uint8
     Say,
     QuickChat,
     QuickChatExt,
-    Emote
+    Emote,
+    CustomEmote
 };
 
 enum class TypedLine : uint8
@@ -40,6 +41,7 @@ struct Speech
 {
     SpeechKind Kind = SpeechKind::Say;
     std::string Payload;
+    std::u16string WidePayload;
     std::string Animation;
     uint32 PhraseId = 0;
     bool SpeakerSees = false;
@@ -61,6 +63,7 @@ public:
 
     static uint8 FilterFor(uint32 permissions) noexcept;
     static bool IsCommand(std::u16string_view text, std::string_view prefix);
+    static bool IsCustomEmoteText(std::u16string_view text, std::string_view prefix);
     static TypedLine Judge(std::string_view message, std::string_view prefix);
     static CommandLine FateOf(uint8 securityLevel, bool playersChat) noexcept;
     static bool IsExtendedPhrase(std::string_view message);

@@ -79,7 +79,7 @@ Each app lists every client message once in a `MessageHandlerTable`: the message
 
 ### GM commands
 
-Each command group is one file, `scripts/Commands/cs_<group>.cpp`, holding a `CommandScript` with a command table and the default account security level each command requires. A `command_security` table overrides levels live and reloads with the other command data.
+Each command group is one file, `scripts/Commands/cs_<group>.cpp`, holding a `CommandScript` with a command table and the default account security level each command requires. A `command_security` row in the world database overrides one command's level, read at start and again by `.reload command_security`, which keeps the levels it had when the table cannot be read. The account, ban and character groups added in 6.05 act on an account only when the caller in game holds a level above it, and never give a level as high as the caller's own, so no game master raises another to its rank or locks out its peers; the console may do all of it. A ban of an account disconnects its wizards in the world with MSG_FORCE_DISCONNECT's AccountBanned, and the login server refuses its next login from the same rows. An account's own `permissions`, NULL by default, take the place of `LoginComplete.Permissions` for its wizards from their next entry, in MSG_LOGINCOMPLETE and in the name behavior's `m_chatPermissions`.
 
 ### Modules
 
@@ -99,7 +99,7 @@ Servers stay headless so they run the same on a desktop, a Linux VPS, or in Dock
 
 ### Tests
 
-`src/test/` mirrors `src/` and builds a single unit test executable. Database integration tests run only when `AMBROSE_TEST_DB` holds a connection string such as `127.0.0.1;3306;root;root;ambrose_test` for a disposable server, and skip otherwise. Each test creates uniquely named databases and drops them when it finishes, including the app smoke tests, which start the real executables with `--check`. The Linux CI legs run them against the runner's MySQL 8 whenever those legs build, and local runs can use MariaDB.
+`src/test/` mirrors `src/` and builds a single unit test executable. Database integration tests run only when `AMBROSE_TEST_DB` holds a connection string such as `127.0.0.1;3306;root;root;ambrose_test` for a disposable server, and skip otherwise. On Windows with that server inside WSL, set `AMBROSE_TEST_DB_WSL` to the distribution's name, such as `Ubuntu-24.04`: WSL ends a distribution, and the MariaDB in it, once no `wsl.exe` is attached, so without it a run loses its database part way through and the tests after that wait out their timeouts, while with it every test process holds the distribution until it ends. Each test creates uniquely named databases and drops them when it finishes, including the app smoke tests, which start the real executables with `--check`. The Linux CI legs run them against the runner's MySQL 8 whenever those legs build, and local runs can use MariaDB.
 
 ## Conventions
 
@@ -478,6 +478,7 @@ Settled on 2026-09-25 in milestone 5.03, from the r806919 client's own code.
 - Positions and facings travel the way the client's MoveBehavior packs them (`PackPositionOrientation` at 0x1416a36a0, `UnpackPositionOrientation` at 0x1416a37f0): a coordinate is multiplied by 0.25 and truncated to a signed 16-bit value and read back times 4, and a facing is multiplied by 40, keeping the low byte, and read back times 0.025, so a byte holds a facing in 1/40-radian steps. `MovementPacking` follows it; the rounding and 256-steps-per-turn facing it had before were not the client's.
 - The client stamps every MSG_CLIENTMOVE with its zone counter (`GameClient` + 0x21650), which it sets to 0 when it sends MSG_ATTACH and changes only when MSG_UPDATEZONECOUNTER or a zone transfer gives it a new one, and it sends moves only while its zone is loaded. So a session's counter starts at 0, and a move under any other counter was sent before a transfer and is ignored.
 - `PlayerMovement` keeps where the wizard stands from its moves, and the position is written to its character row when it leaves the world, under the next revision of that row, as Saving settles.
+- A teleport within a zone, added in 6.06, packs the place the same way and sends MSG_SERVERTELEPORT, LocationX, LocationY, LocationZ, Direction and the wizard's MobileID, to the wizard and to every wizard in its zone instance, so its client snaps there with no loading screen and the others see it appear there; the place is kept as if the wizard had moved there, so it is saved like a move. A place a 16-bit value cannot carry, beyond -131072 to 131068 on any axis, is refused before anything is sent. The places are the zone's own locations, such as Start, and the `game_tele` points of the world database, which `.tele add` and `.tele del` change through the world edit journal and `.reload game_tele` reads again, keeping the points it had when a row is bad.
 
 ### Chat and emotes
 
@@ -544,6 +545,14 @@ Settled on 2026-09-26 in milestone 8.05, from the client program's own code and 
 - A tracker is filled as AddSpell fills one. `m_spellID` is the template id. A tiered spell's `m_isRetired` is its template's `m_retired`, and its `m_tieredSpellGroupIndex` is its group, or -1 when the group file does not name it. Any other spell is neither retired nor in a group, -1.
 - `character_spell` keeps one row for each spell a wizard has learned. An unlearned spell keeps its row with `known` set to 0. Each write carries the next revision of the wizard's spellbook and changes the row only when the row's revision is older. So a learn and an unlearn queued together may land in either order and the newest stays, as Saving settles. `learned` is the revision a spell was last learned at, which keeps the book in the order the wizard filled it. A spell is written the moment it is learned or unlearned, never on a timer.
 - The book is kept on the world thread with the wizard's other state. `GameSession::LearnSpell` and `UnlearnSpell` are what a command, a quest or a trainer changes it through. A command on another thread hands the change to the world thread with `World::RunFor` and waits for the answer, and one on the world thread runs it at once. A known spell the spell set does not hold is left out of what the client is sent and named in the log, and its row stays.
+
+### Item templates
+
+Settled on 2026-10-02 in milestone 8.06, taking the recommended option at the maintainer's standing direction, because 8.06's spec asked sItemMgr to load from world.item_template while World threads, zone data and extracted tables keeps object templates out of the database.
+
+- `sItemMgr` reads its items from the install at run time, as `sSpellMgr` does: every template TemplateManifest.xml lists under `ObjectData/`, decoded on every hardware thread through the template folder reader, kept as a typed record when its class is or derives from WizItemTemplate and passed over otherwise. It swaps the set in whole through the reload target `item_template`, which follows `templates`, so `.reload item_template` after an edited template file applies the edit without a restart, and a set that fails keeps the one serving and names each way its items fail. It logs how many items of each class it holds, their behaviors of classes nothing describes, the memory they take and how long they took.
+- An item holding an object of a class the type dump does not list, anywhere but its behaviors, is refused, naming the class hash and where it sits, so an unknown requirement or effect fails the load and the extraction rather than being skipped. A behavior of such a class keeps its place and is counted, as every template's behaviors are.
+- The extractor's `templates` command also writes `item_template`, because vendors, loot and the panel look items up relationally. It holds only the item's own fields, school, base cost, rank, item limit, item set bonus and color counts, and extends the template's `object_template` row by a foreign key, which already holds its object name, display key, object type and adjectives, so nothing is stored twice. A color count is NULL when the class has no such property.
 
 ### Automatic setup
 
