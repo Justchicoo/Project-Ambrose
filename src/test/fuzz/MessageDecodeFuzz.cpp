@@ -3,6 +3,7 @@
  * Exercises dynamic DML message decoding, including bounded STR and WSTR fields, with arbitrary frame bodies.
  */
 
+#include "AllocationCeiling.h"
 #include "DynamicMessage.h"
 
 #include <cstdlib>
@@ -44,6 +45,7 @@ namespace
 
 extern "C" int LLVMFuzzerInitialize(int* argc, char*** argv)
 {
+    AllocationCeiling::Install();
     MessageDefinitionSet definitions;
     if (!definitions.Add(Definition, "MessageFuzz.xml") || !Registry.Load(std::move(definitions)))
         std::abort();
@@ -66,6 +68,7 @@ extern "C" int LLVMFuzzerInitialize(int* argc, char*** argv)
 
 extern "C" int LLVMFuzzerTestOneInput(uint8_t const* data, std::size_t size)
 {
+    AllocationCeiling::Scope const ceiling;
     DynamicMessage message(Catalog, *Info);
     message.Decode(std::span<uint8 const>(data, size));
     return 0;

@@ -57,6 +57,14 @@ Python packages installed from `apps/clientdriver/requirements.txt` on the machi
 |---|---|---|---|---|
 | comtypes | 1.4.17 | Reading and pressing the launcher window through UI Automation | MIT | Keep the notice |
 
+## What runs the project's Discord bot, and never ships
+
+A Python package installed from `apps/discordbot/requirements.txt` on the machine that hosts the project's Discord bot. Nothing in a program or the panel uses it.
+
+| Package | Version | Used for | Licence | What it asks |
+|---|---|---|---|---|
+| discord.py | 2.7.1 | The Discord gateway, slash commands and messages the bot uses | MIT | Keep the notice |
+
 ## What builds and tests the servers, and never ships
 
 A development dependency. It is linked into the test programs only, and no server or tool carries it.

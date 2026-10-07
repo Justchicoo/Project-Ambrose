@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Implements game-session attachment, queued world-thread message handling, wizard persistence, chat, and outbound instance updates.
+ * Implements game-session attachment, queued world-thread message handling, wizard persistence, chat, outbound instance updates, and the custom emotes a wizard owns.
  */
 
 #include "GameSession.h"
@@ -15,6 +15,7 @@
 #include "Log.h"
 #include "MapMgr.h"
 #include "MessageRegistry.h"
+#include "MovementPacking.h"
 #include "ObjectFields.h"
 #include "ObjectSchemaMgr.h"
 #include "ObjectTemplateMgr.h"
@@ -35,6 +36,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <span>
 #include <utility>
 #include <vector>
@@ -331,6 +333,7 @@ void GameSession::LoadAccount(LoginKeyClaim const& claim)
         }
         AccountInfo const account = AccountMgr::ReadAccountRow(*result);
         SetSecurityLevel(account.SecurityLevel);
+        _accountPermissions = account.Permissions;
         LoadCharacter(claim);
     }));
 }
@@ -517,7 +520,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     CoreObjectTypeTablePtr const types = sObjectSchemaMgr.GetCoreObjectTypes();
     std::shared_ptr<BehaviorClientClasses const> const behaviors = sObjectSchemaMgr.GetBehaviorClientClasses();
     std::shared_ptr<ObjectTemplate const> const playerTemplate = sObjectTemplateMgr.GetPlayer();
-    uint32 const permissions = sSettings.Get<uint32>("LoginComplete.Permissions");
+    uint32 const permissions = AccountMgr::EntryPermissions(_accountPermissions, sSettings.Get<uint32>("LoginComplete.Permissions"));
     PropertyObjectPtr const player = PlayerObjectBuilder::Build(catalog, *types, *behaviors, *playerTemplate, entering, *stats, trackers, placement, permissions, problem);
     ObjectField const* const field = ObjectFields::Find("MSG_LOGINCOMPLETE", "Data");
     EncodeResult const data = player && field ? CoreObjectSerializer::EncodeField(*field, *player, *types) : EncodeResult{};
@@ -603,6 +606,7 @@ void GameSession::EnterWorld(LoginKeyClaim const& claim, CharacterSummary const&
     SendDmlMessage(complete);
     SendBadges();
     SendMapObjects(*map);
+    SendCustomEmotes();
     if (!resumed)
         _arrived = true;
     SetStatus(SessionStatus::LoggedIn);
@@ -702,12 +706,72 @@ void GameSession::ShowMovementOf(GameSession const& mover, MovementUpdate const&
     }
 }
 
+bool GameSession::TeleportWithinMap(PlayerPosition const& target, std::vector<std::shared_ptr<GameSession>> const& onlookers, std::string& problem)
+{
+    if (!MovementPacking::TryPackLocation(target.X) || !MovementPacking::TryPackLocation(target.Y) || !MovementPacking::TryPackLocation(target.Z))
+    {
+        problem = fmt::format("({}, {}, {}) lies outside the {} to {} a position can be sent as", target.X, target.Y, target.Z,
+            MovementPacking::UnpackLocation(std::numeric_limits<int16>::min()), MovementPacking::UnpackLocation(std::numeric_limits<int16>::max()));
+        return false;
+    }
+    if (!IsShown())
+    {
+        problem = "the wizard does not stand in a zone";
+        return false;
+    }
+    std::optional<PackedMove> const teleported = _movement.Teleport(target);
+    if (!teleported)
+    {
+        problem = fmt::format("the facing {} is not a number", target.Yaw);
+        return false;
+    }
+    PackedMove const place = *teleported;
+    _relay.Reset(_movement);
+    std::size_t shown = 0;
+    for (std::shared_ptr<GameSession> const& viewer : onlookers)
+    {
+        if (!viewer->IsOpen() || viewer->GetMapId() != _mapId)
+            continue;
+        viewer->ShowTeleportOf(*this, place);
+        if (viewer.get() != this)
+            ++shown;
+    }
+    LOG_INFO("server.gamesession", "Session {}'s wizard {} was teleported within {} to ({}, {}, {}) facing {}, shown to {} other wizard(s)", GetSessionId(), _worldGuid,
+        Ambrose::ForLog(_zonePath, 128), _movement.GetPosition().X, _movement.GetPosition().Y, _movement.GetPosition().Z, _movement.GetPosition().Yaw, shown);
+    return true;
+}
+
+void GameSession::ShowTeleportOf(GameSession const& mover, PackedMove const& place)
+{
+    GameMessages::ServerTeleport teleport;
+    teleport.LocationX = place.X;
+    teleport.LocationY = place.Y;
+    teleport.LocationZ = place.Z;
+    teleport.Direction = place.Direction;
+    teleport.MobileId = mover._mobileId;
+    SendDmlMessage(teleport);
+}
+
 void GameSession::SendMapObjects(Map const& map)
 {
     for (MapObject const& object : map.GetObjects())
     {
         GameMessages::NewObject message;
         message.Data.assign(object.Data.begin(), object.Data.end());
+        SendDmlMessage(message);
+    }
+}
+
+void GameSession::SendCustomEmotes()
+{
+    std::array<uint32, 3> const& emotes = _stats->GetPurchasedCustomEmotes();
+    std::array<uint32, 3> const& teleportEffects = _stats->GetPurchasedCustomTeleportEffects();
+    for (uint8 rank = 0; rank < emotes.size(); ++rank)
+    {
+        GameMessages::UpdateCustomEmotes message;
+        message.CustomEmotes = emotes[rank];
+        message.CustomTeleportEffects = teleportEffects[rank];
+        message.Rank = rank;
         SendDmlMessage(message);
     }
 }

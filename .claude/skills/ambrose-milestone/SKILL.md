@@ -1,6 +1,6 @@
 ---
 name: ambrose-milestone
-description: Use when picking, building, verifying or landing a Project Ambrose roadmap milestone. Covers confirming it is next, reading its phase section, using and upgrading the repo's tools, ticking acceptance checks with evidence, and the landing commit.
+description: Use when picking, building, verifying or landing a Project Ambrose roadmap milestone. Covers picking any milestone, reading its phase section, using and upgrading the repo's tools, ticking acceptance checks with evidence, and the landing commit.
 ---
 <!-- Project Ambrose by Imjustchico: The steps a session follows to take one roadmap milestone from choosing it to landing it on main. -->
 
@@ -8,12 +8,12 @@ description: Use when picking, building, verifying or landing a Project Ambrose 
 
 This follows CLAUDE.md, doc/MILESTONE-TRACK.md and doc/REVIEWING.md. Those files win if they ever disagree with this one. Read docs by section, as the ambrose-lean skill shows. `docsection` below means `python .claude/skills/ambrose-lean/docsection.py`.
 
-## 1. Confirm it is the right one
+## 1. Pick one
 
-- `docsection doc/ROADMAP.md "Where we are|Decisions needed"` says what has landed and what is blocked.
-- `docsection doc/MILESTONE-TRACK.md "Holds|In flight|Reserved"` says who holds what. Take nothing another session or contributor holds. doc/work/holds.json is the machine-readable form.
-- Read the milestone's own section in its phase file: `docsection doc/roadmap/phase-NN-*.md "^N\.MM |Review notes"`. Check that every milestone on its **Depends on** line is done.
-- Leave no earlier milestone unfinished. `grep -n "^- \[ \]" doc/roadmap/phase-0*.md` lists unticked checks. An unticked check in an earlier milestone comes first, unless it is gated (Dev-gated, Client-gated or Real client) and says why it waits, or doc/MILESTONE-TRACK.md reserves it for another session. Since 2026-10-01 the maintainer lets separate areas build past 8.01 in parallel while the session holding the earlier milestones finishes them, so take the next ready milestone in your own area rather than one another session holds.
+- Any milestone is yours to take, in any phase and any order, and nobody has to be asked: nothing is held or reserved, and no session owns an area. `docsection doc/ROADMAP.md "Where we are|Decisions needed"` says what has landed.
+- Look at what is being built before starting: https://justchicoo.github.io/Project-Ambrose/state.json lists every open pull request against its milestone, from a `milestone/<id>` branch or a title that starts with the id. If somebody already has one on yours, read it and say on it what you will do, so the two combine rather than build the same thing twice.
+- Read the milestone's own section in its phase file: `docsection doc/roadmap/phase-NN-*.md "^N\.MM |Review notes"`. If a milestone on its **Depends on** line is not done, build what it needs in the same pull request or take that one first.
+- `docsection doc/MILESTONE-TRACK.md "Started"` lists milestones that already have work landed, with what is left. Finishing one is as welcome as starting another.
 
 ## 2. Use the tools, and teach them
 
@@ -43,5 +43,5 @@ This follows CLAUDE.md, doc/MILESTONE-TRACK.md and doc/REVIEWING.md. Those files
 - Tick both lists (the short one under the heading and the full one at the end of the detailed spec), in the same commit as the code that earns them.
 - Each tick quotes its evidence in brackets: the test name, the tool run and what it printed, or the screen and what it showed. Write `<account>`, `<address>` and so on, never a real one.
 - The landing commit also updates doc/ROADMAP.md's "Where we are" (`ci_roadmap_state.py` fails without it). It regenerates the progress card with `python apps/progress/progress.py`, which updates doc/progress/progress.json, progress.svg and badge.json. It updates doc/TOOLS.md for any tool that learned something.
-- Moving the milestone's row in doc/MILESTONE-TRACK.md, and reserving the next one, is a separate "Track <id>'s landing" commit.
+- When the milestone has a row in doc/MILESTONE-TRACK.md's Started table, updating or removing it is a separate "Track <id>'s landing" commit. Nothing is reserved, so there is no next one to reserve.
 - Commit subject is `<id>: <what a player or operator now sees>`, and the body says what changed and how it was verified. Every commit ends with the AI attribution trailer naming the model.

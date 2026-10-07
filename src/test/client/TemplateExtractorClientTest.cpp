@@ -1,9 +1,10 @@
 /*
  * Project Ambrose by Imjustchico
- * Extracts every template of the user's own install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it: every manifest entry becomes a row, every ObjectData entry is read, each as many as recorded for the installed revision, r806919's 137423 and 104869, with none left unread; the Ravenwood student 38232 carries its object name, display key, portrait and both its NPC and questing behaviors, the questing one named from its bytes though no class describes it; 39088 is the Golem Tower registrar; the hat 1652259 is a WizItemTemplate under its display key; and building the script twice writes the same rows.
+ * Extracts every template of the user's own install, when AMBROSE_CLIENT_DIR and AMBROSE_TYPE_DUMP_PATH name it, through the classes the install holds beside the dump as the extractor reads them from the world database: every manifest entry becomes a row, every ObjectData entry is read, each as many as recorded for the installed revision, r806919's 137423 and 104869, with none left unread; the Ravenwood student 38232 carries its object name, display key, portrait and both its NPC and questing behaviors, the questing one named from its bytes whether or not a class describes it; 39088 is the Golem Tower registrar; the hat 1652259 is a WizItemTemplate under its display key; every item set bonus is read, r806919's 42, and the Fire set 1502574 needs 2, 3, 5 and 7 items for its tiers, the first granting CanonicalFireAccuracy; and building the script twice writes the same rows.
  */
 
 #include "Environment.h"
+#include "InstalledClasses.h"
 #include "InstalledRevision.h"
 #include "LogConfig.h"
 #include "TemplateExtractor.h"
@@ -15,6 +16,8 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace
 {
@@ -27,8 +30,11 @@ namespace
             std::optional<std::string> const dump = Ambrose::GetEnv("AMBROSE_TYPE_DUMP_PATH");
             if (!client || client->empty() || !dump || dump->empty())
                 return;
+            TypeDumpLoader::RawDump classes;
+            std::string source;
             std::string error;
-            std::optional<TemplateExtraction> extraction = TemplateExtractor::ExtractFromInstall(LogConfig::Utf8Path(*client), LogConfig::Utf8Path(*dump), error);
+            ASSERT_TRUE(InstalledClasses::Read(classes, source, error)) << error;
+            std::optional<TemplateExtraction> extraction = TemplateExtractor::ExtractFromInstall(LogConfig::Utf8Path(*client), LogConfig::Utf8Path(*dump), error, std::move(classes));
             ASSERT_TRUE(extraction) << error;
             s_extraction = std::make_unique<TemplateExtraction>(std::move(*extraction));
         }
@@ -72,7 +78,7 @@ TEST_F(TemplateExtractorClientTest, TheRavenwoodStudentTheRegistrarAndTheHatAreR
     EXPECT_EQ(student->DisplayKey, "WC-NPCs_00000125");
     EXPECT_EQ(student->Icon, "GUI/NpcPortraits/Art_Portrait_Boy_Fire.dds");
     EXPECT_TRUE(HasBehavior(*student, "NPCBehavior"));
-    EXPECT_TRUE(HasBehavior(*student, "WizardQuestingBehavior")) << "named from its bytes, though no class describes WizardQuestingBehaviorTemplate";
+    EXPECT_TRUE(HasBehavior(*student, "WizardQuestingBehavior")) << "named from its bytes whether or not a class describes WizardQuestingBehaviorTemplate";
     EXPECT_TRUE(HasBehavior(*student, "BasicNPCServiceBehavior"));
 
     ExtractedTemplate const* const registrar = s_extraction->Find(39088);
@@ -83,6 +89,23 @@ TEST_F(TemplateExtractorClientTest, TheRavenwoodStudentTheRegistrarAndTheHatAreR
     ASSERT_NE(hat, nullptr);
     EXPECT_EQ(hat->ClassName, "class WizItemTemplate");
     EXPECT_EQ(hat->DisplayKey, "Items_00028316");
+}
+
+TEST_F(TemplateExtractorClientTest, EveryItemSetBonusIsARowWithItsTiers)
+{
+    InstalledRevision::Expect(s_extraction->GetSetBonusCount(), { { "r806919", 42u } }, "item set bonuses");
+    if (!InstalledRevision::Is("r806919"))
+        GTEST_SKIP() << "the Fire set's tiers are recorded for r806919 only";
+    ExtractedTemplate const* const fire = s_extraction->Find(1502574);
+    ASSERT_NE(fire, nullptr);
+    ASSERT_TRUE(fire->SetBonus.has_value());
+    EXPECT_EQ(fire->SetBonus->ObjectName, "IS-L130-Fire-001");
+    std::vector<int32> needed;
+    for (ItemSetBonusTier const& tier : fire->SetBonus->Tiers)
+        needed.push_back(tier.NumItemsToEquip);
+    EXPECT_EQ(needed, (std::vector<int32>{ 2, 3, 5, 7 }));
+    ASSERT_FALSE(fire->SetBonus->Tiers.front().Effects.empty());
+    EXPECT_EQ(fire->SetBonus->Tiers.front().Effects.front().EffectName, "CanonicalFireAccuracy");
 }
 
 TEST_F(TemplateExtractorClientTest, BuildingTheScriptTwiceWritesTheSameRows)

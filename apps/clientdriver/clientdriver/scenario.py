@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, the install the driver found taken literally inside a pattern, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, a seeded wizard's stat it does not carry or a negative one, more wizards without a first one, a patching mode other than off or default, a launch other than the launcher's console or its window, a launcher window opened beside the patching default or a companion, a step that reads or presses the launcher window in a scenario that does not open it or a restart in one that does, a companion without a wizard of its own, a step that drives or watches a client the run does not start, a statement meant for any database but the run's own, a watch that films too often or too long, a held key list that is empty or holds more than four keys, a listener without a name, an address, a port or the number of connections it should see, or a wait on a listener the scenario does not name, before anything is started.
+# Scenarios are data: this loads one JSON file with the scenarios it includes, merges their settings and allow-lists, fills its variables, the install the driver found taken literally inside a pattern, and refuses a step whose action, keys, screen or target the driver does not know, a pattern that does not compile, a settle, hold or restart wait outside its bounds, a value kept under a name the run already uses, a seeded wizard's stat it does not carry or a negative one, more wizards without a first one, a patching mode other than off or default, a launch other than the launcher's console or its window, a launcher window opened beside the patching default or a companion, a step that reads or presses the launcher window in a scenario that does not open it or a restart in one that does, a companion without a wizard of its own, a step that drives or watches a client the run does not start, a statement meant for any database but the run's own, a watch that films too often or too long, a held key list that is empty or holds more than four keys, a listener without a name, an address, a port or the number of connections it should see, or a wait on a listener the scenario does not name, before anything is started; it accepts the three purchased-emote masks for radial-page scenarios.
 import json
 import os
 import re
@@ -51,7 +51,8 @@ LISTENER_OPTIONAL = ("at_least",)
 PATCH_CONFIG_KEYS = ("host", "port")
 REQUIRES = ("client", "capture", "gameserver")
 WIZARD = ("school", "zone", "first", "middle", "last")
-WIZARD_STATS = ("overflow_xp", "secondary_school", "training_points", "gold", "health", "mana", "potion_charge", "potion_max", "arena_points", "level_locked")
+WIZARD_STATS = ("overflow_xp", "secondary_school", "training_points", "gold", "health", "mana", "potion_charge", "potion_max", "arena_points", "level_locked",
+                "purchased_custom_emotes_1", "purchased_custom_emotes_2", "purchased_custom_emotes_3")
 SIDES = ("server", "client")
 OUTCOMES = ("pass", "failure")
 MAX_HOLD_SECONDS = 30
