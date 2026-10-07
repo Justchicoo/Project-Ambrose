@@ -71,6 +71,25 @@ namespace
             { "bool", "m_bUndetectable" }, { "class SharedPointer<class RequirementList>", "m_spawnRequirements" }, { "enum CoreObjectInfo::LoadingType", "m_loadingType" } };
     }
 
+    void AddSpawnClasses(Json& classes)
+    {
+        std::string const node = "enum SpawnObjectInfo::StartNodeType";
+        classes[std::to_string(StringHash::KiStringHash(node))] = Json{ { "name", node }, { "bases", Json::array() }, { "hash", StringHash::KiStringHash(node) },
+            { "properties", Json::object() } };
+        std::vector<std::string> const plain{ "class PropertyClass" };
+        AddClass(classes, "class ReqGlobalRegistryValue", { "class Requirement", "class PropertyClass" }, { { "std::string", "m_entryName" }, { "float", "m_numericValue" } });
+        std::vector<std::pair<std::string, std::string>> spawnInfo = ObjectInfoFields();
+        spawnInfo.insert(spawnInfo.end(), { { "enum SpawnObjectInfo::StartNodeType", "m_kStartNodeType" }, { "unsigned int", "m_startNode" }, { "gid", "m_pathID" },
+            { "char", "m_uniqueLoc" } });
+        AddClass(classes, "class SpawnObjectInfo", { "class CoreObjectInfo", "class PropertyClass" }, spawnInfo);
+        AddClass(classes, "class SpawnItem", plain, { { "unsigned char", "m_percentChance" }, { "class SpawnObjectInfo*", "m_objectInfo" } });
+        AddClass(classes, "class SpawnObject", plain, { { "std::string", "m_name" }, { "gid", "m_id" }, { "bool", "m_active" }, { "bool", "m_popSensitive" },
+            { "unsigned int", "m_maxNumberOfSpawns" }, { "bool", "m_atLeastOneSpawn" }, { "bool", "m_activateAtMax" }, { "int", "m_spawnTime" }, { "unsigned int", "m_respawnRate" },
+            { "class SpawnItem*", "m_spawnList" }, { "class RequirementList*", "m_globalDynamicReqs" }, { "bool", "m_globalDynamic" }, { "bool", "m_waitForTimer" },
+            { "unsigned int", "m_zoneLevelMin" }, { "unsigned int", "m_zoneLevelMax" }, { "unsigned int", "m_zoneLevelUp" } }, { "m_spawnList" });
+        AddClass(classes, "class SpawnManager", plain, { { "class SharedPointer<class SpawnObject>", "m_spawners" } }, { "m_spawners" });
+    }
+
     std::string ZoneDump(bool withMissingClasses)
     {
         Json classes = Json::object();
@@ -97,6 +116,7 @@ namespace
         AddClass(classes, "class WizZoneData", plain, { { "std::string", "m_zoneName" }, { "std::string", "m_zoneDisplayName" }, { "class LocationTemplate", "m_locationList" },
             { "class SharedPointer<class CoreObjectInfo>", "m_objectList" }, { "int", "m_healingPerMinute" }, { "int", "m_nSoftLimit" }, { "int", "m_nHardLimit" },
             { "float", "m_farClip" }, { "bool", "m_noMounts" } }, { "m_locationList", "m_objectList" });
+        AddSpawnClasses(classes);
         return Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump();
     }
 
@@ -129,30 +149,6 @@ namespace
             if (name.starts_with('#'))
                 property["hash"] = std::stoul(name.substr(1));
         AddClass(classes, "class TriggerList", plain, { { "class SharedPointer<class Trigger>", "m_allTriggers" } }, { "m_allTriggers" });
-        return Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump();
-    }
-
-    std::string SpawnDump()
-    {
-        Json classes = Json::object();
-        for (char const* name : { "class PropertyClass", "class Vector3D", "enum CoreObjectInfo::LoadingType", "enum SpawnObjectInfo::StartNodeType" })
-            classes[std::to_string(StringHash::KiStringHash(name))] = Json{ { "name", name }, { "bases", Json::array() }, { "hash", StringHash::KiStringHash(name) },
-                { "properties", Json::object() } };
-        std::vector<std::string> const plain{ "class PropertyClass" };
-        AddClass(classes, "class Requirement", plain, {});
-        AddClass(classes, "class ReqGlobalRegistryValue", { "class Requirement", "class PropertyClass" }, { { "std::string", "m_entryName" }, { "float", "m_numericValue" } });
-        AddClass(classes, "class RequirementList", plain, { { "class Requirement*", "m_requirements" } }, { "m_requirements" });
-        AddClass(classes, "class CoreObjectInfo", plain, ObjectInfoFields());
-        std::vector<std::pair<std::string, std::string>> spawnInfo = ObjectInfoFields();
-        spawnInfo.insert(spawnInfo.end(), { { "enum SpawnObjectInfo::StartNodeType", "m_kStartNodeType" }, { "unsigned int", "m_startNode" }, { "gid", "m_pathID" },
-            { "char", "m_uniqueLoc" } });
-        AddClass(classes, "class SpawnObjectInfo", { "class CoreObjectInfo", "class PropertyClass" }, spawnInfo);
-        AddClass(classes, "class SpawnItem", plain, { { "unsigned char", "m_percentChance" }, { "class SpawnObjectInfo*", "m_objectInfo" } });
-        AddClass(classes, "class SpawnObject", plain, { { "std::string", "m_name" }, { "gid", "m_id" }, { "bool", "m_active" }, { "bool", "m_popSensitive" },
-            { "unsigned int", "m_maxNumberOfSpawns" }, { "bool", "m_atLeastOneSpawn" }, { "bool", "m_activateAtMax" }, { "int", "m_spawnTime" }, { "unsigned int", "m_respawnRate" },
-            { "class SpawnItem*", "m_spawnList" }, { "class RequirementList*", "m_globalDynamicReqs" }, { "bool", "m_globalDynamic" }, { "bool", "m_waitForTimer" },
-            { "unsigned int", "m_zoneLevelMin" }, { "unsigned int", "m_zoneLevelMax" }, { "unsigned int", "m_zoneLevelUp" } }, { "m_spawnList" });
-        AddClass(classes, "class SpawnManager", plain, { { "class SharedPointer<class SpawnObject>", "m_spawners" } }, { "m_spawners" });
         return Json{ { "version", 2 }, { "classes", std::move(classes) } }.dump();
     }
 
@@ -586,11 +582,11 @@ TEST(ZoneTriggerTest, VolumesAndTriggersBecomeRowsAndAResultOfAnUnknownClassKeep
 TEST(ZoneSpawnTest, ASpawnDataFileBecomesSpawnersWithTheItemsTheyPlaceAndTheirRequirements)
 {
     TypeRegistry writer;
-    ASSERT_TRUE(writer.LoadFromText(SpawnDump(), "writer.json")) << writer.GetErrors().front();
+    ASSERT_TRUE(writer.LoadFromText(ZoneDump(false), "writer.json")) << writer.GetErrors().front();
     TypedViewRegistry views;
     ZoneViews::RegisterAll(views);
     TypeRegistry reader(&views);
-    ASSERT_TRUE(reader.LoadFromText(SpawnDump(), "reader.json")) << reader.GetErrors().front();
+    ASSERT_TRUE(reader.LoadFromText(ZoneDump(false), "reader.json")) << reader.GetErrors().front();
     auto const create = [&writer](std::string_view type)
     {
         PropertyObjectPtr object = PropertyObject::Create(writer.GetCatalog(), type);
