@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# What the Discord bot shows and remembers, with no Discord library in it: it keeps the bot's own clone of main current, builds the progress, openings, milestone and pull request embeds from the same code the progress tools use, reads merged pull requests from GitHub, lists the webhook messages the bot retires, and keeps the bot's state file.
+# What the Discord bot shows and remembers, with no Discord library in it: it keeps the bot's clone of main for reading current, apart from the clone its code runs from, builds the progress, openings, milestone and pull request embeds from the same code the progress tools use, reads merged pull requests from GitHub, lists the webhook messages the bot retires, and keeps the bot's state file.
 
 import json
 import os
@@ -24,7 +24,7 @@ GOLD = 0xE4B457
 GREEN = 0x3FA45B
 KINDS = ("progress", "openings", "merges")
 BOARDS = ("progress", "openings")
-BOT_PATHS = ("apps/discordbot/", "apps/progress/")
+WEBHOOK_WORKFLOWS = (".github/workflows/progress.yml", ".github/workflows/openings.yml")
 RETIRED = (("doc/progress/discord-message.json", "progress-state", "discord-message.json"),
            ("doc/progress/discord-openings.json", "openings-state", "discord-openings.json"))
 NEWLINE = chr(10)
@@ -34,7 +34,9 @@ QUIET = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {
 class Home:
     def __init__(self, path):
         self.path = os.path.abspath(path)
-        self.clone = os.path.join(self.path, "repo")
+        self.code = os.path.join(self.path, "repo")
+        self.data = os.path.join(self.path, "main")
+        self.restart = os.path.join(self.path, "restart.request")
         self.state = os.path.join(self.path, "state.json")
         self.token = os.path.join(self.path, "token.txt")
         self.github_token = os.path.join(self.path, "github-token.txt")
@@ -63,30 +65,22 @@ def stamp(root):
         return "counted from the roadmap itself"
 
 
-def clone(home):
-    if os.path.isdir(os.path.join(home.clone, ".git")):
+def clone(path):
+    if os.path.isdir(os.path.join(path, ".git")):
         return False
-    os.makedirs(home.path, exist_ok=True)
-    subprocess.run(["git", "clone", "--depth", "1", "--branch", "main", CLONE_URL, home.clone], capture_output=True, text=True, check=True, **QUIET)
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    subprocess.run(["git", "clone", "--depth", "1", "--branch", "main", CLONE_URL, path], capture_output=True, text=True, check=True, **QUIET)
     return True
 
 
-def touched(root, before, after):
-    if not before or before == after:
-        return False
-    try:
-        changed = git(root, "diff", "--name-only", before, after).splitlines()
-    except (OSError, subprocess.CalledProcessError):
-        return True
-    return any(path.startswith(BOT_PATHS) for path in changed)
+def sync(path):
+    git(path, "fetch", "--quiet", "--depth", "1", "origin", "main")
+    git(path, "reset", "--quiet", "--hard", "FETCH_HEAD")
+    return head(path)
 
 
-def sync(home):
-    before = head(home.clone)
-    git(home.clone, "fetch", "--quiet", "--depth", "1", "origin", "main")
-    git(home.clone, "reset", "--quiet", "--hard", "FETCH_HEAD")
-    after = head(home.clone)
-    return after, touched(home.clone, before, after)
+def webhooks_live(root):
+    return any(os.path.exists(os.path.join(root, path)) for path in WEBHOOK_WORKFLOWS)
 
 
 def load_state(path):

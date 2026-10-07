@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# Self-tests for the Discord bot's logic, which need neither Discord nor its library: that the boards are built from the repository's own progress tools, that the progress board remembers the figures before the last change, that only new merges are posted and in order, that a milestone reports what it waits on, that state survives a restart, that only one copy runs from a folder, that a change to the bot's code is noticed, that the old webhook message ids are found, and that the invite asks only for the permissions the bot uses.
+# Self-tests for the Discord bot's logic, which need neither Discord nor its library: that the boards are built from the repository's own progress tools, that the progress board remembers the figures before the last change, that only new merges are posted and in order, that a milestone reports what it waits on, that state survives a restart, that only one copy runs from a folder, that refreshing the clone it reads leaves the code it runs alone, that the old webhook messages are left alone while their workflows exist and their ids are found, and that the invite asks only for the permissions the bot uses.
 import contextlib
 import io
 import json
@@ -128,16 +128,26 @@ class Clone(unittest.TestCase):
         boards.git(root, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", path)
         return boards.head(root)
 
-    def test_a_change_to_the_bots_code_is_noticed(self):
+    def test_sync_brings_a_clone_to_main_without_touching_another(self):
+        with tempfile.TemporaryDirectory() as folder:
+            origin = os.path.join(folder, "origin")
+            subprocess.run(["git", "init", "-q", "-b", "main", origin], check=True)
+            self.commit(origin, "doc/a.md", "a")
+            data = os.path.join(folder, "main")
+            code = os.path.join(folder, "repo")
+            for path in (data, code):
+                subprocess.run(["git", "clone", "-q", "file://" + origin, path], check=True)
+            pinned = boards.head(code)
+            newest = self.commit(origin, "apps/discordbot/bot.py", "b")
+            self.assertEqual(boards.sync(data), newest)
+            self.assertEqual(boards.head(code), pinned)
+
+    def test_old_messages_wait_while_the_webhook_workflows_exist(self):
         with tempfile.TemporaryDirectory() as root:
-            subprocess.run(["git", "init", "-q", root], check=True)
-            first = self.commit(root, "doc/a.md", "a")
-            second = self.commit(root, "doc/a.md", "b")
-            third = self.commit(root, "apps/discordbot/bot.py", "c")
-            self.assertFalse(boards.touched(root, first, second))
-            self.assertTrue(boards.touched(root, second, third))
-            self.assertFalse(boards.touched(root, None, third))
-            self.assertFalse(boards.touched(root, third, third))
+            self.assertFalse(boards.webhooks_live(root))
+            os.makedirs(os.path.join(root, ".github", "workflows"))
+            open(os.path.join(root, ".github", "workflows", "progress.yml"), "w").close()
+            self.assertTrue(boards.webhooks_live(root))
 
     def test_old_webhook_messages_are_found_on_main(self):
         with tempfile.TemporaryDirectory() as root:

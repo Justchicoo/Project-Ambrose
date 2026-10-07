@@ -1,5 +1,5 @@
 # Project Ambrose by Imjustchico
-# The project's own Discord bot, run on one machine that keeps it online: setup clones main into the bot's folder, asks for the token without echoing it, installs the bot's packages and starts it at sign-in on Windows; run keeps the bot going and restarts it after a crash or when main changes its code; serve connects to Discord, answers the slash commands, keeps the progress and openings boards edited in place and posts merged pull requests, catching up on whatever changed while it was off.
+# The project's own Discord bot, run on one machine that keeps it online: setup clones main twice into the bot's folder, once for its code and once to read, asks for the token without echoing it, installs the bot's packages and starts it at sign-in on Windows; update brings its code to main only when someone runs it; run keeps one copy going and restarts it after a crash or an update; serve connects to Discord, answers the slash commands, keeps the progress and openings boards edited in place and posts merged pull requests, catching up on whatever changed while it was off.
 
 import argparse
 import asyncio
@@ -59,8 +59,9 @@ def venv_python(home, windowed=False):
 def setup(arguments):
     home = boards.Home(arguments.home)
     os.makedirs(home.path, exist_ok=True)
-    print("cloned main into " + home.clone if boards.clone(home) else "the bot's clone of main is already there, bringing it up to date")
-    boards.sync(home)
+    for path in (home.code, home.data):
+        print("cloned main into " + path if boards.clone(path) else path + " is already there, bringing it up to date")
+        boards.sync(path)
 
     token = None if arguments.new_token else boards.read_token(home.token, TOKEN_VARIABLE)
     while not token:
@@ -79,11 +80,11 @@ def setup(arguments):
 
     if not os.path.exists(venv_python(home)):
         subprocess.run([sys.executable, "-m", "venv", home.venv], check=True)
-    requirements = os.path.join(home.clone, "apps", "discordbot", "requirements.txt")
+    requirements = os.path.join(home.code, "apps", "discordbot", "requirements.txt")
     subprocess.run([venv_python(home), "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "-r", requirements], check=True)
     print("installed the bot's packages into " + home.venv)
 
-    script = os.path.join(home.clone, "apps", "discordbot", "bot.py")
+    script = os.path.join(home.code, "apps", "discordbot", "bot.py")
     if os.name == "nt" and not arguments.no_autostart:
         import winreg
         launch = [venv_python(home, windowed=True), script, "run", "--home", home.path]
@@ -95,6 +96,18 @@ def setup(arguments):
         print(f'start it with: "{venv_python(home)}" "{script}" run --home "{home.path}"')
     print("invite it to the server with this link, then use /board here in each channel it should keep a board in:")
     print(boards.invite_url(application["id"]))
+    return 0
+
+
+def update(arguments):
+    home = boards.Home(arguments.home)
+    before = boards.head(home.code)
+    after = boards.sync(home.code)
+    requirements = os.path.join(home.code, "apps", "discordbot", "requirements.txt")
+    subprocess.run([venv_python(home), "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "-r", requirements], check=True)
+    with open(home.restart, "w", encoding="utf-8") as handle:
+        handle.write(after + chr(10))
+    print(f"the bot's code moved from {(before or 'nothing')[:7]} to {after[:7]}, and the running bot restarts on it within a few seconds")
     return 0
 
 
@@ -122,7 +135,7 @@ def run(arguments):
         return 0
     wait = 5
     while True:
-        script = os.path.join(home.clone, "apps", "discordbot", "bot.py")
+        script = os.path.join(home.code, "apps", "discordbot", "bot.py")
         if not os.path.exists(script):
             script = os.path.abspath(__file__)
         started = time.monotonic()
@@ -131,7 +144,7 @@ def run(arguments):
             log.info("the bot stopped on request")
             return 0
         if code == UPDATED:
-            log.info("main changed the bot's code, starting the new version")
+            log.info("starting the updated bot")
             wait = 5
             continue
         if time.monotonic() - started > 600:
@@ -164,7 +177,7 @@ def serve(arguments):
             self.ids_cache = (None, [])
 
         def root(self):
-            return home.clone if os.path.isdir(home.clone) else ROOT
+            return home.data if os.path.isdir(os.path.join(home.data, ".git")) else ROOT
 
         def save(self):
             boards.save_state(home.state, self.state)
@@ -172,6 +185,7 @@ def serve(arguments):
         async def setup_hook(self):
             commands(self)
             self.loop.create_task(self.ticker())
+            self.loop.create_task(self.restarter())
 
         async def on_ready(self):
             log.info("connected as %s to %d server(s)", self.user, len(self.guilds))
@@ -188,6 +202,16 @@ def serve(arguments):
             except discord.HTTPException as failure:
                 log.warning("could not register commands in %s: %s", joined.name, failure)
 
+        async def restarter(self):
+            while not self.is_closed():
+                if os.path.exists(home.restart):
+                    os.remove(home.restart)
+                    log.info("an update asked for a restart")
+                    self.exit_code = UPDATED
+                    await self.close()
+                    return
+                await asyncio.sleep(10)
+
         async def ticker(self):
             await self.wait_until_ready()
             while not self.is_closed():
@@ -199,12 +223,8 @@ def serve(arguments):
 
         async def tick(self, force=False):
             async with self.lock:
-                if os.path.isdir(os.path.join(home.clone, ".git")):
-                    commit, code_changed = await asyncio.to_thread(boards.sync, home)
-                    if code_changed:
-                        self.exit_code = UPDATED
-                        await self.close()
-                        return
+                if self.root() == home.data:
+                    commit = await asyncio.to_thread(boards.sync, home.data)
                 else:
                     commit = boards.head(ROOT)
                 if force or commit != self.state.get("commit"):
@@ -254,7 +274,7 @@ def serve(arguments):
                         return
                     except discord.NotFound:
                         log.info("the %s board message is gone, posting it again", kind)
-                if not entry["retired"].get(kind):
+                if not entry["retired"].get(kind) and not boards.webhooks_live(self.root()):
                     await self.retire(entry, kind, channel)
                 message = await channel.send(embed=embed)
                 entry["messages"][kind] = str(message.id)
@@ -397,9 +417,9 @@ def serve(arguments):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Project Ambrose Discord bot")
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("setup", "run", "serve"):
+    for name in ("setup", "update", "run", "serve"):
         command = commands.add_parser(name)
-        command.add_argument("--home", required=True, help="the bot's own folder, holding its clone of main, its token, state and log")
+        command.add_argument("--home", required=True, help="the bot's own folder, holding its two clones of main, its token, state and log")
         if name == "setup":
             command.add_argument("--new-token", action="store_true", help="ask for the token again")
             command.add_argument("--no-autostart", action="store_true", help="do not start the bot at sign-in")
@@ -407,7 +427,7 @@ def main(argv=None):
     shown.add_argument("--root", default=ROOT)
     shown.add_argument("--milestone")
     arguments = parser.parse_args(argv)
-    return {"setup": setup, "run": run, "serve": serve, "preview": preview}[arguments.command](arguments)
+    return {"setup": setup, "update": update, "run": run, "serve": serve, "preview": preview}[arguments.command](arguments)
 
 
 if __name__ == "__main__":
