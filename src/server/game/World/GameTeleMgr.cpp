@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Reads game_tele into a list keyed by the lowercased name, refusing an empty or overlong name, an empty zone and a place or facing that is not a finite number, and swaps the list in only when every row is good; adds and removes a point through WorldEdits, so the database and the journal take it before the live list does.
+ * Reads game_tele into a list keyed by the lowercased name, refusing an empty or overlong name, an empty zone, a zone zone_template does not hold once the zones are loaded, and a place or facing that is not a finite number, and swaps the list in only when every row is good; adds and removes a point through WorldEdits, so the database and the journal take it before the live list does.
  */
 
 #include "GameTeleMgr.h"
@@ -10,6 +10,7 @@
 #include "StringUtil.h"
 #include "WorldEdits.h"
 #include "WorldSqlScript.h"
+#include "ZoneMgr.h"
 
 #include <fmt/format.h>
 
@@ -40,6 +41,7 @@ bool GameTeleMgr::Load(std::vector<std::string>& errors)
         errors.push_back("game_tele could not be read");
         return false;
     }
+    std::shared_ptr<ZoneTemplates const> const templates = sZoneMgr.GetTemplates();
     std::map<std::string, GameTele, std::less<>> loaded;
     std::size_t const before = errors.size();
     if (rows)
@@ -53,6 +55,8 @@ bool GameTeleMgr::Load(std::vector<std::string>& errors)
                 errors.push_back(fmt::format("game_tele row {} has no usable name", Ambrose::ForLog(tele.Name, 80)));
             else if (tele.Zone.empty())
                 errors.push_back(fmt::format("game_tele point {} names no zone", tele.Name));
+            else if (templates->Count() != 0 && !templates->Has(tele.Zone))
+                errors.push_back(fmt::format("game_tele point {} names zone {}, which zone_template does not hold", tele.Name, Ambrose::ForLog(tele.Zone, 128)));
             else if (!std::isfinite(tele.X) || !std::isfinite(tele.Y) || !std::isfinite(tele.Z) || !std::isfinite(tele.Yaw))
                 errors.push_back(fmt::format("game_tele point {} has a place or facing that is not a number", tele.Name));
             else if (!loaded.emplace(key, std::move(tele)).second)
