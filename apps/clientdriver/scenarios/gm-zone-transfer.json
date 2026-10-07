@@ -345,17 +345,17 @@
     },
     {
       "action": "wait_game_log",
-      "name": "the client acknowledges and is sent with a transfer key",
-      "pattern": "sent wizard {wizard_guid} from WizardCity/WC_Hub to WizardCity/WC_Ravenwood at (\\S+) with a single-use transfer key",
-      "timeout": 30,
-      "record": true
-    },
-    {
-      "action": "wait_game_log",
       "name": "the companion sees the game master leave",
       "pattern": "Session \\d+'s wizard {wizard_guid} was taken away from the (\\d+) wizard\\(s\\) still in instance",
       "timeout": 30,
       "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client acknowledges and is sent with a transfer key",
+      "pattern": "sent wizard {wizard_guid} from WizardCity/WC_Hub to WizardCity/WC_Ravenwood at (\\S+) with a single-use transfer key",
+      "timeout": 30,
       "record": true
     },
     {
