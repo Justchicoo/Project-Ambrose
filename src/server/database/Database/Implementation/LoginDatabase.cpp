@@ -32,7 +32,7 @@ void LoginDatabaseConnection::DoPrepareStatements()
     PrepareStatement(LOGIN_SEL_IP_BANNED, "LOGIN_SEL_IP_BANNED", "SELECT `bandate`, `unbandate`, `bannedby`, `reason` FROM `ip_banned` WHERE `ip` = ?" + banOrder, ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_MACHINE_BANNED, "LOGIN_SEL_MACHINE_BANNED", "SELECT `bandate`, `unbandate`, `bannedby`, `reason` FROM `machine_banned` WHERE `machine_id` = ?" + banOrder, ConnectionFlags::Both);
 
-    PrepareStatement(LOGIN_SEL_AUTHENTICATION, "LOGIN_SEL_AUTHENTICATION", "SELECT a.`id`, a.`username`, a.`verifier`, a.`verifier_key_id`, a.`locked`, "
+    PrepareStatement(LOGIN_SEL_AUTHENTICATION, "LOGIN_SEL_AUTHENTICATION", "SELECT a.`id`, a.`username`, a.`verifier`, a.`verifier_key_id`, a.`locked`, a.`security_level`, "
         "(SELECT IF(MIN(b.`unbandate`) = 0, 0, MAX(b.`unbandate`)) FROM `account_banned` b WHERE b.`account_id` = a.`id` AND b.`active` = 1 AND (b.`unbandate` = 0 OR b.`unbandate` > ?)), "
         "(SELECT IF(MIN(i.`unbandate`) = 0, 0, MAX(i.`unbandate`)) FROM `ip_banned` i WHERE i.`ip` = ? AND (i.`unbandate` = 0 OR i.`unbandate` > ?)), "
         "(SELECT IF(MIN(m.`unbandate`) = 0, 0, MAX(m.`unbandate`)) FROM `machine_banned` m WHERE m.`machine_id` = ? AND (m.`unbandate` = 0 OR m.`unbandate` > ?)) "
@@ -61,6 +61,7 @@ void LoginDatabaseConnection::DoPrepareStatements()
     PrepareStatement(LOGIN_INS_LOGIN_KEY, "LOGIN_INS_LOGIN_KEY", "INSERT INTO `login_key` (`key`, `account_id`, `character_guid`, `realm_id`, `machine_id`, `created`, `expires`, `used`) VALUES (?, ?, ?, ?, ?, ?, ?, 0)", ConnectionFlags::Both);
     PrepareStatement(LOGIN_UPD_CONSUME_LOGIN_KEY, "LOGIN_UPD_CONSUME_LOGIN_KEY", "UPDATE `login_key` SET `used` = 1 WHERE `key` = ? AND `used` = 0 AND `expires` > ? AND `account_id` = ? AND `character_guid` = ? AND `realm_id` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_SEL_LOGIN_KEY, "LOGIN_SEL_LOGIN_KEY", "SELECT `account_id`, `character_guid`, `realm_id`, `expires`, `used` FROM `login_key` WHERE `key` = ?", ConnectionFlags::Both);
+    PrepareStatement(LOGIN_SEL_ACCOUNT_SESSION_KEY, "LOGIN_SEL_ACCOUNT_SESSION_KEY", "SELECT `session_key`, `session_key_id` FROM `account_session` WHERE `account_id` = ?", ConnectionFlags::Async);
     PrepareStatement(LOGIN_INS_REALM_ONLINE_CHARACTER, "LOGIN_INS_REALM_ONLINE_CHARACTER", "REPLACE INTO `realm_online_character` (`realm_id`, `character_guid`, `account_id`, `since`) VALUES (?, ?, ?, ?)", ConnectionFlags::Both);
     PrepareStatement(LOGIN_UPD_ACCOUNT_ONLINE, "LOGIN_UPD_ACCOUNT_ONLINE", "UPDATE `account` SET `online` = ? WHERE `id` = ?", ConnectionFlags::Both);
     PrepareStatement(LOGIN_DEL_REALM_ONLINE_CHARACTER, "LOGIN_DEL_REALM_ONLINE_CHARACTER", "DELETE FROM `realm_online_character` WHERE `character_guid` = ?", ConnectionFlags::Both);
