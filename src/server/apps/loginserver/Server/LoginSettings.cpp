@@ -74,5 +74,13 @@ LoginSettings LoginSettings::Load(ConfigMgr const& config, std::vector<std::stri
         settings.DuplicateLogins = static_cast<DuplicateLoginPolicy>(policy);
     else
         report(fmt::format("Login.DuplicateLoginPolicy = {} is not 0 (reject) or 1 (kick the existing session); using 1", policy));
+
+    settings.Maintenance = config.GetOption<bool>("Login.Maintenance", false, true);
+    settings.MaintenanceReason = std::string(Ambrose::Trim(config.GetOption<std::string>("Login.MaintenanceReason", "", true)));
+    uint32 const bypass = config.GetOption<uint32>("Login.MaintenanceBypassLevel", 2, true);
+    if (bypass <= 4)
+        settings.MaintenanceBypassLevel = static_cast<uint8>(bypass);
+    else
+        report(fmt::format("Login.MaintenanceBypassLevel = {} is not 0-4; using 2 (game master)", bypass));
     return settings;
 }

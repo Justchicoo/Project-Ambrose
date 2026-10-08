@@ -58,6 +58,9 @@ struct LoginSettings
     std::chrono::seconds AfkTimeout{ DefaultAfkTimeoutSeconds };
     int8 AfkWarning = DefaultAfkWarning;
     std::chrono::seconds ShutdownGrace{ DefaultShutdownGraceSeconds };
+    bool Maintenance = false;
+    std::string MaintenanceReason;
+    uint8 MaintenanceBypassLevel = 2;
 
     bool AllowsRevision(std::string_view revision) const;
 
