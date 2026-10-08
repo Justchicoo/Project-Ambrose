@@ -6,7 +6,9 @@
 #include "Panel.h"
 #include "AdminClient.h"
 #include "AdminConfigView.h"
+#include "PanelCaptcha.h"
 #include "PanelErrorReport.h"
+#include "PanelMail.h"
 #include "ConfigMgr.h"
 #include "PanelSettingStore.h"
 #include "CryptoRandom.h"
@@ -27,6 +29,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <limits>
 #include <mutex>
 #include <utility>
@@ -801,6 +804,7 @@ void Panel::RegisterSignIn()
     routes.AddOpen("GET", "/api/panel/permissions", [](AdminRequest const&) { return AdminResponse::Json(200, PanelPermissions::CatalogJson()); });
     routes.AddGuarded("GET", "/api/panel/settings", "panel.settings", [this](AdminRequest const& request) { return PanelSettingsGet(request); });
     routes.AddGuarded("PATCH", "/api/panel/settings", "panel.settings", [this](AdminRequest const& request) { return PanelSettingsUpdate(request); });
+    routes.AddGuarded("POST", "/api/panel/settings/mail/test", "panel.settings", [this](AdminRequest const& request) { return MailTest(request); });
     routes.AddGuarded("GET", "/api/panel/errors", "errors.read", [this](AdminRequest const&)
     {
         std::string error;
@@ -1030,6 +1034,106 @@ AdminResponse Panel::PanelSettingsUpdate(AdminRequest const& request)
     if (event.Result == AuditResult::Refused)
         return AdminResponse::Problem(409, "settings_refused", event.Reason);
     return PanelSettingsGet(request);
+}
+
+namespace
+{
+    std::string CaptchaVerifyUrl(std::string_view provider)
+    {
+        if (char const* const override = std::getenv("AMBROSE_TEST_CAPTCHA_VERIFY_URL"); override != nullptr && *override != '\0')
+            return override;
+        return PanelCaptcha::VerifyUrlFor(provider);
+    }
+}
+
+AdminResponse Panel::MailTest(AdminRequest const& request)
+{
+    std::optional<PanelUser> const user = UserOf(request);
+    if (!user)
+        return AdminResponse::Problem(401, "not_signed_in", "Testing the mail settings needs a signed-in user");
+    if (user->Email.empty())
+        return AdminResponse::Problem(409, "mail_no_address", "The signed-in user has no email address, so there is nowhere to send the test mail");
+
+    PanelMailSettings mail;
+    mail.SmtpHost = _settings.ValueOf("Mail.SmtpHost");
+    mail.TlsMode = _settings.ValueOf("Mail.TlsMode");
+    mail.Username = _settings.ValueOf("Mail.Username");
+    mail.Password = _settings.ValueOf("Mail.Password");
+    mail.FromAddress = _settings.ValueOf("Mail.FromAddress");
+    mail.FromName = _settings.ValueOf("Mail.FromName");
+    try
+    {
+        mail.SmtpPort = static_cast<uint16>(std::stoi(_settings.ValueOf("Mail.SmtpPort")));
+    }
+    catch (std::exception const&)
+    {
+        mail.SmtpPort = 587;
+    }
+    if (mail.SmtpHost.empty() || mail.FromAddress.empty())
+        return AdminResponse::Problem(409, "mail_not_configured", "Set Mail.SmtpHost and Mail.FromAddress before testing the mail settings");
+
+    PanelMailResult const sent = PanelMail::SendTestMail(mail, user->Email);
+
+    AuditEvent event;
+    event.Name = "panel:settings.mail_tested";
+    event.Actor = AuditActor::User;
+    event.ActorId = std::to_string(user->Id);
+    event.ActorName = user->Username;
+    event.Address = request.RemoteAddress;
+    event.Result = sent.Sent ? AuditResult::Succeeded : AuditResult::Refused;
+    event.Reason = sent.Sent ? "the test mail reached " + user->Email : sent.Error;
+    event.On("panel_user", std::to_string(user->Id), user->Username);
+    std::string failure;
+    if (!Record(event, {}, failure))
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A tested mail setting could not be recorded: {}", failure);
+
+    if (!sent.Sent)
+        return AdminResponse::Problem(502, "mail_test_failed", sent.Error);
+    nlohmann::json answer;
+    answer["sent"] = true;
+    answer["to"] = user->Email;
+    return AdminResponse::Json(200, answer.dump());
+}
+
+std::optional<AdminResponse> Panel::CaptchaGate(AdminRequest const& request, nlohmann::json const& body, std::string_view username)
+{
+    std::string const provider = _settings.ValueOf("Security.CaptchaProvider");
+    if (provider.empty() || provider == "off")
+        return std::nullopt;
+    if (_signIn.RecentFailures(username) < PanelCaptcha::AfterFailures)
+        return std::nullopt;
+
+    std::string const token = body.contains("captcha") && body["captcha"].is_string() ? body["captcha"].get<std::string>() : std::string();
+    if (token.empty())
+        return AdminResponse::Problem(401, "captcha_required", "Too many failed sign-ins; answer the captcha to try again");
+
+    PanelCaptchaResult const checked = PanelCaptcha::Verify(
+        provider, _settings.ValueOf("Security.CaptchaSecret"), token, request.RemoteAddress, CaptchaVerifyUrl(provider));
+    if (checked.Result == PanelCaptchaResult::Outcome::Verified)
+        return std::nullopt;
+
+    _signIn.Failed(username, request.RemoteAddress);
+    AuditEvent refused;
+    refused.Name = "panel:session.refused";
+    refused.Actor = AuditActor::User;
+    refused.Address = request.RemoteAddress;
+    refused.UserAgent = request.UserAgent;
+    refused.Result = AuditResult::Refused;
+    refused.On("panel_user", "", std::string(username));
+    std::string failure;
+    if (checked.Result == PanelCaptchaResult::Outcome::Unreachable || checked.Result == PanelCaptchaResult::Outcome::Misconfigured)
+    {
+        refused.Reason = checked.Detail.empty()
+            ? "the captcha could not be checked, so the sign-in is refused"
+            : checked.Detail + ", so the sign-in is refused";
+        if (!Record(refused, {}, failure))
+            AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A captcha-refused sign-in could not be recorded: {}", failure);
+        return AdminResponse::Problem(503, "captcha_unreachable", refused.Reason);
+    }
+    refused.Reason = checked.Detail;
+    if (!Record(refused, {}, failure))
+        AMBROSE_LOG(_log, LogLevel::Error, PanelCategory, "A captcha-refused sign-in could not be recorded: {}", failure);
+    return AdminResponse::Problem(403, "captcha_invalid", checked.Detail);
 }
 
 std::string Panel::NameOf(AdminRequest const& request)
@@ -1306,6 +1410,9 @@ AdminResponse Panel::SignIn(AdminRequest const& request)
         answer.Headers.emplace_back("Retry-After", std::to_string(verdict.RetryAfterSeconds));
         return answer;
     }
+
+    if (std::optional<AdminResponse> gated = CaptchaGate(request, body, username))
+        return *gated;
 
     PanelUser user;
     std::string error;
