@@ -29,12 +29,12 @@ TEST(LoginAccountCommandsTest, RegistersAndUnregistersNetworkBanCommands)
     AccountCommands::Register(commands);
 
     std::vector<std::string> const all = commands.DescribeCommands();
-    for (std::string const& expected : { "ban ip", "ban machine", "unban ip", "unban machine" })
+    for (std::string_view const expected : { "ban ip", "ban machine", "unban ip", "unban machine" })
         EXPECT_NE(std::find_if(all.begin(), all.end(), [&expected](std::string const& line) { return line.starts_with(expected); }), all.end()) << expected;
 
     AccountCommands::Unregister(commands);
     std::vector<std::string> const remaining = commands.DescribeCommands();
-    for (std::string const& removed : { "ban ip", "ban machine", "unban ip", "unban machine" })
+    for (std::string_view const removed : { "ban ip", "ban machine", "unban ip", "unban machine" })
         EXPECT_EQ(std::find_if(remaining.begin(), remaining.end(), [&removed](std::string const& line) { return line.starts_with(removed); }), remaining.end()) << removed;
 }
 
