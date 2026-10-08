@@ -447,7 +447,7 @@ A wizard has a persistent backpack whose items show in the client, and items can
 - [x] Unit test: adding to a full backpack sends ITEMDROP and does not persist the item [InventoryHandlerTest.AddingToAFullBackpackSendsItemDropAndDoesNotPersistTheItem]
 - [x] Unit test: raising Inventory.ExtraSlots lets the next add to a full backpack succeed without a restart [InventoryHandlerTest.RaisingExtraSlotsLetsTheNextAddToAFullBackpackSucceedWithoutARestart]
 - [x] Unit test: trashing an item not owned is rejected and logged [InventoryHandlerTest.TrashingAnItemNotOwnedIsRejectedAndLogged]
-- [ ] Real client: '.additem <hat template>' makes a new hat icon appear in the backpack with the right name tooltip. Trashing it removes it and it stays gone after relogging. Locking an item shows the lock icon and hides the trash option. The add, tooltip, trash and relog parts pass in real client run 20261007-123432 with apps/clientdriver/scenarios/backpack-add-and-trash.json; the lock part waits on 8.09, because the item object carries no lock flag yet and the server has no toggle-lock handler
+- [x] Real client: '.additem <hat template>' makes a new hat icon appear in the backpack with the right name tooltip. Trashing it removes it and it stays gone after relogging. Locking an item shows the lock icon and hides the trash option. [real client run 20261007-123432 with apps/clientdriver/scenarios/backpack-add-and-trash.json for the add, tooltip, trash and relog parts, repeated in run 20261007-202405; the lock part in real client run 20261007-202035 with apps/clientdriver/scenarios/backpack-lock.json: Backpack Item Lock turned to YES in the client's own settings was stored, the lock button pressed on "Cute Fairy Kei Broadbrim" stored the lock, and the row showed a padlock with the trash can greyed out so pressing it asked nothing; after a quit and relog the hat was still locked with the padlock shown, the lock button unlocked it, and the trash can and YES emptied the backpack to 0/100]
 
 **Risks**
 
@@ -466,7 +466,7 @@ A wizard has a persistent backpack whose items show in the client, and items can
 
 - [x] Full backpack sends ITEMDROP and does not persist [InventoryHandlerTest.AddingToAFullBackpackSendsItemDropAndDoesNotPersistTheItem, shared with 8.08]
 - [x] Raising Inventory.ExtraSlots makes room on the next add without a restart [InventoryHandlerTest.RaisingExtraSlotsLetsTheNextAddToAFullBackpackSucceedWithoutARestart, shared with 8.08]
-- [ ] Locked item shows lock icon and hides trash
+- [x] Locked item shows lock icon and hides trash [real client run 20261007-202035 with apps/clientdriver/scenarios/backpack-lock.json: Backpack Item Lock turned to YES in the client's own settings was stored, the lock button pressed on "Cute Fairy Kei Broadbrim" stored the lock, and the row showed a padlock with the trash can greyed out so pressing it asked nothing; after a quit and relog the hat was still locked with the padlock shown, the lock button unlocked it, and the trash can and YES emptied the backpack to 0/100]
 
 ### Detailed spec from WIZ-11: Backpack inventory
 
@@ -497,7 +497,7 @@ A wizard has a persistent backpack whose items show in the client, and items can
 - [x] Unit test: adding to a full backpack sends ITEMDROP and does not persist the item [InventoryHandlerTest.AddingToAFullBackpackSendsItemDropAndDoesNotPersistTheItem, shared with 8.08]
 - [x] Unit test: raising Inventory.ExtraSlots lets the next add to a full backpack succeed without a restart [InventoryHandlerTest.RaisingExtraSlotsLetsTheNextAddToAFullBackpackSucceedWithoutARestart, shared with 8.08]
 - [x] Unit test: trashing an item not owned is rejected and logged [InventoryHandlerTest.TrashingAnItemNotOwnedIsRejectedAndLogged, shared with 8.08]
-- [ ] Real client: '.additem <hat template>' makes a new hat icon appear in the backpack with the right name tooltip. Trashing it removes it and it stays gone after relogging. Locking an item shows the lock icon and hides the trash option.
+- [x] Real client: '.additem <hat template>' makes a new hat icon appear in the backpack with the right name tooltip. Trashing it removes it and it stays gone after relogging. Locking an item shows the lock icon and hides the trash option. [real client run 20261007-202405 with apps/clientdriver/scenarios/backpack-add-and-trash.json for the add, tooltip, trash and relog; real client run 20261007-202035 with apps/clientdriver/scenarios/backpack-lock.json: Backpack Item Lock turned to YES in the client's own settings was stored, the lock button pressed on "Cute Fairy Kei Broadbrim" stored the lock, and the row showed a padlock with the trash can greyed out so pressing it asked nothing; after a quit and relog the hat was still locked with the padlock shown, the lock button unlocked it, and the trash can and YES emptied the backpack to 0/100]
 
 **Risks**
 
