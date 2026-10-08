@@ -44,6 +44,7 @@ public:
 
     PanelSignInVerdict Check(std::string_view username, std::string_view address);
     PanelSignInVerdict CheckAddress(std::string_view address);
+    uint32 RecentFailures(std::string_view username) const;
     void Failed(std::string_view username, std::string_view address);
     void FailedAtAddress(std::string_view address);
     void Succeeded(std::string_view username, std::string_view address);

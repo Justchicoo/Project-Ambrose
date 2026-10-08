@@ -150,6 +150,19 @@ void PanelSignInThrottle::DropOldest(Clock::time_point now)
         _counts.erase(oldest);
 }
 
+uint32 PanelSignInThrottle::RecentFailures(std::string_view username) const
+{
+    if (username.empty())
+        return 0;
+    std::lock_guard const lock(_mutex);
+    auto const found = _counts.find(UserKey(username));
+    if (found == _counts.end())
+        return 0;
+    if (_timeSource() - found->second.Started >= _window)
+        return 0;
+    return found->second.Failures;
+}
+
 void PanelSignInThrottle::Failed(std::string_view username, std::string_view address)
 {
     if (username.empty())

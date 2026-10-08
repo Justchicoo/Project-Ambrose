@@ -11,6 +11,7 @@
     "libmariadb",
     "nlohmann-json",
     "openssl",
+    "curl",
     "pugixml",
     "sqlite3",
     "unicorn",
