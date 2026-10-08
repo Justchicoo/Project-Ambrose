@@ -15,7 +15,7 @@
 
 namespace
 {
-    std::vector<std::string> Run(ConsoleCommandTable const& commands, std::string_view line, ConsoleCommandTable::Result& result)
+    std::vector<std::string> RunLine(ConsoleCommandTable const& commands, std::string_view line, ConsoleCommandTable::Result& result)
     {
         std::vector<std::string> replies;
         result = commands.Execute(line, [&replies](std::string_view text) { replies.emplace_back(text); });
@@ -44,15 +44,15 @@ TEST(LoginAccountCommandsTest, RejectsMissingArgumentsAndMalformedMachineIds)
     AccountCommands::Register(commands);
     ConsoleCommandTable::Result result;
 
-    std::vector<std::string> replies = Run(commands, "ban ip 192.0.2.1 1h", result);
+    std::vector<std::string> replies = RunLine(commands, "ban ip 192.0.2.1 1h", result);
     ASSERT_FALSE(replies.empty());
     EXPECT_EQ(replies.back(), "Usage: ban ip <address> <duration|perm> <reason>");
     EXPECT_EQ(result, ConsoleCommandTable::Result::Usage);
-    replies = Run(commands, "ban machine not-hex 1h reason", result);
+    replies = RunLine(commands, "ban machine not-hex 1h reason", result);
     ASSERT_FALSE(replies.empty());
     EXPECT_EQ(replies.back(), "Usage: ban machine <machine-hex> <duration|perm> <reason>");
     EXPECT_EQ(result, ConsoleCommandTable::Result::Usage);
-    replies = Run(commands, "unban machine not-hex", result);
+    replies = RunLine(commands, "unban machine not-hex", result);
     ASSERT_FALSE(replies.empty());
     EXPECT_EQ(replies.back(), "Usage: unban machine <machine-hex>");
     EXPECT_EQ(result, ConsoleCommandTable::Result::Usage);
@@ -65,7 +65,7 @@ TEST(LoginAccountCommandsTest, RejectsMalformedAddressesBeforeReachingTheDatabas
     AccountCommands::Register(commands);
     ConsoleCommandTable::Result result;
 
-    std::vector<std::string> const replies = Run(commands, "ban ip not-an-address 30m test-reason", result);
+    std::vector<std::string> const replies = RunLine(commands, "ban ip not-an-address 30m test-reason", result);
 
     ASSERT_EQ(result, ConsoleCommandTable::Result::Ran);
     ASSERT_EQ(replies.size(), 1u);
