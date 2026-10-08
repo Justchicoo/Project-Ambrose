@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the Login options: defaults, the server name trimmed, allowed empty and bounded, a revision list with spaces and empty entries, clamped limits, durations and AFK warning byte, a disabled AFK timeout and shutdown grace, an unknown duplicate login policy, and enforcement refused without any allowed revision.
+ * Tests the Login options: defaults, the server name trimmed, allowed empty and bounded, a revision list with spaces and empty entries, clamped limits, durations and AFK warning byte, a disabled AFK timeout and shutdown grace, an unknown duplicate login policy, enforcement refused without any allowed revision, and maintenance mode with its reason and bypass level.
  */
 
 #include "ConfigMgr.h"
@@ -94,4 +94,29 @@ TEST(LoginSettingsTest, TheServerNameIsTrimmedMayBeEmptyAndIsBoundedInLength)
     EXPECT_EQ(LoadFrom("Login.Name = " + std::string(65, 'n') + "\n", problems).Name, "Ambrose");
     ASSERT_EQ(problems.size(), 1u);
     EXPECT_EQ(problems.front(), "Login.Name must be at most 64 bytes; using Ambrose");
+}
+
+TEST(LoginSettingsTest, MaintenanceDefaultsOffWithGameMasterBypass)
+{
+    std::vector<std::string> problems;
+    LoginSettings const settings = LoadFrom("", problems);
+    EXPECT_TRUE(problems.empty());
+    EXPECT_FALSE(settings.Maintenance);
+    EXPECT_TRUE(settings.MaintenanceReason.empty());
+    EXPECT_EQ(settings.MaintenanceBypassLevel, 2u);
+}
+
+TEST(LoginSettingsTest, MaintenanceReadsReasonAndBypassLevel)
+{
+    std::vector<std::string> problems;
+    LoginSettings const settings = LoadFrom("Login.Maintenance = 1\nLogin.MaintenanceReason = \"  Database upgrade  \"\nLogin.MaintenanceBypassLevel = 3\n", problems);
+    EXPECT_TRUE(problems.empty());
+    EXPECT_TRUE(settings.Maintenance);
+    EXPECT_EQ(settings.MaintenanceReason, "Database upgrade");
+    EXPECT_EQ(settings.MaintenanceBypassLevel, 3u);
+
+    LoginSettings const bad = LoadFrom("Login.MaintenanceBypassLevel = 9\n", problems);
+    EXPECT_EQ(bad.MaintenanceBypassLevel, 2u);
+    ASSERT_EQ(problems.size(), 1u);
+    EXPECT_EQ(problems.front(), "Login.MaintenanceBypassLevel = 9 is not 0-4; using 2 (game master)");
 }
