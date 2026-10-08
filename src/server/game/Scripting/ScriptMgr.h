@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The hooks every content script hangs off: a script names itself and registers as it is constructed, the manager keeps each kind in its own list and calls them in registration order, and a hook that throws is reported with the script's name and does not stop the others; WorldScript and CommandScript are the first kinds, carrying the server's startup, shutdown, configuration reload and update tick, PlayerScript hears a wizard's live gold and health changes, and later milestones add the npc, quest and zone kinds beside them. It knows nothing of the scripts themselves: the caller hands it the loader CMake wrote, so the hooks do not depend on the content that uses them. ServerScript sees the network: when it starts, each socket as it opens and closes, and each DML message a session receives or sends, which any server script may hold back, so a module can stop a message without the core being edited.
+ * The hooks every content script hangs off: a script names itself and registers as it is constructed, the manager keeps each kind in its own list and calls them in registration order, and a hook that throws is reported with the script's name and does not stop the others; WorldScript and CommandScript are the first kinds, ZoneScript hears a wizard enter or leave a volume and a trigger fire in its own zone, or in every zone when it names none, carrying the server's startup, shutdown, configuration reload and update tick, PlayerScript hears a wizard's live gold and health changes, and later milestones add the npc, quest and zone kinds beside them. It knows nothing of the scripts themselves: the caller hands it the loader CMake wrote, so the hooks do not depend on the content that uses them. ServerScript sees the network: when it starts, each socket as it opens and closes, and each DML message a session receives or sends, which any server script may hold back, so a module can stop a message without the core being edited.
  */
 
 #ifndef AMBROSE_SCRIPTMGR_H
@@ -46,6 +46,22 @@ protected:
     explicit WorldScript(std::string name);
 };
 
+class ZoneScript : public ScriptObject
+{
+public:
+    std::string const& GetZone() const { return _zone; }
+
+    virtual void OnVolumeEnter(uint32 mapId, std::string_view volume, uint64 wizard) { (void)mapId; (void)volume; (void)wizard; }
+    virtual void OnVolumeExit(uint32 mapId, std::string_view volume, uint64 wizard) { (void)mapId; (void)volume; (void)wizard; }
+    virtual void OnTriggerFired(uint32 mapId, std::string_view trigger, uint64 wizard) { (void)mapId; (void)trigger; (void)wizard; }
+
+protected:
+    ZoneScript(std::string name, std::string zone);
+
+private:
+    std::string _zone;
+};
+
 class PlayerScript : public ScriptObject
 {
 public:
@@ -89,6 +105,7 @@ public:
     using ScriptLoader = void (*)();
 
     void Register(WorldScript* script);
+    void Register(ZoneScript* script);
     void Register(PlayerScript* script);
     void Register(CommandScript* script);
     void Register(ServerScript* script);
@@ -102,6 +119,9 @@ public:
     void OnShutdown();
     void OnConfigLoad(bool reload);
     void OnWorldUpdate(std::chrono::milliseconds diff);
+    void OnVolumeEnter(std::string_view zone, uint32 mapId, std::string_view volume, uint64 wizard);
+    void OnVolumeExit(std::string_view zone, uint32 mapId, std::string_view volume, uint64 wizard);
+    void OnTriggerFired(std::string_view zone, uint32 mapId, std::string_view trigger, uint64 wizard);
     void OnGoldChanged(Player& player, int32 oldValue, int32 newValue);
     void OnHealthChanged(Player& player, int32 oldValue, int32 newValue);
 
@@ -113,6 +133,8 @@ private:
 
     template<typename Hook>
     void ForEach(std::string_view what, Hook hook);
+    template<typename Hook>
+    void ForZone(std::string_view zone, std::string_view what, Hook hook);
     template<typename Hook>
     void ForEachPlayer(std::string_view what, Hook hook);
     template<typename Hook>
@@ -128,6 +150,7 @@ private:
 
     bool _loaded = false;
     std::vector<WorldScript*> _worldScripts;
+    std::vector<ZoneScript*> _zoneScripts;
     std::vector<PlayerScript*> _playerScripts;
     std::vector<CommandScript*> _commandScripts;
     std::vector<ServerScript*> _serverScripts;

@@ -1,0 +1,470 @@
+{
+  "title": "A game master's .additem puts a hat in the backpack with its name in the tooltip, the client's own trash takes it out, and it stays gone after a relog",
+  "include": "parts/common.json",
+  "notes": [
+    "A level 5 Fire wizard with an empty backpack enters Ravenwood as a game master. The backpack B opens shows 0 of the 100 items",
+    "Inventory.Slots gives, which the server writes into the m_numItemsAllowed of the wizard's ClientWizInventoryBehavior.",
+    "'.additem 1652259' typed in chat gives the wizard Crowns-S58-Hats-L110-BS-008-01, the Balance hat the client names Cute Fairy Kei",
+    "Broadbrim. The server stores it and sends GAME MSG_INVENTORYBEHAVIOR_ADDITEM, which the client's ClientInventoryBehavior handles,",
+    "with the item unwrapped in SerializedItem; the backpack shows its row and 1 of 100, and holding the pointer on the row shows the",
+    "tooltip with its name. Choosing the row, the trash can and YES in the client's own dialog sends MSG_TRASHINVENTORYITEM with the",
+    "item's global id, and the server deletes it and sends MSG_INVENTORYBEHAVIOR_REMOVEITEM.",
+    "The client is quit and started again, and the wizard must enter with an empty backpack and no item row left.",
+    "Locking is not part of this run: the item object carries no lock yet and no handler toggles one, so a lock cannot be shown."
+  ],
+  "requires": {
+    "gameserver": true
+  },
+  "game_settings": [
+    "Logger.server=2,Console Server Errors Stream",
+    "Realm.Name=Ambrose Driver",
+    "Logger.network.session=2,Console Server Errors Stream"
+  ],
+  "server_log_allowed": [
+    "character_create_school holds no school, so no wizard can be created until it does",
+    "realmlist holds no realm, so no player can be sent to a gameserver until one is added"
+  ],
+  "wizard": {
+    "school": 2343174,
+    "zone": "WizardCity/WC_Ravenwood",
+    "zone_display": "Ravenwood",
+    "locale": "en-US",
+    "first": 1,
+    "middle": 1,
+    "last": 1,
+    "appearance": {
+      "gender": 1,
+      "race": 79806088,
+      "hair_model": 6,
+      "hair_color": 60,
+      "hat_color": 7,
+      "hat_decal": 4,
+      "torso_color": 4,
+      "torso_decal": 4,
+      "feet_color": 4,
+      "feet_decal": 12
+    },
+    "level": 5,
+    "experience": 900
+  },
+  "steps": [
+    {
+      "action": "server_command",
+      "name": "make the main account a game master",
+      "command": "account set gmlevel {user} 2",
+      "pattern": "Security level of \\S+ set to 2",
+      "timeout": 20
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server decodes the authentication message field by field",
+      "pattern": "sent MSG_USER_AUTHEN_V3: version (W\\.\\d+\\.\\d+\\.\\d+), revision \\S+, data revision \\S+, locale \\S+, machine [0-9A-F]+,",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server lists the wizard the run made",
+      "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "shot",
+      "name": "the wizard on the character selection screen",
+      "file": "character-selection"
+    },
+    {
+      "action": "click",
+      "name": "press play",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server spends the key",
+      "pattern": "Session \\d+ attached: account \\d+ with wizard (\\d+)",
+      "timeout": 60,
+      "expect": "{wizard_guid}"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server sends the wizard its object",
+      "pattern": "put wizard \\d+ in (\\S+) instance \\d+ at .* and sent its \\d+-byte object",
+      "timeout": 60,
+      "fail": "cannot enter the world",
+      "expect": "WizardCity/WC_Ravenwood",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the client loading the zone",
+      "file": "loading-the-zone"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the client loads the zone and the wizard stands in it",
+      "pattern": "loaded (\\S+), and wizard \\d+ stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Ravenwood",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the wizard standing in Ravenwood",
+      "file": "standing-in-ravenwood"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server answers the timed access passes",
+      "pattern": "Session \\d+ asked for its timed access passes and was told it has none",
+      "timeout": 60,
+      "from": "start"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server answers the subscriber-only items",
+      "pattern": "Session \\d+ asked which items only subscribers may use and was told none",
+      "timeout": 60,
+      "from": "start"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server takes the end of shopping",
+      "pattern": "Session \\d+ is done shopping, transaction \\d+",
+      "timeout": 60,
+      "from": "start"
+    },
+    {
+      "action": "key",
+      "name": "open the empty backpack",
+      "vk": "0x42"
+    },
+    {
+      "action": "shot",
+      "name": "the empty backpack holds 0 of the 100 items Inventory.Slots gives",
+      "file": "backpack-empty",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "close the empty backpack",
+      "vk": "0x42"
+    },
+    {
+      "action": "key",
+      "name": "open the chat line to type .additem",
+      "vk": "0xBF"
+    },
+    {
+      "action": "char",
+      "name": "take out the slash the key writes before .additem",
+      "code": 8
+    },
+    {
+      "action": "type",
+      "name": "type .additem",
+      "text": ".additem 1652259"
+    },
+    {
+      "action": "char",
+      "name": "send .additem",
+      "code": 13
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the game server gives the wizard the hat",
+      "pattern": "gave wizard {wizard_guid} item (\\d+) of template 1652259, and its backpack holds 1 of 100 item\\(s\\)",
+      "timeout": 30,
+      "record": true,
+      "keep": "hat_guid"
+    },
+    {
+      "action": "wait_db",
+      "name": "the hat is stored under the wizard",
+      "query": "SELECT `template` FROM `item_instance` WHERE `guid` = {hat_guid} AND `owner` = {wizard_guid}",
+      "timeout": 15,
+      "expect": "1652259",
+      "record": true
+    },
+    {
+      "action": "key",
+      "name": "open the backpack with the hat",
+      "vk": "0x42"
+    },
+    {
+      "action": "shot",
+      "name": "the hat's icon and name in the backpack, 1 of 100",
+      "file": "backpack-with-hat",
+      "settle": 3
+    },
+    {
+      "action": "hover",
+      "name": "the hat's tooltip names it",
+      "target": "backpack_first_item",
+      "file": "hat-tooltip",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "choose the hat",
+      "target": "backpack_first_item"
+    },
+    {
+      "action": "click",
+      "name": "press the trash can",
+      "target": "backpack_trash"
+    },
+    {
+      "action": "shot",
+      "name": "the client asks whether to trash the hat",
+      "file": "trash-confirm",
+      "settle": 2
+    },
+    {
+      "action": "click",
+      "name": "answer YES",
+      "target": "trash_confirm_yes",
+      "attempts": 3,
+      "until": {
+        "action": "wait_game_log",
+        "pattern": "took item {hat_guid} of template 1652259 from wizard {wizard_guid}, and its backpack holds (\\d+) item\\(s\\)",
+        "timeout": 15,
+        "expect": "0",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_db",
+      "name": "the hat's row is gone",
+      "query": "SELECT COUNT(*) FROM `item_instance` WHERE `owner` = {wizard_guid}",
+      "timeout": 15,
+      "expect": "0",
+      "record": true
+    },
+    {
+      "action": "shot",
+      "name": "the backpack after the trash",
+      "file": "backpack-after-trash",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "close the backpack after the trash",
+      "vk": "0x42"
+    },
+    {
+      "action": "restart_client",
+      "name": "quit the client and start it again",
+      "timeout": 240
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client brings its renderer up, again",
+      "pattern": "About to initialize graphical client\\.",
+      "timeout": 180
+    },
+    {
+      "action": "wait_screen",
+      "name": "the login window is on the screen, again",
+      "screens": [
+        "login"
+      ],
+      "timeout": 120
+    },
+    {
+      "action": "submit_login",
+      "name": "log in, again",
+      "password": "{password}"
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server decodes the authentication message field by field, again",
+      "pattern": "sent MSG_USER_AUTHEN_V3: version (W\\.\\d+\\.\\d+\\.\\d+), revision \\S+, data revision \\S+, locale \\S+, machine [0-9A-F]+,",
+      "timeout": 30,
+      "record": true
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server accepts the password, again",
+      "pattern": "authenticated as {user} \\(id \\d+\\)",
+      "timeout": 30
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the client is admitted, again",
+      "pattern": "The LoginServer has admitted the user",
+      "timeout": 30
+    },
+    {
+      "action": "wait_server_log",
+      "name": "the server lists the wizard the run made, again",
+      "pattern": "listed (\\d+) character\\(s\\) of account \\d+",
+      "timeout": 30,
+      "expect": "1",
+      "record": true
+    },
+    {
+      "action": "wait_client_log",
+      "name": "the character selection scene loads, again",
+      "pattern": "WizardCharacterSelect: The scene has been loaded successfully\\.",
+      "timeout": 120
+    },
+    {
+      "action": "wait_screen",
+      "name": "the character selection screen is on the screen, again",
+      "screens": [
+        "charselect"
+      ],
+      "timeout": 90
+    },
+    {
+      "action": "click",
+      "name": "press play, again",
+      "target": "charselect_play",
+      "attempts": 5,
+      "on_screen": "charselect",
+      "until": {
+        "action": "wait_server_log",
+        "pattern": "sent account \\d+ with wizard (\\d+) to realm",
+        "timeout": 20,
+        "expect": "{wizard_guid}",
+        "record": true
+      }
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard enters again with an empty backpack",
+      "pattern": "put wizard \\d+ in (\\S+) instance \\d+ at .* and sent its \\d+-byte object",
+      "timeout": 120,
+      "fail": "cannot enter the world",
+      "expect": "WizardCity/WC_Ravenwood",
+      "record": true
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard stands in the world again",
+      "pattern": "loaded (\\S+), and wizard \\d+ stands in the world",
+      "timeout": 300,
+      "expect": "WizardCity/WC_Ravenwood"
+    },
+    {
+      "action": "key",
+      "name": "open the backpack after relogging",
+      "vk": "0x42"
+    },
+    {
+      "action": "shot",
+      "name": "the backpack after relogging holds nothing",
+      "file": "backpack-after-relog",
+      "settle": 3
+    },
+    {
+      "action": "key",
+      "name": "close the backpack after relogging",
+      "vk": "0x42"
+    },
+    {
+      "action": "wait_db",
+      "name": "the wizard still owns no item",
+      "query": "SELECT COUNT(*) FROM `item_instance` WHERE `owner` = {wizard_guid}",
+      "timeout": 5,
+      "expect": "0"
+    },
+    {
+      "action": "wait_game_log",
+      "name": "the wizard is still connected at the next keepalive",
+      "pattern": "Session \\d+ keepalive from the client",
+      "timeout": 90,
+      "fail": "Closing session \\d+"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the client loaded every object and item the server sent",
+      "side": "client",
+      "pattern": "LoadObject Failed|LoadObject tried to read more data|Failed to deserialize|Failed to find core template"
+    },
+    {
+      "action": "forbid_log",
+      "name": "the game server refused no trash",
+      "side": "server",
+      "pattern": "refused wizard \\d+'s request to trash"
+    }
+  ],
+  "pending_allowed": [
+    "MSG_AdvPvPEloData",
+    "MSG_BUDDYREQUESTLIST",
+    "MSG_CANSEETIEREDSPELLGROUPS",
+    "MSG_CHECK_MAIL",
+    "MSG_CLIENT_DISCONNECT",
+    "MSG_CONNECTIONSTATS",
+    "MSG_CrownShopLogging",
+    "MSG_GETLADDER",
+    "MSG_JEWELSOCKETUNLOCKCOST",
+    "MSG_LOGVIDEOCAPABILITIES",
+    "MSG_PERIODICSUBSCRIPTIONS",
+    "MSG_PLAYERWIZBANG",
+    "MSG_REQASKSERVER",
+    "MSG_REQUESTCROWNSREWARDSEVENTS",
+    "MSG_REQUESTMAINLINEAUDIT",
+    "MSG_REQUESTTSDONEPREPFORMP",
+    "MSG_REQUESTTSMARKEDASUNTRAINED",
+    "MSG_REQUESTTUTORIALTIPLOG",
+    "MSG_SplashEnabled",
+    "MSG_TOURNAMENTLOOTROLLINFO"
+  ]
+}
