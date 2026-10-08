@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "milestones": {
-    "done": 126,
+    "done": 131,
     "total": 469,
-    "percent": 26.9
+    "percent": 27.9
   },
   "checks": {
-    "done": 1029,
+    "done": 1072,
     "total": 2870,
-    "percent": 35.9
+    "percent": 37.4
   },
   "contributor_track": {
     "merged": 93,
@@ -58,17 +58,17 @@
     {
       "phase": 6,
       "title": "Other players are visible",
-      "milestones_done": 13,
+      "milestones_done": 16,
       "milestones_total": 18,
-      "checks_done": 105,
+      "checks_done": 128,
       "checks_total": 139
     },
     {
       "phase": 7,
       "title": "An npc offers a quest",
-      "milestones_done": 1,
+      "milestones_done": 2,
       "milestones_total": 13,
-      "checks_done": 9,
+      "checks_done": 17,
       "checks_total": 86
     },
     {
@@ -76,15 +76,15 @@
       "title": "The wizard grows vitals xp spells backpack and gear",
       "milestones_done": 2,
       "milestones_total": 14,
-      "checks_done": 38,
+      "checks_done": 49,
       "checks_total": 101
     },
     {
       "phase": 9,
       "title": "A duel completes",
-      "milestones_done": 2,
+      "milestones_done": 3,
       "milestones_total": 12,
-      "checks_done": 17,
+      "checks_done": 18,
       "checks_total": 83
     },
     {

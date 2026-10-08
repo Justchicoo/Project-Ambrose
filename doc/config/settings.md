@@ -14,8 +14,8 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Account.AllowPlainVerifiers` | bool | true | none | next connection or operation | loginserver | restricted | Whether an account whose verifier is still unencrypted may log in while a verifier key is active. |
 | `Account.PasswordMinLength` | unsigned | 4 characters | from 1 to 128 characters | next connection or operation | loginserver | normal | The fewest characters a new or changed password may have. |
 | `Account.UsernameMinLength` | unsigned | 3 characters | from 1 to 32 characters | next connection or operation | loginserver | normal | The shortest username a new account may use. |
-| `Account.VerifierActiveKey` | unsigned | 0 | from 0 to 255 | next connection or operation | loginserver | restricted | The key id that seals new and changed verifiers, which Account.VerifierKeys must list; 0 stores them unencrypted and is refused while keys are listed. |
-| `Account.VerifierKeys` | string | empty | at most 65535 bytes | next connection or operation | loginserver | secret, restricted | The AES-256 keys that seal stored password verifiers, written id:hex with ids 1 to 255 and 64 hex digits each, separated by commas; keep every key that still seals a stored verifier. |
+| `Account.VerifierActiveKey` | unsigned | 0 | from 0 to 255 | next connection or operation | gameserver, loginserver | restricted | The key id that seals new and changed verifiers, which Account.VerifierKeys must list; 0 stores them unencrypted and is refused while keys are listed. |
+| `Account.VerifierKeys` | string | empty | at most 65535 bytes | next connection or operation | gameserver, loginserver | secret, restricted | The AES-256 keys that seal stored password verifiers, written id:hex with ids 1 to 255 and 64 hex digits each, separated by commas; keep every key that still seals a stored verifier. |
 
 ## Characters
 
@@ -54,6 +54,13 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Files.MinFreeBytes` | unsigned | 1073741824 bytes | from 0 to 1125899906842624 bytes | live | supervisor | normal | The least free space a volume must keep after any write the panel makes; the larger of this and Files.MinFreePercent holds. |
 | `Files.MinFreePercent` | unsigned | 5 % | from 0 to 90 % | live | supervisor | normal | The least free space a volume must keep after any write the panel makes, as a share of the volume; the larger of this and Files.MinFreeBytes holds. |
 | `Files.ReadMaxBytes` | unsigned | 4194304 bytes | from 65536 to 67108864 bytes | live | supervisor | normal | The most of a file one read hands the panel; a file this size or smaller also carries its content hash, and a configuration file larger than this is not shown. |
+
+## Inventory
+
+| Key | Type | Default | Bounds | Applies | Apps | Access | What it does |
+|---|---|---|---|---|---|---|---|
+| `Inventory.ExtraSlots` | unsigned | 0 items | from 0 to 10000 items | live | gameserver | normal | How many items every wizard's backpack holds beyond Inventory.Slots, read at each add, so raising it lets the next add to a full backpack succeed; the client is told the new total when the wizard next enters the world. |
+| `Inventory.Slots` | unsigned | 100 items | from 0 to 10000 items | next connection or operation | gameserver | normal | How many items every wizard's backpack holds, read when the wizard enters the world and sent to its client as the m_numItemsAllowed of its inventory behavior, since neither the player template nor any other file of the install gives one. |
 
 ## Locale
 

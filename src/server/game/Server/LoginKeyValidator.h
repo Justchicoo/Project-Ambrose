@@ -25,6 +25,7 @@ enum class LoginKeyVerdict : uint8
     WrongAccount,
     WrongCharacter,
     WrongRealm,
+    WrongPassKey,
     Unavailable
 };
 

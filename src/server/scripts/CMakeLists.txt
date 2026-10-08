@@ -21,4 +21,5 @@ target_link_libraries(scripts
         spells
         combat
         items
+        quests
         globals)

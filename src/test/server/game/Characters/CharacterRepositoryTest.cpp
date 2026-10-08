@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used after its row is gone; and stats including custom-emote and teleport-effect ownership masks, missing until first save, replaced whole with full health and mana kept as full, older writes changing nothing, invalid amounts refused, and missing wizards not read as stats; positions written under the revision of their row, late writes changing nothing and non-finite positions refused; and spellbook rows, none until a spell is learned, read in the order learned, an unlearned spell kept as a row that says so, late writes changing nothing, spell 0 refused, and missing wizards not read as a spellbook.
+ * Tests the character repository: a closed characters database is an error, and with AMBROSE_TEST_DB set it installs the characters schema with the updates still pending and checks wizards round-tripping every field and appearance value bit for bit, random ones and ones at every width's smallest and largest value; soft deletion hiding an offline wizard from its account's list and count while it stays readable by guid and can be restored, and refusing an online one; a wizard without appearance counted as the list finds it; rows half deleted refused by the schema; duplicates and data that cannot be stored; the online flag; guids resuming above the highest guid ever used after its row is gone; and stats including custom-emote and teleport-effect ownership masks, missing until first save, replaced whole with full health and mana kept as full, older writes changing nothing, invalid amounts refused, and missing wizards not read as stats; positions written under the revision of their row, late writes changing nothing and non-finite positions refused; and spellbook rows, none until a spell is learned, read in the order learned, an unlearned spell kept as a row that says so, late writes changing nothing, spell 0 refused, and missing wizards not read as a spellbook; and backpack rows, read in the order they arrived with every field, an item trashed only by its owner, its backpack row going with it, and the highest item id kept after the item is gone.
  */
 
 #include "CharacterRepository.h"
@@ -137,7 +137,9 @@ namespace
             ASSERT_TRUE(info);
             info->Database = fmt::format("ambrose_characters_{:08x}", std::random_device()());
             _info = *info;
-            ASSERT_TRUE(DBUpdater::Run(_info, "characters", UpdaterSettings{}));
+            UpdaterSettings updates;
+            updates.AllowPending = true;
+            ASSERT_TRUE(DBUpdater::Run(_info, "characters", updates));
             ASSERT_TRUE(CharacterDatabase.SetConnectionInfo(_info.ToConnectionString(), 1, 1));
             ASSERT_EQ(CharacterDatabase.Open(), 0u);
             _open = true;
@@ -177,6 +179,11 @@ TEST(CharacterRepositoryTest, AClosedCharactersDatabaseIsReportedAsAnError)
     EXPECT_EQ(CharacterRepository::SaveStats(1, CharacterStats{}), CharacterOpResult::DatabaseError);
     EXPECT_EQ(CharacterRepository::LoadSpells(1).Result, CharacterOpResult::DatabaseError);
     EXPECT_EQ(CharacterRepository::SaveSpell(1, CharacterSpell{ 5, true, 1, 1 }), CharacterOpResult::DatabaseError);
+    EXPECT_EQ(CharacterRepository::LoadInventory(1).Result, CharacterOpResult::DatabaseError);
+    EXPECT_EQ(CharacterRepository::AddItem(1, CharacterItem{ 7, 9 }), CharacterOpResult::DatabaseError);
+    EXPECT_EQ(CharacterRepository::AddItem(1, CharacterItem{ 0, 9 }), CharacterOpResult::InvalidData);
+    EXPECT_EQ(CharacterRepository::TrashItem(1, 7), CharacterOpResult::DatabaseError);
+    EXPECT_FALSE(CharacterRepository::GetMaxItemGuid());
     EXPECT_EQ(CharacterRepository::GetResultName(CharacterOpResult::NotFound), "no such character");
 }
 
@@ -455,4 +462,35 @@ TEST_F(CharacterRepositoryDatabaseTest, AWizardsSpellbookRowsReadInTheOrderLearn
     EXPECT_EQ(CharacterRepository::SaveSpell(0, { FireCat, true, 6, 6 }), CharacterOpResult::InvalidData);
     EXPECT_EQ(CharacterRepository::SaveSpell(999, { FireCat, true, 6, 6 }), CharacterOpResult::DatabaseError) << "a spell row needs its wizard";
     EXPECT_EQ(CharacterRepository::LoadSpells(501).Spells.size(), 3u);
+}
+
+TEST_F(CharacterRepositoryDatabaseTest, BackpackItemsRoundTripAreTrashedOnlyByTheirOwnerAndKeepTheirIdsUsed)
+{
+    std::mt19937 random(20261007);
+    ASSERT_EQ(CharacterRepository::Create(MakeCharacter(random, 301, 31, 1800000301)), CharacterOpResult::Ok);
+    ASSERT_EQ(CharacterRepository::Create(MakeCharacter(random, 302, 32, 1800000302)), CharacterOpResult::Ok);
+    CharacterInventoryLoad const empty = CharacterRepository::LoadInventory(301);
+    ASSERT_EQ(empty.Result, CharacterOpResult::Ok);
+    EXPECT_TRUE(empty.Items.empty());
+    EXPECT_EQ(CharacterRepository::LoadInventory(999).Result, CharacterOpResult::NotFound);
+    EXPECT_EQ(CharacterRepository::GetMaxItemGuid(), 0u);
+
+    CharacterItem first{ 5000, 1652259, 3, 4, 5, 6, true, 0xFFFFFFFFu, 1800000400, 1 };
+    CharacterItem second{ 4000, 1652300, 1, 0, 0, 0, false, 0, 1800000401, 0 };
+    ASSERT_EQ(CharacterRepository::AddItem(301, first), CharacterOpResult::Ok);
+    ASSERT_EQ(CharacterRepository::AddItem(301, second), CharacterOpResult::Ok);
+    EXPECT_EQ(CharacterRepository::AddItem(301, first), CharacterOpResult::DatabaseError) << "an item id is never stored twice";
+    CharacterInventoryLoad const held = CharacterRepository::LoadInventory(301);
+    ASSERT_EQ(held.Result, CharacterOpResult::Ok);
+    ASSERT_EQ(held.Items.size(), 2u);
+    EXPECT_TRUE(held.Items[0] == second);
+    EXPECT_TRUE(held.Items[1] == first);
+    EXPECT_TRUE(CharacterRepository::LoadInventory(302).Items.empty());
+
+    EXPECT_EQ(CharacterRepository::TrashItem(302, 5000), CharacterOpResult::NotFound);
+    EXPECT_EQ(CharacterRepository::LoadInventory(301).Items.size(), 2u);
+    EXPECT_EQ(CharacterRepository::TrashItem(301, 5000), CharacterOpResult::Ok);
+    EXPECT_EQ(CharacterRepository::TrashItem(301, 5000), CharacterOpResult::NotFound);
+    ASSERT_EQ(CharacterRepository::LoadInventory(301).Items.size(), 1u);
+    EXPECT_EQ(CharacterRepository::GetMaxItemGuid(), 5000u) << "a trashed item's id is not handed out again";
 }

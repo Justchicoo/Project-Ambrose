@@ -190,7 +190,9 @@ class Engine:
         return line
 
     def act_forbid_log(self, step):
-        tail = self.server.log if step["side"] == "server" else self.client.log
+        if step["side"] == "game" and self.game is None:
+            raise StepFailed("the scenario forbids lines in the game server's log, but it does not require the game server")
+        tail = {"server": self.server.log, "game": self.game.log if self.game else None}.get(step["side"], self.client.log)
         said = tail.matching(self.fill_pattern(step["pattern"]), since=0)
         if said:
             raise StepFailed(f"{tail.name} holds {len(said)} line(s) the step forbids: {said[0].strip()}")
@@ -496,6 +498,22 @@ class Engine:
             else:
                 last = StepFailed("the client's window never became the active one, so its interface dropped the press")
         raise StepFailed(f"{attempts} press(es) on {target} did not take, the last of them {said}: {last}")
+
+    def act_hover(self, step):
+        target = step["target"]
+        x, y = self.store.references.target_of(target)
+        name = step.get("file") or step.get("name", target)
+
+        def shoot():
+            picture = self.client.frame()
+            self.current = picture
+            return self.shot(name, picture)
+
+        taken, active = self.client.hover(x, y, float(step.get("settle", 1.5)), shoot)
+        if not taken:
+            raise StepFailed(f"the screenshot this step asks for could not be written: {self.notes[-1]['note']}")
+        self.screenshots[-1]["step"] = step.get("name", name)
+        return f"held the pointer on {target} at {x},{y} with the window " + ("active" if active else "NOT active") + f" and shot {taken}"
 
     def on_screen(self, name):
         picture = self.client.frame()
