@@ -286,6 +286,37 @@ TEST_F(AuthHandlerDatabaseTest, TheAttemptLimitIsReadLiveAndLocksTheAddressOut)
     EXPECT_EQ(ExpectAdmitted(third).size(), 44u);
 }
 
+TEST_F(AuthHandlerDatabaseTest, MaintenanceRefusesPlayersButAdmitsGameMasters)
+{
+    LoginSettings settings;
+    settings.MaxAuthAttempts = 100;
+    settings.Maintenance = true;
+    settings.MaintenanceReason = "Database upgrade";
+    settings.MaintenanceBypassLevel = 2;
+    sLoginMgr.SetSettings(settings);
+
+    LoginClient player = _server->Connect();
+    SendAuthen(player, Credentials(player, "Wizard", "hunter22"));
+    std::optional<LoginMessages::UserAuthenRsp> const refused = ReadMessage<LoginMessages::UserAuthenRsp>(player);
+    ASSERT_TRUE(refused) << "player refused during maintenance";
+    EXPECT_EQ(refused->Error, AuthResult::Maintenance) << "player refused during maintenance";
+    EXPECT_EQ(refused->Reason, "Database upgrade") << "player sees the maintenance reason";
+    EXPECT_EQ(Count("SELECT COUNT(*) FROM `account_session`"), 0u) << "refused player stores no session";
+
+    ASSERT_EQ(sAccountMgr.SetSecurityLevel(_accountId, 2), AccountOpResult::Ok);
+    LoginClient gm = _server->Connect();
+    SendAuthen(gm, Credentials(gm, "Wizard", "hunter22"));
+    EXPECT_EQ(ExpectAdmitted(gm).size(), 44u) << "game master signs in during maintenance";
+    ASSERT_TRUE(LoginDatabase.DirectExecute("DELETE FROM `account_session`"));
+    ASSERT_EQ(sAccountMgr.SetSecurityLevel(_accountId, 0), AccountOpResult::Ok);
+
+    settings.Maintenance = false;
+    sLoginMgr.SetSettings(settings);
+    LoginClient after = _server->Connect();
+    SendAuthen(after, Credentials(after, "Wizard", "hunter22"));
+    EXPECT_EQ(ExpectAdmitted(after).size(), 44u) << "player signs in after maintenance ends";
+}
+
 TEST_F(AuthHandlerDatabaseTest, DuplicateLoginsKickTheEarlierSessionOrAreRejected)
 {
     LoginClient first = _server->Connect();
