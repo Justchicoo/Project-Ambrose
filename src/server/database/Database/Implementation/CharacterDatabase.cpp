@@ -53,17 +53,17 @@ void CharacterDatabaseConnection::DoPrepareStatements()
     PrepareStatement(CHAR_SEL_SETTING_AUDIT, "CHAR_SEL_SETTING_AUDIT", "SELECT `id`, `key`, `old_value`, `new_value`, `who`, `account_id`, `source`, `reason`, `created` FROM `setting_audit` WHERE `key` = ? ORDER BY `id` DESC LIMIT ?", ConnectionFlags::Both);
     PrepareStatement(CHAR_SEL_CHARACTER_STATS, "CHAR_SEL_CHARACTER_STATS", "SELECT s.`guid` IS NOT NULL, s.`overflow_xp`, s.`secondary_school_id`, s.`training_points`, s.`gold`, s.`health`, s.`mana`, "
         "s.`potion_charge`, s.`potion_max`, s.`arena_points`, s.`level_locked`, s.`purchased_custom_emotes_1`, s.`purchased_custom_emotes_2`, s.`purchased_custom_emotes_3`, "
-        "s.`purchased_custom_teleport_effects_1`, s.`purchased_custom_teleport_effects_2`, s.`purchased_custom_teleport_effects_3`, s.`revision` "
+        "s.`purchased_custom_teleport_effects_1`, s.`purchased_custom_teleport_effects_2`, s.`purchased_custom_teleport_effects_3`, s.`show_item_lock`, s.`revision` "
         "FROM `characters` c LEFT JOIN `character_stats` s ON s.`guid` = c.`guid` WHERE c.`guid` = ?", ConnectionFlags::Both);
     std::string newer;
     for (char const* const column : { "overflow_xp", "secondary_school_id", "training_points", "gold", "health", "mana", "potion_charge", "potion_max", "arena_points", "level_locked",
              "purchased_custom_emotes_1", "purchased_custom_emotes_2", "purchased_custom_emotes_3", "purchased_custom_teleport_effects_1", "purchased_custom_teleport_effects_2",
-             "purchased_custom_teleport_effects_3" })
+             "purchased_custom_teleport_effects_3", "show_item_lock" })
         newer += fmt::format("`{0}` = IF(VALUES(`revision`) > `revision`, VALUES(`{0}`), `{0}`), ", column);
     PrepareStatement(CHAR_REP_CHARACTER_STATS, "CHAR_REP_CHARACTER_STATS", "INSERT INTO `character_stats` (`guid`, `overflow_xp`, `secondary_school_id`, `training_points`, `gold`, `health`, `mana`, "
         "`potion_charge`, `potion_max`, `arena_points`, `level_locked`, `purchased_custom_emotes_1`, `purchased_custom_emotes_2`, `purchased_custom_emotes_3`, "
-        "`purchased_custom_teleport_effects_1`, `purchased_custom_teleport_effects_2`, `purchased_custom_teleport_effects_3`, `revision`) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE " + newer
+        "`purchased_custom_teleport_effects_1`, `purchased_custom_teleport_effects_2`, `purchased_custom_teleport_effects_3`, `show_item_lock`, `revision`) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE " + newer
         + "`revision` = GREATEST(`revision`, VALUES(`revision`))", ConnectionFlags::Both);
     PrepareStatement(CHAR_UPD_POSITION, "CHAR_UPD_POSITION", "UPDATE `characters` SET `pos_x` = ?, `pos_y` = ?, `pos_z` = ?, `orientation` = ?, `state_revision` = ? WHERE `guid` = ? AND `state_revision` < ?",
         ConnectionFlags::Both);

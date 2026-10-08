@@ -172,6 +172,7 @@ TEST_F(PlayerStatsTest, TheGameStatsAndSchoolBehaviorCarryEveryValueAndReadBackT
     stored.LevelLocked = true;
     stored.PurchasedCustomEmotes = { 1u, 0x80000000u, 0xA5A55A5Au };
     stored.PurchasedCustomTeleportEffects = { 2u, 0x40000000u, 0x5A5AA5A5u };
+    stored.ShowItemLock = true;
     std::optional<PlayerStats> const stats = Create(stored);
     ASSERT_TRUE(stats);
 
@@ -205,6 +206,7 @@ TEST_F(PlayerStatsTest, TheGameStatsAndSchoolBehaviorCarryEveryValueAndReadBackT
     EXPECT_EQ(*gameStats->Get("m_purchasedCustomTeleportEffects1")->GetIf<uint32>(), 2u);
     EXPECT_EQ(*gameStats->Get("m_purchasedCustomTeleportEffects2")->GetIf<uint32>(), 0x40000000u);
     EXPECT_EQ(*gameStats->Get("m_purchasedCustomTeleportEffects3")->GetIf<uint32>(), 0x5A5AA5A5u);
+    EXPECT_EQ(*gameStats->Get("m_showItemLock")->GetIf<bool>(), true) << "the backpack shows its lock button";
     EXPECT_EQ(*school->Get("m_schoolOfFocus")->GetIf<uint32>(), Fire);
     EXPECT_EQ(*school->Get("m_level")->GetIf<int32>(), 5);
     EXPECT_EQ(*school->Get("m_experiencePoints")->GetIf<int32>(), 1200);

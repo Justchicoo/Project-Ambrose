@@ -1162,6 +1162,19 @@ namespace GameMessages
         }
     };
 
+    struct ItemLock
+    {
+        static constexpr uint8 ServiceId = WizardService;
+        static constexpr std::string_view Tag = "MSG_ITEMLOCK";
+
+        uint8 Enabled = 0;
+
+        static constexpr auto Fields()
+        {
+            return std::tuple{ DmlField("ItemLock", &ItemLock::Enabled) };
+        }
+    };
+
     struct QuestFinderOption
     {
         static constexpr uint8 ServiceId = WizardService;

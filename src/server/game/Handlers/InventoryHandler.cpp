@@ -142,6 +142,16 @@ void GameSession::HandleRequestToggleLockItem(GameMessages::RequestToggleLockIte
     ToggleItemLock(message.ItemId);
 }
 
+void GameSession::HandleItemLock(GameMessages::ItemLock& message)
+{
+    if (!_player)
+        return;
+    bool const enabled = message.Enabled != 0;
+    if (_player->SetShowItemLock(enabled))
+        SaveStatsIfDirty();
+    LOG_INFO(InventoryLog, "Session {} turned wizard {}'s backpack item lock {}", GetSessionId(), _worldGuid, enabled ? "on" : "off");
+}
+
 bool GameSession::ShowLoot(std::vector<LootItem> const& items)
 {
     std::string problem;

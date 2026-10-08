@@ -46,6 +46,7 @@ namespace
             Accept<&GameSession::HandleQuestFinderOption>(entered, MessageProcessing::InPlace, "GameSession::HandleQuestFinderOption");
             Accept<&GameSession::HandleTrashInventoryItem>(entered, MessageProcessing::Queued, "GameSession::HandleTrashInventoryItem");
             Accept<&GameSession::HandleRequestToggleLockItem>(entered, MessageProcessing::Queued, "GameSession::HandleRequestToggleLockItem");
+            Accept<&GameSession::HandleItemLock>(entered, MessageProcessing::Queued, "GameSession::HandleItemLock");
 
             SessionStatusMask const inWorld = SessionStatuses::InWorld;
             Accept<&GameSession::HandlePostZoneEventFromClient>(inWorld, MessageProcessing::Queued, "GameSession::HandlePostZoneEventFromClient");

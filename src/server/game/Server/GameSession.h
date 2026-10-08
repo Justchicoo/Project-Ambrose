@@ -175,6 +175,7 @@ public:
     bool ShowLoot(std::vector<LootItem> const& items);
     void HandleTrashInventoryItem(GameMessages::TrashInventoryItem& message);
     void HandleRequestToggleLockItem(GameMessages::RequestToggleLockItem& message);
+    void HandleItemLock(GameMessages::ItemLock& message);
     std::optional<int32> AddGameEffect(PropertyObjectPtr effect, std::string& problem);
     std::optional<ActiveGameEffect> RemoveGameEffect(int32 internalId);
     GameEffectHolder const& GetGameEffects() const noexcept { return _effects; }

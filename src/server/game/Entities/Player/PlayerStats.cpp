@@ -144,6 +144,14 @@ bool PlayerStats::SetShadowPipRating(float value) noexcept
     return true;
 }
 
+bool PlayerStats::SetShowItemLock(bool value) noexcept
+{
+    if (_stored.ShowItemLock == value)
+        return false;
+    _stored.ShowItemLock = value;
+    return true;
+}
+
 CharacterStats PlayerStats::ToStored() const
 {
     CharacterStats stored = _stored;
@@ -177,7 +185,8 @@ bool PlayerStats::WriteGameStats(PropertyObject& gameStats, std::string& problem
         .Set("m_purchasedCustomEmotes3", _stored.PurchasedCustomEmotes[2])
         .Set("m_purchasedCustomTeleportEffects1", _stored.PurchasedCustomTeleportEffects[0])
         .Set("m_purchasedCustomTeleportEffects2", _stored.PurchasedCustomTeleportEffects[1])
-        .Set("m_purchasedCustomTeleportEffects3", _stored.PurchasedCustomTeleportEffects[2]);
+        .Set("m_purchasedCustomTeleportEffects3", _stored.PurchasedCustomTeleportEffects[2])
+        .Set("m_showItemLock", _stored.ShowItemLock);
     if (_shadowPipMax)
         filler.Set("m_shadowPipMax", *_shadowPipMax);
     return problem.empty();
