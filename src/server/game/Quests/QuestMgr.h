@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The authored quests (sQuestMgr), read from the world database's quest tables and checked against object_template and, when it is loaded, the locale text: at start every quest that fails a check is left out and counted, and the reload target quest_template rebuilds every table and index off to the side and swaps them in only when every check passes, keeping the quests serving and reporting every error otherwise. A caller holds the generation it was given for as long as it needs it.
+ * The authored quests (sQuestMgr), read from the world database's quest tables and checked against object_template and, when it is loaded, the locale text: at start every quest that fails a check is left out and counted, and the reload target quest_template rebuilds every table and index off to the side and swaps them in only when every check passes, keeping the quests serving and reporting every error otherwise. Quest availability checks use the requirement manager's current immutable generation, and a caller holds the generation it was given for as long as it needs it.
  */
 
 #ifndef AMBROSE_QUESTMGR_H
@@ -18,6 +18,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+class RequirementContext;
 
 struct QuestLoadResult
 {
@@ -48,6 +50,8 @@ public:
     void RegisterReloadTargets();
     QuestLoadResult LoadSkippingInvalid();
     bool Load(std::vector<std::string>& errors);
+    bool CanOffer(std::string_view questName, RequirementContext const& context) const;
+    std::vector<std::string> GetQuestsOfferedBy(uint32 templateId, RequirementContext const& context) const;
     std::shared_ptr<QuestStore const> GetQuests() const { return _quests.Get(); }
     uint64 GetGeneration() const noexcept { return _quests.GetGeneration(); }
     void Clear();

@@ -1,11 +1,12 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the quest manager over hand-written rows it reads from an in-memory source: a Prep dialog whose lines are spoken by template 38232 and then template 0 makes the quest offered by 38232 alone, the goal lookups find each goal by persona, tag, adjective and zone, the validator refuses goalsToAdd naming a missing goal, a bounty goal without adjectives or a tally count, a persona no object is named, a logic entry that both completes the quest and adds goals, a starter without a Prep dialog and a key the locale text lacks, a start skips the bad quests and logs how many quests, goals and validation errors it found, and a reload of quest_template swaps in an added quest with its starter while one that brings errors keeps the quests serving and reports every error.
+ * Tests the quest manager over hand-written rows it reads from an in-memory source: a Prep dialog whose lines are spoken by template 38232 and then template 0 makes the quest offered by 38232 alone, the goal lookups find each goal by persona, tag, adjective and zone, the validator refuses goalsToAdd naming a missing goal, a bounty goal without adjectives or a tally count, a persona no object is named, a logic entry that both completes the quest and adds goals, a starter without a Prep dialog and a key the locale text lacks, a start skips the bad quests and logs how many quests, goals and validation errors it found, a reload of quest_template swaps in an added quest with its starter while one that brings errors keeps the quests serving, and a quest registry requirement gates availability until its Q1 entry is present.
  */
 
 #include "Log.h"
 #include "LogTestConfig.h"
 #include "QuestMgr.h"
+#include "RequirementMgr.h"
 #include "QuestValidator.h"
 #include "ReloadMgr.h"
 #include "TestAppender.h"
@@ -113,6 +114,23 @@ namespace
         return std::any_of(messages.begin(), messages.end(), [text](std::string const& message) { return message.find(text) != std::string::npos; });
     }
 
+    class QuestRegistryContext : public RequirementContext
+    {
+    public:
+        std::optional<bool> HasRegistryEntry(std::string_view questName, std::string_view entryName, bool isQuestRegistry) const override
+        {
+            LastQuest = questName;
+            LastEntry = entryName;
+            LastIsQuestRegistry = isQuestRegistry;
+            return Complete;
+        }
+
+        bool Complete = false;
+        mutable std::string LastQuest;
+        mutable std::string LastEntry;
+        mutable bool LastIsQuestRegistry = false;
+    };
+
     std::vector<std::string> Check(QuestRows const& rows, QuestValidator::KeyLookup keys = {})
     {
         return Messages(QuestValidator::Validate(rows, QuestValidator::Context::From(rows.Objects, std::move(keys))));
@@ -148,6 +166,9 @@ namespace
         void SetUp() override
         {
             sReloadMgr.Clear();
+            sRequirementMgr.Clear();
+            sRequirementMgr.SetRowSource([] { return RequirementRows{}; });
+            sRequirementMgr.RegisterReloadTargets();
             sQuestMgr.Clear();
             _rows = std::make_shared<QuestRows>(Fixture());
             std::shared_ptr<QuestRows> const rows = _rows;
@@ -161,6 +182,7 @@ namespace
         void TearDown() override
         {
             sReloadMgr.Clear();
+            sRequirementMgr.Clear();
             sQuestMgr.Clear();
         }
 
@@ -352,4 +374,36 @@ TEST_F(QuestMgrTest, ReloadThatIntroducesErrorsKeepsTheOldSnapshotAndReportsEver
     EXPECT_EQ(sQuestMgr.GetGeneration(), generation);
     EXPECT_TRUE(sQuestMgr.GetQuests()->GetQuestsOfferedBy(GammaId).empty());
     EXPECT_EQ(sQuestMgr.GetQuests()->GetQuestsOfferedBy(HeadmasterId), std::vector<std::string>{ "PrepQuest" });
+}
+
+TEST_F(QuestMgrTest, QuestRegistryCompletionGatesQuestAvailability)
+{
+    _rows->Quests.front().RequirementListId = "q1-complete";
+    auto requirements = std::make_shared<RequirementRows>();
+    requirements->Lists.push_back(RequirementListRow{ "q1-complete" });
+    RequirementRow completed;
+    completed.ListId = "q1-complete";
+    completed.Type = "ReqHasEntry";
+    completed.QuestName = "Q1";
+    completed.EntryName = "Complete";
+    completed.IsQuestRegistry = true;
+    requirements->Requirements.push_back(completed);
+    sRequirementMgr.SetRowSource([requirements] { return *requirements; });
+
+    ReloadOutcome const requirementReload = sReloadMgr.Reload(RequirementMgr::Target);
+    ASSERT_TRUE(requirementReload.Ok) << (requirementReload.Errors.empty() ? "" : requirementReload.Errors.front());
+    sQuestMgr.RegisterReloadTargets();
+    ReloadOutcome const outcome = sReloadMgr.Reload(QuestMgr::Target);
+    ASSERT_TRUE(outcome.Ok) << (outcome.Errors.empty() ? "" : outcome.Errors.front());
+
+    QuestRegistryContext context;
+    EXPECT_FALSE(sQuestMgr.CanOffer("PrepQuest", context));
+    EXPECT_TRUE(sQuestMgr.GetQuestsOfferedBy(HeadmasterId, context).empty());
+    EXPECT_EQ(context.LastQuest, "Q1");
+    EXPECT_EQ(context.LastEntry, "Complete");
+    EXPECT_TRUE(context.LastIsQuestRegistry);
+
+    context.Complete = true;
+    EXPECT_TRUE(sQuestMgr.CanOffer("PrepQuest", context));
+    EXPECT_EQ(sQuestMgr.GetQuestsOfferedBy(HeadmasterId, context), std::vector<std::string>{ "PrepQuest" });
 }

@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * The rows of the world database's quest tables as plain records, one struct per table, together with the object_template ids and names they are checked against, gathered into one set that the database reader or a test fills and the validator and the quest store read.
+ * The rows of the world database's quest tables as plain records, one struct per table, together with each quest's optional requirement-list reference and the object_template ids and names they are checked against, gathered into one set that the database reader or a test fills and the validator and the quest store read.
  */
 
 #ifndef AMBROSE_QUESTROWS_H
@@ -29,6 +29,7 @@ struct QuestTemplateRow
     uint32 ActivityType = 0;
     bool PrepAlways = false;
     bool IsHidden = false;
+    std::string RequirementListId;
 };
 
 struct QuestStartGoalRow
