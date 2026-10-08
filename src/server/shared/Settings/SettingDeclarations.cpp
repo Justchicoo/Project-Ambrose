@@ -186,6 +186,8 @@ namespace
                 "The least free space a volume must keep after any write the panel makes; the larger of this and Files.MinFreePercent holds."),
             Unsigned("Files.MinFreePercent", "5", "0", "90", "%", "Files", Supervisor, Live,
                 "The least free space a volume must keep after any write the panel makes, as a share of the volume; the larger of this and Files.MinFreeBytes holds."),
+            Unsigned("Files.UploadMaxBytes", "16777216", "1", "1073741824", "bytes", "Files", Supervisor, Live,
+                "The largest file body the panel accepts for one upload or copy."),
             Unsigned("Files.ReadMaxBytes", "4194304", "65536", "67108864", "bytes", "Files", Supervisor, Live,
                 "The most of a file one read hands the panel; a file this size or smaller also carries its content hash, and a configuration file larger than this is not shown."),
             Unsigned("Files.ListMaxEntries", "100000", "1000", "10000000", "entries", "Files", Supervisor, Live,

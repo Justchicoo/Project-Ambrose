@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * Tests the file routes through the admin router with a real panel store and signed-in owner and viewer sessions: a traversal, an absolute path, an encoded traversal, a device name and a link leaving the root, as the path or as a folder on it, are each refused with 403 and recorded with the host path they would have reached, which the answer never carries; a client install and the extracted client data hand no byte to an owner or a viewer whatever the path; a configuration file, or a copy of one, read without the right to see secrets shows every secret masked and names the keys, while an owner who asks sees them and the reveal is recorded without a value; a protected path, built in or an owner's, is refused for listing, reading and every write; a listing carries its policy, paging, sorting and filter; a read is a window cut on a character boundary with an entity tag when the file fits whole; a token the supervisor relays is held to the rights it was forwarded; and every route asks for a permission the panel holds.
+ * Tests the file routes through the admin router with a real panel store and signed-in owner and viewer sessions: a traversal, an absolute path, an encoded traversal, a device name and a link leaving the root, as the path or as a folder on it, are each refused with 403 and recorded with the host path they would have reached, which the answer never carries; a client install and the extracted client data hand no byte to an owner or a viewer whatever the path; a configuration file, or a copy of one, read without the right to see secrets shows every secret masked and names the keys, while an owner who asks sees them and the reveal is recorded without a value; a protected path, built in or an owner's, is refused for listing, reading and every write; a listing carries its policy, paging, sorting and filter; a read is a window cut on a character boundary with an entity tag when the file fits whole; a download returns a safe attachment and an exact byte range, refusing client-derived roots; a single-use HMAC-signed upload link is bound to its issuing permission and cannot be changed or replayed; a token the supervisor relays is held to the rights it was forwarded; and every route asks for a permission the panel holds.
  */
 
 #include "AdminAuth.h"
@@ -330,6 +330,189 @@ TEST(FilesServiceTest, AClientDerivedRootRefusesEveryBytePathForAnOwnerAndAViewe
             }
         }
     }
+}
+
+TEST(FilesServiceTest, DownloadsAFileOrExactRangeAndRefusesClientDerivedRoots)
+{
+    Rig rig;
+    ASSERT_TRUE(rig.Open());
+    std::string contents;
+    contents.resize(256 * 1024);
+    for (std::size_t index = 0; index < contents.size(); ++index)
+        contents[index] = static_cast<char>('a' + index % 26);
+    WriteFile(rig.Inputs.LogsFolder / "large log.txt", contents);
+
+    AdminResponse const whole = rig.Get(Owner, "/api/files/logs/download", "path=large%20log.txt");
+    ASSERT_EQ(whole.Status, 200) << whole.Body;
+    EXPECT_EQ(whole.ContentType, "application/octet-stream");
+    EXPECT_EQ(whole.Body, contents);
+    ASSERT_TRUE(std::any_of(whole.Headers.begin(), whole.Headers.end(), [](auto const& header) { return header.first == "Content-Disposition" && header.second == "attachment; filename=\"large log.txt\""; }));
+    AdminResponse const viewer = rig.Get(Viewer, "/api/files/logs/download", "path=large%20log.txt");
+    EXPECT_EQ(viewer.Status, 200) << viewer.Body;
+    EXPECT_EQ(viewer.Body, contents);
+    AdminResponse const viewerRead = rig.Get(Viewer, "/api/files/logs/content", "path=large%20log.txt");
+    ASSERT_EQ(viewerRead.Status, 200) << viewerRead.Body;
+    EXPECT_EQ(Json::parse(viewerRead.Body).value("text", std::string()), contents);
+
+    AdminRequest range = rig.Request(Owner, "GET", "/api/files/logs/download", "path=large%20log.txt");
+    range.Range = "bytes=12345-23456";
+    AdminResponse const partial = rig.Router.Dispatch(range);
+    ASSERT_EQ(partial.Status, 206) << partial.Body;
+    EXPECT_EQ(partial.Body, contents.substr(12345, 23456 - 12345 + 1));
+    EXPECT_TRUE(std::any_of(partial.Headers.begin(), partial.Headers.end(), [](auto const& header) { return header.first == "Content-Range" && header.second == "bytes 12345-23456/262144"; }));
+
+    AdminRequest unsatisfiable = rig.Request(Owner, "GET", "/api/files/logs/download", "path=large%20log.txt");
+    unsatisfiable.Range = "bytes=262144-";
+    AdminResponse const refused = rig.Router.Dispatch(unsatisfiable);
+    EXPECT_EQ(refused.Status, 416);
+    EXPECT_TRUE(std::any_of(refused.Headers.begin(), refused.Headers.end(), [](auto const& header) { return header.first == "Content-Range" && header.second == "bytes */262144"; }));
+
+    AdminResponse const client = rig.Get(Owner, "/api/files/client/download", "path=Bin/WizardGraphicalClient.exe");
+    EXPECT_EQ(client.Status, 403) << client.Body;
+    EXPECT_EQ(Json::parse(client.Body, nullptr, false).value("error", std::string()), "client_derived");
+    AdminResponse const data = rig.Get(Owner, "/api/files/data/download", "path=types/r806919.types.json");
+    EXPECT_EQ(data.Status, 403) << data.Body;
+    EXPECT_EQ(Json::parse(data.Body, nullptr, false).value("error", std::string()), "client_derived");
+}
+
+TEST(FilesServiceTest, UploadChecksTheLimitBeforeCreatingAndRequiresTheUploadRight)
+{
+    Rig rig;
+    ASSERT_TRUE(rig.Open());
+    std::string const bytes = "upload contents";
+    AdminRequest upload = rig.Request(Owner, "PUT", "/api/files/sql-custom/upload", "path=created.sql", bytes);
+    AdminResponse const created = rig.Router.Dispatch(upload);
+    ASSERT_EQ(created.Status, 201) << created.Body;
+    EXPECT_EQ(std::filesystem::file_size(rig.Inputs.SqlCustomFolder / "created.sql"), bytes.size());
+    AdminRequest secondUpload = rig.Request(Owner, "PUT", "/api/files/sql-custom/upload", "path=second.sql", bytes);
+    EXPECT_EQ(rig.Router.Dispatch(secondUpload).Status, 201);
+    AdminRequest overwrite = rig.Request(Owner, "PUT", "/api/files/sql-custom/upload", "path=created.sql", "replacement");
+    EXPECT_EQ(rig.Router.Dispatch(overwrite).Status, 409);
+    std::ifstream original(rig.Inputs.SqlCustomFolder / "created.sql", std::ios::binary);
+    EXPECT_EQ(std::string((std::istreambuf_iterator<char>(original)), std::istreambuf_iterator<char>()), bytes);
+    AdminRequest replace = rig.Request(Owner, "PUT", "/api/files/sql-custom/upload", "path=created.sql&replace=1", "replacement");
+    AdminResponse const replacedResponse = rig.Router.Dispatch(replace);
+    ASSERT_EQ(replacedResponse.Status, 201) << replacedResponse.Body;
+    std::ifstream replaced(rig.Inputs.SqlCustomFolder / "created.sql", std::ios::binary);
+    EXPECT_EQ(std::string((std::istreambuf_iterator<char>(replaced)), std::istreambuf_iterator<char>()), "replacement");
+
+    AdminRequest viewer = rig.Request(Viewer, "PUT", "/api/files/sql-custom/upload", "path=viewer.sql", bytes);
+    EXPECT_EQ(rig.Router.Dispatch(viewer).Status, 403);
+    EXPECT_FALSE(std::filesystem::exists(rig.Inputs.SqlCustomFolder / "viewer.sql"));
+
+    uint64 const maximum = sSettings.Get<uint64>("Files.UploadMaxBytes");
+    std::string oversized(static_cast<std::size_t>(maximum + 1), 'x');
+    AdminRequest tooLarge = rig.Request(Owner, "PUT", "/api/files/sql-custom/upload", "path=too-large.sql", std::move(oversized));
+    AdminResponse const refused = rig.Router.Dispatch(tooLarge);
+    EXPECT_EQ(refused.Status, 413) << refused.Body;
+    EXPECT_FALSE(std::filesystem::exists(rig.Inputs.SqlCustomFolder / "too-large.sql"));
+}
+
+TEST(FilesServiceTest, UploadLinksAreSignedSingleUseAndKeepTheIssuersPermission)
+{
+    Rig rig;
+    ASSERT_TRUE(rig.Open());
+
+    AdminRequest issue = rig.Request(Owner, "POST", "/api/files/sql-custom/upload-link", "path=linked.sql");
+    AdminResponse const issued = rig.Router.Dispatch(issue);
+    ASSERT_EQ(issued.Status, 201) << issued.Body;
+    Json const link = Json::parse(issued.Body, nullptr, false);
+    ASSERT_TRUE(link.is_object()) << issued.Body;
+    std::string const uploadUrl = link.value("upload_url", std::string());
+    std::size_t const tokenStart = uploadUrl.find("token=");
+    ASSERT_NE(tokenStart, std::string::npos) << uploadUrl;
+    std::string const token = uploadUrl.substr(tokenStart + 6);
+    ASSERT_FALSE(token.empty());
+
+    std::string tampered = token;
+    tampered.back() = tampered.back() == 'A' ? 'B' : 'A';
+    AdminResponse const invalid = rig.Router.Dispatch(rig.Request({}, "PUT", "/api/files/upload", "token=" + tampered, "data"));
+    EXPECT_EQ(invalid.Status, 404) << invalid.Body;
+    EXPECT_FALSE(std::filesystem::exists(rig.Inputs.SqlCustomFolder / "linked.sql"));
+
+    AdminResponse const uploaded = rig.Router.Dispatch(rig.Request({}, "PUT", "/api/files/upload", "token=" + token, "data"));
+    ASSERT_EQ(uploaded.Status, 201) << uploaded.Body;
+    std::ifstream contents(rig.Inputs.SqlCustomFolder / "linked.sql", std::ios::binary);
+    EXPECT_EQ(std::string((std::istreambuf_iterator<char>(contents)), std::istreambuf_iterator<char>()), "data");
+    EXPECT_EQ(rig.Router.Dispatch(rig.Request({}, "PUT", "/api/files/upload", "token=" + token, "again")).Status, 404);
+
+    WriteFile(rig.Inputs.SqlCustomFolder / "replace-linked.sql", "before");
+    AdminRequest replaceIssue = rig.Request(Owner, "POST", "/api/files/sql-custom/upload-link", "path=replace-linked.sql&replace=1");
+    AdminResponse const replaceIssued = rig.Router.Dispatch(replaceIssue);
+    ASSERT_EQ(replaceIssued.Status, 201) << replaceIssued.Body;
+    Json const replacementLink = Json::parse(replaceIssued.Body);
+    std::string const replacementUrl = replacementLink.at("upload_url").get<std::string>();
+    std::size_t const replacementTokenStart = replacementUrl.find("token=");
+    ASSERT_NE(replacementTokenStart, std::string::npos) << replacementUrl;
+    std::string const replacementToken = replacementUrl.substr(replacementTokenStart + 6);
+    AdminResponse const replaced = rig.Router.Dispatch(rig.Request({}, "PUT", "/api/files/upload", "token=" + replacementToken, "after"));
+    ASSERT_EQ(replaced.Status, 201) << replaced.Body;
+    std::ifstream replacementContents(rig.Inputs.SqlCustomFolder / "replace-linked.sql", std::ios::binary);
+    EXPECT_EQ(std::string((std::istreambuf_iterator<char>(replacementContents)), std::istreambuf_iterator<char>()), "after");
+
+    AdminRequest viewer = rig.Request(Viewer, "POST", "/api/files/sql-custom/upload-link", "path=viewer.sql");
+    EXPECT_EQ(rig.Router.Dispatch(viewer).Status, 403);
+    EXPECT_FALSE(std::filesystem::exists(rig.Inputs.SqlCustomFolder / "viewer.sql"));
+    std::vector<Json> const events = rig.Recorded("file:upload-link-issued");
+    ASSERT_EQ(events.size(), 2u);
+    EXPECT_EQ(events.front().value("actor", std::string()), "Merle");
+}
+
+TEST(FilesServiceTest, BatchValidatesEveryEntryBeforeMovingAnyAndNamesTheRefusedTarget)
+{
+    Rig rig;
+    ASSERT_TRUE(rig.Open());
+    WriteFile(rig.Inputs.SqlCustomFolder / "one.sql", "first");
+    WriteFile(rig.Inputs.ConfigFile.parent_path() / "other.conf", "configuration");
+    Json const requestBody = {
+        { "operations", Json::array({
+            { { "action", "move" }, { "sourceRoot", "sql-custom" }, { "sourcePath", "one.sql" }, { "targetRoot", "sql-custom" }, { "targetPath", "one-moved.sql" } },
+            { { "action", "move" }, { "sourceRoot", "config" }, { "sourcePath", "other.conf" }, { "targetRoot", "install" }, { "targetPath", "blocked.conf" } },
+        }) },
+    };
+    AdminRequest request = rig.Request(Owner, "POST", "/api/files/batch", {}, requestBody.dump());
+    AdminResponse const response = rig.Router.Dispatch(request);
+    ASSERT_EQ(response.Status, 403) << response.Body;
+    Json const answer = Json::parse(response.Body);
+    EXPECT_EQ(answer["failed_index"], 1);
+    EXPECT_EQ(answer["failed_path"], "blocked.conf");
+    EXPECT_TRUE(answer["done"].empty());
+    EXPECT_EQ(answer["not_done"].size(), 1);
+    EXPECT_TRUE(answer["message"].get<std::string>().find("install root") != std::string::npos);
+    EXPECT_TRUE(std::filesystem::exists(rig.Inputs.SqlCustomFolder / "one.sql"));
+    EXPECT_FALSE(std::filesystem::exists(rig.Inputs.SqlCustomFolder / "one-moved.sql"));
+    EXPECT_TRUE(std::filesystem::exists(rig.Inputs.ConfigFile.parent_path() / "other.conf"));
+    AdminRequest viewer = rig.Request(Viewer, "POST", "/api/files/batch", {}, requestBody.dump());
+    EXPECT_EQ(rig.Router.Dispatch(viewer).Status, 403);
+    EXPECT_TRUE(std::filesystem::exists(rig.Inputs.SqlCustomFolder / "one.sql"));
+}
+
+TEST(FilesServiceTest, BatchMovesAndCopiesOnlyAfterTheWholeRequestPassesValidation)
+{
+    Rig rig;
+    ASSERT_TRUE(rig.Open());
+    WriteFile(rig.Inputs.SqlCustomFolder / "move.sql", "move data");
+    WriteFile(rig.Inputs.SqlCustomFolder / "copy.sql", "copy data");
+    Json const requestBody = {
+        { "operations", Json::array({
+            { { "action", "move" }, { "sourceRoot", "sql-custom" }, { "sourcePath", "move.sql" }, { "targetRoot", "sql-custom" }, { "targetPath", "moved.sql" } },
+            { { "action", "copy" }, { "sourceRoot", "sql-custom" }, { "sourcePath", "copy.sql" }, { "targetRoot", "sql-custom" }, { "targetPath", "copied.sql" } },
+        }) },
+    };
+    AdminRequest request = rig.Request(Owner, "POST", "/api/files/batch", {}, requestBody.dump());
+    AdminResponse const response = rig.Router.Dispatch(request);
+    ASSERT_EQ(response.Status, 200) << response.Body;
+    Json const answer = Json::parse(response.Body);
+    EXPECT_EQ(answer["done"].size(), 2);
+    EXPECT_TRUE(answer["not_done"].empty());
+    EXPECT_FALSE(std::filesystem::exists(rig.Inputs.SqlCustomFolder / "move.sql"));
+    EXPECT_TRUE(std::filesystem::exists(rig.Inputs.SqlCustomFolder / "moved.sql"));
+    EXPECT_TRUE(std::filesystem::exists(rig.Inputs.SqlCustomFolder / "copy.sql"));
+    std::ifstream copied(rig.Inputs.SqlCustomFolder / "copied.sql", std::ios::binary);
+    EXPECT_EQ(std::string((std::istreambuf_iterator<char>(copied)), std::istreambuf_iterator<char>()), "copy data");
+    std::vector<Json> const audit = rig.Recorded("file:batch.changed");
+    ASSERT_EQ(audit.size(), 2);
+    EXPECT_EQ(audit.front()["properties"].value("sha256_before", std::string()), audit.front()["properties"].value("sha256_after", std::string()));
 }
 
 TEST(FilesServiceTest, AConfFileReadWithoutTheSecretsRightShowsEverySecretRedacted)

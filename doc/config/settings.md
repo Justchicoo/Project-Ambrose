@@ -54,6 +54,7 @@ Access says who may see and change a setting over the admin API and the panel. A
 | `Files.MinFreeBytes` | unsigned | 1073741824 bytes | from 0 to 1125899906842624 bytes | live | supervisor | normal | The least free space a volume must keep after any write the panel makes; the larger of this and Files.MinFreePercent holds. |
 | `Files.MinFreePercent` | unsigned | 5 % | from 0 to 90 % | live | supervisor | normal | The least free space a volume must keep after any write the panel makes, as a share of the volume; the larger of this and Files.MinFreeBytes holds. |
 | `Files.ReadMaxBytes` | unsigned | 4194304 bytes | from 65536 to 67108864 bytes | live | supervisor | normal | The most of a file one read hands the panel; a file this size or smaller also carries its content hash, and a configuration file larger than this is not shown. |
+| `Files.UploadMaxBytes` | unsigned | 16777216 bytes | from 1 to 1073741824 bytes | live | supervisor | normal | The largest file body the panel accepts for one upload or copy. |
 
 ## Inventory
 

@@ -1554,11 +1554,13 @@ Changed on 2026-09-27. The tables browser, and the world schema its forms are bu
 
 **Acceptance**
 
-- [ ] An upload larger than the limit is refused before the limit's worth of bytes plus one reaches the disk, and leaves no partial file
-- [ ] A viewer can read and download but cannot upload, move or delete
-- [ ] A batch with one refused entry changes nothing and names the refused entry
-- [ ] A ranged download of a large log returns the same bytes as the whole file
-- [ ] A move from the config root into the read-only install root is refused naming the target root's policy
+- [x] An upload larger than the limit is refused before the limit's worth of bytes plus one reaches the disk, and leaves no partial file (FilesServiceTest.UploadChecksTheLimitBeforeCreatingAndRequiresTheUploadRight, Windows; the test confirms an over-limit request leaves no destination file)
+- [x] A viewer can read and download but cannot upload, move or delete (FilesServiceTest.DownloadsAFileOrExactRangeAndRefusesClientDerivedRoots, FilesServiceTest.UploadChecksTheLimitBeforeCreatingAndRequiresTheUploadRight, FilesServiceTest.BatchValidatesEveryEntryBeforeMovingAnyAndNamesTheRefusedTarget, and PanelPermissionsTest.AViewerLooksAndDoesNotAct, Windows)
+- [x] A batch with one refused entry changes nothing and names the refused entry (FilesServiceTest.BatchValidatesEveryEntryBeforeMovingAnyAndNamesTheRefusedTarget, Windows)
+- [x] A ranged download of a large log returns the same bytes as the whole file (FilesServiceTest.DownloadsAFileOrExactRangeAndRefusesClientDerivedRoots, Windows; the 256 KiB fixture is byte-identical over the requested range)
+- [x] A move from the config root into the read-only install root is refused naming the target root's policy (FilesServiceTest.BatchValidatesEveryEntryBeforeMovingAnyAndNamesTheRefusedTarget, Windows)
+
+**Open implementation gap:** `AdminServer::ToAdminRequest` copies Crow's already-buffered request body into `AdminRequest::Body` before route dispatch. The configured upload limit is enforced before `FileJail::Create` or `FileJail::Replace` writes anything, but upload bytes are not capped while streaming from the socket. Streaming requires a body-reader path through the HTTP adapter and router; the in-memory limit test does not prove that deliverable.
 
 ## 17.55 Trash, purge, new files and folders, and permission toggles
 
