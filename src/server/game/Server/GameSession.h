@@ -263,6 +263,7 @@ private:
     bool TakeCommandLine(std::string_view packed);
     std::vector<std::string> PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now);
     void FollowReloadedVolumes();
+    void WalkThroughDoor(std::vector<std::string> const& doors);
     void ShowGameEffectsOf(GameSession const& other);
 
     AsyncCallbackProcessor<CountedCallback> _countedCallbacks;

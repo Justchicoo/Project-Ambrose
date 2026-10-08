@@ -36,7 +36,9 @@
 #include "StringHash.h"
 #include "StringUtil.h"
 #include "TypeRegistry.h"
+#include "World.h"
 #include "ZoneMgr.h"
+#include "ZoneTeleportMgr.h"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -1185,7 +1187,8 @@ void GameSession::ArriveInVolumes()
 std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std::chrono::steady_clock::time_point now)
 {
     std::vector<ZoneNotifyText> texts;
-    std::vector<std::string> fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now, &texts);
+    std::vector<std::string> doors;
+    std::vector<std::string> fired = sZoneTriggerMgr.Post(*_mapId, _zonePath, event, _worldGuid, now, &texts, &doors, sSettings.Get<bool>("Zone.DoorsIgnoreRequirements"));
     for (std::string const& trigger : fired)
         sScriptMgr.OnTriggerFired(_zonePath, *_mapId, trigger, _worldGuid);
     for (ZoneNotifyText const& text : texts)
@@ -1196,7 +1199,33 @@ std::vector<std::string> GameSession::PostZoneEvent(std::string_view event, std:
         SendDmlMessage(message);
         LOG_INFO("server.gamesession", "Session {} showed wizard {} the notify text {} of type {}", GetSessionId(), _worldGuid, Ambrose::ForLog(text.Text, 128), text.Type);
     }
+    if (!doors.empty() && event != ZoneTriggerMgr::EnterZoneEvent)
+        WalkThroughDoor(doors);
     return fired;
+}
+
+void GameSession::WalkThroughDoor(std::vector<std::string> const& doors)
+{
+    std::optional<ZoneTeleport> const door = sZoneTeleportMgr.FirstWithDestination(_zonePath, doors);
+    if (!door)
+    {
+        LOG_INFO("server.gamesession", "Session {}'s wizard {} walked through {} in {}, which zone_teleport gives no destination", GetSessionId(), _worldGuid,
+            fmt::format("{}", fmt::join(doors, ", ")), Ambrose::ForLog(_zonePath, 128));
+        return;
+    }
+    ZonePlace const place = sZoneMgr.FindPlace(door->DestZone, door->DestLocation);
+    if (place.Result != ZoneLookup::Ok)
+    {
+        LOG_WARN("server.gamesession", "Session {}'s door {} in {} leads to {} in {}, which the zones no longer hold", GetSessionId(), door->TriggerName,
+            Ambrose::ForLog(_zonePath, 128), door->DestLocation, door->DestZone);
+        return;
+    }
+    PlayerPosition const target{ place.Location.X, place.Location.Y, place.Location.Z, place.Location.Yaw };
+    std::string problem;
+    bool const moved = door->SameZone ? TeleportWithinMap(target, sWorld.GetSessions(), problem)
+                                      : RequestZoneTransfer(ZoneTransfer{ door->DestZone, door->DestZone, door->DestLocation, target }, problem);
+    LOG_INFO("server.gamesession", "Session {}'s wizard {} walked through {} in {} to {} in {}{}", GetSessionId(), _worldGuid, door->TriggerName, Ambrose::ForLog(_zonePath, 128),
+        door->DestLocation, door->DestZone, moved ? std::string() : fmt::format(", which did not happen: {}", problem));
 }
 
 void GameSession::FollowReloadedVolumes()

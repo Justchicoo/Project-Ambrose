@@ -28,6 +28,7 @@
 #include "SigilMgr.h"
 #include "SpellMgr.h"
 #include "ZoneMgr.h"
+#include "ZoneTeleportMgr.h"
 #include "ZoneTriggerMgr.h"
 #include "CharacterNameScript.h"
 #include "ClientExtractionScript.h"
@@ -407,6 +408,11 @@ namespace
                 for (std::string const& error : triggerErrors)
                     LOG_ERROR("server.world", "Zone volumes and triggers: {}", error);
             sZoneTriggerMgr.RegisterReloadTargets();
+            std::vector<std::string> teleportErrors;
+            if (WorldDatabase.IsOpen() && !sZoneTeleportMgr.Load(teleportErrors))
+                for (std::string const& error : teleportErrors)
+                    LOG_ERROR("server.world", "Door destinations: {}", error);
+            sZoneTeleportMgr.RegisterReloadTargets();
             LoadQuests();
 
             uint32 const realmId = Config().GetOption<uint32>("RealmID", 1, true);

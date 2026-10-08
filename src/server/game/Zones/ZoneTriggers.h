@@ -1,6 +1,6 @@
 /*
  * Project Ambrose by Imjustchico
- * One zone's triggers from zone_trigger and zone_trigger_event, with the notify texts their results show: an event posted for a wizard fires every trigger whose fire events name it, unless the trigger has requirements, which fail closed until the requirement engine exists, has fired as often as its trigger max allows, or fired for that wizard within its cooldown; what a fired trigger does is left to the results its owning systems run.
+ * One zone's triggers from zone_trigger and zone_trigger_event, with the notify texts their results show: an event posted for a wizard fires every trigger whose fire events name it, unless the trigger has requirements, which fail closed until the requirement engine exists save for a door when Zone.DoorsIgnoreRequirements lets doors pass, has fired as often as its trigger max allows, or fired for that wizard within its cooldown; what a fired trigger does is left to the results its owning systems run.
  */
 
 #ifndef AMBROSE_ZONETRIGGERS_H
@@ -30,6 +30,7 @@ struct ZoneTrigger
     bool HasRequirements = false;
     std::vector<std::string> FireEvents;
     std::vector<ZoneNotifyText> NotifyTexts;
+    bool Teleports = false;
 };
 
 class ZoneTriggers
@@ -40,7 +41,7 @@ public:
     ZoneTriggers() = default;
     explicit ZoneTriggers(std::vector<ZoneTrigger> triggers) : _triggers(std::move(triggers)) {}
 
-    std::vector<ZoneTrigger const*> Post(std::string_view event, uint64 wizard, Clock::time_point now);
+    std::vector<ZoneTrigger const*> Post(std::string_view event, uint64 wizard, Clock::time_point now, bool doorsIgnoreRequirements = false);
     std::vector<ZoneTrigger> const& All() const noexcept { return _triggers; }
 
 private:
