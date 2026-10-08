@@ -55,7 +55,8 @@ TEST(PathMovementGeneratorTest, TwoNodePathCoversDistanceAtConfiguredSpeedWithin
         ++ticks;
     }
     EXPECT_NEAR(ticks, expectedTicks, 1u);
-    EXPECT_FLOAT_EQ(generator->GetPosition().X, 50.0f);
+    EXPECT_DOUBLE_EQ(generator->GetPosition().X, 50.0);
+    EXPECT_EQ(generator->GetCurrentNodeId(), 2u);
 }
 
 TEST(PathMovementGeneratorTest, LoopWrapsFromLastNodeToFirst)
@@ -66,7 +67,7 @@ TEST(PathMovementGeneratorTest, LoopWrapsFromLastNodeToFirst)
     ASSERT_TRUE(generator.Advance(2s, error));
     PathMovementStep const step = *generator.Advance(500ms, error);
     EXPECT_TRUE(error.empty());
-    EXPECT_FLOAT_EQ(step.Position.X, 15.0f);
+    EXPECT_DOUBLE_EQ(step.Position.X, 15.0);
     EXPECT_EQ(step.CurrentNodeId, 30u);
     EXPECT_EQ(step.NextNodeId, 10u);
 }
@@ -79,7 +80,7 @@ TEST(PathMovementGeneratorTest, PingPongReversesAtTheLastNode)
     ASSERT_TRUE(generator.Advance(2s, error));
     PathMovementStep const step = *generator.Advance(500ms, error);
     EXPECT_TRUE(error.empty());
-    EXPECT_FLOAT_EQ(step.Position.X, 15.0f);
+    EXPECT_DOUBLE_EQ(step.Position.X, 15.0);
     EXPECT_EQ(step.CurrentNodeId, 30u);
     EXPECT_EQ(step.NextNodeId, 20u);
 }
@@ -91,17 +92,17 @@ TEST(PathMovementGeneratorTest, WaitAtANodeUsesElapsedTimeBeforeMovingOn)
 
     PathMovementStep const arrived = *generator.Advance(1s, error);
     ASSERT_TRUE(error.empty());
-    EXPECT_FLOAT_EQ(arrived.Position.X, 10.0f);
+    EXPECT_DOUBLE_EQ(arrived.Position.X, 10.0);
     EXPECT_FALSE(arrived.Moving);
 
     PathMovementStep const waiting = *generator.Advance(500ms, error);
     ASSERT_TRUE(error.empty());
-    EXPECT_FLOAT_EQ(waiting.Position.X, 10.0f);
+    EXPECT_DOUBLE_EQ(waiting.Position.X, 10.0);
     EXPECT_FALSE(waiting.Moving);
 
     PathMovementStep const left = *generator.Advance(750ms, error);
     EXPECT_TRUE(error.empty());
-    EXPECT_NEAR(left.Position.X, 12.5f, 0.0001f);
+    EXPECT_NEAR(left.Position.X, 12.5, 0.0001);
     EXPECT_TRUE(left.Moving);
 }
 
@@ -112,7 +113,7 @@ TEST(PathMovementGeneratorTest, ReverseStartTravelsTowardThePreviousNode)
 
     PathMovementStep const step = *generator.Advance(500ms, error);
     EXPECT_TRUE(error.empty());
-    EXPECT_FLOAT_EQ(step.Position.X, 15.0f);
+    EXPECT_DOUBLE_EQ(step.Position.X, 15.0);
     EXPECT_EQ(step.CurrentNodeId, 30u);
     EXPECT_EQ(step.NextNodeId, 20u);
 }

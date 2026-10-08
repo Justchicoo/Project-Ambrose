@@ -16,9 +16,9 @@
 
 struct PathMovementPosition
 {
-    float X = 0.0f;
-    float Y = 0.0f;
-    float Z = 0.0f;
+    double X = 0.0;
+    double Y = 0.0;
+    double Z = 0.0;
 
     bool operator==(PathMovementPosition const&) const = default;
 };

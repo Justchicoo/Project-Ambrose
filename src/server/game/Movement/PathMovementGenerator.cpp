@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <utility>
 
 namespace
@@ -152,18 +153,22 @@ std::optional<PathMovementStep> PathMovementGenerator::Advance(std::chrono::dura
         }
 
         double const travelTime = distance / _speed;
-        if (remaining < travelTime)
+        double const timeTolerance = std::numeric_limits<double>::epsilon() *
+            std::max({ 1.0, remaining, travelTime }) * 256.0;
+        if (remaining + timeTolerance < travelTime)
         {
             double const fraction = remaining / travelTime;
-            _position.X = static_cast<float>(static_cast<double>(_position.X) + dx * fraction);
-            _position.Y = static_cast<float>(static_cast<double>(_position.Y) + dy * fraction);
-            _position.Z = static_cast<float>(static_cast<double>(_position.Z) + dz * fraction);
+            _position.X += dx * fraction;
+            _position.Y += dy * fraction;
+            _position.Z += dz * fraction;
             remaining = 0.0;
             break;
         }
 
         _position = target;
         remaining -= travelTime;
+        if (remaining <= timeTolerance)
+            remaining = 0.0;
         Reach(_nextNode);
         if (++transitions > MaxTransitionsPerUpdate)
         {
