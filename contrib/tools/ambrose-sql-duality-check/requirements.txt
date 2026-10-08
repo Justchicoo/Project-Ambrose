@@ -1,0 +1,4 @@
+# Project Ambrose by Imjustchico
+# Pinned dependencies for ambrose-sql-duality-check, kept inside its own folder.
+
+mysql-connector-python==9.1.0
